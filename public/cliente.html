@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi resumen — Deportes Zenyatta</title>
+<style>
+  :root {
+    --bg-color: #f4f6f9;
+    --card-bg: #ffffff;
+    --primary: #1a252f;
+    --accent: #27ae60;
+    --accent-hover: #219150;
+    --border: #e1e8ed;
+  }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); padding: 20px; color: #333; margin: 0; }
+  .container { max-width: 900px; margin: 0 auto; background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  h1 { text-align: center; color: var(--primary); margin-top: 0; font-size: 24px; }
+  p.subtitulo { text-align:center; color:#777; margin-top:-8px; font-size:13px; }
+
+  .control-panel { background: #f8f9fa; border: 1px solid var(--border); padding: 15px; border-radius: 8px; display: flex; flex-wrap: wrap; align-items: end; gap: 15px; margin: 20px 0; }
+  .control-group { display: flex; flex-direction: column; gap: 5px; }
+  label { font-weight: bold; font-size: 13px; color: #444; }
+  input[type="date"], select { padding: 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  button { background-color: var(--accent); color: white; border: none; padding: 10px 18px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+  button:hover { background-color: var(--accent-hover); }
+
+  /* =================================================================
+     REDISEÑO SIMPLE (02-09-2026, a pedido del usuario): "solo quiero que
+     vean ... su balance que seria total saldo semana ... solo ponle
+     total semana que seria balance actualmente, el saldo si es verde
+     esta ganando con el simbolo mas o rojo con el simbolo menos si esta
+     perdiendo" — reemplaza las 4 tarjetas (Arriesgado/Perdido/Ganado/
+     Polla) de antes por UNA sola cifra grande, siempre con el signo +/-
+     explícito (no solo el color, para que se entienda igual en blanco y
+     negro / con daltonismo).
+     ================================================================= */
+  .reloj-venezuela { text-align: center; color: #888; font-size: 12.5px; margin: -8px 0 4px 0; }
+  .balance-total { text-align: center; margin: 18px 0 22px 0; }
+  .balance-total .etiqueta { font-size: 13px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; }
+  .balance-total .monto { font-size: 42px; font-weight: 800; margin-top: 4px; line-height: 1.1; }
+  .balance-total .monto.positivo { color: var(--accent); }
+  .balance-total .monto.negativo { color: #c0392b; }
+  .balance-total .rango-fechas { color: #999; font-size: 12.5px; margin-top: 4px; }
+
+  /* Jugadas como ítems (02-09-2026, a pedido del usuario: "recuerda que
+     cada jugada es un item diferente") en vez de filas de tabla — más
+     fácil de leer en un celular. */
+  .jugada-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; background: #fff; }
+  .jugada-item.polla { background: #f6f1fb; border-color: #dcc9ef; }
+  .jugada-detalle { flex: 1; min-width: 150px; }
+  .jugada-ticket { font-size: 11px; color: #999; }
+  .jugada-texto { font-size: 13.5px; color: #333; margin: 2px 0 6px 0; }
+  .jugada-cifras { text-align: right; font-size: 12.5px; color: #666; white-space: nowrap; }
+  .jugada-cifras .jugada-monto { font-weight: bold; font-size: 14px; }
+  .jugada-cifras .jugada-monto.positivo { color: #1e7e34; }
+  .jugada-cifras .jugada-monto.negativo { color: #c0392b; }
+  .jugada-estado { display: inline-block; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+
+  .box-pozo { background:#eef6fc; border:1px solid #bce1f6; border-radius:8px; padding:14px 16px; margin-bottom:16px; font-size:14px; }
+  .box-pozo strong { color:#1b6ec2; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid var(--border); padding: 9px 10px; text-align: left; font-size: 13px; }
+  th { background-color: var(--primary); color: white; }
+  tr:nth-child(even) { background-color: #fafafa; }
+
+  .ganada { background-color: #d4edda !important; color: #155724; font-weight: bold; }
+  .perdida { background-color: #f8d7da !important; color: #721c24; font-weight: bold; }
+  .anulada { background-color: #fff3cd !important; color: #856404; font-weight: bold; }
+  .pendiente { background-color: #e2e3e5 !important; color: #383d41; }
+  .sinresultado { background-color: #e8daef !important; color: #6c3483; font-weight: bold; }
+  .faltalogro { background-color: #fdebd0 !important; color: #b8860b; font-weight: bold; }
+  .suspendida { background-color: #eaf0f6 !important; color: #34495e; font-weight: bold; }
+
+  /* =================================================================
+     "Estamos cuadrados" / "Tengo diferencia" (02-09-2026, a pedido del
+     usuario) — "un plus", nunca bloquea nada; al final de la lista de
+     jugadas. Usable una vez por día de Venezuela, ver
+     src/services/confirmaciones.js.
+     ================================================================= */
+  .confirmacion-seccion { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center; }
+  .confirmacion-titulo { font-size: 13px; color: #777; margin-bottom: 10px; }
+  .confirmacion-botones { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn-cuadrado { background-color: #27ae60; }
+  .btn-cuadrado:hover { background-color: #219150; }
+  .btn-diferencia { background-color: #c0392b; }
+  .btn-diferencia:hover { background-color: #a93226; }
+  .confirmacion-mensaje { padding: 12px 16px; border-radius: 8px; font-size: 14px; font-weight: bold; }
+  .confirmacion-mensaje.ok { background: #d4edda; color: #155724; }
+  .confirmacion-mensaje.alerta { background: #f8d7da; color: #721c24; }
+
+  #estadoCarga, #estadoError { text-align:center; padding:30px; color:#777; }
+  #estadoError { color:#c0392b; }
+  footer.pie-pagina { text-align: center; padding: 22px 10px; margin-top: 10px; color: #8a97a3; font-size: 12px; }
+
+  /* =================================================================
+     Rediseño de esta página (01-09-2026, a pedido del usuario, a partir
+     de una captura de otro programa de apuestas que le gustó): logo del
+     grupo arriba de todo, navegación "◀ / ▶" entre rangos, y las jugadas
+     ordenadas y agrupadas POR DÍA (en vez de una tabla larga con todo
+     junto) — cada día se puede abrir/cerrar para ver su detalle, con su
+     propio balance y un aviso de si esa sábana ya quedó confirmada como
+     la oficial del día. Ver renderResumen()/renderDias() más abajo.
+     ================================================================= */
+  .logo-grupo { display: block; max-width: 220px; max-height: 110px; margin: 0 auto 14px auto; border-radius: 8px; }
+  .badge-tipocuenta { display: inline-block; background: #eef6fc; color: #1b6ec2; border: 1px solid #bce1f6; border-radius: 10px; padding: 2px 10px; font-size: 12px; font-weight: bold; vertical-align: middle; margin-left: 8px; }
+
+  .nav-rango { display: flex; gap: 8px; }
+  .nav-rango button { background-color: #7f8c8d; padding: 9px 14px; font-size: 13px; }
+  .nav-rango button:hover { background-color: #6c7a7b; }
+
+  .dia-grupo { border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; overflow: hidden; }
+  .dia-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 16px; background: #f8f9fa; cursor: pointer; user-select: none; }
+  .dia-cabecera:hover { background: #eef1f4; }
+  .dia-cabecera .dia-izquierda { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dia-flecha { display: inline-block; transition: transform 0.15s; font-size: 12px; color: #777; }
+  .dia-grupo.abierto .dia-flecha { transform: rotate(90deg); }
+  .dia-fecha { font-weight: bold; color: var(--primary); font-size: 14px; }
+  .dia-cantidad { color: #888; font-size: 12px; }
+  .dia-balance { font-weight: bold; font-size: 15px; }
+  .dia-balance.positivo { color: #1e7e34; }
+  .dia-balance.negativo { color: #c0392b; }
+  .badge-diaconfirmado { display: inline-block; background: #27ae60; color: #fff; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-diasinconfirmar { display: inline-block; background: #e67e22; color: #fff; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .dia-cuerpo { display: none; padding: 0 16px 14px 16px; }
+  .dia-grupo.abierto .dia-cuerpo { display: block; }
+  .dia-cuerpo table { margin-top: 8px; }
+
+  /* =================================================================
+     COMPATIBILIDAD MÓVIL (01-09-2026) — este es el link que los clientes
+     abren desde el celular, así que es la página más importante de las
+     3 para este arreglo. Mismo criterio que en index.html/superadmin.html:
+     se ve y se usa bien en pantalla chica sin cambiar cómo funciona nada.
+     ================================================================= */
+  @media (max-width: 760px) {
+    body { padding: 10px; }
+    .container { padding: 14px; border-radius: 8px; }
+    h1 { font-size: 20px; }
+    .control-panel { padding: 12px; gap: 12px; }
+    .nav-rango button { padding: 10px 14px; }
+
+    /* La tabla de tickets de cada día se vuelve un bloque con scroll
+       horizontal propio en vez de aplastar sus columnas (Ticket/Detalle/
+       Arriesga/Gana/Estado no entran cómodas en una pantalla angosta). */
+    .dia-cuerpo table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+
+    .dia-cabecera { padding: 12px; }
+    .dia-fecha { font-size: 13px; }
+
+    .balance-total .monto { font-size: 34px; }
+    .jugada-cifras { text-align: left; width: 100%; }
+    .confirmacion-botones { flex-direction: column; }
+    .confirmacion-botones button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div id="estadoCarga">Cargando tu resumen...</div>
+  <div id="estadoError" style="display:none;"></div>
+
+  <div id="contenido" style="display:none;">
+    <img id="logoGrupo" class="logo-grupo" style="display:none;" alt="Logo del grupo">
+    <h1 id="tituloCliente">Mi resumen</h1>
+    <p class="subtitulo" id="subtituloGrupo">Deportes Zenyatta — solo lectura</p>
+    <p class="reloj-venezuela" id="relojVenezuela"></p>
+
+    <div class="control-panel">
+      <div class="control-group">
+        <label>Rango rápido:</label>
+        <select id="rangoRapido" onchange="cambiarRango()">
+          <option value="hoy">Hoy</option>
+          <option value="semana" selected>Semana actual (lun–dom)</option>
+          <option value="mes">Últimos 30 días</option>
+          <option value="todo">Todo el historial</option>
+          <option value="personalizado">Personalizado</option>
+        </select>
+      </div>
+      <div class="control-group"><label>Desde:</label><input type="date" id="desde" onchange="document.getElementById('rangoRapido').value='personalizado'; cargarResumen();"></div>
+      <div class="control-group"><label>Hasta:</label><input type="date" id="hasta" onchange="document.getElementById('rangoRapido').value='personalizado'; cargarResumen();"></div>
+      <!-- "◀ / ▶" (01-09-2026): se mueven el rango elegido hacia atrás/
+           adelante por su propio largo (si estás viendo una semana, salta
+           una semana entera; si es un día, salta un día) — mismo espíritu
+           que el link de "Semana Anterior" de la captura que mandó el
+           usuario, pero generalizado a cualquier rango. -->
+      <div class="control-group">
+        <label>&nbsp;</label>
+        <div class="nav-rango">
+          <button type="button" onclick="moverRango(-1)" title="Rango anterior">◀</button>
+          <button type="button" onclick="moverRango(1)" title="Rango siguiente">▶</button>
+        </div>
+      </div>
+      <button type="button" onclick="cargarResumen()">Actualizar</button>
+      <button type="button" onclick="descargarExcel()" style="background-color:#217346;">📥 Descargar Excel</button>
+    </div>
+
+    <div id="cajaPozo" class="box-pozo" style="display:none;"></div>
+
+    <div class="balance-total">
+      <div class="etiqueta" id="balanceEtiqueta">Total Semana</div>
+      <div class="monto" id="vBalance">$0.00</div>
+      <div class="rango-fechas" id="balanceRangoFechas"></div>
+    </div>
+
+    <!-- Jugadas agrupadas POR DÍA (01-09-2026) — cada día es una fila
+         "acordeón": se abre/cierra con un clic para ver el detalle de
+         ESE día, con su propio balance. Reemplaza la tabla larga de
+         antes (que mezclaba todos los días juntos). Ver renderDias(). -->
+    <div id="diasContenedor"></div>
+    <p id="diasVacio" style="display:none; text-align:center; color:#888; padding:20px;">Sin jugadas en este rango.</p>
+
+    <!-- =============================================================
+         "Estamos cuadrados" / "Tengo diferencia" (02-09-2026, a pedido
+         del usuario) — ver la nota grande en el CSS y en
+         src/services/confirmaciones.js. Es un plus, no bloquea nada.
+         ============================================================= -->
+    <div class="confirmacion-seccion" id="confirmacionSeccion" style="display:none;">
+      <p class="confirmacion-titulo">¿Cómo ves tu cuenta esta semana?</p>
+      <div class="confirmacion-botones" id="confirmacionBotones">
+        <button type="button" class="btn-cuadrado" onclick="confirmarCuenta('CUADRADO')">✅ Estamos cuadrados</button>
+        <button type="button" class="btn-diferencia" onclick="confirmarCuenta('DIFERENCIA')">⚠️ Tengo diferencia</button>
+      </div>
+      <div class="confirmacion-mensaje" id="confirmacionMensaje" style="display:none;"></div>
+    </div>
+  </div>
+
+  <footer class="pie-pagina">DESARROLLADO POR LOS BROTHERS DOUGLITAS &amp; LUSHO SINCE 2026</footer>
+</div>
+
+<script>
+// =================================================================
+// Vista pública del Cliente — sin login, el token de la URL ES el
+// acceso (ver src/routes/cliente.js del backend). Esta página no lee ni
+// escribe nada en localStorage: cada visita vuelve a pedirle el resumen
+// al servidor.
+// =================================================================
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token');
+
+const CLASE_ESTADO = {
+  'GANADA': 'ganada', 'PERDIDA': 'perdida', 'ANULADA': 'anulada', 'PENDIENTE': 'pendiente',
+  'FALTA CERRAR EN SÁBANA': 'sinresultado', 'NULA (FALTA LOGRO)': 'faltalogro',
+  'NULA (SIN JUGADA)': 'faltalogro', // 05-09-2026 — ver la nota grande en procesarSabana.js
+  'SUSPENDIDA': 'suspendida'
+};
+
+function formatMoney(n) {
+  const num = Number(n) || 0;
+  return (num < 0 ? '-$' : '$') + Math.abs(num).toFixed(2);
+}
+
+// Siempre con el signo +/- explícito (02-09-2026, a pedido del usuario:
+// "el saldo si es verde esta ganando con el simbolo mas o rojo con el
+// simbolo menos si esta perdiendo") — el color solo no alcanza para
+// quien no distingue bien verde/rojo.
+function formatMoneyConSigno(n) {
+  const num = Number(n) || 0;
+  return (num < 0 ? '-$' : '+$') + Math.abs(num).toFixed(2);
+}
+
+// "dd-mm-aaaa" a partir de "YYYY-MM-DD" en texto plano, sin pasar por
+// new Date() a secas (mismo cuidado que en formatFechaLarga más abajo).
+function formatFechaCorta(fechaISO) {
+  const partes = (fechaISO || '').split('-');
+  if (partes.length !== 3) return fechaISO || '';
+  const [anio, mes, dia] = partes;
+  return dia + '-' + mes + '-' + anio;
+}
+
+// =================================================================
+// RELOJ DE VENEZUELA (02-09-2026, a pedido del usuario: "fecha en la que
+// estan viendo el reporte con hora exacta de venezuela") — América/
+// Caracas está fija en UTC-4 todo el año (sin horario de verano desde
+// 2016), así que alcanza con restarle 4 horas al reloj del navegador; se
+// calcula acá mismo (sin pedirle nada al servidor) para que se vea
+// siempre, incluso mientras carga el resumen, y se actualiza solo cada
+// 30s. Mismo cálculo que src/services/fechaVenezuela.js del backend.
+// =================================================================
+const DIAS_SEMANA_VE = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_VE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function horaVenezuelaTexto() {
+  const d = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  const diaSemana = DIAS_SEMANA_VE[d.getUTCDay()];
+  const dia = d.getUTCDate();
+  const mes = MESES_VE[d.getUTCMonth()];
+  const anio = d.getUTCFullYear();
+  let horas = d.getUTCHours();
+  const minutos = String(d.getUTCMinutes()).padStart(2, '0');
+  const ampm = horas >= 12 ? 'p. m.' : 'a. m.';
+  horas = horas % 12;
+  if (horas === 0) horas = 12;
+  return diaSemana + ' ' + dia + ' de ' + mes + ' de ' + anio + ', ' + horas + ':' + minutos + ' ' + ampm + ' (hora de Venezuela)';
+}
+
+function actualizarRelojVenezuela() {
+  const el = document.getElementById('relojVenezuela');
+  if (el) el.textContent = horaVenezuelaTexto();
+}
+actualizarRelojVenezuela();
+setInterval(actualizarRelojVenezuela, 30000);
+
+// Datos de la última respuesta del servidor, para armar el mensaje de
+// WhatsApp de "Tengo diferencia" sin tener que volver a pedirlos.
+let GRUPO_NOMBRE_ACTUAL = '';
+let JUGADOR_NOMBRE_ACTUAL = '';
+let TELEFONO_DIFERENCIA_ACTUAL = null;
+
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// "2026-08-31" -> "Domingo 31-08-2026" (mismo estilo que la captura que
+// mandó el usuario). new Date("YYYY-MM-DDT00:00:00") evita el corrimiento
+// de zona horaria que da new Date("YYYY-MM-DD") a secas en algunos
+// navegadores (que la interpreta en UTC y puede mostrar el día anterior).
+function formatFechaLarga(fechaISO) {
+  const partes = fechaISO.split('-');
+  if (partes.length !== 3) return fechaISO;
+  const [anio, mes, dia] = partes;
+  const d = new Date(fechaISO + 'T00:00:00');
+  const nombreDia = isNaN(d.getDay()) ? '' : DIAS_SEMANA[d.getDay()] + ' ';
+  return nombreDia + dia + '-' + mes + '-' + anio;
+}
+
+function mostrarError(msg) {
+  document.getElementById('estadoCarga').style.display = 'none';
+  document.getElementById('contenido').style.display = 'none';
+  const el = document.getElementById('estadoError');
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+async function cambiarRango() {
+  const tipo = document.getElementById('rangoRapido').value;
+  if (tipo === 'personalizado') return;
+  await cargarResumen(tipo);
+}
+
+// "◀ / ▶" (01-09-2026): desplaza el rango actual (desde/hasta) hacia
+// atrás o adelante por su propio largo en días — así, viendo una semana,
+// salta a la semana anterior/siguiente completa (igual espíritu que
+// "Semana Anterior" de la captura que mandó el usuario, pero sirve para
+// cualquier ancho de rango, no solo semanas).
+function moverRango(direccion) {
+  const desdeEl = document.getElementById('desde');
+  const hastaEl = document.getElementById('hasta');
+  if (!desdeEl.value || !hastaEl.value) return;
+  const desde = new Date(desdeEl.value + 'T00:00:00');
+  const hasta = new Date(hastaEl.value + 'T00:00:00');
+  const largoDias = Math.round((hasta - desde) / 86400000) + 1;
+  desde.setDate(desde.getDate() + direccion * largoDias);
+  hasta.setDate(hasta.getDate() + direccion * largoDias);
+  desdeEl.value = formatearFechaISOLocal(desde);
+  hastaEl.value = formatearFechaISOLocal(hasta);
+  document.getElementById('rangoRapido').value = 'personalizado';
+  cargarResumen();
+}
+
+function formatearFechaISOLocal(d) {
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mes + '-' + dia;
+}
+
+async function cargarResumen(rangoRapido) {
+  if (!TOKEN) { mostrarError('Este link no es válido. Pide a tu grupo que te reenvíe tu link personal.'); return; }
+
+  let url = '/api/cliente/' + encodeURIComponent(TOKEN);
+  const desde = document.getElementById('desde') ? document.getElementById('desde').value : '';
+  const hasta = document.getElementById('hasta') ? document.getElementById('hasta').value : '';
+
+  if (rangoRapido) {
+    url += '?rango=' + rangoRapido;
+  } else if (desde && hasta) {
+    url += '?desde=' + desde + '&hasta=' + hasta;
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) { mostrarError(data.error || 'No se pudo cargar tu resumen.'); return; }
+    renderResumen(data);
+  } catch (e) {
+    mostrarError('No se pudo conectar con el servidor.');
+  }
+}
+
+let ULTIMO_RESUMEN = null; // guarda la última respuesta cargada, para "Descargar Excel"
+
+function renderResumen(data) {
+  ULTIMO_RESUMEN = data;
+  document.getElementById('estadoCarga').style.display = 'none';
+  document.getElementById('estadoError').style.display = 'none';
+  document.getElementById('contenido').style.display = 'block';
+
+  // Logo + nombre del grupo (01-09-2026, a pedido del usuario) — el logo
+  // solo lo puede poner el Súper-admin (ver superadmin.html); si el
+  // grupo no tiene uno cargado, sencillamente no se muestra nada.
+  const logoEl = document.getElementById('logoGrupo');
+  if (data.grupo && data.grupo.logoUrl) {
+    logoEl.src = data.grupo.logoUrl;
+    logoEl.style.display = 'block';
+    logoEl.onerror = () => { logoEl.style.display = 'none'; };
+  } else {
+    logoEl.style.display = 'none';
+  }
+  document.getElementById('subtituloGrupo').textContent = (data.grupo && data.grupo.nombre ? data.grupo.nombre : 'Deportes Zenyatta') + ' — solo lectura';
+
+  const badgeTipoCuenta = data.jugador.tipoCuenta === 'avalado' ? ' <span class="badge-tipocuenta">AVALADO</span>' : '';
+  document.getElementById('tituloCliente').innerHTML = 'Hola, ' + data.jugador.nombre + badgeTipoCuenta;
+  document.getElementById('desde').value = data.rango.desde;
+  document.getElementById('hasta').value = data.rango.hasta;
+
+  // Balance único (02-09-2026, a pedido del usuario) — reemplaza las
+  // tarjetas de Arriesgado/Perdido/Ganado/Polla de antes; la Polla del
+  // rango sigue sumada adentro de este número (ver src/routes/cliente.js)
+  // y se ve aparte, día por día, en renderDias().
+  const ETIQUETAS_RANGO = { hoy: 'Total Hoy', semana: 'Total Semana', mes: 'Total del Mes', todo: 'Total Histórico', personalizado: 'Total del Rango' };
+  const tipoRango = document.getElementById('rangoRapido').value;
+  document.getElementById('balanceEtiqueta').textContent = ETIQUETAS_RANGO[tipoRango] || 'Total Semana';
+
+  const vBalance = document.getElementById('vBalance');
+  vBalance.textContent = formatMoneyConSigno(data.resumen.balance);
+  vBalance.className = 'monto ' + (data.resumen.balance >= 0 ? 'positivo' : 'negativo');
+
+  document.getElementById('balanceRangoFechas').textContent = data.rango.desde === data.rango.hasta
+    ? formatFechaCorta(data.rango.desde)
+    : formatFechaCorta(data.rango.desde) + ' al ' + formatFechaCorta(data.rango.hasta);
+
+  const cajaPozo = document.getElementById('cajaPozo');
+  if (data.pozo) {
+    cajaPozo.style.display = 'block';
+    cajaPozo.innerHTML = '<strong>Tu pozo:</strong> ' + formatMoney(data.pozo.pozoDisponible) + ' disponible' +
+      ' (' + formatMoney(data.pozo.pozoActual) + ' en total' + (data.pozo.congelado ? ', ' + formatMoney(data.pozo.congelado) + ' congelado en jugadas pendientes' : '') + ')';
+  } else {
+    cajaPozo.style.display = 'none';
+  }
+
+  renderDias(data.tickets, data.diasConfirmados || [], data.polla || []);
+  renderConfirmacion(data);
+}
+
+// =================================================================
+// "Estamos cuadrados" / "Tengo diferencia" (02-09-2026, a pedido del
+// usuario) — ver la nota grande en el CSS y en
+// src/services/confirmaciones.js. Si el jugador ya usó el botón hoy
+// (fecha de Venezuela), se muestra el mensaje correspondiente en vez de
+// los botones — así no hace falta apretar de nuevo para enterarse.
+// =================================================================
+function renderConfirmacion(data) {
+  GRUPO_NOMBRE_ACTUAL = (data.grupo && data.grupo.nombre) || '';
+  JUGADOR_NOMBRE_ACTUAL = (data.jugador && data.jugador.nombre) || '';
+  TELEFONO_DIFERENCIA_ACTUAL = data.telefonoDiferencia || null;
+
+  const seccion = document.getElementById('confirmacionSeccion');
+  const botones = document.getElementById('confirmacionBotones');
+  const mensaje = document.getElementById('confirmacionMensaje');
+  seccion.style.display = 'block';
+
+  if (data.confirmacionHoy) {
+    botones.style.display = 'none';
+    mostrarMensajeConfirmacion(data.confirmacionHoy.tipo);
+  } else {
+    botones.style.display = 'flex';
+    mensaje.style.display = 'none';
+  }
+}
+
+function mostrarMensajeConfirmacion(tipo) {
+  const mensaje = document.getElementById('confirmacionMensaje');
+  mensaje.style.display = 'block';
+  if (tipo === 'CUADRADO') {
+    mensaje.className = 'confirmacion-mensaje ok';
+    mensaje.textContent = '✅ Gracias por confirmar tu cuenta, feliz semana y éxitos en tus jugadas.';
+  } else {
+    mensaje.className = 'confirmacion-mensaje alerta';
+    mensaje.textContent = '⚠️ Ya avisaste tu diferencia hoy — el grupo ya lo sabe. Podés volver a usar estos botones mañana.';
+  }
+}
+
+async function confirmarCuenta(tipo) {
+  if (!TOKEN) return;
+  try {
+    const res = await fetch('/api/cliente/' + encodeURIComponent(TOKEN) + '/confirmar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo })
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* sin body */ }
+    if (!res.ok) { alert((data && data.error) || 'No se pudo registrar tu respuesta.'); return; }
+
+    document.getElementById('confirmacionBotones').style.display = 'none';
+    mostrarMensajeConfirmacion(tipo);
+
+    // "Tengo diferencia" (02-09-2026, a pedido del usuario): además de
+    // avisarle al grupo (ya quedó registrado arriba), abre WhatsApp hacia
+    // el primer número que el Súper-admin cargó para este grupo, con el
+    // mensaje ya escrito.
+    if (tipo === 'DIFERENCIA' && TELEFONO_DIFERENCIA_ACTUAL) {
+      const texto = 'hola soy ' + JUGADOR_NOMBRE_ACTUAL + ' tengo diferencias en mi cuenta del grupo ' + GRUPO_NOMBRE_ACTUAL;
+      const link = 'https://wa.me/' + TELEFONO_DIFERENCIA_ACTUAL + '?text=' + encodeURIComponent(texto);
+      window.open(link, '_blank');
+    }
+  } catch (e) {
+    alert('No se pudo conectar con el servidor.');
+  }
+}
+
+// =================================================================
+// Jugadas agrupadas POR DÍA (01-09-2026, a pedido del usuario, a partir
+// de una captura de otro programa de apuestas que le gustó: "se ordena
+// por día, en lo que seleccionás el día ves el detallado de qué hizo ese
+// día"). Cada día es un acordeón con su propio balance (misma cuenta que
+// el resumen de arriba: GANADA suma "gana", PERDIDA resta "arriesga") y
+// un badge de si esa fecha ya quedó confirmada como la sábana oficial
+// ("💾 Guardar Día", ver historial.js). El día más reciente arranca
+// abierto; el resto, cerrado — para no abrumar con todo a la vista de
+// una, pero mostrar de una lo último sin tener que hacer clic primero.
+// =================================================================
+function renderDias(tickets, diasConfirmadosArray, pollaFilas) {
+  const contenedor = document.getElementById('diasContenedor');
+  const vacio = document.getElementById('diasVacio');
+  contenedor.innerHTML = '';
+
+  // "Polla" (02-09-2026, a pedido del usuario): un día puede tener SOLO
+  // polla (sin ningún ticket de sábana) — por eso el vacío se decide
+  // mirando ambas listas, no solo tickets.
+  pollaFilas = pollaFilas || [];
+  if (tickets.length === 0 && pollaFilas.length === 0) {
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+
+  const diasConfirmados = new Set(diasConfirmadosArray);
+  const porFecha = new Map();
+  tickets.forEach(t => {
+    if (!porFecha.has(t.fecha)) porFecha.set(t.fecha, []);
+    porFecha.get(t.fecha).push(t);
+  });
+
+  const pollaPorFecha = new Map();
+  pollaFilas.forEach(p => {
+    pollaPorFecha.set(p.fecha, (pollaPorFecha.get(p.fecha) || 0) + p.monto);
+    if (!porFecha.has(p.fecha)) porFecha.set(p.fecha, []); // día solo con polla, sin tickets
+  });
+
+  // Más reciente primero — para revisar rápido "qué pasó últimamente"
+  // sin tener que bajar hasta el final.
+  const fechasOrdenadas = Array.from(porFecha.keys()).sort().reverse();
+
+  fechasOrdenadas.forEach((fecha, idx) => {
+    const ticketsDelDia = porFecha.get(fecha);
+    let ganado = 0, perdido = 0;
+    ticketsDelDia.forEach(t => {
+      if (t.estado === 'GANADA') ganado += t.gana;
+      if (t.estado === 'PERDIDA') perdido += t.arriesga;
+    });
+    const pollaDia = pollaPorFecha.get(fecha) || 0;
+    const balanceDia = ganado - perdido + pollaDia;
+
+    const grupo = document.createElement('div');
+    grupo.className = 'dia-grupo' + (idx === 0 ? ' abierto' : '');
+    grupo.id = 'diaGrupo-' + idx;
+
+    const badgeDia = diasConfirmados.has(fecha)
+      ? '<span class="badge-diaconfirmado">✅ Confirmado</span>'
+      : '<span class="badge-diasinconfirmar">⚠️ Sin confirmar</span>';
+
+    const cantidadTexto = ticketsDelDia.length + ' ticket(s)' + (pollaDia ? ' + polla' : '');
+
+    const cabecera = document.createElement('div');
+    cabecera.className = 'dia-cabecera';
+    cabecera.onclick = () => toggleDiaGrupo(idx);
+    cabecera.innerHTML =
+      '<span class="dia-izquierda">' +
+        '<span class="dia-flecha">▶</span>' +
+        '<span class="dia-fecha">' + formatFechaLarga(fecha) + '</span>' +
+        '<span class="dia-cantidad">' + cantidadTexto + '</span>' +
+        badgeDia +
+      '</span>' +
+      '<span class="dia-balance ' + (balanceDia >= 0 ? 'positivo' : 'negativo') + '">' + formatMoneyConSigno(balanceDia) + '</span>';
+
+    const cuerpo = document.createElement('div');
+    cuerpo.className = 'dia-cuerpo';
+
+    // Cada jugada como un ítem aparte (02-09-2026, a pedido del usuario:
+    // "recuerda que cada jugada es un item diferente") en vez de una fila
+    // de tabla — más fácil de leer en un celular. La Polla del día
+    // (02-09-2026) es un ítem más, arriba de las jugadas de sábana.
+    if (pollaDia) {
+      const itemPolla = document.createElement('div');
+      itemPolla.className = 'jugada-item polla';
+      itemPolla.innerHTML =
+        '<div class="jugada-detalle"><div class="jugada-texto">🎲 Polla</div></div>' +
+        '<div class="jugada-cifras"><span class="jugada-monto ' + (pollaDia >= 0 ? 'positivo' : 'negativo') + '">' + formatMoneyConSigno(pollaDia) + '</span></div>';
+      cuerpo.appendChild(itemPolla);
+    }
+
+    ticketsDelDia.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'jugada-item';
+      item.innerHTML =
+        '<div class="jugada-detalle">' +
+          '<div class="jugada-ticket">' + (t.ticket || '') + '</div>' +
+          '<div class="jugada-texto">' + (t.detalle || '') + '</div>' +
+          '<span class="jugada-estado ' + (CLASE_ESTADO[t.estado] || '') + '">' + t.estado + '</span>' +
+        '</div>' +
+        '<div class="jugada-cifras">' +
+          '<div>Arriesga: ' + formatMoney(t.arriesga) + '</div>' +
+          '<div class="jugada-monto">Gana: ' + formatMoney(t.gana) + '</div>' +
+        '</div>';
+      cuerpo.appendChild(item);
+    });
+
+    grupo.appendChild(cabecera);
+    grupo.appendChild(cuerpo);
+    contenedor.appendChild(grupo);
+  });
+}
+
+function toggleDiaGrupo(idx) {
+  const grupo = document.getElementById('diaGrupo-' + idx);
+  if (grupo) grupo.classList.toggle('abierto');
+}
+
+// =================================================================
+// DESCARGAR EXCEL: mismo formato que la app original — CSV con BOM UTF-8
+// (para que Excel abra bien tildes/ñ/$) y separador ";" (Excel en español
+// usa ";" como separador de columnas, no ","). Se arma en el navegador a
+// partir de ULTIMO_RESUMEN, sin pedirle nada nuevo al servidor.
+// =================================================================
+function celdaCSV(valor) {
+  const texto = String(valor === undefined || valor === null ? '' : valor);
+  // Si el valor trae ";", comillas o saltos de línea, hay que encerrarlo
+  // entre comillas (y escapar comillas internas) para que Excel no rompa
+  // las columnas.
+  if (/[";\n]/.test(texto)) return '"' + texto.replace(/"/g, '""') + '"';
+  return texto;
+}
+
+function descargarExcel() {
+  if (!ULTIMO_RESUMEN) {
+    alert('Primero espera a que cargue tu resumen.');
+    return;
+  }
+  const d = ULTIMO_RESUMEN;
+  const filas = [];
+  filas.push(['Fecha', 'Ticket', 'Detalle', 'Arriesga', 'Gana (neto)', 'Estado'].map(celdaCSV).join(';'));
+  d.tickets.forEach(t => {
+    filas.push([t.fecha, t.ticket, t.detalle || '', t.arriesga.toFixed(2), t.gana.toFixed(2), t.estado].map(celdaCSV).join(';'));
+  });
+  if (d.polla && d.polla.length > 0) {
+    filas.push('');
+    filas.push(['Fecha', 'Polla'].map(celdaCSV).join(';'));
+    d.polla.forEach(p => {
+      filas.push([p.fecha, p.monto.toFixed(2)].map(celdaCSV).join(';'));
+    });
+  }
+  filas.push('');
+  filas.push(['Total Arriesgado', d.resumen.arriesgado.toFixed(2)].map(celdaCSV).join(';'));
+  filas.push(['Total Perdido', d.resumen.perdido.toFixed(2)].map(celdaCSV).join(';'));
+  filas.push(['Total Ganado (neto)', d.resumen.ganado.toFixed(2)].map(celdaCSV).join(';'));
+  if (d.resumen.polla) {
+    filas.push(['Total Polla', d.resumen.polla.toFixed(2)].map(celdaCSV).join(';'));
+  }
+  filas.push(['Balance', d.resumen.balance.toFixed(2)].map(celdaCSV).join(';'));
+  if (d.pozo) {
+    filas.push(['Pozo disponible', d.pozo.pozoDisponible.toFixed(2)].map(celdaCSV).join(';'));
+  }
+
+  const bom = '﻿'; // BOM UTF-8, así Excel no muestra los acentos/ñ/$ como caracteres raros
+  const csv = bom + filas.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'resumen_' + d.jugador.nombre.replace(/[^a-zA-Z0-9_-]/g, '_') + '_' + d.rango.desde + '_a_' + d.rango.hasta + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+cargarResumen();
+</script>
+</body>
+</html>

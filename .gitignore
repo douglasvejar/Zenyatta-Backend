@@ -1,0 +1,8 @@
+node_modules/
+.env
+*.log
+
+# Carpeta donde el bot de WhatsApp guarda su sesión ya vinculada (las
+# claves del vínculo con WhatsApp, no código) — NUNCA debe subirse a git;
+# en el servidor real vive en un volumen persistente aparte (ver DEPLOY.md).
+whatsapp-session/
