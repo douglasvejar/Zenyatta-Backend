@@ -78,6 +78,18 @@
 //      llama la misma función de acá (procesarDiaAbierto) con
 //      forzar:true — salta la espera de la hora y reinicia el reloj de
 //      1 hora para el próximo envío automático.
+// "ReferenceError: crypto is not defined" en Railway (Node 18.20.8, visto
+// en vivo el 15-09-2026 al conectar por primera vez contra WhatsApp real):
+// @whiskeysockets/baileys usa el objeto global `crypto` (Web Crypto API)
+// para el HKDF de la sesión — ese global recién viene incluido SIEMPRE en
+// Node 20+; en Node 18 solo existe si el propio proceso lo agrega. Se
+// rellena acá, antes de cargar baileys (más abajo, adentro de
+// iniciarBotWhatsApp), en vez de depender de que el hosting use Node 20 —
+// así funciona igual sin importar qué versión de Node tenga el servidor.
+if (typeof globalThis.crypto === 'undefined') {
+  globalThis.crypto = require('node:crypto').webcrypto;
+}
+
 const path = require('path');
 const db = require('../db');
 const { detectarTriggerSabana, quitarLineaTrigger, detectarComando, quitarTildes, normalizarTelefono, telefonoDeParticipante } = require('./whatsappTrigger');
