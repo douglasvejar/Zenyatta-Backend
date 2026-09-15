@@ -277,6 +277,40 @@ router.patch('/grupos/:id/whatsapp-jid', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// VER EL CÓDIGO QR COMO IMAGEN DE VERDAD (15-09-2026, bug real visto en
+// vivo desplegando en Railway: el dibujo del QR en texto (ASCII, ver
+// whatsappBot.js) se rompe en la pantalla de logs de Railway — las
+// líneas son más angostas que el dibujo y se cortan/pasan de renglón,
+// dejando un QR ilegible para la cámara del teléfono. En vez de depender
+// de que el visor de logs del hosting renderice bien texto ancho, estas
+// 2 rutas exponen el mismo código QR (el string crudo que ya guarda
+// whatsappBot.estadoConexion.ultimoQr) como una imagen PNG de verdad,
+// dibujada acá mismo con la librería `qrcode` (una de dibujo — 100%
+// distinta de `qrcode-terminal`, la de texto que ya se usaba).
+// =================================================================
+router.get('/whatsapp-estado', asyncHandler(async (req, res) => {
+  const { obtenerEstadoConexion } = require('../services/whatsappBot');
+  const estado = obtenerEstadoConexion();
+  res.json({
+    conectado: estado.conectado,
+    tieneQr: !!estado.ultimoQr,
+    ultimoError: estado.ultimoError
+  });
+}));
+
+router.get('/whatsapp-qr.png', asyncHandler(async (req, res) => {
+  const { obtenerEstadoConexion } = require('../services/whatsappBot');
+  const estado = obtenerEstadoConexion();
+  if (!estado.ultimoQr) {
+    return res.status(404).json({ error: estado.conectado ? 'El WhatsApp ya está vinculado, no hay ningún QR pendiente.' : 'Todavía no llegó ningún código QR — esperá unos segundos y volvé a pedirlo.' });
+  }
+  const QRCode = require('qrcode');
+  const buffer = await QRCode.toBuffer(estado.ultimoQr, { type: 'png', width: 320, margin: 2 });
+  res.set('Cache-Control', 'no-store');
+  res.type('png').send(buffer);
+}));
+
+// =================================================================
 // NÚMERO AUTORIZADO PARA LOS COMANDOS DE CHAT (09-09-2026, a pedido del
 // usuario: "los comandos lo puede mandar el mismo que manda el comando
 // sabana jugada, pero aparte en super admin yo puedo agregar un numero y
