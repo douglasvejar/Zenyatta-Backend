@@ -1412,6 +1412,11 @@ function renderJuegoCardMLB(info) {
   if (info.finalizado) { claseExtra = ' finalizado'; etiquetaEstado = 'FINAL'; }
   else if (info.suspendido) { etiquetaEstado = 'SUSPENDIDO'; }
   else if (previo) { claseExtra = ' previo'; etiquetaEstado = 'ANTES DEL JUEGO'; }
+  else { claseExtra = ' en-vivo'; }
+
+  // Puntico cian pulsante junto a "EN VIVO" (15-09-2026, rediseño de la
+  // Pizarra a un look más "tablero digital" — ver el CSS de .juego-card).
+  const etiquetaConPunto = claseExtra === ' en-vivo' ? '<span class="jc-dot-vivo"></span>' + etiquetaEstado : etiquetaEstado;
 
   const textoDerecha = info.finalizado ? '' : (previo ? formatHoraLocal(ev.horaInicioUTC) : (ev.entradaActualTexto || ''));
 
@@ -1442,7 +1447,7 @@ function renderJuegoCardMLB(info) {
 
   return (
     '<div class="juego-card' + claseExtra + '">' +
-      '<div class="jc-estado"><span>' + etiquetaEstado + '</span><span>' + textoDerecha + '</span></div>' +
+      '<div class="jc-estado"><span>' + etiquetaConPunto + '</span><span>' + textoDerecha + '</span></div>' +
       filaEquipo(info.awayTeam, info.awayRuns, awayBateando) +
       filaEquipo(info.homeTeam, info.homeRuns, homeBateando) +
       detalleVivo +
@@ -1464,6 +1469,11 @@ function renderJuegoCardNFL(info) {
   if (info.finalizado) { claseExtra = ' finalizado'; etiquetaEstado = 'FINAL'; }
   else if (info.suspendido) { etiquetaEstado = 'SUSPENDIDO'; }
   else if (previo) { claseExtra = ' previo'; etiquetaEstado = 'ANTES DEL JUEGO'; }
+  else { claseExtra = ' en-vivo'; }
+
+  // Puntico cian pulsante junto a "EN VIVO" — mismo criterio que
+  // renderJuegoCardMLB() (ver el CSS de .juego-card.en-vivo/.jc-dot-vivo).
+  const etiquetaConPunto = claseExtra === ' en-vivo' ? '<span class="jc-dot-vivo"></span>' + etiquetaEstado : etiquetaEstado;
 
   const textoDerecha = info.finalizado
     ? ''
@@ -1479,7 +1489,7 @@ function renderJuegoCardNFL(info) {
 
   return (
     '<div class="juego-card' + claseExtra + '">' +
-      '<div class="jc-estado"><span>' + etiquetaEstado + '</span><span>' + textoDerecha + '</span></div>' +
+      '<div class="jc-estado"><span>' + etiquetaConPunto + '</span><span>' + textoDerecha + '</span></div>' +
       filaEquipo(info.awayTeam, info.awayScore, info.awayTeamLogo) +
       filaEquipo(info.homeTeam, info.homeScore, info.homeTeamLogo) +
     '</div>'
