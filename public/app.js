@@ -1254,7 +1254,7 @@ function generarPlanoWhatsApp() {
   // (GRUPO.nombre, el mismo que se ve arriba en "Conectado como: ..."),
   // con el nombre viejo como respaldo solo si por algún motivo GRUPO
   // todavía no se cargó.
-  partes.push('*' + ((GRUPO && GRUPO.nombre) || 'LDSOLUCIONES') + '*');
+  partes.push('*' + ((GRUPO && GRUPO.nombre) || 'Ludox Venezuela 🇻🇪') + '*');
   partes.push('🏀⚽🏈⚾');
   if (ULTIMO_PLANO_WHATSAPP.fecha) {
     const [anio, mes, dia] = ULTIMO_PLANO_WHATSAPP.fecha.split('-');

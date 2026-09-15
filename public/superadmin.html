@@ -2,128 +2,205 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LDSOLUCIONES — Súper-admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ludox Venezuela 🇻🇪 — Súper-admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* =================================================================
+     PALETA OSCURA LUDOX (15-09-2026) — mismos NOMBRES de variable que ya
+     usaba este archivo (--bg-color, --card-bg, --primary, --accent,
+     --accent-hover, --border), pero con el VALOR del tema oscuro, para no
+     tener que salir a tocar cada uso uno por uno. Se agregan además los
+     nombres nuevos que ya usa public/index.html (el portal de bienvenida)
+     para las piezas decorativas (resplandor, marca de agua) — así los 3
+     archivos comparten el mismo vocabulario de colores.
+     ================================================================= */
   :root {
-    --bg-color: #f4f6f9;
-    --card-bg: #ffffff;
-    --primary: #1a252f;
-    --accent: #27ae60;
-    --accent-hover: #219150;
-    --border: #e1e8ed;
-  }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); padding: 20px; color: #333; margin: 0; }
-  .container { max-width: 900px; margin: 0 auto; background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-  h1 { text-align: center; color: var(--primary); margin-top: 0; font-size: 24px; }
-  h2 { color: var(--primary); font-size: 17px; margin-bottom: 12px; }
-  p.subtitulo { text-align: center; color: #777; margin-top: -8px; margin-bottom: 22px; font-size: 13px; }
+    --bg-color: #03060f;
+    --card-bg: #0b0f1e;
+    --primary: #0d1326;
+    --accent: #38e0f0;
+    --accent-hover: #2f6bff;
+    --border: rgba(255,255,255,0.08);
 
-  label { font-weight: bold; font-size: 14px; color: #444; }
+    --bg: #03060f;
+    --bg-glow-1: #1e3aa8;
+    --bg-glow-2: #22d3ee;
+    --card: #0b0f1e;
+    --card-2: #121a30;
+    --card-border: rgba(255,255,255,0.08);
+    --border-light: rgba(255,255,255,0.14);
+    --text: #f4f6fb;
+    --text-dim: #93a0bd;
+    --accent-cyan: #38e0f0;
+    --accent-blue: #2f6bff;
+    --accent-deep: #241fb8;
+    --danger: #ff6b6b;
+    --ok: #34d399;
+    --warning: #facc15;
+  }
+  body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); padding: 20px; color: var(--text); margin: 0; position: relative; overflow-x: hidden; color-scheme: dark; }
+
+  /* Resplandor ambiente + marca de agua del logo (15-09-2026) — mismo
+     recurso visual que public/index.html, copiado tal cual. Los 2 van con
+     z-index NEGATIVO (a diferencia del -1/0 de index.html) a propósito:
+     así quedan detrás de TODO sin tener que revisar el z-index de cada
+     contenedor de este panel (topbar, container, modales, chat flotante,
+     etc.) uno por uno. */
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.32;
+    z-index: -1;
+    pointer-events: none;
+  }
+  body::before {
+    width: 560px; height: 560px;
+    top: -160px; left: 50%;
+    transform: translateX(-62%);
+    background: radial-gradient(circle, var(--bg-glow-2) 0%, transparent 70%);
+  }
+  body::after {
+    width: 620px; height: 620px;
+    bottom: -220px; right: 50%;
+    transform: translateX(58%);
+    background: radial-gradient(circle, var(--bg-glow-1) 0%, transparent 70%);
+    opacity: 0.28;
+  }
+  /* Isotipo LUDOX bien grande, tenue y desenfocado, centrado y fijo — una
+     marca de agua de fondo (no interactúa, no se selecciona). z-index
+     negativo por el mismo motivo que el resplandor de arriba. */
+  .fondo-logo-marca {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60vw;
+    max-width: 640px;
+    opacity: 0.05;
+    filter: blur(4px);
+    pointer-events: none;
+    z-index: -1;
+    user-select: none;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; background: var(--card-bg); border: 1px solid var(--card-border); padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  h1 { text-align: center; color: var(--text); margin-top: 0; font-size: 24px; font-family: 'Outfit', sans-serif; }
+  h2 { color: var(--text); font-size: 17px; margin-bottom: 12px; font-family: 'Outfit', sans-serif; }
+  p.subtitulo { text-align: center; color: var(--text-dim); margin-top: -8px; margin-bottom: 22px; font-size: 13px; }
+
+  label { font-weight: bold; font-size: 14px; color: var(--text-dim); }
   input[type="text"], input[type="email"], input[type="password"], input[type="date"], select {
-    padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; width: 100%;
+    padding: 10px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 14px; box-sizing: border-box; width: 100%;
+    background: rgba(255,255,255,0.04); color: var(--text); font-family: 'Inter', sans-serif;
+  }
+  input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="date"]:focus, select:focus {
+    outline: none; border-color: var(--accent-cyan);
   }
 
-  button { background-color: var(--accent); color: white; border: none; padding: 12px 16px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+  button { background-color: var(--accent); color: #04070f; border: none; padding: 12px 16px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background 0.2s; font-family: 'Outfit', sans-serif; }
   button:hover { background-color: var(--accent-hover); }
-  button.btn-secundario { background-color: #7f8c8d; }
+  button.btn-secundario { background-color: #7f8c8d; color: #fff; }
   button.btn-secundario:hover { background-color: #6c7a7b; }
   button.btn-chico { padding: 7px 12px; font-size: 12px; font-weight: normal; border-radius: 5px; }
-  button.btn-peligro { background-color: #c0392b; }
+  button.btn-peligro { background-color: #c0392b; color: #fff; }
   button.btn-peligro:hover { background-color: #a5281a; }
 
   /* PANTALLA "ENTRAR CON EL SECRETO" */
   .acceso-shell { max-width: 380px; margin: 60px auto; }
   .acceso-shell .container { padding: 30px; }
   .campo { margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
-  #accesoError { color: #c0392b; font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
+  #accesoError { color: var(--danger); font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
 
   /* PANEL PRINCIPAL */
-  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; max-width: 900px; margin: 0 auto 14px auto; font-size: 13px; color: #555; }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; max-width: 900px; margin: 0 auto 14px auto; font-size: 13px; color: var(--text-dim); }
   .topbar button { padding: 8px 14px; font-size: 13px; }
 
-  .box-nuevo-grupo { background-color: #eef6fc; border: 1px solid #bce1f6; padding: 18px; border-radius: 8px; margin-bottom: 25px; }
-  .box-nuevo-grupo h2 { margin-top: 0; color: #1b6ec2; }
+  .box-nuevo-grupo { background-color: rgba(56,224,240,0.05); border: 1px solid rgba(56,224,240,0.25); padding: 18px; border-radius: 8px; margin-bottom: 25px; }
+  .box-nuevo-grupo h2 { margin-top: 0; color: var(--accent-cyan); }
   .inputs-inline { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
   /* Un <select> sin "width" se dibuja tan ancho como su opción más larga y
      empuja toda su columna del grid con él si no se le pone un tope — ver
      el mismo arreglo ya aplicado en public/index.html (01-09-2026). */
   .inputs-inline > div { min-width: 0; }
-  #formError { color: #c0392b; font-size: 13px; margin-top: 8px; min-height: 16px; }
-  #formOk { color: #1e7e34; font-size: 13px; margin-top: 8px; min-height: 16px; }
+  #formError { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 16px; }
+  #formOk { color: var(--ok); font-size: 13px; margin-top: 8px; min-height: 16px; }
 
-  .box-diccionario { background-color: #fbf5e6; border: 1px solid #f0dfa8; padding: 18px; border-radius: 8px; margin: 30px 0 20px 0; }
-  .box-diccionario h2 { margin-top: 0; color: #9a7d1a; }
+  .box-diccionario { background-color: rgba(250,204,21,0.06); border: 1px solid rgba(250,204,21,0.25); padding: 18px; border-radius: 8px; margin: 30px 0 20px 0; }
+  .box-diccionario h2 { margin-top: 0; color: var(--warning); }
   .inputs-inline-dic { display: grid; grid-template-columns: 1fr 1fr 100px auto; gap: 12px; align-items: end; }
-  #dicError { color: #c0392b; font-size: 13px; margin-top: 8px; min-height: 16px; }
-  #dicOk { color: #1e7e34; font-size: 13px; margin-top: 8px; min-height: 16px; }
-  #vacioDiccionario { text-align: center; color: #888; padding: 20px; font-size: 13px; }
+  #dicError { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 16px; }
+  #dicOk { color: var(--ok); font-size: 13px; margin-top: 8px; min-height: 16px; }
+  #vacioDiccionario { text-align: center; color: var(--text-dim); padding: 20px; font-size: 13px; }
 
   table { width: 100%; border-collapse: collapse; margin-top: 5px; }
   th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; font-size: 13px; }
   th { background-color: var(--primary); color: white; }
-  tr:nth-child(even) { background-color: #fafafa; }
+  tr:nth-child(even) { background-color: rgba(255,255,255,0.03); }
 
   .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-  .badge.activo { background-color: #d4edda; color: #155724; }
-  .badge.inactivo { background-color: #f8d7da; color: #721c24; }
+  .badge.activo { background-color: rgba(52,211,153,0.16); color: var(--ok); }
+  .badge.inactivo { background-color: rgba(255,107,107,0.16); color: var(--danger); }
 
-  #vacioGrupos { text-align: center; color: #888; padding: 20px; font-size: 13px; }
+  #vacioGrupos { text-align: center; color: var(--text-dim); padding: 20px; font-size: 13px; }
 
   #tablaGrupos tbody tr { cursor: pointer; }
-  #tablaGrupos tbody tr:hover { background-color: #eef6fc; }
+  #tablaGrupos tbody tr:hover { background-color: rgba(56,224,240,0.06); }
 
   /* MODAL DE DETALLE DE UN GRUPO */
-  .modal-fondo { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
-  .modal-caja { background: var(--card-bg); border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
+  .modal-fondo { display: none; position: fixed; inset: 0; background: rgba(2,4,10,0.72); z-index: 50; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+  .modal-caja { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
   .modal-caja h2 { margin-top: 0; }
-  .modal-cerrar { float: right; background: none; border: none; color: #888; font-size: 20px; padding: 0 4px; cursor: pointer; }
-  .modal-cerrar:hover { background: none; color: #333; }
+  .modal-cerrar { float: right; background: none; border: none; color: var(--text-dim); font-size: 20px; padding: 0 4px; cursor: pointer; }
+  .modal-cerrar:hover { background: none; color: var(--text); }
   .detalle-fila { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .detalle-fila:last-child { border-bottom: none; }
-  .detalle-fila .etiqueta { color: #666; }
+  .detalle-fila .etiqueta { color: var(--text-dim); }
   .detalle-fila .valor { font-weight: bold; text-align: right; }
-  .saldo-positivo { color: #1e7e34; }
-  .saldo-negativo { color: #c0392b; }
+  .saldo-positivo { color: var(--ok); }
+  .saldo-negativo { color: var(--danger); }
   .modal-seccion { margin-top: 18px; padding-top: 14px; border-top: 2px solid var(--border); }
-  .modal-seccion h3 { font-size: 14px; color: var(--primary); margin: 0 0 10px 0; }
+  .modal-seccion h3 { font-size: 14px; color: var(--accent-cyan); margin: 0 0 10px 0; font-family: 'Outfit', sans-serif; }
   .cambiar-password-inline { display: flex; gap: 10px; align-items: end; }
   .cambiar-password-inline input { flex: 1; }
-  #passwordError { color: #c0392b; font-size: 13px; margin-top: 6px; min-height: 16px; }
-  #passwordOk { color: #1e7e34; font-size: 13px; margin-top: 6px; min-height: 16px; }
-  #logoError { color: #c0392b; font-size: 13px; margin-top: 6px; min-height: 16px; }
-  #logoOk { color: #1e7e34; font-size: 13px; margin-top: 6px; min-height: 16px; }
-  #detalleCargando { text-align: center; color: #888; padding: 30px; }
+  #passwordError { color: var(--danger); font-size: 13px; margin-top: 6px; min-height: 16px; }
+  #passwordOk { color: var(--ok); font-size: 13px; margin-top: 6px; min-height: 16px; }
+  #logoError { color: var(--danger); font-size: 13px; margin-top: 6px; min-height: 16px; }
+  #logoOk { color: var(--ok); font-size: 13px; margin-top: 6px; min-height: 16px; }
+  #detalleCargando { text-align: center; color: var(--text-dim); padding: 30px; }
 
-  footer.pie-pagina { text-align: center; padding: 22px 10px; margin-top: 10px; color: #8a97a3; font-size: 12px; letter-spacing: .3px; }
+  footer.pie-pagina { text-align: center; padding: 22px 10px; margin-top: 10px; color: var(--text-dim); font-size: 12px; letter-spacing: .3px; }
 
   /* ALERTAS / CHAT (súper-admin) */
-  .nav-badge { display: inline-block; background-color: #e74c3c; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
+  .nav-badge { display: inline-block; background-color: rgba(255,107,107,0.22); color: var(--danger); border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
   .btn-topbar-alerta.nav-alerta-activa { animation: parpadeoSuperadmin 1.2s ease-in-out infinite; }
   @keyframes parpadeoSuperadmin { 0%, 100% { background-color: #7f8c8d; } 50% { background-color: #c0392b; } }
-  .caja-alerta { border: 1px solid #f5b7b1; background: #fdedec; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
-  .caja-alerta.resuelta { border-color: #a9dfbf; background: #eafaf1; }
-  .caja-alerta .alerta-cabecera { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #555; margin-bottom: 6px; }
+  .caja-alerta { border: 1px solid rgba(255,107,107,0.25); background: rgba(255,107,107,0.06); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .caja-alerta.resuelta { border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.06); }
+  .caja-alerta .alerta-cabecera { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
   .caja-alerta .alerta-mensaje { font-size: 13px; margin-bottom: 10px; }
   .caja-alerta .alerta-resolver { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .caja-alerta .alerta-resolver select { flex: 1; min-width: 180px; }
-  .badge-resuelta { display: inline-block; background: #27ae60; color: #fff; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-resuelta { display: inline-block; background: rgba(52,211,153,0.18); color: var(--ok); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
 
   .conversaciones-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .conversacion-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: #fff; }
-  .conversacion-fila:hover { background: #eef6fc; }
-  .conversacion-fila.activa { border-color: var(--accent); background: #eafaf1; }
+  .conversacion-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: var(--card-2); }
+  .conversacion-fila:hover { background: rgba(56,224,240,0.06); }
+  .conversacion-fila.activa { border-color: var(--accent); background: rgba(56,224,240,0.1); }
   .conversacion-fila .conv-nombre { font-weight: bold; font-size: 13px; }
-  .conversacion-fila .conv-ultimo { font-size: 12px; color: #777; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conversacion-fila .conv-ultimo { font-size: 12px; color: var(--text-dim); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .chat-caja { border: 1px solid var(--border); border-radius: 8px; background: #fafbfc; padding: 14px; margin-top: 14px; }
+  .chat-caja { border: 1px solid var(--border); border-radius: 8px; background: var(--card-2); padding: 14px; margin-top: 14px; }
   .chat-mensajes { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
   .chat-burbuja { max-width: 75%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; }
-  .chat-burbuja.propio { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
-  .chat-burbuja.otro { align-self: flex-start; background: #e1e8ed; color: #333; border-bottom-left-radius: 3px; }
+  .chat-burbuja.propio { align-self: flex-end; background: var(--accent); color: #04070f; border-bottom-right-radius: 3px; }
+  .chat-burbuja.otro { align-self: flex-start; background: var(--card-2); color: var(--text); border-bottom-left-radius: 3px; }
   .chat-burbuja .chat-hora { display: block; font-size: 10px; opacity: .75; margin-top: 4px; }
   .chat-enviar { display: flex; gap: 8px; margin-top: 10px; }
-  .chat-enviar textarea { flex: 1; height: 44px; resize: none; font-family: inherit; font-size: 13px; }
+  .chat-enviar textarea { flex: 1; height: 44px; resize: none; font-family: inherit; font-size: 13px; background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid var(--border-light); border-radius: 6px; }
   .chat-enviar button { padding: 10px 18px; }
 
   /* ================================================================= */
@@ -135,17 +212,17 @@
   /* Alertas, que ahora solo trae las notificaciones de AMBIGUA.         */
   /* ================================================================= */
   .chat-widget { position: fixed; right: 22px; bottom: 22px; z-index: 9999; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; font-family: inherit; }
-  .chat-widget-burbuja { width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 26px; box-shadow: 0 4px 16px rgba(0,0,0,0.28); position: relative; display: flex; align-items: center; justify-content: center; padding: 0; border: none; cursor: pointer; }
+  .chat-widget-burbuja { width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: #04070f; font-size: 26px; box-shadow: 0 4px 16px rgba(0,0,0,0.28); position: relative; display: flex; align-items: center; justify-content: center; padding: 0; border: none; cursor: pointer; }
   .chat-widget-burbuja.parpadea { animation: parpadeoChatWidget 1s ease-in-out infinite; }
   @keyframes parpadeoChatWidget { 0%, 100% { transform: scale(1); box-shadow: 0 4px 16px rgba(0,0,0,0.28); } 50% { transform: scale(1.14); box-shadow: 0 4px 26px rgba(231,76,60,0.65); } }
-  .chat-widget-badge { position: absolute; top: -4px; right: -4px; background: #e74c3c; color: #fff; border-radius: 10px; min-width: 20px; height: 20px; line-height: 20px; font-size: 11px; font-weight: bold; box-shadow: 0 0 0 2px #fff; }
-  .chat-widget-panel { width: 330px; max-width: calc(100vw - 44px); background: #fff; border-radius: 12px; box-shadow: 0 10px 32px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column; }
+  .chat-widget-badge { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #04070f; border-radius: 10px; min-width: 20px; height: 20px; line-height: 20px; font-size: 11px; font-weight: bold; box-shadow: 0 0 0 2px var(--card-bg); }
+  .chat-widget-panel { width: 330px; max-width: calc(100vw - 44px); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; }
   .chat-widget-header { background: var(--primary); color: #fff; padding: 13px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; gap: 8px; }
   .chat-widget-header .cabecera-botones { display: flex; align-items: center; gap: 4px; }
   .chat-widget-header button { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px; }
-  .chat-widget-panel .conversaciones-lista { max-height: 380px; overflow-y: auto; padding: 10px; margin-top: 0; background: #f4f6f8; }
-  .chat-widget-panel .conversacion-fila { background: #fff; }
-  .chat-widget-panel .chat-mensajes { max-height: 340px; min-height: 180px; padding: 12px; background: #f4f6f8; margin: 0; }
+  .chat-widget-panel .conversaciones-lista { max-height: 380px; overflow-y: auto; padding: 10px; margin-top: 0; background: var(--card-bg); }
+  .chat-widget-panel .conversacion-fila { background: var(--card-2); }
+  .chat-widget-panel .chat-mensajes { max-height: 340px; min-height: 180px; padding: 12px; background: var(--card-bg); margin: 0; }
   .chat-widget-panel .chat-enviar { padding: 10px; border-top: 1px solid var(--border); margin-top: 0; }
 
   /* =================================================================
@@ -179,6 +256,12 @@
 </head>
 <body>
 
+<!-- Marca de agua del isotipo LUDOX (15-09-2026) — fixed + z-index negativo,
+     ver la nota grande junto a .fondo-logo-marca en el <style>. Va primero
+     que todo lo demás del <body> a propósito, para no interferir con el
+     orden de apilamiento de ningún otro contenedor de esta pantalla. -->
+<img class="fondo-logo-marca" src="img/logo-ludox.png" alt="" aria-hidden="true">
+
 <!-- ================================================================= -->
 <!-- PANTALLA DE ACCESO: pide el SUPERADMIN_SECRET (el mismo valor que -->
 <!-- está en el .env del servidor) una sola vez y lo guarda en el      -->
@@ -189,7 +272,7 @@
 <div id="vistaAcceso" class="acceso-shell">
   <div class="container">
     <h1>🔑 Súper-admin</h1>
-    <p class="subtitulo">LDSOLUCIONES — administración de Grupos</p>
+    <p class="subtitulo">Ludox Venezuela 🇻🇪 — administración de Grupos</p>
     <div class="campo">
       <label>Clave de Súper-admin</label>
       <input type="password" id="accesoSecret" placeholder="La misma que pusiste en SUPERADMIN_SECRET (.env)">
@@ -235,11 +318,11 @@
       </div>
       <div id="formError"></div>
       <div id="formOk"></div>
-      <small style="display:block; margin-top:6px; color:#666;">El Grupo nuevo queda <strong>inactivo</strong> por defecto — actívalo desde la tabla de abajo cuando ya hayas arreglado el cobro con ese cliente.</small>
+      <small style="display:block; margin-top:6px; color:var(--text-dim);">El Grupo nuevo queda <strong>inactivo</strong> por defecto — actívalo desde la tabla de abajo cuando ya hayas arreglado el cobro con ese cliente.</small>
     </div>
 
     <h2>Grupos existentes</h2>
-    <p style="margin-top:-6px; color:#777; font-size:12px;">Hacé clic en un Grupo para ver su detalle (jugadores activos, saldo, último inicio de sesión, y cambiar su contraseña).</p>
+    <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hacé clic en un Grupo para ver su detalle (jugadores activos, saldo, último inicio de sesión, y cambiar su contraseña).</p>
     <table id="tablaGrupos">
       <thead>
         <tr><th>Nombre</th><th>Email</th><th>Estado</th><th>Creado</th><th>Acción</th></tr>
@@ -256,7 +339,7 @@
     <!-- ============================================================= -->
     <div class="box-diccionario">
       <h2>📖 Diccionario global de equipos</h2>
-      <p style="margin-top:-6px; color:#7a6a2a; font-size:13px;">Apodos que van a funcionar para <strong>todos los Grupos</strong> de la plataforma (no solo el que lo pida). Esto es distinto del cajón "Registrar Equipo Nuevo" que cada Grupo tiene en su propia Sábana — ese sigue siendo privado de cada uno.</p>
+      <p style="margin-top:-6px; color:var(--warning); font-size:13px;">Apodos que van a funcionar para <strong>todos los Grupos</strong> de la plataforma (no solo el que lo pida). Esto es distinto del cajón "Registrar Equipo Nuevo" que cada Grupo tiene en su propia Sábana — ese sigue siendo privado de cada uno.</p>
       <div class="inputs-inline-dic">
         <div>
           <label>Apodo</label>
@@ -294,8 +377,8 @@
     <p class="subtitulo">Jugadas AMBIGUA (VARIOS DEPORTES) que ningún grupo pudo resolver solo — ver src/services/evaluador.js. Resolverla acá elige el deporte correcto para la PRÓXIMA vez que ese grupo reprocese esa sábana.</p>
 
     <div id="listaAlertasSuperadmin"></div>
-    <div id="vacioAlertasSuperadmin" style="display:none; text-align:center; color:#888; padding:20px;">No hay alertas todavía. 🎉</div>
-    <small style="display:block; text-align:center; color:#999; margin-top:14px;">¿Un Grupo te escribió? Usa la bandeja de chat 💬 abajo a la derecha.</small>
+    <div id="vacioAlertasSuperadmin" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">No hay alertas todavía. 🎉</div>
+    <small style="display:block; text-align:center; color:var(--text-dim); margin-top:14px;">¿Un Grupo te escribió? Usa la bandeja de chat 💬 abajo a la derecha.</small>
   </div>
 
   <!-- ================================================================= -->
@@ -310,7 +393,7 @@
     <p class="subtitulo">Lo que manda la gente desde el botón "Contacto" del portal de bienvenida — todavía no son Grupos, son consultas para contratar el servicio.</p>
 
     <div id="listaMensajesContacto"></div>
-    <div id="vacioMensajesContacto" style="display:none; text-align:center; color:#888; padding:20px;">Todavía no llegó ningún mensaje.</div>
+    <div id="vacioMensajesContacto" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Todavía no llegó ningún mensaje.</div>
   </div>
 
   <!-- ================================================================= -->
@@ -331,11 +414,11 @@
 
     <div id="whatsappQrCajaImagen" style="display:none; text-align:center; background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; max-width:360px; margin:0 auto 14px;">
       <img id="whatsappQrImagen" alt="Código QR de WhatsApp" style="width:100%; max-width:300px; image-rendering:pixelated;">
-      <p style="color:#666; font-size:13px; margin-top:10px;">Ajustes de WhatsApp → Dispositivos vinculados → Vincular un dispositivo. El código se refresca solo cada 20 segundos mientras no lo escanees.</p>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:10px;">Ajustes de WhatsApp → Dispositivos vinculados → Vincular un dispositivo. El código se refresca solo cada 20 segundos mientras no lo escanees.</p>
     </div>
 
-    <div id="whatsappQrCajaConectado" style="display:none; text-align:center; padding:24px; color:#1e7e34; font-weight:600;">✅ Ya está vinculado y conectado — no hace falta escanear nada.</div>
-    <div id="whatsappQrCajaSinDatos" style="display:none; text-align:center; padding:24px; color:#888;">Esperando a que el servidor genere un código nuevo… (revisa que <span class="mono" style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">WHATSAPP_BOT_ACTIVADO=true</span> esté cargado en las variables del servidor)</div>
+    <div id="whatsappQrCajaConectado" style="display:none; text-align:center; padding:24px; color:var(--ok); font-weight:600;">✅ Ya está vinculado y conectado — no hace falta escanear nada.</div>
+    <div id="whatsappQrCajaSinDatos" style="display:none; text-align:center; padding:24px; color:var(--text-dim);">Esperando a que el servidor genere un código nuevo… (revisa que <span class="mono" style="background:var(--card-2); color:var(--text); padding:2px 6px; border-radius:4px;">WHATSAPP_BOT_ACTIVADO=true</span> esté cargado en las variables del servidor)</div>
 
     <!-- =============================================================
          ÚLTIMO ERROR DE ENVÍO (15-09-2026, a pedido del usuario tras
@@ -344,10 +427,10 @@
          fallaba mandando un mensaje AL grupo (distinto de recibir uno),
          el único rastro quedaba en los logs de Railway. Se muestra acá
          mismo, sin tener que ir a buscarlo. ============================================================= -->
-    <div id="whatsappErrorEnvioCaja" style="display:none; margin-top:14px; background:#fdecea; border:1px solid #f5c6cb; border-radius:8px; padding:14px;">
-      <strong style="color:#721c24;">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
-      <div id="whatsappErrorEnvioTexto" style="color:#721c24; font-size:13px; margin-top:6px;"></div>
-      <p style="color:#721c24; font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:#fff; padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, probá "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
+    <div id="whatsappErrorEnvioCaja" style="display:none; margin-top:14px; background:rgba(255,107,107,0.08); border:1px solid rgba(255,107,107,0.3); border-radius:8px; padding:14px;">
+      <strong style="color:var(--danger);">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
+      <div id="whatsappErrorEnvioTexto" style="color:var(--danger); font-size:13px; margin-top:6px;"></div>
+      <p style="color:var(--danger); font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:rgba(255,255,255,0.08); color:var(--text); padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, probá "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
     </div>
 
     <!-- =============================================================
@@ -358,14 +441,14 @@
          el QR. Solo tiene sentido usarlo si algo anda mal (sesión
          corrupta, vínculo perdido) — con todo funcionando normal no
          hace falta tocarlo nunca. ============================================================= -->
-    <div style="margin-top:20px; padding-top:14px; border-top:1px solid #eee;">
-      <button type="button" class="btn-secundario" onclick="olvidarSesionWhatsapp()" style="color:#c0392b; border-color:#f5c6cb;">🗑️ Olvidar sesión y generar un QR nuevo</button>
-      <p style="color:#888; font-size:12px; margin-top:6px;">Solo tocá esto si algo anda mal (ej. error "No sessions" al mandar mensajes, o se perdió el vínculo sin explicación). Desvincula el número — vas a tener que escanear un QR nuevo después.</p>
+    <div style="margin-top:20px; padding-top:14px; border-top:1px solid var(--border-light);">
+      <button type="button" class="btn-secundario" onclick="olvidarSesionWhatsapp()" style="color:var(--danger); border-color:rgba(255,107,107,0.35);">🗑️ Olvidar sesión y generar un QR nuevo</button>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:6px;">Solo tocá esto si algo anda mal (ej. error "No sessions" al mandar mensajes, o se perdió el vínculo sin explicación). Desvincula el número — vas a tener que escanear un QR nuevo después.</p>
       <div id="whatsappOlvidarSesionMsg"></div>
     </div>
   </div>
 
-  <footer class="pie-pagina">DESARROLLADO POR LOS BROTHERS DOUGLITAS &amp; LUSHO SINCE 2026</footer>
+  <footer class="pie-pagina">Desarrollado por Ludox Venezuela since 2026 - Soluciones Digitales</footer>
 
   <!-- ================================================================= -->
   <!-- BANDEJA DE CHAT FLOTANTE — ver comentario grande de la sección CSS. -->
@@ -388,10 +471,10 @@
              tener que scrollear toda la lista. Filtra en el navegador
              sobre lo que ya se cargó, sin pedir nada más al backend. -->
         <div style="padding:8px 10px 0;">
-          <input type="text" id="buscarConversacionInput" placeholder="🔍 Buscar grupo..." oninput="filtrarConversaciones()" style="width:100%; padding:8px 10px; font-size:13px; border:1px solid #dbe2ea; border-radius:6px;">
+          <input type="text" id="buscarConversacionInput" placeholder="🔍 Buscar grupo..." oninput="filtrarConversaciones()" style="width:100%; padding:8px 10px; font-size:13px; border:1px solid var(--border-light); border-radius:6px;">
         </div>
         <div id="listaConversaciones" class="conversaciones-lista"></div>
-        <div id="vacioConversaciones" style="display:none; text-align:center; color:#888; padding:16px; font-size:13px;">Ningún grupo coincide con la búsqueda.</div>
+        <div id="vacioConversaciones" style="display:none; text-align:center; color:var(--text-dim); padding:16px; font-size:13px;">Ningún grupo coincide con la búsqueda.</div>
       </div>
       <div id="chatWidgetSAHiloWrap" style="display:none;">
         <div id="chatMensajesSuperadmin" class="chat-mensajes"></div>
@@ -475,7 +558,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>🖼️ Logo del Grupo</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
         <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
         <div class="cambiar-password-inline">
           <input type="text" id="logoUrlInput" placeholder="https://... (dejalo vacío para quitar el logo)">
@@ -494,7 +577,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>📱 Teléfonos de WhatsApp</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Hasta 3 números. Cuando un Cliente presiona "⚠️ Tengo diferencia" en su link, se le abre WhatsApp hacia el PRIMERO de esta lista (el más antiguo) — el orden importa.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hasta 3 números. Cuando un Cliente presiona "⚠️ Tengo diferencia" en su link, se le abre WhatsApp hacia el PRIMERO de esta lista (el más antiguo) — el orden importa.</p>
         <div id="listaTelefonosGrupo"></div>
         <div class="cambiar-password-inline" style="margin-top:8px;">
           <input type="text" id="telefonoNuevoNumero" placeholder="Número con código de país (ej. 584121234567)" style="flex:1.3;">
@@ -515,7 +598,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>📲 Sábana automática por WhatsApp</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Servicio aparte (plus): con esto prendido, "Resumen por Cliente" del Grupo se carga solo a medida que llegan mensajes "SABANA DE JUGADAS" al grupo de WhatsApp vinculado — sin esto, el Grupo sigue 100% manual. Requiere además que el bot esté activado en el servidor (<code>WHATSAPP_BOT_ACTIVADO</code>, ver README.md).</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Servicio aparte (plus): con esto prendido, "Resumen por Cliente" del Grupo se carga solo a medida que llegan mensajes "SABANA DE JUGADAS" al grupo de WhatsApp vinculado — sin esto, el Grupo sigue 100% manual. Requiere además que el bot esté activado en el servidor (<code>WHATSAPP_BOT_ACTIVADO</code>, ver README.md).</p>
         <div class="detalle-fila">
           <span class="etiqueta">Servicio</span>
           <span class="valor" id="whatsappHabilitadoEstado"></span>
@@ -532,21 +615,21 @@
              de la lista completa el campo de abajo, que sigue siendo el
              que de verdad se guarda. ========================================================= -->
         <div style="margin-top:12px;">
-          <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
+          <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <select id="whatsappJidSelectSuperadmin" onchange="elegirWhatsappJidDeLista()" style="flex:1; min-width:220px;">
               <option value="">Cargando lista de grupos…</option>
             </select>
             <button type="button" class="btn-secundario" onclick="cargarWhatsappGruposDisponibles(true)" style="font-size:12px; white-space:nowrap;">🔄 Actualizar lista</button>
           </div>
-          <small style="display:block; color:#777; font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
+          <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
         </div>
 
         <div class="cambiar-password-inline" style="margin-top:12px;">
           <input type="text" id="whatsappJidInputSuperadmin" placeholder="JID del grupo de WhatsApp (ej: 1203630000000001@g.us)">
           <button type="button" class="btn-secundario" onclick="guardarWhatsappJidGrupo()">Guardar</button>
         </div>
-        <small style="display:block; color:#777; font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
+        <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
         <div id="whatsappJidError"></div>
         <div id="whatsappJidOk"></div>
       </div>
@@ -564,7 +647,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>📟 Comandos por WhatsApp</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
         <div class="detalle-fila">
           <span class="etiqueta">Comandos</span>
           <span class="valor" id="comandosWhatsappHabilitadoEstado"></span>
@@ -574,7 +657,7 @@
           <input type="text" id="comandosWhatsappNumeroInput" placeholder="Número autorizado (ej: +58 412-123-4567)">
           <button type="button" class="btn-secundario" onclick="guardarComandosWhatsappNumero()">Guardar</button>
         </div>
-        <small style="display:block; color:#777; font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Dejalo vacío y guardá para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
+        <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Dejalo vacío y guardá para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
         <div id="comandosWhatsappNumeroError"></div>
         <div id="comandosWhatsappNumeroOk"></div>
       </div>
@@ -591,7 +674,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>💰 Modelo de comisión (%)</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Cómo se calcula el % que cobra cada cliente por sus propias jugadas. "Plano" usa el % fijo de Administración &gt; Jugador de siempre, uno por cliente. "Por tipo de jugada" usa UN solo juego de niveles para TODO el grupo (ej. directas 2%, parleys de 2 logros 3%, de 3 logros 5%...) sin importar el % de cada jugador — cada ticket usa el nivel que le toque según cuántos logros tenga, y se suman todos al final.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Cómo se calcula el % que cobra cada cliente por sus propias jugadas. "Plano" usa el % fijo de Administración &gt; Jugador de siempre, uno por cliente. "Por tipo de jugada" usa UN solo juego de niveles para TODO el grupo (ej. directas 2%, parleys de 2 logros 3%, de 3 logros 5%...) sin importar el % de cada jugador — cada ticket usa el nivel que le toque según cuántos logros tenga, y se suman todos al final.</p>
         <div class="cambiar-password-inline">
           <select id="modeloComisionSelect" onchange="cambiarModeloComisionUI()" style="flex:1;">
             <option value="plano">Plano (% fijo por cliente)</option>
@@ -599,7 +682,7 @@
           </select>
         </div>
         <div id="comisionTiersBox" style="display:none; margin-top:10px;">
-          <small style="display:block; color:#777; font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así podés agregar un nivel nuevo más adelante sin romper nada.</small>
+          <small style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así podés agregar un nivel nuevo más adelante sin romper nada.</small>
           <div id="listaComisionTiers"></div>
           <button type="button" class="btn-secundario" onclick="agregarFilaComisionTier()" style="margin-top:6px;">+ Agregar nivel</button>
         </div>
@@ -620,7 +703,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>📝 Sábana de muestra</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Pegá acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para vos — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pegá acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para vos — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
         <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pegá acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
         <button type="button" class="btn-secundario" onclick="guardarSabanaMuestra()" style="margin-top:8px;">Guardar</button>
         <div id="sabanaMuestraError"></div>
@@ -637,7 +720,7 @@
            ============================================================= -->
       <div class="modal-seccion">
         <h3>🗑️ Borrar jugadas / sábana por fecha</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">Marca las fechas que quieras borrar por completo para este grupo (sábana y Polla de esos días). <strong>Esto no se puede deshacer.</strong></p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Marca las fechas que quieras borrar por completo para este grupo (sábana y Polla de esos días). <strong>Esto no se puede deshacer.</strong></p>
         <div id="listaFechasBorrar" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px;"></div>
         <button type="button" class="btn-peligro" onclick="borrarFechasSeleccionadas()">Borrar fechas marcadas</button>
         <div id="borrarFechasError"></div>
@@ -646,7 +729,7 @@
 
       <div class="modal-seccion">
         <h3>🔑 Cambiar contraseña</h3>
-        <p style="margin-top:-6px; color:#777; font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijás una nueva.</p>
+        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijás una nueva.</p>
         <div class="cambiar-password-inline">
           <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
           <button type="button" class="btn-secundario" onclick="cambiarPasswordGrupo()">Cambiar</button>
@@ -1696,7 +1779,7 @@ function renderMensajesContacto(mensajes) {
       : '<span>🆕 Nuevo</span>';
     const acciones = '<div class="alerta-resolver">' +
       (m.leido ? '' : '<button type="button" class="btn-chico" onclick="marcarLeidoMensajeContacto(\'' + m.id + '\')">Marcar leído</button> ') +
-      '<button type="button" class="btn-chico" style="background:#c0392b;" onclick="eliminarMensajeContacto(\'' + m.id + '\')">Eliminar</button></div>';
+      '<button type="button" class="btn-chico" style="background:#c0392b; color:#fff;" onclick="eliminarMensajeContacto(\'' + m.id + '\')">Eliminar</button></div>';
     return '<div class="caja-alerta' + (m.leido ? ' resuelta' : '') + '">' +
       '<div class="alerta-cabecera"><span>' + cabecera + '</span>' + estado + '</div>' +
       '<div class="alerta-mensaje">' + m.mensaje.replace(/</g, '&lt;') + '</div>' +
@@ -1774,7 +1857,7 @@ function renderAlertasSuperadmin(alertas) {
     // que TICKET_EDITADO (informativa), con su propio badge.
     if (a.tipo === 'SABANA_ELIMINADA') {
       return '<div class="caja-alerta resuelta">' +
-        '<div class="alerta-cabecera"><span>' + cabecera + '</span><span class="badge-resuelta" style="background:#f3c6c6; color:#a33;">🗑️ Sábana eliminada</span></div>' +
+        '<div class="alerta-cabecera"><span>' + cabecera + '</span><span class="badge-resuelta" style="background:rgba(255,107,107,0.18); color:#ff6b6b;">🗑️ Sábana eliminada</span></div>' +
         '<div class="alerta-mensaje">' + a.mensaje + '</div></div>';
     }
     if (a.tipo === 'SABANA_RESTAURADA') {
