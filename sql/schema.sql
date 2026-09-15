@@ -633,6 +633,26 @@ create table if not exists whatsapp_dia_estado (
 create index if not exists idx_whatsapp_dia_estado_abiertos on whatsapp_dia_estado(fecha) where cierre_enviado_en is null;
 
 -- =================================================================
+-- MENSAJES DE CONTACTO (15-09-2026): la pantalla de bienvenida pública
+-- (public/index.html, portal nuevo) tiene un botón "Contacto" con un
+-- formulario que cualquiera puede mandar SIN login (ruta pública POST
+-- /api/contacto, ver src/routes/contacto.js) — esta tabla es la bandeja
+-- que después lee Súper-admin (GET /api/superadmin/mensajes-contacto).
+-- No tiene grupo_id: no es de ningún Grupo todavía, es gente interesada
+-- en CONTRATAR el servicio.
+-- =================================================================
+create table if not exists mensajes_contacto (
+  id         serial primary key,
+  nombre     text,
+  contacto   text not null,
+  mensaje    text not null,
+  leido      boolean not null default false,
+  creado_en  timestamptz not null default now()
+);
+
+create index if not exists idx_mensajes_contacto_no_leidos on mensajes_contacto(creado_en) where leido = false;
+
+-- =================================================================
 -- Row Level Security — ver nota grande al inicio del archivo.
 -- =================================================================
 alter table grupos enable row level security;
@@ -652,6 +672,7 @@ alter table confirmaciones_cliente enable row level security;
 alter table sabana_papelera enable row level security;
 alter table sabanas_pendientes_whatsapp enable row level security;
 alter table whatsapp_dia_estado enable row level security;
+alter table mensajes_contacto enable row level security;
 -- Sin políticas = acceso denegado por defecto para las claves anon/
 -- authenticated. Solo la clave service_role (la que usa el backend)
 -- puede leer/escribir. Ver nota al inicio del archivo.

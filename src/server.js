@@ -15,6 +15,7 @@ const clienteRoutes = require('./routes/cliente');
 const equiposRoutes = require('./routes/equipos');
 const imagenesRoutes = require('./routes/imagenes');
 const whatsappRoutes = require('./routes/whatsapp');
+const contactoRoutes = require('./routes/contacto');
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -42,6 +43,7 @@ app.use('/api/cliente', clienteRoutes); // pública, sin login (ver comentario e
 app.use('/api/equipos', equiposRoutes);
 app.use('/api/imagenes', imagenesRoutes); // proxy de logos, pública a propósito (ver routes/imagenes.js)
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/contacto', contactoRoutes); // pública, sin login (ver comentario en routes/contacto.js) — formulario del portal de bienvenida
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se

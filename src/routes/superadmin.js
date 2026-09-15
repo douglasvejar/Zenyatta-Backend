@@ -577,6 +577,35 @@ router.post('/alertas/:id/descartar', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// MENSAJES DE CONTACTO (15-09-2026): bandeja de lo que llega por el
+// formulario "Contacto" del portal de bienvenida (public/index.html) —
+// la ruta que los RECIBE es pública, sin login (POST /api/contacto, ver
+// routes/contacto.js); estas de acá, protegidas por requiereSuperadmin
+// (arriba del archivo), son las que los LEEN.
+// =================================================================
+router.get('/mensajes-contacto', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    'SELECT id, nombre, contacto, mensaje, leido, creado_en FROM mensajes_contacto ORDER BY creado_en DESC LIMIT 200'
+  );
+  res.json(r.rows);
+}));
+
+router.get('/mensajes-contacto/conteo-no-leidos', asyncHandler(async (req, res) => {
+  const r = await db.query('SELECT COUNT(*)::int AS total FROM mensajes_contacto WHERE leido = false');
+  res.json({ total: r.rows[0].total });
+}));
+
+router.post('/mensajes-contacto/:id/marcar-leido', asyncHandler(async (req, res) => {
+  await db.query('UPDATE mensajes_contacto SET leido = true WHERE id = $1', [req.params.id]);
+  res.status(204).end();
+}));
+
+router.delete('/mensajes-contacto/:id', asyncHandler(async (req, res) => {
+  await db.query('DELETE FROM mensajes_contacto WHERE id = $1', [req.params.id]);
+  res.status(204).end();
+}));
+
+// =================================================================
 // CHAT DE SOPORTE (con TODOS los grupos) — ver chat.js. El Súper-admin
 // primero ve la lista de conversaciones (una por grupo con actividad) y
 // después entra a la de un grupo puntual para leer/responder.
