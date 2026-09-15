@@ -227,6 +227,16 @@ async function resolverNumeroRealDelRemitente(sock, msg, participantJid) {
 }
 
 let estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
+
+// Compartida entre iniciarBotWhatsApp() y olvidarSesionWhatsapp() (más
+// abajo) — antes vivía solo adentro de iniciarBotWhatsApp() como variable
+// local, pero olvidarSesionWhatsapp() necesita el mismo path para poder
+// borrar la carpeta.
+function obtenerSessionDir() {
+  return process.env.WHATSAPP_SESSION_DIR
+    ? path.resolve(process.env.WHATSAPP_SESSION_DIR)
+    : path.resolve('./whatsapp-session');
+}
 let sockActual = null; // el socket de Baileys ya conectado, o null si no hay conexión activa ahora mismo.
 let relojDeFondoIniciado = false;
 
@@ -265,12 +275,27 @@ function formatFechaAviso(fechaISO) {
 // en memoria y se expone en obtenerEstadoConexion(), para que tanto el
 // panel del Grupo (routes/whatsapp.js → estadoBot) como Súper-admin
 // (GET /whatsapp-estado) lo puedan mostrar en pantalla.
-async function avisar(sock, jid, texto) {
+async function avisar(sock, jid, texto, intento = 1) {
   try {
     if (!sock || !jid) return;
     await sock.sendMessage(jid, { text: texto });
     estadoConexion.ultimoErrorEnvio = null;
   } catch (e) {
+    // "No sessions" (15-09-2026, error real visto en vivo, reportado por
+    // el usuario tras el arreglo de arriba) — un error conocido de
+    // Baileys/libsignal: pasa cuando todavía no terminó de armar la
+    // "sender key" del grupo para este número recién vinculado (necesita
+    // mandarle esa clave a cada participante del grupo antes de poder
+    // cifrar el primer mensaje) — normalmente se resuelve solo en unos
+    // segundos. En vez de perder el mensaje a la primera, se reintenta un
+    // par de veces con una pausa cada vez más larga antes de darse por
+    // vencido y recién ahí registrar el error.
+    const esFaltaDeSesion = /no sessions/i.test(e.message || '');
+    if (esFaltaDeSesion && intento < 3) {
+      console.log('[whatsappBot] "No sessions" al mandar al grupo ' + jid + ' (intento ' + intento + '/3) — reintentando en ' + (3 * intento) + 's, es normal recién vinculado el número...');
+      await new Promise(r => setTimeout(r, 3000 * intento));
+      return avisar(sock, jid, texto, intento + 1);
+    }
     estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid, mensaje: e.message };
     console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp (jid ' + jid + '):', e.message);
   }
@@ -830,9 +855,7 @@ async function iniciarBotWhatsApp() {
   const { Boom } = require('@hapi/boom');
   const qrcode = require('qrcode-terminal');
 
-  const sessionDir = process.env.WHATSAPP_SESSION_DIR
-    ? path.resolve(process.env.WHATSAPP_SESSION_DIR)
-    : path.resolve('./whatsapp-session');
+  const sessionDir = obtenerSessionDir();
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
@@ -883,7 +906,11 @@ async function iniciarBotWhatsApp() {
       const motivo = lastDisconnect && lastDisconnect.error ? new Boom(lastDisconnect.error) : null;
       const cerroSesion = motivo && motivo.output && motivo.output.statusCode === DisconnectReason.loggedOut;
       if (cerroSesion) {
-        estadoConexion.ultimoError = 'Se cerró la sesión de WhatsApp (hay que volver a escanear el QR). Borrá la carpeta de sesión (' + sessionDir + ') y reiniciá el servidor.';
+        // (15-09-2026) Antes esto pedía borrar la carpeta de sesión a mano
+        // y reiniciar el servidor — ahora alcanza con el botón "🗑️ Olvidar
+        // sesión y generar un QR nuevo" en Súper-admin (ver
+        // olvidarSesionWhatsapp() más abajo), sin tocar nada por fuera.
+        estadoConexion.ultimoError = 'Se cerró la sesión de WhatsApp (hay que volver a escanear el QR) — tocá "🗑️ Olvidar sesión y generar un QR nuevo" en Súper-admin.';
         console.error('[whatsappBot] ' + estadoConexion.ultimoError);
       } else {
         estadoConexion.ultimoError = 'Se perdió la conexión con WhatsApp, reintentando...';
@@ -903,11 +930,58 @@ async function iniciarBotWhatsApp() {
   return sock;
 }
 
+// =================================================================
+// "OLVIDAR" LA SESIÓN Y VOLVER A EMPEZAR (15-09-2026, a pedido del
+// usuario tras reportar el error "No sessions" al mandar mensajes al
+// grupo — un error conocido de Baileys/libsignal que, cuando NO se
+// resuelve solo con los reintentos de avisar() de arriba, casi siempre
+// es porque la sesión guardada localmente (la carpeta de
+// WHATSAPP_SESSION_DIR, en el Volumen persistente de Railway) quedó en
+// un estado inconsistente — por ejemplo, por haber quedado a mitad de
+// camino durante alguno de los reinicios/redespliegues de esta misma
+// depuración). Antes, la única forma de "empezar de cero" era borrar esa
+// carpeta a mano (por SSH/Volumen del hosting, algo que este usuario no
+// tiene forma cómoda de hacer) y reiniciar el servidor — ahora un botón
+// en Súper-admin hace las 2 cosas: le avisa a WhatsApp que este
+// dispositivo se desvincula (logout, para que también desaparezca de
+// "Dispositivos vinculados" en el teléfono) y borra la carpeta local, y
+// arranca el bot de nuevo al toque — que va a mostrar un QR nuevo para
+// escanear, como la primera vez.
+// =================================================================
+async function olvidarSesionWhatsapp() {
+  const fs = require('fs');
+  const sessionDir = obtenerSessionDir();
+
+  if (sockActual) {
+    try {
+      await sockActual.logout();
+    } catch (e) {
+      // No es grave si esto falla (ej. la conexión ya estaba caída) — se
+      // sigue igual con el borrado local, que es la parte que de verdad
+      // importa para poder volver a empezar.
+      console.error('[whatsappBot] No se pudo avisarle a WhatsApp del cierre de sesión (se sigue igual borrando la sesión local):', e.message);
+    }
+  }
+  sockActual = null;
+  estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
+
+  try {
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+  } catch (e) {
+    console.error('[whatsappBot] No se pudo borrar la carpeta de sesión (' + sessionDir + '):', e.message);
+    throw new Error('No se pudo borrar la sesión guardada: ' + e.message);
+  }
+
+  console.log('[whatsappBot] Sesión de WhatsApp olvidada (' + sessionDir + ') — arrancando de nuevo, va a aparecer un QR nuevo para escanear.');
+  iniciarBotWhatsApp().catch(e => console.error('[whatsappBot] Error al reconectar después de olvidar la sesión:', e));
+}
+
 module.exports = {
   iniciarBotWhatsApp,
   obtenerEstadoConexion,
   obtenerSockActivo,
   refrescarGruposDisponibles,
+  olvidarSesionWhatsapp,
   procesarDiaAbierto,
   // manejarMensajeEntrante y tickRelojDeFondo se exportan sobre todo
   // para poder probarlas de verdad (ver test_whatsapp_bot_flujo.js) sin

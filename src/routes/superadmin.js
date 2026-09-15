@@ -349,6 +349,20 @@ router.post('/whatsapp-grupos-disponibles/refrescar', asyncHandler(async (req, r
   }
 }));
 
+// "Olvidar" la sesión guardada y generar un QR nuevo (15-09-2026, a
+// pedido del usuario tras el error "No sessions" al mandar mensajes) —
+// ver el comentario grande en whatsappBot.olvidarSesionWhatsapp(). Único
+// botón "destructivo" de este panel: desvincula el número de WhatsApp
+// (hay que volver a escanear el QR) para los 2 casos en que hace falta
+// empezar de cero: la sesión quedó corrupta (síntoma: "No sessions" al
+// mandar, aunque LEER mensajes funcione bien) o simplemente se perdió el
+// vínculo y no hay forma de recuperarlo de otra manera.
+router.post('/whatsapp-olvidar-sesion', asyncHandler(async (req, res) => {
+  const { olvidarSesionWhatsapp } = require('../services/whatsappBot');
+  await olvidarSesionWhatsapp();
+  res.json({ ok: true });
+}));
+
 // =================================================================
 // NÚMERO AUTORIZADO PARA LOS COMANDOS DE CHAT (09-09-2026, a pedido del
 // usuario: "los comandos lo puede mandar el mismo que manda el comando

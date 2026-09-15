@@ -331,6 +331,21 @@
     <div id="whatsappErrorEnvioCaja" style="display:none; margin-top:14px; background:#fdecea; border:1px solid #f5c6cb; border-radius:8px; padding:14px;">
       <strong style="color:#721c24;">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
       <div id="whatsappErrorEnvioTexto" style="color:#721c24; font-size:13px; margin-top:6px;"></div>
+      <p style="color:#721c24; font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:#fff; padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, probá "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
+    </div>
+
+    <!-- =============================================================
+         "OLVIDAR" LA SESIÓN (15-09-2026, a pedido del usuario tras el
+         error "No sessions" al mandar mensajes) — ver el comentario
+         grande en whatsappBot.olvidarSesionWhatsapp(). Botón
+         "destructivo": desvincula el número y hay que volver a escanear
+         el QR. Solo tiene sentido usarlo si algo anda mal (sesión
+         corrupta, vínculo perdido) — con todo funcionando normal no
+         hace falta tocarlo nunca. ============================================================= -->
+    <div style="margin-top:20px; padding-top:14px; border-top:1px solid #eee;">
+      <button type="button" class="btn-secundario" onclick="olvidarSesionWhatsapp()" style="color:#c0392b; border-color:#f5c6cb;">🗑️ Olvidar sesión y generar un QR nuevo</button>
+      <p style="color:#888; font-size:12px; margin-top:6px;">Solo tocá esto si algo anda mal (ej. error "No sessions" al mandar mensajes, o se perdió el vínculo sin explicación). Desvincula el número — vas a tener que escanear un QR nuevo después.</p>
+      <div id="whatsappOlvidarSesionMsg"></div>
     </div>
   </div>
 
@@ -732,6 +747,24 @@ function pintarErrorEnvioWhatsapp(estado) {
   const err = estado.ultimoErrorEnvio;
   texto.textContent = '"' + err.mensaje + '" — grupo ' + err.jid + ', ' + formatFechaHora(err.en) + '.';
   caja.style.display = 'block';
+}
+
+// "Olvidar" la sesión (15-09-2026, a pedido del usuario tras el error
+// "No sessions" al mandar mensajes) — ver el comentario grande en
+// whatsappBot.olvidarSesionWhatsapp(). Pide confirmación porque es
+// destructivo (desvincula el número de WhatsApp de verdad).
+async function olvidarSesionWhatsapp() {
+  const msgEl = document.getElementById('whatsappOlvidarSesionMsg');
+  msgEl.textContent = '';
+  if (!confirm('Esto va a desvincular el número de WhatsApp actual — vas a tener que escanear un QR nuevo después. ¿Seguro que querés continuar?')) return;
+
+  try {
+    await apiSuperadmin('/api/superadmin/whatsapp-olvidar-sesion', { method: 'POST' });
+    msgEl.innerHTML = '<span style="color:#1e7e34;">✅ Listo — generando un QR nuevo, puede tardar unos segundos en aparecer.</span>';
+    actualizarVinculoWhatsapp();
+  } catch (e) {
+    msgEl.innerHTML = '<span style="color:#c0392b;">⚠️ ' + e.message + '</span>';
+  }
 }
 
 async function actualizarVinculoWhatsapp() {
