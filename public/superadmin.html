@@ -478,11 +478,32 @@
           <span class="valor" id="whatsappHabilitadoEstado"></span>
         </div>
         <button type="button" class="btn-secundario" id="btnToggleWhatsappHabilitado" onclick="toggleWhatsappHabilitadoGrupo()" style="margin-top:6px;"></button>
+
+        <!-- =========================================================
+             ELEGIR EL GRUPO DE LA LISTA (15-09-2026, a pedido del
+             usuario tras reportar "la sábana automática no está
+             funcionando" — la causa real era que no tenía forma de
+             conseguir el JID sin ir a buscarlo en los logs de Railway).
+             Este desplegable se arma solo con los grupos de WhatsApp a
+             los que ya pertenece el número vinculado al bot — elegir uno
+             de la lista completa el campo de abajo, que sigue siendo el
+             que de verdad se guarda. ========================================================= -->
+        <div style="margin-top:12px;">
+          <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select id="whatsappJidSelectSuperadmin" onchange="elegirWhatsappJidDeLista()" style="flex:1; min-width:220px;">
+              <option value="">Cargando lista de grupos…</option>
+            </select>
+            <button type="button" class="btn-secundario" onclick="cargarWhatsappGruposDisponibles(true)" style="font-size:12px; white-space:nowrap;">🔄 Actualizar lista</button>
+          </div>
+          <small style="display:block; color:#777; font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
+        </div>
+
         <div class="cambiar-password-inline" style="margin-top:12px;">
           <input type="text" id="whatsappJidInputSuperadmin" placeholder="JID del grupo de WhatsApp (ej: 1203630000000001@g.us)">
           <button type="button" class="btn-secundario" onclick="guardarWhatsappJidGrupo()">Guardar</button>
         </div>
-        <small style="display:block; color:#777; font-size:12px; margin-top:4px;">Se copia del log del servidor la primera vez que el número vinculado al bot se conecta y lista sus grupos. Dejalo vacío y guardá para desvincular.</small>
+        <small style="display:block; color:#777; font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
         <div id="whatsappJidError"></div>
         <div id="whatsappJidOk"></div>
       </div>
@@ -946,6 +967,7 @@ async function abrirDetalleGrupo(id, nombre) {
     GRUPO_WHATSAPP_HABILITADO = !!d.whatsappHabilitado;
     document.getElementById('whatsappJidInputSuperadmin').value = d.whatsappGrupoJid || '';
     pintarEstadoWhatsappHabilitado();
+    cargarWhatsappGruposDisponibles(false);
 
     GRUPO_COMANDOS_WHATSAPP_HABILITADO = !!d.comandosWhatsappHabilitado;
     document.getElementById('comandosWhatsappNumeroInput').value = d.comandosWhatsappNumero || '';
@@ -1112,9 +1134,80 @@ async function guardarWhatsappJidGrupo() {
     const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-jid', { method: 'PATCH', body: JSON.stringify({ jid }) });
     document.getElementById('whatsappJidInputSuperadmin').value = r.whatsappGrupoJid || '';
     document.getElementById('whatsappJidOk').textContent = r.whatsappGrupoJid ? '✅ Grupo de WhatsApp vinculado.' : '✅ Desvinculado — el bot ya no le va a leer mensajes a este grupo.';
+    // El desplegable de arriba puede haber quedado seleccionando un JID
+    // que ya no coincide con lo que se acaba de guardar (ej. si el
+    // usuario tocó "Guardar" con el campo vacío para desvincular) —
+    // vuelve a marcar la opción correcta sin pegarle de nuevo a WhatsApp.
+    marcarSeleccionActualEnListaWhatsapp();
   } catch (e) {
     document.getElementById('whatsappJidError').textContent = e.message;
   }
+}
+
+// =================================================================
+// LISTA DE GRUPOS DE WHATSAPP DISPONIBLES (15-09-2026, a pedido del
+// usuario tras reportar "la sábana automática no está funcionando" — la
+// causa real era que no tenía forma de conseguir el JID sin ir a
+// buscarlo en los logs de Railway, igual que pasaba antes con el QR). En
+// vez de que el usuario copie/pegue el JID a mano, este desplegable lo
+// arma solo con los grupos de WhatsApp a los que ya pertenece el número
+// vinculado (ver GET /whatsapp-grupos-disponibles en superadmin.js).
+// =================================================================
+async function cargarWhatsappGruposDisponibles(forzarActualizar) {
+  const select = document.getElementById('whatsappJidSelectSuperadmin');
+  const ayuda = document.getElementById('whatsappGruposAyuda');
+  select.innerHTML = '<option value="">' + (forzarActualizar ? 'Actualizando lista…' : 'Cargando lista de grupos…') + '</option>';
+  select.disabled = true;
+
+  try {
+    const r = forzarActualizar
+      ? await apiSuperadmin('/api/superadmin/whatsapp-grupos-disponibles/refrescar', { method: 'POST' })
+      : await apiSuperadmin('/api/superadmin/whatsapp-grupos-disponibles');
+    const grupos = r.grupos || [];
+
+    select.innerHTML = '';
+    const optionVacia = document.createElement('option');
+    optionVacia.value = '';
+    optionVacia.textContent = grupos.length
+      ? '— Elegí un grupo de WhatsApp —'
+      : (r.conectado === false ? 'El bot todavía no está conectado a WhatsApp' : 'No se encontró ningún grupo (¿ya agregaste el número vinculado a ese grupo?)');
+    select.appendChild(optionVacia);
+    grupos.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.jid;
+      opt.textContent = g.nombre + ' (' + g.jid + ')';
+      select.appendChild(opt);
+    });
+
+    marcarSeleccionActualEnListaWhatsapp();
+    ayuda.textContent = grupos.length
+      ? 'Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".'
+      : 'Todavía no aparece ningún grupo — agregá el número vinculado (el que escaneó el QR) como miembro del grupo de WhatsApp del cliente, después tocá "Actualizar lista".';
+  } catch (e) {
+    select.innerHTML = '<option value="">⚠️ No se pudo cargar la lista</option>';
+    ayuda.textContent = '⚠️ ' + e.message;
+  } finally {
+    select.disabled = false;
+  }
+}
+
+// Si el JID ya guardado para este Grupo coincide con alguno de la lista,
+// lo deja seleccionado (así se ve de un vistazo a cuál grupo apunta hoy)
+// — si no coincide con ninguno (ej. el bot no está en ese grupo o
+// todavía no se actualizó la lista), el desplegable queda en "— Elegí
+// un grupo —" sin tocar el campo de texto, que sigue mostrando el JID
+// real guardado.
+function marcarSeleccionActualEnListaWhatsapp() {
+  const select = document.getElementById('whatsappJidSelectSuperadmin');
+  const jidActual = document.getElementById('whatsappJidInputSuperadmin').value.trim();
+  select.value = jidActual;
+  if (select.value !== jidActual) select.value = ''; // no estaba en la lista
+}
+
+function elegirWhatsappJidDeLista() {
+  const select = document.getElementById('whatsappJidSelectSuperadmin');
+  if (!select.value) return; // "— Elegí un grupo —": no toca el campo de texto
+  document.getElementById('whatsappJidInputSuperadmin').value = select.value;
 }
 
 // =================================================================

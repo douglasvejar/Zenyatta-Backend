@@ -311,6 +311,38 @@ router.get('/whatsapp-qr.png', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// GRUPOS DE WHATSAPP DISPONIBLES, PARA ELEGIR EN VEZ DE PEGAR EL JID A
+// MANO (15-09-2026, bug real reportado en vivo: "la sábana automática no
+// está funcionando" — la causa era que no había forma de conseguir el
+// JID del grupo de WhatsApp del cliente sin ir a buscarlo en los logs de
+// Railway, el mismo problema que ya se había resuelto para el QR). Estas
+// 2 rutas exponen la lista de grupos a los que pertenece el número
+// vinculado (whatsappBot.estadoConexion.gruposDisponibles) para que
+// Súper-admin la muestre como un desplegable con el NOMBRE del grupo de
+// WhatsApp — el JID sigue siendo el que se guarda, pero el usuario ya no
+// tiene que copiarlo/pegarlo a mano.
+// =================================================================
+router.get('/whatsapp-grupos-disponibles', asyncHandler(async (req, res) => {
+  const { obtenerEstadoConexion } = require('../services/whatsappBot');
+  const estado = obtenerEstadoConexion();
+  res.json({ conectado: estado.conectado, grupos: estado.gruposDisponibles || [] });
+}));
+
+// Le vuelve a preguntar a WhatsApp AHORA MISMO (en vez de esperar a la
+// próxima reconexión del bot) — hace falta cuando el número se agrega a
+// un grupo de WhatsApp nuevo DESPUÉS de que el bot ya estaba conectado
+// (ver el comentario grande en whatsappBot.refrescarGruposDisponibles).
+router.post('/whatsapp-grupos-disponibles/refrescar', asyncHandler(async (req, res) => {
+  const { refrescarGruposDisponibles } = require('../services/whatsappBot');
+  try {
+    const grupos = await refrescarGruposDisponibles();
+    res.json({ grupos });
+  } catch (e) {
+    res.status(409).json({ error: e.message });
+  }
+}));
+
+// =================================================================
 // NÚMERO AUTORIZADO PARA LOS COMANDOS DE CHAT (09-09-2026, a pedido del
 // usuario: "los comandos lo puede mandar el mismo que manda el comando
 // sabana jugada, pero aparte en super admin yo puedo agregar un numero y

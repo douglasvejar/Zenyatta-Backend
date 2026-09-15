@@ -723,6 +723,30 @@ async function listarGruposDisponibles(sock) {
   }
 }
 
+// (15-09-2026, a pedido del usuario tras reportar "la sábana automática
+// no está funcionando" — el problema real era que no tenía forma de
+// conseguir el JID del grupo de WhatsApp del cliente sin buscarlo en los
+// logs de Railway, el mismo problema que ya se había resuelto para el QR)
+// — expone la MISMA lista que ya se arma sola en listarGruposDisponibles()
+// para que Súper-admin la muestre como un desplegable (ver
+// routes/superadmin.js) en vez de que el usuario tenga que copiar el JID
+// a mano de la consola del servidor.
+//
+// `estadoConexion.gruposDisponibles` solo se llena UNA vez, justo cuando
+// el bot termina de conectarse (ver "connection === 'open'" más abajo) —
+// si el número se agrega a un grupo de WhatsApp nuevo DESPUÉS de esa
+// conexión, ese grupo nuevo no va a aparecer hasta la próxima reconexión.
+// Esta función fuerza una vuelta a preguntarle a WhatsApp ahora mismo
+// (mismo pedido que ya hace listarGruposDisponibles, sin esperar a que el
+// bot se reconecte solo) para cubrir justo ese caso.
+async function refrescarGruposDisponibles() {
+  if (!sockActual) {
+    throw new Error('El bot no está conectado a WhatsApp en este momento — esperá a que se reconecte y volvé a intentar.');
+  }
+  await listarGruposDisponibles(sockActual);
+  return estadoConexion.gruposDisponibles;
+}
+
 // El reloj de fondo: cada 5 minutos recorre TODOS los días abiertos de
 // TODOS los grupos con bot vinculado y les da la chance de verificar/
 // avisar/cerrar (cada día respeta su propio "cada hora" por adentro, ver
@@ -846,6 +870,7 @@ module.exports = {
   iniciarBotWhatsApp,
   obtenerEstadoConexion,
   obtenerSockActivo,
+  refrescarGruposDisponibles,
   procesarDiaAbierto,
   // manejarMensajeEntrante y tickRelojDeFondo se exportan sobre todo
   // para poder probarlas de verdad (ver test_whatsapp_bot_flujo.js) sin
