@@ -474,11 +474,17 @@ function renderListaEquiposPersonalizados() {
   const cont = document.getElementById('listaEquiposPersonalizados');
   if (!cont) return;
   if (EQUIPOS_PERSONALIZADOS_CACHE.length === 0) {
-    cont.innerHTML = '<small style="color:#888;">Todavía no has registrado ningún apodo propio.</small>';
+    cont.innerHTML = '<small style="color:var(--text-dim);">Todavía no has registrado ningún apodo propio.</small>';
     return;
   }
+  // Arreglo (15-09-2026, a pedido del usuario: "sigo teniendo textos que
+  // no se leen"): este chip tenía fondo blanco pero SIN color de texto
+  // propio, así que heredaba el blanco/casi-blanco del tema oscuro
+  // (var(--text)) — texto blanco sobre fondo blanco, invisible. Se le
+  // pone fondo celeste clarito (misma familia del acento cian de Ludox)
+  // y texto azul oscuro, para que se lea siempre sin importar el tema.
   cont.innerHTML = EQUIPOS_PERSONALIZADOS_CACHE.map(eq =>
-    '<span style="background:#fff; border:1px solid #bce1f6; border-radius:14px; padding:5px 10px; font-size:12px; display:inline-flex; align-items:center; gap:6px;">' +
+    '<span style="background:#eaf9fc; border:1px solid #8fd9e6; border-radius:14px; padding:5px 10px; font-size:12px; display:inline-flex; align-items:center; gap:6px; color:#0d1326;">' +
       '<strong>' + eq.apodo + '</strong> → ' + eq.nombre_oficial +
       ' <button type="button" onclick="eliminarEquipoPersonalizado(\'' + eq.id + '\')" style="background:none; border:none; color:#c0392b; cursor:pointer; font-weight:bold; padding:0;">✕</button>' +
     '</span>'
@@ -2108,7 +2114,12 @@ async function renderBalanceGeneral() {
       const t = data.filaTotal;
       const trTotal = document.createElement('tr');
       trTotal.className = 'fila-total-balance';
-      trTotal.style.cssText = 'background:#fff; font-weight:bold; border-top:2px solid #333;';
+      // Arreglo (15-09-2026, misma familia de bug que el chip de apodos:
+      // fondo claro sin color de texto propio → hereda el blanco del
+      // tema oscuro y queda ilegible). Fondo celeste clarito + texto
+      // azul oscuro, y el borde superior pasa del gris genérico al azul
+      // de acento de Ludox.
+      trTotal.style.cssText = 'background:#eaf6ff; color:#0d1326; font-weight:bold; border-top:2px solid #2f6bff;';
       trTotal.innerHTML =
         '<td>TOTAL</td>' +
         '<td class="col-arriesgado">' + formatMoney(t.arriesgado) + '</td>' +
