@@ -765,7 +765,7 @@ async function iniciarBotWhatsApp() {
   // llegara a cargar sin querer (no debería, ver server.js/routes/whatsapp.js),
   // que el error explote acá, en el momento de intentar arrancar el bot,
   // y no al momento de simplemente requerir el archivo.
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
   const { Boom } = require('@hapi/boom');
   const qrcode = require('qrcode-terminal');
 
@@ -775,7 +775,26 @@ async function iniciarBotWhatsApp() {
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-  const sock = makeWASocket({ auth: state });
+  // "Error: Connection Failure ... at Object.decodeFrame (noise-handler.js)"
+  // visto en vivo en Railway (15-09-2026), nunca llegaba a mostrar el QR:
+  // baileys trae GRABADA, adentro del propio paquete de npm, la versión del
+  // protocolo de WhatsApp Web vigente al momento en que se publicó esa
+  // versión de la librería. WhatsApp cambia su protocolo seguido — si pasó
+  // tiempo desde que se publicó la versión instalada, el saludo cifrado
+  // inicial ("Noise Protocol") falla al decodificar la respuesta del
+  // servidor, exactamente el error de arriba. fetchLatestBaileysVersion()
+  // le pregunta a WhatsApp cuál es la versión vigente AHORA, en vez de
+  // confiar en la que vino grabada en el paquete.
+  let waVersion;
+  try {
+    const version = (await fetchLatestBaileysVersion()).version;
+    waVersion = version;
+    console.log('[whatsappBot] Usando la versión vigente de WhatsApp Web:', waVersion.join('.'));
+  } catch (err) {
+    console.log('[whatsappBot] No se pudo consultar la versión vigente de WhatsApp Web (se sigue con la que trae la librería instalada):', err.message);
+  }
+
+  const sock = makeWASocket({ auth: state, version: waVersion });
 
   sock.ev.on('creds.update', saveCreds);
 
