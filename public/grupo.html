@@ -190,6 +190,34 @@
   .suspendida { background-color: rgba(100,116,139,0.18) !important; color: #94a3b8; font-weight: bold; }
   .ambigua { background-color: rgba(56,224,240,0.15) !important; color: #38e0f0; font-weight: bold; }
 
+  /* ===============================================================
+     LA "FOTO" DE LA SÁBANA (#sabanasCapturaContenido) (15-09-2026,
+     corrigiendo un bug reportado por el usuario: "hay textos que no se
+     leen y logos de los equipos que no se ven"). Esta caja se dejó A
+     PROPÓSITO con fondo blanco (ver commit del retema oscuro) porque es
+     la MISMA zona que se convierte en imagen para mandar por WhatsApp —
+     pero al quedar blanca en medio de una página ahora oscura, todo lo
+     que hereda los colores CLAROS del tema oscuro (encabezados en
+     blanco, los estados GANADA/PERDIDA/etc. en verde/rojo muy
+     brillante, pensados para verse sobre un fondo casi negro) quedaba
+     invisible o con poquísimo contraste ahí adentro — un encabezado
+     blanco sobre fondo blanco directamente no se ve. Este bloque le
+     devuelve a ESTA caja, y solo a ella, colores oscuros legibles sobre
+     blanco: mismo tono por estado (verde=ganada, rojo=perdida, etc.,
+     "esos colores más claros" que pidió el usuario) pero en su versión
+     clara/pastel de toda la vida, pensada para fondo blanco — el resto
+     de la app sigue con el tema oscuro sin cambios. */
+  #sabanasCapturaContenido, #sabanasCapturaContenido td { color: #1a2233; }
+  #sabanasCapturaContenido h3 { color: #0d1326; }
+  #sabanasCapturaContenido .ganada { background-color: #d4f7e5 !important; color: #0f6b45 !important; }
+  #sabanasCapturaContenido .perdida { background-color: #fbdede !important; color: #a3231b !important; }
+  #sabanasCapturaContenido .anulada { background-color: #fff3cd !important; color: #7a5b00 !important; }
+  #sabanasCapturaContenido .pendiente { background-color: #e7e9ef !important; color: #3d4457 !important; }
+  #sabanasCapturaContenido .sinresultado { background-color: #ede0fb !important; color: #5b2c8a !important; }
+  #sabanasCapturaContenido .faltalogro { background-color: #ffe6d1 !important; color: #9a4a00 !important; }
+  #sabanasCapturaContenido .suspendida { background-color: #e4e7ec !important; color: #3d4457 !important; }
+  #sabanasCapturaContenido .ambigua { background-color: #d6f3f7 !important; color: #0e6a78 !important; }
+
   /* ALERTAS: badge titilante en la pestaña + tarjetas del registro */
   .nav-badge { display: inline-block; background-color: #e74c3c; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
   .nav-item.nav-alerta-activa { animation: parpadeoNavAlerta 1.2s ease-in-out infinite; }
@@ -201,6 +229,14 @@
   .caja-alerta .alerta-resolver { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .caja-alerta .alerta-resolver select { flex: 1; min-width: 180px; }
   .badge-resuelta { display: inline-block; background: #27ae60; color: #fff; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+
+  /* 💳 PAGOS (15-09-2026) — badge de estado del reporte de pago, mismo
+     lenguaje visual que .badge-resuelta de arriba pero con los 3 estados
+     de pagos_grupo, usando los tokens del tema oscuro (--ok/--danger/
+     --text-dim) en vez de colores nuevos. */
+  .badge-pago-pendiente { display: inline-block; background: rgba(147,160,189,0.18); color: var(--text-dim); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-pago-confirmado { display: inline-block; background: rgba(52,211,153,0.18); color: var(--ok); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-pago-rechazado { display: inline-block; background: rgba(255,107,107,0.18); color: var(--danger); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
   .whatsapp-pendiente { border: 1px solid rgba(52,211,153,0.3); background: var(--card-2); border-radius: 8px; padding: 10px 12px; }
   .whatsapp-pendiente-cabecera { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
   .whatsapp-pendiente-texto { font-size: 13px; white-space: pre-wrap; background: rgba(255,255,255,0.04); border-radius: 6px; padding: 8px 10px; max-height: 160px; overflow-y: auto; margin-bottom: 8px; }
@@ -462,10 +498,19 @@
   <div class="app-shell">
     <nav class="sidebar-admin" id="sidebarAdmin">
       <button type="button" class="nav-item nav-item-active" id="navSabana" onclick="mostrarVista('sabana')">📋 Sábana</button>
-      <button type="button" class="nav-item nav-parent" onclick="toggleGrupoAdmin()">⚙️ Administración <span id="whatsappPendientesBadge" class="nav-badge" style="display:none; background-color:#25d366;">0</span> <span id="adminCaret">▸</span></button>
+      <!-- "Sábana Automática" y "Apodos de Equipos" (15-09-2026, a pedido
+           del usuario: "sabana automatica y apodos de equipo saca de la
+           pestaña administracion colocalos afuera independiente") — antes
+           vivían plegados dentro de "⚙️ Administración"; se usan tan
+           seguido como la propia pestaña Sábana, así que pasan a ser
+           botones propios del menú, al mismo nivel que el resto — mismos
+           ids/onclick de siempre, nada de su lógica cambió, solo dónde
+           viven en la barra lateral. -->
+      <button type="button" class="nav-item" id="navWhatsapp" onclick="mostrarVista('whatsapp')">📲 Sábana Automática<span id="whatsappPendientesBadge" class="nav-badge" style="display:none; background-color:#25d366;">0</span></button>
+      <button type="button" class="nav-item" id="navEquipos" onclick="mostrarVista('equipos')">🏷️ Apodos de Equipos</button>
+      <button type="button" class="nav-item" id="navPagos" onclick="mostrarVista('pagos')">💳 Pagos<span id="pagosBadge" class="nav-badge" style="display:none;">0</span></button>
+      <button type="button" class="nav-item nav-parent" onclick="toggleGrupoAdmin()">⚙️ Administración <span id="adminCaret">▸</span></button>
       <div class="nav-children" id="grupoAdmin" style="display:none;">
-        <button type="button" class="nav-item nav-child" id="navWhatsapp" onclick="mostrarVista('whatsapp')">📲 Sábana Automática</button>
-        <button type="button" class="nav-item nav-child" id="navEquipos" onclick="mostrarVista('equipos')">🏷️ Apodos de Equipos</button>
         <button type="button" class="nav-item nav-child" id="navJugador" onclick="mostrarVista('jugador')">👤 Jugador</button>
         <button type="button" class="nav-item nav-child" id="navComision" onclick="mostrarVista('comision')">💰 Comisión</button>
         <button type="button" class="nav-item nav-child" id="navPorcentajes" onclick="mostrarVista('porcentajes')">📊 % Devueltos</button>
@@ -651,6 +696,84 @@
     </div>
   </div>
   <p id="whatsappSinServicio" style="display:none; color:var(--text-dim); font-size:14px;">💡 Tu grupo todavía no tiene contratado el servicio de sábana automática por WhatsApp. Contactá a soporte si te interesa activarlo.</p>
+</div>
+
+<!-- =================================================================
+     💳 PAGOS (15-09-2026, a pedido del usuario: "cada grupo debe pagar
+     el servicio, el pago es semanal... quiero enlazar esas jugadas a un
+     servidor online") — esto es la SUSCRIPCIÓN que este Grupo le paga a
+     Ludox (el dueño de la plataforma) por usar el servicio, NO tiene
+     nada que ver con lo que los clientes del Grupo ganan/pierden en sus
+     jugadas (eso sigue siendo todo lo de Sábana/Balance General, sin
+     tocar). Acá el Grupo reporta un pago (fecha, método, referencia
+     opcional y una captura como prueba) y Súper-admin lo revisa desde
+     su panel (ver "💳 Pagos" en superadmin.html) marcándolo confirmado
+     o rechazado — esa revisión no toca ningún saldo ni ticket. Ver
+     src/routes/pagos.js y sql/schema.sql (tabla pagos_grupo).
+     ================================================================= -->
+<div class="container" id="vistaPagos" style="display:none;">
+  <h1>💳 Pagos</h1>
+  <p style="margin-top:-8px; color:var(--text-dim); font-size:14px;">El pago SEMANAL de tu Grupo por usar la plataforma Ludox — no tiene relación con las jugadas ni los saldos de tus clientes.</p>
+
+  <div class="box-nuevo-equipo">
+    <h3>📋 Canales de pago</h3>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div>
+        <strong>📱 Pago Móvil</strong><br>
+        <span style="color:var(--text-dim); font-size:13px;">Teléfono: 04222857695 · Banco: Banca Amiga · Cédula: V-28.576.957</span>
+      </div>
+      <div>
+        <strong>🟡 Binance</strong><br>
+        <span style="color:var(--text-dim); font-size:13px;">Ludovicus Angelus · ID: 324480263</span>
+      </div>
+      <div>
+        <strong>💵 Zelle</strong><br>
+        <span style="color:var(--text-dim); font-size:13px;">Solicitá la cuenta y se te enviará.</span>
+      </div>
+      <div>
+        <strong>🇵🇦 Banesco Panamá</strong><br>
+        <span style="color:var(--text-dim); font-size:13px;">Solicitá la cuenta y se te enviará.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="box-nuevo-equipo">
+    <h3>📤 Reportar un pago</h3>
+    <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1.6fr 1.3fr auto;">
+      <div>
+        <label>Fecha del pago</label>
+        <input type="date" id="pagoFecha">
+      </div>
+      <div>
+        <label>Método</label>
+        <select id="pagoMetodoSelect">
+          <option value="pago_movil">Pago Móvil</option>
+          <option value="binance">Binance</option>
+          <option value="zelle">Zelle</option>
+          <option value="banesco_panama">Banesco Panamá</option>
+        </select>
+      </div>
+      <div>
+        <label>Referencia / nota (opcional)</label>
+        <input type="text" id="pagoReferenciaInput" placeholder="Ej: los últimos 4 dígitos, número de confirmación, lo que quieras aclarar">
+      </div>
+      <div>
+        <label>Captura del pago</label>
+        <input type="file" id="pagoCapturaInput" accept="image/*">
+      </div>
+      <button type="button" onclick="reportarPago()">📤 Reportar pago</button>
+    </div>
+    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 La imagen no puede pesar más de 4MB — si la foto de tu cámara pesa más, usá una captura de pantalla en su lugar.</small>
+  </div>
+
+  <h2>Historial de tus pagos</h2>
+  <table id="tablaPagosGrupo">
+    <thead>
+      <tr><th>Fecha</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Nota de Súper-admin</th><th>Acción</th></tr>
+    </thead>
+    <tbody id="cuerpoPagosGrupo"></tbody>
+  </table>
+  <div id="vacioPagosGrupo" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Todavía no reportaste ningún pago.</div>
 </div>
 
 <!-- =================================================================
@@ -984,6 +1107,14 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
     <div class="control-group"><button type="button" onclick="cargarSabanaDia()" style="padding:9px 16px; font-size:13px;">🔍 Cargar</button></div>
     <div class="control-group"><button type="button" onclick="capturarSabanaDiaComoImagen()" style="padding:9px 16px; font-size:13px;">📸 Generar imagen (HD)</button></div>
     <div class="control-group"><button type="button" onclick="descargarSabanaComoPDF()" style="padding:9px 16px; font-size:13px;">📄 Descargar PDF</button></div>
+    <!-- "📝 Extraer en texto" (15-09-2026, a pedido del usuario: "...que
+         me de esa sabana que seleccione en formato whatssap para asi si
+         tengo que modificar algo poderlo hacer") — devuelve el día
+         cargado a texto plano tipo WhatsApp, editable, para corregir algo
+         a mano y volver a pegarlo en "📋 Sábana". Ver
+         generarTextoSabanaWhatsApp()/extraerTextoSabanaWhatsApp() en
+         app.js. -->
+    <div class="control-group"><button type="button" class="btn-secundario" onclick="extraerTextoSabanaWhatsApp()" style="padding:9px 16px; font-size:13px;">📝 Extraer en texto</button></div>
   </div>
   <small style="display:block; margin:8px 0; color:var(--text-dim);">💡 Elige la fecha de una sábana que ya hayas procesado en "📋 Sábana". Si tiene pocas jugadas, "Generar imagen" alcanza. Si tiene muchas (la imagen sale muy alta y WhatsApp le baja la calidad al comprimirla), usa "Descargar PDF" — sale en varias páginas, sin perder detalle.</small>
 
@@ -1116,6 +1247,33 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
         <button type="button" class="btn-secundario" id="btnDescargarCapturaSabanaDia" onclick="descargarCapturaSabanaDia()" disabled>⬇️ Descargar imagen</button>
       </div>
       <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Con "Copiar imagen" puedes pegarla directo (Ctrl+V / Cmd+V) en el chat de WhatsApp Web o Desktop. Si tu navegador no lo permite, usa "Descargar imagen" y adjúntala a mano.</small>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: "📝 Extraer en texto" — la sábana YA PROCESADA de un día,     -->
+  <!-- devuelta a texto plano tipo WhatsApp (15-09-2026, a pedido del      -->
+  <!-- usuario: "...que me de esa sabana que seleccione en formato         -->
+  <!-- whatssap para asi si tengo que modificar algo poderlo hacer"). El   -->
+  <!-- textarea es EDITABLE a propósito (a diferencia de                   -->
+  <!-- #planoWhatsAppTexto, que es readonly) — la idea es poder corregir   -->
+  <!-- algo a mano (o sumar un ticket que faltó) y volver a copiarlo/      -->
+  <!-- pegarlo en "📋 Sábana" (#sabanaInput) para reprocesarlo. Fondo       -->
+  <!-- oscuro normal (no blanco, a diferencia de #sabanasCapturaContenido) -->
+  <!-- porque acá no hay ningún html2canvas de por medio que lo exija. Ver -->
+  <!-- generarTextoSabanaWhatsApp()/extraerTextoSabanaWhatsApp() en        -->
+  <!-- app.js. -->
+  <!-- ================================================================= -->
+  <div class="modal-fondo" id="modalExtraerSabanaTexto">
+    <div class="modal-caja" style="max-width:700px;">
+      <button type="button" class="modal-cerrar" onclick="cerrarExtraerSabanaTexto()">✕</button>
+      <h3>📝 Sábana en texto — <span id="extraerSabanaTextoTitulo"></span></h3>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:-6px;">Mismo formato que se pega en "📋 Sábana" para procesarla. Puedes editarlo acá mismo (corregir un dato, agregar un ticket que faltó) antes de copiarlo y volver a pegarlo ahí.</p>
+      <textarea id="extraerSabanaTextoArea" rows="18" style="height:auto; font-family:'Courier New', monospace; font-size:13px; white-space:pre;"></textarea>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button type="button" onclick="copiarExtraerSabanaTexto()">📋 Copiar</button>
+        <button type="button" class="btn-secundario" onclick="cerrarExtraerSabanaTexto()">Cerrar</button>
+      </div>
     </div>
   </div>
 

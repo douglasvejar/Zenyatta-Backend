@@ -16,6 +16,7 @@ const equiposRoutes = require('./routes/equipos');
 const imagenesRoutes = require('./routes/imagenes');
 const whatsappRoutes = require('./routes/whatsapp');
 const contactoRoutes = require('./routes/contacto');
+const pagosRoutes = require('./routes/pagos');
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -27,7 +28,13 @@ const app = express();
 // más adelante.
 app.set('trust proxy', true);
 app.use(cors());
-app.use(express.json({ limit: '2mb' })); // la sábana pegada puede ser un texto largo
+// El límite subió de 2mb a 8mb el 15-09-2026 por "💳 Pagos" (ver
+// routes/pagos.js): la captura de un pago viaja adentro del JSON como
+// base64, y un base64 crece ~33% sobre el binario original — una
+// captura de hasta 4MB (el tope que valida pagos.js) codifica a ~5.4MB
+// de texto, así que 2mb la rechazaba de entrada (413) antes de que la
+// ruta llegara siquiera a validar su propio tope de tamaño.
+app.use(express.json({ limit: '8mb' })); // la sábana pegada puede ser un texto largo; la captura de pago en base64 (hasta 4MB reales) puede pesar ~5.4MB codificada
 
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
 
@@ -44,6 +51,7 @@ app.use('/api/equipos', equiposRoutes);
 app.use('/api/imagenes', imagenesRoutes); // proxy de logos, pública a propósito (ver routes/imagenes.js)
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/contacto', contactoRoutes); // pública, sin login (ver comentario en routes/contacto.js) — formulario del portal de bienvenida
+app.use('/api/pagos', pagosRoutes); // 💳 Pagos del Grupo a Ludox (con login, ver comentario en routes/pagos.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se

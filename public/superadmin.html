@@ -186,6 +186,14 @@
   .caja-alerta .alerta-resolver select { flex: 1; min-width: 180px; }
   .badge-resuelta { display: inline-block; background: rgba(52,211,153,0.18); color: var(--ok); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
 
+  /* 💳 PAGOS (15-09-2026) — badge de estado del reporte de pago de un
+     Grupo, mismo lenguaje visual que .badge-resuelta de arriba pero con
+     los 3 estados de pagos_grupo, usando los tokens del tema oscuro
+     (--ok/--danger/--text-dim) en vez de colores nuevos. */
+  .badge-pago-pendiente { display: inline-block; background: rgba(147,160,189,0.18); color: var(--text-dim); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-pago-confirmado { display: inline-block; background: rgba(52,211,153,0.18); color: var(--ok); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+  .badge-pago-rechazado { display: inline-block; background: rgba(255,107,107,0.18); color: var(--danger); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: bold; }
+
   .conversaciones-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
   .conversacion-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: var(--card-2); }
   .conversacion-fila:hover { background: rgba(56,224,240,0.06); }
@@ -292,6 +300,7 @@
     <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerAlertas" onclick="mostrarSeccionSuperadmin('alertas')">🔔 Alertas<span id="alertasBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
     <button type="button" class="btn-secundario" id="btnVerWhatsappQr" onclick="mostrarSeccionSuperadmin('whatsappqr')">📶 Vincular WhatsApp</button>
     <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerMensajesContacto" onclick="mostrarSeccionSuperadmin('contacto')">✉️ Contacto<span id="contactoBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
+    <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerPagos" onclick="mostrarSeccionSuperadmin('pagos')">💳 Pagos<span id="pagosBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
     <button type="button" class="btn-secundario" onclick="salir()">Cerrar sesión</button>
   </div>
 
@@ -397,6 +406,23 @@
   </div>
 
   <!-- ================================================================= -->
+  <!-- 💳 PAGOS (15-09-2026, a pedido del usuario: "cada grupo debe pagar  -->
+  <!-- el servicio, el pago es semanal") — bandeja de lo que cada Grupo    -->
+  <!-- reporta como pago de su SUSCRIPCIÓN semanal a Ludox (NO es plata   -->
+  <!-- de clientes, eso sigue siendo Sábana/Balance General de cada       -->
+  <!-- Grupo). Confirmar/rechazar acá NO toca ningún saldo ni ticket. Ver -->
+  <!-- src/routes/pagos.js (el Grupo reporta) y GET/POST .../pagos en     -->
+  <!-- routes/superadmin.js (acá se revisa).                              -->
+  <!-- ================================================================= -->
+  <div class="container" id="vistaPagosSuperadmin" style="display:none;">
+    <h1>💳 Pagos de los Grupos</h1>
+    <p class="subtitulo">Lo que cada Grupo reportó como pago de su suscripción semanal a la plataforma — confirmar o rechazar acá no toca ningún saldo ni ticket de ese Grupo.</p>
+
+    <div id="listaPagosSuperadmin"></div>
+    <div id="vacioPagosSuperadmin" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Todavía no hay ningún pago reportado.</div>
+  </div>
+
+  <!-- ================================================================= -->
   <!-- VINCULAR WHATSAPP (15-09-2026): el número "central" del bot (el    -->
   <!-- que hay que agregar a cada grupo de WhatsApp de tus clientes) se   -->
   <!-- vincula UNA vez desde acá, viendo el QR como imagen de verdad, en  -->
@@ -412,9 +438,15 @@
 
     <div id="whatsappQrEstadoTexto" style="font-weight:600; margin-bottom:14px;">Consultando estado…</div>
 
+    <!-- Fondo blanco A PROPÓSITO (el QR necesita su "zona de silencio"
+         blanca alrededor para poder escanearse) — pero por eso mismo el
+         texto de abajo necesita SU PROPIO color oscuro explícito en vez
+         de heredar var(--text-dim) (pensado para fondo oscuro): sobre
+         blanco quedaba casi invisible (15-09-2026, mismo bug que la
+         "foto" de la Sábana en grupo.html). -->
     <div id="whatsappQrCajaImagen" style="display:none; text-align:center; background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; max-width:360px; margin:0 auto 14px;">
       <img id="whatsappQrImagen" alt="Código QR de WhatsApp" style="width:100%; max-width:300px; image-rendering:pixelated;">
-      <p style="color:var(--text-dim); font-size:13px; margin-top:10px;">Ajustes de WhatsApp → Dispositivos vinculados → Vincular un dispositivo. El código se refresca solo cada 20 segundos mientras no lo escanees.</p>
+      <p style="color:#4a5568; font-size:13px; margin-top:10px;">Ajustes de WhatsApp → Dispositivos vinculados → Vincular un dispositivo. El código se refresca solo cada 20 segundos mientras no lo escanees.</p>
     </div>
 
     <div id="whatsappQrCajaConectado" style="display:none; text-align:center; padding:24px; color:var(--ok); font-weight:600;">✅ Ya está vinculado y conectado — no hace falta escanear nada.</div>
@@ -798,6 +830,7 @@ function revisarNotificacionesFondoSuperadmin() {
   actualizarBadgeAlertasSuperadmin();
   actualizarBadgeChatWidgetSA();
   actualizarBadgeMensajesContacto();
+  actualizarBadgePagosSuperadmin();
 }
 
 // =================================================================
@@ -810,6 +843,7 @@ function mostrarSeccionSuperadmin(nombre) {
   document.getElementById('vistaGrupos').style.display = nombre === 'grupos' ? 'block' : 'none';
   document.getElementById('vistaAlertasSuperadmin').style.display = nombre === 'alertas' ? 'block' : 'none';
   document.getElementById('vistaMensajesContacto').style.display = nombre === 'contacto' ? 'block' : 'none';
+  document.getElementById('vistaPagosSuperadmin').style.display = nombre === 'pagos' ? 'block' : 'none';
   document.getElementById('vistaWhatsappQr').style.display = nombre === 'whatsappqr' ? 'block' : 'none';
   document.getElementById('btnVerGrupos').style.background = nombre === 'grupos' ? '' : '#7f8c8d';
   if (nombre === 'alertas') {
@@ -818,6 +852,9 @@ function mostrarSeccionSuperadmin(nombre) {
   }
   if (nombre === 'contacto') {
     cargarMensajesContacto();
+  }
+  if (nombre === 'pagos') {
+    cargarPagosSuperadmin();
   }
   if (nombre === 'whatsappqr') {
     actualizarVinculoWhatsapp();
@@ -1805,6 +1842,108 @@ async function eliminarMensajeContacto(id) {
     actualizarBadgeMensajesContacto();
   } catch (e) {
     alert('No se pudo eliminar: ' + e.message);
+  }
+}
+
+// =================================================================
+// 💳 PAGOS (15-09-2026) — ver la nota grande junto a #vistaPagosSuperadmin
+// más arriba y src/routes/superadmin.js. Mismo espíritu que la bandeja de
+// "✉️ Contacto" de arriba, pero acá cada fila es de un Grupo YA dado de
+// alta reportando su pago de suscripción, así que además de leer/marcar
+// hay que poder confirmar/rechazar (eso es lo que de verdad "resuelve"
+// un reporte de pago).
+// =================================================================
+const NOMBRES_METODO_PAGO_SA = { pago_movil: 'Pago Móvil', binance: 'Binance', zelle: 'Zelle', banesco_panama: 'Banesco Panamá' };
+
+async function actualizarBadgePagosSuperadmin() {
+  try {
+    const { total } = await apiSuperadmin('/api/superadmin/pagos/conteo-pendientes');
+    const badge = document.getElementById('pagosBadgeSuperadmin');
+    const btn = document.getElementById('btnVerPagos');
+    if (total > 0) {
+      badge.textContent = total > 99 ? '99+' : total;
+      badge.style.display = 'inline-block';
+      btn.classList.add('nav-alerta-activa');
+    } else {
+      badge.style.display = 'none';
+      btn.classList.remove('nav-alerta-activa');
+    }
+  } catch (e) { /* chequeo de fondo — si falla, no interrumpe nada más */ }
+}
+
+async function cargarPagosSuperadmin() {
+  try {
+    const pagos = await apiSuperadmin('/api/superadmin/pagos');
+    renderPagosSuperadmin(pagos);
+  } catch (e) {
+    alert('No se pudieron cargar los pagos: ' + e.message);
+  }
+}
+
+function renderPagosSuperadmin(pagos) {
+  const cont = document.getElementById('listaPagosSuperadmin');
+  document.getElementById('vacioPagosSuperadmin').style.display = pagos.length === 0 ? 'block' : 'none';
+  cont.innerHTML = pagos.map(p => {
+    const cabecera = '<strong>' + p.grupo_nombre + '</strong> — ' + (NOMBRES_METODO_PAGO_SA[p.metodo] || p.metodo) +
+      ' — pagado el ' + formatFechaCorta(p.fecha_pago) + ' — reportado ' + formatFechaHora(p.creado_en);
+    const badgeClase = 'badge-pago-' + p.estado;
+    const estadoTexto = p.estado === 'pendiente' ? 'Pendiente' : (p.estado === 'confirmado' ? '✔️ Confirmado' : '❌ Rechazado');
+    const estado = '<span class="' + badgeClase + '">' + estadoTexto + '</span>';
+    const referencia = p.referencia ? '<div class="alerta-mensaje">Referencia/nota del Grupo: ' + p.referencia.replace(/</g, '&lt;') + '</div>' : '';
+    const notaAdmin = p.nota_admin ? '<div class="alerta-mensaje">Tu nota: ' + p.nota_admin.replace(/</g, '&lt;') + '</div>' : '';
+    const acciones = '<div class="alerta-resolver">' +
+      '<button type="button" class="btn-chico" onclick="verCapturaPagoSuperadmin(\'' + p.id + '\')">👁️ Ver captura</button> ' +
+      (p.estado === 'pendiente'
+        ? '<button type="button" class="btn-chico" style="background:#27ae60; color:#fff;" onclick="confirmarPagoSuperadmin(\'' + p.id + '\')">✅ Confirmar</button> ' +
+          '<button type="button" class="btn-chico" style="background:#c0392b; color:#fff;" onclick="rechazarPagoSuperadmin(\'' + p.id + '\')">❌ Rechazar</button>'
+        : '') +
+      '</div>';
+    return '<div class="caja-alerta' + (p.estado !== 'pendiente' ? ' resuelta' : '') + '">' +
+      '<div class="alerta-cabecera"><span>' + cabecera + '</span>' + estado + '</div>' +
+      referencia + notaAdmin + acciones + '</div>';
+  }).join('');
+}
+
+// Igual que verCapturaPagoGrupo() del lado del Grupo (ver app.js) — la
+// sesión de Súper-admin también viaja como "Authorization: Bearer
+// <SECRET>" (ver apiSuperadmin), nunca como cookie, así que hace falta
+// pedir la imagen a mano con fetch() + ese mismo header en vez de un
+// <a href>/window.open directo.
+async function verCapturaPagoSuperadmin(id) {
+  try {
+    const res = await fetch('/api/superadmin/pagos/' + id + '/captura', { headers: { 'Authorization': 'Bearer ' + SECRET } });
+    if (!res.ok) throw new Error('No se pudo abrir la captura (' + res.status + ').');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  } catch (e) {
+    alert('No se pudo abrir la captura: ' + e.message);
+  }
+}
+
+async function confirmarPagoSuperadmin(id) {
+  try {
+    await apiSuperadmin('/api/superadmin/pagos/' + id + '/confirmar', { method: 'POST', body: JSON.stringify({}) });
+    cargarPagosSuperadmin();
+    actualizarBadgePagosSuperadmin();
+  } catch (e) {
+    alert('No se pudo confirmar el pago: ' + e.message);
+  }
+}
+
+async function rechazarPagoSuperadmin(id) {
+  // Un simple prompt() alcanza acá — es un motivo corto de una sola
+  // línea, no hace falta un modal aparte. La nota es opcional a
+  // propósito (ver el comentario en sql/schema.sql, columna nota_admin):
+  // se puede rechazar sin nota y avisar el motivo después por WhatsApp/chat.
+  const nota = prompt('¿Por qué se rechaza este pago? (opcional, dejá vacío para no aclarar nada acá)');
+  if (nota === null) return; // canceló el prompt
+  try {
+    await apiSuperadmin('/api/superadmin/pagos/' + id + '/rechazar', { method: 'POST', body: JSON.stringify({ notaAdmin: nota || null }) });
+    cargarPagosSuperadmin();
+    actualizarBadgePagosSuperadmin();
+  } catch (e) {
+    alert('No se pudo rechazar el pago: ' + e.message);
   }
 }
 

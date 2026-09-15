@@ -606,6 +606,63 @@ router.delete('/mensajes-contacto/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// PAGOS DEL GRUPO A LUDOX (15-09-2026) — bandeja donde Súper-admin
+// revisa lo que cada Grupo reporta como pago de su SUSCRIPCIÓN
+// semanal a la plataforma (ver la nota grande en sql/schema.sql,
+// tabla pagos_grupo, y src/routes/pagos.js donde el Grupo las manda).
+// Nada de esto toca saldos/tickets/Balance General de ningún Grupo —
+// es un flujo de revisión completamente aparte.
+// =================================================================
+router.get('/pagos', asyncHandler(async (req, res) => {
+  // JOIN con grupos solo para mostrar el nombre — la lista sigue sin
+  // traer captura_base64 (se pide aparte, ver GET /pagos/:id/captura).
+  const r = await db.query(
+    `SELECT p.id, p.grupo_id, g.nombre AS grupo_nombre, p.fecha_pago, p.metodo, p.referencia,
+            p.estado, p.nota_admin, p.creado_en, p.revisado_en
+     FROM pagos_grupo p
+     JOIN grupos g ON g.id = p.grupo_id
+     ORDER BY p.creado_en DESC LIMIT 200`
+  );
+  res.json(r.rows);
+}));
+
+router.get('/pagos/:id/captura', asyncHandler(async (req, res) => {
+  const r = await db.query('SELECT captura_base64, captura_mime FROM pagos_grupo WHERE id = $1', [req.params.id]);
+  if (r.rows.length === 0) return res.status(404).json({ error: 'No se encontró esa captura.' });
+  const fila = r.rows[0];
+  res.set('Content-Type', fila.captura_mime);
+  res.send(Buffer.from(fila.captura_base64, 'base64'));
+}));
+
+router.get('/pagos/conteo-pendientes', asyncHandler(async (req, res) => {
+  const r = await db.query("SELECT COUNT(*)::int AS total FROM pagos_grupo WHERE estado = 'pendiente'");
+  res.json({ total: r.rows[0].total });
+}));
+
+router.post('/pagos/:id/confirmar', asyncHandler(async (req, res) => {
+  const { notaAdmin } = req.body || {};
+  const r = await db.query(
+    "UPDATE pagos_grupo SET estado = 'confirmado', nota_admin = $1, revisado_en = now() WHERE id = $2",
+    [notaAdmin ? String(notaAdmin).trim().slice(0, 1000) : null, req.params.id]
+  );
+  if (r.rowCount === 0) return res.status(404).json({ error: 'No se encontró ese pago.' });
+  res.status(204).end();
+}));
+
+router.post('/pagos/:id/rechazar', asyncHandler(async (req, res) => {
+  // A propósito NO se exige notaAdmin acá — Súper-admin puede rechazar
+  // sin nota y avisar el motivo después por WhatsApp/chat (ver el
+  // comentario en sql/schema.sql, columna nota_admin).
+  const { notaAdmin } = req.body || {};
+  const r = await db.query(
+    "UPDATE pagos_grupo SET estado = 'rechazado', nota_admin = $1, revisado_en = now() WHERE id = $2",
+    [notaAdmin ? String(notaAdmin).trim().slice(0, 1000) : null, req.params.id]
+  );
+  if (r.rowCount === 0) return res.status(404).json({ error: 'No se encontró ese pago.' });
+  res.status(204).end();
+}));
+
+// =================================================================
 // CHAT DE SOPORTE (con TODOS los grupos) — ver chat.js. El Súper-admin
 // primero ve la lista de conversaciones (una por grupo con actividad) y
 // después entra a la de un grupo puntual para leer/responder.

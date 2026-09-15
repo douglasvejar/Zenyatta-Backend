@@ -653,6 +653,52 @@ create table if not exists mensajes_contacto (
 create index if not exists idx_mensajes_contacto_no_leidos on mensajes_contacto(creado_en) where leido = false;
 
 -- =================================================================
+-- PAGOS DEL GRUPO A LUDOX (15-09-2026, a pedido del usuario: "cada
+-- grupo debe pagar el servicio, el pago es semanal" — esto NO es la
+-- plata que un cliente le debe a un Grupo (eso sigue siendo toda la
+-- lógica de tickets/Balance General de siempre), es la SUSCRIPCIÓN:
+-- cada Grupo (cliente de esta plataforma, el que entra por
+-- grupo.html) le paga semanalmente a Ludox (el dueño de la
+-- plataforma) por usar el servicio. Un Grupo reporta acá un pago
+-- (fecha, método, referencia opcional y una captura como prueba) y
+-- Súper-admin lo revisa marcándolo confirmado/rechazado (ver GET/POST
+-- .../pagos en src/routes/superadmin.js) — confirmar/rechazar NO
+-- toca ningún saldo/ticket/Balance General, es un flujo de revisión
+-- aparte, en espejo de mensajes_contacto de arriba pero del lado del
+-- Grupo ya logueado (ver src/routes/pagos.js).
+--   captura_base64/captura_mime: la captura del pago guardada como
+--     base64 en la propia fila — esta app no tiene ninguna
+--     integración de storage de archivos (S3, Supabase Storage, etc.)
+--     así que esto es consistente con el resto del proyecto, no un
+--     atajo nuevo. Con tope de 4MB decodificados validado en la ruta
+--     (routes/pagos.js) — acá en la tabla "text" no tiene límite duro,
+--     pero nadie tiene que mandar una foto de cámara sin comprimir.
+--   estado: pendiente (recién reportado) / confirmado / rechazado —
+--     lo decide Súper-admin.
+--   nota_admin: motivo cuando se rechaza (o cualquier aclaración al
+--     confirmar) — opcional, Súper-admin puede rechazar sin nota y
+--     avisar el motivo después por WhatsApp/chat.
+--   revisado_en: cuándo Súper-admin confirmó o rechazó (null mientras
+--     sigue pendiente).
+-- =================================================================
+create table if not exists pagos_grupo (
+  id             uuid primary key default gen_random_uuid(),
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  fecha_pago     date not null,
+  metodo         text not null check (metodo in ('pago_movil', 'binance', 'zelle', 'banesco_panama')),
+  referencia     text,
+  captura_base64 text not null,
+  captura_mime   text not null default 'image/png',
+  estado         text not null default 'pendiente' check (estado in ('pendiente', 'confirmado', 'rechazado')),
+  nota_admin     text,
+  creado_en      timestamptz not null default now(),
+  revisado_en    timestamptz
+);
+
+create index if not exists idx_pagos_grupo_grupo on pagos_grupo(grupo_id, creado_en desc);
+create index if not exists idx_pagos_grupo_pendientes on pagos_grupo(creado_en) where estado = 'pendiente';
+
+-- =================================================================
 -- Row Level Security — ver nota grande al inicio del archivo.
 -- =================================================================
 alter table grupos enable row level security;
@@ -673,6 +719,7 @@ alter table sabana_papelera enable row level security;
 alter table sabanas_pendientes_whatsapp enable row level security;
 alter table whatsapp_dia_estado enable row level security;
 alter table mensajes_contacto enable row level security;
+alter table pagos_grupo enable row level security;
 -- Sin políticas = acceso denegado por defecto para las claves anon/
 -- authenticated. Solo la clave service_role (la que usa el backend)
 -- puede leer/escribir. Ver nota al inicio del archivo.

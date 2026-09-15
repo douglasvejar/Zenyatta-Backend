@@ -220,6 +220,7 @@ function revisarNotificacionesFondo() {
   actualizarBadgeAlertas();
   actualizarBadgeChatWidget();
   actualizarBadgeWhatsapp();
+  actualizarBadgePagosGrupo();
 }
 
 // =================================================================
@@ -242,8 +243,14 @@ function toggleGrupoAdmin() {
 // Jugador/Comisión/etc. Ningún dato ni función cambió, solo DÓNDE vive el
 // HTML (ver renderPanelWhatsapp()/cargarEquiposPersonalizados() más abajo,
 // siguen actualizando esos mismos ids sin importar qué pestaña se vea).
-const VISTAS = ['sabana', 'whatsapp', 'equipos', 'jugador', 'comision', 'porcentajes', 'balanceGeneral', 'transferencias', 'polla', 'sabanas', 'alertas'];
-const NAV_IDS = { sabana: 'navSabana', whatsapp: 'navWhatsapp', equipos: 'navEquipos', jugador: 'navJugador', comision: 'navComision', porcentajes: 'navPorcentajes', balanceGeneral: 'navBalanceGeneral', transferencias: 'navTransferencias', polla: 'navPolla', sabanas: 'navSabanas', alertas: 'navAlertas' };
+const VISTAS = ['sabana', 'whatsapp', 'equipos', 'pagos', 'jugador', 'comision', 'porcentajes', 'balanceGeneral', 'transferencias', 'polla', 'sabanas', 'alertas'];
+const NAV_IDS = { sabana: 'navSabana', whatsapp: 'navWhatsapp', equipos: 'navEquipos', pagos: 'navPagos', jugador: 'navJugador', comision: 'navComision', porcentajes: 'navPorcentajes', balanceGeneral: 'navBalanceGeneral', transferencias: 'navTransferencias', polla: 'navPolla', sabanas: 'navSabanas', alertas: 'navAlertas' };
+
+// "Sábana Automática"/"Apodos de Equipos"/"Pagos" (15-09-2026) ya NO viven
+// dentro de "⚙️ Administración" — son botones propios del menú, así que
+// NO tienen que abrir el submenú plegable al entrar a ellos (antes,
+// cuando sí vivían ahí adentro, esta lista solo excluía 'sabana'/'alertas').
+const VISTAS_FUERA_DE_ADMINISTRACION = ['sabana', 'alertas', 'whatsapp', 'equipos', 'pagos'];
 
 function mostrarVista(nombre) {
   VISTA_ACTUAL = nombre;
@@ -253,8 +260,9 @@ function mostrarVista(nombre) {
     const nav = document.getElementById(NAV_IDS[v]);
     if (nav) nav.classList.toggle('nav-item-active', v === nombre);
   });
-  if (nombre !== 'sabana' && nombre !== 'alertas') document.getElementById('grupoAdmin').style.display = 'flex';
+  if (!VISTAS_FUERA_DE_ADMINISTRACION.includes(nombre)) document.getElementById('grupoAdmin').style.display = 'flex';
 
+  if (nombre === 'pagos') cargarPagosGrupo();
   if (nombre === 'jugador') cargarJugadores();
   if (nombre === 'comision') { cargarJugadores().then(() => cargarAvales()); }
   if (nombre === 'porcentajes') aplicarRangoRapidoPanel('pd');
@@ -2872,6 +2880,122 @@ async function descargarSabanaComoPDF() {
 }
 
 // =================================================================
+// "📝 Extraer en texto" (15-09-2026, a pedido del usuario: "en la seccion
+// de sabana, coloca un boton que diga extraer en texto que me de esa
+// sabana que seleccione en formato whatssap para asi si tengo que
+// modificar algo poderlo hacer") — a partir de los tickets YA PROCESADOS
+// de un día (ULTIMA_SABANA_DIA.tickets), reconstruye el texto plano que
+// alguien pegaría en "📋 Sábana" (#sabanaInput) para procesarlos de
+// nuevo. Es el camino INVERSO al de src/services/parser.js
+// (parsearSabana): ahí es texto crudo → boletos, acá es boletos → texto
+// crudo — para poder corregir algo a mano (un typo, un ticket que faltó)
+// y volver a pegarlo en "📋 Sábana" para reprocesar, tal como lo pidió el
+// usuario.
+//
+// A propósito NO se intenta adivinar/reproducir el dialecto ORIGINAL con
+// el que se escribió cada sábana (nombre del cliente antes o después,
+// "Ticket #N" con o sin "#", "arriesga//paga" vs. "500 para 1121", etc.
+// — ver todos los casos que parsearSabana() tolera, test_formato_bernal.js
+// y test_logica.js) — siempre se genera hacia UN SOLO dialecto canónico,
+// el más simple y más seguro que el parser entiende:
+//   <CLIENTE>
+//   Ticket #<N>
+//   <jugada 1>
+//   <jugada 2>
+//   <arriesga>//<gana>
+//
+// Por qué este y no otro:
+//   - El cierre "<arriesga>//<gana>" SELLADO (sin "$", sin "para", solo 2
+//     números separados por "//") es el ÚNICO cierre que parsearSabana()
+//     entiende SIN recalcular nada desde una cuota — matchResultado, en
+//     parser.js, hace `(?:x\s*|para\s+)?\$?(\d+...)\$?\s*\/\/+\s*\$?(\d+...)?\$?`:
+//     TODA esa envoltura ("x"/"para"/"$"/emoji ✅❌⭕) es opcional, así que
+//     "100.5//90.91" a secas matchea completo. Como acá YA se conoce el
+//     arriesga/gana EXACTO que tiene el ticket procesado, este es el único
+//     cierre que garantiza que el ticket reprocesado quede con el MISMO
+//     arriesga/gana (nada que el parser tenga que inferir desde una cuota
+//     puede salir distinto).
+//   - El nombre del cliente en su PROPIA línea, ANTES del ticket, es el
+//     dialecto "de toda la vida" que el parser soporta desde el principio
+//     (esTextoCliente, en parser.js) — no depende del arreglo especial
+//     para firmas AL FINAL (formato "Bernal", 04-09-2026), que es un caso
+//     particular, no la regla general.
+//   - Cada jugada se copia TAL CUAL del texto que el parser ya guardó
+//     (t.detalle, separado por " | " — mismo separador que usa
+//     src/services/sabanaDia.js para volver a separar las patas al
+//     mostrarlas) — es texto que YA se sabe que el parser entiende, porque
+//     es justo lo que produjo este mismo boleto la primera vez.
+//
+// Se separa cada ticket del siguiente con una línea en blanco, y se
+// repite el nombre del cliente antes de CADA ticket (aunque 2 tickets
+// seguidos sean del mismo cliente) — repetir el encabezado de cliente es
+// válido para el parser (esTextoCliente no le importa si el nombre ya
+// había aparecido antes) y evita tener que "agrupar" tickets por cliente
+// acá, lo que sería una fuente extra de bugs sin necesidad real.
+//
+// Función PURA (texto/números adentro, nada de DOM) a propósito, para que
+// sea trivial de probar sola — ver test/test_extraer_sabana_texto.js, que
+// mantiene una copia exacta de esta función (comentada como tal, porque
+// este archivo no está armado para importarse con require() desde Node:
+// corre código de navegador al cargar).
+// =================================================================
+function formatearMontoParaTextoSabana(monto) {
+  const n = Number(monto);
+  const limpio = isFinite(n) ? n : 0;
+  // toFixed(2) + Number(...) para pisar basura de coma flotante (ej.
+  // 903.0000000001) y de paso no arrastrar ".00" en montos redondos —
+  // "500" en vez de "500.00" (el parser acepta los 2, pero "500" es más
+  // corto y más legible para editar a mano en el modal).
+  return Number(limpio.toFixed(2)).toString();
+}
+
+function generarTextoSabanaWhatsApp(tickets) {
+  const bloques = (tickets || []).map(t => {
+    const lineas = [];
+    lineas.push(String(t.cliente || 'GENERAL').toUpperCase());
+    // El encabezado "Ticket #N" solo se agrega si el ticket YA tenía uno
+    // (algunas sábanas se procesan sin numerar ticket — queda "Sin
+    // Ticket" — y el parser no lo necesita para nada: agrupa por cliente,
+    // no por número de ticket, así que omitirlo cuando no hay uno de
+    // verdad es más fiel a lo que en realidad se procesó).
+    const ticketLabel = (t.ticket || '').trim();
+    if (/^ticket\s*#?\s*\d+$/i.test(ticketLabel)) {
+      lineas.push(ticketLabel);
+    }
+    const jugadas = String(t.detalle || '').split(' | ').map(j => j.trim()).filter(Boolean);
+    jugadas.forEach(j => lineas.push(j));
+    lineas.push(formatearMontoParaTextoSabana(t.arriesga) + '//' + formatearMontoParaTextoSabana(t.gana));
+    return lineas.join('\n');
+  });
+  return bloques.join('\n\n');
+}
+
+function extraerTextoSabanaWhatsApp() {
+  if (!ULTIMA_SABANA_DIA || !ULTIMA_SABANA_DIA.tickets || ULTIMA_SABANA_DIA.tickets.length === 0) {
+    alert('Primero elegí y cargá una fecha con sábana.');
+    return;
+  }
+  const fechaTitulo = document.getElementById('sabanasTituloFecha');
+  const fecha = fechaTitulo ? fechaTitulo.textContent : (document.getElementById('sabanasFecha') ? document.getElementById('sabanasFecha').value : '');
+  document.getElementById('extraerSabanaTextoTitulo').textContent = fecha;
+  document.getElementById('extraerSabanaTextoArea').value = generarTextoSabanaWhatsApp(ULTIMA_SABANA_DIA.tickets);
+  document.getElementById('modalExtraerSabanaTexto').classList.add('activo');
+}
+
+function cerrarExtraerSabanaTexto() {
+  document.getElementById('modalExtraerSabanaTexto').classList.remove('activo');
+}
+
+function copiarExtraerSabanaTexto() {
+  const caja = document.getElementById('extraerSabanaTextoArea');
+  if (!caja || !caja.value.trim()) return;
+  // Reusa copiarTextoAlPortapapeles() (ver más arriba, sección "5.
+  // GENERAR PLANO WHATSAPP") — el mismo idioma de éxito/fallback que ya
+  // usa "📋 Copiar" del Plano de WhatsApp, en vez de inventar uno nuevo.
+  copiarTextoAlPortapapeles(caja.value, '¡Copiado! Ya lo puedes pegar (y editar si hizo falta) en "📋 Sábana" para procesarlo de nuevo.');
+}
+
+// =================================================================
 // ALERTAS (jugadas AMBIGUA (VARIOS DEPORTES)) — ver src/services/alertas.js
 // y src/routes/sabana.js. El badge de la pestaña se revisa cada 25s desde
 // mostrarApp() (ver ALERTAS_INTERVALO más arriba), sin importar en qué
@@ -2900,6 +3024,141 @@ async function marcarAlertasLeidas() {
     await api('/api/sabana/alertas/marcar-leidas', { method: 'POST' });
     actualizarBadgeAlertas();
   } catch (e) { /* no crítico */ }
+}
+
+// =================================================================
+// 💳 PAGOS (15-09-2026) — ver la nota grande junto a #vistaPagos en
+// grupo.html y src/routes/pagos.js. Esto es la SUSCRIPCIÓN semanal que
+// este Grupo le paga a Ludox, no tiene nada que ver con las jugadas ni
+// los saldos de sus clientes.
+// =================================================================
+const NOMBRES_METODO_PAGO = { pago_movil: 'Pago Móvil', binance: 'Binance', zelle: 'Zelle', banesco_panama: 'Banesco Panamá' };
+const NOMBRES_ESTADO_PAGO = { pendiente: 'Pendiente', confirmado: 'Confirmado', rechazado: 'Rechazado' };
+const TOPE_CAPTURA_PAGO_BYTES = 4 * 1024 * 1024; // 4MB — igual al tope que valida src/routes/pagos.js del lado del servidor
+
+async function cargarPagosGrupo() {
+  const fechaInput = document.getElementById('pagoFecha');
+  if (fechaInput && !fechaInput.value) fechaInput.value = hoyISO();
+
+  try {
+    const pagos = await api('/api/pagos');
+    renderPagosGrupo(pagos);
+    actualizarBadgePagosGrupo(pagos);
+  } catch (e) {
+    alert('No se pudieron cargar tus pagos reportados: ' + e.message);
+  }
+}
+
+function renderPagosGrupo(pagos) {
+  const cuerpo = document.getElementById('cuerpoPagosGrupo');
+  document.getElementById('vacioPagosGrupo').style.display = pagos.length === 0 ? 'block' : 'none';
+  cuerpo.innerHTML = pagos.map(p => {
+    const badgeClase = 'badge-pago-' + p.estado;
+    const nota = p.nota_admin ? p.nota_admin.replace(/</g, '&lt;') : '';
+    return '<tr>' +
+      '<td data-label="Fecha">' + formatFechaDDMMYYYY(p.fecha_pago) + '</td>' +
+      '<td data-label="Método">' + (NOMBRES_METODO_PAGO[p.metodo] || p.metodo) + '</td>' +
+      '<td data-label="Referencia">' + (p.referencia ? p.referencia.replace(/</g, '&lt;') : '—') + '</td>' +
+      '<td data-label="Estado"><span class="' + badgeClase + '">' + (NOMBRES_ESTADO_PAGO[p.estado] || p.estado) + '</span></td>' +
+      '<td data-label="Nota de Súper-admin">' + (nota || '—') + '</td>' +
+      '<td data-label="Acción"><button type="button" class="btn-chico" onclick="verCapturaPagoGrupo(\'' + p.id + '\')">👁️ Ver captura</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// Mismo idioma visual que actualizarBadgeAlertas() (badge + parpadeo del
+// botón de la pestaña) pero contando los pagos RECHAZADOS de este Grupo —
+// un rechazo es algo que el Grupo tiene que notar aunque esté viendo otra
+// pestaña (por eso también se llama desde revisarNotificacionesFondo()
+// más arriba, no solo al entrar a la pestaña "💳 Pagos").
+async function actualizarBadgePagosGrupo(pagosYaCargados) {
+  try {
+    const pagos = pagosYaCargados || await api('/api/pagos');
+    const rechazados = pagos.filter(p => p.estado === 'rechazado').length;
+    const badge = document.getElementById('pagosBadge');
+    const nav = document.getElementById('navPagos');
+    if (!badge || !nav) return;
+    if (rechazados > 0) {
+      badge.textContent = rechazados > 99 ? '99+' : rechazados;
+      badge.style.display = 'inline-block';
+      nav.classList.add('nav-alerta-activa');
+    } else {
+      badge.style.display = 'none';
+      nav.classList.remove('nav-alerta-activa');
+    }
+  } catch (e) { /* chequeo de fondo — si falla, no interrumpe nada más de la app */ }
+}
+
+// Lee el archivo elegido, lo manda como base64 a POST /api/pagos y
+// recarga el historial. El tope de 4MB se chequea ACÁ ANTES de leer el
+// archivo (sin gastar ancho de banda ni CPU convirtiéndolo a base64 para
+// nada) — el servidor igual lo vuelve a validar por su cuenta (ver
+// routes/pagos.js), nunca hay que confiar solo en lo que valida el navegador.
+async function reportarPago() {
+  const fecha = document.getElementById('pagoFecha').value;
+  const metodo = document.getElementById('pagoMetodoSelect').value;
+  const referencia = document.getElementById('pagoReferenciaInput').value.trim();
+  const fileInput = document.getElementById('pagoCapturaInput');
+  const file = fileInput.files[0];
+
+  if (!fecha) { alert('Elegí la fecha del pago.'); return; }
+  if (!file) { alert('Adjuntá la captura del pago.'); return; }
+  if (file.size > TOPE_CAPTURA_PAGO_BYTES) {
+    alert('La imagen es muy pesada (máx. 4MB) — probá con una captura de pantalla en vez de la foto original de la cámara.');
+    return;
+  }
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const lector = new FileReader();
+      lector.onload = () => resolve(String(lector.result));
+      lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      lector.readAsDataURL(file);
+    });
+    // El data URL viene como "data:image/png;base64,AAAA..." — el
+    // servidor solo necesita la parte de después de la coma.
+    const capturaBase64 = dataUrl.split(',')[1] || '';
+
+    await api('/api/pagos', {
+      method: 'POST',
+      body: JSON.stringify({
+        fechaPago: fecha,
+        metodo,
+        referencia: referencia || null,
+        capturaBase64,
+        capturaMime: file.type || 'image/png'
+      })
+    });
+
+    alert('¡Pago reportado! Súper-admin lo va a revisar pronto.');
+    document.getElementById('pagoReferenciaInput').value = '';
+    fileInput.value = '';
+    document.getElementById('pagoFecha').value = hoyISO();
+    await cargarPagosGrupo();
+  } catch (e) {
+    alert('No se pudo reportar el pago: ' + e.message);
+  }
+}
+
+// GET /api/pagos/:id/captura exige sesión de Grupo (requiereGrupo en
+// routes/pagos.js) igual que cualquier otra ruta de este panel — la
+// sesión viaja como "Authorization: Bearer <token>" (ver api() más
+// arriba), NO como cookie, así que un simple <a href>/window.open NO
+// serviría (el navegador no manda ese header solo). Por eso acá se pide
+// la imagen a mano con fetch() + el mismo header, y se abre el blob
+// resultante en una pestaña nueva.
+async function verCapturaPagoGrupo(id) {
+  try {
+    const headers = {};
+    if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+    const res = await fetch('/api/pagos/' + id + '/captura', { headers });
+    if (!res.ok) throw new Error('No se pudo abrir la captura (' + res.status + ').');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  } catch (e) {
+    alert('No se pudo abrir la captura: ' + e.message);
+  }
 }
 
 function formatFechaHoraAlerta(iso) {

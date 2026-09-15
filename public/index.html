@@ -87,8 +87,45 @@
     width: 220px;
     max-width: 62vw;
     margin-bottom: 6px;
+    /* La "cámara" 3D del logo (15-09-2026, a pedido del usuario: "quiero
+       que el logo de la pagina de incio se vea en 3d y tenga movimiento
+       que llame la atención") — perspective acá afuera, el giro/flote
+       real va adentro en .logo-3d, así la distancia de la "cámara" no se
+       ve afectada por el propio tamaño del logo. */
+    perspective: 1000px;
   }
-  .logo-wrap img { width: 100%; display: block; }
+  /* El giro/flote en sí: rota en 2 ejes a la vez (Y = izquierda-derecha,
+     X = arriba-abajo, como si lo sostuvieran en la mano) + una leve
+     subida/bajada, en un ciclo largo (7s) para que se sienta como un
+     movimiento vivo y no un mareo — el drop-shadow doble (uno ancho y
+     azul, otro más chico y cian, ambos con el desenlace real de "caer"
+     hacia abajo del logo en cada instante) es lo que vende la
+     profundidad: sin sombra que se mueva CON el giro, un giro 3D en CSS
+     se ve chato igual. */
+  .logo-3d {
+    transform-style: preserve-3d;
+    animation: logoFlotar3d 7s ease-in-out infinite;
+  }
+  .logo-3d img {
+    width: 100%;
+    display: block;
+    filter:
+      drop-shadow(0 22px 32px rgba(47, 107, 255, 0.45))
+      drop-shadow(0 6px 14px rgba(34, 211, 238, 0.3));
+  }
+  @keyframes logoFlotar3d {
+    0%   { transform: rotateY(-16deg) rotateX(7deg)  translateY(0px); }
+    25%  { transform: rotateY(6deg)   rotateX(-4deg) translateY(-12px); }
+    50%  { transform: rotateY(16deg)  rotateX(-6deg) translateY(0px); }
+    75%  { transform: rotateY(-6deg)  rotateX(5deg)  translateY(-8px); }
+    100% { transform: rotateY(-16deg) rotateX(7deg)  translateY(0px); }
+  }
+  /* A quien prefiera menos movimiento en pantalla (ajuste del propio
+     sistema operativo), se le respeta — el logo se queda quieto, solo
+     con su resplandor de siempre. */
+  @media (prefers-reduced-motion: reduce) {
+    .logo-3d { animation: none; }
+  }
 
   .eyebrow {
     font-family: 'Outfit', sans-serif;
@@ -301,7 +338,9 @@
 
   <div class="portal">
     <div class="logo-wrap">
-      <img src="img/logo-ludox.png" alt="LUDOX — Soluciones digitales para un mayor mañana">
+      <div class="logo-3d">
+        <img src="img/logo-ludox.png" alt="LUDOX — Soluciones digitales para un mayor mañana">
+      </div>
     </div>
     <p class="eyebrow">Portal de acceso</p>
 
