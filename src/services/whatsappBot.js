@@ -965,10 +965,24 @@ async function olvidarSesionWhatsapp() {
   sockActual = null;
   estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
 
+  // "EBUSY: resource busy or locked, rmdir ..." (15-09-2026, error real
+  // visto en vivo en Railway): WHATSAPP_SESSION_DIR es, en producción, el
+  // punto de MONTAJE del Volumen persistente — se puede borrar (y
+  // recrear) todo lo que hay ADENTRO sin problema, pero el sistema
+  // operativo no deja borrar esa carpeta-montaje en sí (fs.rmSync() de
+  // arriba intentaba borrar el punto de montaje entero, no solo su
+  // contenido). El arreglo: recorrer lo que hay adentro y borrar cada
+  // archivo/subcarpeta uno por uno, dejando la carpeta-montaje intacta —
+  // useMultiFileAuthState() la vuelve a llenar sola con una sesión nueva
+  // en cuanto arranca el bot de nuevo, un par de líneas más abajo.
   try {
-    fs.rmSync(sessionDir, { recursive: true, force: true });
+    if (fs.existsSync(sessionDir)) {
+      for (const nombre of fs.readdirSync(sessionDir)) {
+        fs.rmSync(path.join(sessionDir, nombre), { recursive: true, force: true });
+      }
+    }
   } catch (e) {
-    console.error('[whatsappBot] No se pudo borrar la carpeta de sesión (' + sessionDir + '):', e.message);
+    console.error('[whatsappBot] No se pudo borrar el contenido de la carpeta de sesión (' + sessionDir + '):', e.message);
     throw new Error('No se pudo borrar la sesión guardada: ' + e.message);
   }
 
