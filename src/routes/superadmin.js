@@ -294,7 +294,14 @@ router.get('/whatsapp-estado', asyncHandler(async (req, res) => {
   res.json({
     conectado: estado.conectado,
     tieneQr: !!estado.ultimoQr,
-    ultimoError: estado.ultimoError
+    ultimoError: estado.ultimoError,
+    // (15-09-2026, a pedido del usuario tras reportar "la sábana
+    // automática no se envía por WhatsApp") — el último intento de
+    // MANDAR un mensaje al grupo que falló (distinto de ultimoError, que
+    // es sobre la CONEXIÓN) — ver el comentario grande en
+    // whatsappBot.avisar(). null si el último envío salió bien o todavía
+    // no se intentó ninguno.
+    ultimoErrorEnvio: estado.ultimoErrorEnvio || null
   });
 }));
 

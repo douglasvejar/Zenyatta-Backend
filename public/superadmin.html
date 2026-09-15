@@ -320,6 +320,18 @@
 
     <div id="whatsappQrCajaConectado" style="display:none; text-align:center; padding:24px; color:#1e7e34; font-weight:600;">✅ Ya está vinculado y conectado — no hace falta escanear nada.</div>
     <div id="whatsappQrCajaSinDatos" style="display:none; text-align:center; padding:24px; color:#888;">Esperando a que el servidor genere un código nuevo… (revisa que <span class="mono" style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">WHATSAPP_BOT_ACTIVADO=true</span> esté cargado en las variables del servidor)</div>
+
+    <!-- =============================================================
+         ÚLTIMO ERROR DE ENVÍO (15-09-2026, a pedido del usuario tras
+         reportar "la sábana automática no se envía por WhatsApp" aunque
+         el mensaje SÍ se reconocía/importaba bien) — antes, si el bot
+         fallaba mandando un mensaje AL grupo (distinto de recibir uno),
+         el único rastro quedaba en los logs de Railway. Se muestra acá
+         mismo, sin tener que ir a buscarlo. ============================================================= -->
+    <div id="whatsappErrorEnvioCaja" style="display:none; margin-top:14px; background:#fdecea; border:1px solid #f5c6cb; border-radius:8px; padding:14px;">
+      <strong style="color:#721c24;">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
+      <div id="whatsappErrorEnvioTexto" style="color:#721c24; font-size:13px; margin-top:6px;"></div>
+    </div>
   </div>
 
   <footer class="pie-pagina">DESARROLLADO POR LOS BROTHERS DOUGLITAS &amp; LUSHO SINCE 2026</footer>
@@ -707,6 +719,21 @@ function mostrarSeccionSuperadmin(nombre) {
 let WHATSAPP_QR_INTERVALO = null;
 let WHATSAPP_QR_ULTIMA_URL_BLOB = null;
 
+// Se muestra sin importar el estado de la conexión/QR de arriba — un
+// envío puede haber fallado hace un rato y el bot igual estar conectado
+// ahora mismo (ver el comentario grande en whatsappBot.avisar()).
+function pintarErrorEnvioWhatsapp(estado) {
+  const caja = document.getElementById('whatsappErrorEnvioCaja');
+  const texto = document.getElementById('whatsappErrorEnvioTexto');
+  if (!estado || !estado.ultimoErrorEnvio) {
+    caja.style.display = 'none';
+    return;
+  }
+  const err = estado.ultimoErrorEnvio;
+  texto.textContent = '"' + err.mensaje + '" — grupo ' + err.jid + ', ' + formatFechaHora(err.en) + '.';
+  caja.style.display = 'block';
+}
+
 async function actualizarVinculoWhatsapp() {
   const textoEl = document.getElementById('whatsappQrEstadoTexto');
   const cajaImagen = document.getElementById('whatsappQrCajaImagen');
@@ -720,8 +747,11 @@ async function actualizarVinculoWhatsapp() {
     cajaImagen.style.display = 'none';
     cajaConectado.style.display = 'none';
     cajaSinDatos.style.display = 'none';
+    pintarErrorEnvioWhatsapp(null);
     return;
   }
+
+  pintarErrorEnvioWhatsapp(estado);
 
   if (estado.conectado) {
     textoEl.textContent = '';

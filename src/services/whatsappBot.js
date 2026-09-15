@@ -226,7 +226,7 @@ async function resolverNumeroRealDelRemitente(sock, msg, participantJid) {
   return participantJid; // ninguna forma conocida funcionó — se devuelve tal cual
 }
 
-let estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [] };
+let estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
 let sockActual = null; // el socket de Baileys ya conectado, o null si no hay conexión activa ahora mismo.
 let relojDeFondoIniciado = false;
 
@@ -250,12 +250,29 @@ function formatFechaAviso(fechaISO) {
 // Manda un texto al grupo sin nunca tumbar el flujo que lo llama (si el
 // envío falla — ej. se perdió la conexión justo en ese momento — se
 // registra el error y se sigue).
+//
+// (15-09-2026, a pedido del usuario tras reportar "la sábana automática
+// no se envía por WhatsApp" aunque el mensaje SÍ se reconocía/importaba
+// bien — es decir, la LECTURA funcionaba pero algo fallaba en la
+// ESCRITURA, justo la única parte de este archivo que nunca se pudo
+// probar ni una vez contra WhatsApp real, ver la advertencia grande al
+// principio) — antes, si sock.sendMessage() fallaba, el único rastro
+// quedaba en el log del servidor (console.error), invisible para el
+// usuario sin entrar a los logs de Railway — el mismo problema de fondo
+// que ya se resolvió para el QR y para el JID del grupo. Ahora el motivo
+// del último intento fallido de ENVÍO (no de lectura — eso ya lo cubre
+// la bandeja de "recientes"/sabanas_pendientes_whatsapp) queda guardado
+// en memoria y se expone en obtenerEstadoConexion(), para que tanto el
+// panel del Grupo (routes/whatsapp.js → estadoBot) como Súper-admin
+// (GET /whatsapp-estado) lo puedan mostrar en pantalla.
 async function avisar(sock, jid, texto) {
   try {
     if (!sock || !jid) return;
     await sock.sendMessage(jid, { text: texto });
+    estadoConexion.ultimoErrorEnvio = null;
   } catch (e) {
-    console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp:', e.message);
+    estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid, mensaje: e.message };
+    console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp (jid ' + jid + '):', e.message);
   }
 }
 
@@ -705,7 +722,24 @@ async function manejarMensajeEntrante(sock, msg) {
     // una vez (sigue respetando el reloj de la hora salvo que sea la
     // primera verificación del día, o que ya toque cerrar) en vez de
     // esperar a que el reloj de fondo pase por acá.
-    await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
+    //
+    // (15-09-2026, a pedido del usuario tras reportar "la sábana
+    // automática no se envía por WhatsApp" aunque el mensaje SÍ se
+    // reconocía/importaba bien) — hasta acá, la IMPORTACIÓN ya quedó
+    // bien guardada (arriba). Si procesarDiaAbierto() explota por
+    // cualquier motivo que no sea el propio envío (ese ya se registra
+    // aparte, adentro de avisar()) — ej. un error de base de datos al
+    // guardar que se mandó el resumen — antes se perdía en silencio en
+    // el catch de acá abajo, sin que quedara ningún rastro de que el
+    // aviso al grupo no salió. Ahora también queda en
+    // estadoConexion.ultimoErrorEnvio para que se vea en el panel, en
+    // vez de solo en los logs de Railway.
+    try {
+      await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
+    } catch (e) {
+      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message };
+      throw e; // se sigue reportando igual en el log del servidor, ver el catch de abajo
+    }
   } catch (e) {
     console.error('[whatsappBot] Error al procesar un mensaje entrante (no se cae el bot, solo se pierde este mensaje puntual):', e);
   }
@@ -768,6 +802,9 @@ async function tickRelojDeFondo() {
     try {
       await procesarDiaAbierto(sockActual, dia.grupoId, dia.whatsappGrupoJid, dia.fecha, { forzar: false });
     } catch (e) {
+      // Mismo criterio que en manejarMensajeEntrante (15-09-2026): que
+      // quede visible en el panel, no solo en el log del servidor.
+      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: dia.whatsappGrupoJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message };
       console.error('[whatsappBot] Error al verificar el día ' + dia.fecha + ' (grupo ' + dia.grupoId + '):', e.message);
     }
   }

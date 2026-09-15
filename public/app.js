@@ -616,6 +616,21 @@ function renderPanelWhatsapp(resp) {
     estadoConexion.textContent = '';
   }
 
+  // (15-09-2026, a pedido del usuario tras reportar "la sábana automática
+  // no se envía por WhatsApp" aunque el mensaje SÍ se reconocía/importaba
+  // bien) — esto es sobre el ENVÍO del listado de vuelta al grupo (antes
+  // solo visible en los logs de Railway si fallaba), distinto de la
+  // importación, que ya se ve abajo en "Actividad reciente".
+  const cajaErrorEnvio = document.getElementById('whatsappErrorEnvioCaja');
+  const errorEnvio = resp.estadoBot && resp.estadoBot.ultimoErrorEnvio;
+  if (errorEnvio) {
+    document.getElementById('whatsappErrorEnvioTexto').textContent =
+      '"' + errorEnvio.mensaje + '" (' + formatFechaHoraAlerta(errorEnvio.en) + ')';
+    cajaErrorEnvio.style.display = 'block';
+  } else {
+    cajaErrorEnvio.style.display = 'none';
+  }
+
   const listaDias = document.getElementById('whatsappListaDias');
   const diasVacio = document.getElementById('whatsappDiasVacio');
   const dias = resp.dias || [];

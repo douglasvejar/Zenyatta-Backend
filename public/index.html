@@ -526,6 +526,18 @@
     </div>
     <div id="whatsappVinculado" style="display:none;">
       <div id="whatsappEstadoConexion" style="font-size:12px; color:#666; margin-bottom:6px;"></div>
+      <!-- =========================================================
+           ÚLTIMO ERROR DE ENVÍO (15-09-2026, a pedido del usuario tras
+           reportar "la sábana automática no se envía por WhatsApp"
+           aunque el mensaje SÍ se reconocía/importaba bien) — la
+           IMPORTACIÓN ya se ve en "Actividad reciente" más abajo; esto
+           es sobre el ENVÍO del listado de vuelta al grupo, que antes
+           solo se veía en los logs de Railway si fallaba (ver el
+           comentario grande en whatsappBot.avisar()). ========================================================= -->
+      <div id="whatsappErrorEnvioCaja" style="display:none; background:#fdecea; border:1px solid #f5c6cb; border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:12px; color:#721c24;">
+        <strong>⚠️ El último intento de mandar el resumen al grupo falló:</strong>
+        <div id="whatsappErrorEnvioTexto" style="margin-top:4px;"></div>
+      </div>
       <small style="display:block; color:#2e7d32; margin-bottom:10px;">✅ La sábana de hoy se carga sola en "Resumen por Cliente" (pestaña 📋 Sábana) a medida que llega por WhatsApp — no hace falta pegarla a mano.</small>
 
       <h4 style="margin:12px 0 6px; font-size:14px; color:var(--primary);">Días recientes</h4>
