@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mi resumen — Deportes Zenyatta</title>
+<title>Mi resumen — LDSOLUCIONES</title>
 <style>
   :root {
     --bg-color: #f4f6f9;
@@ -164,7 +164,7 @@
   <div id="contenido" style="display:none;">
     <img id="logoGrupo" class="logo-grupo" style="display:none;" alt="Logo del grupo">
     <h1 id="tituloCliente">Mi resumen</h1>
-    <p class="subtitulo" id="subtituloGrupo">Deportes Zenyatta — solo lectura</p>
+    <p class="subtitulo" id="subtituloGrupo">LDSOLUCIONES — solo lectura</p>
     <p class="reloj-venezuela" id="relojVenezuela"></p>
 
     <div class="control-panel">
@@ -405,7 +405,7 @@ function renderResumen(data) {
   } else {
     logoEl.style.display = 'none';
   }
-  document.getElementById('subtituloGrupo').textContent = (data.grupo && data.grupo.nombre ? data.grupo.nombre : 'Deportes Zenyatta') + ' — solo lectura';
+  document.getElementById('subtituloGrupo').textContent = (data.grupo && data.grupo.nombre ? data.grupo.nombre : 'LDSOLUCIONES') + ' — solo lectura';
 
   const badgeTipoCuenta = data.jugador.tipoCuenta === 'avalado' ? ' <span class="badge-tipocuenta">AVALADO</span>' : '';
   document.getElementById('tituloCliente').innerHTML = 'Hola, ' + data.jugador.nombre + badgeTipoCuenta;

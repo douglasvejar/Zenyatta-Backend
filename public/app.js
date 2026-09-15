@@ -184,6 +184,12 @@ function mostrarApp() {
   document.getElementById('vistaLogin').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   document.getElementById('topbarGrupo').textContent = 'Conectado como: ' + GRUPO.nombre + ' (' + GRUPO.email + ')';
+  // "Deportes Zenyatta" (15-09-2026, a pedido del usuario) ya no va fijo
+  // arriba de "Verificador de Sábana" — cada Grupo ve ahí su propio
+  // nombre (mismo criterio que ya se usaba en el Plano de WhatsApp, ver
+  // generarPlanoWhatsApp() más abajo).
+  const tituloSabanaEl = document.getElementById('tituloSabana');
+  if (tituloSabanaEl) tituloSabanaEl.textContent = GRUPO.nombre + ' — Verificador de Sábana';
   document.getElementById('fechaPartidos').value = hoyISO();
   document.getElementById('transferFecha').value = hoyISO();
   cargarMapaLogosEquipos();
@@ -1127,15 +1133,20 @@ function renderTablaResultados(tickets) {
     // así se ve de un vistazo cuáles tickets ganaron/perdieron sin tener
     // que leer la columna de Estado una por una.
     tr.className = claseEstado;
+    // data-label en cada <td> (15-09-2026): en PC no se usa para nada (la
+    // tabla se ve normal, con su thead) — es solo lo que lee el CSS
+    // ":before" en celular (ver @media max-width:760px en index.html) para
+    // dibujar la tarjeta "Etiqueta: valor" sin tener que duplicar el
+    // armado de esta fila en JS aparte para mobile.
     tr.innerHTML =
-      '<td>' + t.cliente + '</td>' +
-      '<td>' + t.ticket + '</td>' +
-      '<td>' + jugadasHTML + '</td>' +
-      '<td>' + formatMoney(t.arriesga) + '</td>' +
-      '<td>' + formatMoney(t.paga) + notaPago + '</td>' +
-      '<td>' + cuota + '</td>' +
-      '<td class="' + claseEstado + '">' + t.estado + notaEstado + '</td>' +
-      '<td><button type="button" class="btn-debug" onclick="toggleDebug(' + idx + ')">🔍 Ver</button></td>';
+      '<td data-label="Cliente">' + t.cliente + '</td>' +
+      '<td data-label="Ticket">' + t.ticket + '</td>' +
+      '<td data-label="Jugada(s)">' + jugadasHTML + '</td>' +
+      '<td data-label="Arriesga">' + formatMoney(t.arriesga) + '</td>' +
+      '<td data-label="Gana (neto)">' + formatMoney(t.paga) + notaPago + '</td>' +
+      '<td data-label="Cuota Calc.">' + cuota + '</td>' +
+      '<td class="' + claseEstado + '" data-label="Estado Auto">' + t.estado + notaEstado + '</td>' +
+      '<td data-label="Debug"><button type="button" class="btn-debug" onclick="toggleDebug(' + idx + ')">🔍 Ver</button></td>';
     tbody.appendChild(tr);
 
     const trDebug = document.createElement('tr');
@@ -1228,7 +1239,7 @@ function generarPlanoWhatsApp() {
   // (GRUPO.nombre, el mismo que se ve arriba en "Conectado como: ..."),
   // con el nombre viejo como respaldo solo si por algún motivo GRUPO
   // todavía no se cargó.
-  partes.push('*' + ((GRUPO && GRUPO.nombre) || 'Deportes Zenyatta') + '*');
+  partes.push('*' + ((GRUPO && GRUPO.nombre) || 'LDSOLUCIONES') + '*');
   partes.push('🏀⚽🏈⚾');
   if (ULTIMO_PLANO_WHATSAPP.fecha) {
     const [anio, mes, dia] = ULTIMO_PLANO_WHATSAPP.fecha.split('-');

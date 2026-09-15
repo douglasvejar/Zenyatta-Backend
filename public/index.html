@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deportes Zenyatta — Panel del Grupo</title>
+<title>LDSOLUCIONES — Panel del Grupo</title>
 <style>
   :root {
     --bg-color: #f4f6f9;
@@ -288,6 +288,30 @@
        con el dedo si no entra de una. */
     table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 
+    /* "Jugada(s)" con Ganada/Perdida en el celular (15-09-2026, a pedido
+       del usuario: "hay que moverla hacia un lado y es incómodo utilizarla")
+       — la tabla de arriba sigue aplicando el scroll horizontal a Resumen
+       por Cliente y al resto de las tablas anchas, pero ESTA en puntual
+       (#tablaResultados, la de cada jugada con su Estado Auto) se convierte
+       en una tarjeta por jugada, una debajo de la otra — igual que ya se ve
+       en el link del cliente (cliente.html) — así se lee de arriba hacia
+       abajo sin deslizar el dedo de costado, y la fila sigue coloreada
+       entera (verde/rojo/etc., ver .ganada/.perdida/... más arriba) como
+       fondo de la tarjeta. Cada <td> trae su etiqueta en el atributo
+       "data-label" (ver renderTablaResultados en app.js) y ":before" la
+       dibuja a la izquierda del valor. */
+    #tablaResultados { display: block; overflow-x: visible; white-space: normal; }
+    #tablaResultados thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    #tablaResultados tbody, #tablaResultados tr { display: block; width: 100%; }
+    #tablaResultados tr:not(.fila-debug) { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; padding: 10px 12px; }
+    #tablaResultados tr.fila-debug { margin-top: -8px; margin-bottom: 10px; border: none; }
+    #tablaResultados td { display: block; border: none !important; padding: 6px 0 6px 42%; position: relative; text-align: left; white-space: normal; }
+    #tablaResultados td:before { content: attr(data-label); position: absolute; left: 0; top: 6px; width: 38%; font-weight: bold; font-size: 12px; color: #556; white-space: normal; }
+    #tablaResultados tr:not(.fila-debug) td:first-child { padding-top: 0; }
+    #tablaResultados tr:not(.fila-debug) td:last-child { padding-bottom: 0; }
+    #tablaResultados .fila-debug td { padding-left: 12px; }
+    #tablaResultados .fila-debug td:before { content: none; }
+
     .modal-caja { padding: 14px; width: 92%; }
     .chat-widget { right: 12px; bottom: 12px; }
     .chat-widget-burbuja { width: 52px; height: 52px; font-size: 22px; }
@@ -302,7 +326,14 @@
      ================================================================= -->
 <div class="login-shell" id="vistaLogin">
   <div class="container">
-    <h1>Deportes Zenyatta</h1>
+    <!-- "Deportes Zenyatta" era el nombre del negocio original para el que
+         se armó esta app (15-09-2026, a pedido del usuario) — ahora que la
+         plataforma se alquila a varios Grupos/clientes distintos, esta
+         pantalla de login (antes de que se sepa a qué Grupo pertenece
+         quien entra) muestra la marca de la propia plataforma,
+         LDSOLUCIONES, en vez del nombre de aquel negocio original. El
+         formulario de abajo (email/contraseña) no cambia. -->
+    <h1>LDSOLUCIONES</h1>
     <p class="subtitulo">Inicia sesión con la cuenta de tu Grupo</p>
     <div class="campo-login">
       <label for="loginEmail">Email</label>
@@ -349,7 +380,13 @@
 
 <!-- ============================= SÁBANA ============================= -->
 <div class="container" id="vistaSabana">
-  <h1>Deportes Zenyatta — Verificador de Sábana</h1>
+  <!-- El texto fijo "Deportes Zenyatta" (15-09-2026, a pedido del usuario)
+       se reemplaza en cuanto carga la app por el nombre REAL del Grupo que
+       inició sesión (mostrarApp(), en app.js) — cada Grupo/cliente ve acá
+       su propio nombre, no el de la plataforma ni el del negocio original.
+       Este texto de acá es solo el que se alcanza a ver una fracción de
+       segundo antes de que corra ese JS. -->
+  <h1 id="tituloSabana">LDSOLUCIONES — Verificador de Sábana</h1>
 
   <div id="avisoAlertasNuevas" class="caja-alerta" style="display:none;"></div>
 
