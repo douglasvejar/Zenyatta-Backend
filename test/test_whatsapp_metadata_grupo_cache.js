@@ -54,7 +54,8 @@ const {
   obtenerMetadataGrupoCacheada,
   invalidarCacheMetadataGrupo,
   avisar,
-  obtenerEstadoConexion
+  obtenerEstadoConexion,
+  extraerDetalleError
 } = require('../src/services/whatsappBot');
 
 Module._load = originalLoad;
@@ -169,12 +170,39 @@ async function testAvisarSeRindeTrasAgotarLosReintentos() {
   const estado = obtenerEstadoConexion();
   check(estado.ultimoErrorEnvio && estado.ultimoErrorEnvio.jid === JID, 'tras agotar los 3 intentos, el error queda expuesto en obtenerEstadoConexion() (lo que muestra el panel del Grupo y de Súper-admin)');
   check(/not-acceptable/i.test(estado.ultimoErrorEnvio.mensaje || ''), 'el mensaje guardado es el error REAL que mandó WhatsApp, tal cual — no un texto genérico que esconda la causa');
+  check(estado.ultimoErrorEnvio.detalle && estado.ultimoErrorEnvio.detalle.mensaje === estado.ultimoErrorEnvio.mensaje, 'el error guardado también trae "detalle" (extraerDetalleError()) — lo que el botón "📋 Copiar detalle del error" del panel copia para poder seguir investigando');
 }
 
 async function testAvisarNuncaRevientaSinSockOSinJid() {
   await avisar(null, '120363000000000006@g.us', 'texto');
   await avisar({ sendMessage: async () => { throw new Error('no debería llamarse'); } }, null, 'texto');
   check(true, 'avisar() sin sock o sin jid simplemente no hace nada — nunca revienta el flujo que lo llama (el reloj de fondo, procesarDiaAbierto, etc.)');
+}
+
+// (16-09-2026, a pedido del usuario tras reportar que el "not-acceptable"
+// seguía igual: "hay una forma de yo ver el error en otro lado y
+// pasartelo para que se pueda corregir") — extraerDetalleError() junta
+// TODO lo que haya en el objeto de error real de Baileys (@hapi/boom),
+// de la forma más genérica posible, sin asumir una forma exacta (nunca
+// se pudo ver un error real de Baileys en este entorno).
+function testExtraerDetalleError() {
+  const soloMensaje = extraerDetalleError(new Error('algo salió mal'));
+  check(soloMensaje.mensaje === 'algo salió mal', 'un Error común y corriente: se guarda al menos el mensaje');
+  check(typeof soloMensaje.stack === 'string' && soloMensaje.stack.length > 0, 'y también las primeras líneas del stack, para ubicar de dónde salió');
+
+  const errorBoom = new Error('not-acceptable');
+  errorBoom.output = { statusCode: 406, payload: { error: 'Not Acceptable', message: 'not-acceptable' } };
+  errorBoom.data = { content: [{ tag: 'error', attrs: { code: '406' } }] };
+  const detalleBoom = extraerDetalleError(errorBoom);
+  check(detalleBoom.statusCode === 406, 'un error con forma de @hapi/boom (lo que usa Baileys): se rescata el statusCode');
+  check(detalleBoom.payload && detalleBoom.payload.error === 'Not Acceptable', 'y también el "payload" completo del error');
+  check(detalleBoom.data && detalleBoom.data.content[0].tag === 'error', 'y "data" (el nodo XML crudo que a veces cuelga Baileys), copiado sin referencias circulares');
+
+  const errorSinNada = extraerDetalleError({});
+  check(errorSinNada.mensaje === undefined && errorSinNada.statusCode === undefined, 'un objeto de error rarísimo, sin nada reconocible, no revienta — simplemente no agrega esos campos');
+
+  const noEsObjeto = extraerDetalleError('un string cualquiera, no un Error de verdad');
+  check(noEsObjeto.mensaje === 'un string cualquiera, no un Error de verdad', 'si ni siquiera es un objeto (alguien hizo throw "texto"), igual devuelve algo útil en vez de reventar');
 }
 
 (async () => {
@@ -184,6 +212,7 @@ async function testAvisarNuncaRevientaSinSockOSinJid() {
   await testAvisarReintentaNotAcceptableYLuegoFunciona();
   await testAvisarSeRindeTrasAgotarLosReintentos();
   await testAvisarNuncaRevientaSinSockOSinJid();
+  testExtraerDetalleError();
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exitCode = fallaron > 0 ? 1 : 0;

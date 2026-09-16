@@ -464,6 +464,14 @@
       <strong style="color:var(--danger);">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
       <div id="whatsappErrorEnvioTexto" style="color:var(--danger); font-size:13px; margin-top:6px;"></div>
       <p style="color:var(--danger); font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:rgba(255,255,255,0.08); color:var(--text); padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, probá "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
+      <!-- "Copiar detalle del error" (16-09-2026, a pedido del usuario:
+           "hay una forma de yo ver el error en otro lado y pasartelo
+           para que se pueda corregir") — copia TODO lo que el servidor
+           pudo sacarle al error (no solo el texto corto de arriba) para
+           pegarlo directo en el chat con Claude. Ver
+           copiarDetalleErrorEnvioWhatsapp()/extraerDetalleError() más
+           abajo / en whatsappBot.js. -->
+      <button type="button" class="btn-secundario" onclick="copiarDetalleErrorEnvioWhatsapp()" style="margin-top:10px; padding:8px 14px; font-size:13px;">📋 Copiar detalle del error</button>
     </div>
 
     <!-- =============================================================
@@ -889,6 +897,52 @@ function pintarErrorEnvioWhatsapp(estado) {
   const err = estado.ultimoErrorEnvio;
   texto.textContent = '"' + err.mensaje + '" — grupo ' + err.jid + ', ' + formatFechaHora(err.en) + '.';
   caja.style.display = 'block';
+  // Objeto COMPLETO (no solo el texto ya resumido de arriba), para que
+  // "📋 Copiar detalle del error" pueda copiar todo lo que el servidor
+  // logró sacarle al error real — ver copiarDetalleErrorEnvioWhatsapp().
+  ULTIMO_ERROR_ENVIO_WHATSAPP = err;
+}
+
+// "📋 Copiar detalle del error" (16-09-2026, a pedido del usuario tras
+// reportar que el "not-acceptable" seguía igual después del arreglo del
+// caché de metadata de grupo: "hay una forma de yo ver el error en otro
+// lado y pasartelo para que se pueda corregir") — arma un texto con TODO
+// lo que el servidor pudo sacarle al error real (no solo "not-acceptable"
+// a secas, ver extraerDetalleError() en whatsappBot.js) para pegarlo
+// directo en el chat con Claude. superadmin.html no incluye app.js (tiene
+// su propio <script> aparte), así que este helper de copiado se repite
+// acá en vez de reusar copiarTextoAlPortapapeles()/copiarDetalleErrorEnvioWhatsapp()
+// de app.js.
+let ULTIMO_ERROR_ENVIO_WHATSAPP = null;
+function copiarDetalleErrorEnvioWhatsapp() {
+  const err = ULTIMO_ERROR_ENVIO_WHATSAPP;
+  if (!err) { alert('No hay ningún error de envío guardado ahora mismo.'); return; }
+  const partes = [
+    'Error al mandar por WhatsApp (Ludox)',
+    'Cuándo: ' + (err.en || '(sin fecha)'),
+    'Grupo (jid): ' + (err.jid || '(desconocido)'),
+    'Mensaje: ' + (err.mensaje || '(sin mensaje)')
+  ];
+  if (err.detalle) partes.push('Detalle técnico: ' + JSON.stringify(err.detalle, null, 2));
+  const texto = partes.join('\n');
+  const mensajeExito = '¡Copiado! Ya lo puedes pegar en el chat con Claude.';
+  const hacerFallback = () => {
+    const temp = document.createElement('textarea');
+    temp.value = texto;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.focus();
+    temp.select();
+    try { document.execCommand('copy'); alert(mensajeExito); }
+    catch (e) { alert('No se pudo copiar automáticamente. Cópialo a mano:\n\n' + texto); }
+    document.body.removeChild(temp);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => alert(mensajeExito)).catch(hacerFallback);
+  } else {
+    hacerFallback();
+  }
 }
 
 // "Olvidar" la sesión (15-09-2026, a pedido del usuario tras el error

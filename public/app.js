@@ -38,6 +38,7 @@ let ULTIMA_FECHA_PROCESADA = null; // fecha del último "Procesar Sábana", para
 let POLLA_REGISTRADA_HOY = false;
 let EQUIPOS_RELEVANTES_HOY = new Set(); // equipos oficiales detectados en la última sábana procesada
 let PIZARRA_INTERVALO = null; // id del setInterval del auto-refresco (20s), para poder cancelarlo
+let ULTIMO_ERROR_ENVIO_WHATSAPP = null; // objeto completo { en, jid, mensaje, detalle } del último error al mandar por WhatsApp, para "📋 Copiar detalle del error"
 let ALERTAS_INTERVALO = null; // id del setInterval que revisa alertas + chat sin leer (25s) — corre SIEMPRE mientras haya sesión, sin importar en qué pestaña se esté (a diferencia de la Pizarra, que solo corre en Sábana)
 let CHAT_WIDGET_ABIERTO = false; // si el panel de la bandeja de chat flotante está abierto o minimizado (ver sección "CHAT DE SOPORTE" más abajo)
 let CHAT_WIDGET_POLL_ABIERTO = null; // id del setInterval que refresca los mensajes mientras el panel está ABIERTO (para que se vea "en vivo" sin tener que cerrar y abrir)
@@ -641,8 +642,14 @@ function renderPanelWhatsapp(resp) {
     document.getElementById('whatsappErrorEnvioTexto').textContent =
       '"' + errorEnvio.mensaje + '" (' + formatFechaHoraAlerta(errorEnvio.en) + ')';
     cajaErrorEnvio.style.display = 'block';
+    // Se guarda el objeto COMPLETO (no solo el texto ya resumido de
+    // arriba) para que "📋 Copiar detalle del error" pueda copiar todo
+    // lo que el servidor logró sacarle al error real — ver
+    // copiarDetalleErrorEnvioWhatsapp() más abajo.
+    ULTIMO_ERROR_ENVIO_WHATSAPP = errorEnvio;
   } else {
     cajaErrorEnvio.style.display = 'none';
+    ULTIMO_ERROR_ENVIO_WHATSAPP = null;
   }
 
   const listaDias = document.getElementById('whatsappListaDias');
@@ -1359,6 +1366,27 @@ function copiarTextoAlPortapapeles(texto, mensajeExito) {
   } else {
     hacerFallback();
   }
+}
+
+// "📋 Copiar detalle del error" (16-09-2026, a pedido del usuario tras
+// reportar que el "not-acceptable" seguía igual después del arreglo del
+// caché de metadata de grupo: "hay una forma de yo ver el error en otro
+// lado y pasartelo para que se pueda corregir") — arma un texto con TODO
+// lo que el servidor pudo sacarle al error real (no solo "not-acceptable"
+// a secas, ver extraerDetalleError() en whatsappBot.js) para que se
+// pueda pegar directo en el chat con Claude y seguir investigando con el
+// error real en la mano, sin tener que entrar a los logs de Railway.
+function copiarDetalleErrorEnvioWhatsapp() {
+  const err = ULTIMO_ERROR_ENVIO_WHATSAPP;
+  if (!err) { alert('No hay ningún error de envío guardado ahora mismo.'); return; }
+  const partes = [
+    'Error al mandar por WhatsApp (Ludox)',
+    'Cuándo: ' + (err.en || '(sin fecha)'),
+    'Grupo (jid): ' + (err.jid || '(desconocido)'),
+    'Mensaje: ' + (err.mensaje || '(sin mensaje)')
+  ];
+  if (err.detalle) partes.push('Detalle técnico: ' + JSON.stringify(err.detalle, null, 2));
+  copiarTextoAlPortapapeles(partes.join('\n'), '¡Copiado! Ya lo puedes pegar en el chat con Claude.');
 }
 
 function copiarPlanoWhatsApp() {

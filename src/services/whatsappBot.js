@@ -316,6 +316,45 @@ function formatFechaAviso(fechaISO) {
   return (anio && mes && dia) ? (dia + '-' + mes + '-' + anio) : (fechaISO || '(sin fecha)');
 }
 
+// (16-09-2026, a pedido del usuario tras reportar que el "not-acceptable"
+// seguía igual después del arreglo del caché de metadata de grupo, y
+// preguntó "hay una forma de yo ver el error en otro lado y pasartelo
+// para que se pueda corregir") — hasta ahora `ultimoErrorEnvio` solo
+// guardaba `e.message` ("not-acceptable" a secas), que no alcanza para
+// seguir investigando sin acceso a los logs de Railway. Baileys usa
+// @hapi/boom para estos errores, que casi siempre trae bastante más
+// detalle colgando del objeto (el código de estado que le puso WhatsApp,
+// el "payload" del error, y a veces hasta el nodo XML crudo que mandó
+// WhatsApp) — se junta acá TODO lo que haya, de la forma más genérica
+// posible (sin asumir una forma exacta, porque esto nunca se pudo ver en
+// vivo en este entorno), para que el panel lo pueda mostrar completo y
+// el usuario lo pueda copiar y pasarlo tal cual.
+function extraerDetalleError(e) {
+  if (!e || typeof e !== 'object') return { mensaje: String(e) };
+  const detalle = { mensaje: e.message, nombre: e.name };
+  if (e.output && typeof e.output === 'object') {
+    if (e.output.statusCode !== undefined) detalle.statusCode = e.output.statusCode;
+    if (e.output.payload !== undefined) detalle.payload = e.output.payload;
+  }
+  if (e.data !== undefined) {
+    try {
+      // JSON.parse(JSON.stringify(...)) para quedarse con una copia
+      // simple (sin referencias circulares ni funciones) que se pueda
+      // mandar tal cual por la API — si e.data trae algo raro que ni
+      // eso tolera, se guarda como texto en vez de reventar acá.
+      detalle.data = JSON.parse(JSON.stringify(e.data));
+    } catch (err) {
+      detalle.data = String(e.data);
+    }
+  }
+  if (e.stack) {
+    // Solo las primeras líneas — alcanza para ubicar de dónde salió sin
+    // mandar un stack trace entero por la API cada vez.
+    detalle.stack = String(e.stack).split('\n').slice(0, 6).join('\n');
+  }
+  return detalle;
+}
+
 // Manda un texto al grupo sin nunca tumbar el flujo que lo llama (si el
 // envío falla — ej. se perdió la conexión justo en ese momento — se
 // registra el error y se sigue).
@@ -371,8 +410,8 @@ async function avisar(sock, jid, texto, intento = 1) {
       return avisar(sock, jid, texto, intento + 1);
     }
 
-    estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid, mensaje: e.message };
-    console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp (jid ' + jid + '):', e.message);
+    estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid, mensaje: e.message, detalle: extraerDetalleError(e) };
+    console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp (jid ' + jid + '):', e.message, JSON.stringify(estadoConexion.ultimoErrorEnvio.detalle));
   }
 }
 
@@ -837,7 +876,7 @@ async function manejarMensajeEntrante(sock, msg) {
     try {
       await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
     } catch (e) {
-      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message };
+      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
       throw e; // se sigue reportando igual en el log del servidor, ver el catch de abajo
     }
   } catch (e) {
@@ -904,7 +943,7 @@ async function tickRelojDeFondo() {
     } catch (e) {
       // Mismo criterio que en manejarMensajeEntrante (15-09-2026): que
       // quede visible en el panel, no solo en el log del servidor.
-      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: dia.whatsappGrupoJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message };
+      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: dia.whatsappGrupoJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
       console.error('[whatsappBot] Error al verificar el día ' + dia.fecha + ' (grupo ' + dia.grupoId + '):', e.message);
     }
   }
@@ -1120,5 +1159,9 @@ module.exports = {
   // librería, solo reciben un `sock`/jid ya armados.
   obtenerMetadataGrupoCacheada,
   invalidarCacheMetadataGrupo,
-  avisar
+  avisar,
+  // Extractor de detalle de error (16-09-2026) — exportado aparte para
+  // poder probarlo directo con distintas formas de error fabricadas a
+  // mano (ver test_whatsapp_metadata_grupo_cache.js).
+  extraerDetalleError
 };

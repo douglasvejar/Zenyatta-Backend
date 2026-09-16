@@ -728,6 +728,14 @@
       <div id="whatsappErrorEnvioCaja" style="display:none; background:rgba(255,107,107,0.12); border:1px solid rgba(255,107,107,0.4); border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:12px; color:#ff8a8a;">
         <strong>⚠️ El último intento de mandar el resumen al grupo falló:</strong>
         <div id="whatsappErrorEnvioTexto" style="margin-top:4px;"></div>
+        <!-- "Copiar detalle del error" (16-09-2026, a pedido del
+             usuario: "hay una forma de yo ver el error en otro lado y
+             pasartelo para que se pueda corregir") — copia TODO lo que
+             el servidor pudo sacarle al error (no solo "not-acceptable"
+             a secas) para pegarlo directo en el chat con Claude. Ver
+             copiarDetalleErrorEnvioWhatsapp()/extraerDetalleError() en
+             app.js/whatsappBot.js. -->
+        <button type="button" class="btn-chico btn-secundario" onclick="copiarDetalleErrorEnvioWhatsapp()" style="margin-top:8px; padding:6px 10px; font-size:12px;">📋 Copiar detalle del error</button>
       </div>
       <small style="display:block; color:#34d399; margin-bottom:10px;">✅ La sábana de hoy se carga sola en "Resumen por Cliente" (pestaña 📋 Sábana) a medida que llega por WhatsApp — no hace falta pegarla a mano.</small>
 
