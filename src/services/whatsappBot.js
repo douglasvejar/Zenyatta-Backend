@@ -355,6 +355,86 @@ function extraerDetalleError(e) {
   return detalle;
 }
 
+// =================================================================
+// "¿QUIÉN ESTÁ TRABANDO EL ENVÍO?" (16-09-2026, a partir del detalle real
+// del error que el usuario copió con el botón de arriba y pasó al chat):
+//
+//   Error al mandar por WhatsApp (Ludox)
+//   Mensaje: not-acceptable
+//   Detalle técnico: { "statusCode": 500, "data": 406,
+//     "stack": "...at assertSessions (.../messages-send.js:182:28)..." }
+//
+// Eso vino de adentro de Baileys, no de nuestro código: assertSessions()
+// junta, en UN SOLO pedido a los servidores de WhatsApp, a TODOS los
+// participantes del grupo con los que todavía no tiene una sesión cifrada
+// guardada (para poder mandarles la clave del mensaje). Si WhatsApp
+// rechaza ese pedido para UNO SOLO de esos números — por ejemplo alguien
+// que se borró de WhatsApp, que sigue en la lista del grupo pero ya no es
+// un número válido, o que bloqueó a este número — el pedido ENTERO se cae
+// con "not-acceptable" (código 406) y el mensaje no se le manda a NADIE
+// del grupo, aunque el resto de los participantes esté perfecto.
+//
+// Se revisó el código fuente de Baileys (la versión que usa este proyecto
+// y también la más nueva disponible) para confirmar esto — sigue siendo
+// así en ambas, no es algo que actualizar la librería vaya a arreglar. Lo
+// que SÍ se puede hacer desde acá es señalar exactamente cuál(es)
+// número(s) son el problema, probándole a cada participante del grupo SU
+// PROPIA sesión, uno por uno (sock.assertSessions ya viene expuesto por
+// Baileys para esto) — así, en vez de un "not-acceptable" genérico, el
+// usuario se entera de qué número(s) puntuales están rompiendo el envío
+// automático completo y puede decidir sacarlos del grupo.
+//
+// A propósito, esto NO corre solo en cada reintento fallido (sería un
+// pedido a WhatsApp por CADA participante del grupo, de más en un envío
+// normal) — es una acción manual, a pedido, desde el botón "🔍 Diagnosticar
+// quién traba el envío" del panel.
+async function diagnosticarSesionesGrupo(sock, jid) {
+  if (!sock) throw new Error('No hay conexión activa con WhatsApp ahora mismo.');
+  if (!jid) throw new Error('Falta el jid del grupo a diagnosticar.');
+
+  // A propósito NO se usa require('@whiskeysockets/baileys') acá adentro
+  // (a diferencia de iniciarBotWhatsApp()) — esta función se prueba con un
+  // `sock` falso sin esa librería instalada (ver
+  // test_whatsapp_diagnostico_sesiones.js), y lo único que necesita del
+  // jid es el número de usuario, que telefonoDeParticipante() ya sabe
+  // sacar sin depender de Baileys.
+  const metadata = await sock.groupMetadata(jid);
+  const participantes = (metadata && metadata.participants) || [];
+  const meUser = sock.user && sock.user.id ? telefonoDeParticipante(sock.user.id) : null;
+
+  let sinProblema = 0;
+  const conProblema = [];
+
+  for (const participante of participantes) {
+    const pJid = participante && participante.id;
+    if (!pJid) continue;
+    const pUser = telefonoDeParticipante(pJid);
+    if (meUser && pUser === meUser) continue; // no tiene sentido probarse la sesión a sí mismo
+
+    try {
+      await sock.assertSessions([pJid], false);
+      sinProblema++;
+    } catch (e) {
+      conProblema.push({
+        jid: pJid,
+        numero: telefonoDeParticipante(pJid),
+        mensaje: e.message
+      });
+    }
+    // Pausa chica entre cada uno para no mandarle de golpe un pedido por
+    // cada participante del grupo a los servidores de WhatsApp.
+    await new Promise(r => setTimeout(r, 350));
+  }
+
+  return {
+    grupoNombre: metadata && metadata.subject,
+    totalParticipantes: participantes.length,
+    revisados: sinProblema + conProblema.length,
+    sinProblema,
+    conProblema
+  };
+}
+
 // Manda un texto al grupo sin nunca tumbar el flujo que lo llama (si el
 // envío falla — ej. se perdió la conexión justo en ese momento — se
 // registra el error y se sigue).
@@ -1163,5 +1243,10 @@ module.exports = {
   // Extractor de detalle de error (16-09-2026) — exportado aparte para
   // poder probarlo directo con distintas formas de error fabricadas a
   // mano (ver test_whatsapp_metadata_grupo_cache.js).
-  extraerDetalleError
+  extraerDetalleError,
+  // Diagnóstico "¿quién traba el envío?" (16-09-2026) — exportado aparte
+  // para poder probarlo directo con un `sock` falso (ver
+  // test_whatsapp_diagnostico_sesiones.js), sin necesitar
+  // @whiskeysockets/baileys instalado.
+  diagnosticarSesionesGrupo
 };

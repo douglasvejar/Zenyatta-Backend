@@ -736,6 +736,17 @@
              copiarDetalleErrorEnvioWhatsapp()/extraerDetalleError() en
              app.js/whatsappBot.js. -->
         <button type="button" class="btn-chico btn-secundario" onclick="copiarDetalleErrorEnvioWhatsapp()" style="margin-top:8px; padding:6px 10px; font-size:12px;">📋 Copiar detalle del error</button>
+        <!-- "Diagnosticar quién traba el envío" (16-09-2026, a partir del
+             detalle real de "not-acceptable" que el usuario copió y pasó:
+             viene de un paso de Baileys que junta a TODOS los
+             participantes del grupo en un solo pedido — si UNO SOLO falla
+             (se borró de WhatsApp, bloqueó este número, etc.) el envío
+             ENTERO se cae para todo el grupo. Esto prueba a cada
+             participante uno por uno para señalar cuál(es) número(s) son
+             el problema. Ver diagnosticarSesionesGrupoWhatsapp() en app.js
+             y whatsappBot.diagnosticarSesionesGrupo(). -->
+        <button type="button" class="btn-chico btn-secundario" onclick="diagnosticarSesionesGrupoWhatsapp()" style="margin-top:8px; margin-left:6px; padding:6px 10px; font-size:12px;">🔍 Diagnosticar quién traba el envío</button>
+        <div id="whatsappDiagnosticoSesionesTexto" style="margin-top:8px; font-size:12px;"></div>
       </div>
       <small style="display:block; color:#34d399; margin-bottom:10px;">✅ La sábana de hoy se carga sola en "Resumen por Cliente" (pestaña 📋 Sábana) a medida que llega por WhatsApp — no hace falta pegarla a mano.</small>
 

@@ -1389,6 +1389,31 @@ function copiarDetalleErrorEnvioWhatsapp() {
   copiarTextoAlPortapapeles(partes.join('\n'), '¡Copiado! Ya lo puedes pegar en el chat con Claude.');
 }
 
+// "Diagnosticar quién traba el envío" (16-09-2026, a partir del detalle
+// real de "not-acceptable" que el usuario copió y pasó: assertSessions()
+// de Baileys junta a TODOS los participantes del grupo en un solo pedido —
+// si UNO SOLO falla, el envío ENTERO se cae para todo el grupo). Prueba la
+// sesión de cada participante uno por uno (POST
+// /api/whatsapp/diagnosticar-sesiones) para señalar cuál(es) número(s) son
+// el problema — ver whatsappBot.diagnosticarSesionesGrupo(). Puede tardar
+// unos segundos en grupos grandes (un pedido a WhatsApp por participante).
+async function diagnosticarSesionesGrupoWhatsapp() {
+  const caja = document.getElementById('whatsappDiagnosticoSesionesTexto');
+  if (!caja) return;
+  caja.textContent = '⏳ Revisando la sesión de cada participante del grupo, uno por uno... puede tardar unos segundos.';
+  try {
+    const r = await api('/api/whatsapp/diagnosticar-sesiones', { method: 'POST' });
+    if (!r.conProblema || r.conProblema.length === 0) {
+      caja.innerHTML = '✅ Se probó la sesión de los ' + r.revisados + ' participantes del grupo ("' + escapeHtml(r.grupoNombre || '') + '") uno por uno y ninguno dio problema individual. El "not-acceptable" podría estar pasando por otro motivo (por ejemplo, con muchos participantes a la vez) — copiá el detalle del error de arriba y pasámelo junto con este resultado.';
+    } else {
+      const lista = r.conProblema.map(p => '<li>+' + escapeHtml(p.numero || p.jid) + ' — ' + escapeHtml(p.mensaje) + '</li>').join('');
+      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + escapeHtml(r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisá si siguen en WhatsApp y, si no, sacalos del grupo.';
+    }
+  } catch (e) {
+    caja.textContent = '⚠️ No se pudo diagnosticar: ' + e.message;
+  }
+}
+
 function copiarPlanoWhatsApp() {
   const caja = document.getElementById('planoWhatsAppTexto');
   if (!caja || !caja.value.trim()) {

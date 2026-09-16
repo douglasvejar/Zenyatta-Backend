@@ -305,6 +305,32 @@ router.get('/whatsapp-estado', asyncHandler(async (req, res) => {
   });
 }));
 
+// Botón "🔍 Diagnosticar quién traba el envío" (16-09-2026, a partir del
+// detalle real del error "not-acceptable" que el usuario copió y pasó):
+// ese error viene de un paso de Baileys que junta a TODOS los
+// participantes de un grupo en un solo pedido — si UNO SOLO falla (se
+// borró de WhatsApp, bloqueó este número, etc.) el envío ENTERO se cae
+// para ese grupo. Prueba a cada participante uno por uno para señalar
+// cuál(es) número(s) son el problema — ver
+// whatsappBot.diagnosticarSesionesGrupo(). A diferencia de la versión de
+// /api/whatsapp (grupo.html, que ya sabe a qué grupo de WhatsApp
+// pertenece), Súper-admin ve a TODOS los clientes, así que el jid a
+// diagnosticar llega por body — normalmente el mismo
+// estadoBot.ultimoErrorEnvio.jid que ya se muestra en la caja de arriba.
+router.post('/whatsapp-diagnosticar-sesiones', asyncHandler(async (req, res) => {
+  const jid = req.body && req.body.jid;
+  if (!jid) {
+    return res.status(400).json({ error: 'Falta el jid del grupo de WhatsApp a diagnosticar.' });
+  }
+  const { obtenerSockActivo, diagnosticarSesionesGrupo } = require('../services/whatsappBot');
+  const sock = obtenerSockActivo();
+  if (!sock) {
+    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisá el QR/la conexión).' });
+  }
+  const resultado = await diagnosticarSesionesGrupo(sock, jid);
+  res.json(resultado);
+}));
+
 router.get('/whatsapp-qr.png', asyncHandler(async (req, res) => {
   const { obtenerEstadoConexion } = require('../services/whatsappBot');
   const estado = obtenerEstadoConexion();

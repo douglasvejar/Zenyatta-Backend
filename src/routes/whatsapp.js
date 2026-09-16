@@ -140,6 +140,37 @@ router.post('/dias/:fecha/enviar-resumen', asyncHandler(async (req, res) => {
   res.json(resultado);
 }));
 
+// Botón "🔍 Diagnosticar quién traba el envío" (16-09-2026, a partir del
+// detalle real del error "not-acceptable" que el usuario copió con el
+// botón de arriba y pasó al chat): ese error viene de adentro de Baileys,
+// de un paso que junta a TODOS los participantes del grupo que necesitan
+// una sesión cifrada nueva en UN SOLO pedido a WhatsApp — si el servidor
+// rechaza ese pedido para UN SOLO participante (alguien que se borró de
+// WhatsApp, o que bloqueó a este número, por ejemplo), el pedido ENTERO
+// se cae y el mensaje no se le manda a NADIE del grupo. Esta acción prueba
+// la sesión de cada participante UNO POR UNO para señalar exactamente
+// cuál(es) número(s) son el problema — ver el comentario grande en
+// whatsappBot.diagnosticarSesionesGrupo(). A propósito es manual (puede
+// tardar unos segundos en grupos grandes, un pedido por participante).
+router.post('/diagnosticar-sesiones', asyncHandler(async (req, res) => {
+  if (!servicioHabilitado(req)) {
+    return res.status(400).json({ error: 'Este grupo no tiene contratado el servicio de sábana automática por WhatsApp.' });
+  }
+  if (!botActivado()) {
+    return res.status(400).json({ error: 'El bot de WhatsApp no está activado en este servidor (WHATSAPP_BOT_ACTIVADO).' });
+  }
+  if (!req.grupo || !req.grupo.whatsapp_grupo_jid) {
+    return res.status(400).json({ error: 'Este grupo todavía no tiene vinculado ningún grupo de WhatsApp (lo hace el Súper-admin).' });
+  }
+  const { obtenerSockActivo, diagnosticarSesionesGrupo } = require('../services/whatsappBot');
+  const sock = obtenerSockActivo();
+  if (!sock) {
+    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisá el QR/la conexión).' });
+  }
+  const resultado = await diagnosticarSesionesGrupo(sock, req.grupo.whatsapp_grupo_jid);
+  res.json(resultado);
+}));
+
 // =================================================================
 // RESUMEN DE SOLO LECTURA de la sábana de un día ya cargado por
 // WhatsApp (04-09-2026, a pedido del usuario: "cuando este habilitada

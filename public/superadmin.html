@@ -472,6 +472,16 @@
            copiarDetalleErrorEnvioWhatsapp()/extraerDetalleError() más
            abajo / en whatsappBot.js. -->
       <button type="button" class="btn-secundario" onclick="copiarDetalleErrorEnvioWhatsapp()" style="margin-top:10px; padding:8px 14px; font-size:13px;">📋 Copiar detalle del error</button>
+      <!-- "Diagnosticar quién traba el envío" (16-09-2026, a partir del
+           detalle real de "not-acceptable" que el usuario copió y pasó:
+           viene de un paso de Baileys que junta a TODOS los participantes
+           de ese grupo en un solo pedido — si UNO SOLO falla, el envío
+           ENTERO se cae para todo el grupo). Prueba a cada participante
+           uno por uno para señalar cuál(es) número(s) son el problema. Ver
+           diagnosticarSesionesGrupoWhatsapp() más abajo /
+           whatsappBot.diagnosticarSesionesGrupo(). -->
+      <button type="button" class="btn-secundario" onclick="diagnosticarSesionesGrupoWhatsapp()" style="margin-top:10px; margin-left:8px; padding:8px 14px; font-size:13px;">🔍 Diagnosticar quién traba el envío</button>
+      <div id="whatsappDiagnosticoSesionesTexto" style="margin-top:10px; font-size:13px; color:var(--text-dim);"></div>
     </div>
 
     <!-- =============================================================
@@ -942,6 +952,37 @@ function copiarDetalleErrorEnvioWhatsapp() {
     navigator.clipboard.writeText(texto).then(() => alert(mensajeExito)).catch(hacerFallback);
   } else {
     hacerFallback();
+  }
+}
+
+// "🔍 Diagnosticar quién traba el envío" (16-09-2026, a partir del detalle
+// real de "not-acceptable" que el usuario copió y pasó: assertSessions()
+// de Baileys junta a TODOS los participantes de un grupo en un solo
+// pedido — si UNO SOLO falla, el envío ENTERO se cae para todo ese grupo).
+// Prueba la sesión de cada participante uno por uno (POST
+// /api/superadmin/whatsapp-diagnosticar-sesiones, con el jid del ÚLTIMO
+// error de envío guardado) para señalar cuál(es) número(s) son el
+// problema — ver whatsappBot.diagnosticarSesionesGrupo(). Puede tardar
+// unos segundos en grupos grandes (un pedido a WhatsApp por participante).
+async function diagnosticarSesionesGrupoWhatsapp() {
+  const caja = document.getElementById('whatsappDiagnosticoSesionesTexto');
+  if (!caja) return;
+  const err = ULTIMO_ERROR_ENVIO_WHATSAPP;
+  if (!err || !err.jid) {
+    caja.innerHTML = '<span style="color:var(--danger);">No hay ningún error de envío guardado ahora mismo (o no trae el jid del grupo) — hace falta para saber a cuál grupo diagnosticar.</span>';
+    return;
+  }
+  caja.textContent = '⏳ Revisando la sesión de cada participante del grupo, uno por uno... puede tardar unos segundos.';
+  try {
+    const r = await apiSuperadmin('/api/superadmin/whatsapp-diagnosticar-sesiones', { method: 'POST', body: JSON.stringify({ jid: err.jid }) });
+    if (!r.conProblema || r.conProblema.length === 0) {
+      caja.innerHTML = '✅ Se probó la sesión de los ' + r.revisados + ' participantes del grupo ("' + (r.grupoNombre || '') + '") uno por uno y ninguno dio problema individual. El "not-acceptable" podría estar pasando por otro motivo (por ejemplo, con muchos participantes a la vez) — pedile a Luisangel que copie el detalle del error de arriba junto con este resultado.';
+    } else {
+      const lista = r.conProblema.map(p => '<li>+' + (p.numero || p.jid) + ' — ' + p.mensaje + '</li>').join('');
+      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + (r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisá si siguen en WhatsApp y, si no, sacalos del grupo.';
+    }
+  } catch (e) {
+    caja.innerHTML = '<span style="color:var(--danger);">⚠️ No se pudo diagnosticar: ' + e.message + '</span>';
   }
 }
 
