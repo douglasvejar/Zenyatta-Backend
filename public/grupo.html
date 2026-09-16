@@ -229,6 +229,23 @@
   #sabanasCapturaContenido .suspendida { background-color: #e4e7ec !important; color: #3d4457 !important; }
   #sabanasCapturaContenido .ambigua { background-color: #d6f3f7 !important; color: #0e6a78 !important; }
 
+  /* ===============================================================
+     "📸 Capturar tabla como imagen" de Balance General (16-09-2026,
+     mismo bug de siempre, reportado con captura: "mira como vienen" —
+     las filas de clientes salían casi invisibles). Acá NO hay una caja
+     blanca propia como #sabanasCapturaContenido: html2canvas captura la
+     tabla TAL COMO SE VE en pantalla (modo oscuro) pero le fuerza un
+     fondo blanco al canvas final, así que las celdas sin color propio y
+     el botón "👁️ Ver" (fondo translúcido + texto casi blanco, pensado
+     para verse sobre oscuro) quedaban invisibles ahí. Como esta tabla
+     SÍ se ve en pantalla en modo oscuro (a diferencia de la de Sábana),
+     no se le puede poner un color fijo — capturarTablaBalanceComoImagen()
+     en app.js le agrega esta clase SOLO mientras dura la captura, y la
+     quita apenas termina. */
+  #tablaBalanceGeneral.capturando-imagen, #tablaBalanceGeneral.capturando-imagen td { color: #1a2233; }
+  #tablaBalanceGeneral.capturando-imagen tr:nth-child(even) { background-color: rgba(15,23,42,0.05); }
+  #tablaBalanceGeneral.capturando-imagen .btn-secundario { background: #eef1f6; color: #1a2233; border-color: #c7cedb; }
+
   /* ALERTAS: badge titilante en la pestaña + tarjetas del registro */
   .nav-badge { display: inline-block; background-color: #e74c3c; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
   .nav-item.nav-alerta-activa { animation: parpadeoNavAlerta 1.2s ease-in-out infinite; }

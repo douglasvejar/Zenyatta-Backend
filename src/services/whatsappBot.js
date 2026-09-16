@@ -240,6 +240,65 @@ function obtenerSessionDir() {
 let sockActual = null; // el socket de Baileys ya conectado, o null si no hay conexión activa ahora mismo.
 let relojDeFondoIniciado = false;
 
+// =================================================================
+// CACHÉ DE METADATA DE GRUPO (16-09-2026, a pedido del usuario tras
+// reportar, con captura: "el actualizador automatico que por whatsapp
+// actualiza las jugadas automaticamente no funciona... solo en la
+// pagina en whatsapp no hace nada" — el panel mostraba el motivo real:
+// 'El último intento de mandar el resumen al grupo falló: "not-acceptable"').
+//
+// Investigado (documentación oficial de Baileys, sección de
+// troubleshooting — ver también el mismo error reportado por usuarios de
+// Evolution API, que usa esta misma librería por debajo): para mandar un
+// mensaje a un GRUPO (nunca pasa mandando a un número suelto), Baileys
+// necesita la lista de participantes del grupo para armar el "sobre"
+// cifrado de cada uno — sin una `cachedGroupMetadata` configurada, la
+// va a buscar en vivo CADA VEZ que manda algo, y si esa consulta tarda,
+// falla, o WhatsApp la limita justo en ese momento, deja mandar el
+// mensaje con el sobre incompleto y WhatsApp lo rechaza directo con
+// "not-acceptable" (la doc oficial lo dice así de claro: "Missing or
+// stale group metadata is one of the most common causes of group
+// message failures"). La solución documentada es exactamente esta: un
+// caché propio de esa metadata, con una consulta en vivo solo si hace
+// falta (primera vez, o venció el TTL), en vez de una consulta nueva en
+// cada mensaje.
+//
+// *** SIN FORMA DE PROBAR ESTO CONTRA WHATSAPP REAL EN ESTE ENTORNO ***
+// (ver la advertencia grande al principio de este archivo) — es, por
+// lejos, la causa más documentada de "not-acceptable" al mandar A UN
+// GRUPO específicamente, pero no se pudo reproducir/confirmar en vivo
+// acá. Si el error sigue apareciendo después de este cambio, el
+// diagnóstico de avisar() (más abajo) lo va a seguir mostrando en
+// pantalla igual, con el mensaje de WhatsApp tal cual — avisar si pasa.
+const CACHE_METADATA_GRUPOS = new Map(); // jid -> { data, expiraEn }
+const CACHE_METADATA_GRUPOS_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+async function obtenerMetadataGrupoCacheada(sock, jid) {
+  const entrada = CACHE_METADATA_GRUPOS.get(jid);
+  if (entrada && entrada.expiraEn > Date.now()) return entrada.data;
+  try {
+    const data = await sock.groupMetadata(jid);
+    CACHE_METADATA_GRUPOS.set(jid, { data, expiraEn: Date.now() + CACHE_METADATA_GRUPOS_TTL_MS });
+    return data;
+  } catch (e) {
+    // Si la consulta en vivo falla justo ahora pero había una entrada
+    // vieja en caché (aunque ya venció su TTL), es mejor mandarle a
+    // Baileys ESA metadata desactualizada que ninguna — en el peor caso
+    // un participante nuevo se queda sin la clave (no que el mensaje
+    // entero se rechace por falta total de metadata).
+    if (entrada) return entrada.data;
+    console.error('[whatsappBot] No se pudo obtener la metadata del grupo ' + jid + ' para cachearla (el próximo envío puede fallar con "not-acceptable" si esto sigue pasando):', e.message);
+    return undefined;
+  }
+}
+
+// Se llama cuando cambia algo del grupo (entra/sale/cambia de rol un
+// participante) — la próxima vez que se mande algo a este grupo, se
+// vuelve a consultar en vivo en vez de seguir usando la lista vieja.
+function invalidarCacheMetadataGrupo(jid) {
+  CACHE_METADATA_GRUPOS.delete(jid);
+}
+
 function obtenerEstadoConexion() {
   // Copia simple para que quien lo lea (routes/whatsapp.js) no pueda
   // mutar el estado interno por accidente.
@@ -296,6 +355,22 @@ async function avisar(sock, jid, texto, intento = 1) {
       await new Promise(r => setTimeout(r, 3000 * intento));
       return avisar(sock, jid, texto, intento + 1);
     }
+
+    // "not-acceptable" (16-09-2026, error real reportado por el usuario:
+    // "el actualizador automatico... no hace nada") — ver el comentario
+    // grande de CACHE_METADATA_GRUPOS más arriba: la causa más
+    // documentada es una metadata de grupo vieja/incompleta al armar el
+    // mensaje. Antes de reintentar, se descarta la metadata cacheada de
+    // ESTE grupo (si la próxima vez sigue fallando igual, al menos no es
+    // por seguir insistiendo con la misma lista vieja de participantes).
+    const esNoAceptable = /not-acceptable/i.test(e.message || '');
+    if (esNoAceptable && intento < 3) {
+      invalidarCacheMetadataGrupo(jid);
+      console.log('[whatsappBot] "not-acceptable" al mandar al grupo ' + jid + ' (intento ' + intento + '/3) — se descartó la metadata cacheada de este grupo y se reintenta en ' + (3 * intento) + 's...');
+      await new Promise(r => setTimeout(r, 3000 * intento));
+      return avisar(sock, jid, texto, intento + 1);
+    }
+
     estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid, mensaje: e.message };
     console.error('[whatsappBot] No se pudo mandar un aviso al grupo de WhatsApp (jid ' + jid + '):', e.message);
   }
@@ -878,9 +953,29 @@ async function iniciarBotWhatsApp() {
     console.log('[whatsappBot] No se pudo consultar la versión vigente de WhatsApp Web (se sigue con la que trae la librería instalada):', err.message);
   }
 
-  const sock = makeWASocket({ auth: state, version: waVersion });
+  // cachedGroupMetadata (16-09-2026, arreglo de "not-acceptable" al
+  // mandar al grupo — ver el comentario grande de
+  // obtenerMetadataGrupoCacheada()/CACHE_METADATA_GRUPOS más arriba).
+  // Referenciar `sock` acá adentro es seguro aunque todavía no esté
+  // asignado en esta misma línea: esta función solo se EJECUTA más
+  // tarde, cuando de verdad haga falta mandar algo a un grupo, momento
+  // en el que `sock` ya está totalmente asignado.
+  const sock = makeWASocket({
+    auth: state,
+    version: waVersion,
+    cachedGroupMetadata: (jid) => obtenerMetadataGrupoCacheada(sock, jid)
+  });
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Si cambia la lista de participantes de un grupo (entra/sale/cambia
+  // de rol alguien), la metadata cacheada de ESE grupo queda vieja — se
+  // descarta para que el próximo envío la vuelva a pedir en vivo, en vez
+  // de arriesgarse a mandar con un "sobre" cifrado armado con la lista
+  // de participantes de antes.
+  sock.ev.on('group-participants.update', (evento) => {
+    if (evento && evento.id) invalidarCacheMetadataGrupo(evento.id);
+  });
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -1016,5 +1111,14 @@ module.exports = {
   estaAutorizadoParaComandos,
   // Resolución de @lid -> número real (09-09-2026) — exportada aparte
   // para poder probarla directo (ver test_whatsapp_comandos_autorizacion.js).
-  resolverNumeroRealDelRemitente
+  resolverNumeroRealDelRemitente,
+  // Caché de metadata de grupo + avisar() (16-09-2026, arreglo del error
+  // "not-acceptable" al mandar al grupo) — exportadas aparte para poder
+  // probarlas directo con un `sock` falso (ver
+  // test_whatsapp_metadata_grupo_cache.js), sin necesitar
+  // @whiskeysockets/baileys instalado — ninguna de las 3 toca esa
+  // librería, solo reciben un `sock`/jid ya armados.
+  obtenerMetadataGrupoCacheada,
+  invalidarCacheMetadataGrupo,
+  avisar
 };

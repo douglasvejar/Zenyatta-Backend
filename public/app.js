@@ -2254,6 +2254,20 @@ async function capturarTablaBalanceComoImagen() {
   }
 
   const tabla = document.getElementById('tablaBalanceGeneral');
+  // Arreglo (16-09-2026, a pedido del usuario, con captura: "mira como
+  // vienen" — las filas de clientes salían casi invisibles en la imagen
+  // de Balance General). A diferencia de la "foto" de Sábana (que vive
+  // en su PROPIA caja blanca aparte, #sabanasCapturaContenido), esta
+  // tabla es la MISMA que se ve en pantalla en modo oscuro — html2canvas
+  // le fuerza un fondo blanco al CANVAS final, pero las celdas normales
+  // (sin color propio, pensadas para fondo oscuro) y el botón "👁️ Ver"
+  // (fondo translúcido + texto casi blanco) se quedaban invisibles sobre
+  // ese blanco. No se le puede poner un color fijo a la tabla porque
+  // rompería la vista en pantalla — se le agrega la clase
+  // "capturando-imagen" SOLO mientras dura esta captura (con sus propias
+  // reglas de contraste, ver el CSS en grupo.html) y se quita apenas
+  // termina, haya salido bien o mal.
+  tabla.classList.add('capturando-imagen');
   try {
     // scale:3 = resolución 3x — "lo más HD posible" (pedido explícito del
     // usuario) sin depender de la resolución de pantalla de quien lo usa.
@@ -2274,6 +2288,8 @@ async function capturarTablaBalanceComoImagen() {
     }, 'image/png');
   } catch (e) {
     estado.textContent = '⚠️ No se pudo generar la imagen: ' + e.message;
+  } finally {
+    tabla.classList.remove('capturando-imagen');
   }
 }
 
