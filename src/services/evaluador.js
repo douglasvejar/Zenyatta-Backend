@@ -417,13 +417,45 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
         debug: debugBase
       };
     }
+
+    // (17-09-2026, a pedido del usuario con un ticket real de fútbol:
+    // "Por que me da este error en futbol si ya el juego termino... esto
+    // es futbol europa league y la liga de españa" — el mismo partido, en
+    // su línea de juego COMPLETO, ya se había evaluado GANADA, o sea el
+    // partido SÍ había terminado) — hasta acá, si el dato del segmento
+    // (1h/2h, ver campoFinalPrimeraMitad/campoFinalSegundaMitad arriba)
+    // todavía no estaba listo, el motivo SIEMPRE decía "aún no ha
+    // terminado" sin importar si el PARTIDO COMPLETO ya había terminado o
+    // no — literalmente falso en ese caso, y confuso: sonaba a que solo
+    // hacía falta esperar más. En fútbol, el dato de 1h/2h viene de OTRA
+    // fuente aparte del marcador final (football-data.org, ver el
+    // comentario grande en CONFIG_POR_DEPORTE.soccer/footballDataApi.js),
+    // que solo cubre 6 de las 10 competiciones que evalúa este sistema
+    // (Premier League, La Liga, Serie A, Bundesliga, Ligue 1 y Champions
+    // League — CONFIRMADO que la Europa League/Conference League NO están
+    // en el plan gratis de esa API, ni en 2026) — si el partido es de una
+    // liga sin cobertura, ese dato NUNCA va a llegar solo, por más que se
+    // espere. Ahora se distingue: si el PARTIDO COMPLETO ya terminó pero
+    // falta el dato del segmento, el motivo lo dice tal cual (y avisa que
+    // puede hacer falta resolverlo a mano), en vez de sonar a que el
+    // partido sigue en curso.
+    if (juego.finalizado && (esPrimeraMitad || esSegundaMitad)) {
+      return {
+        estado: 'PENDIENTE',
+        razon: 'El partido ya terminó, pero todavía no hay datos de ' + (esSegundaMitad ? 'la segunda mitad' : 'la primera mitad') + ' para poder resolver esta jugada — puede que esta liga/competición no tenga ese dato disponible (ej. en fútbol, la Europa League y la Conference League no están cubiertas); si sigue así, revisar y resolver a mano.',
+        debug: debugBase
+      };
+    }
+
     return {
       estado: 'PENDIENTE',
       razon: esPorCuarto
         ? ('El ' + numeroCuartoEnTexto + 'to ' + (config.nombreSegmento || 'cuarto') + ' todavía no ha terminado')
         : esSegundaMitad
           ? 'La segunda mitad todavía no ha terminado'
-          : (esPrimeraMitad ? 'La primera mitad (o las primeras 5 entradas, en MLB) aún no ha terminado' : 'En juego o no iniciado'),
+          : (esPrimeraMitad
+              ? (lineaJugada.includes('5inn') ? 'Las primeras 5 entradas todavía no han terminado' : 'La primera mitad todavía no ha terminado')
+              : 'En juego o no iniciado'),
       debug: debugBase
     };
   }

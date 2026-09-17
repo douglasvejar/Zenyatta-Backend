@@ -748,6 +748,55 @@ const DATOS_MIAMI_NFL_JUEGA = {
 })();
 
 // -----------------------------------------------------------------
+// Caso nuevo (17-09-2026, a pedido del usuario con un ticket real: "Por
+// que me da este error en futbol si ya el juego termino... esto es futbol
+// europa league y la liga de españa") — un partido de fútbol de una
+// competición SIN cobertura de "1h" (football-data.org solo cubre 6 de
+// las 10 ligas que evalúa este sistema — la Europa League no es una de
+// ellas, ver el comentario grande en CONFIG_POR_DEPORTE.soccer) puede
+// terminar (finalizado: true, con marcador final ya decidido) sin que
+// NUNCA llegue el dato de "1h" (final1H se queda undefined/false para
+// siempre). Antes, una jugada de "1h" sobre ese partido decía "la primera
+// mitad aún no ha terminado" — literalmente falso (el partido SÍ
+// terminó) y engañoso (sonaba a que solo hacía falta esperar más). Ahora
+// el motivo tiene que distinguir ese caso del de un partido de verdad
+// todavía en curso.
+// -----------------------------------------------------------------
+(function testFutbol1hPartidoTerminadoSinDatoDeMitad() {
+  const datosSoccer = {
+    'sporting lisboa': {
+      deporte: 'soccer', liga: 'Europa League', homeTeam: 'Sporting Lisboa', awayTeam: 'Real Madrid',
+      // El marcador final SÍ está disponible (viene de ESPN, cubre
+      // cualquier liga) y el partido terminó -> finalizado: true. Pero
+      // "1h" viene de football-data.org, que NO cubre la Europa League
+      // -> nunca se pudo cruzar el equipo, final1H se queda undefined.
+      homeScore: 1, awayScore: 2, totalScore: 3, finalizado: true, suspendido: false
+      // (sin homeScore1H/awayScore1H/final1H — nunca llegaron)
+    },
+    'real madrid': {
+      deporte: 'soccer', liga: 'Europa League', homeTeam: 'Sporting Lisboa', awayTeam: 'Real Madrid',
+      homeScore: 1, awayScore: 2, totalScore: 3, finalizado: true, suspendido: false
+    }
+  };
+  const datosPorDeporte = { mlb: {}, nfl: {}, nhl: {}, soccer: datosSoccer };
+
+  // Primero: la línea de juego COMPLETO de este mismo partido SÍ se
+  // evalúa normal (prueba de que el partido de verdad ya terminó, no es
+  // un problema de datos general).
+  const resCompleto = evaluarJugada(normalizarTexto('Real Madrid -0.5 -129'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
+  check(resCompleto.estado === 'GANADA', 'Fútbol: la línea de juego COMPLETO del mismo partido (Real Madrid gana 1-2 en la cancha del Sporting) se evalúa normal -> GANADA, confirmando que el partido sí terminó');
+
+  // La línea "1h" de ESE MISMO partido terminado, sin dato de mitad
+  // disponible -> sigue PENDIENTE (nunca inventa un resultado), pero con
+  // un motivo que dice la verdad: el partido YA terminó, lo que falta es
+  // el dato de la mitad, no que el partido siga en curso.
+  const res1h = evaluarJugada(normalizarTexto('Real Madrid rl 1h -0.5 +124'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
+  check(res1h.estado === 'PENDIENTE', 'Fútbol: "1h" sin dato de mitad disponible sigue PENDIENTE (nunca se inventa un resultado)');
+  check(/partido ya termin[oó]/i.test(res1h.razon), 'Fútbol: el motivo ahora dice que el PARTIDO YA TERMINÓ (no "aún no ha terminado", que sería falso)');
+  check(!/aún no ha terminado/i.test(res1h.razon), 'Fútbol: ya NO dice "aún no ha terminado" para un partido que de verdad ya terminó — sería engañoso');
+})();
+
+// -----------------------------------------------------------------
 // Caso 24 (multi-deporte ampliado, 28-08-2026): una sábana con Ticket 1 de
 // NHL y Ticket 2 de fútbol, resuelta en una sola llamada a
 // procesarSabana()/evaluarJugada() sin indicar el deporte en ningún lado
