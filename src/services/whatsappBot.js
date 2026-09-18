@@ -31,19 +31,26 @@
 //     banea, se pierde solo ese número, no todo lo demás. Preferí además
 //     un número con algo de historial real (no recién activado) y que ya
 //     venga registrado en WhatsApp Business, no en el WhatsApp normal.
-//   - "Modo cuidadoso" (18-09-2026, agregado después de ese cierre de
-//     cuenta — ver la nota grande en sql/schema.sql y
-//     modoCuidadosoActivo() más abajo): un interruptor por grupo,
-//     exclusivo del Súper-admin, que apaga el envío automático que el
-//     bot decide mandar SOLO (el reloj de fondo, y el aviso apenas se
-//     termina de importar una sábana) — la lectura/importación de
-//     sábanas sigue 100% automática igual que siempre, y el botón manual
-//     "📤 Enviar resumen ahora" + los comandos de chat siguen mandando
-//     normal (son un humano pidiéndolo en el momento, no el bot
-//     inventando algo por su cuenta). Recomendado para cualquier grupo
-//     después de un cierre de cuenta, mientras se evalúa si conviene
-//     seguir en WhatsApp del todo.
-//   - AHORA el bot también MANDA mensajes al grupo (antes solo leía) —
+//   - (18-09-2026, tras ese cierre de cuenta) Este archivo TUVO durante
+//     un rato un "modo cuidadoso" que era un interruptor OPCIONAL por
+//     grupo — el usuario pidió sacar la opción entera y dejar SIEMPRE el
+//     comportamiento cuidadoso, para no tener 2 modos (uno riesgoso y
+//     otro no) conviviendo sin necesidad: "desactiva el otro modo de
+//     sabana automatica, deja solo este que es mas cuidadoso, asi no
+//     tenemos tantas funciones inutiles en el programa". Por eso el bot
+//     YA NO manda nada al grupo por su cuenta, nunca, para ningún grupo
+//     — ni un reloj de fondo revisando cada 5 minutos, ni un aviso
+//     automático apenas se importa una sábana nueva. La
+//     lectura/importación de "SABANA DE JUGADAS" sigue 100% automática
+//     igual que siempre (eso nunca se tocó); lo único que cambió es que
+//     el AVISO al grupo ahora SIEMPRE es una acción de un humano: el
+//     botón "📤 Enviar resumen ahora" del panel, o alguno de los 4
+//     comandos de chat ("act"/"saldo final"/"corte semana"/"saldo total
+//     semana <nombre>"). Si en algún momento se quisiera volver a un
+//     envío automático, revisar el historial de git de este archivo
+//     alrededor del commit que agregó/sacó `whatsapp_modo_cuidadoso` —
+//     ahí está la lógica completa por si hace falta retomarla.
+//   - El bot también MANDA mensajes al grupo (antes solo leía) —
 //     un error de este archivo ya no solo se pierde un mensaje entrante,
 //     puede mandar algo al grupo real. Por eso TODO lo que decide "hay
 //     que mandar algo/cerrar el día" vive en un módulo puro y probado
@@ -63,37 +70,29 @@
 //      NUNCA asume "hoy" por su cuenta (04-09-2026, a pedido del
 //      usuario: la fecha ahí abajo es justamente para confirmar con
 //      certeza qué día se está cargando).
-//   2. Un reloj de fondo (cada 5 minutos, ver iniciarRelojDeFondo) recorre
-//      todos los días "abiertos" (whatsappDiaEstado.listarDiasAbiertos) y
-//      les da la chance de verificar/avisar/cerrar. Como procesarSabana()
-//      consulta los resultados de los partidos EN VIVO cada vez que se
-//      llama, volver a correrlo con la MISMA sábana guardada es lo que
-//      detecta que un partido terminó y actualiza el estado de los
-//      tickets, sin que haga falta ningún mensaje nuevo por WhatsApp. Si
-//      algo cambió Y ya pasó una hora desde el último aviso (o nunca se
-//      avisó nada), manda el listado actualizado al grupo (ver
-//      whatsappResumenDia.decidirAccion). ESTE límite de 1 mensaje por
-//      hora SOLO aplica ANTES de que llegue "SABANA DE JUGADAS FINAL"
-//      (mientras el día todavía puede seguir recibiendo sábanas nuevas
-//      con más tickets) — ver el punto 3.
+//   2. El envío del resumen al grupo NUNCA lo decide el bot solo (ver el
+//      punto de arriba, 18-09-2026) — la ÚNICA forma de que salga un
+//      mensaje es que un humano lo pida: el botón "📤 Enviar resumen
+//      ahora" del panel (routes/whatsapp.js), o alguno de los 4 comandos
+//      de chat. Ambos caminos llaman a procesarDiaAbierto() de acá abajo
+//      con forzar:true. Como procesarSabana() consulta los resultados de
+//      los partidos EN VIVO cada vez que se llama, volver a correrlo con
+//      la MISMA sábana guardada es lo que detecta qué partidos ya
+//      terminaron — eso pasa recién cuando alguien pide el resumen, no
+//      antes.
 //   3. Un mensaje que arranca con "SABANA DE JUGADAS FINAL" cierra el
 //      día para nuevas sábanas (whatsappDiaEstado.marcarSabanaFinalRecibida)
 //      — de ahí en más, cualquier "SABANA DE JUGADAS" (no FINAL) para
-//      esa fecha se ignora y se avisa en el grupo. DESDE ese momento (07-
-//      09-2026, a pedido del usuario) cada juego que va terminando avisa
-//      AL INSTANTE, sin esperar la hora — la lista de tickets ya no puede
-//      crecer más, así que como mucho hay tantos avisos como partidos
-//      falten. Apenas TODOS los tickets de ese día tengan resultado, se
-//      manda el listado final + un segundo mensaje aparte con los
-//      totales del día, el día se confirma solo en Balance General
-//      (equivalente automático de apretar "💾 Guardar Día" — 07-09-2026,
-//      ver confirmarDia() más abajo) y se cierra
-//      (whatsappDiaEstado.marcarCierreEnviado) — esto NUNCA espera el
-//      reloj de la hora (ver el comentario en whatsappResumenDia.js).
-//   4. El botón "📤 Enviar resumen ahora" del panel (routes/whatsapp.js)
-//      llama la misma función de acá (procesarDiaAbierto) con
-//      forzar:true — salta la espera de la hora y reinicia el reloj de
-//      1 hora para el próximo envío automático.
+//      esa fecha se ignora y se avisa en el grupo. El listado final + los
+//      totales del día (2 mensajes aparte) solo se mandan cuando un
+//      humano pide el resumen (botón o comando) y YA todos los tickets
+//      tienen resultado — ahí también se confirma solo el día en Balance
+//      General (equivalente automático de apretar "💾 Guardar Día" —
+//      07-09-2026, ver confirmarDia() más abajo) y se cierra
+//      (whatsappDiaEstado.marcarCierreEnviado).
+//   4. El botón "📤 Enviar resumen ahora" del panel y los comandos de
+//      chat llaman la misma función de acá (procesarDiaAbierto) con
+//      forzar:true.
 // "ReferenceError: crypto is not defined" en Railway (Node 18.20.8, visto
 // en vivo el 15-09-2026 al conectar por primera vez contra WhatsApp real):
 // @whiskeysockets/baileys usa el objeto global `crypto` (Web Crypto API)
@@ -138,25 +137,6 @@ async function obtenerNombreGrupo(grupoId) {
   }
 }
 
-// "Modo cuidadoso" (18-09-2026, ver la nota grande en sql/schema.sql y en
-// la advertencia grande al principio de este archivo) — se consulta
-// directo a la base en vez de arrastrar el valor por parámetros porque
-// hace falta en 2 lugares bien distintos de este archivo (justo después
-// de importar un mensaje nuevo, y en cada vuelta del reloj de fondo) y
-// puede cambiar en cualquier momento desde Súper-admin sin que el bot se
-// reinicie. Si la consulta falla, se asume APAGADO (comportamiento de
-// siempre) — a propósito NUNCA se asume prendido por error: sería un
-// grupo que de repente deja de recibir sus resúmenes automáticos sin que
-// nadie lo haya pedido.
-async function modoCuidadosoActivo(grupoId) {
-  try {
-    const r = await db.query('SELECT whatsapp_modo_cuidadoso FROM grupos WHERE id = $1', [grupoId]);
-    return !!(r.rows[0] && r.rows[0].whatsapp_modo_cuidadoso);
-  } catch (e) {
-    console.error('[whatsappBot] No se pudo verificar el modo cuidadoso del grupo ' + grupoId + ' (se asume APAGADO, comportamiento normal):', e.message);
-    return false;
-  }
-}
 
 // Segunda capa de autorización, EXCLUSIVA de los 4 comandos de chat
 // (09-09-2026, a pedido del usuario: "los comandos lo puede mandar el
@@ -274,7 +254,6 @@ function obtenerSessionDir() {
     : path.resolve('./whatsapp-session');
 }
 let sockActual = null; // el socket de Baileys ya conectado, o null si no hay conexión activa ahora mismo.
-let relojDeFondoIniciado = false;
 
 // =================================================================
 // CACHÉ DE METADATA DE GRUPO (16-09-2026, a pedido del usuario tras
@@ -546,10 +525,11 @@ async function extraerTexto(msg) {
 // la actualización / cierra el día con listado + totales.
 //
 // `sock`/`jid` son quién manda el mensaje y a qué grupo — se pasan
-// aparte (en vez de sacarlos de adentro de esta función) porque tanto
-// el reloj de fondo (que ya trae el jid de listarDiasAbiertos) como el
-// botón manual del panel (que lo saca de grupos.whatsapp_grupo_jid)
-// necesitan llamar esta misma función.
+// aparte (en vez de sacarlos de adentro de esta función) porque tanto el
+// botón manual del panel como los comandos de chat (ambos sacan el jid
+// de grupos.whatsapp_grupo_jid) necesitan llamar esta misma función,
+// siempre con forzar:true (18-09-2026: ya no existe ningún llamador
+// automático — ver la advertencia grande al principio del archivo).
 async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } = {}) {
   const estadoDia = await whatsappDiaEstado.obtenerEstadoDia(grupoId, fecha);
   if (!estadoDia || !estadoDia.ultimoTexto) {
@@ -568,16 +548,16 @@ async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } 
   const todosResueltos = whatsappResumenDia.todosLosTicketsResueltos(resp.tickets);
   const accion = whatsappResumenDia.decidirAccion({
     ahora: Date.now(),
-    // (07-09-2026, más tarde todavía, a pedido del usuario: "antes tenia
-    // el error de aunque haya pasado una hora despues del juego no lo
-    // actualizaba solo igual") — OJO, a propósito NO se manda
-    // `estadoDia.ultimaVerificacionEn` acá: esa marca de tiempo se pisa
-    // en CADA vuelta del reloj de fondo (5 minutos, ver más abajo), pase
-    // lo que pase, así que usarla para la cuenta de "1 hora" hacía que
-    // esa cuenta nunca pasara de ~5 minutos y el aviso automático nunca
-    // se disparara solo. `ultimoEnvioResumenEn` en cambio SOLO se
-    // actualiza cuando de verdad se manda un mensaje (registrarEnvioResumen,
-    // más abajo) — ver el comentario grande en whatsappResumenDia.js.
+    // (07-09-2026 — nota histórica: esto se escribió cuando todavía
+    // existía un reloj de fondo automático, sacado el 18-09-2026; hoy
+    // `forzar` siempre llega en true desde los únicos 2 llamadores que
+    // quedan, así que este throttle de 1 hora ya no bloquea nada en la
+    // práctica, pero se deja la lógica tal cual por si algún día hace
+    // falta retomar un envío automático) — OJO, a propósito NO se manda
+    // `estadoDia.ultimaVerificacionEn` acá para esta cuenta de tiempo.
+    // `ultimoEnvioResumenEn` en cambio SOLO se actualiza cuando de verdad
+    // se manda un mensaje (registrarEnvioResumen, más abajo) — ver el
+    // comentario grande en whatsappResumenDia.js.
     ultimoEnvioEn: estadoDia.ultimoEnvioResumenEn,
     sabanaFinalEn: estadoDia.sabanaFinalEn,
     hashActual,
@@ -586,10 +566,9 @@ async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } 
     forzar
   });
 
-  // Esto SÍ se actualiza en cada vuelta, aunque la decisión haya sido
-  // "ESPERAR" — es solo para que el panel pueda mostrar "Última
-  // verificación: hace 3 minutos" y confirmar que el reloj de fondo
-  // sigue vivo y mirando este día; el throttle de 1 hora de arriba ya NO
+  // Esto se actualiza cada vez que alguien pide el resumen (botón o
+  // comando) — es solo para que el panel pueda mostrar "Última
+  // verificación: hace 3 minutos"; el throttle de 1 hora de arriba ya NO
   // depende de este valor (ver el comentario de `ultimoEnvioEn`).
   await whatsappDiaEstado.registrarVerificacion(grupoId, fecha);
 
@@ -973,40 +952,12 @@ async function manejarMensajeEntrante(sock, msg) {
       return; // sin una sábana válida cargada para hoy, no hay nada más que verificar/mandar
     }
 
-    // Se acaba de cargar/actualizar la sábana del día: se verifica de
-    // una vez (sigue respetando el reloj de la hora salvo que sea la
-    // primera verificación del día, o que ya toque cerrar) en vez de
-    // esperar a que el reloj de fondo pase por acá.
-    //
-    // (15-09-2026, a pedido del usuario tras reportar "la sábana
-    // automática no se envía por WhatsApp" aunque el mensaje SÍ se
-    // reconocía/importaba bien) — hasta acá, la IMPORTACIÓN ya quedó
-    // bien guardada (arriba). Si procesarDiaAbierto() explota por
-    // cualquier motivo que no sea el propio envío (ese ya se registra
-    // aparte, adentro de avisar()) — ej. un error de base de datos al
-    // guardar que se mandó el resumen — antes se perdía en silencio en
-    // el catch de acá abajo, sin que quedara ningún rastro de que el
-    // aviso al grupo no salió. Ahora también queda en
-    // estadoConexion.ultimoErrorEnvio para que se vea en el panel, en
-    // vez de solo en los logs de Railway.
-    //
-    // (18-09-2026, "modo cuidadoso") — este llamado es justo el caso que
-    // ese modo apaga: el bot mandando el resumen al grupo SOLO, apenas
-    // termina de leer una sábana, sin que nadie se lo haya pedido en ese
-    // momento puntual. Con el modo prendido, la sábana YA quedó
-    // importada arriba (eso nunca se toca) — lo único que se salta es
-    // este envío automático; el resumen sigue disponible para mandar a
-    // mano con "📤 Enviar resumen ahora" cuando el Grupo quiera.
-    if (await modoCuidadosoActivo(grupoId)) {
-      console.log('[whatsappBot] Modo cuidadoso activo (grupo ' + grupoId + ') — sábana' + (esFinal ? ' FINAL' : '') + ' leída e importada, pero el envío automático del resumen queda en pausa. Mandalo a mano con "📤 Enviar resumen ahora" desde el panel cuando quieras.');
-    } else {
-      try {
-        await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
-      } catch (e) {
-        estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
-        throw e; // se sigue reportando igual en el log del servidor, ver el catch de abajo
-      }
-    }
+    // (18-09-2026) El bot YA NO manda el resumen al grupo por su cuenta,
+    // nunca — ver la advertencia grande al principio del archivo. La
+    // sábana YA quedó importada arriba (eso nunca se toca); el resumen
+    // se manda a mano con "📤 Enviar resumen ahora" desde el panel, o
+    // con alguno de los 4 comandos de chat, cuando el Grupo quiera.
+    console.log('[whatsappBot] Sábana' + (esFinal ? ' FINAL' : '') + ' leída e importada (grupo ' + grupoId + ', fecha ' + fecha + ') — el envío del resumen queda en pausa hasta que alguien lo pida con "📤 Enviar resumen ahora" o un comando de chat.');
   } catch (e) {
     console.error('[whatsappBot] Error al procesar un mensaje entrante (no se cae el bot, solo se pierde este mensaje puntual):', e);
   }
@@ -1048,47 +999,17 @@ async function refrescarGruposDisponibles() {
   return estadoConexion.gruposDisponibles;
 }
 
-// El reloj de fondo: cada 5 minutos recorre TODOS los días abiertos de
-// TODOS los grupos con bot vinculado y les da la chance de verificar/
-// avisar/cerrar (cada día respeta su propio "cada hora" por adentro, ver
-// whatsappResumenDia.decidirAccion — este intervalo de 5 minutos es solo
-// qué tan seguido se FIJA si a algún día ya le toca, no qué tan seguido
-// se manda algo al grupo).
-const INTERVALO_RELOJ_MS = 5 * 60 * 1000;
-
-async function tickRelojDeFondo() {
-  if (!sockActual) return; // sin conexión activa ahora mismo, no hay con qué mandar nada
-  let dias = [];
-  try {
-    dias = await whatsappDiaEstado.listarDiasAbiertos(3);
-  } catch (e) {
-    console.error('[whatsappBot] No se pudo listar los días abiertos:', e.message);
-    return;
-  }
-  for (const dia of dias) {
-    // "Modo cuidadoso" (18-09-2026) — el reloj de fondo es EXACTAMENTE el
-    // caso que ese modo apaga: el bot mandando algo al grupo solo, cada
-    // 5 minutos/1 hora, sin que nadie se lo haya pedido en ese momento.
-    // `dia.whatsappModoCuidadoso` ya viene resuelto desde
-    // listarDiasAbiertos() (join con grupos), sin una consulta aparte acá.
-    if (dia.whatsappModoCuidadoso) continue;
-    try {
-      await procesarDiaAbierto(sockActual, dia.grupoId, dia.whatsappGrupoJid, dia.fecha, { forzar: false });
-    } catch (e) {
-      // Mismo criterio que en manejarMensajeEntrante (15-09-2026): que
-      // quede visible en el panel, no solo en el log del servidor.
-      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: dia.whatsappGrupoJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
-      console.error('[whatsappBot] Error al verificar el día ' + dia.fecha + ' (grupo ' + dia.grupoId + '):', e.message);
-    }
-  }
-}
-
-function iniciarRelojDeFondo() {
-  if (relojDeFondoIniciado) return;
-  relojDeFondoIniciado = true;
-  setInterval(() => { tickRelojDeFondo().catch(e => console.error('[whatsappBot] Error inesperado en el reloj de fondo:', e)); }, INTERVALO_RELOJ_MS);
-  console.log('[whatsappBot] Reloj de fondo iniciado (revisa los días abiertos cada 5 minutos).');
-}
+// (18-09-2026) Acá vivía el "reloj de fondo": cada 5 minutos revisaba
+// TODOS los días abiertos de TODOS los grupos y, si correspondía, le
+// mandaba solo una actualización al grupo — exactamente el tipo de envío
+// automático, sin que nadie lo pida, que el usuario pidió sacar por
+// completo ("desactiva el otro modo de sabana automatica, deja solo este
+// que es mas cuidadoso, asi no tenemos tantas funciones inutiles en el
+// programa"). Se sacó entero (`tickRelojDeFondo`/`iniciarRelojDeFondo`/
+// `INTERVALO_RELOJ_MS`, y con eso también `whatsappDiaEstado.
+// listarDiasAbiertos()`, que ya no tenía ningún otro llamador) — si hace
+// falta retomarlo alguna vez, está en el historial de git de este
+// archivo.
 
 // Arranca el bot. Se llama UNA vez desde server.js, solo si
 // WHATSAPP_BOT_ACTIVADO=true. Si algo falla acá adentro, el error se
@@ -1165,7 +1086,6 @@ async function iniciarBotWhatsApp() {
       sockActual = sock;
       console.log('[whatsappBot] Conectado a WhatsApp.');
       listarGruposDisponibles(sock);
-      iniciarRelojDeFondo();
     }
 
     if (connection === 'close') {
@@ -1265,12 +1185,11 @@ module.exports = {
   refrescarGruposDisponibles,
   olvidarSesionWhatsapp,
   procesarDiaAbierto,
-  // manejarMensajeEntrante y tickRelojDeFondo se exportan sobre todo
-  // para poder probarlas de verdad (ver test_whatsapp_bot_flujo.js) sin
-  // necesitar @whiskeysockets/baileys instalado — ninguna de las dos
-  // toca esa librería, solo reciben un `sock`/`msg` ya armados.
+  // manejarMensajeEntrante se exporta sobre todo para poder probarla de
+  // verdad (ver test_whatsapp_bot_flujo.js) sin necesitar
+  // @whiskeysockets/baileys instalado — no toca esa librería, solo
+  // recibe un `sock`/`msg` ya armados.
   manejarMensajeEntrante,
-  tickRelojDeFondo,
   // Comandos de chat (09-09-2026) — exportados aparte para poder probar
   // cada uno directo, sin tener que armar un `msg` de Baileys falso para
   // cada caso (ver test_whatsapp_comandos.js).
@@ -1302,8 +1221,5 @@ module.exports = {
   // para poder probarlo directo con un `sock` falso (ver
   // test_whatsapp_diagnostico_sesiones.js), sin necesitar
   // @whiskeysockets/baileys instalado.
-  diagnosticarSesionesGrupo,
-  // "Modo cuidadoso" (18-09-2026) — exportado aparte para poder probarlo
-  // directo con un "pg" falso (ver test_whatsapp_modo_cuidadoso.js).
-  modoCuidadosoActivo
+  diagnosticarSesionesGrupo
 };

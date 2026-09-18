@@ -175,46 +175,20 @@ alter table grupos add column if not exists comandos_whatsapp_habilitado boolean
 alter table grupos add column if not exists comandos_whatsapp_numero text;
 
 -- =================================================================
--- "MODO CUIDADOSO" DE WHATSAPP (18-09-2026, a pedido del usuario después
--- de que WhatsApp le cerrara la cuenta que tenía vinculada al bot: "tenia
--- el whatsaap enlazado para enviar las sabanas atuomaticas y me cerraron
--- la cuenta... que otra manera podemos hacer... que nos podemos inventar
--- para poder utilizar la actualizacion automatica de las sabanas"). El
--- usuario eligió, de 3 caminos investigados (migrar a Telegram / seguir
--- en WhatsApp más cuidadoso / servicio pago de terceros), el segundo:
--- seguir en WhatsApp pero mucho más conservador con lo que el bot manda
--- solo, sin que un humano lo haya pedido.
+-- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
+-- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
+-- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera
+-- prender/apagar el envío automático del bot. El usuario después pidió
+-- sacar la opción entera: "desactiva el otro modo de sabana automatica,
+-- deja solo este que es mas cuidadoso, asi no tenemos tantas funciones
+-- inutiles en el programa" — el comportamiento cuidadoso (el bot NUNCA
+-- manda nada al grupo por su cuenta, solo por botón manual o comando de
+-- chat) pasó a ser el único, permanente, para todos los Grupos, sin
+-- interruptor. Ver la advertencia grande al principio de whatsappBot.js.
+-- Una base de datos que ya corrió la versión vieja de este archivo puede
+-- tener la columna whatsapp_modo_cuidadoso todavía ahí, sin uso — no
+-- hace falta borrarla a mano, ningún código la lee ni la escribe más.
 --
--- Investigado antes de construir esto: WhatsApp detecta cuentas
--- automatizadas sobre todo por PATRONES DE ENVÍO (mensajes que salen sin
--- que nadie los haya pedido, en ráfaga, siempre igual) — LEER mensajes de
--- un grupo no genera ningún riesgo por sí solo. Con "modo cuidadoso"
--- prendido para un grupo:
---   - La LECTURA/IMPORTACIÓN automática de "SABANA DE JUGADAS" sigue
---     exactamente igual que siempre (se guarda, se ve en "Resumen por
---     Cliente" al instante) — nada de esto cambia.
---   - Lo que se APAGA es el envío del resumen/aviso al grupo que el bot
---     decide mandar SOLO, sin que nadie se lo haya pedido en ese momento:
---     ni el reloj de fondo (cada 5 minutos/1 hora, ver
---     whatsappBot.tickRelojDeFondo), ni el envío automático apenas se
---     termina de importar una sábana nueva (ver
---     whatsappBot.manejarMensajeEntrante). En ambos casos, ver
---     modoCuidadosoActivo()/whatsappModoCuidadoso en whatsappBot.js.
---   - Lo que SIGUE mandando mensajes normal, porque es un humano
---     pidiéndolo en el momento (no el bot decidiendo solo): el botón
---     manual "📤 Enviar resumen ahora" del panel, los 4 comandos de chat
---     ("act"/"saldo final"/"corte semana"/"saldo total semana <nombre>"),
---     y los avisos de error de siempre (fecha faltante, sábana
---     duplicada/ya cerrada, sábana no reconocida) — son respuestas
---     directas a un mensaje que alguien acaba de mandar, no algo que el
---     bot inventa por su cuenta.
---
--- Exclusivo del Súper-admin (PATCH
--- /api/superadmin/grupos/:id/whatsapp-modo-cuidadoso), mismo espíritu que
--- whatsapp_habilitado — el propio Grupo solo lo VE en su panel (de solo
--- lectura), no lo puede tocar.
-alter table grupos add column if not exists whatsapp_modo_cuidadoso boolean not null default false;
-
 -- =================================================================
 -- JUGADORES — el registro de "clientes" de cada grupo (Administración >
 -- Jugador de la app actual). También es la tabla que le da al CLIENTE su

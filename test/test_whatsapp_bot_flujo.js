@@ -40,7 +40,7 @@ const FECHA = '2026-09-02';
 
 let siguienteIdPendiente = 1;
 const TABLAS = {
-  grupos: [{ id: GRUPO_ID, nombre: 'Deportes Bernal', whatsapp_grupo_jid: JID, whatsapp_habilitado: true, whatsapp_modo_cuidadoso: false }],
+  grupos: [{ id: GRUPO_ID, nombre: 'Deportes Bernal', whatsapp_grupo_jid: JID, whatsapp_habilitado: true }],
   jugadores: [{ id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', activo: true, comision_propia: 0 }],
   avales: [],
   equipos_globales: [],
@@ -137,14 +137,6 @@ function ejecutarQuery(text, params) {
     const [jid] = params;
     const fila = TABLAS.grupos.find(g => g.whatsapp_grupo_jid === jid && g.whatsapp_habilitado === true);
     return { rows: fila ? [{ id: fila.id }] : [] };
-  }
-
-  // --- modoCuidadosoActivo (18-09-2026, "modo cuidadoso" — ver la nota
-  // grande en sql/schema.sql) ---
-  if (/^SELECT whatsapp_modo_cuidadoso FROM grupos WHERE id = \$1/i.test(sql)) {
-    const [grupoId] = params;
-    const fila = TABLAS.grupos.find(g => g.id === grupoId);
-    return { rows: fila ? [{ whatsapp_modo_cuidadoso: !!fila.whatsapp_modo_cuidadoso }] : [] };
   }
 
   // --- sabanasPendientesWhatsapp.js ---
@@ -277,7 +269,7 @@ function ultimaSabanaPendiente() {
   await whatsappBot.manejarMensajeEntrante(sockFromMe, crearMensaje('SABANA DE JUGADAS\n' + FECHA_FROMME + '\nPEDRO\nhouston -120\n100//90', { fromMe: true }));
   const pendFromMe = ultimaSabanaPendiente();
   check(!!pendFromMe && pendFromMe.estado === 'importada', 'una "SABANA DE JUGADAS" mandada "fromMe" (desde el número del propio bot) SE IMPORTA igual que si la mandara cualquier otro participante del grupo');
-  check(sockFromMe.mensajes.length === 1, 'y genera su aviso normal de "Actualización de resultados", como cualquier primera sábana del día');
+  check(sockFromMe.mensajes.length === 0, '(18-09-2026) una importación exitosa YA NO manda ningún aviso solo al grupo — el resumen se pide a mano con el botón o un comando de chat');
   check((await obtenerEstadoDia(GRUPO_ID, FECHA_FROMME)) !== null, 'y queda guardada bajo su propia fecha en whatsapp_dia_estado');
 
   // --- 1.b) el "cordón de seguridad": "SABANA DE JUGADAS" SIN una fecha
@@ -289,9 +281,9 @@ function ultimaSabanaPendiente() {
   check(pendSinFecha.estado === 'error' && /Falta la fecha/i.test(pendSinFecha.nota || ''), 'el intento sin fecha válida queda registrado como "error" en la bandeja, con el motivo');
   check((await obtenerEstadoDia(GRUPO_ID, FECHA)) === null, 'y sobre todo: NO se carga ninguna sábana bajo ninguna fecha (ni "hoy" ni ninguna otra) — el cordón de seguridad hizo su trabajo');
 
-  // --- 2) primera "SABANA DE JUGADAS" del día: se auto-importa y, como
-  // nunca se había verificado este día antes, se manda de una el primer
-  // aviso ---
+  // --- 2) primera "SABANA DE JUGADAS" del día: se auto-importa, pero
+  // (18-09-2026) ya no se manda ningún aviso solo al grupo — la
+  // importación queda lista para cuando alguien pida el resumen a mano ---
   const sock1 = crearSockFalso();
   const textoSabana1 = ['SABANA DE JUGADAS', FECHA, 'PEDRO', 'houston -120', '100//90'].join('\n');
   await whatsappBot.manejarMensajeEntrante(sock1, crearMensaje(textoSabana1));
@@ -301,24 +293,19 @@ function ultimaSabanaPendiente() {
   const dia1 = await obtenerEstadoDia(GRUPO_ID, FECHA);
   check(!!dia1 && dia1.ultimoTexto === 'PEDRO\nhouston -120\n100//90', 'whatsapp_dia_estado guarda el CUERPO de la sábana (sin las líneas "SABANA DE JUGADAS"/fecha) como "la última" del día — así no queda un ticket fantasma que nunca se resuelve');
   check(dia1.sabanaFinalEn === null, 'el día NO está cerrado todavía (nunca llegó "SABANA DE JUGADAS FINAL")');
-  check(sock1.mensajes.length === 1, 'se manda EXACTAMENTE 1 mensaje: el primer aviso, apenas se carga la sábana por primera vez (nunca se había verificado este día)');
-  check(sock1.mensajes[0].text.includes('🔄 *Actualización de resultados*'), 'ese primer aviso es una "Actualización de resultados" (todavía no llegó SABANA DE JUGADAS FINAL)');
-  check(sock1.mensajes[0].text.includes('100//'), 'el ticket de PEDRO aparece en el listado, todavía sin resultado (el partido no terminó)');
-  check(sock1.mensajes[0].jid === JID, 'el aviso se manda al JID correcto del grupo');
-  check(sock1.mensajes[0].text.startsWith('*Deportes Bernal*'), '(04-09-2026) el encabezado del aviso usa el nombre REAL del Grupo (grupos.nombre) en vez del texto fijo "DEPORTES ZENYATTA" de siempre');
+  check(sock1.mensajes.length === 0, '(18-09-2026) la importación NO manda ningún aviso al grupo por su cuenta — el bot nunca decide solo mandar nada, ni siquiera la primera vez que se carga un día');
 
   // --- 3) una SEGUNDA "SABANA DE JUGADAS" llega poco después (mismo
-  // día): sustituye el texto guardado, pero como todavía no pasó 1 hora
-  // desde el aviso de arriba, NO se manda ningún mensaje nuevo (se
-  // respeta el reloj) ---
+  // día): sustituye el texto guardado — tampoco manda ningún mensaje,
+  // como cualquier importación ---
   const sock2 = crearSockFalso();
   const cuerpoSabana2 = ['PEDRO', 'houston -120', '100//90', '', 'MANOLO', 'houston -120', '50//45'].join('\n');
   const textoSabana2 = 'SABANA DE JUGADAS\n' + FECHA + '\n' + cuerpoSabana2;
   await whatsappBot.manejarMensajeEntrante(sock2, crearMensaje(textoSabana2));
   const dia2 = await obtenerEstadoDia(GRUPO_ID, FECHA);
   check(dia2.ultimoTexto === cuerpoSabana2, 'la segunda sábana SUSTITUYE la primera (nunca se acumulan 2 sábanas del mismo día)');
-  check(sock2.mensajes.length === 0, 'como todavía no pasó 1 hora desde el último aviso, esta actualización NO manda ningún mensaje (se respeta el reloj de la hora)');
-  check(TABLAS.sabanas_pendientes_whatsapp.filter(p => p.grupo_id === GRUPO_ID && p.fecha_detectada === FECHA && p.estado === 'importada').length === 2, 'ambas sábanas quedan registradas como "importada" en la bandeja de auditoría, aunque la segunda no haya generado un aviso');
+  check(sock2.mensajes.length === 0, 'tampoco esta segunda importación manda ningún mensaje al grupo');
+  check(TABLAS.sabanas_pendientes_whatsapp.filter(p => p.grupo_id === GRUPO_ID && p.fecha_detectada === FECHA && p.estado === 'importada').length === 2, 'ambas sábanas quedan registradas como "importada" en la bandeja de auditoría, aunque ninguna haya generado un aviso');
 
   // --- 4) "SABANA DE JUGADAS FINAL" llega mientras el partido TODAVÍA no
   // terminó: bloquea el día para nuevas sábanas, pero NO cierra todavía
@@ -377,7 +364,7 @@ function ultimaSabanaPendiente() {
   // ni aunque se fuerce (el cierre solo se manda una vez) ---
   const sock7 = crearSockFalso();
   const resultado2 = await whatsappBot.procesarDiaAbierto(sock7, GRUPO_ID, JID, FECHA, { forzar: true });
-  check(resultado2.accion === 'ENVIAR_CIERRE' && sock7.mensajes.length === 2, 'procesarDiaAbierto es idempotente: si se lo vuelve a llamar a mano después de cerrado, recalcula lo mismo (no revienta), aunque en un uso real el día ya no aparecería en listarDiasAbiertos para que el reloj de fondo lo vuelva a tocar solo');
+  check(resultado2.accion === 'ENVIAR_CIERRE' && sock7.mensajes.length === 2, 'procesarDiaAbierto es idempotente: si se lo vuelve a llamar a mano (botón o comando) después de cerrado, recalcula lo mismo (no revienta)');
 
   // --- 9) un mensaje con una jugada mal escrita (sin ningún ticket
   // reconocible) se registra como "error", con un aviso en el grupo ---

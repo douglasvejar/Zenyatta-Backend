@@ -77,7 +77,7 @@ function filtrarTicketsHistorial(sql, params) {
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
-  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, whatsapp_modo_cuidadoso, sabana_muestra.*FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
     return { rows: grupo ? [grupo] : [] };
   }

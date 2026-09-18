@@ -257,7 +257,9 @@ function crearMensaje(texto, participante) {
   // comandos, y confirmando que igual se carga normalmente.
   const sockSabana = crearSockFalso();
   await whatsappBot.manejarMensajeEntrante(sockSabana, crearMensaje(['SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n'), PARTICIPANTE_OTRO));
-  check(sockSabana.mensajes.length === 1, '"SABANA DE JUGADAS" se carga igual sin importar quién la mande — el candado de comandos NO le aplica a esto');
+  const diaCargado = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === GRUPO_ID && w.fecha === HOY);
+  check(!!diaCargado && !!diaCargado.ultimo_texto, '"SABANA DE JUGADAS" se carga igual sin importar quién la mande — el candado de comandos NO le aplica a esto');
+  check(sockSabana.mensajes.length === 0, '(18-09-2026) y, como cualquier importación, no manda ningún aviso solo al grupo');
 
   // El número AUTORIZADO SÍ puede mandar "act".
   const sockActAutorizado = crearSockFalso();

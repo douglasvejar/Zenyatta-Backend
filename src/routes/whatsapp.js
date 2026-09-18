@@ -104,10 +104,6 @@ router.get('/estado', asyncHandler(async (req, res) => {
     habilitado: true,
     botActivo: botActivado(),
     grupoVinculado: !!(req.grupo && req.grupo.whatsapp_grupo_jid),
-    // "Modo cuidadoso" (18-09-2026, ver sql/schema.sql) — de SOLO
-    // LECTURA para el Grupo (lo prende/apaga el Súper-admin); el panel lo
-    // usa para explicar por qué el resumen ya no se manda solo.
-    modoCuidadoso: !!(req.grupo && req.grupo.whatsapp_modo_cuidadoso),
     estadoBot,
     dias: dias.map(resumirDia),
     recientes
@@ -115,11 +111,10 @@ router.get('/estado', asyncHandler(async (req, res) => {
 }));
 
 // Botón "📤 Enviar resumen ahora": fuerza una verificación de ese día YA
-// (salta la espera de la hora) y, si el bot está conectado, manda el
-// listado (o el cierre, si ya corresponde) — reiniciando el reloj de 1
-// hora para el próximo envío automático (03-09-2026, más tarde todavía,
-// a pedido del usuario: "tambien tener un boton en el panel donde se
-// pueda enviar... y se reincia el reloj de 1 hora nuevamente").
+// y, si el bot está conectado, manda el listado (o el cierre, si ya
+// corresponde) — desde el 18-09-2026 esta es la ÚNICA forma en que el
+// resumen sale al grupo (junto con los comandos de chat), ver la
+// advertencia grande al principio de whatsappBot.js.
 router.post('/dias/:fecha/enviar-resumen', asyncHandler(async (req, res) => {
   if (!servicioHabilitado(req)) {
     // 400, a propósito NUNCA 401/403: el frontend (api() en app.js) trata

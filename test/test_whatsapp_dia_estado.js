@@ -15,14 +15,8 @@ const originalLoad = Module._load;
 
 const TABLAS = {
   grupos: [
-    { id: 'g1', whatsapp_grupo_jid: '120363000000000001@g.us', whatsapp_modo_cuidadoso: false },
-    { id: 'g2', whatsapp_grupo_jid: null, whatsapp_modo_cuidadoso: false }, // sin JID vinculado -> nunca debe aparecer en listarDiasAbiertos
-    // g3 (18-09-2026, "modo cuidadoso"): CON jid vinculado, para confirmar
-    // que listarDiasAbiertos() SÍ lo sigue trayendo (no es lo mismo que
-    // "sin servicio") — trae el flag prendido para que
-    // whatsappBot.tickRelojDeFondo() sea quien decida saltárselo, no esta
-    // función (ver test_whatsapp_bot_flujo.js/test_whatsapp_modo_cuidadoso.js).
-    { id: 'g3', whatsapp_grupo_jid: '120363000000000003@g.us', whatsapp_modo_cuidadoso: true }
+    { id: 'g1', whatsapp_grupo_jid: '120363000000000001@g.us' },
+    { id: 'g2', whatsapp_grupo_jid: null } // sin JID vinculado
   ],
   whatsapp_dia_estado: [] // { grupo_id, fecha, ultimo_texto, ultimo_texto_en, sabana_final_en, ultima_verificacion_en, ultimo_envio_resumen_en, ultimo_hash_resumen, cierre_enviado_en }
 };
@@ -88,24 +82,6 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
-  if (/^SELECT .* FROM whatsapp_dia_estado w JOIN grupos g ON g\.id = w\.grupo_id/i.test(sql)) {
-    const [diasHaciaAtras] = params;
-    const hoy = new Date();
-    const limite = new Date(hoy.getTime() - diasHaciaAtras * 24 * 60 * 60 * 1000);
-    const filas = TABLAS.whatsapp_dia_estado.filter(w => {
-      const grupo = TABLAS.grupos.find(g => g.id === w.grupo_id);
-      if (!grupo || !grupo.whatsapp_grupo_jid) return false;
-      if (w.cierre_enviado_en) return false;
-      if (!w.ultimo_texto) return false;
-      if (new Date(w.fecha + 'T00:00:00Z') < new Date(limite.toISOString().split('T')[0] + 'T00:00:00Z')) return false;
-      return true;
-    }).sort((a, b) => a.fecha.localeCompare(b.fecha));
-    return { rows: filas.map(f => {
-      const grupo = TABLAS.grupos.find(g => g.id === f.grupo_id);
-      return { ...f, whatsapp_grupo_jid: grupo.whatsapp_grupo_jid, whatsapp_modo_cuidadoso: !!grupo.whatsapp_modo_cuidadoso };
-    }) };
-  }
-
   if (/^SELECT .* FROM whatsapp_dia_estado WHERE grupo_id = \$1 AND fecha >= /i.test(sql)) {
     const [grupoId, diasHaciaAtras] = params;
     const hoy = new Date();
@@ -140,7 +116,6 @@ const {
   registrarVerificacion,
   registrarEnvioResumen,
   marcarCierreEnviado,
-  listarDiasAbiertos,
   listarDiasDelGrupo
 } = require(path.join(__dirname, '..', 'src', 'services', 'whatsappDiaEstado'));
 
@@ -152,8 +127,8 @@ function check(cond, msg) {
   else { fallaron++; console.error('FALLÓ:', msg); }
 }
 
-// Fechas relativas a HOY (en vez de fechas fijas) — listarDiasAbiertos()
-// filtra por CURRENT_DATE de verdad, así que un margen fijo de "3 días
+// Fechas relativas a HOY (en vez de fechas fijas) — listarDiasDelGrupo()
+// filtra por CURRENT_DATE de verdad, así que un margen fijo de "7 días
 // hacia atrás" necesita fechas relativas a HOY para seguir siendo válido
 // sin importar cuándo se corra esta prueba (con fechas fijas, esta prueba
 // se rompía sola apenas "hoy" avanzaba más allá de esas fechas).
@@ -163,7 +138,7 @@ function fechaHace(dias) {
   return d.toISOString().split('T')[0];
 }
 const DIA_A = fechaHace(2); // el más viejo: termina cerrado (cierre_enviado_en)
-const DIA_B = fechaHace(1); // día abierto: debe aparecer en listarDiasAbiertos
+const DIA_B = fechaHace(1); // día abierto, sin cerrar
 const DIA_C = fechaHace(0); // hoy: solo recibe SABANA FINAL, sin ninguna sábana con texto
 
 (async function main() {
@@ -207,32 +182,14 @@ const DIA_C = fechaHace(0); // hoy: solo recibe SABANA FINAL, sin ninguna sában
   await marcarCierreEnviado('g1', DIA_A);
   check(!!buscar('g1', DIA_A).cierre_enviado_en, 'marcarCierreEnviado deja cierre_enviado_en con la fecha/hora');
 
-  // --- 7) listarDiasAbiertos: solo grupos CON JID vinculado, con texto, sin cerrar, dentro del margen de días ---
+  // --- 7) un día abierto normal más, para que listarDiasDelGrupo tenga
+  // algo abierto (además de DIA_A ya cerrado) que comparar ---
   await registrarTextoRecibido('g1', DIA_B, 'SABANA 04-09-2026\nWISTON ...'); // día abierto normal, sin SABANA FINAL todavía
   await registrarTextoRecibido('g2', DIA_B, 'SABANA de un grupo SIN whatsapp_grupo_jid vinculado');
-  const abiertos = await listarDiasAbiertos(3);
-  check(!abiertos.find(d => d.grupoId === 'g1' && d.fecha === DIA_A), '2026-09-03 de g1 YA NO aparece (se le marcó cierre_enviado_en en el paso 6)');
-  check(!abiertos.find(d => d.grupoId === 'g1' && d.fecha === DIA_C), '2026-09-05 de g1 (SABANA FINAL pero SIN ninguna sábana con texto) no aparece — nada que reprocesar todavía');
-  check(!!abiertos.find(d => d.grupoId === 'g1' && d.fecha === DIA_B), '2026-09-04 de g1 (con texto, sin cerrar) SÍ aparece como día abierto');
-  check(!abiertos.find(d => d.grupoId === 'g2'), 'g2 nunca aparece — no tiene whatsapp_grupo_jid vinculado, aunque tenga un día con texto');
-  const diaG1 = abiertos.find(d => d.grupoId === 'g1' && d.fecha === DIA_B);
-  check(diaG1.whatsappGrupoJid === '120363000000000001@g.us', 'listarDiasAbiertos trae también el JID del grupo, para poder mandar el mensaje por WhatsApp');
-  check(diaG1.whatsappModoCuidadoso === false, 'listarDiasAbiertos trae whatsappModoCuidadoso=false para un grupo SIN el modo cuidadoso prendido (g1)');
-
-  // --- 7b) "modo cuidadoso" (18-09-2026): un grupo CON el jid vinculado
-  // pero con whatsapp_modo_cuidadoso=true SIGUE apareciendo en
-  // listarDiasAbiertos (esta función no decide nada sobre el modo
-  // cuidadoso, solo informa el flag) — es whatsappBot.tickRelojDeFondo()
-  // quien lo usa para saltarse el envío, no esta capa de datos.
-  await registrarTextoRecibido('g3', DIA_B, 'SABANA 04-09-2026\nHANRY ...');
-  const abiertosConG3 = await listarDiasAbiertos(3);
-  const diaG3 = abiertosConG3.find(d => d.grupoId === 'g3' && d.fecha === DIA_B);
-  check(!!diaG3, 'un grupo con modo cuidadoso prendido (g3) SIGUE apareciendo en listarDiasAbiertos — el flag no lo excluye acá');
-  check(diaG3.whatsappModoCuidadoso === true, 'listarDiasAbiertos trae whatsappModoCuidadoso=true para g3, tal cual está guardado en grupos');
 
   // --- 8) listarDiasDelGrupo: TODOS los días de un grupo, abiertos o cerrados ---
   const diasG1 = await listarDiasDelGrupo('g1', 7);
-  check(!!diasG1.find(d => d.fecha === DIA_A && !!d.cierreEnviadoEn), '2026-09-03 (ya cerrado) SÍ aparece en listarDiasDelGrupo, a diferencia de listarDiasAbiertos');
+  check(!!diasG1.find(d => d.fecha === DIA_A && !!d.cierreEnviadoEn), '2026-09-03 (ya cerrado) SÍ aparece en listarDiasDelGrupo');
   check(!!diasG1.find(d => d.fecha === DIA_B), '2026-09-04 (abierto) también aparece');
   check(!diasG1.find(d => d.grupoId === 'g2'), 'listarDiasDelGrupo("g1", ...) no trae días de otro grupo (g2)');
   check(diasG1[0].fecha >= diasG1[diasG1.length - 1].fecha, 'listarDiasDelGrupo ordena del más nuevo al más viejo');

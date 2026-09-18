@@ -28,11 +28,7 @@ async function requiereGrupo(req, res, next) {
     // servicio de sábana automática (interruptor que solo prende/apaga el
     // Súper-admin, ver sql/schema.sql) — sin esto quedaban siempre
     // undefined, aunque las columnas sí tuvieran el dato guardado.
-    // whatsapp_modo_cuidadoso (18-09-2026, tras el cierre de cuenta de
-    // WhatsApp del usuario) por el mismo motivo: routes/whatsapp.js (GET
-    // /estado) lo expone de solo lectura en el panel del Grupo, para que
-    // se entienda por qué el resumen ya no se manda solo.
-    const res2 = await db.query('SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, whatsapp_modo_cuidadoso FROM grupos WHERE id = $1', [payload.grupoId]);
+    const res2 = await db.query('SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado FROM grupos WHERE id = $1', [payload.grupoId]);
     const grupo = res2.rows[0];
     if (!grupo) return res.status(401).json({ error: 'Sesión inválida.' });
     if (!grupo.activo) return res.status(403).json({ error: 'Esta cuenta está desactivada. Contacta al administrador de la plataforma.' });

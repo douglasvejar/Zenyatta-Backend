@@ -95,46 +95,21 @@ async function marcarCierreEnviado(grupoId, fecha) {
   );
 }
 
-// Días "abiertos" de TODOS los grupos con bot vinculado (whatsapp_grupo_jid
-// configurado) — los candidatos que el reloj de cada 5 minutos recorre
-// para decidir si les toca revisar/mandar algo. "Abierto" = todavía no
-// se le mandó el cierre (cierre_enviado_en null) y ya tiene al menos una
-// sábana recibida (ultimo_texto no nulo — un día sin ninguna sábana
-// nunca tiene nada que reprocesar). `diasHaciaAtras` acota la búsqueda
-// (por defecto 3 días) para no perseguir para siempre un día que quedó
-// trabado (ej. una jugada NULA (FALTA LOGRO) que nadie corrigió) — pasado
-// ese margen, el día se deja de revisar solo (sigue existiendo en la
-// tabla, y se puede seguir cerrando a mano desde el panel si hace falta).
 const COLUMNAS_W = 'w.grupo_id, w.fecha, w.ultimo_texto, w.ultimo_texto_en, w.sabana_final_en, w.ultima_verificacion_en, w.ultimo_envio_resumen_en, w.ultimo_hash_resumen, w.cierre_enviado_en';
 
-// whatsappModoCuidadoso (18-09-2026, agregado junto con "modo cuidadoso"
-// de WhatsApp — ver la nota grande en sql/schema.sql) va en este SELECT
-// para que whatsappBot.tickRelojDeFondo() pueda saltarse, sin una
-// consulta aparte por cada día, a los días de un grupo que tiene el modo
-// cuidadoso prendido — el reloj de fondo es EXACTAMENTE el caso que ese
-// modo apaga (el bot mandando algo solo, sin que nadie se lo haya
-// pedido en ese momento).
-async function listarDiasAbiertos(diasHaciaAtras = 3) {
-  const res = await db.query(
-    `SELECT ${COLUMNAS_W}, g.whatsapp_grupo_jid, g.whatsapp_modo_cuidadoso
-     FROM whatsapp_dia_estado w
-     JOIN grupos g ON g.id = w.grupo_id
-     WHERE w.cierre_enviado_en IS NULL
-       AND w.ultimo_texto IS NOT NULL
-       AND g.whatsapp_grupo_jid IS NOT NULL
-       AND w.fecha >= (CURRENT_DATE - ($1 || ' days')::interval)
-     ORDER BY w.fecha ASC`,
-    [diasHaciaAtras]
-  );
-  return res.rows.map(r => ({ ...mapFila(r), whatsappGrupoJid: r.whatsapp_grupo_jid, whatsappModoCuidadoso: !!r.whatsapp_modo_cuidadoso }));
-}
+// (18-09-2026) Acá vivía listarDiasAbiertos() — la consulta que el
+// "reloj de fondo" de whatsappBot.js usaba para recorrer TODOS los
+// grupos y decidir si a algún día le tocaba un envío automático. Se sacó
+// entera junto con el reloj de fondo (ver la advertencia grande al
+// principio de whatsappBot.js: el usuario pidió sacar por completo el
+// envío automático, no solo apagarlo con un interruptor) — ya no tenía
+// ningún otro llamador. Si hace falta retomar un envío automático algún
+// día, está en el historial de git de este archivo.
 
 // Días de UN grupo puntual (abiertos Y ya cerrados, por defecto última
-// semana) — a diferencia de listarDiasAbiertos() (que recorre TODOS los
-// grupos para el reloj de fondo), esto es lo que usa el panel del Grupo
-// para mostrar el estado de sus propios días recientes (candado sí/no,
-// última verificación, último envío) sin depender de que el bot esté
-// activado ahora mismo.
+// semana) — lo que usa el panel del Grupo para mostrar el estado de sus
+// propios días recientes (candado sí/no, última verificación, último
+// envío) sin depender de que el bot esté activado ahora mismo.
 async function listarDiasDelGrupo(grupoId, diasHaciaAtras = 7) {
   const res = await db.query(
     `SELECT ${COLUMNAS} FROM whatsapp_dia_estado
@@ -152,18 +127,17 @@ async function listarDiasDelGrupo(grupoId, diasHaciaAtras = 7) {
 // lado del Grupo, o mantenimientoGrupo.js del lado de Súper-admin) SOLO
 // borraba tickets_historial/polla_historial — nunca esta tabla
 // (whatsapp_dia_estado). Si esa fecha había llegado por WhatsApp, el
-// texto original se quedaba guardado acá (`ultimo_texto`), y tanto el
-// reloj de fondo del bot (cada 5 min, listarDiasAbiertos() de arriba, que
-// solo mira si `ultimo_texto IS NOT NULL`, sin importar si ya no hay
-// ningún ticket guardado) como el refresco del panel cada 25s (GET
-// /dias/:fecha/resumen) lo volvían a reprocesar — "resucitando" solo el
-// ticket recién borrado, sin que nadie mandara nada de nuevo por
-// WhatsApp.
+// texto original se quedaba guardado acá (`ultimo_texto`), y el refresco
+// del panel cada 25s (GET /dias/:fecha/resumen) lo volvía a reprocesar
+// solo — "resucitando" el ticket recién borrado, sin que nadie mandara
+// nada de nuevo por WhatsApp. (En su momento, el ahora-eliminado reloj de
+// fondo del bot tenía el mismo problema — ver la advertencia grande en
+// whatsappBot.js sobre por qué se sacó el 18-09-2026.)
 //
 // El arreglo: borrar la sábana de un día completo TAMBIÉN borra esta
 // fila (grupo_id + fecha) — así el día queda como si esa fecha nunca
-// hubiera recibido nada por WhatsApp: el reloj de fondo deja de tocarlo,
-// el panel deja de reprocesarlo, y si el candado de "SABANA FINAL" ya
+// hubiera recibido nada por WhatsApp: el panel deja de reprocesarlo, y si
+// el candado de "SABANA FINAL" ya
 // estaba puesto, también se libera (si más adelante llega una sábana
 // nueva de verdad para esa fecha, se acepta como si fuera la primera).
 // Si esa fecha nunca tuvo ninguna sábana por WhatsApp, este DELETE
@@ -180,7 +154,6 @@ module.exports = {
   registrarVerificacion,
   registrarEnvioResumen,
   marcarCierreEnviado,
-  listarDiasAbiertos,
   listarDiasDelGrupo,
   eliminarEstadoDia
 };

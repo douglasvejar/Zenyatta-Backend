@@ -376,7 +376,7 @@ function fechaMasDias(fechaISO, n) {
   const textoSabanaHoy = ['SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n');
   const sockCarga = crearSockFalso();
   await whatsappBot.manejarMensajeEntrante(sockCarga, crearMensaje(textoSabanaHoy));
-  check(sockCarga.mensajes.length === 1, 'se carga la sábana de hoy normalmente (1er aviso automático de siempre)');
+  check(sockCarga.mensajes.length === 0, '(18-09-2026) la importación normal de la sábana de hoy YA NO manda ningún aviso solo al grupo — el resumen se pide con "act"/"saldo final" o el botón manual');
 
   // --- "act" con el partido TODAVÍA sin resultado: reenvía el listado
   // (forzado, sin esperar la hora) ---
