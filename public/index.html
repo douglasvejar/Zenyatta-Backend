@@ -41,9 +41,157 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 48px 20px 32px;
+    padding: 116px 20px 32px;
     position: relative;
     overflow-x: hidden;
+  }
+
+  /* ============ BARRA DE NAVEGACIÓN (18-09-2026, a pedido del usuario:
+     "agrega botones que diga producto con una flecha hacia abajo... te
+     despliega los productos que ofrecemos... quienes somos... precios...
+     solicitar demo") — fija arriba de todo, encima del portal de acceso
+     de siempre (que sigue exactamente igual, sin tocar). El contenido de
+     cada página de marketing (Producto/Quiénes somos/Precios) queda
+     pendiente de que el usuario lo confirme — por ahora cada una es una
+     página propia con un aviso de "contenido en camino", ver esas mismas
+     páginas (producto-deportes.html/producto-hipico.html/quienes-somos.html/
+     precios.html). ============ */
+  .navbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 20;
+    background: rgba(3, 6, 15, 0.82);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--card-border);
+  }
+  .navbar-inner {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .navbar-marca {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+  .navbar-marca img { width: 26px; height: 26px; object-fit: contain; }
+
+  .navbar-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .navbar-link {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-decoration: none;
+    background: none;
+    border: none;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s ease, background 0.15s ease;
+    white-space: nowrap;
+  }
+  .navbar-link:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .navbar-link .caret { font-size: 10px; transition: transform 0.15s ease; opacity: 0.75; }
+  .navbar-dropdown.abierto .navbar-link .caret { transform: rotate(180deg); }
+
+  .navbar-cta {
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #04070f;
+    text-decoration: none;
+    background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep));
+    border: none;
+    padding: 10px 16px;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 6px 18px -8px rgba(47, 107, 255, 0.65);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .navbar-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px rgba(47, 107, 255, 0.8); }
+
+  .navbar-dropdown { position: relative; }
+  .navbar-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    min-width: 260px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 20px 50px -18px rgba(0,0,0,0.7);
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .navbar-dropdown.abierto .navbar-dropdown-panel { display: flex; }
+  .navbar-dropdown-item {
+    display: block;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+  .navbar-dropdown-item:hover { background: rgba(56, 224, 240, 0.08); }
+  .navbar-dropdown-item .item-titulo { font-family: 'Outfit', sans-serif; font-weight: 600; display: block; }
+  .navbar-dropdown-item .item-sub { color: var(--text-dim); font-size: 12px; display: block; margin-top: 2px; }
+
+  .navbar-toggle {
+    display: none;
+    width: 38px; height: 38px;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 720px) {
+    .navbar-links { display: none; }
+    .navbar-toggle { display: flex; }
+    .navbar-links.movil-abierto {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      position: fixed;
+      top: 64px; left: 0; right: 0;
+      background: var(--card);
+      border-bottom: 1px solid var(--card-border);
+      padding: 10px 14px 16px;
+      box-shadow: 0 20px 40px -20px rgba(0,0,0,0.7);
+    }
+    .navbar-links.movil-abierto .navbar-link { width: 100%; justify-content: space-between; }
+    .navbar-links.movil-abierto .navbar-dropdown-panel { position: static; box-shadow: none; margin: 0 0 4px 10px; }
+    .navbar-links.movil-abierto .navbar-cta { text-align: center; margin-top: 6px; }
+    body { padding-top: 100px; }
   }
 
   /* Resplandor ambiente detrás del logo, usando los mismos tonos de la
@@ -336,6 +484,39 @@
 </head>
 <body>
 
+  <!-- ============ BARRA DE NAVEGACIÓN (marketing) ============ -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a class="navbar-marca" href="index.html">
+        <img src="img/logo-ludox.png" alt="">
+        LUDOX
+      </a>
+
+      <button type="button" class="navbar-toggle" id="navbarToggle" aria-label="Abrir menú">☰</button>
+
+      <div class="navbar-links" id="navbarLinks">
+        <div class="navbar-dropdown" id="navbarDropdownProducto">
+          <button type="button" class="navbar-link" id="navbarBtnProducto">
+            Producto <span class="caret">▾</span>
+          </button>
+          <div class="navbar-dropdown-panel">
+            <a class="navbar-dropdown-item" href="producto-deportes.html">
+              <span class="item-titulo">Automatización de venta de deportes</span>
+              <span class="item-sub">Para Grupos que venden parleys y jugadas</span>
+            </a>
+            <a class="navbar-dropdown-item" href="producto-hipico.html">
+              <span class="item-titulo">Sistema contable hípico</span>
+              <span class="item-sub">Para Grupos de apuestas hípicas</span>
+            </a>
+          </div>
+        </div>
+        <a class="navbar-link" href="quienes-somos.html">Quiénes somos</a>
+        <a class="navbar-link" href="precios.html">Precios</a>
+        <button type="button" class="navbar-cta" id="navbarBtnDemo">Solicitar Demo</button>
+      </div>
+    </div>
+  </nav>
+
   <div class="portal">
     <div class="logo-wrap">
       <div class="logo-3d">
@@ -359,13 +540,22 @@
 
   <footer>LUDOX © <span id="anioActual"></span> — Soluciones digitales</footer>
 
-  <!-- ============ MODAL DE CONTACTO ============ -->
+  <!-- ============ MODAL DE CONTACTO / SOLICITAR DEMO ============
+       (18-09-2026) Un solo modal para las 2 cosas — "Solicitar Demo" pidió
+       exactamente el mismo mecanismo que "Contacto" ya tenía (mismos
+       canales + mismo formulario a POST /api/contacto), así que en vez de
+       duplicar el modal entero, este mismo se reusa cambiando el título y
+       el texto según de dónde se abrió (ver abrirContacto(origen) más
+       abajo) — y el mensaje que se manda a Súper-admin queda etiquetado
+       "🎬 SOLICITUD DE DEMO" al principio cuando viene de ese botón, para
+       que se distinga de un contacto normal en la bandeja, sin tocar nada
+       del backend/base de datos. -->
   <div class="overlay" id="overlayContacto">
     <div class="modal">
       <div class="modal-header">
         <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
-        <h2>Hablemos</h2>
-        <p class="sub">¿Querés contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.</p>
+        <h2 id="tituloModalContacto">Hablemos</h2>
+        <p class="sub" id="subModalContacto">¿Querés contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.</p>
       </div>
 
       <a class="canal-contacto" id="canalEmail" href="mailto:">
@@ -419,14 +609,29 @@ if (TELEFONO_CONTACTO) {
 }
 
 const overlay = document.getElementById('overlayContacto');
-function abrirContacto() {
+
+// (18-09-2026) 'contacto' o 'demo' — decide el título/subtítulo del modal
+// y si el mensaje que se manda a Súper-admin queda etiquetado como
+// solicitud de demo (ver TEXTOS_MODAL_CONTACTO y el submit más abajo).
+let origenModalContacto = 'contacto';
+const TEXTOS_MODAL_CONTACTO = {
+  contacto: { titulo: 'Hablemos', sub: '¿Querés contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.' },
+  demo: { titulo: 'Solicitá tu demo', sub: 'Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.' }
+};
+
+function abrirContacto(origen) {
+  origenModalContacto = origen === 'demo' ? 'demo' : 'contacto';
+  const textos = TEXTOS_MODAL_CONTACTO[origenModalContacto];
+  document.getElementById('tituloModalContacto').textContent = textos.titulo;
+  document.getElementById('subModalContacto').textContent = textos.sub;
   overlay.classList.add('abierto');
   document.getElementById('msgFormContacto').textContent = '';
   document.getElementById('msgFormContacto').className = 'msg-form';
 }
 function cerrarContacto() { overlay.classList.remove('abierto'); }
 
-document.getElementById('btnContacto').addEventListener('click', abrirContacto);
+document.getElementById('btnContacto').addEventListener('click', () => abrirContacto('contacto'));
+document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto('demo'); });
 document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
 overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
 
@@ -436,12 +641,20 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   const msgEl = document.getElementById('msgFormContacto');
   const nombre = document.getElementById('ctNombre').value.trim();
   const contacto = document.getElementById('ctContacto').value.trim();
-  const mensaje = document.getElementById('ctMensaje').value.trim();
+  let mensaje = document.getElementById('ctMensaje').value.trim();
 
   if (!contacto || !mensaje) {
     msgEl.textContent = 'Completá al menos el contacto y el mensaje.';
     msgEl.className = 'msg-form error';
     return;
+  }
+
+  // (18-09-2026) Mismo mecanismo/tabla que "Contacto" de siempre — la
+  // única diferencia de una "Solicitud de Demo" es esta etiqueta al
+  // principio del mensaje, para que se note de un vistazo en la bandeja
+  // de Súper-admin sin necesitar ninguna columna/ruta nueva.
+  if (origenModalContacto === 'demo') {
+    mensaje = '🎬 SOLICITUD DE DEMO\n' + mensaje;
   }
 
   btn.disabled = true;
@@ -464,6 +677,26 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   } finally {
     btn.disabled = false;
   }
+});
+
+// =================================================================
+// BARRA DE NAVEGACIÓN (18-09-2026): dropdown "Producto ▾" (click, no
+// hover — así funciona igual de bien en touch que en desktop) y el menú
+// hamburguesa en mobile (<720px, ver la media query de arriba).
+// =================================================================
+const dropdownProducto = document.getElementById('navbarDropdownProducto');
+document.getElementById('navbarBtnProducto').addEventListener('click', (e) => {
+  e.stopPropagation();
+  dropdownProducto.classList.toggle('abierto');
+});
+document.addEventListener('click', (e) => {
+  if (!dropdownProducto.contains(e.target)) dropdownProducto.classList.remove('abierto');
+});
+
+const navbarLinks = document.getElementById('navbarLinks');
+function cerrarMenuMovil() { navbarLinks.classList.remove('movil-abierto'); }
+document.getElementById('navbarToggle').addEventListener('click', () => {
+  navbarLinks.classList.toggle('movil-abierto');
 });
 </script>
 </body>

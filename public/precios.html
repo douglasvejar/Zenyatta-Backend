@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LUDOX — Precios</title>
+<link rel="icon" href="img/logo-ludox.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #03060f;
+    --bg-glow-1: #1e3aa8;
+    --bg-glow-2: #22d3ee;
+    --card: #0b0f1e;
+    --card-border: rgba(255,255,255,0.08);
+    --text: #f4f6fb;
+    --text-dim: #93a0bd;
+    --accent-cyan: #38e0f0;
+    --accent-blue: #2f6bff;
+    --accent-deep: #241fb8;
+    --danger: #ff6b6b;
+    --ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, Segoe UI, Roboto, sans-serif; min-height: 100%; }
+  body { min-height: 100vh; position: relative; overflow-x: hidden; padding-bottom: 60px; }
+  body::before, body::after { content: ''; position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.28; z-index: 0; pointer-events: none; }
+  body::before { width: 560px; height: 560px; top: -160px; left: 50%; transform: translateX(-62%); background: radial-gradient(circle, var(--bg-glow-2) 0%, transparent 70%); }
+  body::after { width: 620px; height: 620px; bottom: -220px; right: 50%; transform: translateX(58%); background: radial-gradient(circle, var(--bg-glow-1) 0%, transparent 70%); opacity: 0.24; }
+
+  /* ============ BARRA DE NAVEGACIÓN (misma que index.html) ============ */
+  .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; background: rgba(3, 6, 15, 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-border); }
+  .navbar-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .navbar-marca { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.02em; flex-shrink: 0; }
+  .navbar-marca img { width: 26px; height: 26px; object-fit: contain; }
+  .navbar-links { display: flex; align-items: center; gap: 4px; }
+  .navbar-link { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-dim); text-decoration: none; background: none; border: none; padding: 9px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: color 0.15s ease, background 0.15s ease; white-space: nowrap; }
+  .navbar-link:hover, .navbar-link.activo { color: var(--text); background: rgba(255,255,255,0.05); }
+  .navbar-link .caret { font-size: 10px; transition: transform 0.15s ease; opacity: 0.75; }
+  .navbar-dropdown.abierto .navbar-link .caret { transform: rotate(180deg); }
+  .navbar-cta { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #04070f; text-decoration: none; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); border: none; padding: 10px 16px; border-radius: 9px; cursor: pointer; white-space: nowrap; box-shadow: 0 6px 18px -8px rgba(47, 107, 255, 0.65); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .navbar-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px rgba(47, 107, 255, 0.8); }
+  .navbar-dropdown { position: relative; }
+  .navbar-dropdown-panel { position: absolute; top: calc(100% + 8px); left: 0; min-width: 260px; background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 8px; box-shadow: 0 20px 50px -18px rgba(0,0,0,0.7); display: none; flex-direction: column; gap: 2px; }
+  .navbar-dropdown.abierto .navbar-dropdown-panel { display: flex; }
+  .navbar-dropdown-item { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13.5px; line-height: 1.35; }
+  .navbar-dropdown-item:hover, .navbar-dropdown-item.activo { background: rgba(56, 224, 240, 0.08); }
+  .navbar-dropdown-item .item-titulo { font-family: 'Outfit', sans-serif; font-weight: 600; display: block; }
+  .navbar-dropdown-item .item-sub { color: var(--text-dim); font-size: 12px; display: block; margin-top: 2px; }
+  .navbar-toggle { display: none; width: 38px; height: 38px; align-items: center; justify-content: center; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; color: var(--text); font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  @media (max-width: 720px) {
+    .navbar-links { display: none; }
+    .navbar-toggle { display: flex; }
+    .navbar-links.movil-abierto { display: flex; flex-direction: column; align-items: stretch; gap: 2px; position: fixed; top: 64px; left: 0; right: 0; background: var(--card); border-bottom: 1px solid var(--card-border); padding: 10px 14px 16px; box-shadow: 0 20px 40px -20px rgba(0,0,0,0.7); }
+    .navbar-links.movil-abierto .navbar-link { width: 100%; justify-content: space-between; }
+    .navbar-links.movil-abierto .navbar-dropdown-panel { position: static; box-shadow: none; margin: 0 0 4px 10px; }
+    .navbar-links.movil-abierto .navbar-cta { text-align: center; margin-top: 6px; }
+  }
+
+  /* ============ CONTENIDO ============ */
+  .pagina { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 148px 20px 0; text-align: center; }
+  .eyebrow-pagina { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-cyan); margin: 0 0 14px; }
+  h1 { font-family: 'Outfit', sans-serif; font-size: clamp(28px, 5vw, 40px); font-weight: 700; margin: 0 0 16px; text-wrap: balance; }
+  .lead { color: var(--text-dim); font-size: 16px; line-height: 1.6; margin: 0 auto 36px; max-width: 540px; }
+  .caja-pendiente { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 32px 28px; margin: 0 auto 28px; }
+  .caja-pendiente .icono { font-size: 30px; margin-bottom: 12px; }
+  .caja-pendiente h2 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0 0 8px; }
+  .caja-pendiente p { color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0; }
+  .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-pagina { font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 22px; border-radius: 10px; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
+  .btn-pagina-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65); }
+  .btn-pagina-principal:hover { transform: translateY(-1px); }
+  .btn-pagina-secundario { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--card-border); }
+  .btn-pagina-secundario:hover { border-color: rgba(56, 224, 240, 0.5); background: rgba(56, 224, 240, 0.06); }
+  footer { position: relative; z-index: 1; margin-top: 56px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; text-align: center; }
+
+  /* ============ MODAL DE SOLICITAR DEMO (mismo mecanismo que index.html) ============ */
+  .overlay { position: fixed; inset: 0; background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
+  .overlay.abierto { display: flex; }
+  .modal { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px 26px 24px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7); max-height: 88vh; overflow-y: auto; text-align: left; }
+  .modal h2 { font-family: 'Outfit', sans-serif; font-size: 20px; margin: 0 0 4px; }
+  .modal .sub { color: var(--text-dim); font-size: 13.5px; margin: 0 0 20px; line-height: 1.5; }
+  .canal-contacto { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); margin-bottom: 10px; font-size: 14px; text-decoration: none; color: var(--text); }
+  .canal-contacto:hover { border-color: rgba(56, 224, 240, 0.4); }
+  .canal-contacto .icono { font-size: 16px; }
+  .canal-contacto .valor { color: var(--text-dim); margin-left: auto; font-size: 13px; }
+  .separador-o { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin: 18px 0 14px; }
+  .separador-o::before, .separador-o::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
+  .campo { margin-bottom: 12px; text-align: left; }
+  .campo label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
+  .campo input, .campo textarea { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 11px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; resize: vertical; }
+  .campo input:focus, .campo textarea:focus { outline: none; border-color: var(--accent-cyan); }
+  .campo textarea { min-height: 84px; }
+  .btn-enviar { width: 100%; margin-top: 4px; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); color: #04070f; border: none; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; padding: 13px; border-radius: 10px; cursor: pointer; }
+  .btn-enviar:disabled { opacity: 0.6; cursor: default; }
+  .msg-form { font-size: 13px; margin-top: 10px; text-align: center; }
+  .msg-form.ok { color: var(--ok); }
+  .msg-form.error { color: var(--danger); }
+  .cerrar-modal { position: absolute; top: 16px; right: 16px; width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text-dim); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .cerrar-modal:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .modal-header { position: relative; }
+</style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a class="navbar-marca" href="index.html"><img src="img/logo-ludox.png" alt="">LUDOX</a>
+      <button type="button" class="navbar-toggle" id="navbarToggle" aria-label="Abrir menú">☰</button>
+      <div class="navbar-links" id="navbarLinks">
+        <div class="navbar-dropdown" id="navbarDropdownProducto">
+          <button type="button" class="navbar-link" id="navbarBtnProducto">Producto <span class="caret">▾</span></button>
+          <div class="navbar-dropdown-panel">
+            <a class="navbar-dropdown-item" href="producto-deportes.html">
+              <span class="item-titulo">Automatización de venta de deportes</span>
+              <span class="item-sub">Para Grupos que venden parleys y jugadas</span>
+            </a>
+            <a class="navbar-dropdown-item" href="producto-hipico.html">
+              <span class="item-titulo">Sistema contable hípico</span>
+              <span class="item-sub">Para Grupos de apuestas hípicas</span>
+            </a>
+          </div>
+        </div>
+        <a class="navbar-link" href="quienes-somos.html">Quiénes somos</a>
+        <a class="navbar-link activo" href="precios.html">Precios</a>
+        <button type="button" class="navbar-cta" id="navbarBtnDemo">Solicitar Demo</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <p class="eyebrow-pagina">Precios</p>
+    <h1>Precios</h1>
+    <p class="lead">Nuestros planes están en camino.</p>
+
+    <div class="caja-pendiente">
+      <div class="icono">🚧</div>
+      <h2>Estamos armando esta página</h2>
+      <p>Muy pronto vas a encontrar acá nuestros planes y precios. Mientras tanto, pedí una demo y te armamos una propuesta a medida.</p>
+    </div>
+
+    <div class="acciones-pagina">
+      <button type="button" class="btn-pagina btn-pagina-principal" id="navbarBtnDemo2">Solicitar Demo</button>
+      <a class="btn-pagina btn-pagina-secundario" href="index.html">← Volver al inicio</a>
+    </div>
+  </div>
+
+  <footer>LUDOX © <span id="anioActual"></span> — Soluciones digitales</footer>
+
+  <div class="overlay" id="overlayContacto">
+    <div class="modal">
+      <div class="modal-header">
+        <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
+        <h2>Solicitá tu demo</h2>
+        <p class="sub">Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.</p>
+      </div>
+      <a class="canal-contacto" id="canalEmail" href="mailto:">
+        <span class="icono">✉</span> Email
+        <span class="valor" id="valorEmail">—</span>
+      </a>
+      <a class="canal-contacto" id="canalTelefono" href="#" style="display:none;">
+        <span class="icono">☎</span> Teléfono
+        <span class="valor" id="valorTelefono">—</span>
+      </a>
+      <div class="separador-o">o mandanos un mensaje</div>
+      <form id="formContacto">
+        <div class="campo">
+          <label for="ctNombre">Tu nombre (opcional)</label>
+          <input type="text" id="ctNombre" maxlength="200" autocomplete="name">
+        </div>
+        <div class="campo">
+          <label for="ctContacto">Email o teléfono para responderte</label>
+          <input type="text" id="ctContacto" maxlength="200" required autocomplete="email">
+        </div>
+        <div class="campo">
+          <label for="ctMensaje">Mensaje</label>
+          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitás..."></textarea>
+        </div>
+        <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
+        <div class="msg-form" id="msgFormContacto"></div>
+      </form>
+    </div>
+  </div>
+
+<script>
+document.getElementById('anioActual').textContent = new Date().getFullYear();
+
+const EMAIL_CONTACTO = 'contacto@ludoxapp.com';
+const TELEFONO_CONTACTO = ''; // ej: '+58 412 1234567' — vacío = se oculta el canal
+document.getElementById('valorEmail').textContent = EMAIL_CONTACTO;
+document.getElementById('canalEmail').href = 'mailto:' + EMAIL_CONTACTO;
+if (TELEFONO_CONTACTO) {
+  document.getElementById('valorTelefono').textContent = TELEFONO_CONTACTO;
+  document.getElementById('canalTelefono').href = 'https://wa.me/' + TELEFONO_CONTACTO.replace(/[^0-9]/g, '');
+  document.getElementById('canalTelefono').style.display = 'flex';
+}
+
+const overlay = document.getElementById('overlayContacto');
+function abrirContacto() {
+  overlay.classList.add('abierto');
+  document.getElementById('msgFormContacto').textContent = '';
+  document.getElementById('msgFormContacto').className = 'msg-form';
+}
+function cerrarContacto() { overlay.classList.remove('abierto'); }
+document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto(); });
+document.getElementById('navbarBtnDemo2').addEventListener('click', abrirContacto);
+document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
+
+document.getElementById('formContacto').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnEnviarContacto');
+  const msgEl = document.getElementById('msgFormContacto');
+  const nombre = document.getElementById('ctNombre').value.trim();
+  const contacto = document.getElementById('ctContacto').value.trim();
+  // (18-09-2026) Mismo mecanismo que "Contacto": esta página SOLO abre el
+  // modal en su variante "Demo", así que el mensaje siempre va etiquetado.
+  const textoMensaje = document.getElementById('ctMensaje').value.trim();
+
+  if (!contacto || !textoMensaje) {
+    msgEl.textContent = 'Completá al menos el contacto y el mensaje.';
+    msgEl.className = 'msg-form error';
+    return;
+  }
+  const mensaje = '🎬 SOLICITUD DE DEMO (página Precios)\n' + textoMensaje;
+
+  btn.disabled = true;
+  msgEl.textContent = '';
+  msgEl.className = 'msg-form';
+  try {
+    const res = await fetch('/api/contacto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, contacto, mensaje })
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error) || 'No se pudo enviar el mensaje.');
+    msgEl.textContent = '¡Gracias! Te vamos a contactar pronto.';
+    msgEl.className = 'msg-form ok';
+    document.getElementById('formContacto').reset();
+  } catch (err) {
+    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intentá de nuevo.';
+    msgEl.className = 'msg-form error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+const dropdownProducto = document.getElementById('navbarDropdownProducto');
+document.getElementById('navbarBtnProducto').addEventListener('click', (e) => {
+  e.stopPropagation();
+  dropdownProducto.classList.toggle('abierto');
+});
+document.addEventListener('click', (e) => {
+  if (!dropdownProducto.contains(e.target)) dropdownProducto.classList.remove('abierto');
+});
+
+const navbarLinks = document.getElementById('navbarLinks');
+function cerrarMenuMovil() { navbarLinks.classList.remove('movil-abierto'); }
+document.getElementById('navbarToggle').addEventListener('click', () => {
+  navbarLinks.classList.toggle('movil-abierto');
+});
+</script>
+</body>
+</html>
