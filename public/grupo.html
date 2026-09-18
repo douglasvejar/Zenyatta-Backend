@@ -389,6 +389,72 @@
   .campo-login { margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
   #loginError { color: var(--danger); font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
 
+  /* =================================================================
+     VIDEO DE FONDO — pantalla de login del Grupo (18-09-2026) — pedido:
+     video de fondo con tema deportes/carreras de caballos, SIN sonido,
+     SOLO en esta vista. Van DENTRO de #vistaLogin (no del body) para
+     que desaparezcan solos en cuanto iniciarSesion() oculta esta vista
+     con display:none (ver public/app.js) — un descendiente con
+     position:fixed igual se oculta si un ancestro tiene display:none.
+     El <script> de más abajo además llama a video.pause() en ese mismo
+     momento, para no dejarlo decodificando de fondo sin verse.
+     z-index -1 (el mismo nivel que .fondo-logo-marca, pero después en
+     el DOM, así se pinta encima de esa marca de agua) + un degradado
+     oscuro encima en z-index 0 (por debajo de .login-shell, que ya usa
+     z-index:1) para que la tarjeta de login se siga leyendo perfecto
+     encima del video. Si el video no carga, queda el "poster" (el logo)
+     y el degradado oscuro de siempre — nunca se ve roto.
+     ================================================================= */
+  .fondo-video-login {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .fondo-video-login-degradado {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(rgba(3,6,15,0.75), rgba(3,6,15,0.88));
+    pointer-events: none;
+  }
+
+  /* =================================================================
+     MARCA "Ludox Venezuela 🇻🇪" en la esquina, clickeable → index.html
+     (18-09-2026) — misma marca del resto de la app, con fondo propio
+     semitransparente + blur para que se lea bien encima de cualquier
+     fondo (el oscuro de siempre o el video de arriba). z-index alto
+     para quedar SIEMPRE por encima de ese video/degradado y de la
+     marca de agua del logo (.fondo-logo-marca).
+     ================================================================= */
+  .marca-esquina {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(3,6,15,0.55);
+    backdrop-filter: blur(4px);
+    border-radius: 10px;
+    padding: 6px 12px;
+    text-decoration: none;
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .marca-esquina:hover { color: var(--accent-cyan); }
+  .marca-esquina img { width: 24px; height: 24px; object-fit: contain; display: block; }
+  @media (max-width: 760px) {
+    .marca-esquina { top: 8px; left: 8px; padding: 5px 10px; font-size: 12px; }
+    .marca-esquina img { width: 20px; height: 20px; }
+  }
+
   /* BARRA SUPERIOR CON EL GRUPO CONECTADO */
   .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; max-width: 1400px; margin: 0 auto 14px auto; font-size: 13px; color: var(--text-dim); }
   .topbar button { padding: 8px 14px; font-size: 13px; }
@@ -503,10 +569,26 @@
      el z-index/stacking de cada uno de los contenedores de este archivo). -->
 <img class="fondo-logo-marca" src="img/logo-ludox.png" alt="" aria-hidden="true">
 
+<!-- Marca "Ludox Venezuela 🇻🇪" en la esquina superior izquierda,
+     clickeable → index.html (página principal). Visible en TODAS las
+     vistas de este archivo (login y panel), pedido del dueño
+     (18-09-2026). -->
+<a class="marca-esquina" href="index.html">
+  <img src="img/logo-ludox.png" alt="">
+  <span>Ludox Venezuela 🇻🇪</span>
+</a>
+
 <!-- ================================================================
      PANTALLA DE LOGIN (rol "Grupo") — antes de esto no se ve nada más.
      ================================================================= -->
 <div class="login-shell" id="vistaLogin">
+  <!-- Video de fondo (carreras de caballos), SIN sonido, SOLO visible
+       mientras esta vista está a la vista — ver la nota grande junto a
+       ".fondo-video-login" en el <style> de arriba. -->
+  <video class="fondo-video-login" id="videoFondoLogin" autoplay muted loop playsinline poster="img/logo-ludox.png">
+    <source src="https://cdn.pixabay.com/video/2017/02/27/7969-205946421_large.mp4" type="video/mp4">
+  </video>
+  <div class="fondo-video-login-degradado" aria-hidden="true"></div>
   <div class="container">
     <!-- "Deportes Zenyatta" era el nombre del negocio original para el que
          se armó esta app (15-09-2026, a pedido del usuario) — ahora que la
@@ -1626,5 +1708,36 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
      momento. Expone `window.jspdf.jsPDF`. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="app.js"></script>
+<script>
+  // =================================================================
+  // Pausar el video de fondo del login (18-09-2026) — iniciarSesion(), en
+  // app.js, oculta #vistaLogin con style.display='none' tras un login
+  // exitoso; eso ya alcanza para que el video deje de VERSE (un
+  // descendiente con position:fixed se oculta igual si un ancestro tiene
+  // display:none), pero acá además se llama a video.pause() en el mismo
+  // momento para que no siga decodificando/reproduciendo de fondo sin
+  // necesidad. Se usa un MutationObserver sobre el atributo "style" de
+  // #vistaLogin en vez de tocar iniciarSesion()/app.js directamente.
+  // =================================================================
+  (function () {
+    try {
+      var vistaLogin = document.getElementById('vistaLogin');
+      var video = document.getElementById('videoFondoLogin');
+      if (!vistaLogin || !video) return;
+      var observer = new MutationObserver(function () {
+        var oculto = vistaLogin.style.display === 'none';
+        if (oculto) {
+          video.pause();
+        } else if (video.paused) {
+          video.play().catch(function () {}); // autoplay puede rechazarse en algunos navegadores; no rompe nada si falla
+        }
+      });
+      observer.observe(vistaLogin, { attributes: true, attributeFilter: ['style'] });
+    } catch (e) {
+      // Si algo falla acá (navegador viejo sin MutationObserver, etc.), el
+      // login sigue funcionando igual — esto es solo una optimización.
+    }
+  })();
+</script>
 </body>
 </html>

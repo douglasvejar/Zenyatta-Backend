@@ -111,10 +111,74 @@
   button.btn-peligro:hover { background-color: #a5281a; }
 
   /* PANTALLA "ENTRAR CON EL SECRETO" */
-  .acceso-shell { max-width: 380px; margin: 60px auto; }
+  .acceso-shell { max-width: 380px; margin: 60px auto; position: relative; }
   .acceso-shell .container { padding: 30px; }
   .campo { margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
   #accesoError { color: var(--danger); font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
+
+  /* =================================================================
+     FOTO DE FONDO — pantalla de acceso del súper-admin (18-09-2026) —
+     pedido: fondo con tema administración/contabilidad SOLO en esta
+     vista. Va como ::before de #vistaAcceso (no del body) para que
+     desaparezca junto con el resto de la vista cuando entrar() la oculta
+     con display:none — no hace falta lógica JS aparte para "apagarla".
+     El degradado oscuro va SIEMPRE en el mismo background-image que la
+     foto (linear-gradient(...), url(...)) para que, si la foto no carga
+     (sin internet, CDN caído), la vista se siga viendo con el mismo
+     degradado oscuro de siempre y nunca "rota".
+     ================================================================= */
+  #vistaAcceso {
+    position: relative;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+  #vistaAcceso::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -3;
+    background-color: var(--bg-color);
+    background-image:
+      linear-gradient(rgba(3,6,15,0.75), rgba(3,6,15,0.88)),
+      url('https://images.pexels.com/photos/6694492/pexels-photo-6694492.jpeg?auto=compress&cs=tinysrgb&w=1920');
+    background-size: cover;
+    background-position: center;
+    pointer-events: none;
+  }
+
+  /* =================================================================
+     MARCA "Ludox Venezuela 🇻🇪" en la esquina, clickeable → index.html
+     (18-09-2026) — misma marca del resto de la app, con fondo propio
+     semitransparente + blur para que se lea bien encima de cualquier
+     fondo (el oscuro de siempre, la foto de arriba, o el video de
+     grupo.html). z-index alto para quedar SIEMPRE por encima de esos
+     fondos y de la marca de agua del logo (.fondo-logo-marca).
+     ================================================================= */
+  .marca-esquina {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(3,6,15,0.55);
+    backdrop-filter: blur(4px);
+    border-radius: 10px;
+    padding: 6px 12px;
+    text-decoration: none;
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .marca-esquina:hover { color: var(--accent-cyan); }
+  .marca-esquina img { width: 24px; height: 24px; object-fit: contain; display: block; }
+  @media (max-width: 760px) {
+    .marca-esquina { top: 8px; left: 8px; padding: 5px 10px; font-size: 12px; }
+    .marca-esquina img { width: 20px; height: 20px; }
+  }
 
   /* PANEL PRINCIPAL */
   .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; max-width: 900px; margin: 0 auto 14px auto; font-size: 13px; color: var(--text-dim); }
@@ -303,6 +367,15 @@
      que todo lo demás del <body> a propósito, para no interferir con el
      orden de apilamiento de ningún otro contenedor de esta pantalla. -->
 <img class="fondo-logo-marca" src="img/logo-ludox.png" alt="" aria-hidden="true">
+
+<!-- Marca "Ludox Venezuela 🇻🇪" en la esquina superior izquierda,
+     clickeable → index.html (página principal). Visible en TODAS las
+     vistas de este archivo (acceso y panel), pedido del dueño
+     (18-09-2026). -->
+<a class="marca-esquina" href="index.html">
+  <img src="img/logo-ludox.png" alt="">
+  <span>Ludox Venezuela 🇻🇪</span>
+</a>
 
 <!-- ================================================================= -->
 <!-- PANTALLA DE ACCESO: pide el SUPERADMIN_SECRET (el mismo valor que -->
@@ -861,6 +934,7 @@ let CHAT_WIDGET_SA_ABIERTO = false; // si el panel de la bandeja de chat está a
 let CHAT_WIDGET_SA_POLL_ABIERTO = null; // id del setInterval que refresca mientras el panel está ABIERTO (8s)
 let ULTIMA_ALERTA_WHATSAPP_DESDE_EN = null; // alertaDesdeEn de la alerta de WhatsApp caído que está mostrando el banner ahora mismo (o null si no hay ninguna) — ver actualizarBannerWhatsappCaido()
 let ULTIMO_ALERTA_DESDE_EN_DESCARTADO = null; // alertaDesdeEn que el súper-admin ya cerró a mano con la "✕" del banner — se guarda solo en memoria (dura lo que dure el panel abierto), no en localStorage
+let ULTIMOS_GRUPOS = []; // cache en memoria de la última lista de grupos pedida (cargarGrupos), para que eliminarGrupo() pueda leer el nombre exacto sin tener que escaparlo dentro de un atributo onclick
 
 async function apiSuperadmin(path, options = {}) {
   const headers = Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SECRET }, options.headers || {});
@@ -1241,6 +1315,7 @@ async function cargarGrupos() {
   const tbody = document.querySelector('#tablaGrupos tbody');
   try {
     const grupos = await apiSuperadmin('/api/superadmin/grupos');
+    ULTIMOS_GRUPOS = grupos;
     tbody.innerHTML = '';
     document.getElementById('vacioGrupos').style.display = grupos.length === 0 ? 'block' : 'none';
     grupos.forEach(g => {
@@ -1251,9 +1326,12 @@ async function cargarGrupos() {
         '<td>' + g.email + '</td>' +
         '<td>' + badgeEstado(g.activo) + '</td>' +
         '<td>' + formatFecha(g.creado_en) + '</td>' +
-        '<td><button type="button" class="btn-chico ' + (g.activo ? 'btn-secundario' : '') + '" onclick="event.stopPropagation(); toggleActivo(\'' + g.id + '\', ' + (!g.activo) + ')">' +
+        '<td style="white-space:nowrap;">' +
+        '<button type="button" class="btn-chico ' + (g.activo ? 'btn-secundario' : '') + '" onclick="event.stopPropagation(); toggleActivo(\'' + g.id + '\', ' + (!g.activo) + ')">' +
           (g.activo ? 'Desactivar' : 'Activar') +
-        '</button></td>';
+        '</button> ' +
+        '<button type="button" class="btn-chico btn-peligro" onclick="event.stopPropagation(); eliminarGrupo(\'' + g.id + '\')">🗑️ Eliminar</button>' +
+        '</td>';
       tbody.appendChild(tr);
     });
   } catch (e) {
@@ -1298,6 +1376,34 @@ async function toggleActivo(id, nuevoValor) {
     cargarGrupos();
   } catch (e) {
     alert('No se pudo actualizar el grupo: ' + e.message);
+  }
+}
+
+// =================================================================
+// ELIMINAR GRUPO (18-09-2026) — acción IRREVERSIBLE: el backend borra en
+// cascada TODO lo del grupo (jugadores, historial de tickets, empleados,
+// pagos, etc). Por eso la confirmación no es un confirm() de una línea:
+// se le pide al súper-admin escribir el NOMBRE EXACTO del grupo, y solo
+// si coincide letra por letra se llama al DELETE. El nombre se busca en
+// ULTIMOS_GRUPOS (cache de la última cargarGrupos()) en vez de venir como
+// parámetro, para no tener que escapar comillas/acentos dentro del
+// atributo onclick de la fila.
+// =================================================================
+async function eliminarGrupo(id) {
+  const g = ULTIMOS_GRUPOS.find(x => String(x.id) === String(id));
+  const nombre = g ? g.nombre : '';
+  const escrito = prompt('Esta acción NO se puede deshacer. Se borrará el grupo "' + nombre + '" y TODOS sus datos (clientes, historial, pagos, empleados). Escribe el nombre exacto del grupo para confirmar:');
+  if (escrito === null) return; // canceló
+  if (escrito !== nombre) {
+    alert('Cancelado — el nombre no coincidió.');
+    return;
+  }
+  try {
+    await apiSuperadmin('/api/superadmin/grupos/' + id, { method: 'DELETE' });
+    alert('✅ Grupo "' + nombre + '" eliminado junto con todos sus datos.');
+    cargarGrupos();
+  } catch (e) {
+    alert('No se pudo eliminar el grupo: ' + e.message);
   }
 }
 

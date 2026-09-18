@@ -56,6 +56,28 @@ router.patch('/grupos/:id/activo', asyncHandler(async (req, res) => {
   res.json(r.rows[0]);
 }));
 
+// Elimina un Grupo POR COMPLETO — 18-09-2026, a pedido del usuario ("no
+// tengo la opcion de eliminar grupos"). Hasta ahora solo existía
+// "Activar/Desactivar" (el interruptor manual de arriba), que apaga el
+// acceso pero deja todos los datos guardados — esto en cambio BORRA de
+// verdad al Grupo y todo lo que le pertenece, sin vuelta atrás.
+//
+// No hace falta borrar tabla por tabla a mano: TODAS las tablas que
+// cuelgan de un grupo_id (jugadores, empleados, tickets_historial,
+// transferencias, polla_historial, equipos_personalizados, alertas,
+// mensajes_chat, pagos_grupo, grupo_telefonos, etc. — ver sql/schema.sql)
+// ya están declaradas con "references grupos(id) on delete cascade", así
+// que un solo DELETE acá arrastra todo, atómico, del lado de Postgres.
+// La única tabla que NO cuelga de un grupo (mensajes_contacto, del
+// formulario público del portal) no tiene grupo_id y por lo tanto no se
+// toca. El frontend (superadmin.html) exige escribir el nombre exacto del
+// grupo antes de habilitar este botón, porque no hay ningún "deshacer".
+router.delete('/grupos/:id', asyncHandler(async (req, res) => {
+  const r = await db.query('DELETE FROM grupos WHERE id = $1 RETURNING id, nombre', [req.params.id]);
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ eliminado: true, id: r.rows[0].id, nombre: r.rows[0].nombre });
+}));
+
 // =================================================================
 // DETALLE DE UN GRUPO — lo que se ve al hacer clic en un grupo desde
 // superadmin.html: jugadores activos, cómo va su saldo (balance de la
