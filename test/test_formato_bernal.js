@@ -100,6 +100,67 @@ const TEXTO_BERNAL = [
   check(boletos[0].cliente === 'RICKY' && boletos[1].cliente === 'MANOLO', 'cada uno queda con SU PROPIO cliente — el nombre de MANOLO (el segundo) no reescribe retroactivamente el ticket ya cerrado de RICKY (el primero), porque clienteActual ya no era "GENERAL" cuando apareció "MANOLO"');
 })();
 
+(function testFirmaConSimboloPegadoAlNombre() {
+  // 18-09-2026, ticket real del usuario: "Ticket #1 / ⚽ Cristal palace 1h
+  // rl -0,5 -136 / 272 para 200 / ❌Hanry" — mismo mecanismo de "firma al
+  // final" que Bernal, pero con el símbolo de resultado (✅❌⭕) PEGADO al
+  // nombre, sin espacio, y con VARIOS clientes distintos en la misma
+  // sábana (no un solo cliente repetido como Bernal) — el usuario avisó
+  // que esto se envía así y "no puede haber problemas con eso".
+  const textoDosFirmasConSimbolo = [
+    'Ticket #1',
+    'Yankees -150',
+    '100 para 190',
+    '✅Gianco',
+    'Ticket #1',
+    'Cristal palace 1h rl -0.5 -136',
+    '272 para 200',
+    '❌Hanry'
+  ].join('\n');
+  const boletos = parsearSabana(textoDosFirmasConSimbolo, {});
+
+  check(boletos.length === 2, 'los 2 tickets (uno de Gianco, otro de Hanry) se cierran como 2 boletos — NINGÚN boleto fantasma "Sin Ticket"/$0 por la firma mal leída');
+  check(boletos[0].cliente === 'GIANCO' && boletos[1].cliente === 'HANRY', 'CADA ticket queda con SU PROPIO cliente correcto — la firma de Gianco no se le pega al ticket de Hanry (el bug real: antes, el segundo ticket heredaba el cliente de la firma ANTERIOR porque clienteActual ya no era "GENERAL")');
+  check(boletos[0].arriesga === 100 && boletos[0].pagaSabana === 190, 'Ticket de Gianco: "100 para 190" se sigue leyendo igual (arriesga/paga tal cual)');
+  check(boletos[1].arriesga === 272 && boletos[1].pagaSabana === 200, 'Ticket de Hanry: "272 para 200" también');
+  check(boletos[0].marcadorManual === '✅' && boletos[1].marcadorManual === '❌', 'el símbolo pegado al nombre (✅/❌) se guarda como el marcador manual de CADA ticket — antes se perdía por completo, sin que procesarSabana.js pudiera compararlo contra el resultado real');
+  check(boletos[0].jugadas.length === 1 && boletos[0].jugadas[0].includes('Yankees'), 'las jugadas de Gianco no se mezclan con las de Hanry');
+  check(boletos[1].jugadas.length === 1 && boletos[1].jugadas[0].includes('Cristal palace'), 'las jugadas de Hanry no se mezclan con las de Gianco');
+})();
+
+(function testFirmaConSimboloDespuesDelNombre() {
+  // Regresión de la otra forma del mismo patrón: el símbolo puede ir
+  // DESPUÉS del nombre en vez de antes ("Hanry❌"), mismo resultado.
+  const texto = [
+    'Ticket 1',
+    'Dodgers -150',
+    '50 para 90',
+    'Hanry❌'
+  ].join('\n');
+  const boletos = parsearSabana(texto, {});
+  check(boletos.length === 1 && boletos[0].cliente === 'HANRY' && boletos[0].marcadorManual === '❌', '"Hanry❌" (símbolo DESPUÉS del nombre) se reconoce igual de bien que "❌Hanry"');
+})();
+
+(function testFirmaSinSimboloSigueFuncionandoConVariosClientes() {
+  // Regresión: la firma "clásica" de Bernal (sin ningún símbolo, solo el
+  // nombre a secas) también tiene que encadenar bien con VARIOS clientes
+  // distintos, no solo con uno repetido — mismo arreglo (clienteActual
+  // vuelve a "GENERAL" después de cada firma), sin el símbolo de por medio.
+  const texto = [
+    'Ticket 1',
+    'Yankees -150',
+    '100 para 190',
+    'Gianco',
+    'Ticket 1',
+    'Dodgers -150',
+    '50 para 90',
+    'Hanry'
+  ].join('\n');
+  const boletos = parsearSabana(texto, {});
+  check(boletos.length === 2 && boletos[0].cliente === 'GIANCO' && boletos[1].cliente === 'HANRY', 'firma sin símbolo, con 2 clientes distintos: cada ticket queda con su propio cliente, sin ningún marcadorManual (no había símbolo)');
+  check(!boletos[0].marcadorManual && !boletos[1].marcadorManual, 'sin símbolo en la firma, no se inventa ningún marcadorManual');
+})();
+
 (function testBannerYDiaNuncaSonCliente() {
   // Si el banner/día de la semana llegaran a colarse como si fueran el
   // nombre de un cliente, todo lo que sigue quedaría mal atribuido a

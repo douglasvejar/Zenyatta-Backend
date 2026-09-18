@@ -561,27 +561,85 @@ function parsearSabana(texto, diccionarioEquipos) {
     // resultado sin tocar nada más.
     const esTextoCliente = /^[A-ZÁÉÍÓÚÑ0-9\s]{2,20}$/i.test(lineaLimpia) && !/tic?ke?ts?|over|under|alta|baja|para|\/\//i.test(lineaLimpia);
 
-    if (esConAsterisco || esTextoCliente) {
+    // "❌Hanry" / "✅Hanry" / "Hanry❌" (18-09-2026, ticket real de un grupo
+    // con VARIOS clientes, cada uno firmando su PROPIO ticket con el
+    // símbolo de resultado PEGADO a su nombre, sin espacio, ej. "❌Hanry" al
+    // final de "Ticket #1" — el usuario avisó: "el nombre del cliente esta
+    // al final... comete un error en leer el ticket... este también es un
+    // tipo de ticket que se envian y no puede haber problemas con eso").
+    // Es el mismo mecanismo de "firma al final" del grupo "Bernal"
+    // (04-09-2026, ver el comentario grande más abajo), pero con el
+    // símbolo de ganó/perdió/anulado pegado al nombre en vez de en su
+    // propia línea aparte con "arriesga//paga". Antes, el símbolo (✅❌⭕)
+    // hacía que esta línea NO matcheara "esTextoCliente" (esa regex solo
+    // acepta letras/números/espacios) y tampoco "matchResultado" más abajo
+    // (que exige números + "//") — la línea caía al fondo del parser como
+    // si fuera una jugada más, sin equipo ni cuota real, y terminaba
+    // armando un boleto fantasma "Sin Ticket" con $0/$0 ("FALTA CERRAR EN
+    // SÁBANA"), mientras el ticket de verdad se quedaba pegado al cliente
+    // que estuviera activo ANTES de esta firma (el cliente anterior, o
+    // "GENERAL"), en vez del correcto.
+    const matchFirmaConMarcador = lineaLimpia.match(/^([✅❌⭕])\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9\s]{1,19})$/i)
+      || lineaLimpia.match(/^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9\s]{1,19})\s*([✅❌⭕])$/i);
+
+    if (esConAsterisco || esTextoCliente || matchFirmaConMarcador) {
       cerrarBoletoColgado();
-      const nombreNuevo = lineaLimpia.toUpperCase();
-      // OJO (04-09-2026, formato real del grupo "Bernal"): este grupo NO
-      // pone el nombre del cliente ANTES de sus tickets (el único orden que
-      // el parser esperaba hasta ahora) sino DESPUÉS, a modo de firma, al
-      // final de cada ticket. Si todavía no había aparecido NINGÚN nombre
-      // de cliente en esta sábana (clienteActual sigue en "GENERAL", el
-      // valor por defecto), los boletos que ya se cerraron bajo "GENERAL"
-      // son justamente los que le pertenecen a esta firma — se corrigen acá
-      // retroactivamente en vez de perderse bajo "GENERAL". Si el nombre
-      // viene ANTES de los tickets (el uso de siempre), esto no hace nada
-      // (todavía no hay ningún boleto "GENERAL" que corregir). Una vez que
-      // clienteActual deja de ser "GENERAL" la primera vez, este arreglo ya
-      // no se vuelve a activar — evita corromper una sábana clásica de
-      // varios clientes (donde el nombre del SIGUIENTE cliente jamás debe
-      // renombrar los tickets ya cerrados del cliente ANTERIOR).
-      if (clienteActual === 'GENERAL') {
-        boletos.forEach(b => { if (b.cliente === 'GENERAL') b.cliente = nombreNuevo; });
+
+      let nombreNuevo, simboloFirma = null;
+      if (matchFirmaConMarcador) {
+        // El símbolo puede salir en el grupo 1 (va ANTES del nombre, ej.
+        // "❌Hanry") o en el grupo 2 (va DESPUÉS, ej. "Hanry❌") según cuál
+        // de las 2 formas del regex haya matcheado — se distingue mirando
+        // si el símbolo quedó pegado al principio del texto original.
+        const simboloVaAntes = /^[✅❌⭕]/.test(matchFirmaConMarcador[0]);
+        simboloFirma = simboloVaAntes ? matchFirmaConMarcador[1] : matchFirmaConMarcador[2];
+        nombreNuevo = (simboloVaAntes ? matchFirmaConMarcador[2] : matchFirmaConMarcador[1]).trim().toUpperCase();
+      } else {
+        nombreNuevo = lineaLimpia.toUpperCase();
       }
-      clienteActual = nombreNuevo;
+
+      // OJO (04-09-2026, formato real del grupo "Bernal"; AMPLIADO
+      // 18-09-2026 para varios clientes DISTINTOS, cada uno firmando su
+      // propio ticket): este/estos grupos no ponen el nombre del cliente
+      // ANTES de sus tickets (el uso "clásico") sino DESPUÉS, a modo de
+      // firma. Antes esto solo se corregía retroactivamente mientras
+      // clienteActual seguía en "GENERAL" (el valor por defecto) — andaba
+      // bien para UN SOLO cliente repetido en toda la sábana (Bernal,
+      // firmando cada uno de sus tickets), pero NO para varios clientes
+      // DISTINTOS, cada uno firmando el suyo: apenas el primero firmaba,
+      // clienteActual dejaba de ser "GENERAL" PARA SIEMPRE, así que el
+      // ticket del SIGUIENTE cliente (cerrado ANTES de que aparezca SU
+      // firma) quedaba atribuido por error al cliente anterior, en vez de
+      // quedar "pendiente de firma" — exactamente el bug reportado.
+      //
+      // El arreglo: cada vez que una firma SÍ corrige algún boleto
+      // (clienteActual seguía en "GENERAL" y HABÍA algo pendiente que
+      // corregir), clienteActual se vuelve a dejar en "GENERAL" después de
+      // aplicar la firma, en vez de quedarse con el nombre que acaba de
+      // firmar — así el PRÓXIMO ticket, si tampoco trae el nombre por
+      // delante, vuelve a quedar "pendiente de firma" para lo que venga
+      // después, sin heredar el nombre de quien ya firmó. El uso clásico
+      // (nombre ANTES del ticket) no se ve afectado: ahí NUNCA hay nada
+      // pendiente que corregir en el momento en que aparece el nombre
+      // (ver test_formato_bernal.js, testMultipleClientesClasicoNoSeCorrompe),
+      // así que clienteActual sigue quedando con el nombre nuevo, forward,
+      // como siempre.
+      let seUsoComoFirma = false;
+      if (clienteActual === 'GENERAL') {
+        const habiaAlgoQueCorregir = boletos.some(b => b.cliente === 'GENERAL');
+        boletos.forEach(b => {
+          if (b.cliente === 'GENERAL') {
+            b.cliente = nombreNuevo;
+            // El símbolo de esta firma es el marcador manual del ticket
+            // que se acaba de cerrar (mismo campo que ya usa
+            // matchResultado más abajo para "arriesga//paga✅") — nunca
+            // pisa un marcador que ya viniera puesto por otra vía.
+            if (simboloFirma && !b.marcadorManual) b.marcadorManual = simboloFirma;
+          }
+        });
+        seUsoComoFirma = habiaAlgoQueCorregir;
+      }
+      clienteActual = seUsoComoFirma ? 'GENERAL' : nombreNuevo;
       ticketActual = 'Sin Ticket';
       continue;
     }
