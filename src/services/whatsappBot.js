@@ -23,10 +23,26 @@
 //     que compren el servicio") — grupoIdPorJid() (ver
 //     sabanasPendientesWhatsapp.js) exige un JID vinculado Y
 //     whatsapp_habilitado=true, los dos EXCLUSIVOS del Súper-admin.
-//   - Usar una librería no oficial conlleva un riesgo real (aunque en
-//     general bajo con uso moderado) de que WhatsApp bloquee el número
-//     usado para conectarse. Usá de preferencia un número que no sea tu
-//     línea principal.
+//   - Usar una librería no oficial conlleva un riesgo real de que
+//     WhatsApp bloquee el número usado para conectarse — el 18-09-2026 le
+//     pasó de verdad al usuario con el número que tenía vinculado. Usá
+//     SIEMPRE un número dedicado solo a este bot, nunca tu línea
+//     personal ni la línea principal del negocio — si ese número se
+//     banea, se pierde solo ese número, no todo lo demás. Preferí además
+//     un número con algo de historial real (no recién activado) y que ya
+//     venga registrado en WhatsApp Business, no en el WhatsApp normal.
+//   - "Modo cuidadoso" (18-09-2026, agregado después de ese cierre de
+//     cuenta — ver la nota grande en sql/schema.sql y
+//     modoCuidadosoActivo() más abajo): un interruptor por grupo,
+//     exclusivo del Súper-admin, que apaga el envío automático que el
+//     bot decide mandar SOLO (el reloj de fondo, y el aviso apenas se
+//     termina de importar una sábana) — la lectura/importación de
+//     sábanas sigue 100% automática igual que siempre, y el botón manual
+//     "📤 Enviar resumen ahora" + los comandos de chat siguen mandando
+//     normal (son un humano pidiéndolo en el momento, no el bot
+//     inventando algo por su cuenta). Recomendado para cualquier grupo
+//     después de un cierre de cuenta, mientras se evalúa si conviene
+//     seguir en WhatsApp del todo.
 //   - AHORA el bot también MANDA mensajes al grupo (antes solo leía) —
 //     un error de este archivo ya no solo se pierde un mensaje entrante,
 //     puede mandar algo al grupo real. Por eso TODO lo que decide "hay
@@ -119,6 +135,26 @@ async function obtenerNombreGrupo(grupoId) {
   } catch (e) {
     console.error('[whatsappBot] No se pudo leer el nombre del grupo ' + grupoId + ' (se usa un nombre genérico):', e.message);
     return 'Deportes Zenyatta';
+  }
+}
+
+// "Modo cuidadoso" (18-09-2026, ver la nota grande en sql/schema.sql y en
+// la advertencia grande al principio de este archivo) — se consulta
+// directo a la base en vez de arrastrar el valor por parámetros porque
+// hace falta en 2 lugares bien distintos de este archivo (justo después
+// de importar un mensaje nuevo, y en cada vuelta del reloj de fondo) y
+// puede cambiar en cualquier momento desde Súper-admin sin que el bot se
+// reinicie. Si la consulta falla, se asume APAGADO (comportamiento de
+// siempre) — a propósito NUNCA se asume prendido por error: sería un
+// grupo que de repente deja de recibir sus resúmenes automáticos sin que
+// nadie lo haya pedido.
+async function modoCuidadosoActivo(grupoId) {
+  try {
+    const r = await db.query('SELECT whatsapp_modo_cuidadoso FROM grupos WHERE id = $1', [grupoId]);
+    return !!(r.rows[0] && r.rows[0].whatsapp_modo_cuidadoso);
+  } catch (e) {
+    console.error('[whatsappBot] No se pudo verificar el modo cuidadoso del grupo ' + grupoId + ' (se asume APAGADO, comportamiento normal):', e.message);
+    return false;
   }
 }
 
@@ -953,11 +989,23 @@ async function manejarMensajeEntrante(sock, msg) {
     // aviso al grupo no salió. Ahora también queda en
     // estadoConexion.ultimoErrorEnvio para que se vea en el panel, en
     // vez de solo en los logs de Railway.
-    try {
-      await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
-    } catch (e) {
-      estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
-      throw e; // se sigue reportando igual en el log del servidor, ver el catch de abajo
+    //
+    // (18-09-2026, "modo cuidadoso") — este llamado es justo el caso que
+    // ese modo apaga: el bot mandando el resumen al grupo SOLO, apenas
+    // termina de leer una sábana, sin que nadie se lo haya pedido en ese
+    // momento puntual. Con el modo prendido, la sábana YA quedó
+    // importada arriba (eso nunca se toca) — lo único que se salta es
+    // este envío automático; el resumen sigue disponible para mandar a
+    // mano con "📤 Enviar resumen ahora" cuando el Grupo quiera.
+    if (await modoCuidadosoActivo(grupoId)) {
+      console.log('[whatsappBot] Modo cuidadoso activo (grupo ' + grupoId + ') — sábana' + (esFinal ? ' FINAL' : '') + ' leída e importada, pero el envío automático del resumen queda en pausa. Mandalo a mano con "📤 Enviar resumen ahora" desde el panel cuando quieras.');
+    } else {
+      try {
+        await procesarDiaAbierto(sock, grupoId, remoteJid, fecha, { forzar: false });
+      } catch (e) {
+        estadoConexion.ultimoErrorEnvio = { en: new Date().toISOString(), jid: remoteJid, mensaje: 'No se pudo terminar de procesar/enviar el resumen: ' + e.message, detalle: extraerDetalleError(e) };
+        throw e; // se sigue reportando igual en el log del servidor, ver el catch de abajo
+      }
     }
   } catch (e) {
     console.error('[whatsappBot] Error al procesar un mensaje entrante (no se cae el bot, solo se pierde este mensaje puntual):', e);
@@ -1018,6 +1066,12 @@ async function tickRelojDeFondo() {
     return;
   }
   for (const dia of dias) {
+    // "Modo cuidadoso" (18-09-2026) — el reloj de fondo es EXACTAMENTE el
+    // caso que ese modo apaga: el bot mandando algo al grupo solo, cada
+    // 5 minutos/1 hora, sin que nadie se lo haya pedido en ese momento.
+    // `dia.whatsappModoCuidadoso` ya viene resuelto desde
+    // listarDiasAbiertos() (join con grupos), sin una consulta aparte acá.
+    if (dia.whatsappModoCuidadoso) continue;
     try {
       await procesarDiaAbierto(sockActual, dia.grupoId, dia.whatsappGrupoJid, dia.fecha, { forzar: false });
     } catch (e) {
@@ -1248,5 +1302,8 @@ module.exports = {
   // para poder probarlo directo con un `sock` falso (ver
   // test_whatsapp_diagnostico_sesiones.js), sin necesitar
   // @whiskeysockets/baileys instalado.
-  diagnosticarSesionesGrupo
+  diagnosticarSesionesGrupo,
+  // "Modo cuidadoso" (18-09-2026) — exportado aparte para poder probarlo
+  // directo con un "pg" falso (ver test_whatsapp_modo_cuidadoso.js).
+  modoCuidadosoActivo
 };

@@ -40,7 +40,7 @@ const FECHA = '2026-09-02';
 
 let siguienteIdPendiente = 1;
 const TABLAS = {
-  grupos: [{ id: GRUPO_ID, nombre: 'Deportes Bernal', whatsapp_grupo_jid: JID, whatsapp_habilitado: true }],
+  grupos: [{ id: GRUPO_ID, nombre: 'Deportes Bernal', whatsapp_grupo_jid: JID, whatsapp_habilitado: true, whatsapp_modo_cuidadoso: false }],
   jugadores: [{ id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', activo: true, comision_propia: 0 }],
   avales: [],
   equipos_globales: [],
@@ -137,6 +137,14 @@ function ejecutarQuery(text, params) {
     const [jid] = params;
     const fila = TABLAS.grupos.find(g => g.whatsapp_grupo_jid === jid && g.whatsapp_habilitado === true);
     return { rows: fila ? [{ id: fila.id }] : [] };
+  }
+
+  // --- modoCuidadosoActivo (18-09-2026, "modo cuidadoso" — ver la nota
+  // grande en sql/schema.sql) ---
+  if (/^SELECT whatsapp_modo_cuidadoso FROM grupos WHERE id = \$1/i.test(sql)) {
+    const [grupoId] = params;
+    const fila = TABLAS.grupos.find(g => g.id === grupoId);
+    return { rows: fila ? [{ whatsapp_modo_cuidadoso: !!fila.whatsapp_modo_cuidadoso }] : [] };
   }
 
   // --- sabanasPendientesWhatsapp.js ---

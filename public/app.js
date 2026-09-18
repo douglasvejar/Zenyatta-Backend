@@ -631,6 +631,11 @@ function renderPanelWhatsapp(resp) {
     estadoConexion.textContent = '';
   }
 
+  // "Modo cuidadoso" (18-09-2026) — de solo lectura acá, lo prende/apaga
+  // el Súper-admin (ver sql/schema.sql/whatsappBot.js).
+  const avisoModoCuidadoso = document.getElementById('whatsappModoCuidadosoAviso');
+  if (avisoModoCuidadoso) avisoModoCuidadoso.style.display = resp.modoCuidadoso ? 'block' : 'none';
+
   // (15-09-2026, a pedido del usuario tras reportar "la sábana automática
   // no se envía por WhatsApp" aunque el mensaje SÍ se reconocía/importaba
   // bien) — esto es sobre el ENVÍO del listado de vuelta al grupo (antes

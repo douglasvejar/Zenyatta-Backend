@@ -107,9 +107,16 @@ async function marcarCierreEnviado(grupoId, fecha) {
 // tabla, y se puede seguir cerrando a mano desde el panel si hace falta).
 const COLUMNAS_W = 'w.grupo_id, w.fecha, w.ultimo_texto, w.ultimo_texto_en, w.sabana_final_en, w.ultima_verificacion_en, w.ultimo_envio_resumen_en, w.ultimo_hash_resumen, w.cierre_enviado_en';
 
+// whatsappModoCuidadoso (18-09-2026, agregado junto con "modo cuidadoso"
+// de WhatsApp — ver la nota grande en sql/schema.sql) va en este SELECT
+// para que whatsappBot.tickRelojDeFondo() pueda saltarse, sin una
+// consulta aparte por cada día, a los días de un grupo que tiene el modo
+// cuidadoso prendido — el reloj de fondo es EXACTAMENTE el caso que ese
+// modo apaga (el bot mandando algo solo, sin que nadie se lo haya
+// pedido en ese momento).
 async function listarDiasAbiertos(diasHaciaAtras = 3) {
   const res = await db.query(
-    `SELECT ${COLUMNAS_W}, g.whatsapp_grupo_jid
+    `SELECT ${COLUMNAS_W}, g.whatsapp_grupo_jid, g.whatsapp_modo_cuidadoso
      FROM whatsapp_dia_estado w
      JOIN grupos g ON g.id = w.grupo_id
      WHERE w.cierre_enviado_en IS NULL
@@ -119,7 +126,7 @@ async function listarDiasAbiertos(diasHaciaAtras = 3) {
      ORDER BY w.fecha ASC`,
     [diasHaciaAtras]
   );
-  return res.rows.map(r => ({ ...mapFila(r), whatsappGrupoJid: r.whatsapp_grupo_jid }));
+  return res.rows.map(r => ({ ...mapFila(r), whatsappGrupoJid: r.whatsapp_grupo_jid, whatsappModoCuidadoso: !!r.whatsapp_modo_cuidadoso }));
 }
 
 // Días de UN grupo puntual (abiertos Y ya cerrados, por defecto última

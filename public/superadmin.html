@@ -683,6 +683,24 @@
         <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
         <div id="whatsappJidError"></div>
         <div id="whatsappJidOk"></div>
+
+        <!-- =========================================================
+             MODO CUIDADOSO (18-09-2026, agregado después de que a un
+             usuario le cerraran la cuenta de WhatsApp vinculada al bot).
+             Apaga SOLO el envío automático que el bot decide mandar por
+             su cuenta (reloj de fondo + aviso apenas se importa una
+             sábana) — la lectura sigue igual, y el botón manual/los
+             comandos de chat siguen funcionando normal. Ver la nota
+             grande en sql/schema.sql y whatsappBot.js.
+             ========================================================= -->
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--borde);">
+          <div class="detalle-fila">
+            <span class="etiqueta">🛡️ Modo cuidadoso</span>
+            <span class="valor" id="whatsappModoCuidadosoEstado"></span>
+          </div>
+          <p style="margin:4px 0 0; color:var(--text-dim); font-size:12px;">Recomendado si a este número le llegaron a cerrar la cuenta, o como prevención. Con esto prendido, el bot SIGUE leyendo e importando "SABANA DE JUGADAS" automático como siempre — lo único que se apaga es que el resumen se mande solo al grupo (el reloj de fondo, y el aviso apenas se importa una sábana). El resumen se sigue pudiendo mandar con el botón "📤 Enviar resumen ahora" del panel del Grupo, y los comandos de chat ("act"/"saldo final"/etc.) siguen respondiendo normal — son un humano pidiéndolo en el momento, no el bot mandando algo por su cuenta.</p>
+          <button type="button" class="btn-secundario" id="btnToggleWhatsappModoCuidadoso" onclick="toggleWhatsappModoCuidadosoGrupo()" style="margin-top:8px;"></button>
+        </div>
       </div>
 
       <!-- =============================================================
@@ -1269,6 +1287,9 @@ async function abrirDetalleGrupo(id, nombre) {
     pintarEstadoWhatsappHabilitado();
     cargarWhatsappGruposDisponibles(false);
 
+    GRUPO_WHATSAPP_MODO_CUIDADOSO = !!d.whatsappModoCuidadoso;
+    pintarEstadoWhatsappModoCuidadoso();
+
     GRUPO_COMANDOS_WHATSAPP_HABILITADO = !!d.comandosWhatsappHabilitado;
     document.getElementById('comandosWhatsappNumeroInput').value = d.comandosWhatsappNumero || '';
     pintarEstadoComandosWhatsapp();
@@ -1421,6 +1442,35 @@ async function toggleWhatsappHabilitadoGrupo() {
     pintarEstadoWhatsappHabilitado();
   } catch (e) {
     alert('No se pudo actualizar el servicio de sábana automática: ' + e.message);
+  }
+}
+
+// "Modo cuidadoso" (18-09-2026) — ver la nota grande en el HTML de
+// arriba y en sql/schema.sql/whatsappBot.js.
+let GRUPO_WHATSAPP_MODO_CUIDADOSO = false;
+
+function pintarEstadoWhatsappModoCuidadoso() {
+  const estadoEl = document.getElementById('whatsappModoCuidadosoEstado');
+  const boton = document.getElementById('btnToggleWhatsappModoCuidadoso');
+  if (!estadoEl || !boton) return;
+  if (GRUPO_WHATSAPP_MODO_CUIDADOSO) {
+    estadoEl.innerHTML = '<span style="color:#2e7d32; font-weight:600;">✅ Prendido — el resumen se manda a mano</span>';
+    boton.textContent = 'Apagar modo cuidadoso';
+  } else {
+    estadoEl.innerHTML = '<span style="color:#888;">— Apagado — el resumen se manda solo, como siempre —</span>';
+    boton.textContent = 'Prender modo cuidadoso';
+  }
+}
+
+async function toggleWhatsappModoCuidadosoGrupo() {
+  if (!GRUPO_DETALLE_ID) return;
+  const nuevoValor = !GRUPO_WHATSAPP_MODO_CUIDADOSO;
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-modo-cuidadoso', { method: 'PATCH', body: JSON.stringify({ activo: nuevoValor }) });
+    GRUPO_WHATSAPP_MODO_CUIDADOSO = !!r.whatsappModoCuidadoso;
+    pintarEstadoWhatsappModoCuidadoso();
+  } catch (e) {
+    alert('No se pudo actualizar el modo cuidadoso: ' + e.message);
   }
 }
 

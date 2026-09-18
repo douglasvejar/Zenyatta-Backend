@@ -90,7 +90,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const grupoRes = await db.query(
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, whatsapp_modo_cuidadoso, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -130,6 +130,9 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     logoUrl: grupo.logo_url,
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
+    // "Modo cuidadoso" (18-09-2026) — ver la nota grande en
+    // sql/schema.sql y PATCH /grupos/:id/whatsapp-modo-cuidadoso arriba.
+    whatsappModoCuidadoso: grupo.whatsapp_modo_cuidadoso,
     sabanaMuestra: grupo.sabana_muestra,
     // (09-09-2026, a pedido del usuario) número autorizado para los
     // comandos de chat de WhatsApp ("act"/"saldo final"/"corte semana"/
@@ -259,6 +262,22 @@ router.patch('/grupos/:id/whatsapp-habilitado', asyncHandler(async (req, res) =>
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ whatsappHabilitado: r.rows[0].whatsapp_habilitado, whatsappGrupoJid: r.rows[0].whatsapp_grupo_jid });
+}));
+
+// "Modo cuidadoso" (18-09-2026, ver la nota grande en sql/schema.sql) —
+// apaga el envío automático que el bot decide mandar SOLO (reloj de
+// fondo + aviso apenas se importa una sábana), sin tocar la
+// lectura/importación ni el botón manual/comandos de chat. Mismo patrón
+// que whatsapp-habilitado de arriba: interruptor exclusivo del
+// Súper-admin.
+router.patch('/grupos/:id/whatsapp-modo-cuidadoso', asyncHandler(async (req, res) => {
+  const { activo } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET whatsapp_modo_cuidadoso = $1 WHERE id = $2 RETURNING id, whatsapp_modo_cuidadoso',
+    [!!activo, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ whatsappModoCuidadoso: r.rows[0].whatsapp_modo_cuidadoso });
 }));
 
 // Guarda/cambia/borra el JID del grupo de WhatsApp desde donde se va a

@@ -104,6 +104,10 @@ router.get('/estado', asyncHandler(async (req, res) => {
     habilitado: true,
     botActivo: botActivado(),
     grupoVinculado: !!(req.grupo && req.grupo.whatsapp_grupo_jid),
+    // "Modo cuidadoso" (18-09-2026, ver sql/schema.sql) — de SOLO
+    // LECTURA para el Grupo (lo prende/apaga el Súper-admin); el panel lo
+    // usa para explicar por qué el resumen ya no se manda solo.
+    modoCuidadoso: !!(req.grupo && req.grupo.whatsapp_modo_cuidadoso),
     estadoBot,
     dias: dias.map(resumirDia),
     recientes
