@@ -392,21 +392,30 @@
      depender del ".container" genérico de toda la app), para que quede
      bien recortada y nítida sobre el video en movimiento, sin tocar cómo
      se ve ".container" en el resto del panel. */
+  /* 18-09-2026, segunda vuelta: el usuario avisó que la tarjeta "se sigue
+     viendo claro que el fondo" (se mezclaba con el video) y que "debe
+     resaltar, verse full nitido". Se le agrega un borde con resplandor
+     color cian (var(--accent-cyan)) y una sombra más grande/oscura propia,
+     independiente de qué tan clara/oscura salga la escena del video detrás
+     — así la tarjeta se despega igual sin importar el clip que esté
+     pasando. El fondo sigue siendo un color sólido (nada de blur/
+     transparencia) para que el texto se lea nítido. */
   .login-shell .container {
-    padding: 30px;
-    background: #0b0f1e;
-    border: 1px solid rgba(255,255,255,0.16);
-    box-shadow: 0 10px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(56,224,240,0.08);
+    padding: 32px;
+    background: linear-gradient(160deg, #0d1226, #090c18);
+    border: 1px solid rgba(56,224,240,0.4);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.8), 0 0 0 1px rgba(56,224,240,0.12), 0 0 55px rgba(56,224,240,0.22);
+    position: relative;
   }
-  .login-shell h1 { color: #ffffff; }
+  .login-shell h1 { color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
   .login-shell p.subtitulo { text-align: center; color: #b7c1d9; margin-top: -10px; margin-bottom: 20px; font-size: 13px; }
   /* Mismos campos que ".campo-login" usa en el resto de la app, pero con
      un poco más de contraste SOLO acá (el borde genérico, var(--card-border)
      = rgba(255,255,255,0.08), casi no se nota sobre la tarjeta oscura del
      login) — parte del mismo pedido de que la tarjeta se vea nítida. */
   .login-shell input[type="email"], .login-shell input[type="password"] {
-    border-color: rgba(255,255,255,0.22);
-    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
   }
   .campo-login { margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
   #loginError { color: var(--danger); font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
@@ -435,11 +444,16 @@
     z-index: -1;
     pointer-events: none;
   }
+  /* 18-09-2026, segunda vuelta: pedido explícito "el video abajo claro" —
+     el degradado anterior (0.75/0.88) oscurecía demasiado el video. Se
+     baja a la mitad para que el video se vea claro/nítido; la tarjeta ya
+     no depende de este degradado para leerse (tiene su propio fondo
+     sólido + resplandor, ver ".login-shell .container" más arriba). */
   .fondo-video-login-degradado {
     position: fixed;
     inset: 0;
     z-index: 0;
-    background: linear-gradient(rgba(3,6,15,0.75), rgba(3,6,15,0.88));
+    background: linear-gradient(rgba(3,6,15,0.32), rgba(3,6,15,0.5));
     pointer-events: none;
   }
 
@@ -1750,12 +1764,21 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
   //    libres (licencia Pixabay Content License, gratis/uso comercial,
   //    sin marca de agua) referenciados por URL directa (hotlink), mismo
   //    criterio que el clip de caballos que ya se había puesto.
+  // 18-09-2026, segunda vuelta: el clip de básquetbol (Pixabay 5534-...)
+  // resultó estar roto — el <video> se quedaba trabado en el logo porque
+  // el script solo escuchaba el evento "ended" (nunca llega si un clip
+  // no carga; lo que llega ahí es "error"). Se reemplazan básquetbol/NFL/
+  // fútbol por clips de Mixkit (mixkit.co, licencia libre/uso comercial,
+  // sin marca de agua) y se deja el mismo patrón assets.mixkit.co/videos/
+  // {id}/{id}-{calidad}.mp4 confirmado en varias páginas distintas de su
+  // catálogo. Caballos y béisbol (Pixabay) quedan igual: el usuario
+  // confirmó por captura que esos dos SÍ se ven bien.
   var CLIPS_FONDO_LOGIN = [
     'https://cdn.pixabay.com/video/2017/02/27/7969-205946421_large.mp4', // carreras de caballos
     'https://cdn.pixabay.com/video/2020/11/06/54597-477445109_large.mp4', // béisbol
-    'https://cdn.pixabay.com/video/2016/09/21/5534-184666676_large.mp4', // básquetbol
-    'https://cdn.pixabay.com/video/2016/09/14/5262-183786903_large.mp4', // fútbol americano / NFL
-    'https://cdn.pixabay.com/video/2017/07/23/10783-226624891_large.mp4' // fútbol / soccer
+    'https://assets.mixkit.co/videos/44464/44464-720.mp4', // básquetbol
+    'https://assets.mixkit.co/videos/2270/2270-360.mp4', // fútbol americano / NFL
+    'https://assets.mixkit.co/videos/2915/2915-360.mp4' // fútbol / soccer
   ];
   (function () {
     try {
@@ -1764,16 +1787,51 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
       if (!vistaLogin || !video) return;
 
       var indiceClipActual = 0;
+      var temporizadorSeguridad = null;
+
+      function limpiarTemporizadorSeguridad() {
+        if (temporizadorSeguridad) {
+          clearTimeout(temporizadorSeguridad);
+          temporizadorSeguridad = null;
+        }
+      }
+
+      // AVANZAR AL SIGUIENTE CLIP: se centraliza acá (en vez de repetir la
+      // cuenta módulo en cada listener) porque ahora hay TRES caminos que
+      // deben poder avanzar el playlist: el clip termina bien ("ended"),
+      // el clip falla al cargar ("error" — esto es lo que le pasaba al
+      // básquetbol y dejaba todo trabado), o el clip ni termina ni tira
+      // error pero tampoco arranca a reproducirse nunca (red lenta, URL
+      // que cuelga) — para ese tercer caso hay un temporizador de
+      // seguridad de 8s más abajo. Los tres casos llaman a esta misma
+      // función, así el "bucle sin fin" pedido nunca se puede quedar
+      // atascado en un solo clip roto.
+      function siguienteClip(retrasoMs) {
+        limpiarTemporizadorSeguridad();
+        setTimeout(function () {
+          indiceClipActual = (indiceClipActual + 1) % CLIPS_FONDO_LOGIN.length;
+          reproducirClipActual();
+        }, retrasoMs || 0);
+      }
+
       function reproducirClipActual() {
         var fuente = video.querySelector('source');
         fuente.src = CLIPS_FONDO_LOGIN[indiceClipActual];
         video.load();
-        video.play().catch(function () {}); // autoplay puede rechazarse en algunos navegadores; no rompe nada si falla
+        video.play().catch(function () {}); // autoplay puede rechazarse en algunos navegadores; el temporizador de seguridad de abajo lo resuelve igual
+        limpiarTemporizadorSeguridad();
+        temporizadorSeguridad = setTimeout(function () {
+          siguienteClip(0); // el clip nunca arrancó a reproducirse (ni "playing" ni "error") — se salta solo
+        }, 8000);
       }
-      video.addEventListener('ended', function () {
-        indiceClipActual = (indiceClipActual + 1) % CLIPS_FONDO_LOGIN.length;
-        reproducirClipActual();
-      });
+
+      // "playing" = el clip arrancó de verdad → ya no hace falta la red de
+      // seguridad para ESTE clip.
+      video.addEventListener('playing', limpiarTemporizadorSeguridad);
+      video.addEventListener('ended', function () { siguienteClip(0); });
+      video.addEventListener('error', function () { siguienteClip(300); }); // clip roto/404: saltar (con un pequeño respiro para no martillar la red)
+
+      reproducirClipActual(); // arranca el playlist desde el primer clip (antes dependía del <source> fijo del HTML; ahora lo maneja todo este script, con su propia red de seguridad desde el primer clip)
 
       // 2) PAUSA CUANDO NO SE VE: iniciarSesion(), en app.js, oculta
       //    #vistaLogin con style.display='none' tras un login exitoso; eso
@@ -1788,6 +1846,7 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
         var oculto = vistaLogin.style.display === 'none';
         if (oculto) {
           video.pause();
+          limpiarTemporizadorSeguridad();
         } else if (video.paused) {
           video.play().catch(function () {});
         }
