@@ -1,10 +1,13 @@
 const express = require('express');
 const db = require('../db');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+// Los "Avalados por" viven en la pestaña Jugador/Comisión del panel —
+// misma clave de permiso que jugadores.js (ver PERMISOS_VALIDOS).
+router.use(requierePermiso('jugador'));
 
 router.get('/', asyncHandler(async (req, res) => {
   const r = await db.query(

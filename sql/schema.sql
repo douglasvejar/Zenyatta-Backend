@@ -714,6 +714,73 @@ create index if not exists idx_pagos_grupo_grupo on pagos_grupo(grupo_id, creado
 create index if not exists idx_pagos_grupo_pendientes on pagos_grupo(creado_en) where estado = 'pendiente';
 
 -- =================================================================
+-- MONEDA DEL GRUPO (18-09-2026, a pedido del usuario: "permiteme elegir
+-- si el grupo trabaja en dolares, bolivares o mixto, si elijo mixto al
+-- momento de crear los clientes se le elige la moneda y el grupo
+-- tendria entonces dos reportes, bolivares y dolares").
+--
+-- OJO: esto es un concepto TOTALMENTE APARTE del "modelo de comisión"
+-- que en otras partes de este archivo/código también se llama alguna
+-- vez "grupo mixto" (grupos.modelo_comision = 'por_tipo_jugada', ver
+-- más arriba) — ese es sobre CUÁNTO % cobra cada cliente, este es sobre
+-- en QUÉ MONEDA se registra cada cliente. Que las dos cosas se llamen
+-- "mixto" es una coincidencia de palabras, no están relacionadas.
+--
+-- 'usd' o 'bs' = el grupo entero trabaja en una sola moneda fija (el
+-- comportamiento de siempre, "usd" por default para no romper ningún
+-- grupo ya cargado). 'mixto' = el Grupo elige, cliente por cliente, en
+-- cuál de las dos monedas trabaja cada uno (columna jugadores.moneda de
+-- abajo) — Sábana, Balance General y % Devueltos entonces se muestran
+-- separados en dos bloques (uno por moneda) en vez de un solo total,
+-- para no sumar dólares con bolívares en el mismo número. Lo elige el
+-- propio Grupo (administrador, ver routes/grupo.js) — no es un
+-- interruptor de Súper-admin como el modelo de comisión.
+alter table grupos add column if not exists moneda_modo text not null default 'usd' check (moneda_modo in ('usd', 'bs', 'mixto'));
+
+-- Moneda de ESTE cliente puntual. Solo se puede elegir/cambiar de
+-- verdad cuando el grupo está en modo 'mixto' (routes/jugadores.js lo
+-- valida); si el grupo está fijo en 'usd' o 'bs', esta columna se deja
+-- siempre igual a ese valor fijo automáticamente, para que el resto del
+-- código (procesarSabana.js, sabanaDia.js, reportes.js) pueda leer
+-- SIEMPRE jugadores.moneda sin tener que mirar antes el modo del grupo.
+alter table jugadores add column if not exists moneda text not null default 'USD' check (moneda in ('USD', 'BS'));
+
+-- =================================================================
+-- CUENTAS POR EMPLEADO DENTRO DE UN GRUPO (18-09-2026, a pedido del
+-- usuario: "soluciona la cuentas separas por empleado dentro de un
+-- grupo... un administrador que tiene acceso 100% y los empleados
+-- puedes elegir que pueden o no hacer, ya que quizas hay empleados de
+-- mas confianza con acceso a mas cosas que otro").
+--
+-- El "Administrador" sigue siendo la fila de "grupos" de siempre (el
+-- dueño, con la clave que ya usaba) — no tiene fila en esta tabla y
+-- SIEMPRE tiene acceso al 100% de las funciones, sin excepción (incluye
+-- crear/editar/borrar empleados y ver Pagos a Ludox; eso NUNCA se le
+-- puede dar a un empleado, para que un empleado no se pueda dar a sí
+-- mismo más permisos). Cada fila de "empleados" es una cuenta de acceso
+-- LIMITADO al panel de ESE grupo, con su propio email+clave para entrar
+-- por el mismo login de siempre (ver routes/auth.js) — "permisos" es la
+-- lista de secciones del panel a las que puede entrar (ver
+-- PERMISOS_VALIDOS en middleware/auth.js); un empleado sin una sección
+-- en su lista recibe 403 al intentar tocar esas rutas, y el panel
+-- (grupo.html) le oculta ese botón del menú directamente.
+create table if not exists empleados (
+  id             uuid primary key default gen_random_uuid(),
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  nombre         text not null,
+  email          text not null unique,
+  password_hash  text not null,
+  activo         boolean not null default true,
+  permisos       jsonb not null default '[]',
+  creado_en      timestamptz not null default now(),
+  ultimo_login_en         timestamptz,
+  ultimo_login_ip         text,
+  ultimo_login_user_agent text
+);
+
+create index if not exists idx_empleados_grupo on empleados(grupo_id);
+
+-- =================================================================
 -- Row Level Security — ver nota grande al inicio del archivo.
 -- =================================================================
 alter table grupos enable row level security;
@@ -735,6 +802,7 @@ alter table sabanas_pendientes_whatsapp enable row level security;
 alter table whatsapp_dia_estado enable row level security;
 alter table mensajes_contacto enable row level security;
 alter table pagos_grupo enable row level security;
+alter table empleados enable row level security;
 -- Sin políticas = acceso denegado por defecto para las claves anon/
 -- authenticated. Solo la clave service_role (la que usa el backend)
 -- puede leer/escribir. Ver nota al inicio del archivo.

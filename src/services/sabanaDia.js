@@ -97,6 +97,11 @@ async function obtenerSabanaDeFecha(grupoId, fecha) {
   const todosLosJuegos = armarListaJuegos({ datosMLB, datosNFL, datosNHL, datosSoccer, datosNBA });
   const juegos = todosLosJuegos.filter(j => equiposVistos.has(j.homeTeam) || equiposVistos.has(j.awayTeam));
 
+  // "moneda del grupo" (18-09-2026) — ver el comentario grande en
+  // procesarSabana.js. Se etiqueta igual acá para que routes/sabana.js
+  // (GET /dia) pueda partir este mismo listado en dos bloques (USD/BS)
+  // cuando el grupo esté en modo 'mixto'.
+  const jugadoresPorNombre = config.jugadoresPorNombre;
   const porCliente = {};
   function fila(cliente) {
     if (!porCliente[cliente]) {
@@ -104,7 +109,8 @@ async function obtenerSabanaDeFecha(grupoId, fecha) {
         cliente,
         tickets: 0, ganados: 0, perdidos: 0, pendientes: 0,
         arriesgado: 0, ganado: 0, perdido: 0,
-        jugoPolla: false, polla: 0
+        jugoPolla: false, polla: 0,
+        moneda: (jugadoresPorNombre[cliente] && jugadoresPorNombre[cliente].moneda) || 'USD'
       };
     }
     return porCliente[cliente];

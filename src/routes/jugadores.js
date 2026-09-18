@@ -2,12 +2,25 @@
 // cuenta libre/avalado y su pozo) + Avales ("Avalados por").
 const express = require('express');
 const db = require('../db');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso, monedaModoDe } = require('../middleware/auth');
 const { calcularPozoJugador } = require('../services/pozo');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('jugador'));
+
+// Resuelve la moneda a guardar para un cliente (18-09-2026, "moneda del
+// grupo" — ver la nota grande en sql/schema.sql). Si el grupo está fijo
+// en 'usd' o 'bs', SIEMPRE se guarda esa moneda fija, sin importar lo
+// que mande el formulario (así nunca queda un cliente "suelto" en la
+// moneda equivocada por un dato viejo del navegador). Si el grupo está
+// en 'mixto', se respeta lo que elija el Administrador al crear/editar
+// ese cliente puntual (USD por default si no manda nada).
+function resolverMonedaJugador(monedaModoGrupo, monedaPedida) {
+  if (monedaModoGrupo !== 'mixto') return monedaModoGrupo.toUpperCase();
+  return monedaPedida === 'BS' ? 'BS' : 'USD';
+}
 
 router.get('/', asyncHandler(async (req, res) => {
   const r = await db.query('SELECT * FROM jugadores WHERE grupo_id = $1 ORDER BY nombre', [req.grupoId]);
@@ -46,14 +59,15 @@ function normalizarModeloComisionJugador(valor) {
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
+    const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const r = await db.query(
-      `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision)]
+        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal]
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -65,14 +79,15 @@ router.post('/', asyncHandler(async (req, res) => {
 
 router.put('/:id', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda } = req.body;
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
+    const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const r = await db.query(
       `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
-         pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, auto_creado = false
-       WHERE id = $9 AND grupo_id = $10 RETURNING *`,
+         pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false
+       WHERE id = $10 AND grupo_id = $11 RETURNING *`,
       [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), req.params.id, req.grupoId]
+        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, req.params.id, req.grupoId]
     );
     if (r.rows.length === 0) return res.status(404).json({ error: 'Jugador no encontrado.' });
     res.json(r.rows[0]);

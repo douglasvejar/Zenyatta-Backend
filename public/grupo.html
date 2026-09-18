@@ -563,6 +563,19 @@
         <button type="button" class="nav-item nav-child" id="navTransferencias" onclick="mostrarVista('transferencias')">🔄 Transferencias</button>
         <button type="button" class="nav-item nav-child" id="navPolla" onclick="mostrarVista('polla')">🎲 Polla</button>
         <button type="button" class="nav-item nav-child" id="navSabanas" onclick="mostrarVista('sabanas')">🗂️ Sábanas</button>
+        <!-- "💱 Moneda" y "👥 Empleados" (18-09-2026, features nuevas del
+             backend: "moneda del grupo" y "cuentas por empleado" — ver
+             sql/schema.sql). Ambos son EXCLUSIVOS del Administrador: la
+             ruta del backend ya los bloquea con 403 para un Empleado, pero
+             además se ocultan estos 2 botones por completo con JS para
+             cualquier cuenta de Empleado (ver aplicarPermisosEmpleado() en
+             app.js) — no tiene sentido mostrarle un botón a algo que de
+             todas formas le va a fallar. Van dentro de "⚙️ Administración"
+             porque son configuración del grupo, igual que los demás
+             botones de este submenú (decisión propia, no lo pidió el
+             usuario explícitamente para esta ubicación puntual). -->
+        <button type="button" class="nav-item nav-child" id="navMonedaGrupo" onclick="mostrarVista('monedaGrupo')">💱 Moneda</button>
+        <button type="button" class="nav-item nav-child" id="navEmpleados" onclick="mostrarVista('empleados')">👥 Empleados</button>
       </div>
       <button type="button" class="nav-item" id="navAlertas" onclick="mostrarVista('alertas')">🔔 Alertas<span id="alertasBadge" class="nav-badge" style="display:none;">0</span></button>
     </nav>
@@ -667,7 +680,7 @@
     <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Desmarca lo que no necesites — por ejemplo, deja solo "Cliente" y "Total Día (con %)" marcados para ver de un vistazo cómo le fue a cada uno hoy.</small>
   </details>
 
-  <table id="tablaClientes">
+  <table id="tablaClientes" class="tabla-resumen-cliente">
     <thead>
       <tr>
         <th>Cliente</th><th class="col-r-arriesgado">Total Arriesgado</th><th class="col-r-ganado">Total Ganado (pagado)</th><th class="col-r-perdido">Total Perdido</th>
@@ -677,6 +690,17 @@
     </thead>
     <tbody></tbody>
   </table>
+
+  <!-- "Moneda del Grupo" (18-09-2026, mixto) — si el grupo mezcla USD y Bs,
+       la respuesta de /api/sabana/procesar trae "porMoneda" y en vez de
+       la tabla única de arriba se pintan estas 2 (mismas columnas, misma
+       clase "tabla-resumen-cliente" para que el checkbox de "Columnas a
+       mostrar" de arriba las afecte a las 3 por igual) — se arman UNA
+       sola vez por JS (ver asegurarTablasResumenClientesMixto() en
+       app.js) y se reutilizan de ahí en adelante. Si el grupo NO está en
+       modo mixto, este bloque queda oculto siempre y #tablaClientes
+       sigue siendo la única visible — cero cambio para esos grupos. -->
+  <div id="resumenClientesMixtoWrap" style="display:none; margin-top:15px;"></div>
 
   <table id="tablaResultados" style="margin-top:20px;">
     <thead>
@@ -907,7 +931,7 @@
       <button type="button" onclick="guardarJugador()">Guardar Jugador</button>
     </div>
 
-    <div class="inputs-inline" style="grid-template-columns: 1fr 1fr; margin-top:12px;">
+    <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-top:12px;">
       <div>
         <label>Tipo de cuenta:</label>
         <select id="jugadorTipoCuenta" onchange="actualizarVisibilidadPozoJugador()">
@@ -918,6 +942,23 @@
       <div id="contenedorPozoJugador" style="display:none;">
         <label>Saldo inicial (pozo):</label>
         <input type="text" id="jugadorPozoInicial" placeholder="Ej: 500">
+      </div>
+      <!-- "Moneda del Jugador" (18-09-2026, feature "moneda del grupo" —
+           ver sql/schema.sql) — SOLO tiene sentido preguntarlo cuando el
+           grupo entero está en modo 'mixto' (cada cliente en su propia
+           moneda); si el grupo está fijo en USD o Bs, el backend fuerza
+           esa moneda igual aunque este campo no se mande, así que acá se
+           OCULTA por completo (display:none vía JS, ver
+           actualizarVisibilidadMonedaJugador() en app.js) para no
+           confundir con una pregunta que no aplica. Se muestra/oculta en
+           base a MONEDA_MODO_GRUPO, cargado al iniciar sesión y al abrir
+           esta pestaña. -->
+      <div id="contenedorMonedaJugador" style="display:none;">
+        <label>Moneda de este cliente:</label>
+        <select id="jugadorMoneda">
+          <option value="USD">🇺🇸 Dólares (USD)</option>
+          <option value="BS">🇻🇪 Bolívares (Bs)</option>
+        </select>
       </div>
     </div>
     <small id="notaPozoJugador" style="display:block; margin-top:8px; color:var(--text-dim);">💡 Si es "Avalado", mientras tenga una jugada en juego se le congela lo arriesgado de su saldo — al decidirse, si gana se le suma a su pozo, si pierde se le resta.</small>
@@ -931,7 +972,100 @@
 
   <table id="tablaJugadores">
     <thead>
-      <tr><th>Nombre</th><th>Teléfono</th><th>Notas</th><th>Tipo de Cuenta</th><th>Pozo</th><th>Estado</th><th>Acciones</th></tr>
+      <!-- "col-jugador-moneda" (18-09-2026) — igual que las demás columnas
+           ocultables de este panel, se muestra/oculta con JS, pero acá el
+           criterio no es un checkbox a mano sino MONEDA_MODO_GRUPO: solo
+           tiene sentido ver "en qué moneda juega cada uno" cuando el
+           grupo mezcla las 2 monedas (ver renderTablaJugadores() en
+           app.js) — en modo fijo (USD o Bs) todos los clientes están en
+           la misma moneda igual, así que la columna no aportaría nada. -->
+      <tr><th>Nombre</th><th>Teléfono</th><th>Notas</th><th>Tipo de Cuenta</th><th>Pozo</th><th class="col-jugador-moneda" style="display:none;">Moneda</th><th>Estado</th><th>Acciones</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<!-- =============================================================
+     ADMINISTRACIÓN > MONEDA DEL GRUPO (18-09-2026, feature nueva del
+     backend — ver la nota grande en sql/schema.sql y GET/PUT
+     /api/grupo/moneda-modo). EXCLUSIVA del Administrador: la ruta PUT ya
+     está bloqueada con 403 para un Empleado en el backend, y el botón de
+     esta pestaña se oculta por completo para cualquier Empleado (ver
+     aplicarPermisosEmpleado() en app.js) — nada de esto es la única capa
+     de seguridad, es solo para no mostrar un control que de todas formas
+     le fallaría.
+     ============================================================= -->
+<div class="container" id="vistaMonedaGrupo" style="display:none;">
+  <h1>Administración — Moneda del Grupo</h1>
+
+  <div class="box-nuevo-equipo">
+    <h3>💱 ¿En qué moneda juega tu grupo?</h3>
+    <div class="inputs-inline" style="grid-template-columns: 1fr auto;">
+      <div>
+        <label>Modo de moneda:</label>
+        <select id="monedaModoSelect">
+          <option value="usd">🇺🇸 Dólares (USD) — todos los clientes en USD</option>
+          <option value="bs">🇻🇪 Bolívares (Bs) — todos los clientes en Bs</option>
+          <option value="mixto">🔀 Mixto — cada cliente en su propia moneda</option>
+        </select>
+      </div>
+      <button type="button" onclick="guardarMonedaModoGrupo()">Guardar</button>
+    </div>
+    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 En modo "Mixto", cada Jugador tiene su propia moneda (elegible en Administración &gt; Jugador) y todos los reportes con dinero (Sábana, Balance General, % Devueltos) se dividen en dos bloques, uno por moneda, para no mezclar dólares con bolívares en el mismo total. Si cambias DESDE "Mixto" hacia USD o Bs fijo, TODOS los clientes pasan de una vez a esa moneda fija, sin importar la que tenían — por eso se pide confirmar ese cambio puntual.</small>
+    <p id="monedaModoGuardadoAviso" style="display:none; color:var(--ok); font-weight:bold; margin-top:10px;">✅ Guardado.</p>
+  </div>
+</div>
+
+<!-- =============================================================
+     ADMINISTRACIÓN > EMPLEADOS (18-09-2026, a pedido del usuario:
+     "soluciona la cuentas separas por empleado dentro de un grupo... un
+     administrador que tiene acceso 100% y los empleados puedes elegir
+     que pueden o no hacer" — ver la nota grande en
+     src/routes/empleados.js y sql/schema.sql). EXCLUSIVA del
+     Administrador, igual que "💱 Moneda" arriba.
+     ============================================================= -->
+<div class="container" id="vistaEmpleados" style="display:none;">
+  <h1>Administración — Empleados</h1>
+
+  <div class="box-nuevo-equipo">
+    <h3 id="empleadoFormTitulo">➕ Registrar Empleado Nuevo</h3>
+    <input type="hidden" id="empleadoEditandoId" value="">
+    <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr auto;">
+      <div><label>Nombre:</label><input type="text" id="empleadoNombre" placeholder="Ej: JUAN"></div>
+      <div><label>Email (para iniciar sesión):</label><input type="email" id="empleadoEmail" placeholder="Ej: juan@correo.com"></div>
+      <!-- Al editar, dejar esto en blanco = "no cambiar la contraseña"
+           (el backend soporta actualización parcial, ver PUT
+           /api/empleados/:id) — nunca se precarga con la contraseña
+           actual porque el backend nunca la devuelve (solo guarda el
+           hash). -->
+      <div><label>Contraseña<span id="empleadoPasswordNota" style="font-weight:normal;"> (mín. 6 caracteres)</span>:</label><input type="password" id="empleadoPassword" placeholder="Ej: ******"></div>
+      <button type="button" onclick="guardarEmpleado()">Guardar Empleado</button>
+    </div>
+
+    <div style="margin-top:14px;">
+      <label>¿Qué puede ver/hacer este Empleado?</label>
+      <div style="margin:6px 0 10px; display:flex; gap:10px;">
+        <button type="button" class="btn-secundario btn-chico" onclick="marcarTodosPermisosEmpleado(true)">✅ Marcar todos (acceso total)</button>
+        <button type="button" class="btn-secundario btn-chico" onclick="marcarTodosPermisosEmpleado(false)">⬜ Desmarcar todos</button>
+      </div>
+      <!-- Se llena dinámicamente desde app.js (renderChecklistPermisosEmpleado())
+           en vez de escribir a mano los 11 <label>/<input> acá — así, si
+           el backend agrega un permiso nuevo a PERMISOS_VALIDOS el día de
+           mañana, este checklist lo va a mostrar solo (con una etiqueta
+           genérica de respaldo) sin tener que tocar este HTML. -->
+      <div id="empleadoPermisosChecklist" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
+    </div>
+
+    <div style="margin-top:14px; display:flex; align-items:center; gap:14px;">
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="empleadoActivo" checked style="width:auto;"> Activo</label>
+      <button type="button" class="btn-secundario btn-chico" onclick="cancelarEdicionEmpleado()">Cancelar edición</button>
+    </div>
+    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Un Empleado inicia sesión con su propio email/contraseña, en la misma pantalla de login, y solo ve en su barra lateral las pestañas para las que le marcaste permiso. El Administrador (esta cuenta) siempre tiene acceso a todo, sin importar esta lista.</small>
+  </div>
+
+  <table id="tablaEmpleados">
+    <thead>
+      <tr><th>Nombre</th><th>Email</th><th>Permisos</th><th>Estado</th><th>Acciones</th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -1008,10 +1142,24 @@
 
   <small style="display:block; margin:10px 0; color:var(--text-dim);">💡 Haz clic en "ver detalle" para ver el detalle día por día del % de un jugador.</small>
 
-  <table id="tablaPorcentajesDevueltos" style="margin-top:10px;">
-    <thead><tr><th>Jugador</th><th>Total % Devuelto</th><th>Días con %</th></tr></thead>
-    <tbody></tbody>
-  </table>
+  <!-- "pdTablaWrapNormal" (18-09-2026, "moneda del grupo" mixto) — envuelve
+       la tabla de siempre para poder ocultarla ENTERA cuando el grupo está
+       en modo mixto (GET /api/reportes/porcentajes-devueltos responde
+       "mixto:true" en ese caso) sin tocar el resto del panel (rango de
+       fechas, confirmación del rango, etc., que siguen siendo compartidos
+       para las 2 monedas). Ver renderPorcentajesDevueltos() en app.js. -->
+  <div id="pdTablaWrapNormal">
+    <table id="tablaPorcentajesDevueltos" class="tabla-porcentajes-devueltos" style="margin-top:10px;">
+      <thead><tr><th>Jugador</th><th>Total % Devuelto</th><th>Días con %</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Bloques por moneda (USD/Bs) — se arman UNA vez por JS (ver
+       asegurarBloquesPorcentajesMixto() en app.js) reusando la MISMA
+       estructura/columnas de la tabla de arriba, y se muestran SOLO
+       cuando el grupo está en modo mixto. -->
+  <div id="pdMixtoWrap" style="display:none;"></div>
 </div>
 
 <!-- ======================= ADMINISTRACIÓN > BALANCE GENERAL ======================= -->
@@ -1067,26 +1215,44 @@
     <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Desmarca lo que no necesites — por ejemplo, deja solo "Saldo Cliente" marcado para mandar un reporte con nada más que el nombre y el saldo de cada cliente.</small>
   </details>
 
-  <!-- "📸 Capturar tabla como imagen" (02-09-2026, a pedido del usuario):
-       arma una imagen (PNG, en alta resolución) de la tabla de Balance
-       General TAL COMO SE VE ahora mismo (con las columnas que el usuario
-       eligió mostrar) — lista para copiar y pegar directo en WhatsApp, o
-       para descargar. Ver capturarTablaBalanceComoImagen() en app.js. -->
-  <div style="margin:10px 0;">
-    <button type="button" onclick="capturarTablaBalanceComoImagen()" style="padding:9px 16px; font-size:13px;">📸 Capturar tabla como imagen (HD)</button>
-    <small style="display:block; margin-top:6px; color:var(--text-dim);">💡 Genera una imagen de la tabla con las columnas que tengas marcadas arriba — lista para copiar y pegar en WhatsApp, o descargar.</small>
+  <!-- "bgTablaWrapNormal" (18-09-2026, "moneda del grupo" mixto) — envuelve
+       el botón de captura + la tabla de siempre para poder ocultar TODO
+       ese bloque cuando el grupo está en modo mixto (GET
+       /api/reportes/balance-general responde "mixto:true" en ese caso),
+       sin tocar el resto del panel (rango de fechas, columnas a mostrar,
+       confirmación del rango, que siguen siendo compartidos). La captura
+       de imagen (html2canvas) NO se duplicó para los 2 bloques por
+       moneda de abajo — decisión propia por alcance, se puede agregar
+       más adelante si el usuario la pide para "Mixto" también. Ver
+       renderBalanceGeneral() en app.js. -->
+  <div id="bgTablaWrapNormal">
+    <!-- "📸 Capturar tabla como imagen" (02-09-2026, a pedido del usuario):
+         arma una imagen (PNG, en alta resolución) de la tabla de Balance
+         General TAL COMO SE VE ahora mismo (con las columnas que el usuario
+         eligió mostrar) — lista para copiar y pegar directo en WhatsApp, o
+         para descargar. Ver capturarTablaBalanceComoImagen() en app.js. -->
+    <div style="margin:10px 0;">
+      <button type="button" onclick="capturarTablaBalanceComoImagen()" style="padding:9px 16px; font-size:13px;">📸 Capturar tabla como imagen (HD)</button>
+      <small style="display:block; margin-top:6px; color:var(--text-dim);">💡 Genera una imagen de la tabla con las columnas que tengas marcadas arriba — lista para copiar y pegar en WhatsApp, o descargar.</small>
+    </div>
+
+    <table id="tablaBalanceGeneral" class="tabla-balance-general" style="margin-top:10px;">
+      <thead>
+        <tr>
+          <th>Cliente</th><th class="col-arriesgado">Arriesgado</th><th class="col-ganado">Ganado</th>
+          <th class="col-perdido">Perdido</th><th class="col-comision">% Devuelto</th>
+          <th class="col-transferencias">Transferencias</th><th class="col-polla">Polla</th><th class="col-saldo">Saldo Cliente</th><th class="col-ver">Detalle</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
-  <table id="tablaBalanceGeneral" style="margin-top:10px;">
-    <thead>
-      <tr>
-        <th>Cliente</th><th class="col-arriesgado">Arriesgado</th><th class="col-ganado">Ganado</th>
-        <th class="col-perdido">Perdido</th><th class="col-comision">% Devuelto</th>
-        <th class="col-transferencias">Transferencias</th><th class="col-polla">Polla</th><th class="col-saldo">Saldo Cliente</th><th class="col-ver">Detalle</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <!-- Bloques por moneda (USD/Bs) — se arman UNA vez por JS (ver
+       asegurarBloquesBalanceGeneralMixto() en app.js) reusando la MISMA
+       estructura/columnas de la tabla de arriba (clonando su <thead>), y
+       se muestran SOLO cuando el grupo está en modo mixto. -->
+  <div id="bgMixtoWrap" style="display:none;"></div>
 </div>
 
 <!-- ======================= ADMINISTRACIÓN > TRANSFERENCIAS ======================= -->
@@ -1249,6 +1415,18 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
         <div id="juegosSabanaDia" style="display:flex; flex-direction:column; gap:8px;"></div>
         <h3>👥 Resultados de los Clientes</h3>
         <div id="pizarraSabanaDia" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <!-- "Moneda del Grupo" (18-09-2026, mixto) — GET /api/sabana/dia
+             trae "porMoneda" cuando el grupo mezcla USD/Bs; en ese caso se
+             oculta el bloque de arriba y se pintan estos 2, reusando la
+             MISMA renderPizarraSabanaDia() de siempre (ver
+             cargarSabanaDia() en app.js), solo que apuntando a un
+             contenedor distinto cada vez. -->
+        <div id="pizarraSabanaDiaMixtoWrap" style="display:none;">
+          <h4 style="margin:14px 0 4px; color:var(--accent-cyan);">🇺🇸 Dólares (USD)</h4>
+          <div id="pizarraSabanaDiaUSD" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <h4 style="margin:16px 0 4px; color:var(--accent-cyan);">🇻🇪 Bolívares (Bs)</h4>
+          <div id="pizarraSabanaDiaBS" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
       </div>
     </div>
   </div>

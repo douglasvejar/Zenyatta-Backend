@@ -308,7 +308,14 @@ router.get('/whatsapp-estado', asyncHandler(async (req, res) => {
     // es sobre la CONEXIÓN) — ver el comentario grande en
     // whatsappBot.avisar(). null si el último envío salió bien o todavía
     // no se intentó ninguno.
-    ultimoErrorEnvio: estado.ultimoErrorEnvio || null
+    ultimoErrorEnvio: estado.ultimoErrorEnvio || null,
+    // alertaActiva/alertaDesdeEn (18-09-2026, "alerta si se cae la
+    // sesión de WhatsApp") — el panel (superadmin.html) los consulta
+    // desde CUALQUIER pantalla (no solo la de vincular) para mostrar un
+    // aviso fijo mientras esto sea true, ver la nota grande en
+    // whatsappBot.js.
+    alertaActiva: !!estado.alertaActiva,
+    alertaDesdeEn: estado.alertaDesdeEn || null
   });
 }));
 

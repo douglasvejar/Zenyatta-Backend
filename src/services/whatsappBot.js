@@ -242,7 +242,78 @@ async function resolverNumeroRealDelRemitente(sock, msg, participantJid) {
   return participantJid; // ninguna forma conocida funcionó — se devuelve tal cual
 }
 
-let estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
+// alertaActiva/alertaDesdeEn (18-09-2026, "alerta si se cae la sesión de
+// WhatsApp" — ver la nota grande junto a connection.update más abajo):
+// alertaActiva = true mientras el panel de Súper-admin debe seguir
+// mostrando el aviso fijo de "WhatsApp caído" en TODAS sus pantallas
+// (no solo en la de vincular), sin importar qué sección esté mirando.
+let estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null, alertaActiva: false, alertaDesdeEn: null };
+
+// =================================================================
+// ALERTA POR CORREO SI SE CAE LA SESIÓN (18-09-2026, a pedido del
+// usuario: "dame alerta si se cae la sesion de whatssap"). No se manda
+// apenas se desconecta: Baileys reconecta solo la enorme mayoría de las
+// veces en segundos (blips normales de red), así que mandar un correo en
+// CADA una de esas sería puro ruido. En cambio:
+//   - Si la sesión se CERRÓ de verdad (hay que volver a escanear el QR,
+//     ver "cerroSesion" más abajo) se manda YA MISMO — eso nunca se
+//     arregla solo, necesita a alguien escaneando un QR nuevo.
+//   - Si es una desconexión "normal" (se perdió la conexión,
+//     reintentando), se espera TIEMPO_ANTES_DE_ALERTAR_MS antes de
+//     mandar nada — si para entonces ya reconectó sola, no se manda
+//     ningún correo.
+// En los dos casos, apenas vuelve a conectar (connection === 'open'), si
+// se había llegado a mandar la alerta, se manda un segundo correo de
+// "ya se recuperó" y se apaga el aviso fijo del panel.
+// =================================================================
+// Configurable solo para pruebas (test_whatsapp_alerta.js) — sin la
+// variable de entorno, siempre son 3 minutos de verdad; nunca se toca
+// desde .env.example a propósito (no es una perilla que el usuario deba
+// tocar en producción).
+const TIEMPO_ANTES_DE_ALERTAR_MS = Number(process.env.WHATSAPP_ALERTA_DEBOUNCE_MS_TESTING) || 3 * 60 * 1000;
+let desconectadoDesdeEn = null;
+let temporizadorAlertaWhatsapp = null;
+
+function cancelarTemporizadorAlertaWhatsapp() {
+  if (temporizadorAlertaWhatsapp) {
+    clearTimeout(temporizadorAlertaWhatsapp);
+    temporizadorAlertaWhatsapp = null;
+  }
+}
+
+function programarOAlertarCaidaWhatsapp(motivoTexto, urgente) {
+  if (!desconectadoDesdeEn) desconectadoDesdeEn = new Date();
+  cancelarTemporizadorAlertaWhatsapp();
+
+  const disparar = () => {
+    estadoConexion.alertaActiva = true;
+    estadoConexion.alertaDesdeEn = desconectadoDesdeEn.toISOString();
+    const { enviarAlertaEmail } = require('./emailAlertas');
+    enviarAlertaEmail(
+      '🔴 LUDOX: se cayó la conexión de WhatsApp',
+      'El bot de WhatsApp se desconectó (' + motivoTexto + ').\n\n' +
+        'Desde: ' + desconectadoDesdeEn.toLocaleString('es-VE') + '\n\n' +
+        'Entrá al panel de Súper-admin para revisar/reconectar.'
+    ).catch(() => {});
+  };
+
+  if (urgente) disparar();
+  else temporizadorAlertaWhatsapp = setTimeout(disparar, TIEMPO_ANTES_DE_ALERTAR_MS);
+}
+
+function limpiarAlertaCaidaWhatsapp() {
+  cancelarTemporizadorAlertaWhatsapp();
+  if (estadoConexion.alertaActiva) {
+    const { enviarAlertaEmail } = require('./emailAlertas');
+    enviarAlertaEmail(
+      '✅ LUDOX: WhatsApp se reconectó',
+      'El bot de WhatsApp volvió a conectarse a las ' + new Date().toLocaleString('es-VE') + '.'
+    ).catch(() => {});
+  }
+  estadoConexion.alertaActiva = false;
+  estadoConexion.alertaDesdeEn = null;
+  desconectadoDesdeEn = null;
+}
 
 // Compartida entre iniciarBotWhatsApp() y olvidarSesionWhatsapp() (más
 // abajo) — antes vivía solo adentro de iniciarBotWhatsApp() como variable
@@ -1086,6 +1157,7 @@ async function iniciarBotWhatsApp() {
       sockActual = sock;
       console.log('[whatsappBot] Conectado a WhatsApp.');
       listarGruposDisponibles(sock);
+      limpiarAlertaCaidaWhatsapp();
     }
 
     if (connection === 'close') {
@@ -1100,10 +1172,16 @@ async function iniciarBotWhatsApp() {
         // olvidarSesionWhatsapp() más abajo), sin tocar nada por fuera.
         estadoConexion.ultimoError = 'Se cerró la sesión de WhatsApp (hay que volver a escanear el QR) — tocá "🗑️ Olvidar sesión y generar un QR nuevo" en Súper-admin.';
         console.error('[whatsappBot] ' + estadoConexion.ultimoError);
+        // Urgente: esto NUNCA se arregla solo reconectando, necesita a
+        // alguien escaneando un QR nuevo — se avisa ya, sin esperar.
+        programarOAlertarCaidaWhatsapp('se cerró la sesión, hace falta escanear un QR nuevo', true);
       } else {
         estadoConexion.ultimoError = 'Se perdió la conexión con WhatsApp, reintentando...';
         console.log('[whatsappBot] Conexión perdida, reintentando...');
         iniciarBotWhatsApp().catch(e => console.error('[whatsappBot] Error al reconectar:', e));
+        // No urgente: se espera TIEMPO_ANTES_DE_ALERTAR_MS por si el
+        // reintento de arriba ya la resuelve solo, sin mandar ruido.
+        programarOAlertarCaidaWhatsapp('se perdió la conexión', false);
       }
     }
   });
@@ -1151,7 +1229,13 @@ async function olvidarSesionWhatsapp() {
     }
   }
   sockActual = null;
-  estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null };
+  // Se cancela cualquier alerta pendiente/activa sin mandar el correo de
+  // "se recuperó" (esto es un reinicio a mano por el Súper-admin, no una
+  // reconexión real) — el próximo "connection === 'close'"/"'open'" de
+  // verdad ya arma su propio ciclo desde cero.
+  cancelarTemporizadorAlertaWhatsapp();
+  desconectadoDesdeEn = null;
+  estadoConexion = { conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], ultimoErrorEnvio: null, alertaActiva: false, alertaDesdeEn: null };
 
   // "EBUSY: resource busy or locked, rmdir ..." (15-09-2026, error real
   // visto en vivo en Railway): WHATSAPP_SESSION_DIR es, en producción, el
@@ -1221,5 +1305,11 @@ module.exports = {
   // para poder probarlo directo con un `sock` falso (ver
   // test_whatsapp_diagnostico_sesiones.js), sin necesitar
   // @whiskeysockets/baileys instalado.
-  diagnosticarSesionesGrupo
+  diagnosticarSesionesGrupo,
+  // Alerta por correo si se cae la sesión (18-09-2026) — exportadas
+  // aparte para poder probar el "debounce" directo, con setTimeout real
+  // pero tiempos cortos (ver test_whatsapp_alerta.js), sin necesitar
+  // @whiskeysockets/baileys instalado ni esperar los 3 minutos reales.
+  programarOAlertarCaidaWhatsapp,
+  limpiarAlertaCaidaWhatsapp
 };

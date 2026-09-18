@@ -105,6 +105,13 @@ function tryRequire(rel) {
   // WhatsApp en sí (iniciarBotWhatsApp(), que solo se llama si
   // WHATSAPP_BOT_ACTIVADO=true — ver server.js).
   'src/services/whatsappBot.js',
+  // moneda.js/emailAlertas.js (18-09-2026, "moneda del grupo" + "alerta
+  // si se cae WhatsApp"). emailAlertas.js requiere nodemailer adentro de
+  // obtenerTransportador() (nunca al cargar el módulo, mismo criterio que
+  // @whiskeysockets/baileys en whatsappBot.js) — por eso puede cargar
+  // acá aunque nodemailer no esté en el mapa de `fakes` de arriba.
+  'src/services/moneda.js',
+  'src/services/emailAlertas.js',
   'src/routes/auth.js',
   'src/routes/superadmin.js',
   'src/routes/sabana.js',
@@ -117,6 +124,8 @@ function tryRequire(rel) {
   'src/routes/equipos.js',
   'src/routes/imagenes.js',
   'src/routes/whatsapp.js',
+  'src/routes/empleados.js',
+  'src/routes/grupo.js',
   'src/server.js'
 ].forEach(tryRequire);
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso, monedaModoDe } = require('../middleware/auth');
 const { procesarSabana } = require('../services/procesarSabana');
 const { obtenerResultadosAPIs } = require('../services/mlbApi');
 const { obtenerResultadosNFL } = require('../services/nflApi');
@@ -15,19 +15,51 @@ const { obtenerSabanaDeFecha, editarTicketDia } = require('../services/sabanaDia
 const { armarListaJuegos } = require('../services/pizarraJuegos');
 const { listarFechasConDatos } = require('../services/mantenimientoGrupo');
 const papeleraSabana = require('../services/papeleraSabana');
+const { partirPorMoneda } = require('../services/moneda');
 
 const router = express.Router();
 router.use(requiereGrupo);
+
+// "Moneda del grupo" (18-09-2026, ver la nota grande en sql/schema.sql):
+// cuando el grupo está en modo 'mixto', se agrega "porMoneda" al
+// resultado — dos bloques (USD/BS), cada uno con sus propias filas de
+// resumenPorCliente y sus propios totales — para que el panel pueda
+// mostrar "dos reportes" en vez de un solo total que mezclaría dólares
+// con bolívares. Los campos ya calculados de `resultado` (resumenPorCliente,
+// totales) se dejan intactos, por compatibilidad — el panel solo usa
+// "porMoneda" cuando viene presente.
+// procesarSabana.js (resultado de "Procesar Sábana") y sabanaDia.js
+// (resultado de GET /dia, "Sábanas" en Administración) NO traen
+// exactamente las mismas columnas por cliente — cada endpoint pasa la
+// lista que de verdad tiene.
+const CAMPOS_RESUMEN_PROCESAR = ['arriesgado', 'ganado', 'perdido', 'balance', 'comisionTotal', 'polla'];
+const CAMPOS_RESUMEN_DIA = ['tickets', 'ganados', 'perdidos', 'pendientes', 'arriesgado', 'ganado', 'perdido', 'polla'];
+
+function agregarPorMonedaSiMixto(req, resultado, campos) {
+  if (monedaModoDe(req) !== 'mixto') return resultado;
+  const bloques = partirPorMoneda(resultado.resumenPorCliente, campos);
+  if (campos.includes('comisionTotal')) {
+    Object.values(bloques).forEach(bloque => {
+      const t = bloque.totales;
+      // Misma convención de "banca" que procesarSabana.js: lo que le
+      // dejó ese bloque de clientes a la casa, ya restando % y Polla —
+      // se agrega acá para no obligar al frontend a mezclar dólares con
+      // bolívares sumando el total ya combinado de `resultado`.
+      bloque.totalBalanceCasa = t.perdido - t.ganado - t.comisionTotal - t.polla;
+    });
+  }
+  return { ...resultado, porMoneda: bloques };
+}
 
 // Pega la sábana + fecha (YYYY-MM-DD) -> procesa contra la API de MLB,
 // guarda el historial, y devuelve el mismo resumen que mostraba la app
 // original (tickets evaluados, resumen por cliente, totales de la casa,
 // y el bloque para armar el Plano de WhatsApp).
-router.post('/procesar', asyncHandler(async (req, res) => {
+router.post('/procesar', requierePermiso('sabana'), asyncHandler(async (req, res) => {
   try {
     const { texto, fecha } = req.body;
     const resultado = await procesarSabana(req.grupoId, texto, fecha);
-    res.json(resultado);
+    res.json(agregarPorMonedaSiMixto(req, resultado, CAMPOS_RESUMEN_PROCESAR));
   } catch (e) {
     // Errores de VALIDACIÓN (sábana vacía, sin apuestas detectadas, etc,
     // con su propio e.status) se manejan aquí adentro tal cual antes; el
@@ -45,14 +77,14 @@ router.post('/procesar', asyncHandler(async (req, res) => {
 // (confirmarDia/estadoDia) para el detalle de por qué se borra sola cada
 // vez que se reprocesa esa fecha.
 // =================================================================
-router.post('/confirmar-dia', asyncHandler(async (req, res) => {
+router.post('/confirmar-dia', requierePermiso('sabana'), asyncHandler(async (req, res) => {
   const { fecha } = req.body;
   if (!fecha) return res.status(400).json({ error: 'Falta la fecha (YYYY-MM-DD).' });
   const resultado = await confirmarDia(req.grupoId, fecha);
   res.json(resultado);
 }));
 
-router.get('/estado-dia', asyncHandler(async (req, res) => {
+router.get('/estado-dia', requierePermiso('sabana'), asyncHandler(async (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).json({ error: 'Falta la fecha (YYYY-MM-DD).' });
   const resultado = await estadoDia(req.grupoId, fecha);
@@ -66,18 +98,18 @@ router.get('/estado-dia', asyncHandler(async (req, res) => {
 // /tickets/:id edita a mano un ticket de esa sábana y deja constancia en
 // Alertas si de verdad cambió algo.
 // =================================================================
-router.get('/dia', asyncHandler(async (req, res) => {
+router.get('/dia', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).json({ error: 'Falta la fecha (YYYY-MM-DD).' });
   const resultado = await obtenerSabanaDeFecha(req.grupoId, fecha);
-  res.json(resultado);
+  res.json(agregarPorMonedaSiMixto(req, resultado, CAMPOS_RESUMEN_DIA));
 }));
 
 // No hace falta validar acá que el ticket sea de este grupo_id: eso ya lo
 // hace editarTicket()/obtenerTicketPorId() (ver historial.js), que
 // siempre filtra por grupo_id + id — si el id es de otro grupo, responde
 // 404 en vez de dejar editar un ticket ajeno.
-router.put('/tickets/:id', asyncHandler(async (req, res) => {
+router.put('/tickets/:id', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   try {
     const resultado = await editarTicketDia(req.grupoId, req.params.id, req.body || {});
     res.json(resultado);
@@ -95,12 +127,12 @@ router.put('/tickets/:id', asyncHandler(async (req, res) => {
 // sin tocar ese flujo); "eliminar-fechas" borra con papelera + alerta;
 // "papelera"/"papelera/:id/restaurar" listan y deshacen un borrado.
 // =================================================================
-router.get('/fechas-con-datos', asyncHandler(async (req, res) => {
+router.get('/fechas-con-datos', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   const fechas = await listarFechasConDatos(req.grupoId);
   res.json(fechas);
 }));
 
-router.post('/eliminar-fechas', asyncHandler(async (req, res) => {
+router.post('/eliminar-fechas', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   try {
     const { fechas } = req.body;
     const resultado = await papeleraSabana.eliminarSabanaDeFechas(req.grupoId, fechas);
@@ -110,12 +142,12 @@ router.post('/eliminar-fechas', asyncHandler(async (req, res) => {
   }
 }));
 
-router.get('/papelera', asyncHandler(async (req, res) => {
+router.get('/papelera', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   const filas = await papeleraSabana.listarPapelera(req.grupoId);
   res.json(filas);
 }));
 
-router.post('/papelera/:id/restaurar', asyncHandler(async (req, res) => {
+router.post('/papelera/:id/restaurar', requierePermiso('sabanas'), asyncHandler(async (req, res) => {
   try {
     const resultado = await papeleraSabana.restaurarPapelera(req.grupoId, req.params.id);
     res.json(resultado);
@@ -137,7 +169,7 @@ router.post('/papelera/:id/restaurar', asyncHandler(async (req, res) => {
 // equipo local Y visitante, acá se devuelve 1 fila por juego) antes de
 // mandarlo. Cada fila trae su propio campo `deporte` para que el panel
 // sepa con qué diseño de tarjeta dibujarla.
-router.get('/pizarra', asyncHandler(async (req, res) => {
+router.get('/pizarra', requierePermiso('sabana'), asyncHandler(async (req, res) => {
   const { fecha } = req.query;
   if (!fecha) return res.status(400).json({ error: 'Falta la fecha (YYYY-MM-DD).' });
 
@@ -161,17 +193,17 @@ router.get('/pizarra', asyncHandler(async (req, res) => {
 // Súper-admin ve las de TODOS los grupos desde src/routes/superadmin.js;
 // acá el Grupo solo ve (y solo puede marcar leídas/resolver) las suyas.
 // =================================================================
-router.get('/alertas', asyncHandler(async (req, res) => {
+router.get('/alertas', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const alertas = await alertasService.listarAlertasGrupo(req.grupoId);
   res.json(alertas);
 }));
 
-router.get('/alertas/conteo-no-leidas', asyncHandler(async (req, res) => {
+router.get('/alertas/conteo-no-leidas', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const total = await alertasService.contarNoLeidasGrupo(req.grupoId);
   res.json({ total });
 }));
 
-router.post('/alertas/marcar-leidas', asyncHandler(async (req, res) => {
+router.post('/alertas/marcar-leidas', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   await alertasService.marcarLeidasGrupo(req.grupoId);
   res.status(204).end();
 }));
@@ -183,7 +215,7 @@ router.post('/alertas/marcar-leidas', asyncHandler(async (req, res) => {
 // que solo aparece en las respuestas de ESTE mismo grupo (ver
 // listarAlertasGrupo), así que en la práctica un Grupo nunca llega a
 // conocer el id de una alerta ajena para poder mandarlo acá.
-router.post('/alertas/:id/resolver', asyncHandler(async (req, res) => {
+router.post('/alertas/:id/resolver', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const { deporte } = req.body;
   if (!deporte || !deporte.trim()) {
     return res.status(400).json({ error: 'Elige un deporte antes de resolver la alerta.' });
@@ -200,7 +232,7 @@ router.post('/alertas/:id/resolver', asyncHandler(async (req, res) => {
 // SIN_LOGRO, 28-08-2026: a la jugada le falta un número en la sábana) —
 // ver alertas.js. El arreglo real es corregir el texto en la sábana y
 // volver a procesar; esto solo la saca de la lista de pendientes.
-router.post('/alertas/:id/descartar', asyncHandler(async (req, res) => {
+router.post('/alertas/:id/descartar', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   try {
     const resultado = await alertasService.descartarAlerta(req.params.id);
     res.json({ ok: true, grupoId: resultado.grupoId });
@@ -212,12 +244,12 @@ router.post('/alertas/:id/descartar', asyncHandler(async (req, res) => {
 // =================================================================
 // CHAT DE SOPORTE (del propio Grupo, con el Súper-admin) — ver chat.js.
 // =================================================================
-router.get('/chat', asyncHandler(async (req, res) => {
+router.get('/chat', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const mensajes = await chatService.listarMensajes(req.grupoId);
   res.json(mensajes);
 }));
 
-router.post('/chat', asyncHandler(async (req, res) => {
+router.post('/chat', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   try {
     const mensaje = await chatService.enviarMensaje(req.grupoId, 'grupo', req.body.texto);
     res.status(201).json(mensaje);
@@ -226,12 +258,12 @@ router.post('/chat', asyncHandler(async (req, res) => {
   }
 }));
 
-router.get('/chat/conteo-no-leidos', asyncHandler(async (req, res) => {
+router.get('/chat/conteo-no-leidos', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const total = await chatService.contarNoLeidosGrupo(req.grupoId);
   res.json({ total });
 }));
 
-router.post('/chat/marcar-leidos', asyncHandler(async (req, res) => {
+router.post('/chat/marcar-leidos', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   await chatService.marcarLeidosGrupo(req.grupoId);
   res.status(204).end();
 }));

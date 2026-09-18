@@ -23,11 +23,12 @@
 // =================================================================
 const express = require('express');
 const db = require('../db');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('pagos'));
 
 const METODOS_VALIDOS = ['pago_movil', 'binance', 'zelle', 'banesco_panama'];
 const TOPE_CAPTURA_BYTES = 4 * 1024 * 1024; // 4MB decodificados

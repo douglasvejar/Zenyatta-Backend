@@ -1,12 +1,13 @@
 // Administración > Polla (02-09-2026, a pedido del usuario) — ver
 // src/services/polla.js para el formato de texto y la fórmula.
 const express = require('express');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const pollaService = require('../services/polla');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('polla'));
 
 // Lista lo guardado — sin filtro trae todo; se puede acotar con
 // ?desde&hasta y/o ?cliente (mismo patrón que /api/reportes).

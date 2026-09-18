@@ -1,10 +1,11 @@
 const express = require('express');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const transferenciasService = require('../services/transferencias');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('transferencias'));
 
 router.get('/', asyncHandler(async (req, res) => {
   res.json(await transferenciasService.listarTransferencias(req.grupoId));

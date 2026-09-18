@@ -42,7 +42,7 @@
 // WHATSAPP_BOT_ACTIVADO !== 'true' (el bot ni siquiera está corriendo,
 // no habría ningún sock activo con el que mandar nada).
 const express = require('express');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const pendientesService = require('../services/sabanasPendientesWhatsapp');
 const whatsappDiaEstado = require('../services/whatsappDiaEstado');
@@ -50,6 +50,7 @@ const { procesarSabana } = require('../services/procesarSabana');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('whatsapp'));
 
 function botActivado() {
   return process.env.WHATSAPP_BOT_ACTIVADO === 'true';

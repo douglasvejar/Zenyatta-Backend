@@ -17,6 +17,8 @@ const imagenesRoutes = require('./routes/imagenes');
 const whatsappRoutes = require('./routes/whatsapp');
 const contactoRoutes = require('./routes/contacto');
 const pagosRoutes = require('./routes/pagos');
+const empleadosRoutes = require('./routes/empleados');
+const grupoRoutes = require('./routes/grupo');
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -52,6 +54,8 @@ app.use('/api/imagenes', imagenesRoutes); // proxy de logos, pública a propósi
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/contacto', contactoRoutes); // pública, sin login (ver comentario en routes/contacto.js) — formulario del portal de bienvenida
 app.use('/api/pagos', pagosRoutes); // 💳 Pagos del Grupo a Ludox (con login, ver comentario en routes/pagos.js)
+app.use('/api/empleados', empleadosRoutes); // Cuentas por empleado dentro de un Grupo, exclusivo del Administrador (ver routes/empleados.js)
+app.use('/api/grupo', grupoRoutes); // Configuración propia del Grupo (moneda_modo, ver routes/grupo.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se

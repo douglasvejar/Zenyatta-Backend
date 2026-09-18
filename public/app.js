@@ -55,6 +55,75 @@ let CHAT_WIDGET_POLL_ABIERTO = null; // id del setInterval que refresca los mens
 let VISTA_ACTUAL = 'sabana';
 
 // =================================================================
+// "MONEDA DEL GRUPO" (18-09-2026, feature nueva del backend — ver
+// GET/PUT /api/grupo/moneda-modo y la nota grande en sql/schema.sql).
+// 'usd'|'bs' = todo el grupo fijo en esa moneda (comportamiento de
+// siempre, sin cambio); 'mixto' = cada cliente tiene su propia moneda y
+// los reportes con dinero se dividen en 2 bloques (USD/Bs). Se carga una
+// sola vez al iniciar sesión (ver mostrarApp()) y también cada vez que
+// se guarda un cambio desde la pestaña "💱 Moneda" — el formulario de
+// Jugador y la tabla de "Resumen por Cliente"/Sábanas/Balance
+// General/% Devueltos la leen desde esta variable en vez de pedirla de
+// nuevo cada vez, para no multiplicar llamadas a la API.
+let MONEDA_MODO_GRUPO = 'usd';
+
+// =================================================================
+// "CUENTAS POR EMPLEADO" (18-09-2026, a pedido del usuario — ver la nota
+// grande en src/routes/empleados.js). Cache de la última lista de
+// empleados pedida (Administración > Empleados) y de las 11 claves de
+// permiso válidas que el backend acepta, para no tener que volver a
+// pedir "permisos-disponibles" cada vez que se abre/cierra el
+// formulario de alta.
+// =================================================================
+let EMPLEADOS_CACHE = [];
+let PERMISOS_DISPONIBLES_CACHE = [];
+
+// Etiquetas humanas para cada clave de permiso (mismos íconos/texto que
+// ya usa el propio sidebar para esa misma pestaña, para que un
+// Administrador reconozca de una qué es cada casilla). Si el backend
+// llegara a agregar una clave nueva que no está en este mapa, el
+// checklist igual la muestra (con la clave cruda como respaldo) en vez
+// de que desaparezca silenciosamente — ver renderChecklistPermisosEmpleado().
+const ETIQUETAS_PERMISOS = {
+  sabana: '📋 Sábana (vista diaria)',
+  sabanas: '🗂️ Sábanas (historial, papelera)',
+  whatsapp: '📲 Sábana Automática (WhatsApp)',
+  equipos: '🏷️ Apodos de Equipos',
+  pagos: '💳 Pagos',
+  jugador: '👤 Jugador (clientes)',
+  porcentajes: '📊 % Devueltos',
+  balanceGeneral: '📒 Balance General',
+  transferencias: '🔄 Transferencias',
+  polla: '🎲 Polla',
+  alertas: '🔔 Alertas / Chat'
+};
+
+// ¿Esta sesión tiene el permiso `clave` (uno de ETIQUETAS_PERMISOS de
+// arriba)? Un Administrador (GRUPO.permisos === null) SIEMPRE tiene
+// acceso a todo. Esto NO es la capa de seguridad real — esa ya existe en
+// el backend (requierePermiso(), ver middleware/auth.js) — es nada más
+// para decidir, del lado del navegador, si conviene siquiera INTENTAR
+// pedirle algo a una ruta protegida por permiso.
+//
+// Por qué hace falta esto (18-09-2026, encontrado al implementar esta
+// misma feature, no a pedido explícito del usuario): el helper api() de
+// arriba cierra la sesión SOLA en cualquier 401/403 (para el caso normal
+// de "tu sesión venció") — pero un Empleado sin, por ejemplo, permiso
+// 'pagos' o 'alertas' iba a recibir 403 en las revisiones de fondo que
+// corren SIEMPRE cada 25s (revisarNotificacionesFondo) apenas iniciaba
+// sesión, y quedaba deslogueado de inmediato sin haber hecho nada malo.
+// Se usa como guarda ANTES de llamar a una ruta gateada por permiso, en
+// vez de tocar api()/cerrarSesion() (que sí deben seguir cerrando sesión
+// ante un 403 real de sesión inválida).
+function tienePermiso(clave) {
+  if (!GRUPO || GRUPO.rol !== 'empleado') return true;
+  // Defensivo (no debería pasar para un Empleado, ver auth.js): sin un
+  // array de permisos no hay nada que negar.
+  if (!Array.isArray(GRUPO.permisos)) return true;
+  return GRUPO.permisos.includes(clave);
+}
+
+// =================================================================
 // 0. HELPER DE LLAMADAS A LA API
 // =================================================================
 async function api(path, options = {}) {
@@ -184,7 +253,17 @@ function cerrarSesion(mensaje) {
 function mostrarApp() {
   document.getElementById('vistaLogin').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
-  document.getElementById('topbarGrupo').textContent = 'Conectado como: ' + GRUPO.nombre + ' (' + GRUPO.email + ')';
+  // "Cuentas por Empleado" (18-09-2026): si el que inició sesión es un
+  // Empleado (GRUPO.rol === 'empleado'), GRUPO.email es SU propio email
+  // de login (no el del Grupo/negocio) y GRUPO.nombreEmpleado trae su
+  // nombre — se muestran los dos junto con el nombre del Grupo al que
+  // pertenece, para que quede claro con qué cuenta puntual entró (sobre
+  // todo si un mismo Grupo tiene varios Empleados con acceso). El
+  // Administrador (rol==='administrador') sigue viendo exactamente el
+  // mismo texto de siempre.
+  document.getElementById('topbarGrupo').textContent = (GRUPO.rol === 'empleado')
+    ? 'Conectado como: ' + GRUPO.nombreEmpleado + ' — ' + GRUPO.nombre + ' (' + GRUPO.email + ')'
+    : 'Conectado como: ' + GRUPO.nombre + ' (' + GRUPO.email + ')';
   // "Deportes Zenyatta" (15-09-2026, a pedido del usuario) ya no va fijo
   // arriba de "Verificador de Sábana" — cada Grupo ve ahí su propio
   // nombre (mismo criterio que ya se usaba en el Plano de WhatsApp, ver
@@ -200,8 +279,20 @@ function mostrarApp() {
   cargarNombresOficialesDeporte('basket');
   cargarNombresOficialesDeporte('ncaaf');
   cargarEquiposPersonalizados();
+  // "Moneda del Grupo" (18-09-2026) se carga ACÁ, antes de mostrar
+  // cualquier pestaña, para que MONEDA_MODO_GRUPO ya esté correcta la
+  // primera vez que el Grupo abre Jugador/Sábana/etc. (si se dejara para
+  // recién cuando se abre la pestaña "💱 Moneda", el selector de moneda
+  // del formulario de Jugador se quedaría escondido hasta ese momento
+  // aunque el grupo ya estuviera en modo 'mixto').
+  cargarMonedaModoGrupo();
   cargarJugadores();
-  mostrarVista('sabana');
+  // "Cuentas por Empleado" (18-09-2026) — oculta del sidebar lo que este
+  // Empleado no tiene permiso de ver, y devuelve su primera pestaña
+  // permitida (para un Administrador, o si el Empleado sí tiene permiso
+  // 'sabana', esto da null/'sabana' y no cambia el arranque de siempre).
+  const vistaInicialEmpleado = aplicarPermisosEmpleado();
+  mostrarVista(vistaInicialEmpleado || 'sabana');
 
   // El badge de Alertas y el de la bandeja de chat se revisan cada 25s
   // SIEMPRE (no solo en la pestaña Sábana como la Pizarra en Vivo) — así,
@@ -244,8 +335,12 @@ function toggleGrupoAdmin() {
 // Jugador/Comisión/etc. Ningún dato ni función cambió, solo DÓNDE vive el
 // HTML (ver renderPanelWhatsapp()/cargarEquiposPersonalizados() más abajo,
 // siguen actualizando esos mismos ids sin importar qué pestaña se vea).
-const VISTAS = ['sabana', 'whatsapp', 'equipos', 'pagos', 'jugador', 'comision', 'porcentajes', 'balanceGeneral', 'transferencias', 'polla', 'sabanas', 'alertas'];
-const NAV_IDS = { sabana: 'navSabana', whatsapp: 'navWhatsapp', equipos: 'navEquipos', pagos: 'navPagos', jugador: 'navJugador', comision: 'navComision', porcentajes: 'navPorcentajes', balanceGeneral: 'navBalanceGeneral', transferencias: 'navTransferencias', polla: 'navPolla', sabanas: 'navSabanas', alertas: 'navAlertas' };
+// "monedaGrupo" y "empleados" (18-09-2026) se agregan al final — ambas
+// EXCLUSIVAS del Administrador (ver aplicarPermisosEmpleado() más abajo),
+// viven dentro de "⚙️ Administración" así que NO van en
+// VISTAS_FUERA_DE_ADMINISTRACION (mismo criterio que Jugador/Comisión/etc.).
+const VISTAS = ['sabana', 'whatsapp', 'equipos', 'pagos', 'jugador', 'comision', 'porcentajes', 'balanceGeneral', 'transferencias', 'polla', 'sabanas', 'alertas', 'monedaGrupo', 'empleados'];
+const NAV_IDS = { sabana: 'navSabana', whatsapp: 'navWhatsapp', equipos: 'navEquipos', pagos: 'navPagos', jugador: 'navJugador', comision: 'navComision', porcentajes: 'navPorcentajes', balanceGeneral: 'navBalanceGeneral', transferencias: 'navTransferencias', polla: 'navPolla', sabanas: 'navSabanas', alertas: 'navAlertas', monedaGrupo: 'navMonedaGrupo', empleados: 'navEmpleados' };
 
 // "Sábana Automática"/"Apodos de Equipos"/"Pagos" (15-09-2026) ya NO viven
 // dentro de "⚙️ Administración" — son botones propios del menú, así que
@@ -264,7 +359,10 @@ function mostrarVista(nombre) {
   if (!VISTAS_FUERA_DE_ADMINISTRACION.includes(nombre)) document.getElementById('grupoAdmin').style.display = 'flex';
 
   if (nombre === 'pagos') cargarPagosGrupo();
-  if (nombre === 'jugador') cargarJugadores();
+  // "Moneda del Grupo" (18-09-2026) — al entrar a Jugador se refresca la
+  // visibilidad del selector de moneda del formulario, por si se cambió
+  // el modo del grupo en otra pestaña del navegador mientras tanto.
+  if (nombre === 'jugador') { cargarJugadores(); actualizarVisibilidadMonedaJugador(); }
   if (nombre === 'comision') { cargarJugadores().then(() => cargarAvales()); }
   if (nombre === 'porcentajes') aplicarRangoRapidoPanel('pd');
   if (nombre === 'balanceGeneral') { cargarColumnasBalanceGuardadas(); aplicarRangoRapidoPanel('bg'); }
@@ -272,6 +370,10 @@ function mostrarVista(nombre) {
   if (nombre === 'polla') { if (!document.getElementById('pollaFecha').value) document.getElementById('pollaFecha').value = hoyISO(); cargarPolla(); }
   if (nombre === 'sabanas') { cargarColumnasSabanaDiaGuardadas(); if (!document.getElementById('sabanasFecha').value) document.getElementById('sabanasFecha').value = hoyISO(); cargarSabanaDia(); }
   if (nombre === 'alertas') { cargarAlertas(); marcarAlertasLeidas(); }
+  // "Moneda del Grupo" / "Cuentas por Empleado" (18-09-2026, ambas
+  // exclusivas del Administrador — ver aplicarPermisosEmpleado()).
+  if (nombre === 'monedaGrupo') cargarMonedaModoGrupo();
+  if (nombre === 'empleados') cargarEmpleados();
 
   // La Pizarra en Vivo solo se auto-refresca mientras la pestaña Sábana
   // está a la vista — al salir se pausa (no tiene sentido seguir pegándole
@@ -288,6 +390,83 @@ function mostrarVista(nombre) {
     clearInterval(PIZARRA_INTERVALO);
     PIZARRA_INTERVALO = null;
   }
+}
+
+// =================================================================
+// "CUENTAS POR EMPLEADO" (18-09-2026) — oculta del sidebar los nav-items
+// para los que este Empleado NO tiene permiso, y devuelve el nombre de
+// la primera pestaña permitida (para que mostrarApp() no lo deje
+// "aterrizar" en una pestaña que no puede ver). Un Administrador
+// (GRUPO.rol === 'administrador') sigue viendo TODO, sin excepción — esta
+// función no toca nada en ese caso.
+//
+// Esto es solo UX (el backend ya bloquea cada ruta con requierePermiso(),
+// ver middleware/auth.js) — no oculta nada "a prueba de manipulación de
+// localStorage", solo evita mostrarle un botón a un Empleado para algo
+// que de todas formas le va a fallar con 403.
+// =================================================================
+
+// Qué permiso (de los 11 válidos, ver ETIQUETAS_PERMISOS) necesita cada
+// pestaña del sidebar. "comision" no tiene una clave de permiso propia
+// en el backend (son solo 11, ver PERMISOS_VALIDOS en middleware/auth.js)
+// — decisión propia (no pedida explícitamente por el usuario): se agrupa
+// bajo el mismo permiso que "jugador" porque vive en el mismo submenú y
+// trabaja sobre los mismos clientes (% propio / avales), así que quien
+// puede administrar Jugador razonablemente también puede administrar su
+// Comisión, sin inventar una clave #12 solo para esto.
+const MAPA_VISTA_PERMISO = {
+  sabana: 'sabana',
+  sabanas: 'sabanas',
+  whatsapp: 'whatsapp',
+  equipos: 'equipos',
+  pagos: 'pagos',
+  jugador: 'jugador',
+  comision: 'jugador',
+  porcentajes: 'porcentajes',
+  balanceGeneral: 'balanceGeneral',
+  transferencias: 'transferencias',
+  polla: 'polla',
+  alertas: 'alertas'
+};
+
+function aplicarPermisosEmpleado() {
+  // "💱 Moneda" y "👥 Empleados" (18-09-2026) quedan ocultos para
+  // CUALQUIER Empleado, sin excepción — no tienen un permiso propio en
+  // la lista de 11 porque son exclusivos del Administrador (ver la nota
+  // grande junto a estos 2 botones en grupo.html).
+  if (GRUPO && GRUPO.rol === 'empleado') {
+    const navMoneda = document.getElementById('navMonedaGrupo');
+    const navEmpleados = document.getElementById('navEmpleados');
+    if (navMoneda) navMoneda.style.display = 'none';
+    if (navEmpleados) navEmpleados.style.display = 'none';
+  }
+
+  // Un Administrador ve todo — nada más que hacer. Tampoco hay nada que
+  // ocultar si, por lo que sea, GRUPO.permisos no es un array (defensivo:
+  // esto no debería pasar para un Empleado, ver routes/auth.js).
+  if (!GRUPO || GRUPO.rol !== 'empleado' || !Array.isArray(GRUPO.permisos)) return null;
+
+  let primeraVistaPermitida = null;
+  VISTAS.forEach(vista => {
+    const clavePermiso = MAPA_VISTA_PERMISO[vista];
+    if (!clavePermiso) return; // 'monedaGrupo'/'empleados' ya se ocultaron arriba
+    const permitido = GRUPO.permisos.includes(clavePermiso);
+    const boton = document.getElementById(NAV_IDS[vista]);
+    if (boton) boton.style.display = permitido ? '' : 'none';
+    if (permitido && !primeraVistaPermitida) primeraVistaPermitida = vista;
+  });
+
+  // "⚙️ Administración" (el botón padre plegable) se oculta ENTERO si
+  // TODOS sus hijos (Jugador/Comisión/%Devueltos/Balance
+  // General/Transferencias/Polla/Sábanas, más Moneda/Empleados que ya
+  // quedaron ocultos arriba) terminaron ocultos — así no se deja un
+  // submenú vacío que se pueda desplegar sin nada adentro.
+  const hijosDelSubmenu = document.querySelectorAll('#grupoAdmin .nav-item');
+  const todosOcultos = Array.from(hijosDelSubmenu).every(el => el.style.display === 'none');
+  const botonAdministracion = document.querySelector('.sidebar-admin .nav-parent');
+  if (botonAdministracion) botonAdministracion.style.display = todosOcultos ? 'none' : '';
+
+  return primeraVistaPermitida;
 }
 
 // =================================================================
@@ -333,6 +512,10 @@ async function cargarMapaLogosEquipos() {
 // no responde (ej. sin internet) — el datalist simplemente se queda sin
 // sugerencias para ese deporte hasta que se pueda cargar.
 async function cargarNombresOficialesDeporte(deporte) {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — esto
+  // se llama sin condición desde mostrarApp() apenas se inicia sesión, y
+  // /api/equipos/* está gateado por el permiso 'equipos' en el backend.
+  if (!tienePermiso('equipos')) return;
   try {
     const data = await api('/api/equipos/nombres-oficiales/' + deporte);
     NOMBRES_OFICIALES_POR_DEPORTE[deporte] = (data && data.nombres) || [];
@@ -463,6 +646,9 @@ async function prepararLogosParaCaptura(contenedor) {
 let EQUIPOS_PERSONALIZADOS_CACHE = [];
 
 async function cargarEquiposPersonalizados() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — mismo
+  // motivo que cargarNombresOficialesDeporte() justo arriba.
+  if (!tienePermiso('equipos')) return;
   try {
     EQUIPOS_PERSONALIZADOS_CACHE = await api('/api/equipos');
     renderListaEquiposPersonalizados();
@@ -550,6 +736,10 @@ async function eliminarEquipoPersonalizado(id) {
 // qué pestaña esté el Grupo.
 // =================================================================
 async function actualizarBadgeWhatsapp() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — evita
+  // que un Empleado sin permiso 'whatsapp' quede deslogueado solo por
+  // esta revisión de fondo que corre cada 25s sin importar la pestaña.
+  if (!tienePermiso('whatsapp')) return;
   try {
     const resp = await api('/api/whatsapp/estado');
     renderPanelWhatsapp(resp);
@@ -796,7 +986,30 @@ async function procesarYVerificar() {
 // (resumenPorCliente/tickets/totales/...), sin duplicar esta lógica.
 function pintarResultadoSabana(resp, fecha) {
   renderDashboard(resp.totales, resp.tickets.length);
-  renderTablaClientes(resp.resumenPorCliente);
+
+  // "Moneda del Grupo" (18-09-2026, mixto) — si el backend mandó
+  // "porMoneda" (solo pasa cuando el grupo está en modo 'mixto', ver
+  // agregarPorMonedaSiMixto() en routes/sabana.js), el Resumen por
+  // Cliente se pinta en 2 tablas separadas (USD/Bs) en vez de la única de
+  // siempre, para no mezclar las 2 monedas en los mismos totales — pero
+  // reutilizando la MISMA renderTablaClientes() de siempre, dos veces,
+  // solo que apuntando a un <tbody> distinto cada vez (ver
+  // asegurarTablasResumenClientesMixto() más abajo). Si el grupo NO está
+  // en modo mixto, resp.porMoneda no viene y este bloque no hace nada —
+  // comportamiento 100% igual al de antes de este cambio.
+  const tablaNormal = document.getElementById('tablaClientes');
+  const wrapMixto = document.getElementById('resumenClientesMixtoWrap');
+  if (resp.porMoneda) {
+    asegurarTablasResumenClientesMixto();
+    if (tablaNormal) tablaNormal.style.display = 'none';
+    if (wrapMixto) wrapMixto.style.display = 'block';
+    renderTablaClientes(resp.porMoneda.USD.filas, '#tablaClientesUSD tbody');
+    renderTablaClientes(resp.porMoneda.BS.filas, '#tablaClientesBS tbody');
+  } else {
+    if (tablaNormal) tablaNormal.style.display = '';
+    if (wrapMixto) wrapMixto.style.display = 'none';
+    renderTablaClientes(resp.resumenPorCliente);
+  }
   ULTIMOS_TICKETS = resp.tickets;
   renderTablaResultados(resp.tickets);
   ULTIMO_PLANO_WHATSAPP = construirPlanoDesdeRespuesta(resp);
@@ -1009,8 +1222,14 @@ async function copiarLinkClientePorNombre(nombre) {
   copiarTextoAlPortapapeles(link, 'Link de ' + nombre + ' copiado.');
 }
 
-function renderTablaClientes(resumenPorCliente) {
-  const tbody = document.querySelector('#tablaClientes tbody');
+// `tbodySelector` (18-09-2026, "moneda del grupo" mixto) — por defecto
+// pinta en la tabla de siempre (#tablaClientes), pero se puede apuntar a
+// otro <tbody> (ej. "#tablaClientesUSD tbody") para reutilizar esta
+// misma función 2 veces cuando el grupo está en modo mixto, en vez de
+// duplicar toda esta lógica de pintado — ver pintarResultadoSabana() y
+// asegurarTablasResumenClientesMixto() más abajo.
+function renderTablaClientes(resumenPorCliente, tbodySelector) {
+  const tbody = document.querySelector(tbodySelector || '#tablaClientes tbody');
   tbody.innerHTML = '';
   resumenPorCliente.forEach(c => {
     const tr = document.createElement('tr');
@@ -1107,7 +1326,14 @@ function aplicarVisibilidadColumnasResumen() {
     // Las columnas de Polla, además de la preferencia del checkbox, exigen
     // que esta fecha tenga Polla registrada (ver COLUMNAS_SOLO_CON_POLLA).
     const visible = esColumnaDePolla ? (POLLA_REGISTRADA_HOY && marcado) : marcado;
-    document.querySelectorAll('#tablaClientes .' + claseColumna).forEach(el => {
+    // Selector generalizado (18-09-2026, "moneda del grupo" mixto): antes
+    // apuntaba solo a "#tablaClientes .clase"; ahora apunta a la clase
+    // compartida ".tabla-resumen-cliente" para que la misma preferencia
+    // de columnas afecte por igual a la tabla única (grupo NO mixto) y a
+    // las 2 tablas USD/Bs (grupo mixto, ver asegurarTablasResumenClientesMixto()
+    // más abajo) — sin este cambio, las columnas de las 2 tablas nuevas
+    // nunca se hubieran ocultado/mostrado con este mismo checklist.
+    document.querySelectorAll('.tabla-resumen-cliente .' + claseColumna).forEach(el => {
       el.style.display = visible ? '' : 'none';
     });
     if (esColumnaDePolla && checkbox) {
@@ -1117,6 +1343,24 @@ function aplicarVisibilidadColumnasResumen() {
       if (etiqueta) etiqueta.style.display = POLLA_REGISTRADA_HOY ? '' : 'none';
     }
   });
+}
+
+// Construye, UNA sola vez, las 2 tablas "Resumen por Cliente" (USD/Bs)
+// que se usan cuando el grupo está en modo 'mixto' — clonando el
+// encabezado de #tablaClientes (mismas columnas, mismas clases
+// col-r-*) para no repetir esa fila de <th> a mano acá. Se marca con
+// "data-armado" para no reconstruirlas de nuevo cada vez que se procesa
+// otra sábana en la misma sesión (ver pintarResultadoSabana() más
+// arriba).
+function asegurarTablasResumenClientesMixto() {
+  const cont = document.getElementById('resumenClientesMixtoWrap');
+  if (!cont || cont.dataset.armado) return;
+  const filaEncabezado = document.querySelector('#tablaClientes thead tr').innerHTML;
+  const bloque = (sufijo, titulo) =>
+    '<h3 style="margin:18px 0 8px; color:var(--accent-cyan);">' + titulo + '</h3>' +
+    '<table id="tablaClientes' + sufijo + '" class="tabla-resumen-cliente"><thead><tr>' + filaEncabezado + '</tr></thead><tbody></tbody></table>';
+  cont.innerHTML = bloque('USD', '🇺🇸 Dólares (USD)') + bloque('BS', '🇻🇪 Bolívares (Bs)');
+  cont.dataset.armado = '1';
 }
 
 const CLASE_ESTADO = {
@@ -1589,6 +1833,13 @@ async function actualizarPizarraEnVivo() {
 // 6. ADMINISTRACIÓN > JUGADOR
 // =================================================================
 async function cargarJugadores() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — esto
+  // se llama sin condición desde mostrarApp() apenas se inicia sesión (lo
+  // necesitan varias pestañas para llenar sus <select> de clientes), así
+  // que un Empleado sin permiso 'jugador' quedaría deslogueado de
+  // inmediato al entrar si no se corta acá antes de pedirle nada al
+  // backend (que sí bloquea /api/jugadores con 403 para ese caso).
+  if (!tienePermiso('jugador')) { JUGADORES_CACHE = []; renderTablaJugadores(); renderSelectsDeJugadores(); return JUGADORES_CACHE; }
   try {
     JUGADORES_CACHE = await api('/api/jugadores');
     renderTablaJugadores();
@@ -1604,6 +1855,18 @@ function actualizarVisibilidadPozoJugador() {
   document.getElementById('contenedorPozoJugador').style.display = (tipo === 'avalado') ? 'block' : 'none';
 }
 
+// "Moneda del Jugador" (18-09-2026, ver la nota grande en grupo.html
+// junto a #contenedorMonedaJugador) — este selector SOLO se muestra
+// cuando el grupo entero está en modo 'mixto' (MONEDA_MODO_GRUPO, cargada
+// al iniciar sesión y refrescada cada vez que se guarda un cambio desde
+// "💱 Moneda"). En modo fijo (USD o Bs) el backend fuerza esa moneda a
+// TODOS los jugadores igual, así que preguntarlo acá sería una pregunta
+// sin efecto real — se oculta para no confundir.
+function actualizarVisibilidadMonedaJugador() {
+  const cont = document.getElementById('contenedorMonedaJugador');
+  if (cont) cont.style.display = (MONEDA_MODO_GRUPO === 'mixto') ? 'block' : 'none';
+}
+
 function cancelarEdicionJugador() {
   document.getElementById('jugadorEditandoId').value = '';
   document.getElementById('jugadorFormTitulo').textContent = '➕ Registrar Jugador Nuevo';
@@ -1613,7 +1876,10 @@ function cancelarEdicionJugador() {
   document.getElementById('jugadorTipoCuenta').value = 'libre';
   document.getElementById('jugadorPozoInicial').value = '';
   document.getElementById('jugadorActivo').checked = true;
+  const monedaSel = document.getElementById('jugadorMoneda');
+  if (monedaSel) monedaSel.value = 'USD';
   actualizarVisibilidadPozoJugador();
+  actualizarVisibilidadMonedaJugador();
 }
 
 function editarJugador(id) {
@@ -1627,7 +1893,13 @@ function editarJugador(id) {
   document.getElementById('jugadorTipoCuenta').value = j.tipo_cuenta;
   document.getElementById('jugadorPozoInicial').value = j.pozo_inicial || '';
   document.getElementById('jugadorActivo').checked = !!j.activo;
+  // "Moneda del Jugador" (18-09-2026) — precarga con la moneda que ya
+  // tiene guardada este cliente (el backend siempre la devuelve, sin
+  // importar el modo del grupo, ver routes/jugadores.js).
+  const monedaSel = document.getElementById('jugadorMoneda');
+  if (monedaSel) monedaSel.value = j.moneda === 'BS' ? 'BS' : 'USD';
   actualizarVisibilidadPozoJugador();
+  actualizarVisibilidadMonedaJugador();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1649,6 +1921,16 @@ async function guardarJugador() {
     pozoInicial: document.getElementById('jugadorPozoInicial').value || 0,
     comisionPropia: existente ? existente.comision_propia : 0
   };
+
+  // "Moneda del Jugador" (18-09-2026) — solo se manda cuando el selector
+  // está visible (grupo en modo 'mixto'); en modo fijo el backend la
+  // fuerza igual aunque no venga en el body (ver resolverMonedaJugador()
+  // en routes/jugadores.js), así que no hace falta mandarla ahí, pero
+  // tampoco molesta si se manda.
+  if (MONEDA_MODO_GRUPO === 'mixto') {
+    const monedaSel = document.getElementById('jugadorMoneda');
+    if (monedaSel) payload.moneda = monedaSel.value;
+  }
 
   try {
     if (id) {
@@ -1687,6 +1969,7 @@ function renderTablaJugadores() {
     const pozoTexto = j.tipo_cuenta === 'avalado' && j.pozo
       ? formatMoney(j.pozo.pozoDisponible) + ' disp. (' + formatMoney(j.pozo.pozoActual) + ' total)'
       : '—';
+    const monedaTexto = j.moneda === 'BS' ? '🇻🇪 Bs' : '🇺🇸 USD';
     const tr = document.createElement('tr');
     tr.innerHTML =
       '<td>' + j.nombre + '</td>' +
@@ -1694,12 +1977,244 @@ function renderTablaJugadores() {
       '<td>' + (j.notas || '—') + '</td>' +
       '<td>' + (j.tipo_cuenta === 'avalado' ? '🔒 Avalado' : '🆓 Libre') + '</td>' +
       '<td>' + pozoTexto + '</td>' +
+      '<td class="col-jugador-moneda" style="display:none;">' + monedaTexto + '</td>' +
       '<td>' + (j.activo ? 'Activo' : 'Inactivo') + '</td>' +
       '<td style="white-space:nowrap;">' +
         '<button type="button" class="btn-chico" onclick="editarJugador(\'' + j.id + '\')">✏️</button> ' +
         '<button type="button" class="btn-chico btn-secundario" onclick="copiarLinkCliente(\'' + j.token + '\',\'' + j.nombre.replace(/'/g, "\\'") + '\')">🔗 Link</button> ' +
         '<button type="button" class="btn-chico btn-secundario" onclick="abrirHistorialCliente(\'' + j.nombre.replace(/'/g, "\\'") + '\')">📖 Historial</button> ' +
         '<button type="button" class="btn-chico btn-peligro" onclick="eliminarJugador(\'' + j.id + '\')">🗑️</button>' +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+  // "col-jugador-moneda" (18-09-2026) — la columna (encabezado + cada
+  // celda) solo se muestra cuando el grupo está en modo 'mixto' (ver la
+  // nota grande junto a esta clase en grupo.html).
+  document.querySelectorAll('#tablaJugadores .col-jugador-moneda').forEach(el => {
+    el.style.display = (MONEDA_MODO_GRUPO === 'mixto') ? '' : 'none';
+  });
+}
+
+// =================================================================
+// ADMINISTRACIÓN > MONEDA DEL GRUPO (18-09-2026 — ver GET/PUT
+// /api/grupo/moneda-modo en routes/grupo.js y la nota grande en
+// sql/schema.sql). Cualquier sesión autenticada puede LEER el modo
+// actual (se usa para el selector de moneda del formulario de Jugador y
+// para decidir si los reportes con dinero se dividen en 2 bloques), pero
+// solo un Administrador puede CAMBIARLO — el backend ya responde 403 si
+// un Empleado intenta el PUT, y esta pestaña además está oculta por
+// completo para cualquier Empleado (ver aplicarPermisosEmpleado()).
+// =================================================================
+async function cargarMonedaModoGrupo() {
+  try {
+    const data = await api('/api/grupo/moneda-modo');
+    MONEDA_MODO_GRUPO = data.monedaModo;
+    const sel = document.getElementById('monedaModoSelect');
+    if (sel) sel.value = MONEDA_MODO_GRUPO;
+    // Estos 2 lugares leen MONEDA_MODO_GRUPO para decidir qué mostrar —
+    // se refrescan acá para que un cambio guardado en otra pestaña del
+    // navegador (u otro Administrador con sesión abierta a la vez) se
+    // refleje sin tener que recargar toda la página.
+    actualizarVisibilidadMonedaJugador();
+    renderTablaJugadores();
+  } catch (e) {
+    console.error('No se pudo cargar la moneda del grupo:', e);
+  }
+}
+
+async function guardarMonedaModoGrupo() {
+  const sel = document.getElementById('monedaModoSelect');
+  const nuevoModo = sel.value;
+  const aviso = document.getElementById('monedaModoGuardadoAviso');
+  if (aviso) aviso.style.display = 'none';
+
+  // Si el grupo VENÍA de 'mixto' y pasa a un modo fijo (USD o Bs), el
+  // backend fuerza esa moneda fija a TODOS los clientes de una vez (ver
+  // PUT /api/grupo/moneda-modo en routes/grupo.js) — sin importar la
+  // moneda que cada uno tenía. Se pide confirmar ESTE cambio puntual
+  // porque es el único de los 3 que reescribe datos ya guardados de
+  // golpe (cambiar entre 'usd' y 'bs' fijo, o pasar A 'mixto', no borra
+  // ni reescribe nada de cada jugador).
+  if (MONEDA_MODO_GRUPO === 'mixto' && nuevoModo !== 'mixto') {
+    const etiquetaNueva = nuevoModo === 'bs' ? 'Bolívares (Bs)' : 'Dólares (USD)';
+    const confirmado = confirm(
+      '⚠️ Vas a pasar el grupo de "Mixto" a "' + etiquetaNueva + '" fijo.\n\n' +
+      'Todos los clientes pasarán a usar ' + etiquetaNueva + ', sin importar la moneda que tenían antes. ¿Continuar?'
+    );
+    if (!confirmado) return;
+  }
+
+  try {
+    const data = await api('/api/grupo/moneda-modo', { method: 'PUT', body: JSON.stringify({ monedaModo: nuevoModo }) });
+    MONEDA_MODO_GRUPO = data.monedaModo;
+    if (aviso) { aviso.style.display = 'block'; }
+    // El formulario/tabla de Jugador y los reportes de Sábana/Balance
+    // General/% Devueltos dependen de esta variable — se refrescan de
+    // una vez para que el cambio se vea sin tener que ir y volver de
+    // pestaña.
+    actualizarVisibilidadMonedaJugador();
+    cargarJugadores();
+  } catch (e) {
+    alert('No se pudo guardar la moneda del grupo: ' + e.message);
+  }
+}
+
+// =================================================================
+// ADMINISTRACIÓN > EMPLEADOS (18-09-2026, a pedido del usuario:
+// "soluciona la cuentas separas por empleado dentro de un grupo... un
+// administrador que tiene acceso 100% y los empleados puedes elegir que
+// pueden o no hacer" — ver la nota grande en src/routes/empleados.js).
+// EXCLUSIVA del Administrador: la ruta ya responde 403 a un Empleado
+// (además de "requiereAdministrador", ver middleware/auth.js), y esta
+// pestaña está oculta por completo del sidebar para cualquier cuenta de
+// Empleado (ver aplicarPermisosEmpleado()).
+// =================================================================
+async function cargarEmpleados() {
+  try {
+    const [empleados, permisos] = await Promise.all([
+      api('/api/empleados'),
+      // Se pide siempre (no solo la primera vez) porque no cambia en la
+      // sesión y así se evita 1 llamada extra al backend a cada rato —
+      // igual es una lista chiquita (11 strings) y no cuesta nada
+      // repetirla mientras se sigue en esta misma pestaña.
+      PERMISOS_DISPONIBLES_CACHE.length > 0 ? PERMISOS_DISPONIBLES_CACHE : api('/api/empleados/permisos-disponibles')
+    ]);
+    EMPLEADOS_CACHE = empleados;
+    PERMISOS_DISPONIBLES_CACHE = permisos;
+    renderChecklistPermisosEmpleado();
+    renderTablaEmpleados();
+  } catch (e) {
+    console.error('No se pudo cargar la lista de Empleados:', e);
+  }
+}
+
+// Arma el checklist de permisos del formulario a partir de
+// PERMISOS_DISPONIBLES_CACHE (las 11 claves reales que acepta el
+// backend, ver GET /api/empleados/permisos-disponibles) en vez de
+// escribirlo a mano en grupo.html — si el backend agrega una clave
+// nueva el día de mañana, este checklist la muestra sola (con la clave
+// cruda como etiqueta de respaldo si ETIQUETAS_PERMISOS no la conoce
+// todavía) sin tener que tocar HTML.
+function renderChecklistPermisosEmpleado() {
+  const cont = document.getElementById('empleadoPermisosChecklist');
+  if (!cont) return;
+  cont.innerHTML = PERMISOS_DISPONIBLES_CACHE.map(clave =>
+    '<label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;">' +
+    '<input type="checkbox" class="chk-permiso-empleado" value="' + clave + '" style="width:auto;"> ' +
+    (ETIQUETAS_PERMISOS[clave] || clave) +
+    '</label>'
+  ).join('');
+}
+
+function marcarTodosPermisosEmpleado(marcar) {
+  document.querySelectorAll('.chk-permiso-empleado').forEach(cb => { cb.checked = marcar; });
+}
+
+function cancelarEdicionEmpleado() {
+  document.getElementById('empleadoEditandoId').value = '';
+  document.getElementById('empleadoFormTitulo').textContent = '➕ Registrar Empleado Nuevo';
+  document.getElementById('empleadoNombre').value = '';
+  document.getElementById('empleadoEmail').value = '';
+  document.getElementById('empleadoPassword').value = '';
+  document.getElementById('empleadoPassword').placeholder = 'Ej: ******';
+  const notaPassword = document.getElementById('empleadoPasswordNota');
+  if (notaPassword) notaPassword.textContent = ' (mín. 6 caracteres)';
+  document.getElementById('empleadoActivo').checked = true;
+  marcarTodosPermisosEmpleado(false);
+}
+
+function editarEmpleado(id) {
+  const emp = EMPLEADOS_CACHE.find(x => String(x.id) === String(id));
+  if (!emp) return;
+  document.getElementById('empleadoEditandoId').value = emp.id;
+  document.getElementById('empleadoFormTitulo').textContent = '✏️ Editando: ' + emp.nombre;
+  document.getElementById('empleadoNombre').value = emp.nombre;
+  document.getElementById('empleadoEmail').value = emp.email;
+  // La contraseña NUNCA se precarga (el backend no la devuelve, solo
+  // guarda el hash) — dejarla en blanco al editar significa "no
+  // cambiarla" (ver PUT /api/empleados/:id, actualización parcial).
+  document.getElementById('empleadoPassword').value = '';
+  document.getElementById('empleadoPassword').placeholder = 'Deja en blanco para no cambiarla';
+  const notaPassword = document.getElementById('empleadoPasswordNota');
+  if (notaPassword) notaPassword.textContent = ' (deja en blanco para no cambiarla)';
+  document.getElementById('empleadoActivo').checked = !!emp.activo;
+  const permisosDeEste = Array.isArray(emp.permisos) ? emp.permisos : [];
+  document.querySelectorAll('.chk-permiso-empleado').forEach(cb => { cb.checked = permisosDeEste.includes(cb.value); });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function guardarEmpleado() {
+  const id = document.getElementById('empleadoEditandoId').value;
+  const nombre = document.getElementById('empleadoNombre').value.trim();
+  const email = document.getElementById('empleadoEmail').value.trim();
+  const password = document.getElementById('empleadoPassword').value;
+  const permisos = Array.from(document.querySelectorAll('.chk-permiso-empleado:checked')).map(cb => cb.value);
+
+  if (!nombre) { alert('Ingresa el nombre del empleado.'); return; }
+  if (!email) { alert('Ingresa el email del empleado.'); return; }
+  // Al crear, la contraseña es obligatoria; al editar, en blanco = "no
+  // cambiarla" (ver la nota en cancelarEdicionEmpleado()/editarEmpleado()).
+  if (!id && (!password || password.length < 6)) { alert('Ingresa una contraseña de al menos 6 caracteres.'); return; }
+  if (id && password && password.length < 6) { alert('Si vas a cambiar la contraseña, debe tener al menos 6 caracteres.'); return; }
+
+  const payload = { nombre, email, permisos, activo: document.getElementById('empleadoActivo').checked };
+  if (password) payload.password = password;
+
+  try {
+    if (id) {
+      await api('/api/empleados/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await api('/api/empleados', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    cancelarEdicionEmpleado();
+    cargarEmpleados();
+  } catch (e) {
+    // El 409 ("ya existe una cuenta con ese email") ya viene con un
+    // mensaje legible desde el backend (ver routes/empleados.js) — se
+    // muestra tal cual, igual que cualquier otro error de este formulario.
+    alert('No se pudo guardar el empleado: ' + e.message);
+  }
+}
+
+async function eliminarEmpleado(id) {
+  const emp = EMPLEADOS_CACHE.find(x => String(x.id) === String(id));
+  if (!confirm('¿Eliminar la cuenta de "' + (emp ? emp.nombre : id) + '"? Ya no va a poder iniciar sesión.')) return;
+  try {
+    await api('/api/empleados/' + id, { method: 'DELETE' });
+    cargarEmpleados();
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+  }
+}
+
+function renderTablaEmpleados() {
+  const tbody = document.querySelector('#tablaEmpleados tbody');
+  tbody.innerHTML = '';
+  if (EMPLEADOS_CACHE.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">Todavía no registraste ningún Empleado.</td></tr>';
+    return;
+  }
+  EMPLEADOS_CACHE.forEach(emp => {
+    const cantidad = Array.isArray(emp.permisos) ? emp.permisos.length : 0;
+    // "Acceso total" (18-09-2026) — cuando un Empleado tiene los 11
+    // permisos marcados, mostrar "11 de 11" es técnicamente correcto
+    // pero menos claro que decirlo directo; PERMISOS_DISPONIBLES_CACHE
+    // puede no estar cargada todavía la primera vez (ej. si esta tabla
+    // se pintó antes de que resuelva esa llamada) — en ese caso se cae
+    // al conteo simple "N permiso(s)" en vez de comparar contra 0.
+    const totalDisponibles = PERMISOS_DISPONIBLES_CACHE.length;
+    const permisosTexto = (totalDisponibles > 0 && cantidad === totalDisponibles)
+      ? '✅ Acceso total (' + cantidad + ')'
+      : cantidad + ' permiso(s)';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + emp.nombre + '</td>' +
+      '<td>' + emp.email + '</td>' +
+      '<td>' + permisosTexto + '</td>' +
+      '<td>' + (emp.activo ? 'Activo' : 'Inactivo') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button type="button" class="btn-chico" onclick="editarEmpleado(\'' + emp.id + '\')">✏️</button> ' +
+        '<button type="button" class="btn-chico btn-peligro" onclick="eliminarEmpleado(\'' + emp.id + '\')">🗑️</button>' +
       '</td>';
     tbody.appendChild(tr);
   });
@@ -2047,6 +2562,64 @@ async function aplicarRangoRapidoPanel(prefijo) {
 // =================================================================
 // 9. ADMINISTRACIÓN > % DEVUELTOS
 // =================================================================
+// Pinta UN bloque de % Devueltos a partir de un objeto `data` con la
+// forma de siempre ({ porJugador, totalGeneral }). `sufijo` decide en
+// qué ids pinta ('' = de siempre, grupo NO mixto; 'USD'/'BS' = bloque
+// clonado, grupo mixto — ver asegurarBloquesPorcentajesMixto() más abajo)
+// y también sirve de prefijo para los ids de "ver detalle" de cada fila,
+// para que las 2 tablas (USD/Bs) no se pisen los mismos ids entre sí
+// (18-09-2026, "moneda del grupo").
+function pintarBloquePorcentajes(data, sufijo) {
+  sufijo = sufijo || '';
+  const totalEl = document.getElementById('pdTotalGeneral' + sufijo);
+  if (totalEl) totalEl.textContent = formatMoney(data.totalGeneral);
+
+  const tbody = document.querySelector('#tablaPorcentajesDevueltos' + sufijo + ' tbody');
+  tbody.innerHTML = '';
+  const nombres = Object.keys(data.porJugador).filter(n => data.porJugador[n].detalle.length > 0).sort();
+
+  nombres.forEach((nombre, idx) => {
+    const info = data.porJugador[nombre];
+    const idKey = sufijo + idx;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + nombre + '</td>' +
+      '<td>' + formatMoney(info.total) + '</td>' +
+      '<td><span class="detalle-toggle" onclick="togglePdDetalle(\'' + idKey + '\')">' + info.detalle.length + ' día(s) — ver detalle</span></td>';
+    tbody.appendChild(tr);
+
+    const trDetalle = document.createElement('tr');
+    trDetalle.className = 'fila-detalle-expandida';
+    trDetalle.id = 'pd-detalle-' + idKey;
+    trDetalle.style.display = 'none';
+    trDetalle.innerHTML = '<td colspan="3"><ul>' +
+      info.detalle.map(d => '<li>' + d.fecha + ': propia ' + formatMoney(d.comisionPropia) + ' + avalados ' + formatMoney(d.comisionAval) + ' = <strong>' + formatMoney(d.total) + '</strong></li>').join('') +
+      '</ul></td>';
+    tbody.appendChild(trDetalle);
+  });
+
+  if (nombres.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Nadie tiene % devuelto en este rango.</td></tr>';
+  }
+}
+
+// Construye, UNA sola vez, los 2 bloques de % Devueltos (USD/Bs) que se
+// usan cuando el grupo está en modo 'mixto' — mismas columnas que
+// #tablaPorcentajesDevueltos (clonando su <thead>).
+function asegurarBloquesPorcentajesMixto() {
+  const cont = document.getElementById('pdMixtoWrap');
+  if (!cont || cont.dataset.armado) return;
+  const filaEncabezado = document.querySelector('#tablaPorcentajesDevueltos thead tr').innerHTML;
+  const bloque = (sufijo, titulo) =>
+    '<div style="margin-top:18px;">' +
+    '<h3 style="margin:0 0 6px; color:var(--accent-cyan);">' + titulo + '</h3>' +
+    '<p style="margin:0 0 8px;">Total devuelto en el rango: <strong id="pdTotalGeneral' + sufijo + '" style="color:#facc15;">$0.00</strong></p>' +
+    '<table id="tablaPorcentajesDevueltos' + sufijo + '" class="tabla-porcentajes-devueltos"><thead><tr>' + filaEncabezado + '</tr></thead><tbody></tbody></table>' +
+    '</div>';
+  cont.innerHTML = bloque('USD', '🇺🇸 Dólares (USD)') + bloque('BS', '🇻🇪 Bolívares (Bs)');
+  cont.dataset.armado = '1';
+}
+
 async function renderPorcentajesDevueltos() {
   const desde = document.getElementById('pdDesde').value;
   const hasta = document.getElementById('pdHasta').value;
@@ -2054,33 +2627,22 @@ async function renderPorcentajesDevueltos() {
 
   try {
     const data = await api('/api/reportes/porcentajes-devueltos?desde=' + desde + '&hasta=' + hasta);
-    document.getElementById('pdTotalGeneral').textContent = formatMoney(data.totalGeneral);
+    const bloqueNormal = document.getElementById('pdTablaWrapNormal');
+    const bloqueMixto = document.getElementById('pdMixtoWrap');
 
-    const tbody = document.querySelector('#tablaPorcentajesDevueltos tbody');
-    tbody.innerHTML = '';
-    const nombres = Object.keys(data.porJugador).filter(n => data.porJugador[n].detalle.length > 0).sort();
-
-    nombres.forEach((nombre, idx) => {
-      const info = data.porJugador[nombre];
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + nombre + '</td>' +
-        '<td>' + formatMoney(info.total) + '</td>' +
-        '<td><span class="detalle-toggle" onclick="togglePdDetalle(' + idx + ')">' + info.detalle.length + ' día(s) — ver detalle</span></td>';
-      tbody.appendChild(tr);
-
-      const trDetalle = document.createElement('tr');
-      trDetalle.className = 'fila-detalle-expandida';
-      trDetalle.id = 'pd-detalle-' + idx;
-      trDetalle.style.display = 'none';
-      trDetalle.innerHTML = '<td colspan="3"><ul>' +
-        info.detalle.map(d => '<li>' + d.fecha + ': propia ' + formatMoney(d.comisionPropia) + ' + avalados ' + formatMoney(d.comisionAval) + ' = <strong>' + formatMoney(d.total) + '</strong></li>').join('') +
-        '</ul></td>';
-      tbody.appendChild(trDetalle);
-    });
-
-    if (nombres.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Nadie tiene % devuelto en este rango.</td></tr>';
+    // "Moneda del Grupo" (18-09-2026, mixto) — data.mixto viene del
+    // backend (ver routes/reportes.js); reutiliza pintarBloquePorcentajes()
+    // 2 veces en vez de un camino de pintado aparte.
+    if (data.mixto) {
+      asegurarBloquesPorcentajesMixto();
+      if (bloqueNormal) bloqueNormal.style.display = 'none';
+      if (bloqueMixto) bloqueMixto.style.display = 'block';
+      pintarBloquePorcentajes(data.USD, 'USD');
+      pintarBloquePorcentajes(data.BS, 'BS');
+    } else {
+      if (bloqueMixto) bloqueMixto.style.display = 'none';
+      if (bloqueNormal) bloqueNormal.style.display = '';
+      pintarBloquePorcentajes(data, '');
     }
   } catch (e) {
     console.error(e);
@@ -2088,8 +2650,13 @@ async function renderPorcentajesDevueltos() {
   cargarConfirmacionRango('pd', desde, hasta);
 }
 
-function togglePdDetalle(idx) {
-  const fila = document.getElementById('pd-detalle-' + idx);
+// `idKey` (18-09-2026, "moneda del grupo" mixto) — antes era solo el
+// índice numérico de la fila ('pd-detalle-3'); ahora es el string
+// completo que ya arma pintarBloquePorcentajes() (sufijo + índice, ej.
+// 'USD3'), para que las filas del bloque normal y las de los 2 bloques
+// USD/Bs nunca compartan el mismo id.
+function togglePdDetalle(idKey) {
+  const fila = document.getElementById('pd-detalle-' + idKey);
   if (fila) fila.style.display = fila.style.display === 'none' ? 'table-row' : 'none';
 }
 
@@ -2102,10 +2669,15 @@ function togglePdDetalle(idx) {
 // rango es más largo que el límite que puso el backend (ver
 // calcularBalancePorDia() en balanceGeneral.js), en cuyo caso se oculta
 // la tabla en vez de mostrarla vacía o a medias.
-function renderDesgloseDiarioBalance(dias) {
-  const caja = document.getElementById('bgDesgloseDiario');
-  const filaDias = document.getElementById('bgDesgloseDiarioDias');
-  const filaMontos = document.getElementById('bgDesgloseDiarioMontos');
+// `sufijo` (18-09-2026, "moneda del grupo" mixto) — '' pinta en los ids
+// de siempre ("bgDesgloseDiario"...); 'USD'/'BS' pinta en la copia de
+// ese mismo bloque que arma asegurarBloquesBalanceGeneralMixto() más
+// abajo, para reutilizar esta función 2 veces sin duplicar su lógica.
+function renderDesgloseDiarioBalance(dias, sufijo) {
+  sufijo = sufijo || '';
+  const caja = document.getElementById('bgDesgloseDiario' + sufijo);
+  const filaDias = document.getElementById('bgDesgloseDiarioDias' + sufijo);
+  const filaMontos = document.getElementById('bgDesgloseDiarioMontos' + sufijo);
   if (!caja || !filaDias || !filaMontos) return;
 
   if (!dias || dias.length === 0) {
@@ -2120,6 +2692,117 @@ function renderDesgloseDiarioBalance(dias) {
   ).join('');
 }
 
+// Pinta UN bloque completo de Balance General (stat de balance banca,
+// desglose diario y la tabla de clientes con su fila TOTAL) a partir de
+// un objeto `data` con la forma de siempre (balanceBanca, balanceBancaPolla,
+// porDia, filas, filaTotal). `sufijo` decide EN QUÉ ids pinta: '' son los
+// de siempre (grupo NO mixto); 'USD'/'BS' son los del bloque clonado
+// correspondiente (grupo mixto, ver asegurarBloquesBalanceGeneralMixto()
+// más abajo) — así esta misma función se reutiliza 2 veces en vez de
+// duplicar toda esta lógica de pintado (18-09-2026, "moneda del grupo").
+function pintarBloqueBalanceGeneral(data, sufijo, desde, hasta) {
+  sufijo = sufijo || '';
+  const bancaEl = document.getElementById('bgBalanceBanca' + sufijo);
+  if (bancaEl) {
+    bancaEl.textContent = formatMoney(data.balanceBanca);
+    bancaEl.style.color = data.balanceBanca >= 0 ? '#27ae60' : '#c0392b';
+  }
+
+  // "Banca Polla" (02-09-2026, a pedido del usuario): se sigue
+  // mostrando aparte como desglose informativo, pero "Balance de la
+  // banca" de arriba YA la incluye (03-09-2026, ver balanceGeneral.js).
+  const bancaPollaEl = document.getElementById('bgBalanceBancaPolla' + sufijo);
+  if (bancaPollaEl) {
+    bancaPollaEl.textContent = formatMoney(data.balanceBancaPolla || 0);
+    bancaPollaEl.style.color = (data.balanceBancaPolla || 0) >= 0 ? '#27ae60' : '#c0392b';
+  }
+
+  renderDesgloseDiarioBalance(data.porDia || [], sufijo);
+
+  const tbody = document.querySelector('#tablaBalanceGeneral' + sufijo + ' tbody');
+  tbody.innerHTML = '';
+  data.filas.forEach(f => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + f.cliente + '</td>' +
+      '<td class="col-arriesgado">' + formatMoney(f.arriesgado) + '</td>' +
+      '<td class="col-ganado">' + formatMoney(f.ganado) + '</td>' +
+      '<td class="col-perdido">' + formatMoney(f.perdido) + '</td>' +
+      '<td class="col-comision">' + formatMoney(f.comision) + '</td>' +
+      '<td class="col-transferencias">' + formatMoney(f.transferencias) + '</td>' +
+      '<td class="col-polla">' + formatMoney(f.polla || 0) + '</td>' +
+      '<td class="col-saldo" style="font-weight:bold; color:' + (f.saldoCliente >= 0 ? '#27ae60' : '#c0392b') + ';">' + formatMoney(f.saldoCliente) + '</td>' +
+      // "👁️ Ver" (02-09-2026, a pedido del usuario): abre el mismo modal
+      // de "📖 Historial" (tickets + Polla), precargado con el rango que
+      // se está viendo acá — antes no había ninguna forma de ver el
+      // detalle de un cliente desde Balance General, así que un cliente
+      // que solo juega Polla mostraba su saldo pero ningún clic
+      // explicaba de dónde salía.
+      '<td class="col-ver"><button type="button" class="btn-chico btn-secundario" onclick="abrirHistorialCliente(\'' + f.cliente.replace(/'/g, "\\'") + '\', \'' + desde + '\', \'' + hasta + '\')">👁️ Ver</button></td>';
+    tbody.appendChild(tr);
+  });
+  if (data.filas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#888;">Sin movimientos en este rango.</td></tr>';
+  }
+
+  // Fila de "TOTAL" (03-09-2026, a pedido del usuario): la Polla de
+  // cada cliente ya estaba adentro de su "Saldo Cliente" — lo que
+  // faltaba era una fila que sumara TODA la tabla (incluida la Polla)
+  // en un solo número al final, en blanco/resaltado para que se
+  // distinga de las filas de clientes normales.
+  if (data.filaTotal && data.filas.length > 0) {
+    const t = data.filaTotal;
+    const trTotal = document.createElement('tr');
+    trTotal.className = 'fila-total-balance';
+    // Arreglo (15-09-2026, misma familia de bug que el chip de apodos:
+    // fondo claro sin color de texto propio → hereda el blanco del
+    // tema oscuro y queda ilegible). Fondo celeste clarito + texto
+    // azul oscuro, y el borde superior pasa del gris genérico al azul
+    // de acento de Ludox.
+    trTotal.style.cssText = 'background:#eaf6ff; color:#0d1326; font-weight:bold; border-top:2px solid #2f6bff;';
+    trTotal.innerHTML =
+      '<td>TOTAL</td>' +
+      '<td class="col-arriesgado">' + formatMoney(t.arriesgado) + '</td>' +
+      '<td class="col-ganado">' + formatMoney(t.ganado) + '</td>' +
+      '<td class="col-perdido">' + formatMoney(t.perdido) + '</td>' +
+      '<td class="col-comision">' + formatMoney(t.comision) + '</td>' +
+      '<td class="col-transferencias">' + formatMoney(t.transferencias) + '</td>' +
+      '<td class="col-polla">' + formatMoney(t.polla || 0) + '</td>' +
+      '<td class="col-saldo" style="color:' + (t.saldoCliente >= 0 ? '#27ae60' : '#c0392b') + ';">' + formatMoney(t.saldoCliente) + '</td>' +
+      '<td class="col-ver"></td>';
+    tbody.appendChild(trTotal);
+  }
+}
+
+// Construye, UNA sola vez, los 2 bloques de Balance General (USD/Bs) que
+// se usan cuando el grupo está en modo 'mixto' — clona el <thead> de
+// #tablaBalanceGeneral (mismas columnas) y arma el mismo mini-stat de
+// "Balance de la banca"/"Banca Polla" y el mismo desglose diario que ya
+// tiene el bloque normal, con ids con sufijo "USD"/"BS" para que
+// pintarBloqueBalanceGeneral()/renderDesgloseDiarioBalance() los puedan
+// pintar sin tocar nada del bloque normal. NO incluye el botón "📸
+// Capturar tabla como imagen" — decisión propia por alcance, ver el
+// comentario junto a "bgTablaWrapNormal" en grupo.html.
+function asegurarBloquesBalanceGeneralMixto() {
+  const cont = document.getElementById('bgMixtoWrap');
+  if (!cont || cont.dataset.armado) return;
+  const filaEncabezado = document.querySelector('#tablaBalanceGeneral thead tr').innerHTML;
+  const bloque = (sufijo, titulo) =>
+    '<div style="margin-top:22px; padding-top:14px; border-top:1px solid var(--card-border);">' +
+    '<h3 style="margin:0 0 10px; color:var(--accent-cyan);">' + titulo + '</h3>' +
+    '<div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:10px;">' +
+    '<div><label style="display:block;">Balance de la banca:</label><p id="bgBalanceBanca' + sufijo + '" style="margin:0; font-size:18px; font-weight:bold;">$0.00</p></div>' +
+    '<div><label style="display:block;">— de eso, Banca Polla:</label><p id="bgBalanceBancaPolla' + sufijo + '" style="margin:0; font-size:18px; font-weight:bold;">$0.00</p></div>' +
+    '</div>' +
+    '<div id="bgDesgloseDiario' + sufijo + '" style="display:none; margin:10px 0; overflow-x:auto;">' +
+    '<table style="min-width:100%; width:auto;"><thead><tr id="bgDesgloseDiarioDias' + sufijo + '"></tr></thead><tbody><tr id="bgDesgloseDiarioMontos' + sufijo + '"></tr></tbody></table>' +
+    '</div>' +
+    '<table id="tablaBalanceGeneral' + sufijo + '" class="tabla-balance-general" style="margin-top:10px;"><thead><tr>' + filaEncabezado + '</tr></thead><tbody></tbody></table>' +
+    '</div>';
+  cont.innerHTML = bloque('USD', '🇺🇸 Dólares (USD)') + bloque('BS', '🇻🇪 Bolívares (Bs)');
+  cont.dataset.armado = '1';
+}
+
 async function renderBalanceGeneral() {
   const desde = document.getElementById('bgDesde').value;
   const hasta = document.getElementById('bgHasta').value;
@@ -2127,73 +2810,24 @@ async function renderBalanceGeneral() {
 
   try {
     const data = await api('/api/reportes/balance-general?desde=' + desde + '&hasta=' + hasta);
-    const bancaEl = document.getElementById('bgBalanceBanca');
-    bancaEl.textContent = formatMoney(data.balanceBanca);
-    bancaEl.style.color = data.balanceBanca >= 0 ? '#27ae60' : '#c0392b';
+    const bloqueNormal = document.getElementById('bgTablaWrapNormal');
+    const bloqueMixto = document.getElementById('bgMixtoWrap');
 
-    // "Banca Polla" (02-09-2026, a pedido del usuario): se sigue
-    // mostrando aparte como desglose informativo, pero "Balance de la
-    // banca" de arriba YA la incluye (03-09-2026, ver balanceGeneral.js).
-    const bancaPollaEl = document.getElementById('bgBalanceBancaPolla');
-    if (bancaPollaEl) {
-      bancaPollaEl.textContent = formatMoney(data.balanceBancaPolla || 0);
-      bancaPollaEl.style.color = (data.balanceBancaPolla || 0) >= 0 ? '#27ae60' : '#c0392b';
-    }
-
-    renderDesgloseDiarioBalance(data.porDia || []);
-
-    const tbody = document.querySelector('#tablaBalanceGeneral tbody');
-    tbody.innerHTML = '';
-    data.filas.forEach(f => {
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + f.cliente + '</td>' +
-        '<td class="col-arriesgado">' + formatMoney(f.arriesgado) + '</td>' +
-        '<td class="col-ganado">' + formatMoney(f.ganado) + '</td>' +
-        '<td class="col-perdido">' + formatMoney(f.perdido) + '</td>' +
-        '<td class="col-comision">' + formatMoney(f.comision) + '</td>' +
-        '<td class="col-transferencias">' + formatMoney(f.transferencias) + '</td>' +
-        '<td class="col-polla">' + formatMoney(f.polla || 0) + '</td>' +
-        '<td class="col-saldo" style="font-weight:bold; color:' + (f.saldoCliente >= 0 ? '#27ae60' : '#c0392b') + ';">' + formatMoney(f.saldoCliente) + '</td>' +
-        // "👁️ Ver" (02-09-2026, a pedido del usuario): abre el mismo modal
-        // de "📖 Historial" (tickets + Polla), precargado con el rango que
-        // se está viendo acá — antes no había ninguna forma de ver el
-        // detalle de un cliente desde Balance General, así que un cliente
-        // que solo juega Polla mostraba su saldo pero ningún clic
-        // explicaba de dónde salía.
-        '<td class="col-ver"><button type="button" class="btn-chico btn-secundario" onclick="abrirHistorialCliente(\'' + f.cliente.replace(/'/g, "\\'") + '\', \'' + desde + '\', \'' + hasta + '\')">👁️ Ver</button></td>';
-      tbody.appendChild(tr);
-    });
-    if (data.filas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#888;">Sin movimientos en este rango.</td></tr>';
-    }
-
-    // Fila de "TOTAL" (03-09-2026, a pedido del usuario): la Polla de
-    // cada cliente ya estaba adentro de su "Saldo Cliente" — lo que
-    // faltaba era una fila que sumara TODA la tabla (incluida la Polla)
-    // en un solo número al final, en blanco/resaltado para que se
-    // distinga de las filas de clientes normales.
-    if (data.filaTotal && data.filas.length > 0) {
-      const t = data.filaTotal;
-      const trTotal = document.createElement('tr');
-      trTotal.className = 'fila-total-balance';
-      // Arreglo (15-09-2026, misma familia de bug que el chip de apodos:
-      // fondo claro sin color de texto propio → hereda el blanco del
-      // tema oscuro y queda ilegible). Fondo celeste clarito + texto
-      // azul oscuro, y el borde superior pasa del gris genérico al azul
-      // de acento de Ludox.
-      trTotal.style.cssText = 'background:#eaf6ff; color:#0d1326; font-weight:bold; border-top:2px solid #2f6bff;';
-      trTotal.innerHTML =
-        '<td>TOTAL</td>' +
-        '<td class="col-arriesgado">' + formatMoney(t.arriesgado) + '</td>' +
-        '<td class="col-ganado">' + formatMoney(t.ganado) + '</td>' +
-        '<td class="col-perdido">' + formatMoney(t.perdido) + '</td>' +
-        '<td class="col-comision">' + formatMoney(t.comision) + '</td>' +
-        '<td class="col-transferencias">' + formatMoney(t.transferencias) + '</td>' +
-        '<td class="col-polla">' + formatMoney(t.polla || 0) + '</td>' +
-        '<td class="col-saldo" style="color:' + (t.saldoCliente >= 0 ? '#27ae60' : '#c0392b') + ';">' + formatMoney(t.saldoCliente) + '</td>' +
-        '<td class="col-ver"></td>';
-      tbody.appendChild(trTotal);
+    // "Moneda del Grupo" (18-09-2026, mixto) — data.mixto viene del
+    // backend (ver routes/reportes.js); cuando es true, data.USD/data.BS
+    // ya traen la forma NORMAL completa (balanceBanca, porDia, filas,
+    // filaTotal...) cada uno, así que se reutiliza pintarBloqueBalanceGeneral()
+    // 2 veces en vez de un tercer camino de pintado.
+    if (data.mixto) {
+      asegurarBloquesBalanceGeneralMixto();
+      if (bloqueNormal) bloqueNormal.style.display = 'none';
+      if (bloqueMixto) bloqueMixto.style.display = 'block';
+      pintarBloqueBalanceGeneral(data.USD, 'USD', desde, hasta);
+      pintarBloqueBalanceGeneral(data.BS, 'BS', desde, hasta);
+    } else {
+      if (bloqueMixto) bloqueMixto.style.display = 'none';
+      if (bloqueNormal) bloqueNormal.style.display = '';
+      pintarBloqueBalanceGeneral(data, '', desde, hasta);
     }
     aplicarVisibilidadColumnasBalance();
   } catch (e) {
@@ -2260,7 +2894,12 @@ function cargarColumnasBalanceGuardadas() {
 function aplicarVisibilidadColumnasBalance() {
   COLUMNAS_BALANCE.forEach(([checkboxId, claseColumna]) => {
     const visible = document.getElementById(checkboxId) ? document.getElementById(checkboxId).checked : true;
-    document.querySelectorAll('#tablaBalanceGeneral .' + claseColumna).forEach(el => {
+    // Selector generalizado (18-09-2026, "moneda del grupo" mixto): antes
+    // apuntaba solo a "#tablaBalanceGeneral .clase"; ahora usa la clase
+    // compartida ".tabla-balance-general" para afectar por igual a la
+    // tabla única (grupo NO mixto) y a las 2 tablas USD/Bs armadas por
+    // asegurarBloquesBalanceGeneralMixto() (grupo mixto).
+    document.querySelectorAll('.tabla-balance-general .' + claseColumna).forEach(el => {
       el.style.display = visible ? '' : 'none';
     });
   });
@@ -2542,7 +3181,25 @@ async function cargarSabanaDia() {
     renderTablaSabanaDia(sabana.tickets);
     renderTablaSabanaDiaPolla(sabana.polla);
     renderJuegosSabanaDia(sabana.juegos);
-    renderPizarraSabanaDia(sabana.resumenPorCliente);
+
+    // "Moneda del Grupo" (18-09-2026, mixto) — mismo criterio que
+    // pintarResultadoSabana() (Sábana/Procesar): si el grupo está en modo
+    // 'mixto', GET /api/sabana/dia trae "porMoneda" y se pintan 2
+    // bloques de "Resultados de los Clientes" (USD/Bs) reutilizando la
+    // MISMA renderPizarraSabanaDia() de siempre, apuntando a un
+    // contenedor distinto cada vez.
+    const pizarraNormal = document.getElementById('pizarraSabanaDia');
+    const pizarraMixtoWrap = document.getElementById('pizarraSabanaDiaMixtoWrap');
+    if (sabana.porMoneda) {
+      if (pizarraNormal) pizarraNormal.style.display = 'none';
+      if (pizarraMixtoWrap) pizarraMixtoWrap.style.display = 'block';
+      renderPizarraSabanaDia(sabana.porMoneda.USD.filas, 'pizarraSabanaDiaUSD');
+      renderPizarraSabanaDia(sabana.porMoneda.BS.filas, 'pizarraSabanaDiaBS');
+    } else {
+      if (pizarraNormal) pizarraNormal.style.display = 'flex';
+      if (pizarraMixtoWrap) pizarraMixtoWrap.style.display = 'none';
+      renderPizarraSabanaDia(sabana.resumenPorCliente);
+    }
     aplicarVisibilidadColumnasSabanaDia();
   } catch (e) {
     alert('No se pudo cargar la sábana de esa fecha: ' + e.message);
@@ -2756,8 +3413,13 @@ function renderJuegosSabanaDia(juegos) {
 // "👥 Resultados de los Clientes": una tarjeta por cliente con lo que YA
 // quedó guardado en cada ticket (cuántos ganó/perdió/quedaron
 // pendientes) más la polla si jugó.
-function renderPizarraSabanaDia(resumenPorCliente) {
-  const cont = document.getElementById('pizarraSabanaDia');
+// `containerId` (18-09-2026, "moneda del grupo" mixto) — por defecto
+// pinta en el contenedor de siempre ("pizarraSabanaDia"), pero se puede
+// apuntar a otro (ej. "pizarraSabanaDiaUSD") para reutilizar esta misma
+// función 2 veces cuando el grupo está en modo mixto — ver
+// cargarSabanaDia() más arriba.
+function renderPizarraSabanaDia(resumenPorCliente, containerId) {
+  const cont = document.getElementById(containerId || 'pizarraSabanaDia');
   if (!resumenPorCliente || resumenPorCliente.length === 0) {
     cont.innerHTML = '<p style="color:#888;">Sin clientes esta fecha.</p>';
     return;
@@ -3094,6 +3756,8 @@ function copiarExtraerSabanaTexto() {
 const NOMBRES_DEPORTE = { mlb: 'MLB (Béisbol)', nfl: 'NFL (Fútbol Americano)', nhl: 'NHL (Hockey)', soccer: 'Fútbol', basket: 'Basket (NBA)' };
 
 async function actualizarBadgeAlertas() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba).
+  if (!tienePermiso('alertas')) return;
   try {
     const { total } = await api('/api/sabana/alertas/conteo-no-leidas');
     const badge = document.getElementById('alertasBadge');
@@ -3127,6 +3791,12 @@ const NOMBRES_ESTADO_PAGO = { pendiente: 'Pendiente', confirmado: 'Confirmado', 
 const TOPE_CAPTURA_PAGO_BYTES = 4 * 1024 * 1024; // 4MB — igual al tope que valida src/routes/pagos.js del lado del servidor
 
 async function cargarPagosGrupo() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — esta
+  // pestaña ya está oculta del sidebar para un Empleado sin permiso
+  // 'pagos' (ver aplicarPermisosEmpleado()), pero mostrarVista('pagos')
+  // podría llegar a llamarse igual (ej. quedó como VISTA_ACTUAL de una
+  // sesión vieja) — sin este alto explícito, terminaría deslogueado.
+  if (!tienePermiso('pagos')) return;
   const fechaInput = document.getElementById('pagoFecha');
   if (fechaInput && !fechaInput.value) fechaInput.value = hoyISO();
 
@@ -3162,6 +3832,8 @@ function renderPagosGrupo(pagos) {
 // pestaña (por eso también se llama desde revisarNotificacionesFondo()
 // más arriba, no solo al entrar a la pestaña "💳 Pagos").
 async function actualizarBadgePagosGrupo(pagosYaCargados) {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba).
+  if (!tienePermiso('pagos')) return;
   try {
     const pagos = pagosYaCargados || await api('/api/pagos');
     const rechazados = pagos.filter(p => p.estado === 'rechazado').length;
@@ -3406,6 +4078,10 @@ function cerrarChatWidget() {
 }
 
 async function actualizarBadgeChatWidget() {
+  // Guarda de permiso (18-09-2026, ver tienePermiso() más arriba) — el
+  // chat de soporte vive gateado por el mismo permiso 'alertas' del lado
+  // del backend (ver routes/sabana.js).
+  if (!tienePermiso('alertas')) return;
   try {
     const { total } = await api('/api/sabana/chat/conteo-no-leidos');
     const badge = document.getElementById('chatWidgetBadge');

@@ -38,14 +38,22 @@ const { calcularPollaPorCliente } = require('./polla');
 // calcularResumenHistorico (para que acumule comisionPorTipoAcumulada por
 // ticket) y a calcularComisionTotalCliente (para que la use en vez de
 // arriesgadoComisionable*pct). Si se omite, comportamiento de siempre.
-async function calcularBalanceGeneral(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision) {
+//
+// nombresPermitidos (18-09-2026, opcional, "moneda del grupo" — ver la
+// nota grande en sql/schema.sql): un Set de nombres de cliente, para
+// cuando el grupo está en modo 'mixto' y hace falta un Balance General
+// SEPARADO por moneda (uno con solo los clientes en USD, otro con solo
+// los de BS) en vez de un solo total que mezclaría las dos monedas en un
+// mismo número. Si se omite (comportamiento de siempre), entran TODOS
+// los clientes, sin filtrar — así ningún llamador existente cambia.
+async function calcularBalanceGeneral(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision, nombresPermitidos) {
   const modelo = configComision && configComision.modelo;
   const tiers = configComision && configComision.tiers;
   const resumen = await calcularResumenHistorico(grupoId, desde, hasta, modelo, tiers);
   const transferencias = await calcularTransferenciasPorCliente(grupoId, desde, hasta);
   const polla = await calcularPollaPorCliente(grupoId, desde, hasta);
 
-  const clientes = new Set(Object.keys(resumen));
+  let clientes = new Set(Object.keys(resumen));
   Object.keys(transferencias).forEach(c => clientes.add(c));
   Object.keys(polla).forEach(c => clientes.add(c));
 
@@ -75,6 +83,15 @@ async function calcularBalanceGeneral(grupoId, desde, hasta, porcentajesPropios,
     const comisionSiAvala = calcularComisionTotalCliente(avalador, resumen, porcentajesPropios, avalesMap, configComision);
     if (Math.abs(comisionSiAvala.total) > 0.001) clientes.add(avalador);
   });
+
+  // Filtro de moneda (ver comentario grande arriba) — se aplica AL
+  // FINAL, después de armar el Set completo con el mismo criterio de
+  // siempre (incluye avaladores que solo aparecen por su comisión), para
+  // no cambiar en nada qué clientes califican — solo cuáles de ellos se
+  // muestran en ESTE bloque puntual.
+  if (nombresPermitidos) {
+    clientes = new Set([...clientes].filter(c => nombresPermitidos.has(c)));
+  }
 
   let totalBancaGeneral = 0;
   let totalBancaPolla = 0;
@@ -160,14 +177,14 @@ function listaDeFechas(desde, hasta) {
   return fechas;
 }
 
-async function calcularBalancePorDia(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision) {
+async function calcularBalancePorDia(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision, nombresPermitidos) {
   if (!desde || !hasta) return [];
   const fechas = listaDeFechas(desde, hasta);
   if (fechas.length === 0 || fechas.length > LIMITE_DIAS_DESGLOSE) return [];
 
   const dias = [];
   for (const fecha of fechas) {
-    const resultado = await calcularBalanceGeneral(grupoId, fecha, fecha, porcentajesPropios, avalesMap, configComision);
+    const resultado = await calcularBalanceGeneral(grupoId, fecha, fecha, porcentajesPropios, avalesMap, configComision, nombresPermitidos);
     dias.push({ fecha, balanceBanca: resultado.balanceBanca });
   }
   return dias;

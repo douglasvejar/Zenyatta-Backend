@@ -6,11 +6,12 @@
 // original, pero aislado por grupo.
 const express = require('express');
 const db = require('../db');
-const { requiereGrupo } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
+router.use(requierePermiso('equipos'));
 
 router.get('/', asyncHandler(async (req, res) => {
   const r = await db.query(

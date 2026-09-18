@@ -1,8 +1,15 @@
-// Login del rol "Grupo" (administrador del negocio de apuestas).
+// Login del rol "Grupo" (administrador del negocio de apuestas) Y de sus
+// Empleados (18-09-2026, a pedido del usuario — ver la nota grande en
+// sql/schema.sql, tabla "empleados"). Un solo formulario de login para
+// los dos: primero se busca el email en "grupos" (el dueño); si no
+// aparece ahí, se busca en "empleados" (una cuenta de acceso limitado
+// DENTRO de un grupo). No hace falta que quien entra sepa de antemano si
+// es "el administrador" o "un empleado" — el panel (grupo.html) se
+// adapta solo según lo que devuelva este login (grupo.rol/permisos).
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { firmarSesionGrupo } = require('../middleware/auth');
+const { firmarSesionGrupo, firmarSesionEmpleado } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
@@ -13,25 +20,52 @@ router.post('/login', asyncHandler(async (req, res) => {
 
   const r = await db.query('SELECT * FROM grupos WHERE email = $1', [email]);
   const grupo = r.rows[0];
-  if (!grupo) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
 
-  const ok = await bcrypt.compare(password, grupo.password_hash);
-  if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+  if (grupo) {
+    const ok = await bcrypt.compare(password, grupo.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    if (!grupo.activo) return res.status(403).json({ error: 'Esta cuenta todavía no está activada. Contacta al administrador de la plataforma.' });
 
-  if (!grupo.activo) return res.status(403).json({ error: 'Esta cuenta todavía no está activada. Contacta al administrador de la plataforma.' });
+    // Registra el último inicio de sesión (fecha/hora, IP, y el navegador/SO
+    // que reportó el propio navegador vía User-Agent) — lo usa la pantalla
+    // de detalle de Súper-admin (ver src/routes/superadmin.js). No bloquea
+    // el login si esto falla por algún motivo raro: es un UPDATE aparte, no
+    // se espera (await) ni se mete en el camino crítico de responder al login.
+    db.query(
+      'UPDATE grupos SET ultimo_login_en = now(), ultimo_login_ip = $1, ultimo_login_user_agent = $2 WHERE id = $3',
+      [req.ip || null, req.headers['user-agent'] || null, grupo.id]
+    ).catch(e => console.error('No se pudo registrar el último login (no afecta el login en sí):', e.message));
 
-  // Registra el último inicio de sesión (fecha/hora, IP, y el navegador/SO
-  // que reportó el propio navegador vía User-Agent) — lo usa la pantalla
-  // de detalle de Súper-admin (ver src/routes/superadmin.js). No bloquea
-  // el login si esto falla por algún motivo raro: es un UPDATE aparte, no
-  // se espera (await) ni se mete en el camino crítico de responder al login.
+    const token = firmarSesionGrupo(grupo);
+    return res.json({ token, grupo: { id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null } });
+  }
+
+  // No es el Administrador de ningún grupo — probamos si es un Empleado.
+  const r2 = await db.query(
+    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre
+       FROM empleados e JOIN grupos g ON g.id = e.grupo_id
+      WHERE e.email = $1`,
+    [email]
+  );
+  const empleado = r2.rows[0];
+  if (!empleado) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+
+  const okEmpleado = await bcrypt.compare(password, empleado.password_hash);
+  if (!okEmpleado) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+  if (!empleado.grupo_activo) return res.status(403).json({ error: 'Esta cuenta todavía no está activada. Contacta al administrador de la plataforma.' });
+  if (!empleado.activo) return res.status(403).json({ error: 'Esta cuenta de empleado fue desactivada. Contacta al administrador de tu grupo.' });
+
   db.query(
-    'UPDATE grupos SET ultimo_login_en = now(), ultimo_login_ip = $1, ultimo_login_user_agent = $2 WHERE id = $3',
-    [req.ip || null, req.headers['user-agent'] || null, grupo.id]
-  ).catch(e => console.error('No se pudo registrar el último login (no afecta el login en sí):', e.message));
+    'UPDATE empleados SET ultimo_login_en = now(), ultimo_login_ip = $1, ultimo_login_user_agent = $2 WHERE id = $3',
+    [req.ip || null, req.headers['user-agent'] || null, empleado.id]
+  ).catch(e => console.error('No se pudo registrar el último login del empleado (no afecta el login en sí):', e.message));
 
-  const token = firmarSesionGrupo(grupo);
-  res.json({ token, grupo: { id: grupo.id, nombre: grupo.nombre, email: grupo.email } });
+  const tokenEmpleado = firmarSesionEmpleado(empleado);
+  const permisos = Array.isArray(empleado.permisos) ? empleado.permisos : [];
+  res.json({
+    token: tokenEmpleado,
+    grupo: { id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre }
+  });
 }));
 
 module.exports = router;

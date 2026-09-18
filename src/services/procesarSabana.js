@@ -523,6 +523,14 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
     totalDevolucionesSum += comision.total;
     const polla = pollaPorCliente[cliente] || 0;
     totalPollaSum += polla;
+    // "moneda del grupo" (18-09-2026) — se etiqueta cada fila con la
+    // moneda de ESE cliente (jugadores.moneda) para que routes/sabana.js
+    // pueda partir este listado en dos bloques (USD/BS) cuando el grupo
+    // esté en modo 'mixto', sin tocar ningún número ya calculado arriba.
+    // Default 'USD' si por lo que sea el cliente no está en
+    // jugadoresPorNombre (no debería pasar: autoRegistrarJugadores() más
+    // abajo da de alta a cualquier cliente nuevo antes de terminar).
+    const moneda = (jugadoresPorNombre[cliente] && jugadoresPorNombre[cliente].moneda) || 'USD';
     return {
       cliente,
       jugoHoy: Object.prototype.hasOwnProperty.call(resumenClientes, cliente),
@@ -536,7 +544,8 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       comisionAval: comision.comisionAval,
       comisionTotal: comision.total,
       polla,
-      pendientes: rc.pendientes
+      pendientes: rc.pendientes,
+      moneda
     };
   });
   // Banca: negación del total de Polla — misma convención usada en
