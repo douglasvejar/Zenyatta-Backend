@@ -384,8 +384,30 @@
 
   /* PANTALLA DE LOGIN */
   .login-shell { max-width: 380px; margin: 60px auto; position: relative; z-index: 1; }
-  .login-shell .container { padding: 30px; }
-  .login-shell p.subtitulo { text-align: center; color: var(--text-dim); margin-top: -10px; margin-bottom: 20px; font-size: 13px; }
+  /* La tarjeta del login pisa un video de fondo con movimiento (ver
+     ".fondo-video-login" más abajo) — el usuario la vio "difuminada"
+     (18-09-2026: "el cuadro donde se coloca las credenciales... se ve
+     difuminado, ponlo que se vea nitido"). Se le da su propia versión de
+     ".container", más opaca y con borde/resplandor propios (en vez de
+     depender del ".container" genérico de toda la app), para que quede
+     bien recortada y nítida sobre el video en movimiento, sin tocar cómo
+     se ve ".container" en el resto del panel. */
+  .login-shell .container {
+    padding: 30px;
+    background: #0b0f1e;
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 10px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(56,224,240,0.08);
+  }
+  .login-shell h1 { color: #ffffff; }
+  .login-shell p.subtitulo { text-align: center; color: #b7c1d9; margin-top: -10px; margin-bottom: 20px; font-size: 13px; }
+  /* Mismos campos que ".campo-login" usa en el resto de la app, pero con
+     un poco más de contraste SOLO acá (el borde genérico, var(--card-border)
+     = rgba(255,255,255,0.08), casi no se nota sobre la tarjeta oscura del
+     login) — parte del mismo pedido de que la tarjeta se vea nítida. */
+  .login-shell input[type="email"], .login-shell input[type="password"] {
+    border-color: rgba(255,255,255,0.22);
+    background: rgba(255,255,255,0.07);
+  }
   .campo-login { margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
   #loginError { color: var(--danger); font-size: 13px; text-align: center; min-height: 18px; margin-top: 4px; }
 
@@ -582,10 +604,17 @@
      PANTALLA DE LOGIN (rol "Grupo") — antes de esto no se ve nada más.
      ================================================================= -->
 <div class="login-shell" id="vistaLogin">
-  <!-- Video de fondo (carreras de caballos), SIN sonido, SOLO visible
-       mientras esta vista está a la vista — ver la nota grande junto a
-       ".fondo-video-login" en el <style> de arriba. -->
-  <video class="fondo-video-login" id="videoFondoLogin" autoplay muted loop playsinline poster="img/logo-ludox.png">
+  <!-- Video de fondo, SIN sonido, SOLO visible mientras esta vista está a
+       la vista — ver la nota grande junto a ".fondo-video-login" en el
+       <style> de arriba. 18-09-2026: el usuario pidió variedad de
+       deportes, no solo caballos ("colocaste solo caballos te dije que
+       tambien debe tener deportes, beisbol basket, nfl futbol etc"), así
+       que en vez de UN solo clip en loop, este <video> va cambiando de
+       clip (uno por deporte) — ver el <script> del final del archivo,
+       que arma la lista y hace avanzar el "src" cuando cada clip termina
+       (evento "ended", SIN el atributo loop). "poster" sigue siendo el
+       logo, por si el primer clip tarda en cargar. -->
+  <video class="fondo-video-login" id="videoFondoLogin" autoplay muted playsinline poster="img/logo-ludox.png">
     <source src="https://cdn.pixabay.com/video/2017/02/27/7969-205946421_large.mp4" type="video/mp4">
   </video>
   <div class="fondo-video-login-degradado" aria-hidden="true"></div>
@@ -1710,26 +1739,57 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
 <script src="app.js"></script>
 <script>
   // =================================================================
-  // Pausar el video de fondo del login (18-09-2026) — iniciarSesion(), en
-  // app.js, oculta #vistaLogin con style.display='none' tras un login
-  // exitoso; eso ya alcanza para que el video deje de VERSE (un
-  // descendiente con position:fixed se oculta igual si un ancestro tiene
-  // display:none), pero acá además se llama a video.pause() en el mismo
-  // momento para que no siga decodificando/reproduciendo de fondo sin
-  // necesidad. Se usa un MutationObserver sobre el atributo "style" de
-  // #vistaLogin en vez de tocar iniciarSesion()/app.js directamente.
-  // =================================================================
+  // Video de fondo del login — lista de clips (uno por deporte) + pausa
+  // cuando no se ve (18-09-2026).
+  //
+  // 1) LISTA DE CLIPS: el usuario pidió variedad ("debe tener deportes,
+  //    beisbol basket, nfl futbol etc", además de los caballos que ya
+  //    había). En vez de un solo <source> en loop, se arma un playlist
+  //    mudo que va rotando — cuando un clip termina ("ended"), pasa al
+  //    siguiente, y al llegar al final vuelve a empezar. Todos son video
+  //    libres (licencia Pixabay Content License, gratis/uso comercial,
+  //    sin marca de agua) referenciados por URL directa (hotlink), mismo
+  //    criterio que el clip de caballos que ya se había puesto.
+  var CLIPS_FONDO_LOGIN = [
+    'https://cdn.pixabay.com/video/2017/02/27/7969-205946421_large.mp4', // carreras de caballos
+    'https://cdn.pixabay.com/video/2020/11/06/54597-477445109_large.mp4', // béisbol
+    'https://cdn.pixabay.com/video/2016/09/21/5534-184666676_large.mp4', // básquetbol
+    'https://cdn.pixabay.com/video/2016/09/14/5262-183786903_large.mp4', // fútbol americano / NFL
+    'https://cdn.pixabay.com/video/2017/07/23/10783-226624891_large.mp4' // fútbol / soccer
+  ];
   (function () {
     try {
       var vistaLogin = document.getElementById('vistaLogin');
       var video = document.getElementById('videoFondoLogin');
       if (!vistaLogin || !video) return;
+
+      var indiceClipActual = 0;
+      function reproducirClipActual() {
+        var fuente = video.querySelector('source');
+        fuente.src = CLIPS_FONDO_LOGIN[indiceClipActual];
+        video.load();
+        video.play().catch(function () {}); // autoplay puede rechazarse en algunos navegadores; no rompe nada si falla
+      }
+      video.addEventListener('ended', function () {
+        indiceClipActual = (indiceClipActual + 1) % CLIPS_FONDO_LOGIN.length;
+        reproducirClipActual();
+      });
+
+      // 2) PAUSA CUANDO NO SE VE: iniciarSesion(), en app.js, oculta
+      //    #vistaLogin con style.display='none' tras un login exitoso; eso
+      //    ya alcanza para que el video deje de VERSE (un descendiente con
+      //    position:fixed se oculta igual si un ancestro tiene
+      //    display:none), pero acá además se llama a video.pause() en el
+      //    mismo momento para que no siga decodificando/reproduciendo de
+      //    fondo sin necesidad. Se usa un MutationObserver sobre el
+      //    atributo "style" de #vistaLogin en vez de tocar
+      //    iniciarSesion()/app.js directamente.
       var observer = new MutationObserver(function () {
         var oculto = vistaLogin.style.display === 'none';
         if (oculto) {
           video.pause();
         } else if (video.paused) {
-          video.play().catch(function () {}); // autoplay puede rechazarse en algunos navegadores; no rompe nada si falla
+          video.play().catch(function () {});
         }
       });
       observer.observe(vistaLogin, { attributes: true, attributeFilter: ['style'] });
