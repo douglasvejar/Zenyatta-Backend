@@ -265,6 +265,42 @@
   .cambiar-password-inline input { flex: 1; }
   #passwordError { color: var(--danger); font-size: 13px; margin-top: 6px; min-height: 16px; }
   #passwordOk { color: var(--ok); font-size: 13px; margin-top: 6px; min-height: 16px; }
+
+  /* =================================================================
+     FICHA DE UN GRUPO EN PESTAÑAS (19-09-2026, a pedido del usuario) —
+     ver la nota grande junto a "#modalDetalleFondo" en el HTML. Todo
+     acá va con el selector "#modalDetalleFondo" por delante para que
+     SOLO afecte a este modal puntual — el ".modal-caja"/".modal-fondo"
+     genéricos, que usan los demás modales de este panel (nuevo Grupo,
+     etc.), quedan exactamente como estaban.
+     ================================================================= */
+  #modalDetalleFondo .modal-caja { max-width: 1080px; padding: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  #modalDetalleFondo .modal-caja h2 { margin: 0; padding: 20px 46px 14px 24px; border-bottom: 1px solid var(--border); }
+  #modalDetalleFondo #detalleCargando { padding: 24px; }
+  #modalDetalleFondo .modal-cerrar { position: absolute; top: 14px; right: 16px; z-index: 2; }
+  .detalle-tabs-envoltorio { display: flex; flex: 1; min-height: 0; }
+  .detalle-tabs-nav { flex: 0 0 200px; border-right: 1px solid var(--border); padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .detalle-tab-btn { text-align: left; background: none; border: none; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text-dim); cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .detalle-tab-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .detalle-tab-btn.activa { background: var(--accent-cyan); color: #04121a; font-weight: bold; }
+  .detalle-tabs-paneles { flex: 1; overflow-y: auto; padding: 20px 24px; min-width: 0; max-height: calc(90vh - 70px); }
+  .detalle-tab-panel { display: none; }
+  .detalle-tab-panel.activa { display: block; }
+  @media (max-width: 760px) {
+    #modalDetalleFondo .modal-caja { max-width: 100%; max-height: 95vh; }
+    .detalle-tabs-envoltorio { flex-direction: column; }
+    .detalle-tabs-nav { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 auto; max-height: none; }
+    .detalle-tab-btn { flex: 1 1 auto; text-align: center; white-space: normal; }
+    .detalle-tabs-paneles { max-height: none; }
+  }
+
+  /* Tabla de "💰 Balance por Cliente" (nueva, 19-09-2026) */
+  .tabla-balance-superadmin td, .tabla-balance-superadmin th { font-size: 12px; padding: 8px 10px; }
+  .fila-total-balance-sa { background: #eaf6ff; color: #0d1326; font-weight: bold; border-top: 2px solid #2f6bff; }
+
+  /* Tarjetas de "📁 Sábanas" (nueva, 19-09-2026) */
+  .sa-cliente-card { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .sa-cliente-card strong { display: block; margin-bottom: 4px; }
   #logoError { color: var(--danger); font-size: 13px; margin-top: 6px; min-height: 16px; }
   #logoOk { color: var(--ok); font-size: 13px; margin-top: 6px; min-height: 16px; }
   #detalleCargando { text-align: center; color: var(--text-dim); padding: 30px; }
@@ -680,238 +716,275 @@
 
     <div id="detalleCargando">Cargando...</div>
 
+    <!-- =================================================================
+         REORGANIZADO EN PESTAÑAS (19-09-2026, a pedido del usuario:
+         "al darle click en el grupo dame resumen con pestañas a mano
+         izquierda de todo lo que puedo hacer y seleccionar una opcion de
+         lo que quiera desplegar, asi es mas resumido") — antes esto era
+         un solo scroll larguísimo con las 10 secciones de siempre, una
+         debajo de la otra. Ahora: nav fija a la izquierda (una pestaña
+         por sección; algunas secciones chicas y del mismo tema —
+         Teléfonos/Sábana automática/Comandos, todas de WhatsApp— se
+         agruparon en UNA sola pestaña) + un panel a la derecha que
+         muestra SOLO la pestaña elegida (mostrarPestanaDetalleGrupo()).
+         Cero cambio de comportamiento puertas adentro de cada
+         sección — cada input/botón/id sigue siendo exactamente el mismo
+         que ya usaba el resto del JS de este archivo, solo cambió el
+         acomodo visual alrededor. Además se suman 2 pestañas
+         COMPLETAMENTE NUEVAS ("💰 Balance por Cliente" y "📁 Sábanas"),
+         que antes no existían en Súper-admin — de solo lectura, mismos
+         cálculos exactos que ya usa el propio panel del Grupo (ver
+         GET /grupos/:id/balance-clientes y /sabana-dia en
+         src/routes/superadmin.js).
+         ================================================================= -->
     <div id="detalleContenido" style="display:none;">
-      <div class="detalle-fila"><span class="etiqueta">Email</span><span class="valor" id="detalleEmail"></span></div>
-      <div class="detalle-fila"><span class="etiqueta">Estado</span><span class="valor" id="detalleEstado"></span></div>
-      <div class="detalle-fila"><span class="etiqueta">Creado</span><span class="valor" id="detalleCreado"></span></div>
-      <div class="detalle-fila"><span class="etiqueta">Jugadores activos</span><span class="valor" id="detalleJugadoresActivos"></span></div>
+      <div class="detalle-tabs-envoltorio">
+        <nav class="detalle-tabs-nav">
+          <button type="button" class="detalle-tab-btn" data-tab="resumen" onclick="mostrarPestanaDetalleGrupo('resumen')">📊 Resumen</button>
+          <button type="button" class="detalle-tab-btn" data-tab="balance" onclick="mostrarPestanaDetalleGrupo('balance')">💰 Balance por Cliente</button>
+          <button type="button" class="detalle-tab-btn" data-tab="sabanas" onclick="mostrarPestanaDetalleGrupo('sabanas')">📁 Sábanas</button>
+          <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">🖼️ Logo</button>
+          <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">📲 WhatsApp</button>
+          <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">💳 Comisión</button>
+          <button type="button" class="detalle-tab-btn" data-tab="muestra" onclick="mostrarPestanaDetalleGrupo('muestra')">📝 Sábana de muestra</button>
+          <button type="button" class="detalle-tab-btn" data-tab="mantenimiento" onclick="mostrarPestanaDetalleGrupo('mantenimiento')">🗑️ Mantenimiento</button>
+          <button type="button" class="detalle-tab-btn" data-tab="seguridad" onclick="mostrarPestanaDetalleGrupo('seguridad')">🔑 Seguridad</button>
+        </nav>
 
-      <!-- =============================================================
-           SALDO DE LA BANCA POR RANGO DE FECHAS (01-09-2026, a pedido del
-           usuario: antes esto siempre sumaba TODO el historial del grupo;
-           ahora por defecto muestra la semana actual, con el mismo
-           selector de "Rango" + Desde/Hasta que ya usan % Devueltos y
-           Balance General en el panel del propio Grupo. ============== -->
-      <div class="modal-seccion">
-        <h3>💰 Saldo de la banca</h3>
-        <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
-          <div class="campo">
-            <label>Rango:</label>
-            <select id="detalleRangoRapido" onchange="aplicarRangoRapidoDetalle()">
-              <option value="hoy">Hoy</option>
-              <option value="semana" selected>Semana actual (lun–dom)</option>
-              <option value="mes">Últimos 30 días</option>
-              <option value="todo">Todo el historial</option>
-              <option value="personalizado">Personalizado</option>
-            </select>
+        <div class="detalle-tabs-paneles">
+
+          <!-- ========================= 📊 RESUMEN ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="resumen">
+            <div class="detalle-fila"><span class="etiqueta">Email</span><span class="valor" id="detalleEmail"></span></div>
+            <div class="detalle-fila"><span class="etiqueta">Estado</span><span class="valor" id="detalleEstado"></span></div>
+            <div class="detalle-fila"><span class="etiqueta">Creado</span><span class="valor" id="detalleCreado"></span></div>
+            <div class="detalle-fila"><span class="etiqueta">Jugadores activos</span><span class="valor" id="detalleJugadoresActivos"></span></div>
+
+            <!-- SALDO DE LA BANCA POR RANGO DE FECHAS (01-09-2026) -->
+            <div class="modal-seccion">
+              <h3>💰 Saldo de la banca</h3>
+              <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
+                <div class="campo">
+                  <label>Rango:</label>
+                  <select id="detalleRangoRapido" onchange="aplicarRangoRapidoDetalle()">
+                    <option value="hoy">Hoy</option>
+                    <option value="semana" selected>Semana actual (lun–dom)</option>
+                    <option value="mes">Últimos 30 días</option>
+                    <option value="todo">Todo el historial</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
+                </div>
+                <div class="campo">
+                  <label>Desde:</label>
+                  <input type="date" id="detalleDesde" onchange="document.getElementById('detalleRangoRapido').value='personalizado'; cargarSaldoBancaDetalle();">
+                </div>
+                <div class="campo">
+                  <label>Hasta:</label>
+                  <input type="date" id="detalleHasta" onchange="document.getElementById('detalleRangoRapido').value='personalizado'; cargarSaldoBancaDetalle();">
+                </div>
+              </div>
+              <div class="detalle-fila"><span class="etiqueta" id="detalleSaldoEtiqueta">Saldo de la banca</span><span class="valor" id="detalleSaldo"></span></div>
+            </div>
+
+            <div class="modal-seccion">
+              <h3>🕓 Último inicio de sesión</h3>
+              <div class="detalle-fila"><span class="etiqueta">Fecha y hora</span><span class="valor" id="detalleLoginFecha"></span></div>
+              <div class="detalle-fila"><span class="etiqueta">Dispositivo</span><span class="valor" id="detalleLoginDispositivo"></span></div>
+              <div class="detalle-fila"><span class="etiqueta">Dirección IP</span><span class="valor" id="detalleLoginIp"></span></div>
+            </div>
           </div>
-          <div class="campo">
-            <label>Desde:</label>
-            <input type="date" id="detalleDesde" onchange="document.getElementById('detalleRangoRapido').value='personalizado'; cargarSaldoBancaDetalle();">
+
+          <!-- ==================== 💰 BALANCE POR CLIENTE (NUEVO, 19-09-2026) ====================
+               Mismo cálculo EXACTO que Administración > Balance General del
+               propio panel del Grupo (calcularBalanceGeneral) — de solo
+               lectura, sin el botón "👁️ Ver historial" ni las columnas
+               ocultables de esa pantalla, para mantener esta ficha resumida.
+               GET /api/superadmin/grupos/:id/balance-clientes. -->
+          <div class="detalle-tab-panel" data-tab-panel="balance">
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">💰 Balance por Cliente</h3>
+            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismo cálculo que ve el propio Grupo en Administración &gt; Balance General — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
+            <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
+              <div class="campo">
+                <label>Rango:</label>
+                <select id="bcRangoRapido" onchange="aplicarRangoRapidoBalanceClientes()">
+                  <option value="hoy">Hoy</option>
+                  <option value="semana" selected>Semana actual (lun–dom)</option>
+                  <option value="mes">Últimos 30 días</option>
+                  <option value="todo">Todo el historial</option>
+                  <option value="personalizado">Personalizado</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label>Desde:</label>
+                <input type="date" id="bcDesde" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
+              </div>
+              <div class="campo">
+                <label>Hasta:</label>
+                <input type="date" id="bcHasta" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
+              </div>
+            </div>
+            <div id="bcContenido">Cargando...</div>
           </div>
-          <div class="campo">
-            <label>Hasta:</label>
-            <input type="date" id="detalleHasta" onchange="document.getElementById('detalleRangoRapido').value='personalizado'; cargarSaldoBancaDetalle();">
+
+          <!-- ==================== 📁 SÁBANAS (NUEVO, 19-09-2026) ====================
+               Mismo cálculo EXACTO que la pestaña "📁 Sábanas" del propio
+               Grupo (obtenerSabanaDeFecha) — de solo lectura, sin el botón
+               "✏️ Editar" de esa pestaña. GET /api/superadmin/grupos/:id/
+               sabana-dia + /fechas-con-datos (esta última ya existía, se
+               reusa la misma que usa "🗑️ Mantenimiento"). -->
+          <div class="detalle-tab-panel" data-tab-panel="sabanas">
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">📁 Sábanas</h3>
+            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Elegí una fecha con datos para ver los tickets y el resumen por cliente de ese día — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
+            <div class="cambiar-password-inline" style="margin-bottom:10px;">
+              <select id="sabanasFechaSelect" onchange="cargarSabanaDiaDetalle()" style="flex:1;">
+                <option value="">Cargando fechas…</option>
+              </select>
+            </div>
+            <div id="sabanasContenido"></div>
           </div>
-        </div>
-        <div class="detalle-fila"><span class="etiqueta" id="detalleSaldoEtiqueta">Saldo de la banca</span><span class="valor" id="detalleSaldo"></span></div>
-      </div>
 
-      <div class="modal-seccion">
-        <h3>🕓 Último inicio de sesión</h3>
-        <div class="detalle-fila"><span class="etiqueta">Fecha y hora</span><span class="valor" id="detalleLoginFecha"></span></div>
-        <div class="detalle-fila"><span class="etiqueta">Dispositivo</span><span class="valor" id="detalleLoginDispositivo"></span></div>
-        <div class="detalle-fila"><span class="etiqueta">Dirección IP</span><span class="valor" id="detalleLoginIp"></span></div>
-      </div>
-
-      <!-- =============================================================
-           LOGO DEL GRUPO (01-09-2026, a pedido del usuario) — "para que
-           sea algo más personalizado". Solo se puede poner/cambiar acá,
-           desde Súper-admin (el Grupo no tiene este botón en su propio
-           panel) — se guarda como URL a una imagen ya subida a algún
-           lado (no como archivo, ver nota grande en sql/schema.sql).
-           Se muestra en cliente.html, la vista pública del Cliente.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>🖼️ Logo del Grupo</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
-        <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
-        <div class="cambiar-password-inline">
-          <input type="text" id="logoUrlInput" placeholder="https://... (dejalo vacío para quitar el logo)">
-          <button type="button" class="btn-secundario" onclick="guardarLogoGrupo()">Guardar</button>
-        </div>
-        <div id="logoError"></div>
-        <div id="logoOk"></div>
-      </div>
-
-      <!-- =============================================================
-           TELÉFONOS DE WHATSAPP DEL GRUPO (02-09-2026, a pedido del
-           usuario) — máximo 3, con apodo. Solo se agregan/borran acá,
-           desde Súper-admin (mismo criterio que el Logo, arriba). El
-           PRIMERO cargado es al que el botón "Tengo diferencia" del
-           Cliente le manda el mensaje de WhatsApp.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>📱 Teléfonos de WhatsApp</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hasta 3 números. Cuando un Cliente presiona "⚠️ Tengo diferencia" en su link, se le abre WhatsApp hacia el PRIMERO de esta lista (el más antiguo) — el orden importa.</p>
-        <div id="listaTelefonosGrupo"></div>
-        <div class="cambiar-password-inline" style="margin-top:8px;">
-          <input type="text" id="telefonoNuevoNumero" placeholder="Número con código de país (ej. 584121234567)" style="flex:1.3;">
-          <input type="text" id="telefonoNuevoApodo" placeholder="Apodo (ej. Carlos - Soporte)">
-          <button type="button" class="btn-secundario" onclick="agregarTelefonoGrupo()">Agregar</button>
-        </div>
-        <div id="telefonoError"></div>
-        <div id="telefonoOk"></div>
-      </div>
-
-      <!-- =============================================================
-           SÁBANA AUTOMÁTICA POR WHATSAPP (04-09-2026, a pedido del
-           usuario) — servicio contratable aparte, del mismo espíritu que
-           "activo": un interruptor que solo prende/apaga el Súper-admin
-           (whatsapp_habilitado), más el JID del grupo de WhatsApp al que
-           el bot le apunta para este cliente — antes lo podía cambiar el
-           propio Grupo desde su sesión, ahora es EXCLUSIVO de acá.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>📲 Sábana automática por WhatsApp</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Servicio aparte (plus): con esto prendido, "Resumen por Cliente" del Grupo se carga solo a medida que llegan mensajes "SABANA DE JUGADAS" al grupo de WhatsApp vinculado — sin esto, el Grupo sigue 100% manual. Requiere además que el bot esté activado en el servidor (<code>WHATSAPP_BOT_ACTIVADO</code>, ver README.md). El bot nunca le manda nada al grupo de WhatsApp por su cuenta (18-09-2026) — el resumen sale solo cuando el Grupo aprieta "📤 Enviar resumen ahora" en su panel, o con un comando de chat.</p>
-        <div class="detalle-fila">
-          <span class="etiqueta">Servicio</span>
-          <span class="valor" id="whatsappHabilitadoEstado"></span>
-        </div>
-        <button type="button" class="btn-secundario" id="btnToggleWhatsappHabilitado" onclick="toggleWhatsappHabilitadoGrupo()" style="margin-top:6px;"></button>
-
-        <!-- =========================================================
-             ELEGIR EL GRUPO DE LA LISTA (15-09-2026, a pedido del
-             usuario tras reportar "la sábana automática no está
-             funcionando" — la causa real era que no tenía forma de
-             conseguir el JID sin ir a buscarlo en los logs de Railway).
-             Este desplegable se arma solo con los grupos de WhatsApp a
-             los que ya pertenece el número vinculado al bot — elegir uno
-             de la lista completa el campo de abajo, que sigue siendo el
-             que de verdad se guarda. ========================================================= -->
-        <div style="margin-top:12px;">
-          <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <select id="whatsappJidSelectSuperadmin" onchange="elegirWhatsappJidDeLista()" style="flex:1; min-width:220px;">
-              <option value="">Cargando lista de grupos…</option>
-            </select>
-            <button type="button" class="btn-secundario" onclick="cargarWhatsappGruposDisponibles(true)" style="font-size:12px; white-space:nowrap;">🔄 Actualizar lista</button>
+          <!-- ========================= 🖼️ LOGO ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="logo">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>🖼️ Logo del Grupo</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
+              <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
+              <div class="cambiar-password-inline">
+                <input type="text" id="logoUrlInput" placeholder="https://... (dejalo vacío para quitar el logo)">
+                <button type="button" class="btn-secundario" onclick="guardarLogoGrupo()">Guardar</button>
+              </div>
+              <div id="logoError"></div>
+              <div id="logoOk"></div>
+            </div>
           </div>
-          <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
-        </div>
 
-        <div class="cambiar-password-inline" style="margin-top:12px;">
-          <input type="text" id="whatsappJidInputSuperadmin" placeholder="JID del grupo de WhatsApp (ej: 1203630000000001@g.us)">
-          <button type="button" class="btn-secundario" onclick="guardarWhatsappJidGrupo()">Guardar</button>
-        </div>
-        <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
-        <div id="whatsappJidError"></div>
-        <div id="whatsappJidOk"></div>
-      </div>
+          <!-- ========================= 📲 WHATSAPP =========================
+               Agrupa las 3 secciones de WhatsApp que antes estaban
+               apiladas sueltas (Teléfonos / Sábana automática / Comandos)
+               — mismo contenido, solo un mismo techo para no inflar la
+               nav de pestañas con 3 entradas del mismo tema. -->
+          <div class="detalle-tab-panel" data-tab-panel="whatsapp">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>📱 Teléfonos de WhatsApp</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hasta 3 números. Cuando un Cliente presiona "⚠️ Tengo diferencia" en su link, se le abre WhatsApp hacia el PRIMERO de esta lista (el más antiguo) — el orden importa.</p>
+              <div id="listaTelefonosGrupo"></div>
+              <div class="cambiar-password-inline" style="margin-top:8px;">
+                <input type="text" id="telefonoNuevoNumero" placeholder="Número con código de país (ej. 584121234567)" style="flex:1.3;">
+                <input type="text" id="telefonoNuevoApodo" placeholder="Apodo (ej. Carlos - Soporte)">
+                <button type="button" class="btn-secundario" onclick="agregarTelefonoGrupo()">Agregar</button>
+              </div>
+              <div id="telefonoError"></div>
+              <div id="telefonoOk"></div>
+            </div>
 
-      <!-- =============================================================
-           COMANDOS DE CHAT POR WHATSAPP (09-09-2026, a pedido del
-           usuario: "los comandos lo puede mandar el mismo que manda el
-           comando sabana jugada, pero aparte en super admin yo puedo
-           agregar un numero y activarle o desactivarle, la funcion de
-           enviar comandos"). Candado SEPARADO del de arriba: "SABANA DE
-           JUGADAS" la sigue aceptando cualquiera del grupo vinculado
-           (sin cambios) — esto es EXCLUSIVAMENTE para los 4 comandos de
-           chat nuevos ("act"/"saldo final"/"corte semana"/"saldo total
-           semana <nombre>"), que solo el número de acá puede disparar.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>📟 Comandos por WhatsApp</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
-        <div class="detalle-fila">
-          <span class="etiqueta">Comandos</span>
-          <span class="valor" id="comandosWhatsappHabilitadoEstado"></span>
-        </div>
-        <button type="button" class="btn-secundario" id="btnToggleComandosWhatsapp" onclick="toggleComandosWhatsappGrupo()" style="margin-top:6px;"></button>
-        <div class="cambiar-password-inline" style="margin-top:12px;">
-          <input type="text" id="comandosWhatsappNumeroInput" placeholder="Número autorizado (ej: +58 412-123-4567)">
-          <button type="button" class="btn-secundario" onclick="guardarComandosWhatsappNumero()">Guardar</button>
-        </div>
-        <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Dejalo vacío y guardá para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
-        <div id="comandosWhatsappNumeroError"></div>
-        <div id="comandosWhatsappNumeroOk"></div>
-      </div>
+            <div class="modal-seccion">
+              <h3>📲 Sábana automática por WhatsApp</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Servicio aparte (plus): con esto prendido, "Resumen por Cliente" del Grupo se carga solo a medida que llegan mensajes "SABANA DE JUGADAS" al grupo de WhatsApp vinculado — sin esto, el Grupo sigue 100% manual. Requiere además que el bot esté activado en el servidor (<code>WHATSAPP_BOT_ACTIVADO</code>, ver README.md). El bot nunca le manda nada al grupo de WhatsApp por su cuenta (18-09-2026) — el resumen sale solo cuando el Grupo aprieta "📤 Enviar resumen ahora" en su panel, o con un comando de chat.</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Servicio</span>
+                <span class="valor" id="whatsappHabilitadoEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleWhatsappHabilitado" onclick="toggleWhatsappHabilitadoGrupo()" style="margin-top:6px;"></button>
 
-      <!-- =============================================================
-           MODELO DE COMISIÓN (08-09-2026, a pedido del usuario: "hay
-           grupos que manejan de distintas maneras los %... tengo un
-           grupo que el % es de lo arriesgado pero por tipo de
-           jugadas... y despues esos resultados se suman y dan el
-           total"). EXCLUSIVO de acá — ver la nota grande en
-           sql/schema.sql, comisiones.js y src/routes/superadmin.js
-           (PATCH /grupos/:id/modelo-comision). Un solo juego de niveles
-           por GRUPO (no por cliente, confirmado por el usuario).
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>💰 Modelo de comisión (%)</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Cómo se calcula el % que cobra cada cliente por sus propias jugadas. "Plano" usa el % fijo de Administración &gt; Jugador de siempre, uno por cliente. "Por tipo de jugada" usa UN solo juego de niveles para TODO el grupo (ej. directas 2%, parleys de 2 logros 3%, de 3 logros 5%...) sin importar el % de cada jugador — cada ticket usa el nivel que le toque según cuántos logros tenga, y se suman todos al final.</p>
-        <div class="cambiar-password-inline">
-          <select id="modeloComisionSelect" onchange="cambiarModeloComisionUI()" style="flex:1;">
-            <option value="plano">Plano (% fijo por cliente)</option>
-            <option value="por_tipo_jugada">Por tipo de jugada (niveles por logros, para todo el grupo)</option>
-          </select>
-        </div>
-        <div id="comisionTiersBox" style="display:none; margin-top:10px;">
-          <small style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así podés agregar un nivel nuevo más adelante sin romper nada.</small>
-          <div id="listaComisionTiers"></div>
-          <button type="button" class="btn-secundario" onclick="agregarFilaComisionTier()" style="margin-top:6px;">+ Agregar nivel</button>
-        </div>
-        <button type="button" class="btn-secundario" onclick="guardarModeloComision()" style="margin-top:12px;">Guardar modelo de comisión</button>
-        <div id="modeloComisionError"></div>
-        <div id="modeloComisionOk"></div>
-      </div>
+              <div style="margin-top:12px;">
+                <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                  <select id="whatsappJidSelectSuperadmin" onchange="elegirWhatsappJidDeLista()" style="flex:1; min-width:220px;">
+                    <option value="">Cargando lista de grupos…</option>
+                  </select>
+                  <button type="button" class="btn-secundario" onclick="cargarWhatsappGruposDisponibles(true)" style="font-size:12px; white-space:nowrap;">🔄 Actualizar lista</button>
+                </div>
+                <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
+              </div>
 
-      <!-- =============================================================
-           SÁBANA DE MUESTRA (05-09-2026, a pedido del usuario, después de
-           discutir cómo manejar grupos con estilos de sábana distintos)
-           — texto puramente de referencia/documentación: un mensaje real
-           de ejemplo de cómo ESE grupo escribe su sábana. NO se usa para
-           parsear ni interpretar nada — es solo para que el Súper-admin
-           tenga a mano cómo escribe este grupo en particular, y para
-           poder probarlo antes de que haya plata real en juego al dar de
-           alta un grupo nuevo.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>📝 Sábana de muestra</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pegá acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para vos — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
-        <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pegá acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
-        <button type="button" class="btn-secundario" onclick="guardarSabanaMuestra()" style="margin-top:8px;">Guardar</button>
-        <div id="sabanaMuestraError"></div>
-        <div id="sabanaMuestraOk"></div>
-      </div>
+              <div class="cambiar-password-inline" style="margin-top:12px;">
+                <input type="text" id="whatsappJidInputSuperadmin" placeholder="JID del grupo de WhatsApp (ej: 1203630000000001@g.us)">
+                <button type="button" class="btn-secundario" onclick="guardarWhatsappJidGrupo()">Guardar</button>
+              </div>
+              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
+              <div id="whatsappJidError"></div>
+              <div id="whatsappJidOk"></div>
+            </div>
 
-      <!-- =============================================================
-           BORRAR JUGADAS/SÁBANA (Y POLLA) POR FECHA (02-09-2026, a pedido
-           del usuario) — checklist de las fechas que tienen datos; se
-           marcan las que se quieren borrar y se confirma. También borra
-           la Polla de esas mismas fechas (a pedido del usuario), pero NO
-           las alertas — ver la nota grande en
-           src/services/mantenimientoGrupo.js.
-           ============================================================= -->
-      <div class="modal-seccion">
-        <h3>🗑️ Borrar jugadas / sábana por fecha</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Marca las fechas que quieras borrar por completo para este grupo (sábana y Polla de esos días). <strong>Esto no se puede deshacer.</strong></p>
-        <div id="listaFechasBorrar" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px;"></div>
-        <button type="button" class="btn-peligro" onclick="borrarFechasSeleccionadas()">Borrar fechas marcadas</button>
-        <div id="borrarFechasError"></div>
-        <div id="borrarFechasOk"></div>
-      </div>
+            <div class="modal-seccion">
+              <h3>📟 Comandos por WhatsApp</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Comandos</span>
+                <span class="valor" id="comandosWhatsappHabilitadoEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleComandosWhatsapp" onclick="toggleComandosWhatsappGrupo()" style="margin-top:6px;"></button>
+              <div class="cambiar-password-inline" style="margin-top:12px;">
+                <input type="text" id="comandosWhatsappNumeroInput" placeholder="Número autorizado (ej: +58 412-123-4567)">
+                <button type="button" class="btn-secundario" onclick="guardarComandosWhatsappNumero()">Guardar</button>
+              </div>
+              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Dejalo vacío y guardá para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
+              <div id="comandosWhatsappNumeroError"></div>
+              <div id="comandosWhatsappNumeroOk"></div>
+            </div>
+          </div>
 
-      <div class="modal-seccion">
-        <h3>🔑 Cambiar contraseña</h3>
-        <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijás una nueva.</p>
-        <div class="cambiar-password-inline">
-          <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
-          <button type="button" class="btn-secundario" onclick="cambiarPasswordGrupo()">Cambiar</button>
+          <!-- ========================= 💳 COMISIÓN ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="comision">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>💰 Modelo de comisión (%)</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Cómo se calcula el % que cobra cada cliente por sus propias jugadas. "Plano" usa el % fijo de Administración &gt; Jugador de siempre, uno por cliente. "Por tipo de jugada" usa UN solo juego de niveles para TODO el grupo (ej. directas 2%, parleys de 2 logros 3%, de 3 logros 5%...) sin importar el % de cada jugador — cada ticket usa el nivel que le toque según cuántos logros tenga, y se suman todos al final.</p>
+              <div class="cambiar-password-inline">
+                <select id="modeloComisionSelect" onchange="cambiarModeloComisionUI()" style="flex:1;">
+                  <option value="plano">Plano (% fijo por cliente)</option>
+                  <option value="por_tipo_jugada">Por tipo de jugada (niveles por logros, para todo el grupo)</option>
+                </select>
+              </div>
+              <div id="comisionTiersBox" style="display:none; margin-top:10px;">
+                <small style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así podés agregar un nivel nuevo más adelante sin romper nada.</small>
+                <div id="listaComisionTiers"></div>
+                <button type="button" class="btn-secundario" onclick="agregarFilaComisionTier()" style="margin-top:6px;">+ Agregar nivel</button>
+              </div>
+              <button type="button" class="btn-secundario" onclick="guardarModeloComision()" style="margin-top:12px;">Guardar modelo de comisión</button>
+              <div id="modeloComisionError"></div>
+              <div id="modeloComisionOk"></div>
+            </div>
+          </div>
+
+          <!-- ========================= 📝 SÁBANA DE MUESTRA ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="muestra">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>📝 Sábana de muestra</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pegá acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para vos — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
+              <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pegá acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
+              <button type="button" class="btn-secundario" onclick="guardarSabanaMuestra()" style="margin-top:8px;">Guardar</button>
+              <div id="sabanaMuestraError"></div>
+              <div id="sabanaMuestraOk"></div>
+            </div>
+          </div>
+
+          <!-- ========================= 🗑️ MANTENIMIENTO ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="mantenimiento">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>🗑️ Borrar jugadas / sábana por fecha</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Marca las fechas que quieras borrar por completo para este grupo (sábana y Polla de esos días). <strong>Esto no se puede deshacer.</strong></p>
+              <div id="listaFechasBorrar" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px;"></div>
+              <button type="button" class="btn-peligro" onclick="borrarFechasSeleccionadas()">Borrar fechas marcadas</button>
+              <div id="borrarFechasError"></div>
+              <div id="borrarFechasOk"></div>
+            </div>
+          </div>
+
+          <!-- ========================= 🔑 SEGURIDAD ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="seguridad">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>🔑 Cambiar contraseña</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijás una nueva.</p>
+              <div class="cambiar-password-inline">
+                <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
+                <button type="button" class="btn-secundario" onclick="cambiarPasswordGrupo()">Cambiar</button>
+              </div>
+              <div id="passwordError"></div>
+              <div id="passwordOk"></div>
+            </div>
+          </div>
+
         </div>
-        <div id="passwordError"></div>
-        <div id="passwordOk"></div>
       </div>
     </div>
   </div>
@@ -1413,6 +1486,195 @@ async function eliminarGrupo(id) {
 // y PATCH /api/superadmin/grupos/:id/password (ver src/routes/superadmin.js).
 // =================================================================
 let GRUPO_DETALLE_ID = null; // el grupo que está abierto en el modal ahora mismo
+let BALANCE_CLIENTES_CARGADO = false; // "Balance por Cliente" (19-09-2026): true apenas se pidió una vez para el grupo abierto ahora — evita repedir datos cada vez que se vuelve a esa pestaña sin haber cambiado el rango
+let SABANAS_FECHAS_CARGADAS = false; // "Sábanas" (19-09-2026): mismo criterio, para la lista de fechas con datos
+
+// =================================================================
+// PESTAÑAS DE LA FICHA DE UN GRUPO (19-09-2026) — ver la nota grande
+// junto a "#modalDetalleFondo" en el HTML. "Balance por Cliente" y
+// "Sábanas" son de carga perezosa: la primera vez que se entra a cada
+// una, se pide al backend (GRUPO_DETALLE_ID ya tiene que estar puesto,
+// lo hace abrirDetalleGrupo() antes de esto) — las demás pestañas no
+// piden nada nuevo, ya vienen precargadas desde abrirDetalleGrupo().
+// =================================================================
+function mostrarPestanaDetalleGrupo(tab) {
+  document.querySelectorAll('.detalle-tab-btn').forEach(btn => {
+    btn.classList.toggle('activa', btn.dataset.tab === tab);
+  });
+  document.querySelectorAll('.detalle-tab-panel').forEach(panel => {
+    panel.classList.toggle('activa', panel.dataset.tabPanel === tab);
+  });
+  if (tab === 'balance' && !BALANCE_CLIENTES_CARGADO) {
+    BALANCE_CLIENTES_CARGADO = true;
+    cargarBalanceClientesDetalle();
+  }
+  if (tab === 'sabanas' && !SABANAS_FECHAS_CARGADAS) {
+    SABANAS_FECHAS_CARGADAS = true;
+    cargarFechasSabanaDetalle();
+  }
+}
+
+// =================================================================
+// 💰 BALANCE POR CLIENTE (NUEVO, 19-09-2026, a pedido del usuario:
+// "quiero desde super admin pulsar el grupo y poder ver, balances del
+// grupo detallado por clientes y sus saldos"). Mismo cálculo EXACTO que
+// ya usa el propio panel del Grupo en Administración > Balance General
+// (GET /api/superadmin/grupos/:id/balance-clientes, que por dentro
+// llama a la MISMA calcularBalanceGeneral() — ver la nota grande en
+// src/routes/superadmin.js) — acá se muestra de solo lectura, sin el
+// botón "👁️ Ver historial" ni las columnas ocultables de esa pantalla,
+// para que esta ficha quede resumida. Mismo patrón de "Rango rápido +
+// Desde/Hasta" que ya usa "💰 Saldo de la banca" (ver
+// aplicarRangoRapidoDetalle/cargarSaldoBancaDetalle, unas líneas más
+// abajo) — se duplica chiquito a propósito, en vez de compartir función,
+// porque son 2 selectores de rango independientes (uno por pestaña).
+// =================================================================
+function aplicarRangoRapidoBalanceClientes() {
+  const tipo = document.getElementById('bcRangoRapido').value;
+  if (tipo === 'personalizado') return;
+  cargarBalanceClientesDetalle(tipo);
+}
+
+async function cargarBalanceClientesDetalle(tipoForzado) {
+  if (!GRUPO_DETALLE_ID) return;
+  const tipo = tipoForzado || document.getElementById('bcRangoRapido').value;
+
+  let url = '/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/balance-clientes';
+  if (tipo === 'personalizado') {
+    const desde = document.getElementById('bcDesde').value;
+    const hasta = document.getElementById('bcHasta').value;
+    if (!desde || !hasta) return; // esperar a que se llenen los 2 campos
+    url += '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+  } else {
+    url += '?rango=' + encodeURIComponent(tipo);
+  }
+
+  const cont = document.getElementById('bcContenido');
+  cont.innerHTML = 'Cargando...';
+  try {
+    const data = await apiSuperadmin(url);
+    if (data.rango) {
+      document.getElementById('bcDesde').value = data.rango.desde;
+      document.getElementById('bcHasta').value = data.rango.hasta;
+    }
+    if (data.mixto) {
+      cont.innerHTML =
+        '<h4 style="margin:14px 0 6px; color:var(--accent-cyan);">🇺🇸 Dólares (USD)</h4>' + tablaBalanceClientesHTML(data.USD) +
+        '<h4 style="margin:18px 0 6px; color:var(--accent-cyan);">🇻🇪 Bolívares (Bs)</h4>' + tablaBalanceClientesHTML(data.BS);
+    } else {
+      cont.innerHTML = tablaBalanceClientesHTML(data);
+    }
+  } catch (e) {
+    cont.innerHTML = '<p style="color:var(--danger); font-size:13px;">No se pudo cargar: ' + e.message + '</p>';
+  }
+}
+
+function tablaBalanceClientesHTML(data) {
+  const filas = data.filas || [];
+  if (filas.length === 0) {
+    return '<p style="color:var(--text-dim); font-size:13px;">Sin movimientos en este rango.</p>';
+  }
+  const filaHTML = (f, esTotal) => {
+    const color = f.saldoCliente >= 0 ? 'var(--ok)' : 'var(--danger)';
+    return '<tr' + (esTotal ? ' class="fila-total-balance-sa"' : '') + '>' +
+      '<td>' + f.cliente + '</td>' +
+      '<td>' + formatDinero(f.arriesgado) + '</td>' +
+      '<td>' + formatDinero(f.ganado) + '</td>' +
+      '<td>' + formatDinero(f.perdido) + '</td>' +
+      '<td>' + formatDinero(f.comision) + '</td>' +
+      '<td>' + formatDinero(f.transferencias) + '</td>' +
+      '<td>' + formatDinero(f.polla || 0) + '</td>' +
+      '<td style="font-weight:bold; color:' + (esTotal ? 'inherit' : color) + ';">' + formatDinero(f.saldoCliente) + '</td>' +
+    '</tr>';
+  };
+  return '<div style="overflow-x:auto;"><table class="tabla-balance-superadmin"><thead><tr>' +
+    '<th>Cliente</th><th>Arriesgado</th><th>Ganado</th><th>Perdido</th><th>Comisión</th><th>Transferencias</th><th>Polla</th><th>Saldo</th>' +
+    '</tr></thead><tbody>' +
+    filas.map(f => filaHTML(f, false)).join('') +
+    (data.filaTotal ? filaHTML(data.filaTotal, true) : '') +
+    '</tbody></table></div>' +
+    '<p style="margin-top:8px; font-size:13px;">Balance de la banca: <strong style="color:' + (data.balanceBanca >= 0 ? 'var(--ok)' : 'var(--danger)') + ';">' + formatDinero(data.balanceBanca) + '</strong></p>';
+}
+
+// =================================================================
+// 📁 SÁBANAS (NUEVO, 19-09-2026, mismo pedido de arriba: "tambien sus
+// sabanas"). Mismo cálculo EXACTO que la pestaña "📁 Sábanas" del propio
+// Grupo (GET /api/superadmin/grupos/:id/sabana-dia, por dentro la MISMA
+// obtenerSabanaDeFecha() — ver la nota grande en
+// src/routes/superadmin.js) — de solo lectura, sin el botón "✏️ Editar"
+// de esa pestaña (para editar un ticket, hay que entrar como ese Grupo).
+// Reusa /grupos/:id/fechas-con-datos, la MISMA ruta que ya usa
+// "🗑️ Mantenimiento" para armar su checklist de fechas a borrar.
+// =================================================================
+async function cargarFechasSabanaDetalle() {
+  if (!GRUPO_DETALLE_ID) return;
+  const select = document.getElementById('sabanasFechaSelect');
+  select.innerHTML = '<option value="">Cargando fechas…</option>';
+  try {
+    const fechas = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/fechas-con-datos');
+    if (fechas.length === 0) {
+      select.innerHTML = '<option value="">Sin sábanas guardadas todavía</option>';
+      document.getElementById('sabanasContenido').innerHTML = '<p style="color:var(--text-dim); font-size:13px;">Este grupo todavía no tiene ninguna sábana ni Polla guardada.</p>';
+      return;
+    }
+    // listarFechasConDatos() ya las trae más reciente primero — se arma
+    // el <select> en ese mismo orden y se auto-elige la primera (el día
+    // más reciente con datos), en vez de dejarlo vacío esperando un clic.
+    select.innerHTML = fechas.map(f => '<option value="' + f.fecha + '">' + formatFechaCorta(f.fecha) + ' (' + f.tickets + ' ticket' + (f.tickets === 1 ? '' : 's') + ')</option>').join('');
+    cargarSabanaDiaDetalle();
+  } catch (e) {
+    select.innerHTML = '<option value="">Error al cargar</option>';
+    document.getElementById('sabanasContenido').innerHTML = '<p style="color:var(--danger); font-size:13px;">No se pudo cargar: ' + e.message + '</p>';
+  }
+}
+
+async function cargarSabanaDiaDetalle() {
+  if (!GRUPO_DETALLE_ID) return;
+  const fecha = document.getElementById('sabanasFechaSelect').value;
+  const cont = document.getElementById('sabanasContenido');
+  if (!fecha) { cont.innerHTML = ''; return; }
+  cont.innerHTML = 'Cargando...';
+  try {
+    const data = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/sabana-dia?fecha=' + encodeURIComponent(fecha));
+    const tickets = data.tickets || [];
+    const resumen = data.resumenPorCliente || [];
+
+    const tablaTickets = tickets.length === 0
+      ? '<p style="color:var(--text-dim); font-size:13px;">Sin tickets esa fecha.</p>'
+      : '<div style="overflow-x:auto;"><table class="tabla-balance-superadmin"><thead><tr><th>Cliente</th><th>Ticket</th><th>Detalle</th><th>Arriesga</th><th>Gana</th><th>Estado</th></tr></thead><tbody>' +
+        tickets.map(t => '<tr>' +
+          '<td>' + t.cliente + '</td>' +
+          '<td>' + (t.ticket || '') + '</td>' +
+          '<td>' + (t.detalle || '') + '</td>' +
+          '<td>' + formatDinero(t.arriesga) + '</td>' +
+          '<td>' + formatDinero(t.gana) + '</td>' +
+          '<td style="color:' + colorEstadoTicketSuperadmin(t.estado) + '; font-weight:bold;">' + t.estado + '</td>' +
+        '</tr>').join('') +
+        '</tbody></table></div>';
+
+    const tarjetasResumen = resumen.length === 0 ? '' : '<h4 style="margin:16px 0 8px; color:var(--accent-cyan);">👥 Resumen por Cliente</h4>' +
+      resumen.map(c => {
+        const partes = [];
+        if (c.ganados > 0) partes.push('<span style="color:var(--ok);">✅ ' + c.ganados + '</span>');
+        if (c.perdidos > 0) partes.push('<span style="color:var(--danger);">❌ ' + c.perdidos + '</span>');
+        if (c.pendientes > 0) partes.push('<span style="color:var(--text-dim);">⏳ ' + c.pendientes + '</span>');
+        if (c.jugoPolla) partes.push('<span style="color:' + (c.polla >= 0 ? 'var(--ok)' : 'var(--danger)') + ';">🎲 Polla ' + formatDinero(c.polla) + '</span>');
+        return '<div class="sa-cliente-card"><strong>' + c.cliente + '</strong><div style="display:flex; flex-wrap:wrap; gap:10px; font-size:12px;">' + partes.join('') + '</div></div>';
+      }).join('');
+
+    cont.innerHTML = tablaTickets + tarjetasResumen;
+  } catch (e) {
+    cont.innerHTML = '<p style="color:var(--danger); font-size:13px;">No se pudo cargar: ' + e.message + '</p>';
+  }
+}
+
+function colorEstadoTicketSuperadmin(estado) {
+  if (estado === 'GANADA') return 'var(--ok)';
+  if (estado === 'PERDIDA') return 'var(--danger)';
+  if (estado === 'ANULADA' || estado === 'SUSPENDIDA') return 'var(--text-dim)';
+  return '#f5a623'; // PENDIENTE / FALTA CERRAR / NULA / AMBIGUA — tonos "atención"
+}
+
 
 function formatDinero(n) {
   const num = Number(n) || 0;
@@ -1496,6 +1758,22 @@ async function abrirDetalleGrupo(id, nombre) {
   document.getElementById('detalleRangoRapido').value = 'semana';
   document.getElementById('detalleDesde').value = '';
   document.getElementById('detalleHasta').value = '';
+  // Pestañas (19-09-2026): cada vez que se abre el modal, arranca en
+  // "📊 Resumen" — nunca queda pegado en la pestaña que se había dejado
+  // abierta para OTRO grupo. "Balance por Cliente" y "Sábanas" son de
+  // carga perezosa (recién piden datos la primera vez que el súper-admin
+  // las abre, ver mostrarPestanaDetalleGrupo) — se resetean sus
+  // "ya cargado" para que, al abrir OTRO grupo, vuelvan a pedir datos
+  // frescos en vez de mostrar los del grupo anterior.
+  document.getElementById('bcRangoRapido').value = 'semana';
+  document.getElementById('bcDesde').value = '';
+  document.getElementById('bcHasta').value = '';
+  document.getElementById('bcContenido').innerHTML = 'Cargando...';
+  document.getElementById('sabanasFechaSelect').innerHTML = '<option value="">Cargando fechas…</option>';
+  document.getElementById('sabanasContenido').innerHTML = '';
+  BALANCE_CLIENTES_CARGADO = false;
+  SABANAS_FECHAS_CARGADAS = false;
+  mostrarPestanaDetalleGrupo('resumen');
   document.getElementById('modalDetalleFondo').style.display = 'flex';
 
   try {

@@ -13,6 +13,15 @@ const alertasService = require('../services/alertas');
 const chatService = require('../services/chat');
 const mantenimientoGrupo = require('../services/mantenimientoGrupo');
 const telefonosService = require('../services/telefonos');
+// 19-09-2026, a pedido del usuario: "quiero desde super admin pulsar el
+// grupo y poder ver, balances del grupo detallado por clientes y sus
+// saldos, tambien sus sabanas" — obtenerSabanaDeFecha() ya es 100%
+// genérica (recibe el grupoId como parámetro, nunca depende de una
+// sesión de Grupo), así que se puede llamar directo desde acá para
+// reconstruir la sábana de CUALQUIER grupo, de solo lectura (sin el
+// botón "✏️ Editar" que sí tiene el propio panel del Grupo — para editar
+// un ticket, hay que entrar como ese Grupo).
+const { obtenerSabanaDeFecha } = require('../services/sabanaDia');
 
 const router = express.Router();
 router.use(requiereSuperadmin);
@@ -172,6 +181,81 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
       userAgent: grupo.ultimo_login_user_agent
     }
   });
+}));
+
+// Mismo helper que ya usa routes/reportes.js (agruparNombresPorMoneda)
+// para "moneda del grupo" en modo 'mixto' — se duplica acá, chiquito a
+// propósito, en vez de importar entre routers (cada archivo de rutas de
+// este proyecto se mantiene con sus propios imports de /services, sin
+// depender de otro router).
+function agruparNombresPorMonedaSuperadmin(jugadores) {
+  const usd = new Set();
+  const bs = new Set();
+  (jugadores || []).forEach(j => (j.moneda === 'BS' ? bs : usd).add(j.nombre));
+  return { usd, bs };
+}
+
+// =================================================================
+// BALANCE GENERAL POR CLIENTE, para CUALQUIER grupo (19-09-2026, a
+// pedido del usuario — ver la nota grande junto al import de
+// obtenerSabanaDeFecha más arriba). Mismo cálculo EXACTO que ya usa el
+// propio panel del Grupo en Administración > Balance General
+// (routes/reportes.js, GET /balance-general) — se reusa
+// calcularBalanceGeneral() tal cual, solo que acá el grupo lo elige el
+// Súper-admin por :id de la URL en vez de salir del token de sesión
+// (requiereGrupo). Mismo manejo de rango que /grupos/:id/detalle de
+// arriba (?desde&hasta, o ?rango=hoy|semana|mes|todo, default "semana").
+// Respeta "moneda del grupo" (USD/Bs/Mixto) devolviendo 2 bloques
+// (USD/BS) cuando el grupo está en modo 'mixto', igual que el panel del
+// propio Grupo.
+// =================================================================
+router.get('/grupos/:id/balance-clientes', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const grupoRes = await db.query('SELECT id, moneda_modo FROM grupos WHERE id = $1', [id]);
+  if (grupoRes.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  const monedaModo = grupoRes.rows[0].moneda_modo || 'usd';
+
+  let desde = req.query.desde;
+  let hasta = req.query.hasta;
+  if (!desde && !hasta) {
+    const rango = await calcularRangoRapido(id, req.query.rango || 'semana');
+    desde = rango.desde;
+    hasta = rango.hasta;
+  }
+
+  const config = await cargarConfigGrupo(id);
+  const configComision = { modelo: config.modeloComision, tiers: config.tiersComision, modelosPorCliente: config.modelosComisionPorCliente };
+
+  if (monedaModo === 'mixto') {
+    const { usd, bs } = agruparNombresPorMonedaSuperadmin(config.jugadores);
+    const [resultadoUSD, resultadoBS] = await Promise.all([
+      calcularBalanceGeneral(id, desde, hasta, config.porcentajesPropios, config.avalesMap, configComision, usd),
+      calcularBalanceGeneral(id, desde, hasta, config.porcentajesPropios, config.avalesMap, configComision, bs)
+    ]);
+    return res.json({ mixto: true, rango: { desde, hasta }, USD: resultadoUSD, BS: resultadoBS });
+  }
+
+  const resultado = await calcularBalanceGeneral(id, desde, hasta, config.porcentajesPropios, config.avalesMap, configComision);
+  res.json({ mixto: false, moneda: monedaModo.toUpperCase(), rango: { desde, hasta }, ...resultado });
+}));
+
+// =================================================================
+// SÁBANA DE UN DÍA PUNTUAL, para CUALQUIER grupo (19-09-2026, mismo
+// pedido de arriba). obtenerSabanaDeFecha() ya es 100% genérica (ver el
+// import arriba) — se llama directo con el :id de la URL. Devuelve
+// exactamente lo mismo que ve el propio Grupo en su pestaña "📁 Sábanas"
+// (tickets con su detalle/estado, resumen por cliente, juegos de esa
+// fecha), pero de SOLO LECTURA: esta ruta no tiene un PUT para editar
+// tickets — esa edición sigue siendo exclusiva del propio panel del
+// Grupo (routes/sabana.js, PUT /tickets/:id, con su propio permiso
+// 'sabanas' por empleado).
+// =================================================================
+router.get('/grupos/:id/sabana-dia', asyncHandler(async (req, res) => {
+  const { fecha } = req.query;
+  if (!fecha) return res.status(400).json({ error: 'Falta la fecha (YYYY-MM-DD).' });
+  const resultado = await obtenerSabanaDeFecha(req.params.id, fecha);
+  res.json(resultado);
 }));
 
 // Restablece la contraseña de un Grupo — el súper-admin fija una NUEVA
