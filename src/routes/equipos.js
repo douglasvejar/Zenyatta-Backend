@@ -60,7 +60,23 @@ router.get('/nombres-oficiales/:deporte', asyncHandler(async (req, res) => {
       // diferencia de las demás ligas de acá, un límite chico se quedaría
       // corto, así que se pide bien alto. Mismo formato de respuesta que
       // NFL/NHL/basket (misma API de ESPN, ver ncaafApi.js).
-      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=400');
+      //
+      // CORREGIDO (20-09-2026, bug reportado por el usuario: "Tennessee
+      // Volunteers... no me aparece en la api para agregar el apodo"):
+      // a diferencia del scoreboard (ver la nota grande en ncaafApi.js —
+      // ese SÍ trae todos los partidos de FBS sin parámetros extra), este
+      // endpoint de "teams" es distinto: ESPN usa "groups" para separar
+      // Division I FBS (groups=80) de FCS y divisiones más chicas
+      // (confirmado contra la propia ESPN — la URL pública
+      // espn.com/college-football/schedule/_/group/80 es literalmente la
+      // temporada FBS). Sin ese parámetro, el endpoint no está devolviendo
+      // de forma confiable las ~130 escuelas FBS completas — por eso un
+      // programa tan conocido como Tennessee (SEC) podía faltar en la
+      // lista aunque el límite (400) sobrara de sobra. Se agrega
+      // "&groups=80" para pedirle a ESPN explícitamente "todos los
+      // equipos de Division I FBS", en vez de confiar en qué trae por
+      // default.
+      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?groups=80&limit=400');
       const json = await r.json();
       const equipos = (json.sports && json.sports[0] && json.sports[0].leagues && json.sports[0].leagues[0] && json.sports[0].leagues[0].teams) || [];
       nombres = equipos.map(e => e.team && e.team.displayName).filter(Boolean);
