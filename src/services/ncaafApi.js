@@ -41,14 +41,37 @@ async function obtenerResultadosNCAAF(fechaISO) {
   const fechaCompacta = (fechaISO || '').replace(/-/g, ''); // 'YYYY-MM-DD' -> 'YYYYMMDD' (formato que pide ESPN)
 
   try {
-    // Sin "groups"/"group": el endpoint de scoreboard de ESPN ya devuelve,
-    // por defecto, todos los juegos de División I FBS de la fecha pedida
-    // (confirmado contra la documentación pública de esta API) — no hace
-    // falta ningún parámetro extra para "traer todos los equipos", a
-    // diferencia de otros endpoints de ESPN (ej. standings) que sí piden un
-    // "level"/"group" puntual.
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=' + fechaCompacta);
-    const json = await res.json();
+    // Sin "groups"/"group": el endpoint de scoreboard de ESPN devuelve, por
+    // defecto, los juegos de División I FBS de la fecha pedida — pero SOLO
+    // los de FBS, no los de FCS (Division I-AA). Esto quedó confirmado del
+    // todo el 20-09-2026, a raíz de un pedido explícito del usuario:
+    // "quiero que esten todos los equipos de ncaaf que existan... north
+    // dakota state bison... quiero que este todos los que existen" — North
+    // Dakota State Bison es un programa de FCS, no de FBS, así que un
+    // partido suyo NUNCA iba a aparecer acá sin pedir explícitamente ese
+    // otro grupo (groups=81 es FCS, confirmado contra la propia ESPN:
+    // espn.com/college-football/scoreboard/_/group/81). Se pide groups=80
+    // (FBS) y groups=81 (FCS) EN PARALELO, mismo día/fecha, y se combinan
+    // los partidos de los 2 en un solo mapa — mismo criterio ya usado en
+    // src/routes/equipos.js para el listado de nombres oficiales. No se
+    // agregó división II/III: ESPN no las cubre de forma confiable en esta
+    // misma API "oculta", y no son ligas que se apuesten en la práctica.
+    const [resFbs, resFcs] = await Promise.all([
+      fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=' + fechaCompacta + '&groups=80').then(r => r.json()).catch(() => ({ events: [] })),
+      fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=' + fechaCompacta + '&groups=81').then(r => r.json()).catch(() => ({ events: [] }))
+    ]);
+    // Combina los eventos de los 2 grupos, evitando contar 2 veces un mismo
+    // partido si por algún motivo ESPN lo listara en ambos (no debería
+    // pasar — FBS y FCS son grupos excluyentes — pero por las dudas se
+    // deduplica por id de evento).
+    const eventosVistos = new Set();
+    const eventosCombinados = [];
+    [].concat(resFbs.events || [], resFcs.events || []).forEach(ev => {
+      if (eventosVistos.has(ev.id)) return;
+      eventosVistos.add(ev.id);
+      eventosCombinados.push(ev);
+    });
+    const json = { events: eventosCombinados };
 
     (json.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];

@@ -813,10 +813,14 @@ const DICCIONARIO_EQUIPOS_NBA_BASE = {
 // "escuela aggies" en ese momento, igual que ya se hizo acá con Tigers/
 // Bulldogs/Wildcats/Cougars).
 //
-// Sigue siendo un subconjunto a propósito (Power 4 + Notre Dame, no los
-// ~130 equipos de FBS ni ningún equipo de FCS/Grupo de 5) — se van
-// agregando más programas a medida que aparezcan en sábanas reales, mismo
-// criterio ya usado para ir sumando MLB/NFL/NHL/fútbol/NBA con el tiempo.
+// Sigue siendo un subconjunto a propósito (no las ~130 escuelas de FBS
+// completas, aunque ya cubre bastante Grupo de 5 además de Power 4 +
+// Notre Dame) — se van agregando más programas a medida que aparezcan en
+// sábanas reales, mismo criterio ya usado para ir sumando
+// MLB/NFL/NHL/fútbol/NBA con el tiempo. Desde el 20-09-2026 también tiene
+// su primera escuela de FCS (North Dakota State Bison, ver el final de
+// este mismo diccionario) — la API en vivo (ncaafApi.js/equipos.js) ya
+// cubre FBS y FCS por igual desde ese mismo día.
 const DICCIONARIO_EQUIPOS_NCAAF_BASE = {
   'miami florida': { nombre: 'Miami (FL) Hurricanes', deporte: 'ncaaf' },
   'miami hurricanes': { nombre: 'Miami (FL) Hurricanes', deporte: 'ncaaf' },
@@ -1260,7 +1264,26 @@ const DICCIONARIO_EQUIPOS_NCAAF_BASE = {
   // --- Independiente ---
   'uconn': { nombre: 'UConn Huskies', deporte: 'ncaaf' },
   'uconn huskies': { nombre: 'UConn Huskies', deporte: 'ncaaf' },
-  'connecticut huskies': { nombre: 'UConn Huskies', deporte: 'ncaaf' }
+  'connecticut huskies': { nombre: 'UConn Huskies', deporte: 'ncaaf' },
+
+  // --- FCS (Division I-AA) — primera entrada de esta subdivisión
+  // (20-09-2026, a pedido explícito del usuario: "quiero que esten todos
+  // los equipos de ncaaf que existan... north dakota state bison") ---
+  // Hasta ahora este diccionario solo tenía equipos de FBS (ver la nota
+  // grande al principio de DICCIONARIO_EQUIPOS_NCAAF_BASE) — North Dakota
+  // State Bison es un programa de FCS, una subdivisión aparte (más chica,
+  // sin los mismos programas "Power"), que recién queda cubierta por la
+  // API en vivo desde este mismo día (ver el arreglo de groups=81 en
+  // src/services/ncaafApi.js y src/routes/equipos.js) — sin esa parte del
+  // arreglo, aunque el equipo estuviera acá, sus partidos nunca hubieran
+  // aparecido en el marcador en vivo. Igual que con FBS, esto es una
+  // SEMILLA (no las ~130 escuelas de FCS de una sola vez) — se va a ir
+  // ampliando con programas reales a medida que aparezcan en sábanas,
+  // mismo criterio de siempre.
+  'north dakota state': { nombre: 'North Dakota State Bison', deporte: 'ncaaf' },
+  'north dakota state bison': { nombre: 'North Dakota State Bison', deporte: 'ncaaf' },
+  'ndsu bison': { nombre: 'North Dakota State Bison', deporte: 'ncaaf' },
+  'bison': { nombre: 'North Dakota State Bison', deporte: 'ncaaf' }
 };
 
 // =================================================================

@@ -50,6 +50,18 @@
 // quedó mapeado — se reemplazó por "North Dakota State" (potencia de
 // FCS, fuera del alcance de la API de FBS de ESPN) como el nuevo ejemplo
 // de programa genuinamente sin mapear.
+//
+// ACTUALIZADO (20-09-2026, a pedido del usuario: "quiero que esten todos
+// los equipos de ncaaf que existan... north dakota state bison"): tanto
+// la API en vivo (ncaafApi.js) como el listado de nombres oficiales
+// (routes/equipos.js) ahora también piden el grupo de FCS (groups=81) a
+// ESPN, y North Dakota State Bison se agregó al diccionario base — así
+// que "North Dakota State" DEJÓ de servir como ejemplo de programa sin
+// mapear. Se reemplazó por "Idaho Vandals" (otra potencia de FCS,
+// tampoco en el diccionario todavía) como el nuevo ejemplo de programa
+// genuinamente sin mapear — el mecanismo que este archivo prueba (que el
+// marcador manual siga funcionando como red de seguridad para CUALQUIER
+// programa todavía no mapeado) no cambió en nada.
 // Mismo patrón de base de datos + fetch falsos que
 // test_marcador_manual_sin_mapeo.js/test_alertas_integracion.js.
 const Module = require('module');
@@ -227,8 +239,8 @@ function check(cond, msg) {
   //    demuestra que ampliar el diccionario no le sacó la red de seguridad
   //    a los programas que todavía faltan.
   // -----------------------------------------------------------------
-  const resProgramaNoMapeado = evaluarJugada('north dakota state bison -110', {}, diccionario, {});
-  check(resProgramaNoMapeado.estado === 'SIN_MAPEO', 'un programa que todavía no está en el diccionario (ej. North Dakota State, de la FCS) sigue dando SIN_MAPEO, no PENDIENTE');
+  const resProgramaNoMapeado = evaluarJugada('idaho vandals -110', {}, diccionario, {});
+  check(resProgramaNoMapeado.estado === 'SIN_MAPEO', 'un programa que todavía no está en el diccionario (ej. Idaho Vandals, de la FCS) sigue dando SIN_MAPEO, no PENDIENTE');
 
   // -----------------------------------------------------------------
   // 3-bis) LA ENTREGA 3: el caso puntual reportado por el usuario. "Texas
@@ -306,22 +318,23 @@ function check(cond, msg) {
 
   // -----------------------------------------------------------------
   // 7) El marcador manual SIGUE funcionando para un programa de NCAAF que
-  //    todavía no está en el diccionario ampliado (Fresno State, ver el punto 3)
-  //    — mismo mecanismo de siempre para equipos genuinamente sin mapear.
+  //    todavía no está en el diccionario ampliado (Idaho Vandals, ver
+  //    el punto 3) — mismo mecanismo de siempre para equipos genuinamente
+  //    sin mapear.
   // -----------------------------------------------------------------
   global.fetch = fakeFetchResuelto;
   const textoConProgramaNoMapeado = [
     'PEDRO',
     'Ticket #9',
-    'north dakota state bison -110',
+    'idaho vandals -110',
     '49ers -150',
     'yankees -300',
     '50//192.98✅'
   ].join('\n');
   const r4 = await procesarSabana('grupo-ncaaf', textoConProgramaNoMapeado, FECHA_PRUEBA);
   const t4 = r4.tickets.find(t => t.cliente === 'PEDRO');
-  check(t4.estado === 'GANADA', 'un programa que todavía no está en el diccionario (North Dakota State) se sigue resolviendo vía el marcador manual, con los otros 2 legs ganando de verdad');
-  check(t4.resueltoPorMarcadorManualSinMapeo === true, 'para North Dakota State (sin mapear) el marcador manual SIGUE activándose, a diferencia de Miami (ya mapeado, con API real)');
+  check(t4.estado === 'GANADA', 'un programa que todavía no está en el diccionario (Idaho Vandals) se sigue resolviendo vía el marcador manual, con los otros 2 legs ganando de verdad');
+  check(t4.resueltoPorMarcadorManualSinMapeo === true, 'para Idaho Vandals (sin mapear) el marcador manual SIGUE activándose, a diferencia de Miami (ya mapeado, con API real)');
 
   // -----------------------------------------------------------------
   // 8) ENTREGA 3, de punta a punta: el ticket real reportado ("Ticket 2",
@@ -365,6 +378,58 @@ function check(cond, msg) {
   check(!!t5, 'el "Ticket 2" reportado por el usuario aparece en la respuesta');
   check(t5.estado === 'PERDIDA', 'el "Ticket 2" real (California no cubre +3.5, aunque Texas State sí cubra -2.5) queda PERDIDA — ya no se marca GANADA por error');
   check(!t5.resueltoPorMarcadorManualSinMapeo, 'ya no hizo falta el marcador manual ✅: ambas patas se resolvieron solas contra la API real de NCAAF, y el estado real (PERDIDA) le ganó al marcador manual');
+
+  // -----------------------------------------------------------------
+  // 9) ENTREGA 4 (20-09-2026, a pedido explícito del usuario: "quiero que
+  //    esten todos los equipos de ncaaf que existan... north dakota state
+  //    bison"): un partido de FCS (North Dakota State Bison, ya agregado
+  //    al diccionario base) se resuelve SOLO contra la API real — a pesar
+  //    de que ESPN solo lo devuelve en el grupo groups=81 (FCS), nunca en
+  //    groups=80 (FBS). Este fake distingue los 2 llamados por su
+  //    parámetro "groups" para probar de verdad que ncaafApi.js combina
+  //    ambos grupos, no solo que "algo" responda a cualquier URL de
+  //    college-football.
+  // -----------------------------------------------------------------
+  function fakeFetchConBisonFCS(url) {
+    if (url.includes('/football/college-football/') && url.includes('groups=81')) {
+      return Promise.resolve({
+        json: async () => ({
+          events: [{
+            id: 'espn-ncaaf-fcs-9001',
+            date: FECHA_PRUEBA + 'T18:00:00Z',
+            competitions: [{
+              status: { type: { completed: true, description: 'Final', state: 'post' } },
+              competitors: [
+                { homeAway: 'home', team: { displayName: 'North Dakota State Bison', logo: null }, score: '45' },
+                { homeAway: 'away', team: { displayName: 'South Dakota State Jackrabbits', logo: null }, score: '10' }
+              ]
+            }]
+          }]
+        })
+      });
+    }
+    if (url.includes('/football/college-football/') && url.includes('groups=80')) {
+      // El mismo día, la FBS (groups=80) no tiene ningún partido de Bison
+      // — es justamente el punto: si ncaafApi.js solo pidiera groups=80
+      // (como antes de este arreglo), este ticket jamás se resolvería solo.
+      return Promise.resolve({ json: async () => ({ events: [] }) });
+    }
+    return fakeFetchResuelto(url);
+  }
+  global.fetch = fakeFetchConBisonFCS;
+  const textoConBison = [
+    'SOFIA',
+    'Ticket #10',
+    'north dakota state bison -110',
+    '49ers -150',
+    'yankees -300',
+    '50//192.98✅'
+  ].join('\n');
+  const r6 = await procesarSabana('grupo-ncaaf', textoConBison, FECHA_PRUEBA);
+  const t6 = r6.tickets.find(t => t.cliente === 'SOFIA');
+  check(!!t6, 'el ticket de SOFIA (North Dakota State Bison, FCS) aparece en la respuesta');
+  check(t6.estado === 'GANADA', 'North Dakota State Bison (FCS) ahora se resuelve SOLO contra la API real, combinando groups=80 (FBS) y groups=81 (FCS)');
+  check(!t6.resueltoPorMarcadorManualSinMapeo, 'YA NO hizo falta el marcador manual para Bison: ni "sin mapear" (ya está en el diccionario) ni dependiente de que la FBS lo tuviera');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

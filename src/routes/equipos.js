@@ -69,17 +69,35 @@ router.get('/nombres-oficiales/:deporte', asyncHandler(async (req, res) => {
       // Division I FBS (groups=80) de FCS y divisiones más chicas
       // (confirmado contra la propia ESPN — la URL pública
       // espn.com/college-football/schedule/_/group/80 es literalmente la
-      // temporada FBS). Sin ese parámetro, el endpoint no está devolviendo
-      // de forma confiable las ~130 escuelas FBS completas — por eso un
-      // programa tan conocido como Tennessee (SEC) podía faltar en la
-      // lista aunque el límite (400) sobrara de sobra. Se agrega
-      // "&groups=80" para pedirle a ESPN explícitamente "todos los
-      // equipos de Division I FBS", en vez de confiar en qué trae por
-      // default.
-      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?groups=80&limit=400');
-      const json = await r.json();
-      const equipos = (json.sports && json.sports[0] && json.sports[0].leagues && json.sports[0].leagues[0] && json.sports[0].leagues[0].teams) || [];
-      nombres = equipos.map(e => e.team && e.team.displayName).filter(Boolean);
+      // temporada FBS). Sin ese parámetro, el endpoint no estaba
+      // devolviendo de forma confiable las ~130 escuelas FBS completas.
+      //
+      // AMPLIADO (mismo día, pedido explícito del usuario: "quiero que
+      // esten todos los equipos de ncaaf que existan... north dakota
+      // state bison... quiero que este todos los que existen"): "todos
+      // los que existen" incluye también la FCS (Division I-AA, ~130
+      // escuelas más) — North Dakota State Bison es justamente un
+      // programa de FCS, no de FBS, así que agregar SOLO "groups=80" no
+      // alcanzaba para este pedido puntual (confirmado contra la propia
+      // ESPN: espn.com/college-football/teams/_/group/81 es literalmente
+      // el listado de equipos de FCS). Se piden los 2 grupos EN PARALELO
+      // (groups=80 FBS + groups=81 FCS) y se combinan en una sola lista —
+      // mismo patrón ya usado más abajo para "soccer" (que también junta
+      // varias competiciones en una sola lista). No se agregó división
+      // II/III: ESPN no las cubre en esta misma API "oculta" de forma
+      // confiable, y no son ligas que se apuesten en la práctica — si
+      // algún día aparece un caso real de D-II/D-III en una sábana, se
+      // puede agregar ese equipo puntual al diccionario base
+      // (diccionarioEquipos.js) sin depender de esta API.
+      const [resFbs, resFcs] = await Promise.all([
+        fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?groups=80&limit=400').then(r => r.json()).catch(() => null),
+        fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?groups=81&limit=400').then(r => r.json()).catch(() => null)
+      ]);
+      const equiposDe = json => (json && json.sports && json.sports[0] && json.sports[0].leagues && json.sports[0].leagues[0] && json.sports[0].leagues[0].teams) || [];
+      const setNombresNcaaf = new Set();
+      equiposDe(resFbs).forEach(e => { const n = e.team && e.team.displayName; if (n) setNombresNcaaf.add(n); });
+      equiposDe(resFcs).forEach(e => { const n = e.team && e.team.displayName; if (n) setNombresNcaaf.add(n); });
+      nombres = Array.from(setNombresNcaaf);
     } else if (deporte === 'soccer') {
       // Fútbol no es UNA liga — son las 10 competiciones de LIGAS_SOCCER
       // (soccerApi.js). Se piden todas EN PARALELO y se combinan/deduplican
