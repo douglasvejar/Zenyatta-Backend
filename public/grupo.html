@@ -573,8 +573,19 @@
        Resultados, etc.) se vuelve un bloque con scroll horizontal PROPIO
        en vez de aplastar sus columnas o empujar toda la página de costado
        — se sigue viendo la tabla entera, tal cual, solo que se desliza
-       con el dedo si no entra de una. */
-    table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+       con el dedo si no entra de una.
+       20-09-2026, a pedido del usuario ("solo me deja moverme ahora hacia
+       los lados... no puedo darle hacia abajo... para ver los saldos de
+       todos los jugadores"): el "overflow-y: hidden" es OBLIGATORIO acá.
+       Sin ponerlo a mano, el navegador (por la spec de CSS) convierte
+       overflow-y en "auto" solo porque overflow-x ya no es "visible" —
+       eso hace que la tabla misma quede registrada como su propio
+       contenedor de scroll VERTICAL (aunque no tenga nada para scrollear
+       verticalmente adentro), y en celular eso es suficiente para que le
+       "robe" a la página el gesto de deslizar hacia abajo con el dedo,
+       en vez de dejarlo pasar hacia el contenedor de arriba que sí
+       necesita scrollear (la tabla completa, para ver todas las filas). */
+    table { display: block; overflow-x: auto; overflow-y: hidden; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 
     /* "Jugada(s)" con Ganada/Perdida en el celular (15-09-2026, a pedido
        del usuario: "hay que moverla hacia un lado y es incómodo utilizarla")
@@ -1323,7 +1334,7 @@
        grupo por día de esa semana"). Solo se llena cuando el rango es de
        31 días o menos (ver calcularBalancePorDia() en balanceGeneral.js);
        para rangos más largos (ej. "Todo el historial") se oculta. -->
-  <div id="bgDesgloseDiario" style="display:none; margin:10px 0; overflow-x:auto;">
+  <div id="bgDesgloseDiario" style="display:none; margin:10px 0; overflow-x:auto; overflow-y:hidden;">
     <table style="min-width:100%; width:auto;">
       <thead><tr id="bgDesgloseDiarioDias"></tr></thead>
       <tbody><tr id="bgDesgloseDiarioMontos"></tr></tbody>

@@ -2836,7 +2836,7 @@ function asegurarBloquesBalanceGeneralMixto() {
     '<div><label style="display:block;">Balance de la banca:</label><p id="bgBalanceBanca' + sufijo + '" style="margin:0; font-size:18px; font-weight:bold;">$0.00</p></div>' +
     '<div><label style="display:block;">— de eso, Banca Polla:</label><p id="bgBalanceBancaPolla' + sufijo + '" style="margin:0; font-size:18px; font-weight:bold;">$0.00</p></div>' +
     '</div>' +
-    '<div id="bgDesgloseDiario' + sufijo + '" style="display:none; margin:10px 0; overflow-x:auto;">' +
+    '<div id="bgDesgloseDiario' + sufijo + '" style="display:none; margin:10px 0; overflow-x:auto; overflow-y:hidden;">' +
     '<table style="min-width:100%; width:auto;"><thead><tr id="bgDesgloseDiarioDias' + sufijo + '"></tr></thead><tbody><tr id="bgDesgloseDiarioMontos' + sufijo + '"></tr></tbody></table>' +
     '</div>' +
     '<table id="tablaBalanceGeneral' + sufijo + '" class="tabla-balance-general" style="margin-top:10px;"><thead><tr>' + filaEncabezado + '</tr></thead><tbody></tbody></table>' +

@@ -391,7 +391,20 @@
        de banca (dentro del modal de detalle) — todos en 1 columna. */
     .inputs-inline, .inputs-inline-dic { grid-template-columns: 1fr !important; }
 
-    table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    /* 20-09-2026, a pedido del usuario ("solo me deja moverme ahora hacia
+       los lados... no puedo darle hacia abajo... para ver los saldos de
+       todos los jugadores", probado en la pestaña "💰 Balance por
+       Cliente" de la ficha de un grupo) — el "overflow-y: hidden" es
+       OBLIGATORIO acá. Sin ponerlo a mano, el navegador (por la spec de
+       CSS) convierte overflow-y en "auto" solo porque overflow-x ya no
+       es "visible" — eso hace que la tabla misma quede registrada como
+       su propio contenedor de scroll VERTICAL (aunque no tenga nada para
+       scrollear verticalmente adentro), y en celular eso le "roba" al
+       panel de arriba (.detalle-tabs-paneles) el gesto de deslizar hacia
+       abajo con el dedo, en vez de dejarlo pasar para ver todas las
+       filas de la tabla. Ver el mismo arreglo, con el mismo comentario,
+       en grupo.html. */
+    table { display: block; overflow-x: auto; overflow-y: hidden; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 
     .modal-fondo { padding: 10px; }
     .modal-caja { padding: 16px; max-width: 100%; }
@@ -1630,7 +1643,7 @@ function tablaBalanceClientesHTML(data) {
       '<td style="font-weight:bold; color:' + (esTotal ? 'inherit' : color) + ';">' + formatDinero(f.saldoCliente) + '</td>' +
     '</tr>';
   };
-  return '<div style="overflow-x:auto;"><table class="tabla-balance-superadmin"><thead><tr>' +
+  return '<div style="overflow-x:auto; overflow-y:hidden;"><table class="tabla-balance-superadmin"><thead><tr>' +
     '<th>Cliente</th><th>Arriesgado</th><th>Ganado</th><th>Perdido</th><th>Comisión</th><th>Transferencias</th><th>Polla</th><th>Saldo</th>' +
     '</tr></thead><tbody>' +
     filas.map(f => filaHTML(f, false)).join('') +
@@ -1684,7 +1697,7 @@ async function cargarSabanaDiaDetalle() {
 
     const tablaTickets = tickets.length === 0
       ? '<p style="color:var(--text-dim); font-size:13px;">Sin tickets esa fecha.</p>'
-      : '<div style="overflow-x:auto;"><table class="tabla-balance-superadmin"><thead><tr><th>Cliente</th><th>Ticket</th><th>Detalle</th><th>Arriesga</th><th>Gana</th><th>Estado</th></tr></thead><tbody>' +
+      : '<div style="overflow-x:auto; overflow-y:hidden;"><table class="tabla-balance-superadmin"><thead><tr><th>Cliente</th><th>Ticket</th><th>Detalle</th><th>Arriesga</th><th>Gana</th><th>Estado</th></tr></thead><tbody>' +
         tickets.map(t => '<tr>' +
           '<td>' + t.cliente + '</td>' +
           '<td>' + (t.ticket || '') + '</td>' +
