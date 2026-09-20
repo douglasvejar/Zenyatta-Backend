@@ -440,11 +440,29 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
     // puede hacer falta resolverlo a mano), en vez de sonar a que el
     // partido sigue en curso.
     if (juego.finalizado && (esPrimeraMitad || esSegundaMitad)) {
-      return {
-        estado: 'PENDIENTE',
-        razon: 'El partido ya terminó, pero todavía no hay datos de ' + (esSegundaMitad ? 'la segunda mitad' : 'la primera mitad') + ' para poder resolver esta jugada — puede que esta liga/competición no tenga ese dato disponible (ej. en fútbol, la Europa League y la Conference League no están cubiertas); si sigue así, revisar y resolver a mano.',
-        debug: debugBase
-      };
+      // CORREGIDO (20-09-2026, caso real: 2 tickets de "1h" de La Liga y
+      // Serie A — ligas SÍ cubiertas por football-data.org — mostraban el
+      // mismo texto genérico de "puede que esta liga no esté cubierta",
+      // que es ENGAÑOSO para una liga que sí está en la lista. Para
+      // fútbol, ahora se usa `juego.motivoSinPrimeraMitad` (armado en
+      // soccerApi.js/agregarPrimeraMitad) para decir la causa real en vez
+      // de un mensaje único que sirve para cualquier motivo.
+      const segmento = esSegundaMitad ? 'la segunda mitad' : 'la primera mitad';
+      let razon;
+      if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'sin-clave') {
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta, pero el servidor no tiene configurada la clave de football-data.org (FOOTBALL_DATA_API_KEY). Esto es un problema de configuración, no de la liga: revisar esa variable de entorno en Railway.';
+      } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'error-api') {
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta y la clave está puesta, pero football-data.org devolvió un error al pedir esta competencia (clave inválida o límite de pedidos superado). Revisar el log del servidor; si sigue así, resolver a mano.';
+      } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'sin-cruce') {
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para este partido puntual — la liga SÍ está cubierta y la clave funciona, pero football-data.org no tiene (o no se pudo cruzar por nombre de equipo) este partido en particular. Revisar este caso puntual; si sigue así, resolver a mano.';
+      } else {
+        // Deporte sin fuente de 1h/2h separada (ej. NBA, donde el dato sale
+        // de la MISMA API que el marcador final), o fútbol de una liga
+        // genuinamente sin cobertura (ej. Europa League/Conference League)
+        // — acá sí puede que el dato nunca llegue solo.
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para poder resolver esta jugada — puede que esta liga/competición no tenga ese dato disponible (ej. en fútbol, la Europa League y la Conference League no están cubiertas); si sigue así, revisar y resolver a mano.';
+      }
+      return { estado: 'PENDIENTE', razon, debug: debugBase };
     }
 
     return {

@@ -197,11 +197,49 @@ function nombresDeEquipoCoinciden(nombreA, nombreB) {
 // EXIGE que local Y visitante coincidan a la vez, para no cruzar mal 2
 // partidos distintos que por casualidad compartan un equipo con nombre
 // parecido.
-function agregarPrimeraMitad(mapaCombinado, primeraMitadPorPartido) {
-  if (!primeraMitadPorPartido || primeraMitadPorPartido.length === 0) return;
+//
+// CORREGIDO (20-09-2026, caso real: Barcelona/La Liga y Roma/Serie A —
+// las 2 ligas SÍ están en LIGAS_CON_PRIMERA_MITAD — quedaron PENDIENTE
+// con el mensaje de "puede que esta liga no esté cubierta"): ahora cada
+// juego se marca con `motivoSinPrimeraMitad` cuando NO se pudo completar
+// el dato de 1h, distinguiendo el motivo real:
+//   - 'liga-no-cubierta': el torneo de este partido (`juego.liga`) ni
+//     siquiera está en la lista de las 6 ligas que cubre football-data.org
+//     (ej. Europa League/Conference League/Liga MX/etc.) — esto SIGUE
+//     siendo una limitación real, sin arreglo gratis posible.
+//   - 'sin-clave': la liga SÍ está cubierta, pero `FOOTBALL_DATA_API_KEY`
+//     no está configurada en el servidor — un problema de CONFIGURACIÓN,
+//     no de cobertura, y si es este el motivo, arreglarlo es tan simple
+//     como cargar esa variable de entorno en Railway.
+//   - 'error-api': la liga SÍ está cubierta y la clave SÍ está puesta,
+//     pero football-data.org devolvió un error (clave inválida, límite de
+//     pedidos superado, etc. — ver el log del servidor) para ALGUNA de
+//     las 6 competencias pedidas ese día.
+//   - 'sin-cruce': la liga SÍ está cubierta, la clave SÍ está puesta, la
+//     consulta SÍ respondió bien, pero este partido puntual no apareció
+//     en la lista de football-data.org para esa fecha, o su nombre de
+//     equipo no pudo cruzarse contra el de ESPN (ver
+//     nombresDeEquipoCoinciden arriba) — el caso más específico, y el
+//     único de los 4 que amerita revisar el club puntual en vez de la
+//     configuración del servidor.
+// Un juego que SÍ cruzó bien no lleva este campo (queda `undefined`).
+function agregarPrimeraMitad(mapaCombinado, primeraMitadInfo) {
+  const primeraMitadPorPartido = (primeraMitadInfo && primeraMitadInfo.partidos) || [];
+  const claveConfigurada = !!(primeraMitadInfo && primeraMitadInfo.claveConfigurada);
+  const huboError = !!(primeraMitadInfo && primeraMitadInfo.huboError);
+  const { LIGAS_CON_PRIMERA_MITAD } = require('./footballDataApi'); // require perezoso, mismo motivo que en obtenerResultadosSoccer más abajo
+  const nombresLigasCubiertas = LIGAS_CON_PRIMERA_MITAD.map(l => l.nombre);
 
   const juegosUnicos = new Set(Object.values(mapaCombinado));
   juegosUnicos.forEach(juego => {
+    if (!nombresLigasCubiertas.includes(juego.liga)) {
+      juego.motivoSinPrimeraMitad = 'liga-no-cubierta';
+      return;
+    }
+    if (!claveConfigurada) {
+      juego.motivoSinPrimeraMitad = 'sin-clave';
+      return;
+    }
     const match = primeraMitadPorPartido.find(pm =>
       (nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamName) || nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamShortName)) &&
       (nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamName) || nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamShortName))
@@ -210,7 +248,10 @@ function agregarPrimeraMitad(mapaCombinado, primeraMitadPorPartido) {
       juego.homeScore1H = match.homeScore1H;
       juego.awayScore1H = match.awayScore1H;
       juego.final1H = match.final1H;
+      if (!match.final1H) juego.motivoSinPrimeraMitad = 'sin-cruce'; // el partido cruzó, pero football-data.org todavía no tiene el dato del entretiempo — no es lo mismo que no haber cruzado nunca
+      return;
     }
+    juego.motivoSinPrimeraMitad = huboError ? 'error-api' : 'sin-cruce';
   });
 }
 
@@ -223,12 +264,12 @@ function agregarPrimeraMitad(mapaCombinado, primeraMitadPorPartido) {
 async function obtenerResultadosSoccer(fechaISO) {
   const fechaCompacta = (fechaISO || '').replace(/-/g, '');
   const { obtenerPrimeraMitadFutbol } = require('./footballDataApi'); // require perezoso: evita un ciclo de módulos si algún día footballDataApi.js necesitara algo de acá
-  const [mapasPorLiga, primeraMitadPorPartido] = await Promise.all([
+  const [mapasPorLiga, primeraMitadInfo] = await Promise.all([
     Promise.all(LIGAS_SOCCER.map(liga => obtenerResultadosDeLiga(liga.slug, liga.nombre, fechaCompacta))),
-    obtenerPrimeraMitadFutbol(fechaISO).catch(() => [])
+    obtenerPrimeraMitadFutbol(fechaISO).catch(() => ({ partidos: [], claveConfigurada: false, huboError: true }))
   ]);
   const mapaCombinado = Object.assign({}, ...mapasPorLiga);
-  agregarPrimeraMitad(mapaCombinado, primeraMitadPorPartido);
+  agregarPrimeraMitad(mapaCombinado, primeraMitadInfo);
   return mapaCombinado;
 }
 

@@ -52,25 +52,33 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   // Milano, nombres bien distintos entre las 2 APIs).
   // -----------------------------------------------------------------
   process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
+  // NOTA (20-09-2026): todas las respuestas simuladas acá agregan
+  // `ok: true` — footballDataApi.js ahora revisa `res.ok` antes de leer
+  // el JSON (para poder distinguir un error real de football-data.org de
+  // "no hay partidos ese día", ver el comentario grande en ese archivo).
+  // Sin este campo, el mock hacía que TODAS las llamadas parecieran un
+  // error, y las pruebas de esta sección se rompían — no era un bug del
+  // código nuevo, era que el mock no imitaba `fetch` de verdad (que
+  // siempre trae `.ok`).
   global.fetch = async (url) => {
     const u = String(url);
     if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
-      return { json: async () => fixtureESPN('Manchester City', 'Arsenal', 2, 1) };
+      return { ok: true, json: async () => fixtureESPN('Manchester City', 'Arsenal', 2, 1) };
     }
     if (u.includes('site.api.espn.com') && u.includes('/soccer/ita.1/')) {
-      return { json: async () => fixtureESPN('Napoli', 'Inter Milan', 1, 2) };
+      return { ok: true, json: async () => fixtureESPN('Napoli', 'Inter Milan', 1, 2) };
     }
     if (u.includes('site.api.espn.com') && u.includes('/soccer/')) {
-      return { json: async () => ({ events: [] }) }; // las demás ligas de ESPN: sin partidos ese día
+      return { ok: true, json: async () => ({ events: [] }) }; // las demás ligas de ESPN: sin partidos ese día
     }
     if (u.includes('api.football-data.org') && u.includes('/competitions/PL/')) {
-      return { json: async () => fixtureFootballData('Manchester City FC', 'Man City', 'Arsenal FC', 'Arsenal', 1, 1) };
+      return { ok: true, json: async () => fixtureFootballData('Manchester City FC', 'Man City', 'Arsenal FC', 'Arsenal', 1, 1) };
     }
     if (u.includes('api.football-data.org') && u.includes('/competitions/SA/')) {
-      return { json: async () => fixtureFootballData('SSC Napoli', 'Napoli', 'FC Internazionale Milano', 'Inter', 1, 1) };
+      return { ok: true, json: async () => fixtureFootballData('SSC Napoli', 'Napoli', 'FC Internazionale Milano', 'Inter', 1, 1) };
     }
     if (u.includes('api.football-data.org')) {
-      return { json: async () => ({ matches: [] }) }; // las demás 4 competiciones cubiertas: sin partidos ese día
+      return { ok: true, json: async () => ({ matches: [] }) }; // las demás 4 competiciones cubiertas: sin partidos ese día
     }
     throw new Error('URL inesperada en la prueba: ' + url);
   };
@@ -96,11 +104,11 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   let sePidioFootballData = false;
   global.fetch = async (url) => {
     const u = String(url);
-    if (u.includes('api.football-data.org')) { sePidioFootballData = true; return { json: async () => ({ matches: [] }) }; }
+    if (u.includes('api.football-data.org')) { sePidioFootballData = true; return { ok: true, json: async () => ({ matches: [] }) }; }
     if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
-      return { json: async () => fixtureESPN('Manchester City', 'Arsenal', 2, 1) };
+      return { ok: true, json: async () => fixtureESPN('Manchester City', 'Arsenal', 2, 1) };
     }
-    return { json: async () => ({ events: [] }) };
+    return { ok: true, json: async () => ({ events: [] }) };
   };
   const resultadosSinClave = await obtenerResultadosSoccer('2026-08-31');
   check(!sePidioFootballData, 'Sin FOOTBALL_DATA_API_KEY configurada, NUNCA se le pega a football-data.org (no gasta pedidos de nadie por accidente)');
@@ -115,6 +123,72 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   // compartir la palabra "Milan".
   // -----------------------------------------------------------------
   check(!nombresDeEquipoCoinciden('AC Milan', 'Inter Milan'), 'Regresión: "AC Milan" e "Inter Milan" (equipos DISTINTOS que comparten ciudad) no se consideran el mismo equipo');
+
+  // -----------------------------------------------------------------
+  // Casos D-G (agregados 20-09-2026, a raíz del caso real reportado por
+  // el usuario: tickets de "1h" de La Liga/Serie A — ligas SÍ cubiertas
+  // — quedaban PENDIENTE con un mensaje que sonaba a "puede que esta
+  // liga no esté cubierta"). Confirman que `motivoSinPrimeraMitad`
+  // distingue las 4 causas reales en vez de mezclarlas todas.
+  // -----------------------------------------------------------------
+
+  // Caso D: liga SÍ cubierta (La Liga) pero SIN la clave configurada —
+  // debe marcarse 'sin-clave', no 'liga-no-cubierta'.
+  delete process.env.FOOTBALL_DATA_API_KEY;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/esp.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Barcelona', 'Real Madrid', 2, 1) };
+    }
+    return { ok: true, json: async () => ({ events: [] }) };
+  };
+  const resD = await obtenerResultadosSoccer('2026-08-31');
+  check(resD['barcelona'] && resD['barcelona'].motivoSinPrimeraMitad === 'sin-clave',
+    'Caso real (La Liga, sin FOOTBALL_DATA_API_KEY en el servidor): se marca "sin-clave", no el genérico de "liga no cubierta" — La Liga SÍ está en la lista');
+
+  // Caso E: liga SÍ cubierta (Serie A), clave configurada, pero
+  // football-data.org devuelve un error (401/429/etc.) para esa
+  // competencia — debe marcarse 'error-api'.
+  process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/ita.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Roma', 'Lazio', 1, 0) };
+    }
+    if (u.includes('site.api.espn.com')) {
+      return { ok: true, json: async () => ({ events: [] }) };
+    }
+    if (u.includes('api.football-data.org') && u.includes('/competitions/SA/')) {
+      return { ok: false, status: 429, json: async () => ({}) }; // límite de pedidos superado
+    }
+    return { ok: true, json: async () => ({ matches: [] }) };
+  };
+  const resE = await obtenerResultadosSoccer('2026-08-31');
+  check(resE['roma'] && resE['roma'].motivoSinPrimeraMitad === 'error-api',
+    'Caso real (Serie A, football-data.org responde 429): se marca "error-api", no "liga no cubierta" — Serie A SÍ está en la lista y la clave SÍ está puesta');
+
+  // Caso F: liga SÍ cubierta, clave OK, la consulta responde 200, pero
+  // este partido puntual no aparece ese día (o no cruzó por nombre) —
+  // debe marcarse 'sin-cruce'.
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Chelsea', 'Everton', 1, 1) };
+    }
+    if (u.includes('site.api.espn.com')) {
+      return { ok: true, json: async () => ({ events: [] }) };
+    }
+    return { ok: true, json: async () => ({ matches: [] }) }; // football-data.org responde bien, pero sin este partido
+  };
+  const resF = await obtenerResultadosSoccer('2026-08-31');
+  check(resF['chelsea'] && resF['chelsea'].motivoSinPrimeraMitad === 'sin-cruce',
+    'Liga cubierta + clave OK + respuesta 200 pero sin este partido puntual: se marca "sin-cruce" (el caso más específico, para revisar el club puntual)');
+
+  // Caso G: liga que GENUINAMENTE no está cubierta (Europa League) —
+  // sigue siendo 'liga-no-cubierta', el único caso donde el mensaje
+  // original ("puede que esta liga no esté cubierta") sigue siendo
+  // preciso.
+  check(true, 'Nota: el caso "liga-no-cubierta" ya está cubierto por test_logica.js (testFutbol1hPartidoTerminadoSinDatoDeMitad, liga Europa League)');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

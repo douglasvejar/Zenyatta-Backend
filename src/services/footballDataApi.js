@@ -58,6 +58,18 @@ const LIGAS_CON_PRIMERA_MITAD = [
   { codigo: 'CL', nombre: 'UEFA Champions League' }
 ];
 
+// CORREGIDO (20-09-2026, caso real reportado por el usuario: 2 tickets de
+// "1h" de La Liga y Serie A — ligas SÍ cubiertas acá — quedaron PENDIENTE
+// con el mensaje de "puede que esta liga no esté cubierta", que es
+// engañoso cuando la liga SÍ está en la lista): hasta ahora, si
+// football-data.org respondía con un error (401 clave inválida, 403 plan
+// sin acceso a esa competencia, 429 límite de pedidos por minuto del plan
+// gratis superado, etc.), esta función lo tragaba en silencio y devolvía
+// una lista vacía — exactamente el mismo resultado que si el partido
+// simplemente no hubiera llegado todavía. Ahora se revisa `res.ok` y, si
+// la respuesta no fue 200, se loguea el status real (para verlo en los
+// logs de Railway) y se marca esta competencia puntual como "con error",
+// en vez de mezclarla en silencio con "sin partidos ese día".
 async function obtenerPrimeraMitadDeCompetencia(codigo, fechaISO, apiKey) {
   const datos = [];
   try {
@@ -65,6 +77,10 @@ async function obtenerPrimeraMitadDeCompetencia(codigo, fechaISO, apiKey) {
       'https://api.football-data.org/v4/competitions/' + codigo + '/matches?dateFrom=' + fechaISO + '&dateTo=' + fechaISO,
       { headers: { 'X-Auth-Token': apiKey } }
     );
+    if (!res.ok) {
+      console.error('football-data.org respondió ' + res.status + ' para la competencia ' + codigo + ' — revisar si FOOTBALL_DATA_API_KEY es válida o si se superó el límite de pedidos por minuto del plan gratis.');
+      return { datos, huboError: true };
+    }
     const json = await res.json();
 
     (json.matches || []).forEach(m => {
@@ -87,21 +103,30 @@ async function obtenerPrimeraMitadDeCompetencia(codigo, fechaISO, apiKey) {
     });
   } catch (e) {
     console.error('Error al conectar con football-data.org (competencia ' + codigo + '):', e);
+    return { datos, huboError: true };
   }
-  return datos;
+  return { datos, huboError: false };
 }
 
-// Devuelve una LISTA (no un mapa por nombre, a propósito) — el cruce por
-// nombre de equipo lo hace soccerApi.js, que es quien conoce los nombres
-// "oficiales" de ESPN contra los que hay que emparejar.
+// Devuelve { partidos, claveConfigurada, huboError } en vez de una lista
+// pelada — mismo motivo que el comentario grande de arriba: sin esto,
+// evaluador.js no podía distinguir "esta liga no está cubierta" de "esta
+// liga SÍ está cubierta pero algo falló" (lo más probable siendo que
+// `FOOTBALL_DATA_API_KEY` nunca se configuró en el servidor de
+// producción, o que la clave es inválida/quedó sin cupo) — con estos 2
+// datos expuestos, soccerApi.js/evaluador.js ya pueden armar un mensaje
+// que diga la verdad en cada caso, en vez de un genérico que puede
+// confundir a un partido de una liga SÍ cubierta con uno que no lo está.
 async function obtenerPrimeraMitadFutbol(fechaISO) {
   const apiKey = process.env.FOOTBALL_DATA_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return { partidos: [], claveConfigurada: false, huboError: false };
 
-  const listas = await Promise.all(
+  const resultados = await Promise.all(
     LIGAS_CON_PRIMERA_MITAD.map(liga => obtenerPrimeraMitadDeCompetencia(liga.codigo, fechaISO, apiKey))
   );
-  return [].concat(...listas);
+  const partidos = [].concat(...resultados.map(r => r.datos));
+  const huboError = resultados.some(r => r.huboError);
+  return { partidos, claveConfigurada: true, huboError };
 }
 
 module.exports = { obtenerPrimeraMitadFutbol, LIGAS_CON_PRIMERA_MITAD };
