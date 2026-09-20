@@ -281,25 +281,89 @@
      genéricos, que usan los demás modales de este panel (nuevo Grupo,
      etc.), quedan exactamente como estaban.
      ================================================================= */
-  #modalDetalleFondo .modal-caja { max-width: 1080px; padding: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  /* "height" fijo (NO "max-height") a propósito — ver la nota grande de
+     "min-height: 0" en ".detalle-tabs-paneles" más abajo: con solo
+     "max-height", el alto de este modal queda INDEFINIDO para flexbox
+     (se ajusta a su contenido y recién se lo recorta después), y eso
+     hacía que ".detalle-tabs-paneles" nunca tuviera un alto real del
+     cual "encogerse" — crecía sin límite y el sobrante quedaba cortado
+     por el "overflow:hidden" de acá, sin scroll posible. Con "height"
+     fijo, el modal SIEMPRE mide lo mismo (con la pestaña "Logo" corta o
+     con "Balance por Cliente" larga) y ahí sí ".detalle-tabs-paneles"
+     puede calcular su alto real y scrollear internamente lo que sobre. */
+  #modalDetalleFondo .modal-caja { max-width: 1080px; height: 90vh; max-height: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; }
   #modalDetalleFondo .modal-caja h2 { margin: 0; padding: 20px 46px 14px 24px; border-bottom: 1px solid var(--border); }
   #modalDetalleFondo #detalleCargando { padding: 24px; }
+  /* 20-09-2026 — este div es el que de verdad causaba el bug de "no puedo
+     bajar para ver la lista completa de clientes": es hijo directo de
+     ".modal-caja" (que sí es "display:flex; flex-direction:column"), pero
+     ÉL MISMO se mostraba con "display:block" (puesto a mano desde el JS,
+     ver mostrarDetalleGrupo() en el <script>) — un div de bloque normal
+     no participa de ningún flexbox, así que rompía la cadena justo en el
+     medio: ".detalle-tabs-envoltorio"/".detalle-tabs-paneles", que están
+     ADENTRO de este div, nunca recibían un alto real de la parte de
+     arriba, y por eso terminaban creciendo al tamaño de todo su
+     contenido en vez de quedarse acotados con su propio scroll interno.
+     Con "flex-direction:column; flex:1; min-height:0" acá (y el JS
+     mostrándolo con "display:flex", no "block"), este div pasa a ser un
+     eslabón más de la MISMA cadena de flexbox, y recién ahí
+     ".detalle-tabs-paneles" consigue un alto real del que scrollear. */
+  #modalDetalleFondo #detalleContenido { flex-direction: column; flex: 1; min-height: 0; }
   #modalDetalleFondo .modal-cerrar { position: absolute; top: 14px; right: 16px; z-index: 2; }
   .detalle-tabs-envoltorio { display: flex; flex: 1; min-height: 0; }
   .detalle-tabs-nav { flex: 0 0 200px; border-right: 1px solid var(--border); padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
   .detalle-tab-btn { text-align: left; background: none; border: none; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text-dim); cursor: pointer; font-family: inherit; white-space: nowrap; }
   .detalle-tab-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
   .detalle-tab-btn.activa { background: var(--accent-cyan); color: #04121a; font-weight: bold; }
-  .detalle-tabs-paneles { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 20px 24px; min-width: 0; max-height: calc(90vh - 70px); }
+  /* 20-09-2026, a pedido del usuario ("no puedo bajar para ver la lista de
+     los clientes completa... solo me deja moverme hacia los lados") — el
+     "min-height: 0" acá es OBLIGATORIO. Sin él, este panel (un hijo
+     "flex:1" dentro de un flex container) nunca se achica para dejarle
+     lugar a su propio "overflow-y:auto": por default un flex item no se
+     encoge más chico que el alto de TODO su contenido ("min-height: auto"
+     implícito), así que en vez de mostrar una barra de scroll interna,
+     el panel simplemente crecía más alto que el modal — y como el
+     ".modal-caja" de este modal puntual tiene "overflow: hidden" (no
+     "auto"), todo lo que no entraba quedaba CORTADO Y INACCESIBLE, sin
+     ningún scroll que lo mostrara (ni con el dedo ni con el mouse). Con
+     "min-height: 0" el panel sí se achica al espacio real que le tocó, y
+     ahí sí su propio "overflow-y:auto" entra a scrollear internamente. */
+  .detalle-tabs-paneles { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 20px 24px; min-width: 0; max-height: calc(90vh - 70px); }
   .detalle-tab-panel { display: none; }
   .detalle-tab-panel.activa { display: block; }
   @media (max-width: 760px) {
-    #modalDetalleFondo .modal-caja { max-width: 100%; max-height: 95vh; }
-    .detalle-tabs-envoltorio { flex-direction: column; }
-    .detalle-tabs-nav { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 auto; max-height: none; }
-    .detalle-tab-btn { flex: 1 1 auto; text-align: center; white-space: normal; }
-    .detalle-tabs-paneles { max-height: none; }
+    #modalDetalleFondo .modal-caja { max-width: 100%; height: 95vh; max-height: none; }
+    /* 20-09-2026, a pedido del usuario ("ponemlo en columna a la
+       izquierda asi ahora mas espacio") — antes, en celular, la nav
+       pasaba a ser una fila arriba con los 9 botones envueltos en varias
+       líneas (".detalle-tabs-envoltorio { flex-direction: column }"),
+       comiéndose una franja grande de la pantalla ANTES de llegar al
+       contenido. Ahora se queda como columna a la izquierda (igual que
+       en PC), solo que más angosta y con letra más chica, para dejarle
+       todo el ancho que se pueda al panel de la derecha. */
+    .detalle-tabs-nav { flex: 0 0 84px; padding: 6px 3px; gap: 1px; }
+    .detalle-tab-btn { font-size: 10.5px; padding: 8px 3px; text-align: center; white-space: normal; line-height: 1.2; }
+    .detalle-tabs-paneles { max-height: none; padding: 14px 12px; }
   }
+
+  /* Filtro de rango de "💰 Balance por Cliente" (20-09-2026, a pedido del
+     usuario: "hazlo mas pequeno no gastes tanto espacio para elegir esos
+     rangos , usa un formato mas resumido") — antes usaba ".inputs-inline"
+     genérico (3 campos "Rango"/"Desde"/"Hasta", cada uno con su label
+     ARRIBA y 14px de margen) que en celular la media query global los
+     apila en 3 filas completas, una debajo de la otra, comiéndose buena
+     parte de la pantalla antes de llegar a la tabla de clientes. Este
+     bloque propio (sin depender de ".inputs-inline"/".campo") deja
+     "Rango" en su propia fila (su texto es largo, ej. "Semana actual
+     (lun–dom)") pero junta "Desde"/"Hasta" en una sola fila de 2, y
+     achica letra/relleno — mismos 3 campos, misma función, la mitad del
+     alto. */
+  .bc-desc { margin: 0 0 8px; color: var(--text-dim); font-size: 11px; }
+  .bc-filtros { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .bc-filtros-fila { display: flex; gap: 6px; }
+  .bc-campo { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .bc-campo label { font-size: 11px; color: var(--text-dim); }
+  .bc-campo select, .bc-campo input { padding: 6px 8px; font-size: 12px; }
 
   /* Tabla de "💰 Balance por Cliente" (nueva, 19-09-2026) */
   .tabla-balance-superadmin td, .tabla-balance-superadmin th { font-size: 12px; padding: 8px 10px; }
@@ -822,10 +886,10 @@
                GET /api/superadmin/grupos/:id/balance-clientes. -->
           <div class="detalle-tab-panel" data-tab-panel="balance">
             <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">💰 Balance por Cliente</h3>
-            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismo cálculo que ve el propio Grupo en Administración &gt; Balance General — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
-            <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
-              <div class="campo">
-                <label>Rango:</label>
+            <p class="bc-desc">Mismo cálculo que Balance General del propio Grupo — de solo lectura.</p>
+            <div class="bc-filtros">
+              <div class="bc-campo">
+                <label>Rango</label>
                 <select id="bcRangoRapido" onchange="aplicarRangoRapidoBalanceClientes()">
                   <option value="hoy">Hoy</option>
                   <option value="semana" selected>Semana actual (lun–dom)</option>
@@ -834,13 +898,15 @@
                   <option value="personalizado">Personalizado</option>
                 </select>
               </div>
-              <div class="campo">
-                <label>Desde:</label>
-                <input type="date" id="bcDesde" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
-              </div>
-              <div class="campo">
-                <label>Hasta:</label>
-                <input type="date" id="bcHasta" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
+              <div class="bc-filtros-fila">
+                <div class="bc-campo">
+                  <label>Desde</label>
+                  <input type="date" id="bcDesde" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
+                </div>
+                <div class="bc-campo">
+                  <label>Hasta</label>
+                  <input type="date" id="bcHasta" onchange="document.getElementById('bcRangoRapido').value='personalizado'; cargarBalanceClientesDetalle();">
+                </div>
               </div>
             </div>
             <div id="bcContenido">Cargando...</div>
@@ -1866,7 +1932,13 @@ async function abrirDetalleGrupo(id, nombre) {
     cambiarModeloComisionUI();
 
     document.getElementById('detalleCargando').style.display = 'none';
-    document.getElementById('detalleContenido').style.display = 'block';
+    // 20-09-2026: "flex", NO "block" — ver la nota grande de "#detalleContenido"
+    // en el CSS. Con "block" quedaba afuera de la cadena de flexbox que
+    // arranca en ".modal-caja" (column) y sigue en ".detalle-tabs-envoltorio"
+    // (row), así que ".detalle-tabs-paneles" nunca tenía un alto real del
+    // que scrollear y todo lo que no entraba en el modal quedaba cortado
+    // sin ningún scroll que lo mostrara.
+    document.getElementById('detalleContenido').style.display = 'flex';
 
     cargarTelefonosGrupo();
     cargarFechasParaBorrar();
