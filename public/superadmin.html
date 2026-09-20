@@ -249,7 +249,14 @@
 
   /* MODAL DE DETALLE DE UN GRUPO */
   .modal-fondo { display: none; position: fixed; inset: 0; background: rgba(2,4,10,0.72); z-index: 50; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
-  .modal-caja { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  /* 20-09-2026, a pedido del usuario: en celular, deslizar hacia abajo
+     dentro del modal scrolleaba la página de fondo en vez del modal (en
+     PC no pasaba porque la rueda del mouse siempre scrollea lo que está
+     bajo el cursor). El body de atrás nunca se bloqueaba al abrir un
+     modal. Ver bloqueoScrollFondoSuperadmin() más abajo en el <script>,
+     que agrega/saca esta clase automáticamente. */
+  body.scroll-bloqueado { position: fixed; left: 0; right: 0; overflow: hidden; }
+  .modal-caja { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
   .modal-caja h2 { margin-top: 0; }
   .modal-cerrar { float: right; background: none; border: none; color: var(--text-dim); font-size: 20px; padding: 0 4px; cursor: pointer; }
   .modal-cerrar:hover { background: none; color: var(--text); }
@@ -283,7 +290,7 @@
   .detalle-tab-btn { text-align: left; background: none; border: none; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--text-dim); cursor: pointer; font-family: inherit; white-space: nowrap; }
   .detalle-tab-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
   .detalle-tab-btn.activa { background: var(--accent-cyan); color: #04121a; font-weight: bold; }
-  .detalle-tabs-paneles { flex: 1; overflow-y: auto; padding: 20px 24px; min-width: 0; max-height: calc(90vh - 70px); }
+  .detalle-tabs-paneles { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 20px 24px; min-width: 0; max-height: calc(90vh - 70px); }
   .detalle-tab-panel { display: none; }
   .detalle-tab-panel.activa { display: block; }
   @media (max-width: 760px) {
@@ -1008,6 +1015,42 @@ let CHAT_WIDGET_SA_POLL_ABIERTO = null; // id del setInterval que refresca mient
 let ULTIMA_ALERTA_WHATSAPP_DESDE_EN = null; // alertaDesdeEn de la alerta de WhatsApp caído que está mostrando el banner ahora mismo (o null si no hay ninguna) — ver actualizarBannerWhatsappCaido()
 let ULTIMO_ALERTA_DESDE_EN_DESCARTADO = null; // alertaDesdeEn que el súper-admin ya cerró a mano con la "✕" del banner — se guarda solo en memoria (dura lo que dure el panel abierto), no en localStorage
 let ULTIMOS_GRUPOS = []; // cache en memoria de la última lista de grupos pedida (cargarGrupos), para que eliminarGrupo() pueda leer el nombre exacto sin tener que escaparlo dentro de un atributo onclick
+
+// =================================================================
+// BLOQUEO DE SCROLL DE FONDO CON EL MODAL ABIERTO (20-09-2026, a pedido
+// del usuario: "cuando ingreso a travez de un telefono... quiero
+// deslizar hacia abajo para ver mas informacion no baja, baja es la
+// pantalla anterior que esta en el fondo... en pc si baja"). El
+// #modalDetalleFondo (ficha de un grupo, con las pestañas de Balance/
+// Sábanas/etc.) nunca bloqueaba el scroll del body de atrás. En PC no se
+// notaba porque la rueda del mouse siempre scrollea lo que esté bajo el
+// cursor, pero en celular el dedo terminaba arrastrando la página de
+// fondo en vez del modal. Mismo mecanismo que en app.js (grupo.html):
+// un MutationObserver por cada .modal-fondo que mira el style.display
+// (acá abrirDetalleGrupo()/cerrarDetalleGrupo() lo cambian a mano) y
+// prende/apaga body.scroll-bloqueado (CSS más arriba).
+let SCROLL_LOCK_Y_GUARDADO_SA = 0;
+function hayModalFondoVisibleSuperadmin() {
+  return Array.from(document.querySelectorAll('.modal-fondo'))
+    .some(function (el) { return window.getComputedStyle(el).display !== 'none'; });
+}
+function actualizarBloqueoScrollFondoSuperadmin() {
+  const debeBloquear = hayModalFondoVisibleSuperadmin();
+  const yaBloqueado = document.body.classList.contains('scroll-bloqueado');
+  if (debeBloquear && !yaBloqueado) {
+    SCROLL_LOCK_Y_GUARDADO_SA = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = '-' + SCROLL_LOCK_Y_GUARDADO_SA + 'px';
+    document.body.classList.add('scroll-bloqueado');
+  } else if (!debeBloquear && yaBloqueado) {
+    document.body.classList.remove('scroll-bloqueado');
+    document.body.style.top = '';
+    window.scrollTo(0, SCROLL_LOCK_Y_GUARDADO_SA);
+  }
+}
+document.querySelectorAll('.modal-fondo').forEach(function (modal) {
+  new MutationObserver(actualizarBloqueoScrollFondoSuperadmin)
+    .observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+});
 
 async function apiSuperadmin(path, options = {}) {
   const headers = Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SECRET }, options.headers || {});

@@ -55,6 +55,48 @@ let CHAT_WIDGET_POLL_ABIERTO = null; // id del setInterval que refresca los mens
 let VISTA_ACTUAL = 'sabana';
 
 // =================================================================
+// BLOQUEO DE SCROLL DE FONDO CON UN MODAL ABIERTO (20-09-2026, a pedido
+// del usuario: "cuando ingreso a travez de un telefono... quiero deslizar
+// hacia abajo para ver mas informacion no baja, baja es la pantalla
+// anterior que esta en el fondo... en pc si baja"). Ningún ".modal-fondo"
+// de esta página (historial de cliente, capturas de imagen, editar
+// ticket, extraer sábana de texto, etc.) bloqueaba el scroll del body de
+// atrás mientras estaba abierto. En PC no se notaba porque la rueda del
+// mouse siempre scrollea lo que esté bajo el cursor, pero en celular el
+// dedo terminaba arrastrando la página de fondo en vez del cuadro nuevo.
+// Se resuelve acá de forma GENÉRICA con un MutationObserver por cada
+// .modal-fondo que ya existe en el HTML: mira si se le agrega/saca la
+// clase "activo" o se le cambia el style.display a mano (las 2 formas
+// que usa esta página para abrir/cerrar modales) y prende/apaga
+// body.scroll-bloqueado (CSS en grupo.html) — así cubre TODOS los
+// modales actuales sin tener que tocar cada función abrirXxx()/
+// cerrarXxx() una por una, y también cualquiera que se agregue después.
+let SCROLL_LOCK_Y_GUARDADO = 0;
+function hayModalFondoVisible() {
+  return Array.from(document.querySelectorAll('.modal-fondo'))
+    .some(function (el) { return window.getComputedStyle(el).display !== 'none'; });
+}
+function actualizarBloqueoScrollFondo() {
+  const debeBloquear = hayModalFondoVisible();
+  const yaBloqueado = document.body.classList.contains('scroll-bloqueado');
+  if (debeBloquear && !yaBloqueado) {
+    SCROLL_LOCK_Y_GUARDADO = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = '-' + SCROLL_LOCK_Y_GUARDADO + 'px';
+    document.body.classList.add('scroll-bloqueado');
+  } else if (!debeBloquear && yaBloqueado) {
+    document.body.classList.remove('scroll-bloqueado');
+    document.body.style.top = '';
+    window.scrollTo(0, SCROLL_LOCK_Y_GUARDADO);
+  }
+}
+// app.js se carga al final de <body>, así que los .modal-fondo (HTML
+// estático de grupo.html) ya existen en el DOM en este punto.
+document.querySelectorAll('.modal-fondo').forEach(function (modal) {
+  new MutationObserver(actualizarBloqueoScrollFondo)
+    .observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+});
+
+// =================================================================
 // "MONEDA DEL GRUPO" (18-09-2026, feature nueva del backend — ver
 // GET/PUT /api/grupo/moneda-modo y la nota grande en sql/schema.sql).
 // 'usd'|'bs' = todo el grupo fijo en esa moneda (comportamiento de

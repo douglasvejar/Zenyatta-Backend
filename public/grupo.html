@@ -284,9 +284,19 @@
   /* "CONTROL POR CLIENTE" (31-08-2026) — panel de historial de jugadas de un cliente */
   .modal-fondo { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000; align-items: center; justify-content: center; }
   .modal-fondo.activo { display: flex; }
-  .modal-caja { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 20px; max-width: 900px; width: 95%; max-height: 85vh; overflow-y: auto; }
+  .modal-caja { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 20px; max-width: 900px; width: 95%; max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .modal-caja h3 { font-family: 'Outfit', sans-serif; margin-top: 0; }
   .modal-cerrar { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-dim); }
+
+  /* 20-09-2026, a pedido del usuario: "cuando ingreso a travez de un
+     telefono... quiero deslizar hacia abajo para ver mas informacion no
+     baja, baja es la pantalla anterior que esta en el fondo" — con un
+     modal abierto, el body de atrás seguía siendo scrolleable (nunca se
+     bloqueaba), así que en celular el dedo arrastraba la página de fondo
+     en vez del cuadro nuevo (en PC no se notaba porque la rueda del mouse
+     siempre scrollea lo que está bajo el cursor). scrollLockModales() en
+     app.js agrega esta clase mientras haya CUALQUIER .modal-fondo visible. */
+  body.scroll-bloqueado { position: fixed; left: 0; right: 0; overflow: hidden; }
 
   /* CHAT DE SOPORTE */
   .chat-caja { border: 1px solid var(--border); border-radius: 8px; background: var(--card-2); padding: 14px; margin-top: 10px; }
