@@ -22,10 +22,12 @@
 // Liga MX, MLS, Champions League, Copa Libertadores, Copa Sudamericana
 // (pedidas el 28-08-2026) + UEFA Europa League y UEFA Conference League
 // (agregadas el 31-08-2026, a pedido del usuario — "falto la europa league
-// y la conference"). Agregar una liga nueva más adelante es solo sumar su
-// slug acá — no hace falta tocar nada más del motor de evaluación
-// (evaluador.js ya trata a TODO fútbol como un solo deporte "soccer", sin
-// importar el torneo).
+// y la conference") + Eredivisie de Holanda (agregada el 20-09-2026, a
+// pedido del usuario — "tenemos la liga holandesa para agregar... no me
+// aparece para agregar equipos a la api"). Agregar una liga nueva más
+// adelante es solo sumar su slug acá — no hace falta tocar nada más del
+// motor de evaluación (evaluador.js ya trata a TODO fútbol como un solo
+// deporte "soccer", sin importar el torneo).
 //
 // Slugs de Europa League/Conference League confirmados contra la API real
 // de ESPN (vía la herramienta de búsqueda web, con fechas reales de la
@@ -35,6 +37,15 @@
 // leagues[0].name = "UEFA Europa League"; 'uefa.europa.conf' devolvió
 // partidos reales (ej. "Crystal Palace at Dynamo Kyiv", 02-10-2025) con
 // leagues[0].name = "UEFA Conference League".
+//
+// Slug de Eredivisie ('ned.1') confirmado igual que las anteriores: varias
+// páginas públicas reales de espn.com (standings/schedule/teams/stats,
+// todas con /league/ned.1 en la URL) y decenas de resultados reales de
+// partidos de la temporada 2025-26/2026-27 (vía búsqueda web — no se pudo
+// pegarle directo a la API en vivo desde este sandbox, ver limitación de
+// red documentada en el doc del proyecto) confirman el slug y, de paso,
+// el nombre EXACTO que ESPN usa para cada club (importante: no siempre es
+// el nombre completo — ver diccionarioEquipos.js, sección Eredivisie).
 const LIGAS_SOCCER = [
   { slug: 'eng.1', nombre: 'Premier League' },
   { slug: 'esp.1', nombre: 'La Liga' },
@@ -47,7 +58,8 @@ const LIGAS_SOCCER = [
   { slug: 'uefa.europa', nombre: 'UEFA Europa League' },
   { slug: 'uefa.europa.conf', nombre: 'UEFA Conference League' },
   { slug: 'conmebol.libertadores', nombre: 'Copa Libertadores' },
-  { slug: 'conmebol.sudamericana', nombre: 'Copa Sudamericana' }
+  { slug: 'conmebol.sudamericana', nombre: 'Copa Sudamericana' },
+  { slug: 'ned.1', nombre: 'Eredivisie' }
 ];
 
 async function obtenerResultadosDeLiga(slug, nombreLiga, fechaCompacta) {

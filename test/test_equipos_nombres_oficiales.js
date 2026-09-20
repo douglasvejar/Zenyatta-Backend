@@ -164,8 +164,12 @@ const handler = encontrarHandler('get', '/nombres-oficiales/:deporte');
     );
   }
 
-  // --- Fútbol (28-08-2026): pide las 10 ligas configuradas EN PARALELO y
-  // combina/deduplica los nombres en una sola lista ordenada ---
+  // --- Fútbol (28-08-2026): pide las ligas configuradas EN PARALELO y
+  // combina/deduplica los nombres en una sola lista ordenada. Incluye la
+  // Eredivisie (20-09-2026, ver soccerApi.js/LIGAS_SOCCER) como una
+  // liga más, para confirmar que la ruta no necesitó ningún cambio propio
+  // para que una liga nueva aparezca acá — alcanza con agregarla a
+  // LIGAS_SOCCER (esta ruta ya la reusa sin ningún hardcode de slugs). ---
   global.fetch = async (url) => {
     const u = String(url);
     if (u.includes('/soccer/eng.1/')) {
@@ -174,8 +178,11 @@ const handler = encontrarHandler('get', '/nombres-oficiales/:deporte');
     if (u.includes('/soccer/esp.1/')) {
       return { json: async () => ({ sports: [{ leagues: [{ teams: [{ team: { displayName: 'Real Madrid' } }, { team: { displayName: 'Barcelona' } }] }] }] }) };
     }
+    if (u.includes('/soccer/ned.1/')) {
+      return { json: async () => ({ sports: [{ leagues: [{ teams: [{ team: { displayName: 'Ajax' } }, { team: { displayName: 'PSV' } }] }] }] }) };
+    }
     if (u.includes('/soccer/')) {
-      // Las demás 8 ligas configuradas: se responde vacío, para confirmar
+      // Las demás ligas configuradas: se responde vacío, para confirmar
       // que la ruta no se cae si una liga no trae equipos en ese momento.
       return { json: async () => ({ sports: [{ leagues: [{ teams: [] }] }] }) };
     }
@@ -186,6 +193,10 @@ const handler = encontrarHandler('get', '/nombres-oficiales/:deporte');
     check(
       res.body.nombres.includes('Arsenal') && res.body.nombres.includes('Real Madrid') && res.body.nombres.includes('Barcelona'),
       'Fútbol (28-08-2026): combina los nombres de VARIAS ligas (Premier League + La Liga) pedidas en paralelo en una sola lista'
+    );
+    check(
+      res.body.nombres.includes('Ajax') && res.body.nombres.includes('PSV'),
+      'Fútbol (20-09-2026): la Eredivisie (ned.1) ya viene incluida en la lista combinada, sin haber tocado esta ruta'
     );
     check(res.body.nombres.length === new Set(res.body.nombres).size, 'Fútbol: la lista combinada no trae nombres repetidos');
   }

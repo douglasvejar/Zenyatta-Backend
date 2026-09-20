@@ -403,8 +403,10 @@ const DICCIONARIO_EQUIPOS_NHL_BASE = {
 // eligió estas 10 competiciones: Premier League, La Liga, Serie A,
 // Bundesliga, Ligue 1, Liga MX, MLS, Champions League, Copa Libertadores
 // y Copa Sudamericana. Ampliado el 31-08-2026 con UEFA Europa League y
-// UEFA Conference League (12 competiciones en total) — ver LIGAS_SOCCER
-// en soccerApi.js.
+// UEFA Conference League, y el 20-09-2026 con la Eredivisie de Holanda
+// (13 competiciones en total, pedido explícito del usuario: "tenemos la
+// liga holandesa para agregar al programa porque no me aparece para
+// agregar equipos a la api") — ver LIGAS_SOCCER en soccerApi.js.
 //
 // OJO — esto es una SEMILLA, no un roster exhaustivo: a diferencia de
 // MLB/NFL/NHL (ligas cerradas de 30-32 equipos fijos), estas 10
@@ -603,7 +605,70 @@ const DICCIONARIO_EQUIPOS_SOCCER_BASE = {
   'independiente del valle': { nombre: 'Independiente del Valle', deporte: 'soccer' },
   'liga de quito': { nombre: 'Liga de Quito', deporte: 'soccer' },
   'cerro porteno': { nombre: 'Cerro Porteño', deporte: 'soccer' },
-  'olimpia': { nombre: 'Olimpia', deporte: 'soccer' }
+  'olimpia': { nombre: 'Olimpia', deporte: 'soccer' },
+
+  // --- Eredivisie (Holanda) — agregada 20-09-2026, a pedido explícito
+  // del usuario: "tenemos la liga holandesa para agregar al programa
+  // porque no me aparece para agregar equipos a la api" (ver soccerApi.js,
+  // LIGAS_SOCCER, slug 'ned.1'). Los 18 clubes de la temporada
+  // 2025-26/2026-27 (confirmados vía búsqueda web de resultados reales de
+  // partidos en espn.com — no se pudo pegarle directo a la API en vivo
+  // desde este sandbox, misma limitación de red de siempre).
+  //
+  // OJO — el campo "nombre" de acá abajo tiene que ser EXACTAMENTE el
+  // mismo texto que ESPN usa como `team.displayName` en su scoreboard EN
+  // VIVO (la clave que arma obtenerResultadosDeLiga() en soccerApi.js,
+  // ej. datos['psv'] = {...}) — si no coincide exacto, el ticket puede
+  // quedar SIN colgarse del partido en vivo (aunque el apodo SÍ se
+  // reconozca) y quedar PENDIENTE para siempre. Un detalle real que
+  // confirmó esto: a diferencia de la mayoría de los otros clubes de este
+  // diccionario (que siempre usan su nombre "largo" — ej. "Atlético
+  // Madrid", "Borussia Dortmund"), varios clubes de Eredivisie aparecen en
+  // los resultados reales de ESPN con su forma CORTA, no la larga: "PSV"
+  // (nunca "PSV Eindhoven" en el marcador, aunque su página de equipo sí
+  // se llame así), "Sparta" (nunca "Sparta Rotterdam" en el marcador),
+  // "NEC" (nunca "NEC Nijmegen"), "Fortuna" (nunca "Fortuna Sittard"),
+  // "Heracles" (nunca "Heracles Almelo"), "Heerenveen" (nunca "SC
+  // Heerenveen"). AZ es la excepción rara: SÍ aparece completo, "AZ
+  // Alkmaar", en vez de solo "AZ" — confirmado por separado porque una
+  // apodo tan corto y genérico como "az" (2 letras) sin el "Alkmaar" sería
+  // además peligroso para el diccionario (matchearía por sustring dentro
+  // de "Lazio", "Trail Blazers", "Jazz", "Cruz Azul", etc. — no se agregó
+  // "az" pelado por esta misma razón, solo "az alkmaar"). Los apodos de
+  // acá abajo incluyen tanto la forma corta (la que hay que usar como
+  // "nombre" para que el marcador en vivo lo encuentre) como la forma
+  // larga/con sufijo del club (para que el USUARIO pueda escribir
+  // cualquiera de las 2 en su ticket y las 2 se resuelvan igual).
+  'ajax': { nombre: 'Ajax', deporte: 'soccer' },
+  'psv': { nombre: 'PSV', deporte: 'soccer' },
+  'psv eindhoven': { nombre: 'PSV', deporte: 'soccer' },
+  'feyenoord': { nombre: 'Feyenoord', deporte: 'soccer' },
+  'az alkmaar': { nombre: 'AZ Alkmaar', deporte: 'soccer' },
+  'fc twente': { nombre: 'FC Twente', deporte: 'soccer' },
+  'twente': { nombre: 'FC Twente', deporte: 'soccer' },
+  'fc utrecht': { nombre: 'FC Utrecht', deporte: 'soccer' },
+  'utrecht': { nombre: 'FC Utrecht', deporte: 'soccer' },
+  'fc groningen': { nombre: 'FC Groningen', deporte: 'soccer' },
+  'groningen': { nombre: 'FC Groningen', deporte: 'soccer' },
+  'heerenveen': { nombre: 'Heerenveen', deporte: 'soccer' },
+  'sc heerenveen': { nombre: 'Heerenveen', deporte: 'soccer' },
+  'sparta': { nombre: 'Sparta', deporte: 'soccer' },
+  'sparta rotterdam': { nombre: 'Sparta', deporte: 'soccer' },
+  'go ahead eagles': { nombre: 'Go Ahead Eagles', deporte: 'soccer' },
+  'nec': { nombre: 'NEC', deporte: 'soccer' },
+  'nec nijmegen': { nombre: 'NEC', deporte: 'soccer' },
+  'fortuna': { nombre: 'Fortuna', deporte: 'soccer' },
+  'fortuna sittard': { nombre: 'Fortuna', deporte: 'soccer' },
+  'heracles': { nombre: 'Heracles', deporte: 'soccer' },
+  'heracles almelo': { nombre: 'Heracles', deporte: 'soccer' },
+  'pec zwolle': { nombre: 'PEC Zwolle', deporte: 'soccer' },
+  'zwolle': { nombre: 'PEC Zwolle', deporte: 'soccer' },
+  'nac breda': { nombre: 'NAC Breda', deporte: 'soccer' },
+  'breda': { nombre: 'NAC Breda', deporte: 'soccer' },
+  'excelsior': { nombre: 'Excelsior', deporte: 'soccer' },
+  'telstar': { nombre: 'Telstar', deporte: 'soccer' },
+  'fc volendam': { nombre: 'FC Volendam', deporte: 'soccer' },
+  'volendam': { nombre: 'FC Volendam', deporte: 'soccer' }
 };
 
 // =================================================================

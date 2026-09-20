@@ -99,8 +99,9 @@ router.get('/nombres-oficiales/:deporte', asyncHandler(async (req, res) => {
       equiposDe(resFcs).forEach(e => { const n = e.team && e.team.displayName; if (n) setNombresNcaaf.add(n); });
       nombres = Array.from(setNombresNcaaf);
     } else if (deporte === 'soccer') {
-      // Fútbol no es UNA liga — son las 10 competiciones de LIGAS_SOCCER
-      // (soccerApi.js). Se piden todas EN PARALELO y se combinan/deduplican
+      // Fútbol no es UNA liga — son las competiciones de LIGAS_SOCCER
+      // (soccerApi.js, 13 desde que se agregó la Eredivisie el
+      // 20-09-2026). Se piden todas EN PARALELO y se combinan/deduplican
       // en una sola lista alfabética — mismo espíritu que ya usa
       // obtenerResultadosSoccer() para los resultados en vivo.
       const { LIGAS_SOCCER } = require('../services/soccerApi');
