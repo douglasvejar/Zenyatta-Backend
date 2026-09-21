@@ -3911,7 +3911,21 @@ function renderSaldosSemana() {
 
   titulo.textContent = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYY(datos.semana.desde) + ' – ' + formatFechaDDMMYYYY(datos.semana.hasta) + ')';
 
-  if (!datos.clientes || datos.clientes.length === 0) {
+  // Solo clientes con saldo real esta semana (21-09-2026, a pedido EXPLÍCITO
+  // del usuario: "quiero que muestres los clientes que tienen saldo los que
+  // no tienen saldos que no aparezcan en la imagen de descargar") — un
+  // cliente sin NINGÚN movimiento esta semana (ni de apuestas ni de
+  // comisión, ej. un cliente activo pero sin actividad) se saca de la
+  // imagen/PDF por completo, para no ensuciar la lista con filas en $0.00.
+  // Alcanza con mirar saldoSemana/comisionSemana (los totales YA calculados
+  // por el backend para toda la semana): si los 2 dan exactamente 0, no
+  // tuvo ningún movimiento — no hace falta revisar día por día. El TOTAL de
+  // abajo no cambia (un cliente en $0.00 no aportaba nada al total de
+  // todos modos), y el Excel se deja intacto a propósito (el pedido fue
+  // puntualmente sobre "la imagen de descargar").
+  const clientesConSaldo = (datos.clientes || []).filter(c => c.saldoSemana !== 0 || c.comisionSemana !== 0);
+
+  if (clientesConSaldo.length === 0) {
     cont.innerHTML = '';
     vacio.style.display = 'block';
     return;
@@ -3960,7 +3974,7 @@ function renderSaldosSemana() {
   });
   html += '</tr></thead><tbody>';
 
-  datos.clientes.forEach(c => {
+  clientesConSaldo.forEach(c => {
     // Fila del cliente: SOLO su resultado (jugadas + polla + transferencias),
     // SIN la comisión — la comisión va en su propia fila aparte, justo
     // debajo (21-09-2026, a pedido EXPLÍCITO del usuario: "son dos item

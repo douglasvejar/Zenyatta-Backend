@@ -2075,7 +2075,13 @@ function renderSaldosSemana() {
 
   titulo.textContent = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.desde) + ' – ' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.hasta) + ')';
 
-  if (!datos.clientes || datos.clientes.length === 0) {
+  // Solo clientes con saldo real esta semana (21-09-2026, mismo criterio
+  // que public/app.js — ver la nota grande ahí): se saca de la imagen/PDF
+  // cualquier cliente sin NINGÚN movimiento esta semana (ni de apuestas ni
+  // de comisión), a pedido EXPLÍCITO del usuario.
+  const clientesConSaldo = (datos.clientes || []).filter(c => c.saldoSemana !== 0 || c.comisionSemana !== 0);
+
+  if (clientesConSaldo.length === 0) {
     cont.innerHTML = '';
     vacio.style.display = 'block';
     return;
@@ -2124,7 +2130,7 @@ function renderSaldosSemana() {
   });
   html += '</tr></thead><tbody>';
 
-  datos.clientes.forEach(c => {
+  clientesConSaldo.forEach(c => {
     // Fila del cliente: SOLO su resultado, SIN la comisión — la comisión
     // va en su propia fila aparte, justo debajo (21-09-2026, mismo
     // criterio que public/app.js — ver la nota grande ahí). "resultado"
