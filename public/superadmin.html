@@ -510,7 +510,6 @@
   #ssCaptura table.ss-tabla thead tr.ss-fila-dias th .ss-th-fecha { display: block; font-size: 10px; font-weight: 500; color: #9aa3b5; margin-top: 1px; }
   #ssCaptura th.ss-col-cliente, #ssCaptura td.ss-col-cliente { text-align: left; }
   #ssCaptura td.ss-col-cliente .ss-nombre-cliente { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13.5px; color: #0d1326; }
-  #ssCaptura td.ss-col-cliente .ss-porcentaje { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #0d6a78; background: #e0f9fc; border-radius: 8px; padding: 1px 7px; }
   #ssCaptura td.ss-col-saldo, #ssCaptura th.ss-col-saldo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; background: #f7f9fc; border-left: 1px solid #e3e7ee; border-right: 1px solid #e3e7ee; }
   #ssCaptura td.ss-dia { font-weight: 600; font-size: 12.5px; }
   #ssCaptura .ss-pos { color: #0f8a52; }
@@ -520,6 +519,12 @@
   #ssCaptura .ss-extra-primera { border-left: 2px solid #e3e7ee; }
   #ssCaptura tbody tr.ss-fila-cliente:nth-child(even) { background: #fafbfd; }
   #ssCaptura tfoot tr.ss-fila-total td { border-top: 2px solid #0d1326; background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 12px; padding-bottom: 12px; }
+  /* Fila "NOMBRE %" (21-09-2026) — mismo criterio que public/grupo.html:
+     la comisión ya no va como badge pegado debajo del nombre en la misma
+     celda, va en su PROPIA fila justo debajo de la del cliente. */
+  #ssCaptura tbody tr.ss-fila-comision { background: #fbfbfe; }
+  #ssCaptura .ss-nombre-comision { font-style: italic; font-weight: 600; color: #4a5468; }
+  #ssCaptura tfoot tr.ss-fila-total-comision td { background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 8px; padding-bottom: 12px; }
   #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
   #ssCaptura .ss-footer strong { color: #6b7688; }
 </style>
@@ -2117,32 +2122,68 @@ function renderSaldosSemana() {
   html += '</tr></thead><tbody>';
 
   datos.clientes.forEach(c => {
+    // Fila del cliente: SOLO su resultado, SIN la comisión — la comisión
+    // va en su propia fila aparte, justo debajo (21-09-2026, mismo
+    // criterio que public/app.js — ver la nota grande ahí). "resultado"
+    // (por día) y "saldoSemana - comisionSemana" (para la semana
+    // completa) ya son EXACTAMENTE el balance sin comisión, calculados
+    // así por el backend desde antes de esta pantalla.
+    const saldoSemanaSinComision = c.saldoSemana - c.comisionSemana;
     html += '<tr class="ss-fila-cliente">';
-    html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">' + escaparHtmlSaldosSemana(c.nombre) + '</span>';
-    if (c.porcentaje > 0) html += '<br><span class="ss-porcentaje">' + formatPorcentaje(c.porcentaje) + '</span>';
-    html += '</td>';
-    html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(c.saldoSemana) + '</td>';
+    html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">' + escaparHtmlSaldosSemana(c.nombre) + '</span></td>';
+    html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(saldoSemanaSinComision) + '</td>';
     datos.semana.dias.forEach(d => {
       const dia = c.porDia[d.fecha] || { resultado: 0, comision: 0 };
-      html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+      html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado) + '</td>';
     });
     columnasExtra.forEach(([checkboxId, campoSemana], i) => {
       html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatDinero(c[campoSemana]) + '</td>';
     });
     html += '</tr>';
+
+    // Fila "NOMBRE %" aparte, solo para clientes con % propio — SOLO el
+    // nombre con "%" pegado, sin la tasa, con su propio desglose día por
+    // día de la comisión sola.
+    if (c.porcentaje > 0) {
+      html += '<tr class="ss-fila-cliente ss-fila-comision">';
+      html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente ss-nombre-comision">' + escaparHtmlSaldosSemana(c.nombre) + ' %</span></td>';
+      html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(c.comisionSemana) + '</td>';
+      datos.semana.dias.forEach(d => {
+        const dia = c.porDia[d.fecha] || { resultado: 0, comision: 0 };
+        html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.comision) + '</td>';
+      });
+      columnasExtra.forEach((col, i) => {
+        html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">—</td>';
+      });
+      html += '</tr>';
+    }
   });
 
   html += '</tbody><tfoot><tr class="ss-fila-total">';
   html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">TOTAL</span></td>';
-  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana) + '</td>';
+  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana - datos.totales.comisionSemana) + '</td>';
   datos.semana.dias.forEach(d => {
     const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
-    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado) + '</td>';
   });
   columnasExtra.forEach(([checkboxId, campoSemana], i) => {
     html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatDinero(datos.totales[campoSemana]) + '</td>';
   });
-  html += '</tr></tfoot></table>';
+  html += '</tr>';
+  if (datos.clientes.some(c => c.porcentaje > 0)) {
+    html += '<tr class="ss-fila-total-comision">';
+    html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente ss-nombre-comision">TOTAL %</span></td>';
+    html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.comisionSemana) + '</td>';
+    datos.semana.dias.forEach(d => {
+      const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
+      html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.comision) + '</td>';
+    });
+    columnasExtra.forEach((col, i) => {
+      html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">—</td>';
+    });
+    html += '</tr>';
+  }
+  html += '</tfoot></table>';
 
   html += '<div class="ss-footer"><strong>LUDOX Venezuela 🇻🇪</strong> · Reporte generado automáticamente</div>';
 

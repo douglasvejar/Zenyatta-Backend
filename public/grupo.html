@@ -288,7 +288,6 @@
   #ssCaptura table.ss-tabla thead tr.ss-fila-dias th .ss-th-fecha { display: block; font-size: 10px; font-weight: 500; color: #9aa3b5; margin-top: 1px; }
   #ssCaptura th.ss-col-cliente, #ssCaptura td.ss-col-cliente { text-align: left; }
   #ssCaptura td.ss-col-cliente .ss-nombre-cliente { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13.5px; color: #0d1326; }
-  #ssCaptura td.ss-col-cliente .ss-porcentaje { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #0d6a78; background: #e0f9fc; border-radius: 8px; padding: 1px 7px; }
   #ssCaptura td.ss-col-saldo, #ssCaptura th.ss-col-saldo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; background: #f7f9fc; border-left: 1px solid #e3e7ee; border-right: 1px solid #e3e7ee; }
   #ssCaptura td.ss-dia { font-weight: 600; font-size: 12.5px; }
   #ssCaptura .ss-pos { color: #0f8a52; }
@@ -298,6 +297,16 @@
   #ssCaptura .ss-extra-primera { border-left: 2px solid #e3e7ee; }
   #ssCaptura tbody tr.ss-fila-cliente:nth-child(even) { background: #fafbfd; }
   #ssCaptura tfoot tr.ss-fila-total td { border-top: 2px solid #0d1326; background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 12px; padding-bottom: 12px; }
+  /* Fila "NOMBRE %" (21-09-2026, a pedido del usuario: "son dos item
+     diferentes... quiero que se vea uno debajo del otro y no disperso" —
+     antes la tasa de comisión (ej. "5%") aparecía como un badge pegado
+     DEBAJO del nombre, en la MISMA celda/fila; ahora es su PROPIA fila,
+     justo debajo de la del cliente, con su propio desglose día por día).
+     Fondo fijo (no depende de nth-child) para que se vea igual sin
+     importar en qué posición de la tabla caiga esta fila extra. */
+  #ssCaptura tbody tr.ss-fila-comision { background: #fbfbfe; }
+  #ssCaptura .ss-nombre-comision { font-style: italic; font-weight: 600; color: #4a5468; }
+  #ssCaptura tfoot tr.ss-fila-total-comision td { background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 8px; padding-bottom: 12px; }
   #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
   #ssCaptura .ss-footer strong { color: #6b7688; }
 
