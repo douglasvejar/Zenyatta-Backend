@@ -2075,13 +2075,17 @@ function renderSaldosSemana() {
 
   titulo.textContent = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.desde) + ' – ' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.hasta) + ')';
 
-  // Solo clientes con saldo real esta semana (21-09-2026, mismo criterio
-  // que public/app.js — ver la nota grande ahí): se saca de la imagen/PDF
-  // cualquier cliente sin NINGÚN movimiento esta semana (ni de apuestas ni
-  // de comisión), a pedido EXPLÍCITO del usuario.
-  const clientesConSaldo = (datos.clientes || []).filter(c => c.saldoSemana !== 0 || c.comisionSemana !== 0);
+  // Solo clientes con ALGÚN registro esta semana (21-09-2026, mismo
+  // criterio que public/app.js — ver la nota grande ahí): se mira cada
+  // total semanal de movimiento por separado (jugadas/pollas/traspasos/
+  // comisión), no el saldo final, para no ocultar a un cliente que tuvo
+  // actividad real pero cerró en $0.00 neto.
+  const clientesConActividad = (datos.clientes || []).filter(c =>
+    c.arriesgadoSemana !== 0 || c.ganadoSemana !== 0 || c.perdidoSemana !== 0 ||
+    c.transferenciasSemana !== 0 || c.pollaSemana !== 0 || c.comisionSemana !== 0
+  );
 
-  if (clientesConSaldo.length === 0) {
+  if (clientesConActividad.length === 0) {
     cont.innerHTML = '';
     vacio.style.display = 'block';
     return;
@@ -2130,7 +2134,7 @@ function renderSaldosSemana() {
   });
   html += '</tr></thead><tbody>';
 
-  clientesConSaldo.forEach(c => {
+  clientesConActividad.forEach(c => {
     // Fila del cliente: SOLO su resultado, SIN la comisión — la comisión
     // va en su propia fila aparte, justo debajo (21-09-2026, mismo
     // criterio que public/app.js — ver la nota grande ahí). "resultado"
@@ -2168,16 +2172,18 @@ function renderSaldosSemana() {
     }
   });
 
-  // TOTAL: acá SÍ va todo unido en un solo monto (21-09-2026, a pedido
-  // EXPLÍCITO del usuario — mismo criterio que public/app.js: el TOTAL
-  // representa el saldo real de la banca, así que incluye la comisión
-  // como cualquier otro movimiento. Ya NO hay una fila "TOTAL %" aparte.
+  // El saldo de esta fila se muestra invertido (× -1): es la banca, no un
+  // cliente más (21-09-2026, mismo criterio que public/app.js — ver la
+  // nota grande ahí). Solo se invierte el saldo (Saldo Semana + columnas
+  // de día); las columnas "Detalle" se dejan tal cual. Se renombra de
+  // "TOTAL" a "SALDO BANCA" para que quede claro que ya no es la simple
+  // suma de las filas de arriba, sino su inverso.
   html += '</tbody><tfoot><tr class="ss-fila-total">';
-  html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">TOTAL</span></td>';
-  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana) + '</td>';
+  html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">SALDO BANCA</span></td>';
+  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(-datos.totales.saldoSemana) + '</td>';
   datos.semana.dias.forEach(d => {
     const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
-    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(-(dia.resultado + dia.comision)) + '</td>';
   });
   columnasExtra.forEach(([checkboxId, campoSemana], i) => {
     html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatDinero(datos.totales[campoSemana]) + '</td>';

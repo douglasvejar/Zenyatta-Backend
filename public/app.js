@@ -3911,21 +3911,28 @@ function renderSaldosSemana() {
 
   titulo.textContent = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYY(datos.semana.desde) + ' – ' + formatFechaDDMMYYYY(datos.semana.hasta) + ')';
 
-  // Solo clientes con saldo real esta semana (21-09-2026, a pedido EXPLÍCITO
-  // del usuario: "quiero que muestres los clientes que tienen saldo los que
-  // no tienen saldos que no aparezcan en la imagen de descargar") — un
-  // cliente sin NINGÚN movimiento esta semana (ni de apuestas ni de
-  // comisión, ej. un cliente activo pero sin actividad) se saca de la
-  // imagen/PDF por completo, para no ensuciar la lista con filas en $0.00.
-  // Alcanza con mirar saldoSemana/comisionSemana (los totales YA calculados
-  // por el backend para toda la semana): si los 2 dan exactamente 0, no
-  // tuvo ningún movimiento — no hace falta revisar día por día. El TOTAL de
-  // abajo no cambia (un cliente en $0.00 no aportaba nada al total de
+  // Solo clientes con ALGÚN registro esta semana (21-09-2026, a pedido
+  // EXPLÍCITO del usuario — primero pidió ocultar a los que "no tienen
+  // saldo", y después afinó el criterio: "en la imagen de descargar solo
+  // muestrame los clientes que tengan jugadas, traspasos, o pollas o lo
+  // que sea los clientes que no tengan ningun registro en la semana no me
+  // lo muestres asi ahorra espacio"). OJO: esto es distinto de "saldo
+  // final en $0.00" — un cliente que ganó y perdió montos que se cancelan
+  // exactamente a $0.00 neto en la semana SÍ tuvo actividad real (jugadas
+  // de verdad) y tiene que seguir apareciendo; lo único que se oculta es
+  // al cliente que de verdad no tuvo NINGÚN registro (ni jugadas, ni
+  // pollas, ni traspasos, ni comisión). Por eso el filtro mira los
+  // totales semanales de CADA tipo de movimiento por separado (todos ya
+  // calculados por el backend), no el saldo final. El TOTAL de abajo no
+  // cambia (un cliente sin ningún registro no aportaba nada al total de
   // todos modos), y el Excel se deja intacto a propósito (el pedido fue
   // puntualmente sobre "la imagen de descargar").
-  const clientesConSaldo = (datos.clientes || []).filter(c => c.saldoSemana !== 0 || c.comisionSemana !== 0);
+  const clientesConActividad = (datos.clientes || []).filter(c =>
+    c.arriesgadoSemana !== 0 || c.ganadoSemana !== 0 || c.perdidoSemana !== 0 ||
+    c.transferenciasSemana !== 0 || c.pollaSemana !== 0 || c.comisionSemana !== 0
+  );
 
-  if (clientesConSaldo.length === 0) {
+  if (clientesConActividad.length === 0) {
     cont.innerHTML = '';
     vacio.style.display = 'block';
     return;
@@ -3974,7 +3981,7 @@ function renderSaldosSemana() {
   });
   html += '</tr></thead><tbody>';
 
-  clientesConSaldo.forEach(c => {
+  clientesConActividad.forEach(c => {
     // Fila del cliente: SOLO su resultado (jugadas + polla + transferencias),
     // SIN la comisión — la comisión va en su propia fila aparte, justo
     // debajo (21-09-2026, a pedido EXPLÍCITO del usuario: "son dos item
@@ -4033,12 +4040,23 @@ function renderSaldosSemana() {
   // polla/traspaso — por eso usa saldoSemana COMPLETO (con comisión) y,
   // por día, resultado + comision (= saldoCliente, el movimiento total
   // del día). Ya NO hay una fila "TOTAL %" aparte — se sacó a propósito.
+  // El saldo de esta fila se muestra invertido (× -1): es la banca, no un
+  // cliente más (21-09-2026, a pedido EXPLÍCITO del usuario: "el saldo
+  // total, osea el saldo de la banca debe ser multiplicado x-1, asi si los
+  // clientes ganan la banca se vea en negativo, si los clientes pierden la
+  // banca se vea en positivo"). Los clientes ganan = saldoSemana total
+  // positivo = a la banca LE SALIÓ esa plata = negativo para la banca, y
+  // viceversa. Solo se invierte el saldo (Saldo Semana + columnas de día);
+  // las columnas "Detalle" (Arriesgado/Ganado/Perdido/etc.) son estadística
+  // agregada de las jugadas, no un saldo, así que se dejan tal cual. Se
+  // renombra la fila de "TOTAL" a "SALDO BANCA" para que quede claro que
+  // ya no es la simple suma de las filas de arriba, sino su inverso.
   html += '</tbody><tfoot><tr class="ss-fila-total">';
-  html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">TOTAL</span></td>';
-  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana) + '</td>';
+  html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">SALDO BANCA</span></td>';
+  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(-datos.totales.saldoSemana) + '</td>';
   datos.semana.dias.forEach(d => {
     const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
-    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(-(dia.resultado + dia.comision)) + '</td>';
   });
   columnasExtra.forEach(([checkboxId, campoSemana], i) => {
     html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatMoney(datos.totales[campoSemana]) + '</td>';
