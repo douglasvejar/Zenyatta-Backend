@@ -306,7 +306,10 @@
      importar en qué posición de la tabla caiga esta fila extra. */
   #ssCaptura tbody tr.ss-fila-comision { background: #fbfbfe; }
   #ssCaptura .ss-nombre-comision { font-style: italic; font-weight: 600; color: #4a5468; }
-  #ssCaptura tfoot tr.ss-fila-total-comision td { background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 8px; padding-bottom: 12px; }
+  /* Ya no hay una fila "TOTAL %" aparte en <tfoot> (21-09-2026: el TOTAL
+     de la banca suma todo, comisión incluida, en un solo monto) — se
+     sacó la regla .ss-fila-total-comision de este <tfoot>, que quedó sin
+     ningún uso. */
   #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
   #ssCaptura .ss-footer strong { color: #6b7688; }
 

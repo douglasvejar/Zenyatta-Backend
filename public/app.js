@@ -4009,34 +4009,27 @@ function renderSaldosSemana() {
     }
   });
 
+  // TOTAL: acá SÍ va todo unido en un solo monto (21-09-2026, a pedido
+  // EXPLÍCITO del usuario: "abajo el total, suma todo incluyendo los %...
+  // da un solo saldo total de la banca... todo se suma para hacer un solo
+  // monto") — a diferencia de las filas POR CLIENTE (que sí separan
+  // "NOMBRE" de "NOMBRE %" para poder ver a cada cliente por separado),
+  // el TOTAL representa el saldo real de la banca, y ahí la comisión es
+  // una plata que de verdad entra o sale igual que cualquier jugada/
+  // polla/traspaso — por eso usa saldoSemana COMPLETO (con comisión) y,
+  // por día, resultado + comision (= saldoCliente, el movimiento total
+  // del día). Ya NO hay una fila "TOTAL %" aparte — se sacó a propósito.
   html += '</tbody><tfoot><tr class="ss-fila-total">';
   html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">TOTAL</span></td>';
-  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana - datos.totales.comisionSemana) + '</td>';
+  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana) + '</td>';
   datos.semana.dias.forEach(d => {
     const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
-    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado) + '</td>';
+    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
   });
   columnasExtra.forEach(([checkboxId, campoSemana], i) => {
     html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatMoney(datos.totales[campoSemana]) + '</td>';
   });
-  html += '</tr>';
-  // "TOTAL %" aparte, mismo criterio que la fila por cliente — solo se
-  // omite si NINGÚN cliente tiene % (para no dejar una fila de puros
-  // ceros cuando ni siquiera aplica).
-  if (datos.clientes.some(c => c.porcentaje > 0)) {
-    html += '<tr class="ss-fila-total-comision">';
-    html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente ss-nombre-comision">TOTAL %</span></td>';
-    html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.comisionSemana) + '</td>';
-    datos.semana.dias.forEach(d => {
-      const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
-      html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.comision) + '</td>';
-    });
-    columnasExtra.forEach((col, i) => {
-      html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">—</td>';
-    });
-    html += '</tr>';
-  }
-  html += '</tfoot></table>';
+  html += '</tr></tfoot></table>';
 
   html += '<div class="ss-footer"><strong>' + (GRUPO && GRUPO.nombre ? escaparHtmlSaldosSemana(GRUPO.nombre) : 'Ludox') + '</strong> · Reporte generado automáticamente por Ludox</div>';
 
