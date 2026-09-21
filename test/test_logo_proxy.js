@@ -50,10 +50,34 @@ function fakeFetch(url) {
   return Promise.reject(new Error('URL inesperada en la prueba: ' + url));
 }
 
+// "pg" (21-09-2026): imagenes.js ahora también importa ../db (nuevo
+// endpoint /logo-grupo/:grupoId, ver la nota grande en ese archivo) —
+// antes de esto el archivo no tocaba la base de datos para nada. Se
+// fakea acá para que este archivo pueda seguir haciendo require() sin
+// una base real, mismo patrón que el resto de las pruebas del proyecto.
+const LOGOS_GRUPO = {
+  'g1': 'https://www.mlbstatic.com/team-logos/117.svg',
+  'g2': 'http://www.mlbstatic.com/team-logos/117.svg', // http, no https -> se rechaza igual que en /logo
+  'g3': null // grupo sin logo configurado
+};
+const fakePool = function () {
+  this.query = async (text, params) => {
+    if (/SELECT logo_url FROM grupos WHERE id = \$1/i.test(text)) {
+      const id = params[0];
+      if (!(id in LOGOS_GRUPO)) return { rows: [] }; // grupo que no existe
+      return { rows: [{ logo_url: LOGOS_GRUPO[id] }] };
+    }
+    return { rows: [] };
+  };
+  this.on = () => {};
+};
+
 Module._load = function (request, parent, isMain) {
   if (request === 'express') return fakeExpress;
+  if (request === 'pg') return { Pool: fakePool };
   return originalLoad.apply(this, arguments);
 };
+process.env.DATABASE_URL = 'postgresql://fake/fake';
 global.fetch = fakeFetch;
 
 const imagenesRouter = require(path.join(__dirname, '..', 'src', 'routes', 'imagenes'));
@@ -114,6 +138,34 @@ function check(cond, msg) {
   const r6 = await invocarRuta(handler, { query: { url: 'https://www.mlbstatic.com/team-logos/117.svg' } });
   check(r6._status === 502, 'Si el fetch al CDN falla de plano (excepción de red), el proxy responde 502 en vez de tumbar el servidor');
   SIMULAR_ERROR_RED = false;
+
+  // =================================================================
+  // GET /api/imagenes/logo-grupo/:grupoId (21-09-2026) — mismo espíritu
+  // que /logo de arriba, pero para la pestaña nueva "⬇️ Descargar" > "📅
+  // Saldos Semana" (ver la nota grande junto a esta ruta en
+  // src/routes/imagenes.js): NUNCA recibe la URL del logo desde el
+  // cliente — solo un :grupoId, y busca ella misma logo_url en la base,
+  // así que no hace falta ningún whitelist de dominios (no hay ningún
+  // riesgo de proxy genérico: la URL siempre sale de lo que el propio
+  // Súper-admin ya guardó).
+  // =================================================================
+  const entradaGrupo = imagenesRouter.__handlers.find(([metodo, args]) => metodo === 'get' && args[0] === '/logo-grupo/:grupoId');
+  check(!!entradaGrupo, 'existe GET /api/imagenes/logo-grupo/:grupoId');
+  const handlerGrupo = entradaGrupo[1][entradaGrupo[1].length - 1];
+
+  const rg1 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g1' } });
+  check(rg1._status === 200 && rg1._body, 'grupo con logo https válido -> 200 con el body de la imagen');
+  check(rg1._headers['Content-Type'] === 'image/svg+xml', 'devuelve el content-type real que trajo el CDN');
+  check(/max-age=300/.test(rg1._headers['Cache-Control'] || ''), 'cachea corto (5 min, no "immutable" como los escudos de equipo) porque el logo de un grupo SÍ puede cambiar');
+
+  const rg2 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g2' } });
+  check(rg2._status === 404, 'grupo con logo guardado en http (no https) -> 404, nunca se intenta pedir');
+
+  const rg3 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g3' } });
+  check(rg3._status === 404, 'grupo sin ningún logo configurado (logo_url null) -> 404');
+
+  const rg4 = await invocarRuta(handlerGrupo, { params: { grupoId: 'no-existe' } });
+  check(rg4._status === 404, 'grupo que no existe en la base -> 404 (no revienta)');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

@@ -224,24 +224,81 @@ async function calcularBalancePorDia(grupoId, desde, hasta, porcentajesPropios, 
 // Un día sin ninguna actividad de ese cliente (ni jugó, ni tiene Polla,
 // ni transferencias, ni comisión) NO se agrega — así el reporte no
 // queda lleno de líneas en $0.00 para los días sin nada.
+//
+// AMPLIADO (21-09-2026, a pedido del usuario — pestaña nueva "⬇️
+// Descargar" > "📅 Saldos Semana": "tambien coloca opcion donde puedo
+// agregar mas columnas si quiero, como cuanto a arriesgado, cuanto gano
+// etc todo lo que tenemos"): antes cada día solo guardaba
+// "resultado"/"comision" — el resto de lo que ya calcula
+// calcularBalanceGeneral() por cliente (arriesgado/ganado/perdido/
+// transferencias/polla/saldoCliente) se recalculaba y se tiraba en cada
+// vuelta del for. Ahora cada día guarda TAMBIÉN esos campos (y se suman
+// en totalArriesgado/totalGanado/etc., un total por semana de cada uno),
+// y se agrega totalPorFecha (mismo desglose pero de la fila TOTAL de
+// cada día, ya armada por calcularBalanceGeneral) — así
+// services/saldosSemana.js puede armar la fila de "TOTAL" del reporte
+// sin tener que volver a sumar cliente por cliente. 100% ADITIVO: los 2
+// campos de siempre (resultado/comision, totalResultado/totalComision)
+// no cambiaron en nada, así que los llamadores existentes
+// (whatsappBot.js, "corte semana"/"saldo semana") siguen funcionando
+// exactamente igual, sin tocarlos.
 async function calcularBalanceSemanalPorCliente(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision) {
   const fechas = listaDeFechas(desde, hasta);
-  if (fechas.length === 0 || fechas.length > LIMITE_DIAS_DESGLOSE) return { porCliente: {}, fechas: [] };
+  if (fechas.length === 0 || fechas.length > LIMITE_DIAS_DESGLOSE) return { porCliente: {}, fechas: [], totalPorFecha: {} };
 
   const porCliente = {};
+  const totalPorFecha = {};
   for (const fecha of fechas) {
     const resultado = await calcularBalanceGeneral(grupoId, fecha, fecha, porcentajesPropios, avalesMap, configComision);
     resultado.filas.forEach(f => {
       const huboActividad = Math.abs(f.arriesgado) > 0.001 || Math.abs(f.polla) > 0.001 || Math.abs(f.transferencias) > 0.001 || Math.abs(f.comision) > 0.001;
       if (!huboActividad) return;
-      if (!porCliente[f.cliente]) porCliente[f.cliente] = { porFecha: {}, totalResultado: 0, totalComision: 0 };
+      if (!porCliente[f.cliente]) {
+        porCliente[f.cliente] = {
+          porFecha: {},
+          totalResultado: 0,
+          totalComision: 0,
+          totalArriesgado: 0,
+          totalGanado: 0,
+          totalPerdido: 0,
+          totalTransferencias: 0,
+          totalPolla: 0,
+          totalSaldoCliente: 0
+        };
+      }
+      const c = porCliente[f.cliente];
       const resultadoDia = f.saldoCliente - f.comision;
-      porCliente[f.cliente].porFecha[fecha] = { resultado: resultadoDia, comision: f.comision };
-      porCliente[f.cliente].totalResultado += resultadoDia;
-      porCliente[f.cliente].totalComision += f.comision;
+      c.porFecha[fecha] = {
+        resultado: resultadoDia,
+        comision: f.comision,
+        arriesgado: f.arriesgado,
+        ganado: f.ganado,
+        perdido: f.perdido,
+        transferencias: f.transferencias,
+        polla: f.polla,
+        saldoCliente: f.saldoCliente
+      };
+      c.totalResultado += resultadoDia;
+      c.totalComision += f.comision;
+      c.totalArriesgado += f.arriesgado;
+      c.totalGanado += f.ganado;
+      c.totalPerdido += f.perdido;
+      c.totalTransferencias += f.transferencias;
+      c.totalPolla += f.polla;
+      c.totalSaldoCliente += f.saldoCliente;
     });
+    totalPorFecha[fecha] = {
+      resultado: resultado.filaTotal.saldoCliente - resultado.filaTotal.comision,
+      comision: resultado.filaTotal.comision,
+      arriesgado: resultado.filaTotal.arriesgado,
+      ganado: resultado.filaTotal.ganado,
+      perdido: resultado.filaTotal.perdido,
+      transferencias: resultado.filaTotal.transferencias,
+      polla: resultado.filaTotal.polla,
+      saldoCliente: resultado.filaTotal.saldoCliente
+    };
   }
-  return { porCliente, fechas };
+  return { porCliente, fechas, totalPorFecha };
 }
 
 module.exports = { calcularBalanceGeneral, calcularBalancePorDia, calcularBalanceSemanalPorCliente };

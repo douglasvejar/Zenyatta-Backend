@@ -246,6 +246,61 @@
   #tablaBalanceGeneral.capturando-imagen tr:nth-child(even) { background-color: rgba(15,23,42,0.05); }
   #tablaBalanceGeneral.capturando-imagen .btn-secundario { background: #eef1f6; color: #1a2233; border-color: #c7cedb; }
 
+  /* ===============================================================
+     "📅 Saldos Semana" (21-09-2026, pestaña nueva "⬇️ Descargar") —
+     #ssCaptura es una caja blanca propia (mismo criterio que
+     #sabanasCapturaContenido de arriba): logo+nombre del grupo, semana
+     ISO del año, y la grilla cliente×día con TODO lo que le movió el
+     saldo (sábana + polla + transferencias). Se arma 100% por JS
+     (renderSaldosSemana() en app.js, a partir de GET
+     /api/descargas/saldos-semana) y es la MISMA caja que se ve en
+     pantalla, se manda a html2canvas para "imagen HD" y se corta en
+     páginas para el PDF — lo que el usuario ve es exactamente lo que
+     descarga. */
+  #ssCaptura { display: inline-block; background: #fff; padding: 26px 30px 20px; border-radius: 10px; font-family: 'Inter', sans-serif; color: #1a2233; }
+  #ssCaptura .ss-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  #ssCaptura .ss-logo { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #eef1f6; }
+  #ssCaptura .ss-header-textos { display: flex; flex-direction: column; gap: 2px; }
+  #ssCaptura .ss-nombre-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: 0.2px; color: #0d1326; }
+  #ssCaptura .ss-subtitulo { font-size: 12.5px; color: #6b7688; font-weight: 500; }
+  #ssCaptura .ss-semana-badge { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+  #ssCaptura .ss-semana-numero { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; color: #04070f; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); padding: 5px 12px; border-radius: 20px; }
+  #ssCaptura .ss-semana-rango { font-size: 12.5px; color: #4a5468; font-weight: 600; }
+  #ssCaptura .ss-fecha-generado { font-size: 10.5px; color: #9aa3b5; }
+  #ssCaptura .ss-divider { height: 3px; margin: 16px 0 14px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue) 55%, rgba(47,107,255,0.15)); }
+  /* Reset explícito (21-09-2026): el resto de la app pone "th { background:
+     var(--primary); color: var(--text) }" y "th, td { border: 1px solid
+     var(--border) }" pensado para el tema OSCURO de toda la app — sin
+     este reset, esas reglas globales se colaban acá adentro (esta caja es
+     blanca a propósito, ver el comentario grande de arriba) y dejaban los
+     encabezados con fondo azul oscuro y texto clarito, casi ilegibles
+     sobre el resto de la tabla blanca. Mismo espíritu que el bloque de
+     #sabanasCapturaContenido más arriba. */
+  #ssCaptura table.ss-tabla { border-collapse: collapse; font-size: 13px; }
+  /* Selector A PROPÓSITO poco específico (id + elemento nada más, sin
+     ".ss-tabla" ni ninguna otra clase) — es el "piso" de abajo de todo:
+     cualquier regla de acá abajo que agregue una clase (.ss-col-saldo,
+     .ss-fila-total td, etc.) tiene MÁS especificidad que esta y la gana
+     sin pelear, en vez de depender del orden en que quedaron escritas. */
+  #ssCaptura th, #ssCaptura td { padding: 9px 13px; text-align: center; white-space: nowrap; background: #fff; border: none; color: #1a2233; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-grupos th { padding-top: 0; padding-bottom: 3px; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: #9aa3b5; font-weight: 700; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-dias th { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; color: #4a5468; border-bottom: 2px solid #e3e7ee; padding-top: 2px; padding-bottom: 10px; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-dias th .ss-th-fecha { display: block; font-size: 10px; font-weight: 500; color: #9aa3b5; margin-top: 1px; }
+  #ssCaptura th.ss-col-cliente, #ssCaptura td.ss-col-cliente { text-align: left; }
+  #ssCaptura td.ss-col-cliente .ss-nombre-cliente { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13.5px; color: #0d1326; }
+  #ssCaptura td.ss-col-cliente .ss-porcentaje { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #0d6a78; background: #e0f9fc; border-radius: 8px; padding: 1px 7px; }
+  #ssCaptura td.ss-col-saldo, #ssCaptura th.ss-col-saldo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; background: #f7f9fc; border-left: 1px solid #e3e7ee; border-right: 1px solid #e3e7ee; }
+  #ssCaptura td.ss-dia { font-weight: 600; font-size: 12.5px; }
+  #ssCaptura .ss-pos { color: #0f8a52; }
+  #ssCaptura .ss-neg { color: #c0392b; }
+  #ssCaptura .ss-cero { color: #b3bac9; font-weight: 500; }
+  #ssCaptura td.ss-col-extra, #ssCaptura th.ss-col-extra { color: #4a5468; font-weight: 600; }
+  #ssCaptura .ss-extra-primera { border-left: 2px solid #e3e7ee; }
+  #ssCaptura tbody tr.ss-fila-cliente:nth-child(even) { background: #fafbfd; }
+  #ssCaptura tfoot tr.ss-fila-total td { border-top: 2px solid #0d1326; background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 12px; padding-bottom: 12px; }
+  #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
+  #ssCaptura .ss-footer strong { color: #6b7688; }
+
   /* ALERTAS: badge titilante en la pestaña + tarjetas del registro */
   .nav-badge { display: inline-block; background-color: #e74c3c; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
   .nav-item.nav-alerta-activa { animation: parpadeoNavAlerta 1.2s ease-in-out infinite; }
@@ -709,6 +764,16 @@
         <button type="button" class="nav-item nav-child" id="navTransferencias" onclick="mostrarVista('transferencias')">🔄 Transferencias</button>
         <button type="button" class="nav-item nav-child" id="navPolla" onclick="mostrarVista('polla')">🎲 Polla</button>
         <button type="button" class="nav-item nav-child" id="navSabanas" onclick="mostrarVista('sabanas')">🗂️ Sábanas</button>
+        <!-- "⬇️ Descargar" (21-09-2026, a pedido del usuario: "en la
+             pestaña de administracion una sesion que se llame descargar...
+             esto se puede usar tanto del grupo como desde super admin") —
+             botón "📅 Saldos Semana" (imagen HD, cliente por cliente y día
+             por día, con TODO — sábana + polla + transferencias) más
+             exportar a Excel/PDF. Ver vistaDescargar más abajo,
+             routes/descargas.js y services/saldosSemana.js. Mismo permiso
+             nuevo 'descargar' que el resto de esta sección (ver
+             PERMISOS_VALIDOS en middleware/auth.js). -->
+        <button type="button" class="nav-item nav-child" id="navDescargar" onclick="mostrarVista('descargar')">⬇️ Descargar</button>
         <!-- "💱 Moneda" y "👥 Empleados" (18-09-2026, features nuevas del
              backend: "moneda del grupo" y "cuentas por empleado" — ver
              sql/schema.sql). Ambos son EXCLUSIVOS del Administrador: la
@@ -1578,6 +1643,68 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
   </div>
 </div>
 
+<!-- ======================= ADMINISTRACIÓN > DESCARGAR ======================= -->
+<!-- 21-09-2026, a pedido del usuario (verbatim): "en la pestaña de
+     administracion una sesion que se llame descargar, esto se puede usar
+     tanto del grupo como desde super admin crea un boton que me permita
+     descargar toda la semana... logo y nombre del grupo arriba... a la
+     izquierda ordenado en columna el nombre de los clientes y si tiene %
+     su % abajo... al lado del nombre inmediantamente saldo semana... y
+     hacia la derecha su saldo... lunes martes miercoles... esto incluye
+     todas las jugadas, pollas, traspaso, todo absolutamente todo... la
+     imagen siempre debe ser en hd... tambien coloca opcion donde puedo
+     agregar mas columnas... el boton se puede llamar saldos semana...
+     tambien crea una opcion para exportar... archivo excel... y pueda
+     seleccionar que ver... un boton para descargar en pdf... arriba
+     fecha, y semana en la que estamos del año y el logo del grupo".
+
+     #ssCaptura (más abajo) es la MISMA caja blanca que se usa para las 3
+     salidas (imagen/PDF/pantalla) — se arma una sola vez por JS
+     (renderSaldosSemana(), en app.js) a partir de GET
+     /api/descargas/saldos-semana, y esa misma caja es la que
+     html2canvas/jsPDF capturan — mismo criterio que #sabanasCapturaContenido
+     (pestaña Sábanas), para que lo que se ve en pantalla sea EXACTAMENTE
+     lo que sale en la imagen/PDF, sin sorpresas. -->
+<div class="container" id="vistaDescargar" style="display:none;">
+  <h1>Administración — Descargar</h1>
+
+  <div class="control-panel" style="flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px;">
+    <button type="button" class="btn-secundario" onclick="cambiarSemanaSaldos(-1)" style="padding:9px 14px; font-size:13px;">◀ Semana anterior</button>
+    <div class="control-group" style="min-width:220px; text-align:center;">
+      <label style="margin-bottom:2px;">Semana mostrada</label>
+      <p id="ssTituloSemana" style="margin:0; font-weight:bold; font-size:15px;">Cargando...</p>
+    </div>
+    <button type="button" class="btn-secundario" onclick="cambiarSemanaSaldos(1)" style="padding:9px 14px; font-size:13px;">Semana siguiente ▶</button>
+    <button type="button" class="btn-secundario" onclick="irASemanaActualSaldos()" style="padding:9px 14px; font-size:13px;">📍 Semana actual</button>
+  </div>
+
+  <details class="box-nuevo-equipo caja-columnas" style="background:var(--card-2); border-color:var(--card-border); margin-top:12px; padding:12px 15px;">
+    <summary style="font-size:13px; color:var(--text); font-weight:bold; cursor:pointer;">👁️ Agregar más columnas (opcional)</summary>
+    <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px;">
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColArriesgado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto arriesgó</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColGanado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto ganó</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPerdido" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto perdió</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColComision" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> % Devuelto ($)</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColTransferencias" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Transferencias</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPolla" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Polla</label>
+    </div>
+    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Estas columnas se agregan a la derecha, después de los 7 días — "Saldo Semana" (que ya incluye todo: jugadas + polla + transferencias) siempre se muestra.</small>
+  </details>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">
+    <button type="button" onclick="capturarSaldosSemanaComoImagen()" style="padding:9px 16px; font-size:13px;">📅 Saldos Semana (imagen HD)</button>
+    <button type="button" class="btn-secundario" onclick="descargarSaldosSemanaComoPDF()" style="padding:9px 16px; font-size:13px;">📄 Descargar PDF</button>
+    <button type="button" class="btn-secundario" onclick="abrirExportarExcelSaldosSemana()" style="padding:9px 16px; font-size:13px;">📊 Exportar Excel</button>
+  </div>
+  <small style="display:block; margin:-6px 0 10px; color:var(--text-dim);">💡 La vista de abajo es EXACTAMENTE lo que sale en la imagen/PDF — revisa las columnas antes de generarla. El Excel te deja elegir aparte qué columnas incluir.</small>
+
+  <p id="ssVacio" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Este grupo todavía no tiene ningún cliente registrado.</p>
+
+  <div id="ssCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
+    <div id="ssCaptura"></div>
+  </div>
+</div>
+
 <!-- ======================= ALERTAS ======================= -->
 <div class="container" id="vistaAlertas" style="display:none;">
   <h1>🔔 Alertas</h1>
@@ -1638,6 +1765,54 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
         <button type="button" class="btn-secundario" id="btnDescargarCapturaSabanaDia" onclick="descargarCapturaSabanaDia()" disabled>⬇️ Descargar imagen</button>
       </div>
       <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Con "Copiar imagen" puedes pegarla directo (Ctrl+V / Cmd+V) en el chat de WhatsApp Web o Desktop. Si tu navegador no lo permite, usa "Descargar imagen" y adjúntala a mano.</small>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: vista previa de la imagen capturada de "📅 Saldos Semana"     -->
+  <!-- (21-09-2026). Ver capturarSaldosSemanaComoImagen() en app.js.        -->
+  <!-- ================================================================= -->
+  <div class="modal-fondo" id="modalCapturaSaldosSemana">
+    <div class="modal-caja" style="max-width:1100px;">
+      <button type="button" class="modal-cerrar" onclick="cerrarCapturaSaldosSemana()">✕</button>
+      <h3>📅 Imagen de Saldos Semana</h3>
+      <p id="capturaSaldosSemanaEstado" style="color:var(--text-dim); font-size:13px;">Generando imagen...</p>
+      <div style="overflow:auto; max-height:60vh; border:1px solid var(--card-border); border-radius:8px; background:var(--card-2); text-align:center;">
+        <img id="capturaSaldosSemanaImg" style="max-width:100%; display:none;" alt="Saldos de la semana">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button type="button" id="btnCopiarCapturaSaldosSemana" onclick="copiarCapturaSaldosSemana()" disabled>📋 Copiar imagen (para pegar en WhatsApp)</button>
+        <button type="button" class="btn-secundario" id="btnDescargarCapturaSaldosSemana" onclick="descargarCapturaSaldosSemana()" disabled>⬇️ Descargar imagen</button>
+      </div>
+      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Con "Copiar imagen" puedes pegarla directo (Ctrl+V / Cmd+V) en el chat de WhatsApp Web o Desktop. Si tu navegador no lo permite, usa "Descargar imagen" y adjúntala a mano.</small>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: "📊 Exportar Excel" de "📅 Saldos Semana" (21-09-2026, a      -->
+  <!-- pedido del usuario: "...y yo pueda seleccionar que ver en ese       -->
+  <!-- archivo excel"). Arma el .xlsx 100% en el navegador con SheetJS     -->
+  <!-- (ver generarExcelSaldosSemana() en app.js) a partir de los mismos   -->
+  <!-- datos ya cargados (SALDOS_SEMANA_ACTUAL) — no vuelve a pedirle      -->
+  <!-- nada al backend.                                                    -->
+  <!-- ================================================================= -->
+  <div class="modal-fondo" id="modalExportarExcelSaldosSemana">
+    <div class="modal-caja" style="max-width:520px;">
+      <button type="button" class="modal-cerrar" onclick="cerrarExportarExcelSaldosSemana()">✕</button>
+      <h3>📊 Exportar Saldos Semana a Excel</h3>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:-6px;">Elige qué columnas quieres que traiga el archivo — el nombre del cliente y su % (si tiene) siempre se incluyen.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;">
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColSaldoSemana" checked style="width:auto;"> Saldo Semana</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColDias" checked style="width:auto;"> Lunes a Domingo (7 columnas)</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColArriesgado" style="width:auto;"> Cuánto arriesgó</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColGanado" style="width:auto;"> Cuánto ganó</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColPerdido" style="width:auto;"> Cuánto perdió</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColComision" style="width:auto;"> % Devuelto ($)</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColTransferencias" style="width:auto;"> Transferencias</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColPolla" style="width:auto;"> Polla</label>
+      </div>
+      <button type="button" onclick="generarExcelSaldosSemana()" style="margin-top:16px;">⬇️ Descargar Excel</button>
+      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Se descarga un archivo .xlsx con una fila por cliente y la fila de TOTAL al final, de la semana que tengas abierta ahora mismo.</small>
     </div>
   </div>
 
@@ -1771,6 +1946,15 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
      público, con aviso claro si el navegador no tiene internet en ese
      momento. Expone `window.jspdf.jsPDF`. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- SheetJS/"xlsx" (21-09-2026, a pedido del usuario: "crea una opcion
+     para exportar y me descargue un archivo excel y yo pueda seleccionar
+     que ver en ese archivo excel") — arma el .xlsx de "📅 Saldos Semana"
+     100% en el navegador (ver generarExcelSaldosSemana() en app.js), a
+     partir de los mismos datos ya cargados, sin pedirle nada nuevo al
+     backend. Mismo criterio que html2canvas/jsPDF: CDN público, expone
+     el global `XLSX`. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 <script>
   // =================================================================

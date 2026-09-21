@@ -30,6 +30,7 @@
 // proxy genérico para cualquier URL.
 // =================================================================
 const express = require('express');
+const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
@@ -66,6 +67,60 @@ router.get('/logo', asyncHandler(async (req, res) => {
     res.send(buffer);
   } catch (e) {
     res.status(502).json({ error: 'No se pudo obtener la imagen.' });
+  }
+}));
+
+// =================================================================
+// PROXY DEL LOGO DE UN GRUPO (21-09-2026, misma necesidad de arriba pero
+// para la pestaña nueva "⬇️ Descargar" > "📅 Saldos Semana": el header de
+// la imagen/PDF que se genera lleva el logo del propio grupo, y ese logo
+// es una URL EXTERNA cualquiera que puso el Súper-admin (grupos.logo_url,
+// ver PATCH /api/superadmin/grupos/:id/logo) — no un puñado fijo de CDN
+// de equipos, así que no alcanza con el whitelist de dominios de arriba.
+//
+// A diferencia de /logo (que recibe la URL directo por query string —
+// solo sirve porque el whitelist de dominios evita que se use como proxy
+// genérico), acá NUNCA se acepta una URL desde el cliente: se recibe
+// nada más que un :grupoId y ESTE SERVIDOR busca en su propia base cuál
+// es el logo_url guardado para ese grupo — así no hay ningún riesgo de
+// SSRF (el navegador no puede pedir "de intermediario" ninguna URL que
+// no haya puesto ya el propio Súper-admin).
+//
+// Sin login a propósito, mismo criterio que /logo y que
+// GET /api/cliente/:token (el link del cliente YA muestra este mismo
+// logo sin pedir ninguna sesión) — no es información nueva ni sensible
+// de ningún grupo, es literalmente la misma imagen que cualquiera con el
+// link de un cliente de ese grupo ya puede ver.
+// =================================================================
+router.get('/logo-grupo/:grupoId', asyncHandler(async (req, res) => {
+  const r = await db.query('SELECT logo_url FROM grupos WHERE id = $1', [req.params.grupoId]);
+  const logoUrl = r.rows[0] && r.rows[0].logo_url;
+  if (!logoUrl) return res.status(404).end();
+
+  let url;
+  try {
+    url = new URL(logoUrl);
+  } catch (e) {
+    return res.status(404).end();
+  }
+  if (url.protocol !== 'https:') return res.status(404).end();
+
+  try {
+    const resp = await fetch(url.toString());
+    if (!resp.ok) return res.status(502).end();
+
+    const tipo = resp.headers.get('content-type') || 'image/png';
+    const buffer = Buffer.from(await resp.arrayBuffer());
+
+    res.set('Content-Type', tipo);
+    // A diferencia del escudo de un equipo (que nunca cambia), el
+    // Súper-admin puede actualizar el logo de un grupo — cache corto
+    // (5 min) en vez de "immutable", para que un cambio de logo se vea
+    // reflejado sin que el usuario tenga que limpiar caché a mano.
+    res.set('Cache-Control', 'public, max-age=300');
+    res.send(buffer);
+  } catch (e) {
+    res.status(502).json({ error: 'No se pudo obtener el logo.' });
   }
 }));
 

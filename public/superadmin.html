@@ -478,6 +478,50 @@
     .chat-widget-burbuja { width: 52px; height: 52px; font-size: 22px; }
     .conversacion-fila .conv-ultimo { max-width: 55vw; }
   }
+
+  /* ===============================================================
+     "📅 Saldos Semana" (21-09-2026, pestaña "⬇️ Descargar" de la ficha de
+     un grupo) — MISMO bloque, tal cual, que ya usa public/grupo.html
+     (ver la nota grande ahí): #ssCaptura es una caja blanca propia,
+     armada 100% por JS (renderSaldosSemana(), acá abajo) a partir de GET
+     /api/superadmin/grupos/:id/saldos-semana, y es la MISMA caja que se
+     manda a html2canvas para "imagen HD"/PDF — lo que el súper-admin ve
+     es exactamente lo que descarga. */
+  #ssCaptura { display: inline-block; background: #fff; padding: 26px 30px 20px; border-radius: 10px; font-family: 'Inter', sans-serif; color: #1a2233; }
+  #ssCaptura .ss-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  #ssCaptura .ss-logo { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #eef1f6; }
+  #ssCaptura .ss-header-textos { display: flex; flex-direction: column; gap: 2px; }
+  #ssCaptura .ss-nombre-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: 0.2px; color: #0d1326; }
+  #ssCaptura .ss-subtitulo { font-size: 12.5px; color: #6b7688; font-weight: 500; }
+  #ssCaptura .ss-semana-badge { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+  #ssCaptura .ss-semana-numero { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; color: #04070f; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); padding: 5px 12px; border-radius: 20px; }
+  #ssCaptura .ss-semana-rango { font-size: 12.5px; color: #4a5468; font-weight: 600; }
+  #ssCaptura .ss-fecha-generado { font-size: 10.5px; color: #9aa3b5; }
+  #ssCaptura .ss-divider { height: 3px; margin: 16px 0 14px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue) 55%, rgba(47,107,255,0.15)); }
+  /* Reset explícito, a propósito poco específico (id + elemento, sin
+     ninguna clase) — ver la explicación completa en public/grupo.html.
+     Sin esto, las reglas globales de acá arriba ("th { background:
+     var(--primary) }", pensadas para el resto del panel en tema OSCURO)
+     se cuelan en esta caja BLANCA y dejan el encabezado casi ilegible. */
+  #ssCaptura table.ss-tabla { border-collapse: collapse; font-size: 13px; }
+  #ssCaptura th, #ssCaptura td { padding: 9px 13px; text-align: center; white-space: nowrap; background: #fff; border: none; color: #1a2233; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-grupos th { padding-top: 0; padding-bottom: 3px; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: #9aa3b5; font-weight: 700; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-dias th { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; color: #4a5468; border-bottom: 2px solid #e3e7ee; padding-top: 2px; padding-bottom: 10px; }
+  #ssCaptura table.ss-tabla thead tr.ss-fila-dias th .ss-th-fecha { display: block; font-size: 10px; font-weight: 500; color: #9aa3b5; margin-top: 1px; }
+  #ssCaptura th.ss-col-cliente, #ssCaptura td.ss-col-cliente { text-align: left; }
+  #ssCaptura td.ss-col-cliente .ss-nombre-cliente { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13.5px; color: #0d1326; }
+  #ssCaptura td.ss-col-cliente .ss-porcentaje { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #0d6a78; background: #e0f9fc; border-radius: 8px; padding: 1px 7px; }
+  #ssCaptura td.ss-col-saldo, #ssCaptura th.ss-col-saldo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; background: #f7f9fc; border-left: 1px solid #e3e7ee; border-right: 1px solid #e3e7ee; }
+  #ssCaptura td.ss-dia { font-weight: 600; font-size: 12.5px; }
+  #ssCaptura .ss-pos { color: #0f8a52; }
+  #ssCaptura .ss-neg { color: #c0392b; }
+  #ssCaptura .ss-cero { color: #b3bac9; font-weight: 500; }
+  #ssCaptura td.ss-col-extra, #ssCaptura th.ss-col-extra { color: #4a5468; font-weight: 600; }
+  #ssCaptura .ss-extra-primera { border-left: 2px solid #e3e7ee; }
+  #ssCaptura tbody tr.ss-fila-cliente:nth-child(even) { background: #fafbfd; }
+  #ssCaptura tfoot tr.ss-fila-total td { border-top: 2px solid #0d1326; background: #eef3fb; font-weight: 700; font-family: 'Outfit', sans-serif; padding-top: 12px; padding-bottom: 12px; }
+  #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
+  #ssCaptura .ss-footer strong { color: #6b7688; }
 </style>
 </head>
 <body>
@@ -827,6 +871,13 @@
           <button type="button" class="detalle-tab-btn" data-tab="resumen" onclick="mostrarPestanaDetalleGrupo('resumen')">📊 Resumen</button>
           <button type="button" class="detalle-tab-btn" data-tab="balance" onclick="mostrarPestanaDetalleGrupo('balance')">💰 Balance por Cliente</button>
           <button type="button" class="detalle-tab-btn" data-tab="sabanas" onclick="mostrarPestanaDetalleGrupo('sabanas')">📁 Sábanas</button>
+          <!-- "⬇️ Descargar" (21-09-2026, a pedido del usuario: "esto se
+               puede usar tanto del grupo como desde super admin") — mismo
+               reporte "📅 Saldos Semana" (imagen HD/PDF/Excel) que ve el
+               propio Grupo en su pestaña ⬇️ Descargar, de solo lectura,
+               para CUALQUIER grupo elegido acá. Ver
+               GET /api/superadmin/grupos/:id/saldos-semana. -->
+          <button type="button" class="detalle-tab-btn" data-tab="descargar" onclick="mostrarPestanaDetalleGrupo('descargar')">⬇️ Descargar</button>
           <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">🖼️ Logo</button>
           <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">📲 WhatsApp</button>
           <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">💳 Comisión</button>
@@ -927,6 +978,47 @@
               </select>
             </div>
             <div id="sabanasContenido"></div>
+          </div>
+
+          <!-- ========================= ⬇️ DESCARGAR (21-09-2026) =========================
+               Mismo reporte "📅 Saldos Semana" del panel del Grupo
+               (public/grupo.html), de solo lectura, para el grupo abierto
+               acá (GRUPO_DETALLE_ID) — mismo espíritu que "💰 Balance por
+               Cliente"/"📁 Sábanas" de arriba (de carga perezosa, ver
+               mostrarPestanaDetalleGrupo). -->
+          <div class="detalle-tab-panel" data-tab-panel="descargar">
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">⬇️ Descargar — 📅 Saldos Semana</h3>
+            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismo reporte semanal que ve el propio Grupo en su pestaña ⬇️ Descargar — de solo lectura.</p>
+
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;">
+              <button type="button" class="btn-secundario" onclick="cambiarSemanaSaldos(-1)" style="padding:8px 12px; font-size:12px;">◀ Semana anterior</button>
+              <p id="ssTituloSemana" style="margin:0; font-weight:bold; font-size:13px; min-width:220px; text-align:center;">Cargando...</p>
+              <button type="button" class="btn-secundario" onclick="cambiarSemanaSaldos(1)" style="padding:8px 12px; font-size:12px;">Semana siguiente ▶</button>
+              <button type="button" class="btn-secundario" onclick="irASemanaActualSaldos()" style="padding:8px 12px; font-size:12px;">📍 Semana actual</button>
+            </div>
+
+            <details class="cambiar-password-inline" style="display:block; margin-bottom:10px;">
+              <summary style="cursor:pointer; font-size:12px; font-weight:bold;">👁️ Agregar más columnas (opcional)</summary>
+              <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:8px;">
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColArriesgado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto arriesgó</label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColGanado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto ganó</label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColPerdido" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto perdió</label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColComision" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> % Devuelto ($)</label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColTransferencias" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Transferencias</label>
+                <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:12px;"><input type="checkbox" id="ssColPolla" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Polla</label>
+              </div>
+            </details>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+              <button type="button" onclick="capturarSaldosSemanaComoImagen()" style="padding:8px 14px; font-size:12px;">📅 Saldos Semana (imagen HD)</button>
+              <button type="button" class="btn-secundario" onclick="descargarSaldosSemanaComoPDF()" style="padding:8px 14px; font-size:12px;">📄 Descargar PDF</button>
+              <button type="button" class="btn-secundario" onclick="abrirExportarExcelSaldosSemana()" style="padding:8px 14px; font-size:12px;">📊 Exportar Excel</button>
+            </div>
+
+            <p id="ssVacio" style="display:none; text-align:center; color:var(--text-dim); padding:16px; font-size:13px;">Este grupo todavía no tiene ningún cliente registrado.</p>
+            <div id="ssCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
+              <div id="ssCaptura"></div>
+            </div>
           </div>
 
           <!-- ========================= 🖼️ LOGO ========================= -->
@@ -1075,6 +1167,60 @@
     </div>
   </div>
 </div>
+
+<!-- ================================================================= -->
+<!-- MODAL: vista previa de la imagen capturada de "📅 Saldos Semana"     -->
+<!-- (21-09-2026, pestaña ⬇️ Descargar de la ficha de un grupo). Mismo    -->
+<!-- patrón que public/grupo.html — ver capturarSaldosSemanaComoImagen(). -->
+<!-- ================================================================= -->
+<div class="modal-fondo" id="modalCapturaSaldosSemana">
+  <div class="modal-caja" style="max-width:1100px;">
+    <button type="button" class="modal-cerrar" onclick="cerrarCapturaSaldosSemana()">✕</button>
+    <h2 style="margin-top:0;">📅 Imagen de Saldos Semana</h2>
+    <p id="capturaSaldosSemanaEstado" style="color:var(--text-dim); font-size:13px;">Generando imagen...</p>
+    <div style="overflow:auto; max-height:60vh; border:1px solid var(--border); border-radius:8px; background:var(--card-2, #121a30); text-align:center;">
+      <img id="capturaSaldosSemanaImg" style="max-width:100%; display:none;" alt="Saldos de la semana">
+    </div>
+    <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+      <button type="button" id="btnCopiarCapturaSaldosSemana" onclick="copiarCapturaSaldosSemana()" disabled>📋 Copiar imagen</button>
+      <button type="button" class="btn-secundario" id="btnDescargarCapturaSaldosSemana" onclick="descargarCapturaSaldosSemana()" disabled>⬇️ Descargar imagen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================= -->
+<!-- MODAL: "📊 Exportar Excel" de "📅 Saldos Semana" (21-09-2026) —      -->
+<!-- mismo patrón que public/grupo.html.                                 -->
+<!-- ================================================================= -->
+<div class="modal-fondo" id="modalExportarExcelSaldosSemana">
+  <div class="modal-caja" style="max-width:520px;">
+    <button type="button" class="modal-cerrar" onclick="cerrarExportarExcelSaldosSemana()">✕</button>
+    <h2 style="margin-top:0;">📊 Exportar Saldos Semana a Excel</h2>
+    <p style="color:var(--text-dim); font-size:13px; margin-top:-6px;">Elige qué columnas quieres que traiga el archivo — el nombre del cliente y su % (si tiene) siempre se incluyen.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;">
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColSaldoSemana" checked style="width:auto;"> Saldo Semana</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColDias" checked style="width:auto;"> Lunes a Domingo (7 columnas)</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColArriesgado" style="width:auto;"> Cuánto arriesgó</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColGanado" style="width:auto;"> Cuánto ganó</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColPerdido" style="width:auto;"> Cuánto perdió</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColComision" style="width:auto;"> % Devuelto ($)</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColTransferencias" style="width:auto;"> Transferencias</label>
+      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColPolla" style="width:auto;"> Polla</label>
+    </div>
+    <button type="button" onclick="generarExcelSaldosSemana()" style="margin-top:16px;">⬇️ Descargar Excel</button>
+  </div>
+</div>
+
+<!-- html2canvas/jsPDF/SheetJS (21-09-2026) — mismas 3 librerías de CDN,
+     mismas versiones, que ya usa public/grupo.html para "📅 Saldos
+     Semana": convierten #ssCaptura en imagen HD, la cortan en páginas
+     para el PDF, y arman el .xlsx, todo del lado del navegador sin
+     backend. Ver la nota grande junto a estos mismos scripts en
+     grupo.html — acá no hacía falta ninguna de las 3 hasta ahora porque
+     el resto de este panel (súper-admin) no descarga nada. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 // =================================================================
@@ -1610,14 +1756,16 @@ async function eliminarGrupo(id) {
 let GRUPO_DETALLE_ID = null; // el grupo que está abierto en el modal ahora mismo
 let BALANCE_CLIENTES_CARGADO = false; // "Balance por Cliente" (19-09-2026): true apenas se pidió una vez para el grupo abierto ahora — evita repedir datos cada vez que se vuelve a esa pestaña sin haber cambiado el rango
 let SABANAS_FECHAS_CARGADAS = false; // "Sábanas" (19-09-2026): mismo criterio, para la lista de fechas con datos
+let SALDOS_SEMANA_SA_CARGADO = false; // "⬇️ Descargar" (21-09-2026): mismo criterio, para "📅 Saldos Semana"
 
 // =================================================================
 // PESTAÑAS DE LA FICHA DE UN GRUPO (19-09-2026) — ver la nota grande
-// junto a "#modalDetalleFondo" en el HTML. "Balance por Cliente" y
-// "Sábanas" son de carga perezosa: la primera vez que se entra a cada
-// una, se pide al backend (GRUPO_DETALLE_ID ya tiene que estar puesto,
-// lo hace abrirDetalleGrupo() antes de esto) — las demás pestañas no
-// piden nada nuevo, ya vienen precargadas desde abrirDetalleGrupo().
+// junto a "#modalDetalleFondo" en el HTML. "Balance por Cliente",
+// "Sábanas" y "⬇️ Descargar" son de carga perezosa: la primera vez que se
+// entra a cada una, se pide al backend (GRUPO_DETALLE_ID ya tiene que
+// estar puesto, lo hace abrirDetalleGrupo() antes de esto) — las demás
+// pestañas no piden nada nuevo, ya vienen precargadas desde
+// abrirDetalleGrupo().
 // =================================================================
 function mostrarPestanaDetalleGrupo(tab) {
   document.querySelectorAll('.detalle-tab-btn').forEach(btn => {
@@ -1633,6 +1781,11 @@ function mostrarPestanaDetalleGrupo(tab) {
   if (tab === 'sabanas' && !SABANAS_FECHAS_CARGADAS) {
     SABANAS_FECHAS_CARGADAS = true;
     cargarFechasSabanaDetalle();
+  }
+  if (tab === 'descargar' && !SALDOS_SEMANA_SA_CARGADO) {
+    SALDOS_SEMANA_SA_CARGADO = true;
+    cargarColumnasSaldosSemanaGuardadas();
+    cargarSaldosSemana();
   }
 }
 
@@ -1790,6 +1943,479 @@ async function cargarSabanaDiaDetalle() {
   }
 }
 
+// =================================================================
+// 📅 SALDOS SEMANA — pestaña "⬇️ Descargar" de la ficha de un grupo
+// (21-09-2026). MISMO reporte, MISMOS cálculos, MISMO HTML/CSS que ya usa
+// el propio panel del Grupo (public/app.js, ver renderSaldosSemana() ahí
+// — este bloque es un port 1:1, solo cambian 3 cosas: apiSuperadmin() en
+// vez de api(), GRUPO_DETALLE_ID en vez de GRUPO.id, y formatDinero() en
+// vez de formatMoney()). Es de SOLO LECTURA para el súper-admin — no hay
+// nada que este panel escriba, solo lee y descarga.
+// =================================================================
+let SALDOS_SEMANA_SA_ACTUAL = null; // último JSON que devolvió el backend
+let SALDOS_SEMANA_SA_FECHA_REF = null; // 'YYYY-MM-DD' cualquier día DENTRO de la semana que se está mostrando; null = semana actual (la decide el backend)
+let ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB = null;
+let ULTIMA_CAPTURA_SALDOS_SEMANA_SA_URL = null;
+
+const COLUMNAS_SALDOS_SEMANA_SA = [
+  ['ssColArriesgado', 'arriesgadoSemana', 'arriesgado', 'Arriesgado'],
+  ['ssColGanado', 'ganadoSemana', 'ganado', 'Ganado'],
+  ['ssColPerdido', 'perdidoSemana', 'perdido', 'Perdido'],
+  ['ssColComision', 'comisionSemana', 'comision', '% Devuelto'],
+  ['ssColTransferencias', 'transferenciasSemana', 'transferencias', 'Transferencias'],
+  ['ssColPolla', 'pollaSemana', 'polla', 'Polla']
+];
+
+function actualizarColumnasSaldosSemana() {
+  const estado = {};
+  COLUMNAS_SALDOS_SEMANA_SA.forEach(([checkboxId]) => { estado[checkboxId] = document.getElementById(checkboxId).checked; });
+  localStorage.setItem('zenyatta_ss_columnas', JSON.stringify(estado));
+  renderSaldosSemana();
+}
+
+function cargarColumnasSaldosSemanaGuardadas() {
+  let estado = {};
+  try { estado = JSON.parse(localStorage.getItem('zenyatta_ss_columnas') || '{}'); } catch (e) { estado = {}; }
+  COLUMNAS_SALDOS_SEMANA_SA.forEach(([checkboxId]) => {
+    const cb = document.getElementById(checkboxId);
+    if (cb && Object.prototype.hasOwnProperty.call(estado, checkboxId)) cb.checked = estado[checkboxId];
+  });
+}
+
+async function cargarSaldosSemana() {
+  if (!GRUPO_DETALLE_ID) return;
+  const titulo = document.getElementById('ssTituloSemana');
+  titulo.textContent = 'Cargando...';
+  try {
+    const qs = SALDOS_SEMANA_SA_FECHA_REF ? ('?fecha=' + encodeURIComponent(SALDOS_SEMANA_SA_FECHA_REF)) : '';
+    SALDOS_SEMANA_SA_ACTUAL = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/saldos-semana' + qs);
+    renderSaldosSemana();
+  } catch (e) {
+    titulo.textContent = '⚠️ No se pudo cargar';
+  }
+}
+
+// "◀ Semana anterior"/"Semana siguiente ▶": se mueve 7 días desde el
+// LUNES de la semana que ya está en pantalla (no desde "hoy") — mismo
+// criterio que public/app.js.
+function cambiarSemanaSaldos(deltaSemanas) {
+  const base = (SALDOS_SEMANA_SA_ACTUAL && SALDOS_SEMANA_SA_ACTUAL.semana && SALDOS_SEMANA_SA_ACTUAL.semana.desde) || hoyISOSaldosSemanaSA();
+  const d = new Date(base + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaSemanas * 7);
+  SALDOS_SEMANA_SA_FECHA_REF = d.toISOString().split('T')[0];
+  cargarSaldosSemana();
+}
+
+function irASemanaActualSaldos() {
+  SALDOS_SEMANA_SA_FECHA_REF = null;
+  cargarSaldosSemana();
+}
+
+function escaparHtmlSaldosSemana(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto == null ? '' : String(texto);
+  return div.innerHTML;
+}
+
+// "+$50.00"/"-$50.00"/"$0.00", con la clase de color (verde/rojo/gris) —
+// pensado para fondo BLANCO (ver el CSS de #ssCaptura).
+function celdaMontoSaldosSemana(monto) {
+  const n = Number(monto) || 0;
+  const clase = n > 0.004 ? 'ss-pos' : (n < -0.004 ? 'ss-neg' : 'ss-cero');
+  const texto = n > 0.004 ? ('+' + formatDinero(n)) : formatDinero(n);
+  return '<span class="' + clase + '">' + texto + '</span>';
+}
+
+// "5%"/"12.5%" — sin decimales de sobra si el % es un número entero.
+function formatPorcentaje(pct) {
+  const n = Number(pct) || 0;
+  const texto = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return texto + '%';
+}
+
+// Helpers de fecha propios de este archivo (superadmin.html no tenía
+// ninguno de los 3 hasta ahora) — mismo criterio UTC que public/app.js
+// para no correrse un día por la zona horaria del navegador.
+function hoyISOSaldosSemanaSA() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mes + '-' + dia;
+}
+function formatFechaDDMMYYYYSaldosSemanaSA(fechaISO) {
+  const d = new Date(fechaISO + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return fechaISO;
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return dd + '-' + mm + '-' + d.getUTCFullYear();
+}
+const DIAS_SEMANA_LARGO_SA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+function etiquetaDiaLargaSaldosSemanaSA(fechaISO) {
+  const d = new Date(fechaISO + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return fechaISO;
+  return DIAS_SEMANA_LARGO_SA[d.getUTCDay()];
+}
+
+// Arma #ssCaptura ENTERO (header + tabla) a partir de SALDOS_SEMANA_SA_ACTUAL
+// y de qué columnas extra estén marcadas ahora mismo.
+function renderSaldosSemana() {
+  const datos = SALDOS_SEMANA_SA_ACTUAL;
+  const cont = document.getElementById('ssCaptura');
+  const vacio = document.getElementById('ssVacio');
+  const titulo = document.getElementById('ssTituloSemana');
+  if (!datos) return;
+
+  titulo.textContent = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.desde) + ' – ' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.hasta) + ')';
+
+  if (!datos.clientes || datos.clientes.length === 0) {
+    cont.innerHTML = '';
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+
+  const columnasExtra = COLUMNAS_SALDOS_SEMANA_SA.filter(([checkboxId]) => {
+    const cb = document.getElementById(checkboxId);
+    return cb && cb.checked;
+  });
+
+  const nombreGrupo = escaparHtmlSaldosSemana(datos.grupo.nombre || '');
+  const logoHTML = datos.grupo.logoUrl
+    ? '<img class="ss-logo logo-grupo-captura" src="' + urlLogoGrupoProxySA() + '" alt="" onerror="this.style.display=\'none\'">'
+    : '';
+
+  const rangoTexto = rangoSemanaLegibleSA(datos.semana.desde, datos.semana.hasta);
+  const generadoTexto = 'Generado el ' + fechaHoraTextoCortoSA();
+
+  let html = '';
+  html += '<div class="ss-header">';
+  html += logoHTML;
+  html += '<div class="ss-header-textos">';
+  html += '<div class="ss-nombre-grupo">' + nombreGrupo + '</div>';
+  html += '<div class="ss-subtitulo">📅 Saldos Semana · jugadas, pollas y transferencias</div>';
+  html += '</div>';
+  html += '<div class="ss-semana-badge">';
+  html += '<div class="ss-semana-numero">SEMANA ' + datos.semana.numero + ' · ' + datos.semana.anio + '</div>';
+  html += '<div class="ss-semana-rango">' + rangoTexto + '</div>';
+  html += '<div class="ss-fecha-generado">' + generadoTexto + '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div class="ss-divider"></div>';
+
+  html += '<table class="ss-tabla"><thead>';
+  html += '<tr class="ss-fila-grupos"><th class="ss-col-cliente"></th><th class="ss-col-saldo"></th><th colspan="7">Lunes a Domingo</th>';
+  if (columnasExtra.length > 0) html += '<th colspan="' + columnasExtra.length + '" class="ss-extra-primera">Detalle</th>';
+  html += '</tr>';
+  html += '<tr class="ss-fila-dias"><th class="ss-col-cliente">Cliente</th><th class="ss-col-saldo">Saldo Semana</th>';
+  datos.semana.dias.forEach(d => {
+    html += '<th>' + d.corta + '<span class="ss-th-fecha">' + formatFechaDDMMYYYYSaldosSemanaSA(d.fecha).slice(0, 5).replace('-', '/') + '</span></th>';
+  });
+  columnasExtra.forEach(([checkboxId, , , etiqueta], i) => {
+    html += '<th class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + etiqueta + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  datos.clientes.forEach(c => {
+    html += '<tr class="ss-fila-cliente">';
+    html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">' + escaparHtmlSaldosSemana(c.nombre) + '</span>';
+    if (c.porcentaje > 0) html += '<br><span class="ss-porcentaje">' + formatPorcentaje(c.porcentaje) + '</span>';
+    html += '</td>';
+    html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(c.saldoSemana) + '</td>';
+    datos.semana.dias.forEach(d => {
+      const dia = c.porDia[d.fecha] || { resultado: 0, comision: 0 };
+      html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+    });
+    columnasExtra.forEach(([checkboxId, campoSemana], i) => {
+      html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatDinero(c[campoSemana]) + '</td>';
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody><tfoot><tr class="ss-fila-total">';
+  html += '<td class="ss-col-cliente"><span class="ss-nombre-cliente">TOTAL</span></td>';
+  html += '<td class="ss-col-saldo">' + celdaMontoSaldosSemana(datos.totales.saldoSemana) + '</td>';
+  datos.semana.dias.forEach(d => {
+    const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
+    html += '<td class="ss-dia">' + celdaMontoSaldosSemana(dia.resultado + dia.comision) + '</td>';
+  });
+  columnasExtra.forEach(([checkboxId, campoSemana], i) => {
+    html += '<td class="ss-col-extra' + (i === 0 ? ' ss-extra-primera' : '') + '">' + formatDinero(datos.totales[campoSemana]) + '</td>';
+  });
+  html += '</tr></tfoot></table>';
+
+  html += '<div class="ss-footer"><strong>LUDOX Venezuela 🇻🇪</strong> · Reporte generado automáticamente</div>';
+
+  cont.innerHTML = html;
+}
+
+// Mismo proxy público que usa el propio panel del Grupo (GET
+// /api/imagenes/logo-grupo/:grupoId, ver src/routes/imagenes.js) — se pide
+// DESDE ESTE MISMO servidor (mismo origen) para que html2canvas pueda leer
+// los píxeles del logo sin problema de CORS.
+function urlLogoGrupoProxySA() {
+  return '/api/imagenes/logo-grupo/' + encodeURIComponent(GRUPO_DETALLE_ID) + '?v=' + Date.now();
+}
+
+function fechaHoraTextoCortoSA() {
+  const ahora = new Date();
+  return formatFechaDDMMYYYYSaldosSemanaSA(hoyISOSaldosSemanaSA()).replace(/-/g, '/') + ', ' + ahora.toLocaleTimeString('es-VE', { hour: 'numeric', minute: '2-digit' });
+}
+
+function capitalizarSA(texto) {
+  if (!texto) return '';
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+// "Lunes 14 – Domingo 20 de septiembre" (mismo mes) o "Lunes 29 de
+// diciembre – Domingo 4 de enero" (la semana cruza de mes/año).
+const MESES_LARGO_SA = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function rangoSemanaLegibleSA(desde, hasta) {
+  const dDesde = new Date(desde + 'T00:00:00Z');
+  const dHasta = new Date(hasta + 'T00:00:00Z');
+  const mismoMes = dDesde.getUTCMonth() === dHasta.getUTCMonth() && dDesde.getUTCFullYear() === dHasta.getUTCFullYear();
+  const inicio = capitalizarSA(etiquetaDiaLargaSaldosSemanaSA(desde)) + ' ' + dDesde.getUTCDate() + (mismoMes ? '' : ' de ' + MESES_LARGO_SA[dDesde.getUTCMonth()]);
+  const fin = capitalizarSA(etiquetaDiaLargaSaldosSemanaSA(hasta)) + ' ' + dHasta.getUTCDate() + ' de ' + MESES_LARGO_SA[dHasta.getUTCMonth()];
+  return inicio + ' – ' + fin;
+}
+
+// Rasteriza el logo del grupo (por si fuera SVG, mismo problema que ya se
+// resolvió en public/app.js para los escudos de equipo) ANTES de mandar
+// #ssCaptura a html2canvas — sin esto, un logo SVG puede tirar SecurityError
+// o simplemente no aparecer en la imagen final.
+async function convertirLogoAPngParaCapturaSA(img) {
+  return new Promise(resolve => {
+    const rasterizar = () => {
+      try {
+        if (!img.naturalWidth) { resolve(); return; }
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        img.src = canvas.toDataURL('image/png');
+      } catch (e) {
+        // Si por lo que sea no se puede (imagen rota, formato raro, etc.),
+        // se deja el <img> tal como estaba.
+      }
+      resolve();
+    };
+    if (img.complete) rasterizar();
+    else { img.onload = rasterizar; img.onerror = () => resolve(); }
+  });
+}
+
+async function prepararLogosParaCapturaSA(contenedor) {
+  const imgs = Array.from(contenedor.querySelectorAll('img.logo-grupo-captura'));
+  await Promise.all(imgs.map(convertirLogoAPngParaCapturaSA));
+}
+
+// "📅 Saldos Semana (imagen HD)" — mismo patrón EXACTO que public/app.js:
+// rasteriza el logo primero, y usa scale:3 ("lo más HD posible", pedido
+// explícito del usuario) con fondo blanco forzado.
+async function capturarSaldosSemanaComoImagen() {
+  const modal = document.getElementById('modalCapturaSaldosSemana');
+  const estado = document.getElementById('capturaSaldosSemanaEstado');
+  const img = document.getElementById('capturaSaldosSemanaImg');
+  const btnCopiar = document.getElementById('btnCopiarCapturaSaldosSemana');
+  const btnDescargar = document.getElementById('btnDescargarCapturaSaldosSemana');
+
+  const contenido = document.getElementById('ssCaptura');
+  if (!SALDOS_SEMANA_SA_ACTUAL || !SALDOS_SEMANA_SA_ACTUAL.clientes || SALDOS_SEMANA_SA_ACTUAL.clientes.length === 0) {
+    alert('Este grupo todavía no tiene ningún cliente registrado.');
+    return;
+  }
+
+  modal.classList.add('activo');
+  estado.textContent = 'Generando imagen...';
+  img.style.display = 'none';
+  btnCopiar.disabled = true;
+  btnDescargar.disabled = true;
+  ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB = null;
+
+  if (typeof html2canvas !== 'function') {
+    estado.textContent = '⚠️ No se pudo cargar la herramienta para generar la imagen (revisa tu conexión a internet y vuelve a intentar).';
+    return;
+  }
+
+  try {
+    await prepararLogosParaCapturaSA(contenido);
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(blob => {
+      if (!blob) {
+        estado.textContent = '⚠️ No se pudo generar la imagen. Intenta de nuevo.';
+        return;
+      }
+      ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB = blob;
+      if (ULTIMA_CAPTURA_SALDOS_SEMANA_SA_URL) URL.revokeObjectURL(ULTIMA_CAPTURA_SALDOS_SEMANA_SA_URL);
+      ULTIMA_CAPTURA_SALDOS_SEMANA_SA_URL = URL.createObjectURL(blob);
+      img.src = ULTIMA_CAPTURA_SALDOS_SEMANA_SA_URL;
+      img.style.display = 'inline-block';
+      estado.textContent = '✅ Imagen lista — cópiala o descárgala.';
+      btnCopiar.disabled = false;
+      btnDescargar.disabled = false;
+    }, 'image/png');
+  } catch (e) {
+    estado.textContent = '⚠️ No se pudo generar la imagen: ' + e.message;
+  }
+}
+
+async function copiarCapturaSaldosSemana() {
+  if (!ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB) return;
+  try {
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Este navegador no soporta copiar imágenes al portapapeles.');
+    }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB })]);
+    alert('¡Imagen copiada! Ya la puedes pegar (Ctrl+V) donde quieras.');
+  } catch (e) {
+    alert('No se pudo copiar automáticamente (' + e.message + '). Usa "⬇️ Descargar imagen" y adjúntala a mano.');
+  }
+}
+
+function descargarCapturaSaldosSemana() {
+  if (!ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB) return;
+  const semana = SALDOS_SEMANA_SA_ACTUAL ? SALDOS_SEMANA_SA_ACTUAL.semana : null;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(ULTIMA_CAPTURA_SALDOS_SEMANA_SA_BLOB);
+  a.download = 'saldos_semana' + (semana ? '_' + semana.anio + '_s' + semana.numero : '') + '.png';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function cerrarCapturaSaldosSemana() {
+  document.getElementById('modalCapturaSaldosSemana').classList.remove('activo');
+}
+
+// "📄 Descargar PDF" — mismo patrón EXACTO que public/app.js: horizontal
+// ("l" de landscape) porque esta tabla es ANCHA (7 días + hasta 6 columnas
+// extra), no alta.
+async function descargarSaldosSemanaComoPDF() {
+  if (!SALDOS_SEMANA_SA_ACTUAL || !SALDOS_SEMANA_SA_ACTUAL.clientes || SALDOS_SEMANA_SA_ACTUAL.clientes.length === 0) {
+    alert('Este grupo todavía no tiene ningún cliente registrado.');
+    return;
+  }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    alert('No se pudo cargar la herramienta para generar el PDF (revisa tu conexión a internet y vuelve a intentar).');
+    return;
+  }
+
+  const contenido = document.getElementById('ssCaptura');
+  const semana = SALDOS_SEMANA_SA_ACTUAL.semana;
+
+  try {
+    await prepararLogosParaCapturaSA(contenido);
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'l', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const altoPagina = pdf.internal.pageSize.getHeight();
+
+    const escala = anchoPagina / canvas.width;
+    const altoPaginaEnCanvas = Math.floor(altoPagina / escala);
+
+    let y = 0;
+    let primeraPagina = true;
+    while (y < canvas.height) {
+      const altoPedazo = Math.min(altoPaginaEnCanvas, canvas.height - y);
+
+      const pedazo = document.createElement('canvas');
+      pedazo.width = canvas.width;
+      pedazo.height = altoPedazo;
+      const ctx = pedazo.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pedazo.width, pedazo.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, altoPedazo, 0, 0, canvas.width, altoPedazo);
+
+      const dataUrl = pedazo.toDataURL('image/jpeg', 0.95);
+      if (!primeraPagina) pdf.addPage();
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, anchoPagina, altoPedazo * escala);
+
+      primeraPagina = false;
+      y += altoPedazo;
+    }
+
+    pdf.save('saldos_semana' + (semana ? '_' + semana.anio + '_s' + semana.numero : '') + '.pdf');
+  } catch (e) {
+    alert('No se pudo generar el PDF: ' + e.message);
+  }
+}
+
+// "📊 Exportar Excel" — mismo patrón EXACTO que public/app.js: arma el
+// .xlsx 100% en el navegador con SheetJS a partir de SALDOS_SEMANA_SA_ACTUAL
+// (los mismos datos que ya están en pantalla), con columna por columna
+// elegible en el modal.
+function abrirExportarExcelSaldosSemana() {
+  if (!SALDOS_SEMANA_SA_ACTUAL || !SALDOS_SEMANA_SA_ACTUAL.clientes || SALDOS_SEMANA_SA_ACTUAL.clientes.length === 0) {
+    alert('Este grupo todavía no tiene ningún cliente registrado.');
+    return;
+  }
+  document.getElementById('modalExportarExcelSaldosSemana').classList.add('activo');
+}
+
+function cerrarExportarExcelSaldosSemana() {
+  document.getElementById('modalExportarExcelSaldosSemana').classList.remove('activo');
+}
+
+function generarExcelSaldosSemana() {
+  if (typeof XLSX === 'undefined') {
+    alert('No se pudo cargar la herramienta para generar el Excel (revisa tu conexión a internet y vuelve a intentar).');
+    return;
+  }
+  const datos = SALDOS_SEMANA_SA_ACTUAL;
+  if (!datos || !datos.clientes || datos.clientes.length === 0) return;
+
+  const incluirSaldoSemana = document.getElementById('xlsColSaldoSemana').checked;
+  const incluirDias = document.getElementById('xlsColDias').checked;
+  const columnasExtraXls = COLUMNAS_SALDOS_SEMANA_SA.filter((_, i) => {
+    const idsXls = ['xlsColArriesgado', 'xlsColGanado', 'xlsColPerdido', 'xlsColComision', 'xlsColTransferencias', 'xlsColPolla'];
+    const cb = document.getElementById(idsXls[i]);
+    return cb && cb.checked;
+  });
+
+  const encabezado = ['Cliente', '%'];
+  if (incluirSaldoSemana) encabezado.push('Saldo Semana');
+  if (incluirDias) datos.semana.dias.forEach(d => encabezado.push(d.nombre + ' ' + formatFechaDDMMYYYYSaldosSemanaSA(d.fecha)));
+  columnasExtraXls.forEach(([, , , etiqueta]) => encabezado.push(etiqueta));
+
+  const filas = [encabezado];
+  datos.clientes.forEach(c => {
+    const fila = [c.nombre, c.porcentaje > 0 ? formatPorcentaje(c.porcentaje) : ''];
+    if (incluirSaldoSemana) fila.push(Number(c.saldoSemana.toFixed(2)));
+    if (incluirDias) {
+      datos.semana.dias.forEach(d => {
+        const dia = c.porDia[d.fecha] || { resultado: 0, comision: 0 };
+        fila.push(Number((dia.resultado + dia.comision).toFixed(2)));
+      });
+    }
+    columnasExtraXls.forEach(([, campoSemana]) => fila.push(Number((c[campoSemana] || 0).toFixed(2))));
+    filas.push(fila);
+  });
+
+  const filaTotal = ['TOTAL', ''];
+  if (incluirSaldoSemana) filaTotal.push(Number(datos.totales.saldoSemana.toFixed(2)));
+  if (incluirDias) {
+    datos.semana.dias.forEach(d => {
+      const dia = datos.totales.porDia[d.fecha] || { resultado: 0, comision: 0 };
+      filaTotal.push(Number((dia.resultado + dia.comision).toFixed(2)));
+    });
+  }
+  columnasExtraXls.forEach(([, campoSemana]) => filaTotal.push(Number((datos.totales[campoSemana] || 0).toFixed(2))));
+  filas.push(filaTotal);
+
+  const tituloGrupo = (datos.grupo.nombre || 'Grupo') + ' — Saldos Semana';
+  const tituloSemana = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.desde) + ' – ' + formatFechaDDMMYYYYSaldosSemanaSA(datos.semana.hasta) + ')';
+
+  const hoja = XLSX.utils.aoa_to_sheet([[tituloGrupo], [tituloSemana], [], ...filas]);
+  hoja['!cols'] = encabezado.map((_, i) => ({ wch: i === 0 ? 20 : 14 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Saldos Semana');
+  XLSX.writeFile(libro, 'saldos_semana_' + datos.semana.anio + '_s' + datos.semana.numero + '.xlsx');
+
+  cerrarExportarExcelSaldosSemana();
+}
+
 function colorEstadoTicketSuperadmin(estado) {
   if (estado === 'GANADA') return 'var(--ok)';
   if (estado === 'PERDIDA') return 'var(--danger)';
@@ -1895,6 +2521,16 @@ async function abrirDetalleGrupo(id, nombre) {
   document.getElementById('sabanasContenido').innerHTML = '';
   BALANCE_CLIENTES_CARGADO = false;
   SABANAS_FECHAS_CARGADAS = false;
+  // "⬇️ Descargar" (21-09-2026): mismo criterio — al abrir OTRO grupo,
+  // "📅 Saldos Semana" tiene que volver a pedir datos frescos (y arrancar
+  // otra vez en la semana actual, no en la que se había dejado para el
+  // grupo anterior) en vez de mostrar los del grupo anterior.
+  SALDOS_SEMANA_SA_CARGADO = false;
+  SALDOS_SEMANA_SA_ACTUAL = null;
+  SALDOS_SEMANA_SA_FECHA_REF = null;
+  document.getElementById('ssTituloSemana').textContent = 'Cargando...';
+  document.getElementById('ssCaptura').innerHTML = '';
+  document.getElementById('ssVacio').style.display = 'none';
   mostrarPestanaDetalleGrupo('resumen');
   document.getElementById('modalDetalleFondo').style.display = 'flex';
 

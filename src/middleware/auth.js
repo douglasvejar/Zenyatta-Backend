@@ -39,7 +39,8 @@ const PERMISOS_VALIDOS = [
   'balanceGeneral', // 📒 Balance General
   'transferencias', // 🔄 Transferencias
   'polla', // 🎲 Polla
-  'alertas' // 🔔 Alertas y chat interno
+  'alertas', // 🔔 Alertas y chat interno
+  'descargar' // ⬇️ Descargar (21-09-2026: Saldos Semana, Excel, PDF)
 ];
 
 // Lee req.grupo.moneda_modo con un default seguro ('usd', igual que la
@@ -84,8 +85,14 @@ async function requiereGrupo(req, res, next) {
     // whatsapp_grupo_jid/whatsapp_habilitado/moneda_modo van en el SELECT
     // porque varias rutas necesitan leerlos de req.grupo sin otra
     // consulta aparte (whatsapp.js, jugadores.js, reportes.js, sabana.js).
+    // logo_url (21-09-2026, pestaña "⬇️ Descargar" > "📅 Saldos Semana":
+    // el header del reporte lleva el logo del propio grupo) — hasta ahora
+    // el panel del Grupo no tenía ninguna forma de leer su propio logo
+    // (solo Súper-admin lo veía, en la ficha de detalle del grupo); se
+    // agrega acá en vez de una consulta aparte por la misma razón que los
+    // 3 campos de arriba.
     const res2 = await db.query(
-      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo FROM grupos WHERE id = $1',
+      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url FROM grupos WHERE id = $1',
       [payload.grupoId]
     );
     const grupo = res2.rows[0];

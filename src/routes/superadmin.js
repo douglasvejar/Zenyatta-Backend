@@ -22,6 +22,11 @@ const telefonosService = require('../services/telefonos');
 // botón "✏️ Editar" que sí tiene el propio panel del Grupo — para editar
 // un ticket, hay que entrar como ese Grupo).
 const { obtenerSabanaDeFecha } = require('../services/sabanaDia');
+// "⬇️ Descargar" (21-09-2026, mismo pedido de arriba, extendido a la
+// pestaña nueva "Saldos Semana" del propio panel del Grupo — ver
+// routes/descargas.js): se reusa la MISMA función que arma ese reporte,
+// solo que acá el grupo lo elige el Súper-admin por :id de la URL.
+const { construirSaldosSemana } = require('../services/saldosSemana');
 
 const router = express.Router();
 router.use(requiereSuperadmin);
@@ -238,6 +243,27 @@ router.get('/grupos/:id/balance-clientes', asyncHandler(async (req, res) => {
 
   const resultado = await calcularBalanceGeneral(id, desde, hasta, config.porcentajesPropios, config.avalesMap, configComision);
   res.json({ mixto: false, moneda: monedaModo.toUpperCase(), rango: { desde, hasta }, ...resultado });
+}));
+
+// =================================================================
+// "📅 Saldos Semana", para CUALQUIER grupo (21-09-2026, a pedido del
+// usuario: "esto se puede usar tanto del grupo como desde super admin"):
+// mismo reporte semanal cliente-por-cliente/día-por-día que ve el propio
+// Grupo en su pestaña "⬇️ Descargar" (routes/descargas.js) — se reusa
+// construirSaldosSemana() tal cual, solo que acá el grupo lo elige el
+// Súper-admin por :id de la URL en vez de salir del token de sesión.
+// ?fecha=YYYY-MM-DD opcional (cualquier día dentro de la semana que se
+// quiere ver — mismas flechitas "◀ Semana anterior"/"Semana siguiente ▶"
+// que en el panel del Grupo); sin ella, la semana actual.
+// =================================================================
+router.get('/grupos/:id/saldos-semana', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const grupoRes = await db.query('SELECT id, nombre, logo_url FROM grupos WHERE id = $1', [id]);
+  const grupo = grupoRes.rows[0];
+  if (!grupo) return res.status(404).json({ error: 'Grupo no encontrado.' });
+
+  const datos = await construirSaldosSemana(id, grupo.nombre, grupo.logo_url, req.query.fecha);
+  res.json(datos);
 }));
 
 // =================================================================

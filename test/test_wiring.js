@@ -78,6 +78,8 @@ function tryRequire(rel) {
   'src/services/fechaVenezuela.js',
   'src/services/confirmaciones.js',
   'src/services/balanceGeneral.js',
+  'src/services/fechaSemana.js',
+  'src/services/saldosSemana.js',
   'src/services/pozo.js',
   'src/services/nflApi.js',
   'src/services/nhlApi.js',
@@ -126,6 +128,7 @@ function tryRequire(rel) {
   'src/routes/whatsapp.js',
   'src/routes/empleados.js',
   'src/routes/grupo.js',
+  'src/routes/descargas.js',
   'src/server.js'
 ].forEach(tryRequire);
 
