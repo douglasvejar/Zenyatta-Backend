@@ -72,6 +72,13 @@
   .tarjeta-resumen .etiqueta { font-size: 12px; opacity: 0.85; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
   .tarjeta-resumen .monto-grande { font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .tarjeta-resumen .rango { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+  /* Desglose Hipismo/Deportes (23-09-2026, a pedido del usuario: "en
+     balance general si los uno si saldra un solo saldo que seria la suma
+     de total hipismo mas total deportes") — el número grande de arriba
+     ya es la suma de los 2; esta línea chica aclara cuánto puso cada
+     módulo, solo cuando el cliente tiene los 2 anclados a su link. */
+  .desglose-modulos { font-size: 11.5px; opacity: 0.85; margin-top: 6px; text-align: center; }
+  .desglose-modulos span { font-variant-numeric: tabular-nums; font-weight: 700; }
   .mini-fila { display: flex; gap: 10px; margin-top: 14px; }
   .mini-fila .mini { flex: 1; background: rgba(255,255,255,0.14); border-radius: 10px; padding: 9px 12px; }
   .mini-fila .mini .etq { font-size: 11px; opacity: 0.85; }
@@ -147,6 +154,16 @@
   .carrera-fila .resultado { text-align: right; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; align-self: center; }
   .carrera-fila .monto-jugado { display: block; font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-align: right; }
 
+  /* Fila de un ticket de Deportes dentro del bloque "⚽ Deportes"
+     (23-09-2026) — mismo espíritu que .carrera-fila pero sin carrera ni
+     pizarra: en su lugar, el número de ticket, el detalle de la jugada y
+     su estado (GANADA/PERDIDA/PENDIENTE/...). */
+  .ticket-fila { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 4px; border-top: 1px dashed var(--card-border); flex-wrap: wrap; }
+  .ticket-fila:first-child { border-top: none; }
+  .ticket-detalle { flex: 1; min-width: 150px; }
+  .ticket-num { display: block; font-size: 10.5px; color: var(--text-dim); }
+  .ticket-estado { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; }
+
   .pie-nota { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-top: 22px; line-height: 1.6; }
 
   @media (max-width: 380px) {
@@ -175,6 +192,7 @@
     <div class="tarjeta-resumen">
       <div class="etiqueta">Total de la semana</div>
       <div class="monto-grande" id="totalSemana">—</div>
+      <div class="desglose-modulos" id="desgloseModulos" style="display:none;"></div>
       <div class="switcher-semana">
         <button type="button" id="btnSemanaAnterior" onclick="cambiarSemana('anterior')">‹ Semana anterior</button>
         <div class="rango" id="rangoSemana">—</div>
@@ -291,6 +309,18 @@
     // --- Tarjeta resumen ---
     document.getElementById('totalSemana').textContent = conSigno(data.resumen.totalSemana);
     document.getElementById('cantidadJugadas').textContent = data.resumen.cantidadJugadas;
+
+    // Desglose por módulo — solo si este grupo también tiene Deportes
+    // (si no, el total de arriba YA es 100% Hipismo y esta línea sobra).
+    const desglose = document.getElementById('desgloseModulos');
+    if (data.modulos && data.modulos.deportes) {
+      desglose.style.display = 'block';
+      desglose.innerHTML =
+        `🐎 Hipismo: <span class="${claseMonto(data.resumen.totalHipismo)}">${conSigno(data.resumen.totalHipismo)}</span>` +
+        `&nbsp;&nbsp;·&nbsp;&nbsp;⚽ Deportes: <span class="${claseMonto(data.resumen.totalDeportes)}">${conSigno(data.resumen.totalDeportes)}</span>`;
+    } else {
+      desglose.style.display = 'none';
+    }
     document.getElementById('rangoSemana').innerHTML =
       `${fechaCorta(data.rango.desde)} – ${fechaCorta(data.rango.hasta)}` +
       (data.esSemanaActual ? '<span class="pill-semana-cerrada">Semana actual</span>' : '<span class="pill-semana-cerrada">Semana cerrada</span>');
@@ -309,11 +339,13 @@
     document.getElementById('btnSemanaAnterior').disabled = (data.semana === 'anterior');
     document.getElementById('btnSemanaActual').disabled = (data.semana === 'actual');
 
-    // --- Chips de balance por hipódromo ---
+    // --- Chips de balance por hipódromo (Deportes entra como una tarjeta
+    // más acá, con el ⚽ en vez de una bandera de país — "en el link
+    // saldra deportes como si fuera otro hipodromo", pedido del usuario) ---
     const saldoPorHip = {};
     data.dias.forEach(dia => {
       dia.hipodromos.forEach(hip => {
-        if (!saldoPorHip[hip.nombre]) saldoPorHip[hip.nombre] = { monto: 0, pais: hip.pais };
+        if (!saldoPorHip[hip.nombre]) saldoPorHip[hip.nombre] = { monto: 0, pais: hip.pais, tipo: hip.tipo };
         saldoPorHip[hip.nombre].monto += totalCarreras(hip.carreras);
       });
     });
@@ -324,7 +356,7 @@
       const chip = document.createElement('div');
       chip.className = 'chip-hip';
       chip.innerHTML = `
-        <span class="bandera">${BANDERAS[info.pais] || '🏁'}</span>
+        <span class="bandera">${info.tipo === 'deportes' ? '⚽' : (BANDERAS[info.pais] || '🏁')}</span>
         <span class="nombre">${nombre}</span>
         <span class="monto ${claseMonto(info.monto)}">${conSigno(info.monto)}</span>`;
       chipsWrap.appendChild(chip);
@@ -365,12 +397,13 @@
         const bloqueHip = document.createElement('div');
         bloqueHip.className = 'hip-bloque';
 
+        const esDeportes = hip.tipo === 'deportes';
         const headerHip = document.createElement('div');
         headerHip.className = 'hip-header';
         headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
         headerHip.innerHTML = `
           <span class="flecha-toggle">▾</span>
-          <span class="bandera">${BANDERAS[hip.pais] || '🏁'}</span>
+          <span class="bandera">${esDeportes ? '⚽' : (BANDERAS[hip.pais] || '🏁')}</span>
           <span class="nombre-hip">${hip.nombre}</span>
           <span class="saldo-hip ${claseMonto(subtotalHip)}">${conSigno(subtotalHip)}</span>`;
         bloqueHip.appendChild(headerHip);
@@ -378,17 +411,35 @@
         const bodyHip = document.createElement('div');
         bodyHip.className = 'hip-body';
 
-        hip.carreras.forEach(c => {
-          const filaCarrera = document.createElement('div');
-          filaCarrera.className = 'carrera-fila';
-          filaCarrera.innerHTML = `
-            <span class="num-carrera">${c.carrera}ª</span>
-            <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-            <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">con ${formatMonto(c.monto)}</span></span>
-            <span class="pizarra-txt">Pizarra: ${c.pizarra}</span>
-            <span></span>`;
-          bodyHip.appendChild(filaCarrera);
-        });
+        if (esDeportes) {
+          // Un ticket de Deportes no tiene carrera/pizarra/modalidad —
+          // se muestra con su propia etiqueta, detalle y estado, mismo
+          // criterio visual que ya usa public/cliente.html para sus tickets.
+          hip.carreras.forEach(c => {
+            const filaTicket = document.createElement('div');
+            filaTicket.className = 'ticket-fila';
+            filaTicket.innerHTML = `
+              <span class="ticket-detalle">
+                <span class="ticket-num">${c.ticket || ''}</span>
+                <span class="jugada-txt">${c.detalle || ''}</span>
+                <span class="ticket-estado">${c.estado}</span>
+              </span>
+              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">arriesga ${formatMonto(c.monto)}</span></span>`;
+            bodyHip.appendChild(filaTicket);
+          });
+        } else {
+          hip.carreras.forEach(c => {
+            const filaCarrera = document.createElement('div');
+            filaCarrera.className = 'carrera-fila';
+            filaCarrera.innerHTML = `
+              <span class="num-carrera">${c.carrera}ª</span>
+              <span class="jugada-txt">${armarJugadaTexto(c)}</span>
+              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">con ${formatMonto(c.monto)}</span></span>
+              <span class="pizarra-txt">Pizarra: ${c.pizarra}</span>
+              <span></span>`;
+            bodyHip.appendChild(filaCarrera);
+          });
+        }
 
         bloqueHip.appendChild(bodyHip);
         body.appendChild(bloqueHip);

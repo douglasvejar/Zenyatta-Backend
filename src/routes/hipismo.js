@@ -221,4 +221,112 @@ router.get('/balance-general', asyncHandler(async (req, res) => {
   res.json({ plano: r.rows[0] });
 }));
 
+// =================================================================
+// COMISIONES POR CARRERA (23-09-2026, a pedido del usuario: "en
+// comisiones por carrera uneme todo un dia y al darle click veo por
+// hipodromo al darle clikc en dicho hipodromo veo por carrera de ese
+// hipodromo") — antes era una lista plana de carreras con datos de
+// ejemplo (ver public/hipismo-mockup.html); ahora agrupa DÍA >
+// HIPÓDROMO > CARRERA con datos reales de hipismo_planos/hipismo_tickets,
+// el mismo drill-down de 3 niveles que pidió el usuario. El detalle
+// jugada-por-jugada de cada carrera (para el 4to nivel, "click en la
+// carrera") sigue viniendo adentro de cada carrera.
+//
+// GET /comisiones-por-carrera?semana=actual|anterior|hace2 — mismo
+// patrón de 3 semanas que ya tenía el selector de "Cierre Final" en el
+// mockup (semana actual, anterior, hace 2 semanas), semana FIJA lunes a
+// domingo en hora de Venezuela (mismo cálculo que
+// routes/hipismoCliente.js).
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+function isoDeFechaUTC(d) { return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
+function hoyVenezuela() { return new Date(Date.now() - 4 * 60 * 60 * 1000); }
+function rangoSemana(fecha, offsetSemanas) {
+  const diaSemana = fecha.getUTCDay();
+  const diffHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+  const lunes = new Date(fecha);
+  lunes.setUTCDate(lunes.getUTCDate() + diffHastaLunes + offsetSemanas * 7);
+  const domingo = new Date(lunes);
+  domingo.setUTCDate(lunes.getUTCDate() + 6);
+  return { desde: isoDeFechaUTC(lunes), hasta: isoDeFechaUTC(domingo) };
+}
+
+// La comisión de UNA línea (ticket) es la diferencia entre el bruto (sin
+// comisión) y lo que efectivamente cobró el lado que ganó esa línea —
+// mismo criterio que montoMostrado()/resultadoJugador-Banquero en
+// services/hipismoCalc.js: solo el lado GANADOR de cada línea paga 5%,
+// el que pierde no paga nada. Sumar esto por carrera da lo mismo que
+// hipismo_planos.comision_total (ya guardado) — se usa ese total como
+// el número "oficial" de cada carrera y esto solo arma el detalle.
+function comisionDeLado(resultadoMostrado) {
+  const n = Number(resultadoMostrado);
+  if (n <= 0) return 0;
+  const bruto = n / 0.95;
+  return bruto - n;
+}
+
+function textoJugadaTicket(t) {
+  return `${t.modalidad} (${t.caballo}) con ${Number(t.monto).toFixed(2).replace('.', ',')}`;
+}
+
+router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoSemana(hoyVenezuela(), offset);
+
+  const rPlanos = await db.query(
+    `SELECT id, fecha, hipodromo_nombre, carrera_numero, comision_total
+       FROM hipismo_planos
+      WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3
+      ORDER BY fecha DESC, hipodromo_nombre, carrera_numero`,
+    [req.grupoId, desde, hasta]
+  );
+  if (rPlanos.rows.length === 0) {
+    return res.json({ rango: { desde, hasta }, semana, dias: [], totalGeneral: 0 });
+  }
+
+  const rTickets = await db.query(
+    `SELECT plano_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero
+       FROM hipismo_tickets WHERE plano_id = ANY($1::uuid[])`,
+    [rPlanos.rows.map(p => p.id)]
+  );
+  const ticketsPorPlano = new Map();
+  rTickets.rows.forEach(t => {
+    if (!ticketsPorPlano.has(t.plano_id)) ticketsPorPlano.set(t.plano_id, []);
+    const detalle = [];
+    const comJugador = comisionDeLado(t.resultado_jugador);
+    const comBanquero = comisionDeLado(t.resultado_banquero);
+    if (comJugador > 0) detalle.push({ cliente: t.cliente_nombre, jugada: textoJugadaTicket(t), comision: comJugador });
+    if (comBanquero > 0) detalle.push({ cliente: t.banquero_nombre, jugada: textoJugadaTicket(t), comision: comBanquero });
+    ticketsPorPlano.get(t.plano_id).push(...detalle);
+  });
+
+  const porDia = new Map();
+  let totalGeneral = 0;
+  rPlanos.rows.forEach(p => {
+    const fechaIso = p.fecha instanceof Date ? p.fecha.toISOString().slice(0, 10) : p.fecha;
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, { fecha: fechaIso, totalComision: 0, hipodromosMap: new Map() });
+    const dia = porDia.get(fechaIso);
+    if (!dia.hipodromosMap.has(p.hipodromo_nombre)) {
+      dia.hipodromosMap.set(p.hipodromo_nombre, { nombre: p.hipodromo_nombre, totalComision: 0, carreras: [] });
+    }
+    const hip = dia.hipodromosMap.get(p.hipodromo_nombre);
+    const comisionCarrera = Number(p.comision_total);
+    hip.carreras.push({
+      planoId: p.id,
+      carreraNumero: p.carrera_numero,
+      totalComision: comisionCarrera,
+      detalle: ticketsPorPlano.get(p.id) || []
+    });
+    hip.totalComision += comisionCarrera;
+    dia.totalComision += comisionCarrera;
+    totalGeneral += comisionCarrera;
+  });
+
+  const dias = Array.from(porDia.values())
+    .map(d => ({ fecha: d.fecha, totalComision: d.totalComision, hipodromos: Array.from(d.hipodromosMap.values()) }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  res.json({ rango: { desde, hasta }, semana, dias, totalGeneral });
+}));
+
 module.exports = router;

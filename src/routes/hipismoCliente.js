@@ -30,8 +30,40 @@
 const express = require('express');
 const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
+// leerHistorial (23-09-2026, a pedido del usuario: "separame los datos de
+// deportes con los de hipismo... el cliente que juegue deportes o
+// viceversa, se le puede anclar o incluir la información del otro
+// módulo... pero deben salir separados en el link... deportes saldrá
+// como si fuera otro hipódromo con sus jugadas detalladas por días") —
+// misma función que ya usa el portal público de Deportes
+// (routes/cliente.js), reusada tal cual para traer las jugadas de
+// Deportes de ESTE MISMO cliente (mismo "jugadores.nombre", misma fila —
+// un cliente que juega en los 2 módulos es UN SOLO registro en la tabla
+// "jugadores" compartida) cuando el grupo también tiene Deportes
+// habilitado.
+const { leerHistorial } = require('../services/historial');
 
 const router = express.Router();
+
+// "⚽ Deportes" se guarda como un hipódromo más dentro de "dias[].hipodromos"
+// (mismo shape que un hipódromo real), pero con tipo:'deportes' para que
+// el frontend sepa que sus "carreras" en realidad son tickets de sábana
+// (ticket/detalle/estado), no carreras de caballos — así queda SEPARADO
+// visualmente (su propia tarjeta/chip) aunque el TOTAL de la semana sí
+// los suma a los dos (pedido explícito: "en balance general si los uno
+// si saldra un solo saldo que seria la suma de total hipismo mas total
+// deportes").
+const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
+
+// Mismo criterio que calcularResumenHistorico() en services/historial.js
+// para convertir un ticket de Deportes en un neto por línea: GANADA suma
+// lo que se ganó, PERDIDA resta lo arriesgado, cualquier otro estado
+// (pendiente, anulada, etc.) todavía no define nada — no suma ni resta.
+function resultadoTicketDeportes(t) {
+  if (t.estado === 'GANADA') return t.gana;
+  if (t.estado === 'PERDIDA') return -t.arriesga;
+  return 0;
+}
 
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -69,7 +101,7 @@ router.get('/:token', asyncHandler(async (req, res) => {
   const jugador = rJugador.rows[0];
   if (!jugador) return res.status(404).json({ error: 'Link inválido.' });
 
-  const rGrupo = await db.query('SELECT activo, nombre, logo_url, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  const rGrupo = await db.query('SELECT activo, nombre, logo_url, modulo_hipismo_habilitado, modulo_deportes_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = rGrupo.rows[0];
   if (!grupo || !grupo.activo) {
     return res.status(403).json({ error: 'Esta cuenta no está disponible en este momento.' });
@@ -137,6 +169,40 @@ router.get('/:token', asyncHandler(async (req, res) => {
     if (fechaIso === hoyIso) totalHoy += resultado;
   });
 
+  let totalHipismo = totalSemana;
+  let totalDeportes = 0;
+  let cantidadJugadasDeportes = 0;
+
+  // Deportes "anclado" (23-09-2026) — solo si el GRUPO tiene el módulo de
+  // Deportes habilitado (un grupo que solo compró Hipismo no tiene nada
+  // que traer acá). Mismo cliente, misma fila en "jugadores" — se busca
+  // por el mismo nombre canónico, ya en MAYÚSCULA en los 2 módulos.
+  if (grupo.modulo_deportes_habilitado) {
+    const ticketsDeportes = await leerHistorial(jugador.grupo_id, { desde, hasta, cliente: jugador.nombre });
+    ticketsDeportes.forEach(t => {
+      const resultado = resultadoTicketDeportes(t);
+      const fechaIso = t.fecha;
+
+      if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+      const hipMap = porDia.get(fechaIso);
+      if (!hipMap.has(NOMBRE_BLOQUE_DEPORTES)) {
+        hipMap.set(NOMBRE_BLOQUE_DEPORTES, { nombre: NOMBRE_BLOQUE_DEPORTES, tipo: 'deportes', carreras: [] });
+      }
+      hipMap.get(NOMBRE_BLOQUE_DEPORTES).carreras.push({
+        ticket: t.ticket,
+        detalle: t.detalle,
+        estado: t.estado,
+        monto: t.arriesga,
+        resultado
+      });
+
+      totalDeportes += resultado;
+      cantidadJugadasDeportes += 1;
+      totalSemana += resultado;
+      if (fechaIso === hoyIso) totalHoy += resultado;
+    });
+  }
+
   const dias = Array.from(porDia.entries())
     .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
@@ -148,10 +214,23 @@ router.get('/:token', asyncHandler(async (req, res) => {
     rango: { desde, hasta },
     hoy: hoyIso,
     esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
+    // Módulos que este cliente tiene "anclados" en este link — el
+    // frontend usa esto para saber si vale la pena mostrar el desglose
+    // Hipismo/Deportes por separado debajo del total combinado, o si el
+    // grupo directamente no tiene Deportes y ni hace falta mencionarlo.
+    modulos: { hipismo: true, deportes: !!grupo.modulo_deportes_habilitado },
     resumen: {
+      // Combinado (pedido explícito: "en balance general si los uno si
+      // saldra un solo saldo que seria la suma de total hipismo mas
+      // total deportes") — el desglose por módulo va aparte para
+      // mostrarlo si hace falta, sin obligar al frontend a recalcularlo.
       totalSemana,
       totalHoy,
-      cantidadJugadas: r.rows.length
+      cantidadJugadas: r.rows.length + cantidadJugadasDeportes,
+      totalHipismo,
+      totalDeportes,
+      cantidadJugadasHipismo: r.rows.length,
+      cantidadJugadasDeportes
     },
     dias
   });

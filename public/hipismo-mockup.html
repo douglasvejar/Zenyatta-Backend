@@ -162,6 +162,18 @@
   .fila-carrera-comision .detalle-carrera { display: none; padding: 4px 16px 14px; }
   .fila-carrera-comision.expandida .detalle-carrera { display: block; }
 
+  /* Drill-down de 3 niveles de "Comisiones por Carrera" (23-09-2026, a
+     pedido del usuario: "uneme todo un dia y al darle click veo por
+     hipodromo al darle clikc en dicho hipodromo veo por carrera de ese
+     hipodromo") — mismo bloque .fila-carrera-comision de siempre, en 3
+     niveles anidados (día > hipódromo > carrera), cada uno con más
+     sangría/tamaño más chico que el anterior para que se note la
+     jerarquía de un vistazo. */
+  .comision-nivel-hipodromos, .comision-nivel-carreras { padding-left: 18px; margin-top: 8px; }
+  .comision-nivel-hipodromos .cabecera-carrera, .comision-nivel-carreras .cabecera-carrera { padding: 11px 14px; }
+  .comision-nivel-carreras .info-carrera .hipodromo { font-size: 12.5px; }
+  .comision-nivel-carreras .monto-carrera { font-size: 13.5px; }
+
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--card-border); }
   th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -568,7 +580,19 @@
     <section class="vista" id="vista-comisionesPorCarrera">
       <div class="card">
         <h2>📈 Comisiones por Carrera</h2>
-        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec) en cada carrera. Hacé clic en una carrera para ver el detalle, jugada por jugada, de cómo se armó esa comisión. <span class="badge-pendiente">Datos de ejemplo — en producción sale de sumar la comisión de cada plano ya calculado</span></p>
+        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec), agrupado por DÍA — hacé clic en un día para ver sus hipódromos, clic en un hipódromo para ver sus carreras, y clic en una carrera para ver el detalle jugada por jugada de cómo se armó esa comisión. Ya sale de sumar la comisión real de cada plano guardado en "Cargar Planos".</p>
+
+        <div class="subnav" id="selectorSemanaComisiones">
+          <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaComisiones('actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="cambiarSemanaComisiones('anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="cambiarSemanaComisiones('hace2', this)">🗓️ Hace 2 semanas</button>
+        </div>
+
+        <div class="comision-caja" style="margin-bottom:16px;">
+          <span class="etiqueta">💼 Total de la semana</span>
+          <span class="monto" id="montoComisionesPorCarreraTotal">$ 0,00</span>
+        </div>
+
         <div id="listaComisionesPorCarrera"></div>
       </div>
     </section>
@@ -1146,19 +1170,26 @@ async function cargarClientesReales() {
   `).join('');
 }
 
-// Copia al portapapeles el link público (sin clave) que el cliente abre
-// para ver sus jugadas de Hipismo de la semana actual o la anterior (ver
-// public/hipismo-cliente-portal.html). navigator.clipboard puede fallar
-// en algunos navegadores/contextos (ej. sin HTTPS) — ahí se cae a un
-// prompt() para que el link se pueda copiar a mano igual.
+// Copia al portapapeles el MENSAJE completo (no solo la URL suelta) que
+// el administrador le manda al cliente por WhatsApp junto con su link
+// público (sin clave) para ver sus jugadas de Hipismo de la semana
+// actual o la anterior (ver public/hipismo-cliente-portal.html) —
+// formato exacto pedido por el usuario (22-09-2026). navigator.clipboard
+// puede fallar en algunos navegadores/contextos (ej. sin HTTPS) — ahí se
+// cae a un prompt() para que el mensaje se pueda copiar a mano igual.
 function copiarLinkClienteHipismo(token, nombre) {
   const url = `${location.origin}/hipismo-cliente-portal.html?token=${token}`;
+  const nombreGrupo = (GRUPO && GRUPO.nombre) || 'nuestro grupo';
+  const mensaje =
+    `Gracias por preferirnos y jugar en su grupo ${nombreGrupo}, a continuación se anexa su link para que pueda verificar sus jugadas, este no se vence y funciona las 24hrs. Cualquier duda o diferencia estoy a su disposición.\n\n` +
+    `Balance del jugador ${nombre} en su grupo de confianza ${nombreGrupo} 🐎🐎🐎💰💰💰\n\n` +
+    url;
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url)
-      .then(() => alert(`✅ Link de ${nombre} copiado:\n\n${url}`))
-      .catch(() => prompt(`Copiá el link de ${nombre}:`, url));
+    navigator.clipboard.writeText(mensaje)
+      .then(() => alert(`✅ Mensaje de ${nombre} copiado — pegalo directo en WhatsApp:\n\n${mensaje}`))
+      .catch(() => prompt(`Copiá el mensaje para ${nombre}:`, mensaje));
   } else {
-    prompt(`Copiá el link de ${nombre}:`, url);
+    prompt(`Copiá el mensaje para ${nombre}:`, mensaje);
   }
 }
 
@@ -1770,47 +1801,13 @@ function mostrarToastTraspaso(msg, esError) {
 }
 
 // ------------------------------------------------------------------
-// Comisiones por Carrera / Comisiones Devueltas / Saldo Comisiones
-// (22-09-2026) — datos de ejemplo. La fórmula exacta de "Devolución de
-// %" todavía está pendiente de confirmar con el usuario (sección 10 del
-// spec) y hoy no hay planos guardados en una base de datos real — estas
-// 3 pantallas muestran la ESTRUCTURA que van a tener apenas eso quede
-// confirmado y haya planos reales para sumar.
+// Comisiones Devueltas / Saldo Comisiones (22-09-2026) — siguen con
+// datos de ejemplo. La fórmula exacta de "Devolución de %" todavía está
+// pendiente de confirmar con el usuario (sección 10 del spec) — estas 2
+// pantallas muestran la ESTRUCTURA que van a tener apenas eso quede
+// confirmado. "Comisiones por Carrera" (más abajo) ya es real desde el
+// 23-09-2026 — ver comisionesPorCarreraSemana()/pintarComisionesPorCarrera().
 // ------------------------------------------------------------------
-const COMISIONES_POR_CARRERA = [
-  {
-    fecha: '22/09/2026', hipodromo: 'La Rinconada', carrera: '14ta',
-    detalle: [
-      { jugador: 'hernan', jugada: '1/2 (10) con 100,00', comision: 2.50 },
-      { jugador: 'pl', jugada: '1p (10) con 100,00', comision: 5.00 },
-      { jugador: 'gg', jugada: '1p (10) con 100,00', comision: 5.00 },
-      { jugador: 'soyganador', jugada: '1p (10) con 100,00', comision: 5.00 },
-      { jugador: 'rambo', jugada: '1/2 (10) con 100,00', comision: 2.50 },
-      { jugador: 'sammy', jugada: '1/2 + 1p (10) con 300,00', comision: 14.25 },
-      { jugador: 'tykhe', jugada: '3p (2) con 200,00', comision: 9.50 },
-      { jugador: 'gringo', jugada: '1/2 + 1p (10) con 60,00', comision: 4.50 },
-      { jugador: 'mrincreible', jugada: '1/2 (10) con 225,00', comision: 9.75 },
-    ],
-  },
-  {
-    fecha: '21/09/2026', hipodromo: 'Valencia', carrera: '8va',
-    detalle: [
-      { jugador: 'kristian', jugada: '1p (10) con 80,00', comision: 4.00 },
-      { jugador: 'josue', jugada: '1/2 (10) con 60,00', comision: 1.50 },
-      { jugador: 'codino', jugada: '1p (10) con 100,00', comision: 5.00 },
-      { jugador: 'zeta', jugada: '2p (6) con 50,00', comision: 2.50 },
-    ],
-  },
-  {
-    fecha: '19/09/2026', hipodromo: 'Gulfstream Park', carrera: '6ta',
-    detalle: [
-      { jugador: 'houston', jugada: '1/2 (10) con 40,00', comision: 0.95 },
-      { jugador: 'alvarado', jugada: '1/2 (10) con 30,00', comision: 0.71 },
-      { jugador: 'puertolacruz', jugada: 'pp (6x9) con 40,00', comision: 1.90 },
-    ],
-  },
-];
-
 const COMISIONES_DEVUELTAS = [
   {
     fecha: '22/09/2026', hipodromo: 'La Rinconada', carrera: '14ta',
@@ -1842,34 +1839,113 @@ function toggleFilaCarrera(id) {
   document.getElementById(id).classList.toggle('expandida');
 }
 
-function pintarComisionesPorCarrera() {
+// "Comisiones por Carrera" REAL (23-09-2026, a pedido del usuario: "en
+// comisiones por carrera uneme todo un dia y al darle click veo por
+// hipodromo al darle clikc en dicho hipodromo veo por carrera de ese
+// hipodromo") — 3 niveles: DÍA > HIPÓDROMO > CARRERA (y la carrera, al
+// expandirla, muestra el detalle jugada por jugada de siempre). Datos
+// reales de src/routes/hipismo.js (GET /comisiones-por-carrera), que
+// suma la comisión ya guardada de cada plano — no hace falta recalcular
+// nada acá.
+let semanaComisionesPorCarrera = 'actual';
+let idComisionSeq = 0; // ids únicos para los 3 niveles de acordeón, sin colisionar entre semanas repintadas
+
+function cambiarSemanaComisiones(semana, btn) {
+  semanaComisionesPorCarrera = semana;
+  document.querySelectorAll('#selectorSemanaComisiones button').forEach(b => b.classList.remove('activo'));
+  if (btn) btn.classList.add('activo');
+  pintarComisionesPorCarrera();
+}
+
+async function pintarComisionesPorCarrera() {
   const cont = document.getElementById('listaComisionesPorCarrera');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando comisiones...</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-por-carrera?semana=${semanaComisionesPorCarrera}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar las comisiones: ${e.message}</div>`;
+    return;
+  }
+
+  document.getElementById('montoComisionesPorCarreraTotal').textContent = '$ ' + formatMontoTabla(data.totalGeneral);
+
+  if (!data.dias.length) {
+    cont.innerHTML = '<div class="resultado-vacio">Sin planos calculados en este rango — no hay comisión que mostrar todavía.</div>';
+    return;
+  }
+
   cont.innerHTML = '';
-  COMISIONES_POR_CARRERA.forEach((carrera, idx) => {
-    const total = totalDetalle(carrera.detalle, 'comision');
-    const filasDetalle = carrera.detalle.map(d =>
-      `<tr><td>${formatNombre(d.jugador)}</td><td>${d.jugada}</td><td class="num pos">+${formatMontoTabla(d.comision)}</td></tr>`
-    ).join('');
-    const fila = document.createElement('div');
-    fila.className = 'fila-carrera-comision';
-    fila.id = 'filaComisionCarrera' + idx;
-    fila.innerHTML = `
-      <div class="cabecera-carrera" onclick="toggleFilaCarrera('filaComisionCarrera${idx}')">
+  data.dias.forEach(dia => {
+    const idDia = 'comDia' + (idComisionSeq++);
+    const filaDia = document.createElement('div');
+    filaDia.className = 'fila-carrera-comision';
+    filaDia.id = idDia;
+    filaDia.innerHTML = `
+      <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idDia}')">
         <span class="flecha-expandir">▶</span>
         <div class="info-carrera">
-          <div class="hipodromo">🏇 ${carrera.hipodromo} — ${carrera.carrera} Carrera</div>
-          <div class="detalle-fecha">${carrera.fecha}</div>
+          <div class="hipodromo">📅 ${formatFechaCortaDMY(dia.fecha)}</div>
+          <div class="detalle-fecha">${dia.hipodromos.length} hipódromo${dia.hipodromos.length === 1 ? '' : 's'}</div>
         </div>
-        <div class="monto-carrera">+${formatMontoTabla(total)}</div>
+        <div class="monto-carrera">+${formatMontoTabla(dia.totalComision)}</div>
       </div>
-      <div class="detalle-carrera">
-        <table>
-          <thead><tr><th>Cliente</th><th>Jugada</th><th class="num">Comisión</th></tr></thead>
-          <tbody>${filasDetalle}</tbody>
-        </table>
-      </div>`;
-    cont.appendChild(fila);
+      <div class="detalle-carrera comision-nivel-hipodromos"></div>`;
+    const contHipodromos = filaDia.querySelector('.comision-nivel-hipodromos');
+
+    dia.hipodromos.forEach(hip => {
+      const idHip = 'comHip' + (idComisionSeq++);
+      const filaHip = document.createElement('div');
+      filaHip.className = 'fila-carrera-comision';
+      filaHip.id = idHip;
+      filaHip.innerHTML = `
+        <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idHip}')">
+          <span class="flecha-expandir">▶</span>
+          <div class="info-carrera">
+            <div class="hipodromo">🏟️ ${hip.nombre}</div>
+            <div class="detalle-fecha">${hip.carreras.length} carrera${hip.carreras.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="monto-carrera">+${formatMontoTabla(hip.totalComision)}</div>
+        </div>
+        <div class="detalle-carrera comision-nivel-carreras"></div>`;
+      const contCarreras = filaHip.querySelector('.comision-nivel-carreras');
+
+      hip.carreras.forEach(carrera => {
+        const idCarrera = 'comCarrera' + (idComisionSeq++);
+        const filasDetalle = carrera.detalle.length
+          ? carrera.detalle.map(d => `<tr><td>${formatNombre(d.cliente)}</td><td>${d.jugada}</td><td class="num pos">+${formatMontoTabla(d.comision)}</td></tr>`).join('')
+          : '<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Sin comisión en esta carrera (nadie ganó ninguna línea).</td></tr>';
+        const filaCarrera = document.createElement('div');
+        filaCarrera.className = 'fila-carrera-comision';
+        filaCarrera.id = idCarrera;
+        filaCarrera.innerHTML = `
+          <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCarrera}')">
+            <span class="flecha-expandir">▶</span>
+            <div class="info-carrera">
+              <div class="hipodromo">🏇 ${carrera.carreraNumero}ta Carrera</div>
+            </div>
+            <div class="monto-carrera">+${formatMontoTabla(carrera.totalComision)}</div>
+          </div>
+          <div class="detalle-carrera">
+            <table>
+              <thead><tr><th>Cliente</th><th>Jugada</th><th class="num">Comisión</th></tr></thead>
+              <tbody>${filasDetalle}</tbody>
+            </table>
+          </div>`;
+        contCarreras.appendChild(filaCarrera);
+      });
+
+      contHipodromos.appendChild(filaHip);
+    });
+
+    cont.appendChild(filaDia);
   });
+}
+
+// "2026-09-22" -> "22/09/2026" (mismo formato que ya usaba el mockup viejo).
+function formatFechaCortaDMY(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 function pintarComisionesDevueltas() {
