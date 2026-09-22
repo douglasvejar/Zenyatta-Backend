@@ -37,12 +37,26 @@ router.post('/login', asyncHandler(async (req, res) => {
     ).catch(e => console.error('No se pudo registrar el último login (no afecta el login en sí):', e.message));
 
     const token = firmarSesionGrupo(grupo);
-    return res.json({ token, grupo: { id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null } });
+    // moduloDeportesHabilitado/moduloHipismoHabilitado (22-09-2026, a
+    // pedido del usuario: selector "⚽ Deportes / 🐎 Hipismo" — ver
+    // claude/plan-modulo-hipismo.md) van en la respuesta del login para
+    // que grupo.html/hipismo-mockup.html decidan, sin otra llamada
+    // aparte, a qué módulo entrar solo y si mostrar el botón de cambio.
+    return res.json({
+      token,
+      grupo: {
+        id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null,
+        moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
+        moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado
+      }
+    });
   }
 
   // No es el Administrador de ningún grupo — probamos si es un Empleado.
   const r2 = await db.query(
-    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre
+    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre,
+            g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
+            g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
       WHERE e.email = $1`,
     [email]
@@ -64,7 +78,11 @@ router.post('/login', asyncHandler(async (req, res) => {
   const permisos = Array.isArray(empleado.permisos) ? empleado.permisos : [];
   res.json({
     token: tokenEmpleado,
-    grupo: { id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre }
+    grupo: {
+      id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre,
+      moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
+      moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado
+    }
   });
 }));
 

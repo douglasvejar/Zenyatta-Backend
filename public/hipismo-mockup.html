@@ -257,7 +257,7 @@
 </head>
 <body>
 
-<div class="banner-borrador">🚧 BORRADOR PARA REVISAR — estructura y colores del panel de Hipismo. Ningún dato de acá es real ni se guarda en ningún lado todavía; el cálculo de "Cargar Planos" sí funciona de verdad con las reglas que confirmamos.</div>
+<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos" y "🏟️ Hipódromos" ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Cierre Final, Comisiones Devueltas/Saldo Comisiones, Clientes/link público, Traspasos de saldos ya cerrados, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
 
 <!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
@@ -273,12 +273,18 @@
     <span class="logo-emoji">🏇</span>
     <div>
       <h1>Ludox — Panel del Grupo</h1>
-      <div class="sub">Zenyatta 🇻🇪</div>
+      <div class="sub" id="topbarNombreGrupo">Zenyatta 🇻🇪</div>
     </div>
   </div>
-  <div class="selector-modulo">
-    <button type="button">⚽ Deportes</button>
-    <button type="button" class="activo">🐎 Hipismo</button>
+  <!-- Selector de módulo (22-09-2026, a pedido del usuario) — oculto por
+       defecto hasta que actualizarSelectorModulo() (más abajo) confirme
+       que este grupo tiene los 2 módulos activos; si solo tiene Hipismo,
+       ni se muestra (no hay a dónde cambiarse). Cambiar de módulo es
+       solo navegar a grupo.html — la sesión sigue en localStorage
+       (mismas claves que ya usa app.js), no se pierde nada de acá. -->
+  <div class="selector-modulo" id="selectorModulo" style="display:none;">
+    <button type="button" onclick="irAModuloDeportes()">⚽ Deportes</button>
+    <button type="button" class="activo" disabled>🐎 Hipismo</button>
   </div>
 </div>
 
@@ -335,9 +341,7 @@
           <div>
             <label for="selHipodromo">Hipódromo</label>
             <select id="selHipodromo">
-              <option>La Rinconada</option>
-              <option>Valencia</option>
-              <option>+ Crear hipódromo…</option>
+              <option value="">(cargando…)</option>
             </select>
           </div>
           <div>
@@ -814,6 +818,67 @@ Pizarra: [se llena al calcular]</textarea>
 
 <script>
 // ------------------------------------------------------------------
+// SESIÓN (22-09-2026, a pedido del usuario: "conecta el modulo real al
+// backend"). Hipismo NO tiene login propio — comparte el único login de
+// Deportes (grupo.html/app.js): usa las MISMAS claves de localStorage
+// ('zenyatta_token'/'zenyatta_grupo'), así que si ya iniciaste sesión en
+// grupo.html, esta página la reconoce sola. Si no hay sesión guardada, o
+// el grupo no tiene el módulo de Hipismo habilitado (Súper-admin >
+// pestaña "🎯 Módulos"), se manda de vuelta a grupo.html — la única
+// pantalla de login que existe.
+//
+// OJO: si iniciaste sesión ANTES de este cambio, tu sesión guardada
+// todavía no trae moduloHipismoHabilitado (se agregó recién al login) —
+// cerrá sesión y volvé a entrar una vez para que se actualice.
+// ------------------------------------------------------------------
+let TOKEN = localStorage.getItem('zenyatta_token') || null;
+let GRUPO = null;
+try { GRUPO = JSON.parse(localStorage.getItem('zenyatta_grupo') || 'null'); } catch (e) { GRUPO = null; }
+
+if (!TOKEN || !GRUPO || !GRUPO.moduloHipismoHabilitado) {
+  window.location.href = 'grupo.html';
+}
+
+async function apiHipismo(path, options = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  let res;
+  try {
+    res = await fetch(path, Object.assign({}, options, { headers }));
+  } catch (e) {
+    throw new Error('No se pudo conectar con el servidor.');
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* respuestas sin body */ }
+  if (res.status === 401) {
+    localStorage.removeItem('zenyatta_token');
+    localStorage.removeItem('zenyatta_grupo');
+    window.location.href = 'grupo.html';
+    throw new Error('Sesión inválida.');
+  }
+  if (!res.ok) throw new Error((data && data.error) || ('Error inesperado (' + res.status + ').'));
+  return data;
+}
+
+// Selector "⚽ Deportes / 🐎 Hipismo" de la topbar — solo se muestra si el
+// grupo tiene los 2 módulos activos (si solo tiene Hipismo, no hay a
+// dónde cambiarse). Cambiar de módulo es solo navegar — la sesión sigue
+// viva en localStorage, no se pierde nada de lo que se esté haciendo acá.
+function actualizarSelectorModulo() {
+  const selector = document.getElementById('selectorModulo');
+  if (!selector || !GRUPO) return;
+  selector.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+}
+function irAModuloDeportes() { window.location.href = 'grupo.html'; }
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!GRUPO) return;
+  actualizarSelectorModulo();
+  const nombreEl = document.getElementById('topbarNombreGrupo');
+  if (nombreEl) nombreEl.textContent = GRUPO.nombre || '';
+});
+
+// ------------------------------------------------------------------
 // Navegación (sidebar + subnav) — solo maqueta visual
 // ------------------------------------------------------------------
 function mostrarVista(id, btn) {
@@ -961,142 +1026,67 @@ function resolverModalidad(modalidad, pos, posB) {
   return null; // modalidad no reconocida
 }
 
-function calcularPlano() {
+// REAL desde el 22-09-2026 (a pedido del usuario: "conecta el modulo
+// real al backend ya quiero trabajar y hacer pruebas"): "Calcular" ya no
+// calcula solo en memoria del navegador — manda el plano al servidor
+// (POST /api/hipismo/planos), que corre EXACTAMENTE el mismo motor de
+// reglas (src/services/hipismoCalc.js, portado línea por línea de este
+// mismo archivo) y lo GUARDA de verdad en hipismo_planos/hipismo_tickets.
+// resolverModalidad()/montoMostrado() de arriba quedan sin usar acá pero
+// no se borraron: el resto de las pantallas de este mockup (Pozos,
+// Cierre Final, Comisiones...) siguen siendo maqueta con datos de
+// ejemplo y todavía no dependen de este cambio.
+async function calcularPlano() {
   const pizarraTxt = document.getElementById('inpPizarra').value.trim();
-  const posiciones = {};
-  pizarraTxt.split(/[^0-9]+/).filter(Boolean).forEach((h, i) => { posiciones[parseInt(h, 10)] = i + 1; });
-  const rank = h => posiciones[h] !== undefined ? posiciones[h] : 99;
-
-  const lineas = document.getElementById('txtPlano').value.split('\n');
-  const lineaRegex = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|pp|10[\/a]\d+(?:\.\d+)?)\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
-
-  const rawPorNombre = {};
-  const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
-
-  const salidaLineas = [];
-  const sinReconocer = [];
-  let huboLineas = false;
-
-  lineas.forEach(linea => {
-    const limpia = linea.replace(/\*/g, '').trim();
-    if (!limpia) { salidaLineas.push(''); return; }
-    const mm = limpia.match(lineaRegex);
-    if (!mm) {
-      // encabezados de categoría (ej. "TERCIOS") u otras líneas se dejan igual
-      salidaLineas.push(limpia);
-      if (!/^[A-ZÁÉÍÓÚÑ ]+$/i.test(limpia.replace(/[^a-zA-Zá-úÁ-Ú ]/g, '')) || limpia.split(' ').length > 3) {
-        // probablemente una jugada mal escrita, no un título de categoría
-        if (/juega/i.test(limpia)) sinReconocer.push(limpia);
-      }
-      return;
-    }
-    huboLineas = true;
-    const [, jugador, modalidad, caballoTxt, montoTxt, banco] = mm;
-    const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
-    let resultado;
-    if (modalidad.toLowerCase() === 'pp') {
-      const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
-      resultado = resolverModalidad('pp', rank(hA), rank(hB));
-      const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-      add(jugador, jRaw); add(banco, bRaw);
-      const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
-      salidaLineas.push(`pp (${hA}x${hB}) con ${montoTxt}`);
-      salidaLineas.push(`(${hA}) ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
-      salidaLineas.push(`(${hB}) ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
-    } else {
-      const caballo = parseInt(caballoTxt.trim(), 10);
-      resultado = resolverModalidad(modalidad, rank(caballo));
-      if (!resultado) { sinReconocer.push(limpia); salidaLineas.push(limpia); return; }
-      const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-      add(jugador, jRaw); add(banco, bRaw);
-      const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
-      salidaLineas.push(`${modalidad} (${caballo}) con ${montoTxt}`);
-      salidaLineas.push(`Juega ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
-      salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
-    }
-    salidaLineas.push('');
-  });
-
+  const hipodromoNombre = document.getElementById('selHipodromo').value;
+  const carreraNumero = document.getElementById('selCarrera').value;
+  const fecha = document.getElementById('inpFecha').value;
+  const ret = document.getElementById('inpRet').value;
   const cruzar = document.getElementById('chkCruzar').checked;
-  const totalesFinales = {};
-  let comisionTotal = 0;
+  const texto = document.getElementById('txtPlano').value;
 
-  if (cruzar) {
-    Object.keys(rawPorNombre).forEach(nombre => {
-      const raw = rawPorNombre[nombre];
-      if (raw > 0) {
-        const neto = raw * 0.95;
-        totalesFinales[nombre] = neto;
-        comisionTotal += raw * 0.05;
-      } else {
-        totalesFinales[nombre] = raw;
-      }
-    });
-  } else {
-    // Sin cruzar: recorremos línea por línea otra vez para aplicar comisión por jugada
-    Object.keys(rawPorNombre).forEach(nombre => { totalesFinales[nombre] = 0; });
-    lineas.forEach(linea => {
-      const limpia = linea.replace(/\*/g, '').trim();
-      const mm = limpia.match(lineaRegex);
-      if (!mm) return;
-      const [, jugador, modalidad, caballoTxt, montoTxt, banco] = mm;
-      const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
-      let resultado;
-      if (modalidad.toLowerCase() === 'pp') {
-        const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
-        resultado = resolverModalidad('pp', rank(hA), rank(hB));
-      } else {
-        resultado = resolverModalidad(modalidad, rank(parseInt(caballoTxt, 10)));
-      }
-      if (!resultado) return;
-      [[jugador, resultado.j], [banco, resultado.b]].forEach(([nombre, frac]) => {
-        const bruto = frac * monto;
-        if (bruto > 0) { totalesFinales[nombre] += bruto * 0.95; comisionTotal += bruto * 0.05; }
-        else { totalesFinales[nombre] += bruto; }
-      });
-    });
+  const vacio = document.getElementById('resultadoVacio');
+  const caja = document.getElementById('resultadoCaja');
+
+  if (!hipodromoNombre) {
+    vacio.textContent = 'Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
   }
-
-  if (!huboLineas) {
-    document.getElementById('resultadoVacio').textContent = 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.';
-    document.getElementById('resultadoVacio').style.display = 'block';
-    document.getElementById('resultadoCaja').style.display = 'none';
+  if (!pizarraTxt) {
+    vacio.textContent = 'Falta la Pizarra (orden de llegada).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
     return;
   }
 
-  ultimosTotales = { totales: totalesFinales, comision: comisionTotal };
+  vacio.textContent = 'Calculando y guardando en el servidor…';
+  vacio.style.display = 'block';
+  caja.style.display = 'none';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/planos', {
+      method: 'POST',
+      body: JSON.stringify({ texto, pizarra: pizarraTxt, cruzaJugadas: cruzar, hipodromoNombre, carreraNumero, ret, fecha })
+    });
+  } catch (e) {
+    vacio.textContent = e.message;
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  ultimosTotales = { totales: data.totalesFinales, comision: data.comisionTotal };
   pintarBalanceGeneral();
 
-  // Ganan y pierden van SEPARADOS (no una sola lista alfabética), cada uno
-  // ordenado del que más gana/pierde al que menos — pedido del usuario,
-  // 22-09-2026. La comisión NO se muestra en este texto: este plano se
-  // manda tal cual al grupo, y el usuario no quiere que los clientes vean
-  // la comisión de la banca (eso solo se calcula/ve en Balance General y
-  // Cierre Final, que son vistas internas del admin).
-  const entradasFinales = Object.entries(totalesFinales);
-  const ganan = entradasFinales.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
-  const pierden = entradasFinales.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
-
-  const bloques = [];
-  if (ganan.length) {
-    bloques.push('✅ *GANAN*\n' + ganan.map(([n, v]) => `${formatNombre(n)} +${formatMontoTabla(v)}`).join('\n'));
-  }
-  if (pierden.length) {
-    bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
-  }
-  const totalesTexto = bloques.join('\n\n');
-
-  const encabezado = document.getElementById('txtEncabezado').value.replace('Pizarra: .....', 'Pizarra: ' + pizarraTxt);
-  const pie = `*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gana y se cobra con el chat)\n*USTED ES SU PROPIO CORREDOR*\n*RECLAMOS AL PRIVADO*\n*NO DIGA:* ❌MALO❌; CASA FALTA...\n*TILDE SU JUGADA Y SE REVISARÁ*`;
-
-  let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto + '\n------------------------------\n------------------------------\n' + pie;
-
-  if (sinReconocer.length) {
-    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + sinReconocer.join('\n') + '\n\n' + salida;
+  let salida = data.plano.texto_resultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
 
-  document.getElementById('resultadoVacio').style.display = 'none';
-  const caja = document.getElementById('resultadoCaja');
+  vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
 }
@@ -1557,31 +1547,35 @@ function descargarCierreExcel() {
 }
 
 // ------------------------------------------------------------------
-// Hipódromos — lista Nacionales (Venezuela) / Americanos (USA), bandera
-// a la izquierda del nombre, y autocompletado (datalist) para no tener
-// que escribir el nombre completo cada vez (22-09-2026, a pedido del
-// usuario, con la lista de hipódromos que mandó de ejemplo).
+// Hipódromos — REAL desde el 22-09-2026 (a pedido del usuario: "conecta
+// el modulo real al backend"): se guardan y se leen de verdad en
+// hipismo_hipodromos, uno por grupo (ver src/routes/hipismo.js). Lista
+// Nacionales (Venezuela) / Americanos (USA), bandera a la izquierda del
+// nombre — spec sección 3.
+//
+// HIPODROMOS_SUGERIDOS es SOLO para el autocompletado (datalist) —
+// nombres de referencia que el usuario mandó de ejemplo, para no tener
+// que escribirlos enteros. NO significa que ya existan como hipódromos
+// creados — eso es HIPODROMOS (abajo), la lista real de este grupo.
 // ------------------------------------------------------------------
-let HIPODROMOS = [
-  { nombre: 'La Rinconada', pais: 'VE', carreras: 25 },
-  { nombre: 'Valencia', pais: 'VE', carreras: 25 },
-  { nombre: 'Belmont Park', pais: 'US', carreras: 25 },
-  { nombre: 'Gulfstream Park', pais: 'US', carreras: 25 },
-  { nombre: 'Los Alamitos', pais: 'US', carreras: 25 },
-  { nombre: 'Los Alamitos Race Course', pais: 'US', carreras: 25 },
-  { nombre: 'Churchill Downs', pais: 'US', carreras: 25 },
-  { nombre: 'Delaware Park', pais: 'US', carreras: 25 },
-  { nombre: 'Ajax Downs', pais: 'US', carreras: 25 },
-  { nombre: 'Thistledown', pais: 'US', carreras: 25 },
-  { nombre: 'Finger Lakes', pais: 'US', carreras: 25 },
-  { nombre: 'Presque Isle Downs', pais: 'US', carreras: 25 },
-  { nombre: 'Louisiana Downs', pais: 'US', carreras: 25 },
-  { nombre: 'Mountaineer', pais: 'US', carreras: 25 },
-  { nombre: 'Assiniboia Downs', pais: 'US', carreras: 25 },
-  { nombre: 'Albuquerque', pais: 'US', carreras: 25 },
-  { nombre: 'Horseshoe Indianapolis', pais: 'US', carreras: 25 },
-  { nombre: 'Belterra Park', pais: 'US', carreras: 25 },
+const HIPODROMOS_SUGERIDOS = [
+  'La Rinconada', 'Valencia', 'Belmont Park', 'Gulfstream Park', 'Los Alamitos',
+  'Los Alamitos Race Course', 'Churchill Downs', 'Delaware Park', 'Ajax Downs',
+  'Thistledown', 'Finger Lakes', 'Presque Isle Downs', 'Louisiana Downs',
+  'Mountaineer', 'Assiniboia Downs', 'Albuquerque', 'Horseshoe Indianapolis', 'Belterra Park'
 ];
+
+let HIPODROMOS = []; // hipódromos reales de ESTE grupo, cargados de la base (cargarHipodromos())
+
+async function cargarHipodromos() {
+  try {
+    HIPODROMOS = await apiHipismo('/api/hipismo/hipodromos');
+  } catch (e) {
+    HIPODROMOS = [];
+  }
+  pintarHipodromos();
+  poblarSelectHipodromo();
+}
 
 function pintarHipodromos() {
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
@@ -1591,24 +1585,45 @@ function pintarHipodromos() {
   tbodyUS.innerHTML = '';
   HIPODROMOS.forEach(h => {
     const fila = document.createElement('tr');
-    fila.innerHTML = `<td>${banderaPorPais[h.pais]} ${h.nombre}</td><td class="num">${h.carreras}</td>`;
+    fila.innerHTML = `<td>${banderaPorPais[h.pais]} ${h.nombre}</td><td class="num">${h.carreras_max}</td>`;
     (h.pais === 'VE' ? tbodyVE : tbodyUS).appendChild(fila);
   });
 
   const datalist = document.getElementById('listaHipodromosConocidos');
-  datalist.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">`).join('');
+  const nombres = Array.from(new Set([...HIPODROMOS.map(h => h.nombre), ...HIPODROMOS_SUGERIDOS]));
+  datalist.innerHTML = nombres.map(n => `<option value="${n}">`).join('');
 }
 
-function crearHipodromo() {
+// "Cargar Planos" solo puede elegir entre los hipódromos que el grupo YA
+// creó de verdad (no los sugeridos del datalist) — si todavía no creó
+// ninguno, lo manda a Administración > Hipódromos primero.
+function poblarSelectHipodromo() {
+  const sel = document.getElementById('selHipodromo');
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    actualizarEncabezado();
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+  actualizarEncabezado();
+}
+
+async function crearHipodromo() {
   const inputNombre = document.getElementById('inpNombreHipodromo');
   const nombre = inputNombre.value.trim();
   const pais = document.getElementById('selPaisHipodromo').value;
-  const carreras = parseInt(document.getElementById('inpCarrerasHipodromo').value, 10) || 25;
+  const carrerasMax = parseInt(document.getElementById('inpCarrerasHipodromo').value, 10) || 25;
   if (!nombre) return;
-  const yaExiste = HIPODROMOS.some(h => h.nombre.toLowerCase() === nombre.toLowerCase());
-  if (!yaExiste) HIPODROMOS.push({ nombre, pais, carreras });
-  pintarHipodromos();
-  inputNombre.value = '';
+  try {
+    await apiHipismo('/api/hipismo/hipodromos', { method: 'POST', body: JSON.stringify({ nombre, pais, carrerasMax }) });
+    inputNombre.value = '';
+    await cargarHipodromos();
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 // Fecha de Semana: el grupo define cuándo arranca y cuándo cierra su
@@ -1895,7 +1910,7 @@ pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 document.getElementById('balanceFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 actualizarAlertaPozos();
-pintarHipodromos();
+cargarHipodromos();
 actualizarPreviewSemana();
 pintarCierreFinal(0);
 actualizarColumnasCierre();

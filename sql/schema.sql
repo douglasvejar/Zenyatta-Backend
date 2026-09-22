@@ -213,6 +213,82 @@ alter table grupos add column if not exists modulo_deportes_habilitado boolean n
 alter table grupos add column if not exists modulo_hipismo_habilitado boolean not null default false;
 
 -- =================================================================
+-- HIPISMO — backend real (22-09-2026, a pedido del usuario: "conecta el
+-- modulo real al backend ya quiero trabajar y hacer pruebas"). Primera
+-- rebanada real del módulo, la que todo lo demás del plan depende de que
+-- exista (ver claude/plan-modulo-hipismo.md / claude/spec-modulo-hipismo.md,
+-- que viven en el Proyecto "DEPORTES", no en este repo): guardar un plano
+-- ya calculado ("Cargar Planos", spec sección 4.1-8) de verdad en la base
+-- de datos, en vez de solo calcularlo en memoria del navegador como hacía
+-- hipismo-mockup.html hasta ahora. El resto del plan (Pozos con
+-- histórico real, Cierre Final agregado real, Comisiones Devueltas/Saldo
+-- Comisiones —dependen de una fórmula todavía sin confirmar—, portal
+-- público del cliente con datos reales, WhatsApp por módulo) sigue
+-- pendiente — ver la nota en cada pantalla del mockup que todavía usa
+-- datos de ejemplo.
+--
+-- HIPÓDROMOS por grupo (Administración > Hipódromos, spec sección 3).
+create table if not exists hipismo_hipodromos (
+  id            uuid primary key default gen_random_uuid(),
+  grupo_id      uuid not null references grupos(id) on delete cascade,
+  nombre        text not null,
+  pais          text not null default 'VE', -- 'VE' (🇻🇪 nacional) | 'US' (🇺🇸 americano) — ver spec sección 3
+  carreras_max  integer not null default 25,
+  creado_en     timestamptz not null default now()
+);
+-- Único por grupo, sin importar mayúsculas/minúsculas (evita "La Rinconada"
+-- y "la rinconada" como 2 hipódromos distintos por accidente).
+create unique index if not exists idx_hipismo_hipodromos_grupo_nombre on hipismo_hipodromos(grupo_id, lower(nombre));
+
+-- PLANOS — cabecera de cada plano de Hipismo ya calculado y guardado
+-- (spec secciones 1, 5, 6, 7). texto_resultado es el bloque ✅GANAN/❌PIERDEN
+-- ya armado (spec sección 7.1), listo para copiar y pegar al grupo de
+-- WhatsApp tal cual, sin comisión — la comisión sí se guarda aparte en
+-- comision_total, para Balance General/Cierre Final (uso interno).
+create table if not exists hipismo_planos (
+  id                uuid primary key default gen_random_uuid(),
+  grupo_id          uuid not null references grupos(id) on delete cascade,
+  hipodromo_id      uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre  text not null, -- copia del nombre al momento de calcular, por si el hipódromo se renombra/borra después
+  carrera_numero    integer not null,
+  fecha             date not null,
+  ret               text,
+  pizarra           text not null, -- ej. "6.10.4.8.2", tal cual se escribió
+  cruza_jugadas     boolean not null default false,
+  texto_original    text not null, -- el plano tal como lo pegó el administrador
+  texto_resultado   text not null, -- encabezado + líneas resueltas + GANAN/PIERDEN + pie, listo para copiar
+  comision_total    numeric not null default 0,
+  creado_en         timestamptz not null default now()
+);
+create index if not exists idx_hipismo_planos_grupo_fecha on hipismo_planos(grupo_id, fecha);
+
+-- TICKETS — una fila por línea del plano ya resuelta (spec sección 5):
+-- quién jugó/banqueó qué modalidad y caballo, y el resultado de ESA línea
+-- puntual ya con el 5% de comisión aplicado al lado que ganó (spec
+-- sección 6) — esto es el detalle que se guarda SIEMPRE, cruce o no.
+-- Cuando el grupo cruza jugadas (spec sección 7), el saldo final por
+-- cliente que se usa en Balance General se recalcula sumando el BRUTO
+-- (sin comisión) de todas sus líneas y aplicando el 5% una sola vez al
+-- final si ese neto es positivo — hipismo_planos.texto_resultado ya trae
+-- ese resultado final armado, este detalle línea por línea queda para
+-- auditoría/Traspasos de Jugadas más adelante.
+create table if not exists hipismo_tickets (
+  id                  uuid primary key default gen_random_uuid(),
+  plano_id            uuid not null references hipismo_planos(id) on delete cascade,
+  grupo_id            uuid not null references grupos(id) on delete cascade,
+  cliente_nombre      text not null, -- quien jugó (el "jugador" de la línea)
+  banquero_nombre     text not null, -- quien banqueó/cubrió esa línea
+  modalidad           text not null, -- '1p'..'10p', '1/2', '2n', '2y2', '2y3', '3n', 'pp', '10/N'
+  caballo             text,          -- número de caballo tal cual se escribió ("10", o "9x2" para pp)
+  monto               numeric not null,
+  resultado_jugador   numeric not null default 0,  -- ya con comisión aplicada si ganó esta línea puntual
+  resultado_banquero  numeric not null default 0,
+  creado_en           timestamptz not null default now()
+);
+create index if not exists idx_hipismo_tickets_plano on hipismo_tickets(plano_id);
+create index if not exists idx_hipismo_tickets_grupo_cliente on hipismo_tickets(grupo_id, cliente_nombre);
+
+-- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
 -- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera

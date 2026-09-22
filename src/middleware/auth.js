@@ -40,7 +40,8 @@ const PERMISOS_VALIDOS = [
   'transferencias', // 🔄 Transferencias
   'polla', // 🎲 Polla
   'alertas', // 🔔 Alertas y chat interno
-  'descargar' // ⬇️ Descargar (21-09-2026: Saldos Semana, Excel, PDF)
+  'descargar', // ⬇️ Descargar (21-09-2026: Saldos Semana, Excel, PDF)
+  'hipismo' // 🐎 Módulo Hipismo completo (22-09-2026) — igual que 'sabana' para Deportes, protege TODO src/routes/hipismo.js. Además de este permiso, la ruta exige que el GRUPO tenga grupos.modulo_hipismo_habilitado=true (ver requiereGrupo() más abajo y hipismo.js) — un empleado con este permiso pero de un grupo sin el módulo contratado sigue sin poder entrar.
 ];
 
 // Lee req.grupo.moneda_modo con un default seguro ('usd', igual que la
@@ -91,8 +92,13 @@ async function requiereGrupo(req, res, next) {
     // (solo Súper-admin lo veía, en la ficha de detalle del grupo); se
     // agrega acá en vez de una consulta aparte por la misma razón que los
     // 3 campos de arriba.
+    // modulo_deportes_habilitado/modulo_hipismo_habilitado (22-09-2026) —
+    // hipismo.js las necesita en req.grupo para exigir que el módulo esté
+    // contratado (ver requiereModuloHipismo ahí), y el propio panel
+    // (grupo.html/hipismo-mockup.html) las lee del login para decidir el
+    // selector "⚽ Deportes / 🐎 Hipismo" — ver claude/plan-modulo-hipismo.md.
     const res2 = await db.query(
-      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url FROM grupos WHERE id = $1',
+      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1',
       [payload.grupoId]
     );
     const grupo = res2.rows[0];

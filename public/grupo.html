@@ -572,6 +572,15 @@
   .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; max-width: 1400px; margin: 0 auto 14px auto; font-size: 13px; color: var(--text-dim); }
   .topbar button { padding: 8px 14px; font-size: 13px; }
 
+  /* Selector de módulo "⚽ Deportes / 🐎 Hipismo" (22-09-2026) — mismo
+     criterio visual en las 2 páginas (grupo.html y hipismo-mockup.html):
+     2 botones pegados tipo pastilla, el módulo donde ya estás parado se
+     ve "activo" (relleno, deshabilitado) y el otro se ve clickeable. */
+  .selector-modulo { display: flex; align-items: center; gap: 2px; background: var(--card-2, rgba(255,255,255,0.06)); border: 1px solid var(--border-light, var(--border)); border-radius: 999px; padding: 3px; margin-right: auto; }
+  .btn-modulo { border: none; background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer; box-shadow: none; }
+  .btn-modulo:hover:not(:disabled) { background: rgba(127,127,127,0.15); color: var(--text); }
+  .btn-modulo-activo, .btn-modulo-activo:hover { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%); color: #04070f; cursor: default; }
+
   .detalle-toggle { cursor: pointer; color: var(--accent-cyan); font-size: 12px; text-decoration: underline; }
   .fila-detalle-expandida td { background: var(--card-2); }
   .fila-detalle-expandida ul { list-style: none; padding: 0; margin: 0; }
@@ -895,6 +904,21 @@
 <div id="appShell" style="display:none;">
 
   <div class="topbar">
+    <!-- Selector de módulo (22-09-2026, a pedido del usuario: "creale un
+         boton arriba que diga deportes hipismo, para que hagan el cambio
+         del modulo") — oculto por defecto, actualizarSelectorModulo()
+         (app.js) lo muestra SOLO si el grupo tiene los 2 módulos activos
+         (grupos.modulo_deportes_habilitado Y modulo_hipismo_habilitado).
+         Si solo tiene uno de los dos, no se le muestra nada — entra
+         derecho a su único módulo, sin ver este selector (ver
+         mostrarApp() en app.js). Cambiar de módulo es solo navegar a
+         hipismo-mockup.html: la sesión vive en localStorage (mismo
+         origen, mismas claves que ya usa app.js), así que no cierra
+         sesión ni borra nada de lo que se esté haciendo del otro lado. -->
+    <div id="selectorModulo" class="selector-modulo" style="display:none;">
+      <button type="button" class="btn-modulo btn-modulo-activo" disabled>⚽ Deportes</button>
+      <button type="button" class="btn-modulo" onclick="irAModuloHipismo()">🐎 Hipismo</button>
+    </div>
     <span id="topbarGrupo"></span>
     <button type="button" class="btn-secundario" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
   </div>

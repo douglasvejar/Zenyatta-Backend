@@ -138,7 +138,8 @@ const ETIQUETAS_PERMISOS = {
   transferencias: '🔄 Transferencias',
   polla: '🎲 Polla',
   alertas: '🔔 Alertas / Chat',
-  descargar: '⬇️ Descargar (Saldos Semana, Excel, PDF)'
+  descargar: '⬇️ Descargar (Saldos Semana, Excel, PDF)',
+  hipismo: '🐎 Módulo Hipismo'
 };
 
 // ¿Esta sesión tiene el permiso `clave` (uno de ETIQUETAS_PERMISOS de
@@ -297,10 +298,40 @@ function cerrarSesion(mensaje) {
   document.body.classList.remove('tema-deportes-claro');
 }
 
+// Selector de módulo "⚽ Deportes / 🐎 Hipismo" (22-09-2026, a pedido del
+// usuario — ver claude/plan-modulo-hipismo.md). GRUPO.moduloDeportesHabilitado/
+// moduloHipismoHabilitado vienen del login (routes/auth.js). Si el grupo
+// SOLO tiene Hipismo activo, ni siquiera se llega a mostrar este panel —
+// mostrarApp() redirige derecho a hipismo-mockup.html antes de pintar
+// nada. Si tiene los 2, se muestra el botón de arriba para cambiar; si
+// solo tiene Deportes (todos los grupos de hoy), no cambia nada.
+function actualizarSelectorModulo() {
+  const selector = document.getElementById('selectorModulo');
+  if (!selector) return;
+  selector.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+}
+function irAModuloHipismo() {
+  // Solo navega — la sesión sigue viva en localStorage (mismo origen,
+  // mismas claves 'zenyatta_token'/'zenyatta_grupo' que ya lee
+  // hipismo-mockup.html), así que no se pierde nada de lo que se esté
+  // trabajando del lado de Deportes.
+  window.location.href = 'hipismo-mockup.html';
+}
+
 function mostrarApp() {
+  // Si el grupo NO tiene Deportes habilitado pero SÍ tiene Hipismo, este
+  // panel (Deportes) nunca se muestra — entra derecho al único módulo
+  // que tiene contratado. Cubre tanto el login recién hecho como volver
+  // a abrir grupo.html con una sesión ya guardada (intentarSesionGuardada()
+  // más abajo también pasa por acá).
+  if (!GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) {
+    window.location.href = 'hipismo-mockup.html';
+    return;
+  }
   document.getElementById('vistaLogin').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   document.body.classList.add('tema-deportes-claro');
+  actualizarSelectorModulo();
   // "Cuentas por Empleado" (18-09-2026): si el que inició sesión es un
   // Empleado (GRUPO.rol === 'empleado'), GRUPO.email es SU propio email
   // de login (no el del Grupo/negocio) y GRUPO.nombreEmpleado trae su

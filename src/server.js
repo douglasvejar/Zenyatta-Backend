@@ -20,6 +20,7 @@ const pagosRoutes = require('./routes/pagos');
 const empleadosRoutes = require('./routes/empleados');
 const grupoRoutes = require('./routes/grupo');
 const descargasRoutes = require('./routes/descargas');
+const hipismoRoutes = require('./routes/hipismo'); // Módulo Hipismo (22-09-2026) — ver routes/hipismo.js
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -58,6 +59,7 @@ app.use('/api/pagos', pagosRoutes); // 💳 Pagos del Grupo a Ludox (con login, 
 app.use('/api/empleados', empleadosRoutes); // Cuentas por empleado dentro de un Grupo, exclusivo del Administrador (ver routes/empleados.js)
 app.use('/api/grupo', grupoRoutes); // Configuración propia del Grupo (moneda_modo, ver routes/grupo.js)
 app.use('/api/descargas', descargasRoutes); // ⬇️ Descargar — Saldos Semana/Excel/PDF (ver routes/descargas.js)
+app.use('/api/hipismo', hipismoRoutes); // Módulo Hipismo — Hipódromos + Cargar Planos (ver routes/hipismo.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se
