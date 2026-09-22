@@ -598,36 +598,14 @@
     <section class="vista" id="vista-clientes">
       <div class="card">
         <h2>👤 Clientes</h2>
-        <p class="desc">Acá se crean los clientes. Cada cliente puede tener un % de devolución de sus jugadas — a sí mismo, o a quien lo avala — y un saldo inicial, o quedar libre (sin saldo asignado). Cada cliente también recibe un <strong>link público</strong> propio, para que entre a ver sus jugadas, sin necesidad de clave.</p>
-        <div class="fila">
-          <div><label>Nombre del cliente</label><input type="text" placeholder="Ej: Pedro"></div>
-          <div><label>¿A quién se le devuelve el %?</label><select><option>Al mismo cliente</option><option>A quien lo avala</option><option>No aplica</option></select></div>
-        </div>
-        <div class="fila">
-          <div><label>% de devolución</label><input type="text" placeholder="Ej: 5%"></div>
-          <div><label>Saldo</label><select><option>Colocar saldo inicial</option><option>Dejar libre (sin saldo)</option></select></div>
-        </div>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Crear cliente</button></div>
+        <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. El % que se ve es el mismo "% de comisión propia" que ya existe para ese cliente — para cambiarlo, todavía se edita desde el panel de Deportes (Administración &gt; Jugador). El portal público del cliente para Hipismo (link individual sin clave) es la única parte de esta pantalla que sigue sin construir — ver el aviso en el botón de abajo.</p>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled title="Los clientes se crean solos al calcular un plano — el alta manual todavía no está conectada.">+ Crear cliente</button></div>
         <table style="margin-top:18px;">
-          <thead><tr><th>Cliente</th><th>Devolución %</th><th>A quién</th><th>Saldo</th><th>Link público</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th>Portal del cliente</th></tr></thead>
           <tbody id="tablaClientes">
-            <tr data-cliente="Pedro">
-              <td>Pedro</td><td>5%</td><td>Al mismo cliente</td><td>Pozo 1.000,00</td>
-              <td>
-                <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkCliente('Pedro', this)">🔗 Copiar link</button>
-                <span class="toast-copiado">¡Copiado!</span>
-              </td>
-            </tr>
-            <tr data-cliente="Sammy">
-              <td>Sammy</td><td>—</td><td>No aplica</td><td><span class="pill pill-verde">Libre</span></td>
-              <td>
-                <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkCliente('Sammy', this)">🔗 Copiar link</button>
-                <span class="toast-copiado">¡Copiado!</span>
-              </td>
-            </tr>
+            <tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
           </tbody>
         </table>
-        <p class="desc" style="margin-top:12px; margin-bottom:0;">Al pulsar "Copiar link" se copia una URL única del cliente (ej: <code>ludox.app/mis-jugadas/pedro-8f2a</code>) para pegarla directo en el chat del cliente por WhatsApp. Esa página muestra sus jugadas ordenadas por día y por hipódromo, con su saldo por hipódromo, su total del día y su total de la semana — con flechas para resumir cada día o cada hipódromo. <span class="badge-pendiente">Vista de ejemplo — ver hipismo-cliente-portal.html</span></p>
       </div>
     </section>
 
@@ -1080,6 +1058,11 @@ async function calcularPlano() {
 
   ultimosTotales = { totales: data.totalesFinales, comision: data.comisionTotal };
   pintarBalanceGeneral();
+  // Cualquier cliente/banquero nuevo de este plano ya quedó dado de alta
+  // en el servidor (ver POST /api/hipismo/planos) — refresca acá la
+  // pestaña "Clientes" para que se vea de inmediato, sin tener que
+  // cambiar de pestaña e ir a buscarlo.
+  cargarClientesReales();
 
   let salida = data.plano.texto_resultado;
   if (data.sinReconocer && data.sinReconocer.length) {
@@ -1116,31 +1099,46 @@ function copiarResultado() {
   }
 }
 
-// Link público del cliente: en producción cada cliente tiene un token único
-// y estable (no el nombre plano) para que el link no se pueda adivinar.
-// Acá se simula con un slug + sufijo fijo, solo para la vista previa.
-function slugCliente(nombre) {
-  return nombre.toString().trim().toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // sin tildes
-    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
-
-function copiarLinkCliente(nombre, btn) {
-  const link = `https://ludox.app/mis-jugadas/${slugCliente(nombre)}-8f2a`;
-  const toast = btn.nextElementSibling;
-  const mostrarToast = () => {
-    if (toast) {
-      toast.classList.add('visible');
-      setTimeout(() => toast.classList.remove('visible'), 1800);
-    }
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(link).then(mostrarToast).catch(() => {
-      alert('No se pudo copiar automáticamente. Link: ' + link);
-    });
-  } else {
-    alert('No se pudo copiar automáticamente. Link: ' + link);
+// ------------------------------------------------------------------
+// "👤 Clientes" — REAL desde el 22-09-2026 (a pedido del usuario:
+// "quiero me los cree automaticamente si llega un plano nuevo con un
+// cliente nuevo se crea automatico"). Lee /api/jugadores — la MISMA
+// tabla compartida con Deportes (ver claude/plan-modulo-hipismo.md) —
+// en vez de la fila fija "Pedro"/"Sammy" que traía el mockup. Requiere
+// que la sesión tenga el permiso 'jugador' además de 'hipismo' (un
+// Administrador siempre lo tiene; un Empleado necesita los 2 permisos
+// cargados desde Súper-admin/Empleados).
+//
+// El botón "Portal del cliente" de antes copiaba un link falso
+// (https://ludox.app/mis-jugadas/...) que no llevaba a ningún lado real
+// — el usuario lo probó y reportó que "envía a otra página que no tiene
+// nada que ver". Se saca ese link inventado: el botón queda deshabilitado
+// con un aviso, hasta que se construya el portal público real de
+// Hipismo (spec sección 13 — depende de Cierre Final/histórico semanal
+// real, que todavía no existe).
+async function cargarClientesReales() {
+  const tbody = document.getElementById('tablaClientes');
+  let jugadores;
+  try {
+    jugadores = await apiHipismo('/api/jugadores');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
+    return;
   }
+  if (!jugadores.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calculá un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = jugadores.map(j => `
+    <tr data-cliente="${j.nombre}">
+      <td>${formatNombre(j.nombre)}${j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : ''}</td>
+      <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
+      <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
+      <td>
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" disabled title="El portal público del cliente para Hipismo todavía no está construido.">🔗 Portal (en construcción)</button>
+      </td>
+    </tr>
+  `).join('');
 }
 
 // ------------------------------------------------------------------
@@ -1911,6 +1909,7 @@ document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDa
 document.getElementById('balanceFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 actualizarAlertaPozos();
 cargarHipodromos();
+cargarClientesReales();
 actualizarPreviewSemana();
 pintarCierreFinal(0);
 actualizarColumnasCierre();
