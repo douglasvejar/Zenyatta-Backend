@@ -28,6 +28,16 @@ const db = require('../db');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const { calcularPlano, armarTextoResultado } = require('../services/hipismoCalc');
+// autoRegistrarJugadores (22-09-2026, a pedido del usuario: "al hacer un
+// plano el cliente debe crearse automatico, despues el empleado debera
+// ver si le coloca % o no") — es la MISMA función que ya usa Deportes
+// al procesar una sábana (services/procesarSabana.js), reusada tal cual
+// sobre la MISMA tabla "jugadores" compartida entre los 2 módulos (ver
+// claude/plan-modulo-hipismo.md: "Jugadores... siguen siendo UNA sola
+// tabla/pantalla compartida"). Da de alta con auto_creado=true,
+// tipo_cuenta='libre', comisión 0% — el empleado decide después, desde
+// Administración > Jugador, si le carga un % propio o lo deja así.
+const { autoRegistrarJugadores } = require('../services/procesarSabana');
 
 const router = express.Router();
 router.use(requiereGrupo);
@@ -132,6 +142,16 @@ router.post('/planos', asyncHandler(async (req, res) => {
     salidaLineas: resultado.salidaLineas,
     totalesFinales: resultado.totalesFinales
   });
+
+  // Da de alta en "jugadores" a cualquier cliente/banquero de este plano
+  // que todavía no esté registrado en el grupo — mismo criterio y misma
+  // tabla que ya usa Deportes (ver el require de arriba). Los nombres ya
+  // vienen en MAYÚSCULA desde hipismoCalc.js, así que "Mujica"/"MUJICA"/
+  // "mujica" en planos distintos siempre resuelven al mismo registro
+  // (ON CONFLICT (grupo_id, nombre) DO NOTHING adentro de la función).
+  const nombresDelPlano = new Set();
+  resultado.tickets.forEach(t => { nombresDelPlano.add(t.clienteNombre); nombresDelPlano.add(t.banqueroNombre); });
+  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelPlano), {});
 
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(

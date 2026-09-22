@@ -660,4 +660,10 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
   };
 }
 
-module.exports = { procesarSabana };
+// autoRegistrarJugadores también se exporta (22-09-2026) para que
+// src/routes/hipismo.js la reuse tal cual al guardar un plano — mismo
+// pedido del usuario ("al hacer un plano el cliente debe crearse
+// automatico") pero para Hipismo, sobre la MISMA tabla "jugadores"
+// compartida entre los 2 módulos (ver claude/plan-modulo-hipismo.md).
+// Ningún cambio de comportamiento acá, solo queda accesible desde afuera.
+module.exports = { procesarSabana, autoRegistrarJugadores };

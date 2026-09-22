@@ -152,8 +152,19 @@ function calcularPlano({ texto, pizarra, cruzar }) {
       return;
     }
     huboLineas = true;
-    const [, jugador, modalidad, caballoTxt, montoTxt, banco] = mm;
+    const [, jugadorCrudo, modalidad, caballoTxt, montoTxt, bancoCrudo] = mm;
     const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
+    // Nombre CANÓNICO en MAYÚSCULA (22-09-2026, a pedido del usuario: "si
+    // esta escrito en mayusuculas o minuscula no afecta contal se lea lo
+    // mismo es igual") — mismo criterio que ya usa Deportes (ver
+    // clienteActual.toUpperCase() en services/parser.js y
+    // editarTicket() en services/historial.js): así "Mujica", "MUJICA" y
+    // "mujica" en distintos planos son SIEMPRE el mismo cliente, nunca 3
+    // clientes separados por un tipeo distinto. formatNombre() más abajo
+    // sigue siendo la única que decide cómo se VE (Primera mayúscula) en
+    // el texto que se copia a WhatsApp — esto es la clave interna.
+    const jugador = jugadorCrudo.trim().toUpperCase();
+    const banco = bancoCrudo.trim().toUpperCase();
 
     let resultado, caballoGuardado = caballoTxt.trim();
     if (modalidad.toLowerCase() === 'pp') {
