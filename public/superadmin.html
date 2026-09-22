@@ -530,6 +530,105 @@
      ningún uso. */
   #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
   #ssCaptura .ss-footer strong { color: #6b7688; }
+
+  /* =================================================================
+     TEMA CLARO — Súper-admin, en ROJO (22-09-2026, a pedido del
+     usuario: "cambiale ese azul oscuro tambien... super admin hazlo en
+     rojo... todos claro con los mismos efectos que hiciste en
+     hipismo"). Mismo mecanismo que ya probó hipismo-mockup.html (el
+     primer panel con tema claro): este panel está armado casi 100% con
+     variables CSS (--bg-color, --card-bg, --primary, --accent, etc.),
+     así que alcanza con REDEFINIR el valor de esas variables para que
+     todo lo que ya usa var(...) se pinte solo — sin tener que rehacer
+     cada regla una por una.
+     La redefinición va bajo "body.tema-superadmin-claro" (NO en :root
+     directo) a propósito: así la PANTALLA DE ACCESO (#vistaAcceso, el
+     "inicio de sesión" de este panel) se queda con el tema oscuro de
+     siempre — el usuario pidió explícitamente dejarla como está.
+     mostrarPanel()/mostrarAcceso(), más abajo en el <script>, son los
+     2 únicos lugares que agregan o sacan esta clase del <body>: el
+     tema cambia justo al entrar o salir del panel, nunca antes.
+     También se apagan acá el resplandor ambiente y la marca de agua
+     (pensados para fondo oscuro) — Hipismo, en su tema claro, no los
+     usa: "en un tema claro... suman ruido visual en vez de ambiente".
+     ================================================================= */
+  body.tema-superadmin-claro {
+    --bg-color: #fdf4f4;
+    --card-bg: #ffffff;
+    --primary: #fbebeb;
+    --accent: #dc2626;
+    --accent-hover: #b91c1c;
+    --border: rgba(127,29,29,0.10);
+
+    --bg: #fdf4f4;
+    --card: #ffffff;
+    --card-2: #fdecec;
+    --card-border: rgba(127,29,29,0.12);
+    --border-light: rgba(127,29,29,0.20);
+    --text: #2a1414;
+    --text-dim: #8a5f5f;
+    --accent-cyan: #ef4444;
+    --accent-blue: #b91c1c;
+    --accent-deep: #7f1d1d;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warning: #d97706;
+    color-scheme: light;
+  }
+  body.tema-superadmin-claro::before,
+  body.tema-superadmin-claro::after,
+  body.tema-superadmin-claro .fondo-logo-marca { display: none; }
+
+  /* La marca "Ludox Venezuela" de la esquina tiene SU PROPIO fondo oscuro
+     semitransparente (pensado para leerse encima de cualquier fondo,
+     claro u oscuro) que no cambia con el tema — sin este ajuste, su
+     texto (que toma var(--text)) pasaría a oscuro también y quedaría
+     invisible sobre ese mismo fondo oscuro. */
+  body.tema-superadmin-claro .marca-esquina { color: #f4f6fb; }
+
+  /* Botones/burbujas de acento: con el acento ahora SATURADO (rojo), el
+     texto casi negro que traía el tema oscuro (pensado para un cian
+     CLARO) pierde contraste — pasa a blanco, mismo criterio que
+     ".btn-primario" de Hipismo.
+     "button:not([class])" A PROPÓSITO, en vez de "button" a secas: un
+     "button" sin ninguna clase es siempre un botón PRIMARIO (fondo
+     var(--accent)) — así se deja afuera, sin tocarlos, a
+     ".btn-secundario"/".btn-chico"/".btn-peligro"/".detalle-tab-btn",
+     que ya traen su propio color pensado a propósito (gris con texto
+     blanco, texto atenuado, etc.) y por especificidad de CSS un
+     "button { color: ... }" liso los pisaría a todos igual, dejando
+     textos como el de las pestañas del modal de detalle invisibles. */
+  body.tema-superadmin-claro button:not([class]),
+  body.tema-superadmin-claro .chat-burbuja.propio,
+  body.tema-superadmin-claro .chat-widget-burbuja,
+  body.tema-superadmin-claro .chat-widget-badge { color: #ffffff; }
+  body.tema-superadmin-claro .detalle-tab-btn.activa { background: var(--accent-cyan); color: #ffffff; }
+
+  /* Encabezados de tabla: mismo criterio que Hipismo (sin fondo sólido,
+     solo texto atenuado en mayúsculas) — con --primary ahora claro,
+     "color: white" (la regla de más arriba, pensada para fondo oscuro)
+     quedaría invisible. */
+  body.tema-superadmin-claro th { background-color: transparent; color: var(--text-dim); border-bottom: 2px solid var(--border); }
+
+  /* Superficies que en el tema oscuro eran "blanco translúcido sobre
+     fondo casi negro" (inputs, textarea del chat, filas pares, hover de
+     pestañas) — sin este cambio quedarían casi invisibles sobre las
+     tarjetas blancas nuevas. */
+  body.tema-superadmin-claro input[type="text"],
+  body.tema-superadmin-claro input[type="email"],
+  body.tema-superadmin-claro input[type="password"],
+  body.tema-superadmin-claro input[type="date"],
+  body.tema-superadmin-claro select,
+  body.tema-superadmin-claro .chat-enviar textarea { background: var(--card-2); }
+  body.tema-superadmin-claro tr:nth-child(even) { background-color: rgba(127,29,29,0.035); }
+  body.tema-superadmin-claro .detalle-tab-btn:hover { background: rgba(127,29,29,0.07); }
+
+  /* Cajas/hover con el tinte cian de marca del tema oscuro — pasan al
+     rojo nuevo, mismo % de opacidad de siempre. */
+  body.tema-superadmin-claro .box-nuevo-grupo { background-color: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.22); }
+  body.tema-superadmin-claro #tablaGrupos tbody tr:hover { background-color: rgba(220,38,38,0.06); }
+  body.tema-superadmin-claro .conversacion-fila:hover { background: rgba(220,38,38,0.06); }
+  body.tema-superadmin-claro .conversacion-fila.activa { background: rgba(220,38,38,0.1); }
 </style>
 </head>
 <body>
@@ -1346,11 +1445,16 @@ function mostrarAcceso(mensaje) {
   document.getElementById('vistaAcceso').style.display = 'block';
   document.getElementById('vistaPanel').style.display = 'none';
   document.getElementById('accesoError').textContent = mensaje || '';
+  // Tema claro/rojo (22-09-2026) SOLO del panel — ver la nota grande junto
+  // a "body.tema-superadmin-claro" en el <style>. La pantalla de acceso
+  // se queda con el tema oscuro de siempre.
+  document.body.classList.remove('tema-superadmin-claro');
 }
 
 function mostrarPanel() {
   document.getElementById('vistaAcceso').style.display = 'none';
   document.getElementById('vistaPanel').style.display = 'block';
+  document.body.classList.add('tema-superadmin-claro');
   cargarGrupos();
   cargarDiccionarioGlobal();
   mostrarSeccionSuperadmin('grupos');

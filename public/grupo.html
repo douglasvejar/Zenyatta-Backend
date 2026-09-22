@@ -683,6 +683,152 @@
     .chat-widget-burbuja { width: 52px; height: 52px; font-size: 22px; }
     .pizarra-grid { grid-template-columns: 1fr; }
   }
+
+  /* =================================================================
+     TEMA CLARO — Deportes, en AZUL (22-09-2026, a pedido del usuario:
+     "cambiale ese azul oscuro tambien... deportes azul... todos claro
+     con los mismos efectos que hiciste en hipismo"). Mismo mecanismo
+     que hipismo-mockup.html (el primer panel con tema claro): este
+     panel está armado casi 100% con variables CSS (--bg-color,
+     --card-bg, --primary, --accent-cyan, etc.), así que alcanza con
+     REDEFINIR el valor de esas variables para que todo lo que ya usa
+     var(...) se pinte solo.
+     La redefinición va bajo "body.tema-deportes-claro" (NO en :root
+     directo) a propósito: así la PANTALLA DE LOGIN (#vistaLogin, con
+     su video de fondo) se queda con el tema oscuro de siempre — el
+     usuario pidió explícitamente dejarla como está. mostrarApp()/
+     cerrarSesion(), en public/app.js, son los 2 únicos lugares que
+     agregan o sacan esta clase del <body>: el tema cambia justo al
+     entrar o salir del panel, nunca antes ni en el login.
+     También se apaga acá el resplandor ambiente (pensado para fondo
+     oscuro) — Hipismo, en su tema claro, no lo usa: "en un tema claro...
+     suman ruido visual en vez de ambiente". La marca de agua del logo
+     NO se apaga acá (a diferencia de Súper-admin) porque en este
+     archivo también cubre el login con el video, y la clase nueva
+     nunca está puesta mientras el login se ve — no hace falta.
+     ================================================================= */
+  body.tema-deportes-claro {
+    --bg-color: #f2f6fd;
+    --card-bg: #ffffff;
+    --primary: #e9f1fd;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --border: rgba(30,58,138,0.10);
+
+    --bg: #f2f6fd;
+    --card: #ffffff;
+    --card-2: #eef4fd;
+    --card-border: rgba(30,58,138,0.12);
+    --border-light: rgba(30,58,138,0.20);
+    --text: #142238;
+    --text-dim: #5b6b8c;
+    --accent-cyan: #3b82f6;
+    --accent-blue: #1d4ed8;
+    --accent-deep: #1e3a8a;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warning: #d97706;
+  }
+  body.tema-deportes-claro::before,
+  body.tema-deportes-claro::after { display: none; }
+
+  /* La marca "Ludox Venezuela" de la esquina tiene SU PROPIO fondo oscuro
+     semitransparente (pensado para leerse encima de cualquier fondo,
+     claro, oscuro, o el video del login) que no cambia con el tema — sin
+     este ajuste, su texto (que toma var(--text)) pasaría a oscuro
+     también y quedaría invisible sobre ese mismo fondo oscuro. */
+  body.tema-deportes-claro .marca-esquina { color: #f4f6fb; }
+
+  /* Botón principal, burbujas de chat y sidebar activa: degradés que
+     ahora van de un azul medio a uno profundo (antes cian claro→azul),
+     bien más saturados — el texto casi negro que traía el tema oscuro
+     pierde contraste ahí, pasa a blanco, mismo criterio que
+     ".btn-primario" de Hipismo.
+     "button:not([class])" A PROPÓSITO, en vez de "button" a secas: un
+     "button" sin ninguna clase es siempre el botón PRIMARIO (degradé
+     cian→azul); así se deja afuera, sin tocarlos, a
+     ".btn-secundario"/".btn-debug"/".btn-whatsapp"/".btn-peligro", que
+     ya traen su propio color pensado a propósito — por especificidad de
+     CSS un "button { color: ... }" liso los pisaría a todos igual (bug
+     real, encontrado en la verificación: dejaba "🔄 Actualizar ahora",
+     un .btn-secundario, con texto blanco sobre su propio fondo clarito,
+     casi ilegible). */
+  body.tema-deportes-claro button:not([class]),
+  body.tema-deportes-claro .chat-burbuja.propio,
+  body.tema-deportes-claro .chat-widget-burbuja,
+  body.tema-deportes-claro .sidebar-admin .nav-item.nav-item-active { color: #ffffff; }
+
+  /* Barra lateral: con --primary ahora un celeste bien clarito, el texto
+     gris casi blanco de siempre (pensado para leerse sobre el navy
+     oscuro de antes) queda invisible — pasa a un azul oscuro legible,
+     mismo criterio que ".nav-item" de Hipismo (texto oscuro sobre
+     sidebar clara, el acento solo en el ítem activo). */
+  body.tema-deportes-claro .sidebar-admin .nav-item { color: #1e3a5c; }
+  body.tema-deportes-claro .sidebar-admin .nav-item:hover { background: rgba(30,58,138,0.08); color: #0f2038; }
+  body.tema-deportes-claro .sidebar-admin hr { border-top-color: rgba(30,58,138,0.16); }
+  @keyframes parpadeoNavAlertaClaro { 0%, 100% { background: transparent; color: #1e3a5c; } 50% { background: #c0392b; color: #fff; } }
+  body.tema-deportes-claro .nav-item.nav-alerta-activa { animation-name: parpadeoNavAlertaClaro; }
+
+  /* Superficies que en el tema oscuro eran "blanco translúcido sobre
+     fondo casi negro" (inputs, textareas, filas pares, botones
+     secundarios, burbujas de chat ajenas, etc.) — sin este cambio
+     quedarían casi invisibles sobre las tarjetas blancas nuevas. */
+  body.tema-deportes-claro textarea,
+  body.tema-deportes-claro input[type="text"],
+  body.tema-deportes-claro input[type="date"],
+  body.tema-deportes-claro input[type="email"],
+  body.tema-deportes-claro input[type="password"],
+  body.tema-deportes-claro input[type="number"],
+  body.tema-deportes-claro select,
+  body.tema-deportes-claro button.btn-secundario,
+  body.tema-deportes-claro .whatsapp-pendiente-texto,
+  body.tema-deportes-claro .chat-burbuja.otro,
+  body.tema-deportes-claro .btn-debug { background: var(--card-2); }
+  body.tema-deportes-claro tr:nth-child(even) { background-color: rgba(30,58,138,0.035); }
+  body.tema-deportes-claro button.btn-secundario:hover,
+  body.tema-deportes-claro .btn-debug:hover { background: rgba(30,58,138,0.08); }
+  body.tema-deportes-claro .historial-dia-header:hover { background: rgba(30,58,138,0.06); }
+
+  /* Caja "Registrar Equipo Nuevo" — tenía el tinte cian de marca del
+     tema oscuro, pasa al azul nuevo, mismo % de opacidad de siempre. */
+  body.tema-deportes-claro .box-nuevo-equipo { background: rgba(37,99,235,0.06); border-color: rgba(37,99,235,0.22); }
+
+  /* Tarjeta "Arriesgado" del resumen (dashboard-summary): color fijo
+     pensado para leerse sobre las tarjetas oscuras de antes — pasa a un
+     azul-gris más oscuro para seguir siendo legible sobre la tarjeta
+     blanca nueva. */
+  body.tema-deportes-claro .card-box.arriesgado p { color: #4a5b78; }
+
+  /* Estados de ticket (Ganada/Perdida/Anulada/...): el tema oscuro los
+     pintaba "tinte translúcido + texto saturado brillante", pensado para
+     leerse sobre el fondo casi negro del panel — sobre las tarjetas
+     blancas nuevas ese texto brillante pierde casi todo el contraste.
+     Se reusan, tal cual, los mismos pares claros que este archivo YA
+     tenía para #sabanasCapturaContenido (la "foto" que se manda por
+     WhatsApp, siempre blanca) — mismo criterio de color por estado,
+     ahora aplicado en todo el panel, no solo en esa caja puntual. */
+  body.tema-deportes-claro .ganada { background-color: #d4f7e5 !important; color: #0f6b45 !important; }
+  body.tema-deportes-claro .perdida { background-color: #fbdede !important; color: #a3231b !important; }
+  body.tema-deportes-claro .anulada { background-color: #fff3cd !important; color: #7a5b00 !important; }
+  body.tema-deportes-claro .pendiente { background-color: #e7e9ef !important; color: #3d4457 !important; }
+  body.tema-deportes-claro .sinresultado { background-color: #ede0fb !important; color: #5b2c8a !important; }
+  body.tema-deportes-claro .faltalogro { background-color: #ffe6d1 !important; color: #9a4a00 !important; }
+  body.tema-deportes-claro .suspendida { background-color: #e4e7ec !important; color: #3d4457 !important; }
+  body.tema-deportes-claro .ambigua { background-color: #d6f3f7 !important; color: #0e6a78 !important; }
+  body.tema-deportes-claro .banner-confirmacion-rango.ok { background: #d4f7e5; color: #0f6b45; }
+  body.tema-deportes-claro .banner-confirmacion-rango.aviso { background: #fff3cd; color: #7a5b00; }
+
+  /* "Pizarra en Vivo" (.juego-card y compañía): a propósito se deja tal
+     cual — es un marcador tipo jumbotron, oscuro por diseño (mismo
+     criterio que un tablero digital real), no la "ropa" general del
+     panel. Sí hace falta fijarle su propio texto/acento a mano: ya no
+     puede depender de var(--text)/var(--accent-cyan), que ahora son
+     oscuro/azul (pensados para las tarjetas CLARAS de alrededor) — sin
+     esto, el marcador se quedaría con texto oscuro sobre su propio
+     fondo oscuro, invisible. */
+  body.tema-deportes-claro .juego-card { color: #f4f6fb; }
+  body.tema-deportes-claro .jc-dot-vivo { background: #38e0f0; box-shadow: 0 0 6px 1px rgba(56,224,240,.9); }
+  body.tema-deportes-claro .juego-card.en-vivo .jc-estado { color: #38e0f0; }
 </style>
 </head>
 <body>

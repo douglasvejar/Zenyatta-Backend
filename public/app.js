@@ -291,11 +291,16 @@ function cerrarSesion(mensaje) {
   document.getElementById('vistaLogin').style.display = 'block';
   document.getElementById('loginError').textContent = mensaje || '';
   document.getElementById('loginPassword').value = '';
+  // Tema claro/azul (22-09-2026) SOLO del panel — ver la nota grande junto
+  // a "body.tema-deportes-claro" en el <style> de grupo.html. La pantalla
+  // de login se queda con el tema oscuro (y su video de fondo) de siempre.
+  document.body.classList.remove('tema-deportes-claro');
 }
 
 function mostrarApp() {
   document.getElementById('vistaLogin').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
+  document.body.classList.add('tema-deportes-claro');
   // "Cuentas por Empleado" (18-09-2026): si el que inició sesión es un
   // Empleado (GRUPO.rol === 'empleado'), GRUPO.email es SU propio email
   // de login (no el del Grupo/negocio) y GRUPO.nombreEmpleado trae su
