@@ -21,6 +21,7 @@ const empleadosRoutes = require('./routes/empleados');
 const grupoRoutes = require('./routes/grupo');
 const descargasRoutes = require('./routes/descargas');
 const hipismoRoutes = require('./routes/hipismo'); // Módulo Hipismo (22-09-2026) — ver routes/hipismo.js
+const hipismoClienteRoutes = require('./routes/hipismoCliente'); // Portal público del Cliente de Hipismo (22-09-2026) — pública, sin login (ver comentario en routes/hipismoCliente.js)
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -60,6 +61,7 @@ app.use('/api/empleados', empleadosRoutes); // Cuentas por empleado dentro de un
 app.use('/api/grupo', grupoRoutes); // Configuración propia del Grupo (moneda_modo, ver routes/grupo.js)
 app.use('/api/descargas', descargasRoutes); // ⬇️ Descargar — Saldos Semana/Excel/PDF (ver routes/descargas.js)
 app.use('/api/hipismo', hipismoRoutes); // Módulo Hipismo — Hipódromos + Cargar Planos (ver routes/hipismo.js)
+app.use('/api/hipismo-cliente', hipismoClienteRoutes); // pública, sin login — portal del cliente de Hipismo (ver routes/hipismoCliente.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se

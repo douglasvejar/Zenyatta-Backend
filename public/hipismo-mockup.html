@@ -1112,10 +1112,15 @@ function copiarResultado() {
 // El botón "Portal del cliente" de antes copiaba un link falso
 // (https://ludox.app/mis-jugadas/...) que no llevaba a ningún lado real
 // — el usuario lo probó y reportó que "envía a otra página que no tiene
-// nada que ver". Se saca ese link inventado: el botón queda deshabilitado
-// con un aviso, hasta que se construya el portal público real de
-// Hipismo (spec sección 13 — depende de Cierre Final/histórico semanal
-// real, que todavía no existe).
+// nada que ver". El link real (22-09-2026, a pedido del usuario: "ya los
+// clientes que tienen jugadas... necesito tengan su link para ver sus
+// saldos") usa el MISMO token que ya trae GET /api/jugadores (columna
+// "token" de la tabla jugadores, pensada justo para esto — ver
+// sql/schema.sql) y apunta a public/hipismo-cliente-portal.html, que
+// ahora lee datos reales de src/routes/hipismoCliente.js (pública, sin
+// login). location.origin en vez de un dominio fijo, para que el link
+// copiado sirva igual en producción (ludoxapp.com) o en cualquier otro
+// entorno donde corra la app, sin tener que tocar este archivo.
 async function cargarClientesReales() {
   const tbody = document.getElementById('tablaClientes');
   let jugadores;
@@ -1135,10 +1140,26 @@ async function cargarClientesReales() {
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
       <td>
-        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" disabled title="El portal público del cliente para Hipismo todavía no está construido.">🔗 Portal (en construcción)</button>
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
       </td>
     </tr>
   `).join('');
+}
+
+// Copia al portapapeles el link público (sin clave) que el cliente abre
+// para ver sus jugadas de Hipismo de la semana actual o la anterior (ver
+// public/hipismo-cliente-portal.html). navigator.clipboard puede fallar
+// en algunos navegadores/contextos (ej. sin HTTPS) — ahí se cae a un
+// prompt() para que el link se pueda copiar a mano igual.
+function copiarLinkClienteHipismo(token, nombre) {
+  const url = `${location.origin}/hipismo-cliente-portal.html?token=${token}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => alert(`✅ Link de ${nombre} copiado:\n\n${url}`))
+      .catch(() => prompt(`Copiá el link de ${nombre}:`, url));
+  } else {
+    prompt(`Copiá el link de ${nombre}:`, url);
+  }
 }
 
 // ------------------------------------------------------------------

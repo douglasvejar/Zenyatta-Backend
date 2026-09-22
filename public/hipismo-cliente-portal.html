@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ludox Hipismo 🇻🇪 — Mis Jugadas (borrador para revisar)</title>
+<title>Ludox Hipismo 🇻🇪 — Mis Jugadas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35,19 +35,26 @@
     margin: 0;
   }
 
-  .banner-demo {
-    background: linear-gradient(100deg, #facc15, #f59e0b);
-    color: #241a03;
+  /* Banner de error (22-09-2026) — reemplaza al viejo banner amarillo de
+     "BORRADOR": ahora esta vista es real, así que ese aviso solo aparece
+     cuando el link no sirve (token inválido, cuenta desactivada, módulo
+     no habilitado para el grupo, o un problema de conexión). */
+  .banner-error {
+    background: linear-gradient(100deg, #dc2626, #b91c1c);
+    color: #fff;
     text-align: center;
     font-weight: 700;
-    font-size: 12.5px;
-    padding: 8px 14px;
+    font-size: 13px;
+    padding: 10px 16px;
     letter-spacing: 0.2px;
   }
+
+  #estadoCarga { text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 14px; }
 
   .envoltorio { max-width: 560px; margin: 0 auto; padding: 18px 16px 60px; }
 
   .encabezado { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .encabezado .logo-grupo { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
   .encabezado .avatar {
     width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
     background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime));
@@ -70,9 +77,10 @@
   .mini-fila .mini .etq { font-size: 11px; opacity: 0.85; }
   .mini-fila .mini .val { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
-  /* Selector de semana: por defecto se ve la semana actual (lunes a
-     domingo); "‹ Semana anterior" pide un click para ver la semana pasada,
-     tal como lo pidió el usuario (22-09-2026). */
+  /* Selector de semana: solo 2 estados, tal como lo pidió el usuario
+     (22-09-2026: "veran sus jugadas semanales, o semana anterior") — no
+     un histórico infinito, cada click vuelve a pedirle al servidor esa
+     semana puntual (ver cambiarSemana() más abajo). */
   .switcher-semana { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .switcher-semana .rango { flex: 1; margin-top: 0; text-align: center; }
   .switcher-semana button {
@@ -81,7 +89,6 @@
     padding: 7px 11px; border-radius: 20px; cursor: pointer; white-space: nowrap;
   }
   .switcher-semana button:disabled { opacity: 0.35; cursor: default; }
-  .switcher-semana button.oculto { visibility: hidden; }
   .pill-semana-cerrada {
     display: inline-block; margin-top: 6px; background: rgba(255,255,255,0.16);
     font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; letter-spacing: 0.2px;
@@ -150,15 +157,18 @@
 </head>
 <body>
 
-  <div class="banner-demo">🔧 BORRADOR — esta vista es un ejemplo con datos de prueba, para revisar el diseño antes de conectarla a los planos reales</div>
+  <div class="banner-error" id="bannerError" style="display:none;"></div>
 
-  <div class="envoltorio">
+  <div id="estadoCarga">Cargando tus jugadas...</div>
+
+  <div class="envoltorio" id="contenido" style="display:none;">
 
     <div class="encabezado">
-      <div class="avatar" id="avatarIniciales">M</div>
+      <img class="logo-grupo" id="logoGrupo" style="display:none;" alt="Logo del grupo">
+      <div class="avatar" id="avatarIniciales">–</div>
       <div>
-        <h1 id="saludoNombre">Hola, Mujica 👋</h1>
-        <div class="sub">Tus jugadas — Ludox Hipismo 🇻🇪</div>
+        <h1 id="saludoNombre">Hola 👋</h1>
+        <div class="sub" id="subGrupo">Tus jugadas — Ludox Hipismo 🇻🇪</div>
       </div>
     </div>
 
@@ -166,9 +176,9 @@
       <div class="etiqueta">Total de la semana</div>
       <div class="monto-grande" id="totalSemana">—</div>
       <div class="switcher-semana">
-        <button type="button" id="btnSemanaAnterior" onclick="semanaAnterior()">‹ Semana anterior</button>
+        <button type="button" id="btnSemanaAnterior" onclick="cambiarSemana('anterior')">‹ Semana anterior</button>
         <div class="rango" id="rangoSemana">—</div>
-        <button type="button" id="btnSemanaSiguiente" onclick="semanaSiguiente()">Semana actual ›</button>
+        <button type="button" id="btnSemanaActual" onclick="cambiarSemana('actual')">Semana actual ›</button>
       </div>
       <div class="mini-fila">
         <div class="mini" id="miniHoy">
@@ -193,102 +203,21 @@
   </div>
 
 <script>
-  // ============================================================
-  // DATOS DE EJEMPLO — esta vista es un mockup. En producción,
-  // este arreglo saldrá de las jugadas reales del cliente,
-  // resueltas por el mismo motor de cálculo del panel admin
-  // (misma lógica que "Cargar Planos" en hipismo-mockup.html).
-  // ============================================================
-  const CLIENTE = { nombre: 'Mujica' };
-
-  // La semana es FIJA lunes a domingo (confirmado por el usuario, 22-09-2026:
-  // "dejala fija que la semana arranque el lunes y cierre el domingo"). Los
-  // días se agrupan por semana más abajo (construirSemanas()) y el cliente
-  // puede pasar a la semana anterior con un click (semanaAnterior()/
-  // semanaSiguiente()) — igual pedido explícito del usuario.
-  //
-  // Cada jugada trae "modalidad" + "caballo" (o "caballoA"/"caballoB" en el
-  // caso de PP, que enfrenta 2 caballos) + "rol": 'jugador' cuando el cliente
-  // jugó esa apuesta, 'banquero' cuando el cliente fue quien la banqueó
-  // (la "dio"). El texto que se muestra sale de armarJugadaTexto() más abajo,
-  // según el pedido del usuario: "Jugó 1P del 3" / "Dio 3P del 1" /
-  // "Jugó 2x6 PP" (22-09-2026).
-  const DIAS = [
-    {
-      fecha: '2026-09-22', // hoy (martes de la semana actual: lunes 21 a domingo 27)
-      hipodromos: [
-        {
-          nombre: 'La Rinconada', pais: 'VE',
-          carreras: [
-            { carrera: 4, pizarra: '10-6-8-4-2', modalidad: '1/2', caballo: 6, rol: 'jugador', monto: 200, resultado: 95 },
-            { carrera: 6, pizarra: '5-1-9-3-7',  modalidad: '2P',  caballo: 1, rol: 'jugador', monto: 80,  resultado: 76 },
-          ]
-        },
-        {
-          nombre: 'Gulfstream Park', pais: 'US',
-          carreras: [
-            { carrera: 8, pizarra: '7-3-2-5-9', modalidad: '1P', caballo: 3, rol: 'jugador', monto: 100, resultado: -100 },
-          ]
-        }
-      ]
-    },
-    {
-      fecha: '2026-09-21',
-      hipodromos: [
-        {
-          nombre: 'La Rinconada', pais: 'VE',
-          carreras: [
-            { carrera: 3, pizarra: '6-10-4-8-2', modalidad: '1P',  caballo: 10, rol: 'jugador',  monto: 100, resultado: 95 },
-            { carrera: 5, pizarra: '3-9-1-6-4',  modalidad: '1/2', caballo: 9,  rol: 'jugador',  monto: 50,  resultado: -50 },
-            { carrera: 7, pizarra: '8-2-5-1-9',  modalidad: '3P',  caballo: 5,  rol: 'banquero', monto: 60,  resultado: 57 },
-          ]
-        },
-        {
-          nombre: 'Valencia', pais: 'VE',
-          carreras: [
-            { carrera: 2, pizarra: '4-7-2-9-1', modalidad: '1P', caballo: 4, rol: 'jugador', monto: 40, resultado: 38 },
-          ]
-        }
-      ]
-    },
-    {
-      // Semana anterior (lunes 14 a domingo 20 de septiembre)
-      fecha: '2026-09-19',
-      hipodromos: [
-        {
-          nombre: 'Valencia', pais: 'VE',
-          carreras: [
-            { carrera: 1, pizarra: '2-6-9-1-4', modalidad: 'PP',  caballoA: 2, caballoB: 6, rol: 'jugador', monto: 30, resultado: 28.5 },
-            { carrera: 9, pizarra: '6-3-8-2-5', modalidad: '1/2', caballo: 3, rol: 'jugador', monto: 50, resultado: -25 },
-          ]
-        },
-        {
-          nombre: 'La Rinconada', pais: 'VE',
-          carreras: [
-            { carrera: 12, pizarra: '9-4-1-7-3', modalidad: '1P', caballo: 4, rol: 'banquero', monto: 70, resultado: -70 },
-          ]
-        }
-      ]
-    },
-    {
-      // También semana anterior — para que se vea con más de un día al probar "‹ Semana anterior"
-      fecha: '2026-09-17',
-      hipodromos: [
-        {
-          nombre: 'La Rinconada', pais: 'VE',
-          carreras: [
-            { carrera: 6, pizarra: '7-2-9-4-1', modalidad: '2P', caballo: 7, rol: 'jugador', monto: 60, resultado: -60 },
-          ]
-        }
-      ]
-    }
-  ];
+  // =================================================================
+  // Vista pública del Cliente de Hipismo (22-09-2026) — sin login, el
+  // token de la URL ES el acceso (ver src/routes/hipismoCliente.js del
+  // backend, mismo criterio que ya usa Deportes en routes/cliente.js).
+  // Esta página no lee ni escribe nada en localStorage: cada visita
+  // vuelve a pedirle el resumen al servidor.
+  // =================================================================
+  const params = new URLSearchParams(location.search);
+  const TOKEN = params.get('token');
 
   const BANDERAS = { VE: '🇻🇪', US: '🇺🇸' };
   const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  const HOY_ISO = '2026-09-22';
+
+  let semanaActual = 'actual'; // 'actual' | 'anterior' — los 2 únicos estados que pidió el usuario
 
   function formatMonto(n) {
     const neg = n < 0;
@@ -302,111 +231,92 @@
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
-  function isoDeFecha(dt) {
-    const p = n => (n < 10 ? '0' + n : '' + n);
-    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
-  }
   function fechaLegible(iso) {
     const fecha = fechaDeIso(iso);
-    return { dow: DIAS_SEMANA[fecha.getDay()], texto: `${fecha.getDate()} de ${MESES[fecha.getMonth()]}` };
+    return { dow: DIAS_SEMANA[fecha.getDay()], texto: `${fecha.getDate()} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][fecha.getMonth()]}` };
   }
-  function fechaCorta(dt) {
-    return `${dt.getDate()} ${MESES_CORTO[dt.getMonth()]}`;
+  function fechaCorta(iso) {
+    const fecha = fechaDeIso(iso);
+    return `${fecha.getDate()} ${MESES_CORTO[fecha.getMonth()]}`;
   }
 
   function totalCarreras(carreras) {
     return carreras.reduce((acc, c) => acc + c.resultado, 0);
   }
 
-  // Agrupa los días en semanas fijas de lunes a domingo (confirmado por el
-  // usuario, 22-09-2026), de más reciente a más vieja. SEMANAS[0] es la
-  // semana más reciente que tiene datos — que es la semana actual siempre
-  // que "hoy" (HOY_ISO) caiga dentro de su rango.
-  function construirSemanas() {
-    const mapa = new Map();
-    DIAS.forEach(dia => {
-      const fecha = fechaDeIso(dia.fecha);
-      const dow = fecha.getDay(); // 0=domingo..6=sábado
-      const diffAlLunes = dow === 0 ? -6 : 1 - dow;
-      const lunes = new Date(fecha);
-      lunes.setDate(lunes.getDate() + diffAlLunes);
-      const domingo = new Date(lunes);
-      domingo.setDate(domingo.getDate() + 6);
-      const clave = isoDeFecha(lunes);
-      if (!mapa.has(clave)) mapa.set(clave, { inicio: lunes, fin: domingo, dias: [] });
-      mapa.get(clave).dias.push(dia);
-    });
-    const lista = Array.from(mapa.values());
-    lista.forEach(s => s.dias.sort((a, b) => b.fecha.localeCompare(a.fecha)));
-    lista.sort((a, b) => b.inicio - a.inicio);
-    return lista;
-  }
-
-  const SEMANAS = construirSemanas();
-  let semanaIndex = 0; // 0 = semana más reciente con datos (la actual, si "hoy" cae en su rango)
-
-  // Arma la frase de la jugada tal como la pidió el usuario: contada en
-  // primera persona, diciéndole al cliente qué hizo — no la notación técnica
-  // del plano del admin ("1/2 (10)"), sino en lenguaje llano:
+  // Arma la frase de la jugada tal como lo pidió el usuario: contada en
+  // primera persona, diciéndole al cliente qué hizo — no la notación
+  // técnica del plano del admin, sino en lenguaje llano:
   //   jugador, modalidad normal → "Jugó 1P del 3"
   //   banquero, modalidad normal → "Dio 3P del 1"
-  //   PP (dos caballos cruzados) → "Jugó 2x6 PP" / "Dio 2x6 PP"
+  //   pp (dos caballos cruzados)  → "Jugó 2x6 PP" / "Dio 2x6 PP"
   function armarJugadaTexto(c) {
     const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
-    if (c.modalidad === 'PP') {
+    if ((c.modalidad || '').toLowerCase() === 'pp') {
       return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
     }
     return `${verbo} ${c.modalidad} del ${c.caballo}`;
   }
 
-  // Pinta la semana actualmente seleccionada (SEMANAS[semanaIndex]). Se
-  // llama al cargar la página y cada vez que el cliente hace click en
-  // "‹ Semana anterior" / "Semana actual ›".
-  function renderSemana() {
-    const semana = SEMANAS[semanaIndex];
-    const inicioIso = isoDeFecha(semana.inicio);
-    const finIso = isoDeFecha(semana.fin);
-    const esActual = HOY_ISO >= inicioIso && HOY_ISO <= finIso;
+  function mostrarError(mensaje) {
+    document.getElementById('estadoCarga').style.display = 'none';
+    document.getElementById('contenido').style.display = 'none';
+    const banner = document.getElementById('bannerError');
+    banner.textContent = mensaje;
+    banner.style.display = 'block';
+  }
 
-    // --- Totales de la semana seleccionada ---
-    let totalSemana = 0, totalHoy = 0, cantidadJugadas = 0;
-    const saldoPorHip = {}; // nombre -> {monto, pais}
+  // Pinta la respuesta del servidor para la semana pedida (ya viene
+  // agrupada por día > hipódromo, ver src/routes/hipismoCliente.js).
+  function renderDatos(data) {
+    document.getElementById('bannerError').style.display = 'none';
+    document.getElementById('estadoCarga').style.display = 'none';
+    document.getElementById('contenido').style.display = 'block';
 
-    semana.dias.forEach(dia => {
-      dia.hipodromos.forEach(hip => {
-        const subtotal = totalCarreras(hip.carreras);
-        totalSemana += subtotal;
-        cantidadJugadas += hip.carreras.length;
-        if (dia.fecha === HOY_ISO) totalHoy += subtotal;
-        if (!saldoPorHip[hip.nombre]) saldoPorHip[hip.nombre] = { monto: 0, pais: hip.pais };
-        saldoPorHip[hip.nombre].monto += subtotal;
-      });
-    });
+    // --- Encabezado (grupo + cliente) ---
+    document.getElementById('subGrupo').textContent = `Tus jugadas — ${data.grupo.nombre}`;
+    document.getElementById('saludoNombre').textContent = `Hola, ${data.jugador.nombre} 👋`;
+    const logo = document.getElementById('logoGrupo');
+    const avatar = document.getElementById('avatarIniciales');
+    if (data.grupo.logoUrl) {
+      logo.src = data.grupo.logoUrl;
+      logo.style.display = '';
+      avatar.style.display = 'none';
+    } else {
+      logo.style.display = 'none';
+      avatar.style.display = '';
+      avatar.textContent = data.jugador.nombre.trim().charAt(0).toUpperCase();
+    }
 
-    document.getElementById('totalSemana').textContent = conSigno(totalSemana);
-    document.getElementById('cantidadJugadas').textContent = cantidadJugadas;
+    // --- Tarjeta resumen ---
+    document.getElementById('totalSemana').textContent = conSigno(data.resumen.totalSemana);
+    document.getElementById('cantidadJugadas').textContent = data.resumen.cantidadJugadas;
     document.getElementById('rangoSemana').innerHTML =
-      `${fechaCorta(semana.inicio)} – ${fechaCorta(semana.fin)}` +
-      (esActual ? '<span class="pill-semana-cerrada">Semana actual</span>' : '<span class="pill-semana-cerrada">Semana cerrada</span>');
+      `${fechaCorta(data.rango.desde)} – ${fechaCorta(data.rango.hasta)}` +
+      (data.esSemanaActual ? '<span class="pill-semana-cerrada">Semana actual</span>' : '<span class="pill-semana-cerrada">Semana cerrada</span>');
 
-    // El mini-card "Hoy" solo tiene sentido si "hoy" cae dentro de la semana
-    // que se está mostrando.
     const miniHoy = document.getElementById('miniHoy');
-    if (esActual) {
+    if (data.esSemanaActual) {
       miniHoy.style.display = '';
-      document.getElementById('totalHoy').textContent = conSigno(totalHoy);
+      document.getElementById('totalHoy').textContent = conSigno(data.resumen.totalHoy);
     } else {
       miniHoy.style.display = 'none';
     }
 
-    // Botones del selector de semana — "‹ Semana anterior" se deshabilita
-    // cuando no hay datos más viejos; "Semana actual ›" se oculta cuando ya
-    // se está viendo la semana más reciente (pedido del usuario: "un click a
-    // semana anterior en caso de que la necesiten").
-    document.getElementById('btnSemanaAnterior').disabled = semanaIndex >= SEMANAS.length - 1;
-    document.getElementById('btnSemanaSiguiente').classList.toggle('oculto', semanaIndex === 0);
+    // Solo 2 estados (pedido explícito del usuario): "‹ Semana anterior"
+    // se apaga cuando ya se está viendo la anterior; "Semana actual ›" se
+    // apaga cuando ya se está viendo la actual.
+    document.getElementById('btnSemanaAnterior').disabled = (data.semana === 'anterior');
+    document.getElementById('btnSemanaActual').disabled = (data.semana === 'actual');
 
-    // --- Chips de balance por hipódromo (de la semana seleccionada) ---
+    // --- Chips de balance por hipódromo ---
+    const saldoPorHip = {};
+    data.dias.forEach(dia => {
+      dia.hipodromos.forEach(hip => {
+        if (!saldoPorHip[hip.nombre]) saldoPorHip[hip.nombre] = { monto: 0, pais: hip.pais };
+        saldoPorHip[hip.nombre].monto += totalCarreras(hip.carreras);
+      });
+    });
     const chipsWrap = document.getElementById('chipsHipodromo');
     chipsWrap.innerHTML = '';
     Object.keys(saldoPorHip).forEach(nombre => {
@@ -419,14 +329,17 @@
         <span class="monto ${claseMonto(info.monto)}">${conSigno(info.monto)}</span>`;
       chipsWrap.appendChild(chip);
     });
+    if (!Object.keys(saldoPorHip).length) {
+      chipsWrap.innerHTML = '<p class="pie-nota" style="margin:0;">Sin jugadas en este rango.</p>';
+    }
 
-    // --- Acordeón de días (solo los de la semana seleccionada) ---
+    // --- Acordeón de días ---
     const listaDias = document.getElementById('listaDias');
     listaDias.innerHTML = '';
-    if (!semana.dias.length) {
+    if (!data.dias.length) {
       listaDias.innerHTML = '<p class="pie-nota" style="margin-top:0;">No hay jugadas cargadas en esta semana.</p>';
     }
-    semana.dias.forEach((dia, idxDia) => {
+    data.dias.forEach((dia, idxDia) => {
       const f = fechaLegible(dia.fecha);
       const totalDelDia = dia.hipodromos.reduce((acc, h) => acc + totalCarreras(h.carreras), 0);
 
@@ -439,7 +352,7 @@
       header.onclick = () => wrapDia.classList.toggle('colapsado');
       header.innerHTML = `
         <span class="flecha-toggle">▾</span>
-        <span class="fecha"><span class="dow">${f.dow}</span>${f.texto}${dia.fecha === HOY_ISO ? ' · hoy' : ''}</span>
+        <span class="fecha"><span class="dow">${f.dow}</span>${f.texto}${dia.fecha === data.hoy ? ' · hoy' : ''}</span>
         <span class="total-dia ${claseMonto(totalDelDia)}">${conSigno(totalDelDia)}</span>`;
       wrapDia.appendChild(header);
 
@@ -486,24 +399,33 @@
     });
   }
 
-  function semanaAnterior() {
-    if (semanaIndex < SEMANAS.length - 1) {
-      semanaIndex++;
-      renderSemana();
-    }
-  }
-  function semanaSiguiente() {
-    if (semanaIndex > 0) {
-      semanaIndex--;
-      renderSemana();
+  async function cargarSemana(semana) {
+    try {
+      const r = await fetch(`/api/hipismo-cliente/${encodeURIComponent(TOKEN)}?semana=${semana}`);
+      const data = await r.json();
+      if (!r.ok) {
+        mostrarError(data.error || 'No se pudo cargar tu resumen.');
+        return;
+      }
+      semanaActual = data.semana;
+      renderDatos(data);
+    } catch (e) {
+      mostrarError('No se pudo conectar con el servidor. Probá de nuevo en un momento.');
     }
   }
 
-  // Saludo/avatar — no depende de la semana seleccionada.
-  document.getElementById('avatarIniciales').textContent = CLIENTE.nombre.trim().charAt(0).toUpperCase();
-  document.getElementById('saludoNombre').textContent = `Hola, ${CLIENTE.nombre} 👋`;
+  function cambiarSemana(semana) {
+    if (semana === semanaActual) return;
+    document.getElementById('estadoCarga').style.display = 'block';
+    document.getElementById('contenido').style.display = 'none';
+    cargarSemana(semana);
+  }
 
-  renderSemana();
+  if (!TOKEN) {
+    mostrarError('Link inválido — falta el token. Pedile al grupo que te comparta el link correcto.');
+  } else {
+    cargarSemana('actual');
+  }
 </script>
 </body>
 </html>
