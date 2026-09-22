@@ -579,12 +579,14 @@
   body.tema-superadmin-claro::after,
   body.tema-superadmin-claro .fondo-logo-marca { display: none; }
 
-  /* La marca "Ludox Venezuela" de la esquina tiene SU PROPIO fondo oscuro
-     semitransparente (pensado para leerse encima de cualquier fondo,
-     claro u oscuro) que no cambia con el tema — sin este ajuste, su
-     texto (que toma var(--text)) pasaría a oscuro también y quedaría
-     invisible sobre ese mismo fondo oscuro. */
-  body.tema-superadmin-claro .marca-esquina { color: #f4f6fb; }
+  /* La marca "Ludox Venezuela" de la esquina (22-09-2026, a pedido del
+     usuario: "despues de iniciar sesion no debe aparecer el logo de
+     ludox que te lleva al inicio") — mismo criterio que grupo.html: se
+     sigue viendo en la pantalla de acceso (fuera de esta regla), pero
+     desaparece apenas se entra al panel de Súper-admin. Reemplaza la
+     regla vieja que solo le cambiaba el color para leerse sobre el
+     fondo claro — ya no hace falta, no se muestra. */
+  body.tema-superadmin-claro .marca-esquina { display: none; }
 
   /* Botones/burbujas de acento: con el acento ahora SATURADO (rojo), el
      texto casi negro que traía el tema oscuro (pensado para un cian

@@ -741,12 +741,17 @@
   body.tema-deportes-claro::before,
   body.tema-deportes-claro::after { display: none; }
 
-  /* La marca "Ludox Venezuela" de la esquina tiene SU PROPIO fondo oscuro
-     semitransparente (pensado para leerse encima de cualquier fondo,
-     claro, oscuro, o el video del login) que no cambia con el tema — sin
-     este ajuste, su texto (que toma var(--text)) pasaría a oscuro
-     también y quedaría invisible sobre ese mismo fondo oscuro. */
-  body.tema-deportes-claro .marca-esquina { color: #f4f6fb; }
+  /* La marca "Ludox Venezuela" de la esquina (22-09-2026, a pedido del
+     usuario: "despues de iniciar sesion no debe aparecer el logo de
+     ludox que te lleva al inicio") — se sigue viendo en la pantalla de
+     login (fuera de esta regla, body todavía no tiene la clase de tema
+     ahí), pero desaparece apenas se entra al panel: además de ya no
+     tener sentido un link a la página principal estando adentro del
+     panel de trabajo, con el selector de módulo nuevo ("⚽ Deportes /
+     🐎 Hipismo") ya no hay lugar arriba a la izquierda para los dos.
+     Reemplaza la regla vieja que solo le cambiaba el color para que se
+     leyera sobre el fondo claro — ya no hace falta, no se muestra. */
+  body.tema-deportes-claro .marca-esquina { display: none; }
 
   /* Botón principal, burbujas de chat y sidebar activa: degradés que
      ahora van de un azul medio a uno profundo (antes cian claro→azul),
