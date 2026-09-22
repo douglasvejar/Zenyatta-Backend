@@ -126,7 +126,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const grupoRes = await db.query(
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -175,6 +175,12 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // "SABANA DE JUGADAS", sin cambios).
     comandosWhatsappHabilitado: grupo.comandos_whatsapp_habilitado,
     comandosWhatsappNumero: grupo.comandos_whatsapp_numero,
+    // (22-09-2026, a pedido del usuario) qué producto(s) tiene contratados
+    // este grupo — ver la nota grande junto a estas 2 columnas en
+    // sql/schema.sql y claude/plan-modulo-hipismo.md. Exclusivo del
+    // Súper-admin, igual que whatsappHabilitado arriba.
+    moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
+    moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
     // (08-09-2026, a pedido del usuario) modelo de comisión de este
     // grupo — ver la nota grande en sql/schema.sql y comisiones.js.
     // Exclusivo del Súper-admin, igual que whatsappHabilitado arriba.
@@ -391,6 +397,44 @@ router.patch('/grupos/:id/whatsapp-habilitado', asyncHandler(async (req, res) =>
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ whatsappHabilitado: r.rows[0].whatsapp_habilitado, whatsappGrupoJid: r.rows[0].whatsapp_grupo_jid });
+}));
+
+// =================================================================
+// MÓDULOS CONTRATADOS — Deportes / Hipismo (22-09-2026, a pedido del
+// usuario: "donde le coloco si el grupo tiene deportes o hipismo? a los
+// grupos que ya estan creados se le puede colocar?"). Ver la nota grande
+// junto a estas 2 columnas en sql/schema.sql y el plan de arquitectura en
+// claude/plan-modulo-hipismo.md. Mismo espíritu que whatsapp-habilitado
+// arriba: interruptor manual, EXCLUSIVO del Súper-admin (el propio Grupo
+// no tiene ningún botón para tocar ninguno de los 2) — se puede prender o
+// apagar en cualquier momento, tanto en un grupo nuevo como en uno que ya
+// existe desde antes de que existiera Hipismo.
+//
+// A propósito 2 rutas separadas (una por módulo) en vez de una sola que
+// reciba los 2 a la vez, mismo criterio que whatsapp-habilitado /
+// comandos-whatsapp-habilitado: cada interruptor se prende o apaga solo,
+// sin depender del estado del otro. No se valida que quede al menos uno
+// prendido — un grupo con los 2 en false simplemente no tiene ningún
+// producto activo (por ejemplo, mientras se le da de baja o se renegocia
+// el contrato), sin que eso rompa nada del resto del sistema.
+router.patch('/grupos/:id/modulo-deportes', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET modulo_deportes_habilitado = $1 WHERE id = $2 RETURNING id, modulo_deportes_habilitado',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ moduloDeportesHabilitado: r.rows[0].modulo_deportes_habilitado });
+}));
+
+router.patch('/grupos/:id/modulo-hipismo', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET modulo_hipismo_habilitado = $1 WHERE id = $2 RETURNING id, modulo_hipismo_habilitado',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ moduloHipismoHabilitado: r.rows[0].modulo_hipismo_habilitado });
 }));
 
 // (18-09-2026) Acá vivía PATCH /grupos/:id/whatsapp-modo-cuidadoso — el

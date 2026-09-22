@@ -175,6 +175,44 @@ alter table grupos add column if not exists comandos_whatsapp_habilitado boolean
 alter table grupos add column if not exists comandos_whatsapp_numero text;
 
 -- =================================================================
+-- MÓDULOS CONTRATADOS POR GRUPO — Deportes / Hipismo (22-09-2026, a
+-- pedido del usuario: "donde le coloco si el grupo tiene deportes o
+-- hipismo? a los grupos que ya estan creados se le puede colocar?").
+-- Ver la arquitectura completa en claude/plan-modulo-hipismo.md (el
+-- documento del Proyecto "DEPORTES", no vive en este repo) — resumen:
+-- Deportes e Hipismo conviven en UNA sola cuenta/login por grupo (no hay
+-- 2 portales), pero cada grupo puede haber contratado uno de los dos
+-- productos o los dos, y eso lo decide y factura el Súper-admin, no el
+-- propio Grupo. Mismo espíritu que whatsapp_habilitado más arriba:
+-- interruptor manual, sin cobro automático, EXCLUSIVO del Súper-admin
+-- (PATCH /api/superadmin/grupos/:id/modulo-deportes y
+-- .../modulo-hipismo, ver superadmin.js/superadmin.html, pestaña
+-- "🎯 Módulos"). El propio Grupo no tiene ningún botón para tocar estas
+-- 2 columnas.
+--
+-- Default modulo_deportes_habilitado = TRUE y modulo_hipismo_habilitado
+-- = FALSE a propósito: así, correr este ALTER TABLE sobre la base de
+-- datos real (con todos los grupos ya creados hasta hoy, todos
+-- trabajando en Deportes) no le cambia nada a ninguno — todos quedan
+-- exactamente como ya estaban (Deportes prendido, Hipismo apagado) sin
+-- tocarlos a mano uno por uno. Para sumarle Hipismo a un grupo que ya
+-- existe, el Súper-admin simplemente prende su interruptor
+-- "modulo_hipismo_habilitado" desde esa pestaña, igual que con uno
+-- nuevo.
+--
+-- OJO — alcance real a esta fecha: estas 2 columnas y sus rutas ya
+-- quedan funcionando de verdad (se guardan y se leen de la base de
+-- datos), pero por ahora es solo el "interruptor administrativo" — el
+-- selector "⚽ Deportes"/"🐎 Hipismo" que el plan describe DENTRO del
+-- panel del propio Grupo (grupo.html) todavía NO está construido, porque
+-- Hipismo en sí sigue siendo un mockup de front-end (hipismo-mockup.html)
+-- sin rutas ni tablas reales — no hay, todavía, nada real que ese
+-- selector deba mostrar del lado de Hipismo. Eso es el siguiente paso
+-- pendiente del plan.
+alter table grupos add column if not exists modulo_deportes_habilitado boolean not null default true;
+alter table grupos add column if not exists modulo_hipismo_habilitado boolean not null default false;
+
+-- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
 -- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera

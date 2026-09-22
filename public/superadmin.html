@@ -886,6 +886,12 @@
                para CUALQUIER grupo elegido acá. Ver
                GET /api/superadmin/grupos/:id/saldos-semana. -->
           <button type="button" class="detalle-tab-btn" data-tab="descargar" onclick="mostrarPestanaDetalleGrupo('descargar')">⬇️ Descargar</button>
+          <!-- "🎯 Módulos" (22-09-2026, a pedido del usuario: "donde le
+               coloco si el grupo tiene deportes o hipismo? a los grupos
+               que ya estan creados se le puede colocar?") — qué
+               producto(s) tiene contratados este grupo. Ver la nota
+               grande en sql/schema.sql y claude/plan-modulo-hipismo.md. -->
+          <button type="button" class="detalle-tab-btn" data-tab="modulos" onclick="mostrarPestanaDetalleGrupo('modulos')">🎯 Módulos</button>
           <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">🖼️ Logo</button>
           <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">📲 WhatsApp</button>
           <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">💳 Comisión</button>
@@ -1026,6 +1032,41 @@
             <p id="ssVacio" style="display:none; text-align:center; color:var(--text-dim); padding:16px; font-size:13px;">Este grupo todavía no tiene ningún cliente registrado.</p>
             <div id="ssCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
               <div id="ssCaptura"></div>
+            </div>
+          </div>
+
+          <!-- ========================= 🎯 MÓDULOS (NUEVO, 22-09-2026) =========================
+               A pedido del usuario: "donde le coloco si el grupo tiene
+               deportes o hipismo? a los grupos que ya estan creados se le
+               puede colocar?". Deportes e Hipismo conviven en UNA sola
+               cuenta por grupo (ver claude/plan-modulo-hipismo.md) — acá
+               el Súper-admin marca qué producto(s) contrató cada grupo.
+               Mismo patrón de botón-interruptor que "📲 Sábana automática
+               por WhatsApp" más abajo. Sirve tanto para un grupo nuevo
+               como para uno que ya existía antes de que Hipismo
+               existiera (todos arrancan con Deportes=✅ / Hipismo=🚫, sin
+               que haya que tocarlos a mano — ver default en
+               sql/schema.sql). -->
+          <div class="detalle-tab-panel" data-tab-panel="modulos">
+            <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
+              <h3>⚽ Módulo Deportes</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Apuestas deportivas (parleys y jugadas directas) — el producto original, todo lo que ya usa este panel hasta ahora.</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Estado</span>
+                <span class="valor" id="moduloDeportesEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleModuloDeportes" onclick="toggleModuloGrupo('deportes')" style="margin-top:6px;"></button>
+            </div>
+
+            <div class="modal-seccion">
+              <h3>🐎 Módulo Hipismo</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Apuestas a carreras de caballos (planos, tercios, 10/N). Producto nuevo, todavía en mockup de front-end (<code>hipismo-mockup.html</code>) — prender este interruptor deja registrado que el grupo contrató el servicio, para cuando el módulo tenga backend real.</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Estado</span>
+                <span class="valor" id="moduloHipismoEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleModuloHipismo" onclick="toggleModuloGrupo('hipismo')" style="margin-top:6px;"></button>
+              <div id="moduloHipismoError"></div>
             </div>
           </div>
 
@@ -2597,6 +2638,10 @@ async function abrirDetalleGrupo(id, nombre) {
     document.getElementById('logoUrlInput').value = d.logoUrl || '';
     mostrarPreviewLogo(d.logoUrl);
 
+    GRUPO_MODULO_DEPORTES_HABILITADO = !!d.moduloDeportesHabilitado;
+    GRUPO_MODULO_HIPISMO_HABILITADO = !!d.moduloHipismoHabilitado;
+    pintarEstadoModulos();
+
     GRUPO_WHATSAPP_HABILITADO = !!d.whatsappHabilitado;
     document.getElementById('whatsappJidInputSuperadmin').value = d.whatsappGrupoJid || '';
     pintarEstadoWhatsappHabilitado();
@@ -2728,6 +2773,60 @@ async function guardarLogoGrupo() {
     document.getElementById('logoOk').textContent = r.logoUrl ? '✅ Logo actualizado.' : '✅ Logo quitado — vuelve a mostrarse solo el nombre del Grupo.';
   } catch (e) {
     document.getElementById('logoError').textContent = e.message;
+  }
+}
+
+// =================================================================
+// MÓDULOS CONTRATADOS — Deportes / Hipismo (22-09-2026, a pedido del
+// usuario: "donde le coloco si el grupo tiene deportes o hipismo? a los
+// grupos que ya estan creados se le puede colocar?"). Ver el bloque HTML
+// de arriba (pestaña "🎯 Módulos") y src/routes/superadmin.js
+// (modulo-deportes/modulo-hipismo). Mismo patrón botón-interruptor que
+// "📲 Sábana automática por WhatsApp" más abajo, EXCLUSIVO de acá (el
+// propio Grupo no tiene ningún botón para tocar ninguno de los 2).
+// =================================================================
+let GRUPO_MODULO_DEPORTES_HABILITADO = true;
+let GRUPO_MODULO_HIPISMO_HABILITADO = false;
+
+function pintarEstadoModulos() {
+  const deportesEstado = document.getElementById('moduloDeportesEstado');
+  const deportesBoton = document.getElementById('btnToggleModuloDeportes');
+  if (GRUPO_MODULO_DEPORTES_HABILITADO) {
+    deportesEstado.innerHTML = '<span style="color:#2e7d32; font-weight:600;">✅ Contratado</span>';
+    deportesBoton.textContent = 'Desactivar módulo Deportes';
+  } else {
+    deportesEstado.innerHTML = '<span style="color:#888;">— No contratado —</span>';
+    deportesBoton.textContent = 'Activar módulo Deportes';
+  }
+
+  const hipismoEstado = document.getElementById('moduloHipismoEstado');
+  const hipismoBoton = document.getElementById('btnToggleModuloHipismo');
+  if (GRUPO_MODULO_HIPISMO_HABILITADO) {
+    hipismoEstado.innerHTML = '<span style="color:#2e7d32; font-weight:600;">✅ Contratado</span>';
+    hipismoBoton.textContent = 'Desactivar módulo Hipismo';
+  } else {
+    hipismoEstado.innerHTML = '<span style="color:#888;">— No contratado —</span>';
+    hipismoBoton.textContent = 'Activar módulo Hipismo';
+  }
+}
+
+// modulo: 'deportes' | 'hipismo'
+async function toggleModuloGrupo(modulo) {
+  if (!GRUPO_DETALLE_ID) return;
+  const errorEl = document.getElementById('moduloHipismoError');
+  if (errorEl) errorEl.textContent = '';
+  const nuevoValor = modulo === 'deportes' ? !GRUPO_MODULO_DEPORTES_HABILITADO : !GRUPO_MODULO_HIPISMO_HABILITADO;
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/modulo-' + modulo, { method: 'PATCH', body: JSON.stringify({ habilitado: nuevoValor }) });
+    if (modulo === 'deportes') {
+      GRUPO_MODULO_DEPORTES_HABILITADO = !!r.moduloDeportesHabilitado;
+    } else {
+      GRUPO_MODULO_HIPISMO_HABILITADO = !!r.moduloHipismoHabilitado;
+    }
+    pintarEstadoModulos();
+  } catch (e) {
+    const msg = 'No se pudo actualizar el módulo ' + (modulo === 'deportes' ? 'Deportes' : 'Hipismo') + ': ' + e.message;
+    if (errorEl) errorEl.textContent = msg; else alert(msg);
   }
 }
 
