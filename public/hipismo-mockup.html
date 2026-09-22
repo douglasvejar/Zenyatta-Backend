@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ludox Hipismo 🇻🇪 — Vista Previa del Panel (borrador para revisar)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Mismo lenguaje visual que el panel de Deportes (grupo.html), pero en
+       paleta verde "pasto" en vez de azul oscuro, para distinguir las dos
+       plataformas a simple vista (pedido explícito del usuario, 22-09-2026).
+       22-09-2026 (3er ajuste): el usuario dijo que la gente va a pasar
+       muchas horas trabajando en este panel, así que se cambia todo a
+       TEMA CLARO (fondo blanco/verde muy suave, texto oscuro) en vez de
+       tema oscuro — mucho más cómodo para jornadas largas que un verde
+       oscuro saturado. El acento verde se mantiene para seguir
+       distinguiéndose de Deportes (que es oscuro). */
+    --bg-color: #f3f9f4;
+    --card-bg: #ffffff;
+    --primary: #eaf6ee;
+    --accent: #16a34a;
+    --accent-hover: #15803d;
+    --border: rgba(15,60,35,0.10);
+
+    --bg: #f3f9f4;
+    --card: #ffffff;
+    --card-2: #f1f8f3;
+    --card-border: rgba(15,60,35,0.12);
+    --border-light: rgba(15,60,35,0.18);
+    --text: #15321f;
+    --text-dim: #587264;
+    --accent-grass: #16a34a;
+    --accent-lime: #65a30d;
+    --accent-deep: #14532d;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warning: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text);
+    margin: 0;
+    position: relative;
+  }
+  /* Sin resplandores difuminados de fondo: quedaban bien en el tema oscuro,
+     pero en un tema claro pensado para jornadas largas de trabajo suman
+     ruido visual en vez de ambiente — mejor una superficie plana y limpia. */
+
+  .banner-borrador {
+    background: linear-gradient(100deg, #facc15, #f59e0b);
+    color: #241a03;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 8px 14px;
+    letter-spacing: 0.2px;
+  }
+
+  .app-shell { display: flex; gap: 18px; max-width: 1400px; margin: 0 auto; padding: 18px; align-items: flex-start; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1400px; margin: 0 auto; padding: 14px 18px 0;
+  }
+  .marca { display: flex; align-items: center; gap: 10px; }
+  .marca .logo-emoji { font-size: 26px; }
+  .marca h1 { font-family: 'Outfit', sans-serif; font-size: 19px; font-weight: 800; margin: 0; letter-spacing: 0.2px; }
+  .marca .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+  .selector-modulo { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--card-border); border-radius: 30px; padding: 4px; }
+  .selector-modulo button { border: none; border-radius: 24px; padding: 7px 16px; font-size: 13px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: default; background: transparent; color: var(--text-dim); }
+  .selector-modulo button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); color: #ffffff; }
+
+  .sidebar-admin { width: 220px; flex-shrink: 0; background: var(--primary); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 18px; }
+  .nav-item { background: transparent; border: none; color: #2f4d3c; text-align: left; padding: 10px 12px; border-radius: 6px; font-size: 14px; font-weight: 600; width: 100%; box-sizing: border-box; cursor: pointer; font-family: 'Inter', sans-serif; display: block; }
+  .nav-item:hover { background: rgba(15,60,35,0.08); color: #0f2a1a; }
+  .nav-item.nav-item-active { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; }
+  .nav-parent { display: flex; justify-content: space-between; align-items: center; }
+  .nav-children { display: flex; flex-direction: column; gap: 2px; padding-left: 14px; margin-top: 2px; }
+  .nav-child { font-size: 13px; font-weight: 500; padding: 8px 12px; }
+  .sidebar-admin hr { border: none; border-top: 1px solid rgba(15,60,35,0.14); margin: 8px 4px; }
+  .nav-badge { display: inline-block; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; border-radius: 20px; padding: 1px 7px; margin-left: 4px; vertical-align: middle; }
+  @keyframes parpadeoAlerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  .fila-pozo-rojo { animation: parpadeoAlerta 1.1s ease-in-out infinite; background: rgba(220,38,38,0.10) !important; }
+
+  /* Alerta flotante FIJA — siempre visible, sin importar la pestaña o el
+     scroll (pedido explícito del usuario, 22-09-2026). */
+  .alerta-flotante {
+    position: fixed;
+    top: 104px;
+    right: 20px;
+    z-index: 999;
+    background: var(--danger);
+    color: #ffffff;
+    border: none;
+    border-radius: 30px;
+    padding: 11px 20px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+    box-shadow: 0 6px 18px rgba(220,38,38,0.4);
+    cursor: pointer;
+    animation: parpadeoAlerta 1.1s ease-in-out infinite;
+  }
+  .alerta-flotante:hover { filter: brightness(1.08); }
+  @media (max-width: 860px) {
+    .alerta-flotante { top: auto; bottom: 18px; right: 18px; left: 18px; text-align: center; }
+  }
+
+  .main { flex: 1; min-width: 0; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0 0 4px; }
+  .card .desc { font-size: 13px; color: var(--text-dim); margin: 0 0 16px; line-height: 1.5; }
+  .badge-pendiente { display: inline-block; background: rgba(250,204,21,0.15); color: var(--warning); border: 1px solid rgba(250,204,21,0.35); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 5px; }
+  input, select, textarea { width: 100%; background: var(--card-2); border: 1px solid var(--border-light); border-radius: 8px; color: var(--text); padding: 9px 11px; font-size: 14px; font-family: 'Inter', sans-serif; }
+  textarea { resize: vertical; font-family: 'ui-monospace', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  .fila { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .fila > div { flex: 1; min-width: 160px; }
+  .check-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .check-fila input { width: auto; }
+  .check-fila label { margin: 0; color: var(--text); font-size: 13.5px; }
+
+  button.btn { font-family: 'Outfit', sans-serif; border: none; padding: 11px 18px; font-size: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; }
+  .btn-primario { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; }
+  .btn-secundario { background: var(--card-2); color: var(--text); border: 1px solid var(--border-light) !important; }
+  .btn-fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+
+  .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
+  .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; }
+  .toast-copiado { display: inline-block; margin-left: 10px; font-size: 12.5px; color: var(--ok); font-weight: 600; opacity: 0; transition: opacity .25s; }
+  .toast-copiado.visible { opacity: 1; }
+
+  /* Traspasos de Jugadas (22-09-2026): chips con los nombres detectados en
+     el plano pegado — clic en uno arma una fila nueva de cambio con ese
+     nombre ya cargado en "Nombre actual". */
+  .chips-jugadores { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip-jugador { background: var(--card-2); border: 1px solid var(--border-light); border-radius: 20px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; font-family: 'Inter', sans-serif; }
+  .chip-jugador:hover { background: rgba(15,60,35,0.08); border-color: var(--accent-grass); color: #0f2a1a; }
+  .fila-cambio-nombre { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .fila-cambio-nombre input { width: auto; flex: 1; min-width: 140px; }
+  .fila-cambio-nombre .flecha-cambio { font-size: 16px; color: var(--text-dim); flex-shrink: 0; }
+  .fila-cambio-nombre .btn-quitar-cambio { background: transparent; border: none; color: var(--danger); font-size: 18px; cursor: pointer; padding: 2px 8px; flex-shrink: 0; }
+
+  /* Comisiones por Carrera / Comisiones Devueltas: filas expandibles con
+     el detalle carrera a carrera (22-09-2026). */
+  .fila-carrera-comision { border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; background: #fff; }
+  .fila-carrera-comision .cabecera-carrera { display: flex; align-items: center; gap: 12px; padding: 13px 16px; cursor: pointer; background: var(--card-2); }
+  .fila-carrera-comision .cabecera-carrera:hover { background: rgba(15,60,35,0.06); }
+  .fila-carrera-comision .flecha-expandir { font-size: 13px; color: var(--text-dim); transition: transform .18s; flex-shrink: 0; }
+  .fila-carrera-comision.expandida .flecha-expandir { transform: rotate(90deg); }
+  .fila-carrera-comision .info-carrera { flex: 1; min-width: 0; }
+  .fila-carrera-comision .info-carrera .hipodromo { font-weight: 700; font-size: 13.5px; color: #15321f; }
+  .fila-carrera-comision .info-carrera .detalle-fecha { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+  .fila-carrera-comision .monto-carrera { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; color: var(--accent-grass); flex-shrink: 0; }
+  .fila-carrera-comision .detalle-carrera { display: none; padding: 4px 16px 14px; }
+  .fila-carrera-comision.expandida .detalle-carrera { display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--card-border); }
+  th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--ok); font-weight: 700; }
+  .neg { color: var(--danger); font-weight: 700; }
+
+  .balance-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .balance-col h3 { font-family: 'Outfit', sans-serif; font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; color: var(--text); }
+  .flecha { font-size: 12px; }
+  .flecha-verde { color: var(--ok); }
+  .flecha-roja { color: var(--danger); }
+  .balance-lista { display: flex; flex-direction: column; gap: 6px; }
+  .balance-fila { display: flex; justify-content: space-between; align-items: center; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 12px; font-size: 13.5px; }
+  .balance-fila .nombre { font-weight: 600; }
+  .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
+  .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
+  .comision-caja { margin-top: 16px; background: linear-gradient(100deg, var(--warning), #f59e0b 75%); border: none; border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 3px 10px rgba(217,119,6,0.25); }
+  .comision-caja .etiqueta { font-family: 'Outfit', sans-serif; font-size: 15px; color: #2b1c02; font-weight: 800; letter-spacing: 0.2px; }
+  .comision-caja .monto { font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; color: #2b1c02; }
+
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
+  .pill-verde { background: rgba(22,163,74,0.12); color: var(--ok); border: 1px solid rgba(22,163,74,0.32); }
+
+  /* Logo del grupo, arriba de las capturas que se exportan/comparten
+     (Balance General y Cierre Final) — pedido del usuario, 22-09-2026.
+     Acá es un placeholder con emoji; en producción sale de una imagen que
+     cada grupo sube (pendiente definir dónde se configura). */
+  .logo-grupo {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 21px; box-shadow: 0 2px 6px rgba(15,60,35,0.18);
+  }
+  .encabezado-captura { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .encabezado-captura .titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; color: #15321f; }
+  .encabezado-captura .fecha { font-size: 12px; color: #587264; margin-top: 1px; }
+
+  /* Logo grande de Cierre Final — pedido del usuario, 22-09-2026: "el logo
+     lo quiero grande expandido del ancho de la tabla". A diferencia del
+     logo chico de Balance General (.logo-grupo, arriba), este es un
+     banner que ocupa el 100% del ancho de la caja exportable, con el
+     ícono del grupo más grande adentro. Como #cierreFinalCaptura pasó a
+     padding:0 (el padding ahora vive en .cierre-final-cuerpo, más abajo),
+     este banner llega solo hasta el borde de la tarjeta blanca. */
+  .logo-grupo-grande {
+    width: 100%; box-sizing: border-box;
+    padding: 22px 20px;
+    background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime));
+    display: flex; align-items: center; gap: 16px;
+  }
+  .logo-grupo-grande .logo-grande-icono {
+    width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; box-shadow: 0 2px 10px rgba(15,60,35,0.22);
+  }
+  .logo-grupo-grande .titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 19px; color: #ffffff; }
+  .logo-grupo-grande .fecha { font-size: 12.5px; color: rgba(255,255,255,0.9); margin-top: 2px; }
+  .cierre-final-cuerpo { padding: 18px 20px; }
+
+  /* Cierre Final: columnas opcionales que el usuario puede ocultar/mostrar
+     (22-09-2026) — por defecto ocultas, porque mayormente solo se envía el
+     saldo definitivo. Se ocultan también dentro de la captura, así que no
+     aparecen en la imagen/PDF exportado cuando están apagadas. */
+  #cierreFinalCaptura.ocultar-jugadas .col-jugadas { display: none; }
+  #cierreFinalCaptura.ocultar-gano .col-gano { display: none; }
+  #cierreFinalCaptura.ocultar-perdio .col-perdio { display: none; }
+
+  .placeholder-card { border: 1px dashed var(--card-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
+
+  .punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .punto-verde { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+  .punto-amarillo { background: #eab308; box-shadow: 0 0 0 3px rgba(234,179,8,0.18); }
+  .punto-rojo { background: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.18); }
+  .punto-gris { background: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,0.15); }
+
+  .vista { display: none; }
+  .vista.activa { display: block; }
+
+  .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .subnav button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 20px; cursor: pointer; }
+  .subnav button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; border-color: transparent; }
+  .subvista { display: none; }
+  .subvista.activa { display: block; }
+
+  @media (max-width: 860px) {
+    .app-shell { flex-direction: column; }
+    .sidebar-admin { width: 100%; position: static; }
+    .balance-cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="banner-borrador">🚧 BORRADOR PARA REVISAR — estructura y colores del panel de Hipismo. Ningún dato de acá es real ni se guarda en ningún lado todavía; el cálculo de "Cargar Planos" sí funciona de verdad con las reglas que confirmamos.</div>
+
+<!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
+     vea" — se saca de la barra lateral (donde solo se veía si estabas en
+     esa pantalla/scroll) y se pone FIJA en la esquina, encima de todo,
+     visible sin importar en qué pestaña estés o cuánto scroll hagas.
+     Solo aparece cuando hay al menos 1 cliente en pozo rojo. -->
+<button type="button" id="alertaFlotante" class="alerta-flotante" style="display:none;" onclick="irAPozosDesdeAlerta()">
+  🚨 <span id="alertaFlotanteTexto">1 cliente en pozo rojo</span>
+</button>
+
+<div class="topbar">
+  <div class="marca">
+    <span class="logo-emoji">🏇</span>
+    <div>
+      <h1>Ludox — Panel del Grupo</h1>
+      <div class="sub">Zenyatta 🇻🇪</div>
+    </div>
+  </div>
+  <div class="selector-modulo">
+    <button type="button">⚽ Deportes</button>
+    <button type="button" class="activo">🐎 Hipismo</button>
+  </div>
+</div>
+
+<div class="app-shell">
+
+  <nav class="sidebar-admin" id="sidebar">
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('apuestas')">🏁 Apuestas <span id="caretApuestas">▾</span></button>
+    <div class="nav-children" id="grupoApuestas">
+      <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥 Cargar Planos</button>
+      <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅ Validar Plano</button>
+      <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆 Cargar Remate</button>
+      <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁 Traspasos de Jugadas</button>
+    </div>
+
+    <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰 Pozos</button>
+    <button type="button" class="nav-item" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒 Balance General</button>
+    <button type="button" class="nav-item" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁 Cierre Final</button>
+
+    <hr>
+
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('comisiones')">💼 Comisiones <span id="caretComisiones">▾</span></button>
+    <div class="nav-children" id="grupoComisiones">
+      <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈 Comisiones por Carrera</button>
+      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️ Comisiones Devueltas</button>
+      <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳 Saldo Comisiones</button>
+    </div>
+
+    <hr>
+
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('admin')">⚙️ Administración <span id="caretAdmin">▾</span></button>
+    <div class="nav-children" id="grupoAdmin">
+      <button type="button" class="nav-item nav-child" data-vista="clientes" onclick="mostrarVista('clientes', this)">👤 Clientes</button>
+      <button type="button" class="nav-item nav-child" data-vista="avales" onclick="mostrarVista('avales', this)">🛡️ Avales y Depósitos</button>
+      <button type="button" class="nav-item nav-child" data-vista="retiros" onclick="mostrarVista('retiros', this)">💸 Retiros</button>
+      <button type="button" class="nav-item nav-child" data-vista="traspasos" onclick="mostrarVista('traspasos', this)">🔄 Traspaso de Saldo</button>
+      <button type="button" class="nav-item nav-child" data-vista="gastos" onclick="mostrarVista('gastos', this)">🧾 Gastos</button>
+      <button type="button" class="nav-item nav-child" data-vista="hipodromos" onclick="mostrarVista('hipodromos', this)">🏟️ Hipódromos</button>
+      <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅 Fecha de Semana</button>
+      <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝 Cabeza y Pie de Plano</button>
+      <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥 Usuarios</button>
+      <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️ Planos Eliminados</button>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ CARGAR PLANOS (funcional, con las reglas confirmadas) ============ -->
+    <section class="vista activa" id="vista-cargarPlanos">
+      <div class="card">
+        <h2>📥 Cargar Planos</h2>
+        <p class="desc">Pegá el plano de una carrera, metés la pizarra (orden de llegada) y le das <b>Calcular</b>. Ya tiene programadas las modalidades de Tercios (1p...10p, 1/2, 2n, 3n, 2y2, 2y3, pp) más el sistema de cuotas 10/N, con el 5% de comisión y la opción de "cruzar jugadas" que confirmaste. <span class="badge-pendiente">Formato exacto de 10/N todavía en revisión</span></p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromo">Hipódromo</label>
+            <select id="selHipodromo">
+              <option>La Rinconada</option>
+              <option>Valencia</option>
+              <option>+ Crear hipódromo…</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCarrera">Carrera</label>
+            <select id="selCarrera"></select>
+          </div>
+          <div>
+            <label for="inpFecha">Fecha</label>
+            <input type="date" id="inpFecha">
+          </div>
+        </div>
+
+        <div class="fila">
+          <div>
+            <label for="inpRet">Ret (retirados) — opcional</label>
+            <input type="text" id="inpRet" placeholder="Ej: 3, 7">
+          </div>
+          <div>
+            <label for="inpPizarra">Pizarra (orden de llegada, ej: 6.10.4.8.2)</label>
+            <input type="text" id="inpPizarra" value="6.10.4.8.2">
+          </div>
+        </div>
+
+        <div class="check-fila">
+          <input type="checkbox" id="chkCruzar" checked>
+          <label for="chkCruzar">Cruzar jugadas para este grupo (se activa/desactiva por grupo desde Súper-admin)</label>
+        </div>
+
+        <label for="txtEncabezado">Encabezado (se arma solo — vista previa)</label>
+        <textarea id="txtEncabezado" rows="4" readonly style="opacity:0.85; margin-bottom:14px;"></textarea>
+
+        <label for="txtPlano">Plano (pegá aquí las jugadas)</label>
+        <textarea id="txtPlano" rows="14"></textarea>
+
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" onclick="calcularPlano()">🧮 Calcular</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarPlano()">🧹 Limpiar</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultado()">📋 Copiar Resultado</button>
+          <span class="toast-copiado" id="toastCopiado">Copiado ✅</span>
+        </div>
+
+        <div id="resultadoVacio" class="resultado-vacio">El plano resuelto va a aparecer acá cuando le des Calcular.</div>
+        <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
+      </div>
+    </section>
+
+    <!-- ============ VALIDAR PLANO (pendiente) ============ -->
+    <section class="vista" id="vista-validarPlano">
+      <div class="card">
+        <h2>✅ Validar Plano <span class="badge-pendiente">Pendiente de definir</span></h2>
+        <p class="desc">Todavía falta que me expliques qué hace exactamente esta sección — la dejé como espacio reservado en el menú para no perder el orden que diste.</p>
+        <div class="placeholder-card">Sin definir todavía</div>
+      </div>
+    </section>
+
+    <!-- ============ CARGAR REMATE (pendiente) ============ -->
+    <section class="vista" id="vista-cargarRemate">
+      <div class="card">
+        <h2>🏆 Cargar Remate <span class="badge-pendiente">Pendiente de definir</span></h2>
+        <p class="desc">Igual que "Validar Plano" — falta que me cuentes qué va aquí (probablemente el resultado/pago final de la carrera, pero lo confirmamos cuando me expliques).</p>
+        <div class="placeholder-card">Sin definir todavía</div>
+      </div>
+    </section>
+
+    <!-- ============ TRASPASOS DE JUGADAS ============ -->
+    <section class="vista" id="vista-traspasosJugadas">
+      <div class="card">
+        <h2>🔁 Traspasos de Jugadas</h2>
+        <p class="desc">Para cuando una jugada quedó cargada con el nombre de cliente equivocado, o hay que pasarle una jugada de un cliente a otro: pegá el plano (o cargá el que ya está en "Cargar Planos"), elegí qué nombre cambiar y por cuál, y generá un plano nuevo con el cambio ya aplicado — listo para pegar de vuelta en "Cargar Planos" y recalcular. Esto NO recalcula nada acá — solo arma el texto del plano con los nombres ya cambiados.</p>
+
+        <label for="txtTraspasoOriginal">Plano original</label>
+        <textarea id="txtTraspasoOriginal" rows="12" placeholder="Pegá acá el plano..."></textarea>
+        <div class="btn-fila" style="margin-top:8px; margin-bottom:16px;">
+          <button class="btn btn-secundario" type="button" onclick="cargarPlanoActualEnTraspaso()">📋 Cargar el plano actual de "Cargar Planos"</button>
+          <button class="btn btn-secundario" type="button" onclick="detectarJugadoresTraspaso()">🔍 Detectar jugadores</button>
+        </div>
+
+        <div id="chipsJugadoresTraspaso" class="chips-jugadores" style="display:none; margin-bottom:18px;"></div>
+
+        <label>Cambios de nombre</label>
+        <p class="desc" style="margin-bottom:8px;">Agregá uno o varios cambios — cada uno reemplaza TODAS las veces que aparece ese nombre en el plano (tanto donde jugó como donde banqueó).</p>
+        <div id="filasTraspaso"></div>
+        <div class="btn-fila" style="margin-bottom:16px;">
+          <button class="btn btn-secundario" type="button" onclick="agregarFilaTraspaso()">+ Agregar cambio</button>
+        </div>
+
+        <div class="btn-fila" style="margin-bottom:16px;">
+          <button class="btn btn-primario" type="button" onclick="generarPlanoTraspaso()">🔁 Generar plano con los cambios</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarPlanoTraspaso()">📋 Copiar plano nuevo</button>
+          <span class="toast-copiado" id="toastTraspaso"></span>
+        </div>
+
+        <div id="resultadoVacioTraspaso" class="resultado-vacio">El plano con los cambios va a aparecer acá cuando le des "Generar plano con los cambios".</div>
+        <pre class="resultado-caja" id="resultadoTraspasoCaja" style="display:none;"></pre>
+      </div>
+    </section>
+
+    <!-- ============ POZOS ============ -->
+    <section class="vista" id="vista-pozos">
+      <div class="card">
+        <h2>💰 Pozos</h2>
+        <p class="desc">Cuánto pozo/saldo le queda a cada cliente. Ejemplo con los números que diste: si a Pedro se le asigna un pozo de 1000 y pierde 700 en el período, le quedan 300 de pozo. El círculo de color avisa qué tan vivo está ese pozo: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Datos de ejemplo, no reales.</p>
+
+        <div class="btn-fila" style="margin-bottom:14px;">
+          <button class="btn btn-primario" type="button" onclick="copiarPozosImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarPozosTexto()">📋 Copiar Texto (para el grupo)</button>
+          <span class="toast-copiado" id="toastPozos"></span>
+        </div>
+
+        <div id="pozosCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div style="font-family:'Outfit',sans-serif; font-weight:800; font-size:16px; color:#15321f; margin-bottom:2px;">💰 Pozos — Zenyatta 🇻🇪</div>
+          <div style="font-size:12px; color:#587264; margin-bottom:14px;" id="pozosFechaCaptura"></div>
+          <table id="tablaPozos">
+            <thead><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Perdido en el período</th><th class="num">Pozo restante</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr data-pct="90"><td>Kristian</td><td class="num">1.000,00</td><td class="num neg">-100,00</td><td class="num pos">900,00</td><td><span class="punto punto-verde"></span> 90%</td></tr>
+              <tr data-pct="30"><td>Pedro</td><td class="num">1.000,00</td><td class="num neg">-700,00</td><td class="num pos">300,00</td><td><span class="punto punto-amarillo"></span> 30%</td></tr>
+              <tr data-pct="10" class="fila-pozo-rojo"><td>Mujica</td><td class="num">500,00</td><td class="num neg">-450,00</td><td class="num pos">50,00</td><td><span class="punto punto-rojo"></span> 10%</td></tr>
+              <tr><td>Sammy</td><td class="num">Libre (sin pozo)</td><td class="num">—</td><td class="num">—</td><td><span class="punto punto-gris"></span> Libre</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BALANCE GENERAL ============ -->
+    <section class="vista" id="vista-balanceGeneral">
+      <div class="card">
+        <h2>📒 Balance General</h2>
+        <p class="desc">Dos listas: a la izquierda los que van perdiendo, del mayor perdedor al menor; a la derecha los que van ganando, del mayor ganador al menor. En rojo/negativo los que pierden, en verde/positivo los que ganan. Se llena solo con lo último que calculaste en "Cargar Planos" — probá calcular el plano de ejemplo y volvé acá.</p>
+
+        <div class="btn-fila" style="margin-bottom:16px;">
+          <button class="btn btn-primario" type="button" onclick="copiarBalanceImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarBalanceExcel()">📊 Descargar Excel</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarBalancePDF()">📄 Descargar PDF</button>
+          <span class="toast-copiado" id="toastBalance"></span>
+        </div>
+
+        <div id="balanceCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="encabezado-captura">
+            <div class="logo-grupo">🏇</div>
+            <div>
+              <div class="titulo">📒 Balance General — Zenyatta 🇻🇪</div>
+              <div class="fecha" id="balanceFechaCaptura"></div>
+            </div>
+          </div>
+          <div class="balance-cols">
+            <div class="balance-col">
+              <h3><span class="flecha flecha-roja">▼</span> Pierden</h3>
+              <div class="balance-lista" id="listaPierden"></div>
+            </div>
+            <div class="balance-col">
+              <h3><span class="flecha flecha-verde">▲</span> Ganan</h3>
+              <div class="balance-lista" id="listaGanan"></div>
+            </div>
+          </div>
+          <div class="comision-caja">
+            <span class="etiqueta">💼 Comisión</span>
+            <span class="monto" id="montoComision">$ 0,00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CIERRE FINAL ============ -->
+    <section class="vista" id="vista-cierreFinal">
+      <div class="card">
+        <h2>🏁 Cierre Final</h2>
+        <p class="desc">El saldo definitivo de cada cliente para la semana completa — todos los ítems de todos los planos/carreras de esos 7 días, ya sumados. El sistema guarda como máximo las últimas 2 semanas cerradas, más la semana que se está trabajando actualmente (3 en total); usá los botones de abajo para ver una semana anterior.</p>
+
+        <div class="subnav" id="selectorSemanaCierre">
+          <button type="button" class="activo" data-semana="0" onclick="mostrarSemanaCierre(0, this)">Semana actual</button>
+          <button type="button" data-semana="1" onclick="mostrarSemanaCierre(1, this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="2" onclick="mostrarSemanaCierre(2, this)">🗓️ Hace 2 semanas</button>
+        </div>
+
+        <label style="margin-top:2px;">Columnas a mostrar</label>
+        <p class="desc" style="margin-bottom:8px;">Por defecto solo se ve el saldo definitivo de cada cliente, que es lo que mayormente se envía. Marcá acá si además necesitás ver cuántas jugadas hizo, cuánto ganó o cuánto perdió — esto también se refleja en lo que copiás/descargás.</p>
+        <div class="fila" style="margin-bottom:6px;">
+          <div class="check-fila" style="margin-bottom:0;">
+            <input type="checkbox" id="chkColJugadas" onchange="actualizarColumnasCierre()">
+            <label for="chkColJugadas" style="margin:0;">Ver "Jugadas"</label>
+          </div>
+          <div class="check-fila" style="margin-bottom:0;">
+            <input type="checkbox" id="chkColGano" onchange="actualizarColumnasCierre()">
+            <label for="chkColGano" style="margin:0;">Ver "Ganó"</label>
+          </div>
+          <div class="check-fila" style="margin-bottom:0;">
+            <input type="checkbox" id="chkColPerdio" onchange="actualizarColumnasCierre()">
+            <label for="chkColPerdio" style="margin:0;">Ver "Perdió"</label>
+          </div>
+        </div>
+
+        <div class="btn-fila" style="margin-bottom:16px;">
+          <button class="btn btn-primario" type="button" onclick="copiarCierreImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarCierreExcel()">📊 Descargar Excel</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarCierrePDF()">📄 Descargar PDF</button>
+          <span class="toast-copiado" id="toastCierre"></span>
+        </div>
+
+        <div id="cierreFinalCaptura" class="ocultar-jugadas ocultar-gano ocultar-perdio" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
+          <div class="logo-grupo-grande">
+            <div class="logo-grande-icono">🏇</div>
+            <div>
+              <div class="titulo">🏁 Cierre Final — Zenyatta 🇻🇪</div>
+              <div class="fecha" id="cierreRangoCaptura"></div>
+            </div>
+          </div>
+          <div class="cierre-final-cuerpo">
+            <table>
+              <thead><tr><th>Cliente</th><th class="num col-jugadas">Jugadas</th><th class="num col-gano">Ganó</th><th class="num col-perdio">Perdió</th><th class="num">Saldo definitivo</th></tr></thead>
+              <tbody id="tablaCierreFinal"></tbody>
+            </table>
+            <div class="comision-caja">
+              <span class="etiqueta">💼 Comisión de la semana</span>
+              <span class="monto" id="montoComisionCierre">$ 0,00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMISIONES POR CARRERA ============ -->
+    <section class="vista" id="vista-comisionesPorCarrera">
+      <div class="card">
+        <h2>📈 Comisiones por Carrera</h2>
+        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec) en cada carrera. Hacé clic en una carrera para ver el detalle, jugada por jugada, de cómo se armó esa comisión. <span class="badge-pendiente">Datos de ejemplo — en producción sale de sumar la comisión de cada plano ya calculado</span></p>
+        <div id="listaComisionesPorCarrera"></div>
+      </div>
+    </section>
+
+    <!-- ============ COMISIONES DEVUELTAS ============ -->
+    <section class="vista" id="vista-comisionesDevueltas">
+      <div class="card">
+        <h2>↩️ Comisiones Devueltas</h2>
+        <p class="desc">Cuánto se devolvió de comisión, carrera por carrera, a los clientes que tienen configurado un % de devolución (sección 10 del spec — a sí mismos o a quien los avala). Hacé clic en una carrera para ver a quién se le devolvió y cuánto. <span class="badge-pendiente">Datos de ejemplo — la fórmula exacta de la devolución todavía está pendiente de confirmar con vos</span></p>
+        <div id="listaComisionesDevueltas"></div>
+      </div>
+    </section>
+
+    <!-- ============ SALDO COMISIONES ============ -->
+    <section class="vista" id="vista-saldoComisiones">
+      <div class="card">
+        <h2>💳 Saldo Comisiones</h2>
+        <p class="desc">Por cliente: su % de devolución configurado y cuánto lleva acumulado devuelto en la semana actual. <span class="badge-pendiente">Datos de ejemplo</span></p>
+        <table>
+          <thead><tr><th>Cliente</th><th class="num">% Devolución</th><th class="num">Devuelto esta semana</th></tr></thead>
+          <tbody id="tablaSaldoComisiones"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: CLIENTES ============ -->
+    <section class="vista" id="vista-clientes">
+      <div class="card">
+        <h2>👤 Clientes</h2>
+        <p class="desc">Acá se crean los clientes. Cada cliente puede tener un % de devolución de sus jugadas — a sí mismo, o a quien lo avala — y un saldo inicial, o quedar libre (sin saldo asignado). Cada cliente también recibe un <strong>link público</strong> propio, para que entre a ver sus jugadas, sin necesidad de clave.</p>
+        <div class="fila">
+          <div><label>Nombre del cliente</label><input type="text" placeholder="Ej: Pedro"></div>
+          <div><label>¿A quién se le devuelve el %?</label><select><option>Al mismo cliente</option><option>A quien lo avala</option><option>No aplica</option></select></div>
+        </div>
+        <div class="fila">
+          <div><label>% de devolución</label><input type="text" placeholder="Ej: 5%"></div>
+          <div><label>Saldo</label><select><option>Colocar saldo inicial</option><option>Dejar libre (sin saldo)</option></select></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Crear cliente</button></div>
+        <table style="margin-top:18px;">
+          <thead><tr><th>Cliente</th><th>Devolución %</th><th>A quién</th><th>Saldo</th><th>Link público</th></tr></thead>
+          <tbody id="tablaClientes">
+            <tr data-cliente="Pedro">
+              <td>Pedro</td><td>5%</td><td>Al mismo cliente</td><td>Pozo 1.000,00</td>
+              <td>
+                <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkCliente('Pedro', this)">🔗 Copiar link</button>
+                <span class="toast-copiado">¡Copiado!</span>
+              </td>
+            </tr>
+            <tr data-cliente="Sammy">
+              <td>Sammy</td><td>—</td><td>No aplica</td><td><span class="pill pill-verde">Libre</span></td>
+              <td>
+                <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkCliente('Sammy', this)">🔗 Copiar link</button>
+                <span class="toast-copiado">¡Copiado!</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="desc" style="margin-top:12px; margin-bottom:0;">Al pulsar "Copiar link" se copia una URL única del cliente (ej: <code>ludox.app/mis-jugadas/pedro-8f2a</code>) para pegarla directo en el chat del cliente por WhatsApp. Esa página muestra sus jugadas ordenadas por día y por hipódromo, con su saldo por hipódromo, su total del día y su total de la semana — con flechas para resumir cada día o cada hipódromo. <span class="badge-pendiente">Vista de ejemplo — ver hipismo-cliente-portal.html</span></p>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: AVALES Y DEPÓSITOS ============ -->
+    <section class="vista" id="vista-avales">
+      <div class="card">
+        <h2>🛡️ Avales y Depósitos</h2>
+        <p class="desc">Cuánto tiene de aval cada cliente (quién responde por él y con cuánto).</p>
+        <div class="fila">
+          <div><label>Cliente</label><input type="text" placeholder="Ej: Mujica"></div>
+          <div><label>Avalado por</label><input type="text" placeholder="Ej: Hernan"></div>
+          <div><label>Monto de aval</label><input type="text" placeholder="Ej: 2.000,00"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Registrar aval</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: RETIROS ============ -->
+    <section class="vista" id="vista-retiros">
+      <div class="card">
+        <h2>💸 Retiros</h2>
+        <p class="desc">Para registrar un pago que se le hizo a un cliente.</p>
+        <div class="fila">
+          <div><label>Cliente</label><input type="text" placeholder="Ej: Tykhe"></div>
+          <div><label>Monto pagado</label><input type="text" placeholder="Ej: 190,00"></div>
+          <div><label>Fecha</label><input type="date"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Registrar retiro</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: TRASPASO DE SALDO ============ -->
+    <section class="vista" id="vista-traspasos">
+      <div class="card">
+        <h2>🔄 Traspaso de Saldo</h2>
+        <p class="desc">Pasar saldo de un cliente a otro.</p>
+        <div class="fila">
+          <div><label>De (cliente)</label><input type="text" placeholder="Ej: Mrincreible"></div>
+          <div><label>A (cliente)</label><input type="text" placeholder="Ej: Puertolacruz"></div>
+          <div><label>Monto</label><input type="text" placeholder="Ej: 50,00"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Traspasar</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: GASTOS ============ -->
+    <section class="vista" id="vista-gastos">
+      <div class="card">
+        <h2>🧾 Gastos</h2>
+        <p class="desc">Todos los gastos del grupo: sueldos, publicidad, etc.</p>
+        <div class="fila">
+          <div><label>Concepto</label><input type="text" placeholder="Ej: Sueldo operador"></div>
+          <div><label>Monto</label><input type="text" placeholder="Ej: 300,00"></div>
+          <div><label>Fecha</label><input type="date"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Registrar gasto</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: HIPÓDROMOS ============ -->
+    <section class="vista" id="vista-hipodromos">
+      <div class="card">
+        <h2>🏟️ Hipódromos</h2>
+        <p class="desc">Se crean los hipódromos de la fecha que se va a jugar. Cada hipódromo trae, por defecto, hasta 25 carreras. La bandera se coloca sola según el país (🇻🇪 los de Venezuela, 🇺🇸 los de EE.UU.), y quedan separados en dos listas: Nacionales y Americanos.</p>
+
+        <div class="fila">
+          <div>
+            <label for="inpNombreHipodromo">Nombre del hipódromo</label>
+            <input type="text" id="inpNombreHipodromo" placeholder="Empezá a escribir…" list="listaHipodromosConocidos" autocomplete="off">
+            <!-- 22-09-2026, a pedido del usuario: que al crear un hipódromo quede
+                 "guardado" para que la próxima vez no haya que escribirlo
+                 completo — en este mockup se simula con un <datalist> HTML
+                 (autocompletado nativo del navegador) precargado con los
+                 nombres que mandó, más los que se vayan creando en vivo. En
+                 el sistema real esto sale de una tabla en la base de datos
+                 que crece cada vez que se crea un hipódromo nuevo. -->
+            <datalist id="listaHipodromosConocidos"></datalist>
+          </div>
+          <div>
+            <label for="selPaisHipodromo">País</label>
+            <select id="selPaisHipodromo">
+              <option value="VE">🇻🇪 Venezuela</option>
+              <option value="US">🇺🇸 Estados Unidos</option>
+            </select>
+          </div>
+          <div><label>Cantidad de carreras</label><input type="number" id="inpCarrerasHipodromo" value="25"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="crearHipodromo()">+ Crear hipódromo</button></div>
+
+        <div style="margin-top:22px;">
+          <h3 style="font-family:'Outfit',sans-serif; font-size:14px; margin:0 0 10px;">🇻🇪 Nacionales (Venezuela)</h3>
+          <table id="tablaHipodromosVE"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div style="margin-top:22px;">
+          <h3 style="font-family:'Outfit',sans-serif; font-size:14px; margin:0 0 10px;">🇺🇸 Americanos (USA)</h3>
+          <table id="tablaHipodromosUS"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: FECHA DE SEMANA ============ -->
+    <section class="vista" id="vista-fechaSemana">
+      <div class="card">
+        <h2>📅 Fecha de Semana</h2>
+        <p class="desc">Por defecto, la semana arranca el lunes y cierra el domingo. Pero hay semanas en las que el lunes hay carreras en Estados Unidos — para esos casos, cada grupo puede definir sus propios días de inicio y cierre de semana. Esta configuración es la que se usa para calcular el "Total de la semana" y el "Balance por hipódromo" que ve cada cliente en su link público (ver Clientes).</p>
+        <div class="fila">
+          <div>
+            <label for="selInicioSemana">La semana empieza el</label>
+            <select id="selInicioSemana" onchange="actualizarPreviewSemana()">
+              <option>Lunes</option>
+              <option>Martes</option>
+              <option>Miércoles</option>
+              <option>Jueves</option>
+              <option>Viernes</option>
+              <option>Sábado</option>
+              <option>Domingo</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCierreSemana">La semana cierra el</label>
+            <select id="selCierreSemana" onchange="actualizarPreviewSemana()">
+              <option>Domingo</option>
+              <option>Lunes</option>
+              <option>Martes</option>
+              <option>Miércoles</option>
+              <option>Jueves</option>
+              <option>Viernes</option>
+              <option>Sábado</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>Guardar configuración</button></div>
+        <p class="desc" id="previewSemana" style="margin-top:16px; margin-bottom:0;"></p>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: CABEZA Y PIE DE PLANO ============ -->
+    <section class="vista" id="vista-cabezaPie">
+      <div class="card">
+        <h2>📝 Cabeza y Pie de Plano</h2>
+        <p class="desc">Lo que va arriba y abajo de cada plano que se manda al grupo. Se edita una vez y queda por defecto (se puede cambiar cuando quieran).</p>
+        <label>Cabeza (encabezado)</label>
+        <textarea rows="4" readonly>*🇻🇪🏇🏟️ [NOMBRE DEL GRUPO] 🏟️🏇🇻🇪*
+[Hipódromo], [N]ta Carrera
+Ret: [retirados]
+Pizarra: [se llena al calcular]</textarea>
+        <label style="margin-top:14px;">Pie (referencial)</label>
+        <textarea rows="8" readonly>*PLANO REFERENCIAL*
+*_La guía es el chat_*
+(se gana y se cobra con el chat)
+*USTED ES SU PROPIO CORREDOR*
+*RECLAMOS AL PRIVADO*
+*NO DIGA:* ❌MALO❌; CASA FALTA...
+*TILDE SU JUGADA Y SE REVISARÁ*</textarea>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: USUARIOS ============ -->
+    <section class="vista" id="vista-usuarios">
+      <div class="card">
+        <h2>👥 Usuarios</h2>
+        <p class="desc">Para crear sub-usuarios para los empleados (mismo concepto que ya existe en Deportes).</p>
+        <div class="fila">
+          <div><label>Nombre</label><input type="text" placeholder="Ej: Carlos"></div>
+          <div><label>Usuario</label><input type="text" placeholder="Ej: carlos.hipismo"></div>
+          <div><label>Contraseña</label><input type="password" placeholder="••••••••"></div>
+        </div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Crear usuario</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: PLANOS ELIMINADOS ============ -->
+    <section class="vista" id="vista-planosEliminados">
+      <div class="card">
+        <h2>🗑️ Planos Eliminados</h2>
+        <p class="desc">Todos los planos que se eliminaron, organizados por fecha y por hipódromo.</p>
+        <table>
+          <thead><tr><th>Fecha</th><th>Hipódromo</th><th>Carrera</th><th>Eliminado por</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>20/09/2026</td><td>La Rinconada</td><td>9na</td><td>Admin</td><td><a href="#" style="color:var(--accent-grass);">Ver</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ------------------------------------------------------------------
+// Navegación (sidebar + subnav) — solo maqueta visual
+// ------------------------------------------------------------------
+function mostrarVista(id, btn) {
+  document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
+  document.getElementById('vista-' + id).classList.add('activa');
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('nav-item-active'));
+  if (btn) btn.classList.add('nav-item-active');
+}
+function toggleGrupo(nombre) {
+  const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
+  el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
+}
+
+// ------------------------------------------------------------------
+// "Cargar Planos" — motor de cálculo real, con las reglas confirmadas
+// en claude/spec-modulo-hipismo.md (secciones 6, 7 y 8)
+// ------------------------------------------------------------------
+const PLANO_EJEMPLO = `*TERCIOS*
+Juega Bombero 1/2 (10) con 100,00 da Hernan
+Juega Sebastian 1/2 (10) con 50,00 da Flaco
+Juega Hanry pp (9x2) con 50,00 da Puertolacruz
+Juega Puertolacruz 1/2 (10) con 10,00 da Houston
+Juega Mujica 1p (10) con 100,00 da Pl
+Juega Mujica 1p (10) con 100,00 da Gg
+Juega Josue 1p (10) con 100,00 da Soyganador
+Juega Sebastian 1/2 (10) con 100,00 da Rambo
+Juega Codino 1/2 (10) con 60,00 da Gringo
+Juega Codino 1p (10) con 60,00 da Gringo
+Juega Mujica 1/2 (10) con 200,00 da Mrincreible
+Juega Puertolacruz 1/2 (10) con 25,00 da Mrincreible
+Juega Zeta 1p (10) con 50,00 da Hanry
+Juega Mujica 1/2 (10) con 100,00 da Sammy
+Juega Mujica 1p (10) con 100,00 da Sammy
+Juega Kristian 1/2 (10) con 50,00 da Sammy
+Juega Kristian 1p (10) con 50,00 da Sammy
+Juega Riky pp (4x3) con 15,00 da Zamuray
+Juega Rambo 3p (2) con 130,00 da Tykhe
+Juega Rambo 3p (2) con 70,00 da Tykhe
+Juega Puertolacruz pp (6x9) con 40,00 da Pier
+Juega Alvarado 1/2 (10) con 30,00 da Hernan
+Juega Alvarado 2n (10) con 30,00 da Hernan
+Juega Zmf 3p (6) con 50,00 da Marcopolo
+Juega Josue 1/2 (10) con 50,00 da Sebastian`;
+
+let ultimosTotales = null; // se comparte con Balance General
+
+function poblarCarreras() {
+  const sel = document.getElementById('selCarrera');
+  sel.innerHTML = '';
+  for (let i = 1; i <= 25; i++) {
+    const op = document.createElement('option');
+    op.value = i; op.textContent = i + 'ta';
+    if (i === 14) op.selected = true;
+    sel.appendChild(op);
+  }
+}
+
+function nombreOrdinal(n) { return n + 'ta'; }
+
+function actualizarEncabezado() {
+  const hip = document.getElementById('selHipodromo').value;
+  const car = document.getElementById('selCarrera').value;
+  const ret = document.getElementById('inpRet').value || '';
+  const pizarra = document.getElementById('inpPizarra').value || '.....';
+  const txt = `*🇻🇪🏇🏟️ZENYATTA🏟️🏇🇻🇪*\n${hip}, ${nombreOrdinal(car)} Carrera\nRet: ${ret}\nPizarra: ${pizarra}`;
+  document.getElementById('txtEncabezado').value = txt;
+}
+
+function formatMonto(n) {
+  const signo = n < 0 ? '-' : '';
+  const abs = Math.abs(n).toFixed(2).replace('.', ',');
+  return signo + '$ ' + abs;
+}
+function formatMontoTabla(n) {
+  return Math.abs(n).toFixed(2).replace('.', ',');
+}
+// Solo estética: en el TEXTO del plano ya calculado, cada nombre se muestra
+// con la primera letra en mayúscula (sin importar cómo lo haya tecleado el
+// admin: MUJICA, mujica, mUJICA...). Esto es puramente visual — pedido del
+// usuario 22-09-2026 — y no toca en absoluto cómo se agrupan/suman los
+// nombres puertas adentro (eso sigue usando el texto tal cual se escribió).
+function formatNombre(nombre) {
+  const n = nombre.toString().trim().toLowerCase();
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+// El monto que se MUESTRA en cada línea del plano resuelto siempre lleva
+// el 5% descontado si es una ganancia (así lo mostró el usuario en su
+// ejemplo real, línea por línea) — independiente de si el grupo cruza
+// jugadas o no. El cruce (sección 7 del spec) solo cambia cómo se arma
+// el TOTAL por persona al final, no cómo se ve cada línea individual.
+function montoMostrado(fraccionMonto) {
+  return fraccionMonto > 0 ? fraccionMonto * 0.95 : fraccionMonto;
+}
+
+// Devuelve {jugadorFrac, bancoFrac} como fracción del monto (antes de comisión).
+// pos = posición de llegada del caballo (1,2,3...) o 99 si no colocó.
+function resolverModalidad(modalidad, pos, posB) {
+  modalidad = modalidad.toLowerCase().trim();
+
+  // familia "N puestos": 1p, 2p, 3p ... 10p
+  let m = modalidad.match(/^(\d{1,2})p$/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    return (pos <= n) ? { j: 1, b: -1 } : { j: -1, b: 1 };
+  }
+
+  if (modalidad === '1/2' || modalidad === '1y2') {
+    if (pos === 1) return { j: 1, b: -1 };
+    if (pos === 2) return { j: -0.5, b: 0.5 };
+    return { j: -1, b: 1 };
+  }
+  if (modalidad === '2n' || modalidad === '2nini') {
+    if (pos === 1) return { j: 1, b: -1 };
+    if (pos === 2) return { j: 0, b: 0 };
+    return { j: -1, b: 1 };
+  }
+  if (modalidad === '3n' || modalidad === '3nn') {
+    if (pos === 1) return { j: 1, b: -1 };
+    if (pos === 2) return { j: 1, b: -1 };
+    if (pos === 3) return { j: 0, b: 0 };
+    return { j: -1, b: 1 };
+  }
+  if (modalidad === '2y2') {
+    if (pos === 1) return { j: 1, b: -1 };
+    if (pos === 2) return { j: 0.5, b: -0.5 };
+    return { j: -1, b: 1 };
+  }
+  if (modalidad === '2y3') {
+    if (pos === 1) return { j: 1, b: -1 };
+    if (pos === 2) return { j: 1, b: -1 };
+    if (pos === 3) return { j: -0.5, b: 0.5 };
+    return { j: -1, b: 1 };
+  }
+  if (modalidad === 'pp') {
+    // pos = ranking del caballo A, posB = ranking del caballo B
+    return (pos < posB) ? { j: 1, b: -1 } : { j: -1, b: 1 };
+  }
+  // "10/N" o "10aN" (décimos) — experimental, formato de línea pendiente de confirmar
+  m = modalidad.match(/^10[\/a](\d+(\.\d+)?)$/);
+  if (m) {
+    const frac = parseFloat(m[1]) / 10;
+    if (pos === 1) return { j: frac, b: -frac };
+    return { j: -1, b: 1 };
+  }
+  return null; // modalidad no reconocida
+}
+
+function calcularPlano() {
+  const pizarraTxt = document.getElementById('inpPizarra').value.trim();
+  const posiciones = {};
+  pizarraTxt.split(/[^0-9]+/).filter(Boolean).forEach((h, i) => { posiciones[parseInt(h, 10)] = i + 1; });
+  const rank = h => posiciones[h] !== undefined ? posiciones[h] : 99;
+
+  const lineas = document.getElementById('txtPlano').value.split('\n');
+  const lineaRegex = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|pp|10[\/a]\d+(?:\.\d+)?)\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
+
+  const rawPorNombre = {};
+  const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
+
+  const salidaLineas = [];
+  const sinReconocer = [];
+  let huboLineas = false;
+
+  lineas.forEach(linea => {
+    const limpia = linea.replace(/\*/g, '').trim();
+    if (!limpia) { salidaLineas.push(''); return; }
+    const mm = limpia.match(lineaRegex);
+    if (!mm) {
+      // encabezados de categoría (ej. "TERCIOS") u otras líneas se dejan igual
+      salidaLineas.push(limpia);
+      if (!/^[A-ZÁÉÍÓÚÑ ]+$/i.test(limpia.replace(/[^a-zA-Zá-úÁ-Ú ]/g, '')) || limpia.split(' ').length > 3) {
+        // probablemente una jugada mal escrita, no un título de categoría
+        if (/juega/i.test(limpia)) sinReconocer.push(limpia);
+      }
+      return;
+    }
+    huboLineas = true;
+    const [, jugador, modalidad, caballoTxt, montoTxt, banco] = mm;
+    const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
+    let resultado;
+    if (modalidad.toLowerCase() === 'pp') {
+      const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
+      resultado = resolverModalidad('pp', rank(hA), rank(hB));
+      const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
+      add(jugador, jRaw); add(banco, bRaw);
+      const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
+      salidaLineas.push(`pp (${hA}x${hB}) con ${montoTxt}`);
+      salidaLineas.push(`(${hA}) ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
+      salidaLineas.push(`(${hB}) ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
+    } else {
+      const caballo = parseInt(caballoTxt.trim(), 10);
+      resultado = resolverModalidad(modalidad, rank(caballo));
+      if (!resultado) { sinReconocer.push(limpia); salidaLineas.push(limpia); return; }
+      const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
+      add(jugador, jRaw); add(banco, bRaw);
+      const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
+      salidaLineas.push(`${modalidad} (${caballo}) con ${montoTxt}`);
+      salidaLineas.push(`Juega ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
+      salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
+    }
+    salidaLineas.push('');
+  });
+
+  const cruzar = document.getElementById('chkCruzar').checked;
+  const totalesFinales = {};
+  let comisionTotal = 0;
+
+  if (cruzar) {
+    Object.keys(rawPorNombre).forEach(nombre => {
+      const raw = rawPorNombre[nombre];
+      if (raw > 0) {
+        const neto = raw * 0.95;
+        totalesFinales[nombre] = neto;
+        comisionTotal += raw * 0.05;
+      } else {
+        totalesFinales[nombre] = raw;
+      }
+    });
+  } else {
+    // Sin cruzar: recorremos línea por línea otra vez para aplicar comisión por jugada
+    Object.keys(rawPorNombre).forEach(nombre => { totalesFinales[nombre] = 0; });
+    lineas.forEach(linea => {
+      const limpia = linea.replace(/\*/g, '').trim();
+      const mm = limpia.match(lineaRegex);
+      if (!mm) return;
+      const [, jugador, modalidad, caballoTxt, montoTxt, banco] = mm;
+      const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
+      let resultado;
+      if (modalidad.toLowerCase() === 'pp') {
+        const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
+        resultado = resolverModalidad('pp', rank(hA), rank(hB));
+      } else {
+        resultado = resolverModalidad(modalidad, rank(parseInt(caballoTxt, 10)));
+      }
+      if (!resultado) return;
+      [[jugador, resultado.j], [banco, resultado.b]].forEach(([nombre, frac]) => {
+        const bruto = frac * monto;
+        if (bruto > 0) { totalesFinales[nombre] += bruto * 0.95; comisionTotal += bruto * 0.05; }
+        else { totalesFinales[nombre] += bruto; }
+      });
+    });
+  }
+
+  if (!huboLineas) {
+    document.getElementById('resultadoVacio').textContent = 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.';
+    document.getElementById('resultadoVacio').style.display = 'block';
+    document.getElementById('resultadoCaja').style.display = 'none';
+    return;
+  }
+
+  ultimosTotales = { totales: totalesFinales, comision: comisionTotal };
+  pintarBalanceGeneral();
+
+  // Ganan y pierden van SEPARADOS (no una sola lista alfabética), cada uno
+  // ordenado del que más gana/pierde al que menos — pedido del usuario,
+  // 22-09-2026. La comisión NO se muestra en este texto: este plano se
+  // manda tal cual al grupo, y el usuario no quiere que los clientes vean
+  // la comisión de la banca (eso solo se calcula/ve en Balance General y
+  // Cierre Final, que son vistas internas del admin).
+  const entradasFinales = Object.entries(totalesFinales);
+  const ganan = entradasFinales.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
+  const pierden = entradasFinales.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
+
+  const bloques = [];
+  if (ganan.length) {
+    bloques.push('✅ *GANAN*\n' + ganan.map(([n, v]) => `${formatNombre(n)} +${formatMontoTabla(v)}`).join('\n'));
+  }
+  if (pierden.length) {
+    bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
+  }
+  const totalesTexto = bloques.join('\n\n');
+
+  const encabezado = document.getElementById('txtEncabezado').value.replace('Pizarra: .....', 'Pizarra: ' + pizarraTxt);
+  const pie = `*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gana y se cobra con el chat)\n*USTED ES SU PROPIO CORREDOR*\n*RECLAMOS AL PRIVADO*\n*NO DIGA:* ❌MALO❌; CASA FALTA...\n*TILDE SU JUGADA Y SE REVISARÁ*`;
+
+  let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto + '\n------------------------------\n------------------------------\n' + pie;
+
+  if (sinReconocer.length) {
+    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + sinReconocer.join('\n') + '\n\n' + salida;
+  }
+
+  document.getElementById('resultadoVacio').style.display = 'none';
+  const caja = document.getElementById('resultadoCaja');
+  caja.style.display = 'block';
+  caja.textContent = salida;
+}
+
+function limpiarPlano() {
+  document.getElementById('txtPlano').value = '';
+  document.getElementById('resultadoCaja').style.display = 'none';
+  document.getElementById('resultadoVacio').style.display = 'block';
+  document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';
+}
+
+function copiarResultado() {
+  const caja = document.getElementById('resultadoCaja');
+  if (caja.style.display === 'none') return;
+  const texto = caja.textContent;
+  const mostrarToast = () => {
+    const t = document.getElementById('toastCopiado');
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
+      alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+    });
+  } else {
+    alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+  }
+}
+
+// Link público del cliente: en producción cada cliente tiene un token único
+// y estable (no el nombre plano) para que el link no se pueda adivinar.
+// Acá se simula con un slug + sufijo fijo, solo para la vista previa.
+function slugCliente(nombre) {
+  return nombre.toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // sin tildes
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function copiarLinkCliente(nombre, btn) {
+  const link = `https://ludox.app/mis-jugadas/${slugCliente(nombre)}-8f2a`;
+  const toast = btn.nextElementSibling;
+  const mostrarToast = () => {
+    if (toast) {
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 1800);
+    }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(mostrarToast).catch(() => {
+      alert('No se pudo copiar automáticamente. Link: ' + link);
+    });
+  } else {
+    alert('No se pudo copiar automáticamente. Link: ' + link);
+  }
+}
+
+// ------------------------------------------------------------------
+// Balance General — se llena con lo último calculado en Cargar Planos
+// ------------------------------------------------------------------
+function pintarBalanceGeneral() {
+  const listaPierden = document.getElementById('listaPierden');
+  const listaGanan = document.getElementById('listaGanan');
+  listaPierden.innerHTML = '';
+  listaGanan.innerHTML = '';
+
+  if (!ultimosTotales) {
+    listaPierden.innerHTML = '<div class="placeholder-card">Todavía no calculaste ningún plano.</div>';
+    listaGanan.innerHTML = '<div class="placeholder-card">Todavía no calculaste ningún plano.</div>';
+    document.getElementById('montoComision').textContent = '$ 0,00';
+    return;
+  }
+
+  const entradas = Object.entries(ultimosTotales.totales);
+  const pierden = entradas.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
+  const ganan = entradas.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+
+  pierden.forEach(([nombre, v]) => {
+    const fila = document.createElement('div');
+    fila.className = 'balance-fila perdedor';
+    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">${formatMonto(v)}</span>`;
+    listaPierden.appendChild(fila);
+  });
+  ganan.forEach(([nombre, v]) => {
+    const fila = document.createElement('div');
+    fila.className = 'balance-fila ganador';
+    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">+${formatMonto(v).replace('$ ', '$ ')}</span>`;
+    listaGanan.appendChild(fila);
+  });
+  if (!pierden.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en este plano.</div>';
+  if (!ganan.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en este plano.</div>';
+
+  document.getElementById('montoComision').textContent = formatMonto(ultimosTotales.comision);
+}
+
+// ------------------------------------------------------------------
+// Pozos — círculo de color según % de pozo vivo, alerta cuando llega a
+// rojo, y los 2 botones de copiar (imagen HD / texto para el grupo)
+// ------------------------------------------------------------------
+// Umbrales pedidos por el usuario: verde >=80% vivo, rojo <15% vivo,
+// amarillo todo lo del medio (incluye el "50%" que mencionó como ejemplo).
+function colorPorPorcentaje(pct) {
+  if (pct >= 80) return 'verde';
+  if (pct < 15) return 'rojo';
+  return 'amarillo';
+}
+
+function actualizarAlertaPozos() {
+  const filasRojas = document.querySelectorAll('#tablaPozos tbody tr.fila-pozo-rojo');
+  const flotante = document.getElementById('alertaFlotante');
+  const texto = document.getElementById('alertaFlotanteTexto');
+  if (filasRojas.length > 0) {
+    flotante.style.display = 'block';
+    texto.textContent = filasRojas.length + (filasRojas.length === 1 ? ' cliente en pozo rojo' : ' clientes en pozo rojo');
+  } else {
+    flotante.style.display = 'none';
+  }
+}
+
+function irAPozosDesdeAlerta() {
+  mostrarVista('pozos', document.querySelector('[data-vista="pozos"]'));
+}
+
+function mostrarToastPozos(msg, esError) {
+  const t = document.getElementById('toastPozos');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+async function copiarPozosImagen() {
+  if (typeof html2canvas !== 'function') {
+    mostrarToastPozos('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('pozosCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastPozos('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastPozos('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        // Fallback: descarga directa si el navegador no deja copiar imágenes
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'pozos.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastPozos('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastPozos('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+function copiarPozosTexto() {
+  const emojiPorColor = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
+  const filas = document.querySelectorAll('#tablaPozos tbody tr');
+  let texto = '💰 *POZOS* — Zenyatta 🇻🇪\n📅 ' + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
+  filas.forEach(fila => {
+    const celdas = fila.querySelectorAll('td');
+    const nombre = celdas[0].textContent.trim();
+    if (fila.dataset.pct === undefined) {
+      texto += `${emojiPorColor.gris} ${nombre}: libre (sin pozo)\n`;
+    } else {
+      const pct = fila.dataset.pct;
+      const color = colorPorPorcentaje(parseInt(pct, 10));
+      const asignado = celdas[1].textContent.trim();
+      const restante = celdas[3].textContent.trim();
+      texto += `${emojiPorColor[color]} ${nombre}: ${restante} de ${asignado} (${pct}% vivo)\n`;
+    }
+  });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastPozos('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastPozos('No se pudo copiar — seleccioná el texto a mano.', true));
+  } else {
+    mostrarToastPozos('No se pudo copiar — seleccioná el texto a mano.', true);
+  }
+}
+
+// ------------------------------------------------------------------
+// Balance General — copiar imagen HD / descargar Excel / descargar PDF
+// (mismo patrón que ya usa Deportes para "Saldos Semana" en public/app.js:
+// html2canvas para la imagen/PDF, SheetJS (XLSX) para el Excel)
+// ------------------------------------------------------------------
+function mostrarToastBalance(msg, esError) {
+  const t = document.getElementById('toastBalance');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+async function copiarBalanceImagen() {
+  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('balanceCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastBalance('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastBalance('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'balance_general.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastBalance('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastBalance('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarBalancePDF() {
+  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('balanceCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('balance_general.pdf');
+    mostrarToastBalance('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastBalance('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarBalanceExcel() {
+  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (typeof XLSX === 'undefined') {
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    return;
+  }
+  const entradas = Object.entries(ultimosTotales.totales).sort((a, b) => a[1] - b[1]);
+  const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(ultimosTotales.comision.toFixed(2))]];
+  const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
+  hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Balance General');
+  XLSX.writeFile(libro, 'balance_general.xlsx');
+  mostrarToastBalance('✅ Excel descargado.');
+}
+
+// ------------------------------------------------------------------
+// Cierre Final — saldo definitivo de la semana completa, con selector de
+// semana (actual / anterior / hace 2 semanas). Pedido del usuario,
+// 22-09-2026: "siempre teniendo como base de datos máximo 2 semanas
+// guardadas en el sistema, más la que estarían trabajando actualmente" —
+// por eso son solo 3 semanas disponibles, nunca más.
+//
+// Datos de ejemplo (en producción esto sale de sumar TODOS los planos ya
+// calculados de esos 7 días, no de números sueltos como acá).
+// ------------------------------------------------------------------
+const CIERRES_SEMANALES = [
+  {
+    rango: '21 – 27 sep 2026 · semana actual, todavía en curso',
+    comision: 186.40,
+    clientes: [
+      { nombre: 'Mujica',       jugadas: 14, gano: 620.00, perdio: 380.00 },
+      { nombre: 'Rambo',        jugadas: 6,  gano: 0,      perdio: 305.00 },
+      { nombre: 'Puertolacruz', jugadas: 9,  gano: 210.00, perdio: 141.12 },
+      { nombre: 'Sebastian',    jugadas: 5,  gano: 90.00,  perdio: 140.00 },
+      { nombre: 'Kristian',     jugadas: 4,  gano: 180.00, perdio: 0 },
+      { nombre: 'Hanry',        jugadas: 3,  gano: 47.50,  perdio: 47.50 },
+    ]
+  },
+  {
+    rango: '14 – 20 sep 2026 · cerrada',
+    comision: 214.75,
+    clientes: [
+      { nombre: 'Mujica',       jugadas: 16, gano: 540.00, perdio: 610.00 },
+      { nombre: 'Rambo',        jugadas: 8,  gano: 285.00, perdio: 90.00 },
+      { nombre: 'Puertolacruz', jugadas: 7,  gano: 133.00, perdio: 200.00 },
+      { nombre: 'Sebastian',    jugadas: 6,  gano: 190.00, perdio: 50.00 },
+      { nombre: 'Kristian',     jugadas: 5,  gano: 0,      perdio: 260.00 },
+    ]
+  },
+  {
+    rango: '7 – 13 sep 2026 · cerrada',
+    comision: 165.90,
+    clientes: [
+      { nombre: 'Mujica',       jugadas: 10, gano: 300.00, perdio: 260.00 },
+      { nombre: 'Rambo',        jugadas: 5,  gano: 95.00,  perdio: 220.00 },
+      { nombre: 'Puertolacruz', jugadas: 8,  gano: 410.00, perdio: 90.00 },
+      { nombre: 'Sebastian',    jugadas: 4,  gano: 60.00,  perdio: 60.00 },
+    ]
+  }
+];
+
+let semanaCierreActual = 0;
+
+function pintarCierreFinal(idx) {
+  semanaCierreActual = idx;
+  const semana = CIERRES_SEMANALES[idx];
+  document.getElementById('cierreRangoCaptura').textContent = semana.rango;
+
+  // Orden alfabético por nombre — pedido del usuario, 22-09-2026 (antes
+  // se ordenaba de mayor a menor saldo).
+  const filas = semana.clientes
+    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  const tbody = document.getElementById('tablaCierreFinal');
+  tbody.innerHTML = '';
+  filas.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatNombre(c.nombre)}</td>
+      <td class="num col-jugadas">${c.jugadas}</td>
+      <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
+      <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
+      <td class="num ${c.saldo >= 0 ? 'pos' : 'neg'}">${c.saldo >= 0 ? '+' : '-'}${formatMontoTabla(c.saldo)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('montoComisionCierre').textContent = formatMonto(semana.comision);
+}
+
+function mostrarSemanaCierre(idx, btn) {
+  document.querySelectorAll('#selectorSemanaCierre button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  pintarCierreFinal(idx);
+}
+
+// Columnas opcionales de Cierre Final: por defecto ocultas (arrancan
+// desmarcadas en el HTML) — el usuario dijo que mayormente solo envía el
+// saldo total de la semana, pero puede tildarlas para ver/exportar el
+// detalle completo cuando lo necesite.
+function actualizarColumnasCierre() {
+  const cont = document.getElementById('cierreFinalCaptura');
+  cont.classList.toggle('ocultar-jugadas', !document.getElementById('chkColJugadas').checked);
+  cont.classList.toggle('ocultar-gano', !document.getElementById('chkColGano').checked);
+  cont.classList.toggle('ocultar-perdio', !document.getElementById('chkColPerdio').checked);
+}
+
+function mostrarToastCierre(msg, esError) {
+  const t = document.getElementById('toastCierre');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+async function copiarCierreImagen() {
+  if (typeof html2canvas !== 'function') {
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('cierreFinalCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastCierre('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastCierre('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'cierre_final.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastCierre('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastCierre('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarCierrePDF() {
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('cierreFinalCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('cierre_final.pdf');
+    mostrarToastCierre('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastCierre('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarCierreExcel() {
+  if (typeof XLSX === 'undefined') {
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    return;
+  }
+  const semana = CIERRES_SEMANALES[semanaCierreActual];
+  // Respeta las mismas columnas que el usuario tildó para ver en pantalla
+  // (Jugadas / Ganó / Perdió son opcionales; Cliente y Saldo siempre van).
+  const verJugadas = document.getElementById('chkColJugadas').checked;
+  const verGano = document.getElementById('chkColGano').checked;
+  const verPerdio = document.getElementById('chkColPerdio').checked;
+
+  const encabezados = ['Cliente'];
+  if (verJugadas) encabezados.push('Jugadas');
+  if (verGano) encabezados.push('Ganó');
+  if (verPerdio) encabezados.push('Perdió');
+  encabezados.push('Saldo definitivo');
+
+  const filas = semana.clientes
+    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(c => {
+      const fila = [formatNombre(c.nombre)];
+      if (verJugadas) fila.push(c.jugadas);
+      if (verGano) fila.push(Number(c.gano.toFixed(2)));
+      if (verPerdio) fila.push(Number((-c.perdio).toFixed(2)));
+      fila.push(Number(c.saldo.toFixed(2)));
+      return fila;
+    });
+  const filaComision = ['Comisión de la semana'];
+  for (let i = 1; i < encabezados.length - 1; i++) filaComision.push('');
+  filaComision.push(Number(semana.comision.toFixed(2)));
+
+  const hoja = XLSX.utils.aoa_to_sheet([
+    ['Cierre Final — Zenyatta 🇻🇪'],
+    [semana.rango],
+    [],
+    encabezados,
+    ...filas,
+    [],
+    filaComision
+  ]);
+  hoja['!cols'] = encabezados.map((_, i) => ({ wch: i === 0 ? 18 : 14 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Cierre Final');
+  XLSX.writeFile(libro, 'cierre_final.xlsx');
+  mostrarToastCierre('✅ Excel descargado.');
+}
+
+// ------------------------------------------------------------------
+// Hipódromos — lista Nacionales (Venezuela) / Americanos (USA), bandera
+// a la izquierda del nombre, y autocompletado (datalist) para no tener
+// que escribir el nombre completo cada vez (22-09-2026, a pedido del
+// usuario, con la lista de hipódromos que mandó de ejemplo).
+// ------------------------------------------------------------------
+let HIPODROMOS = [
+  { nombre: 'La Rinconada', pais: 'VE', carreras: 25 },
+  { nombre: 'Valencia', pais: 'VE', carreras: 25 },
+  { nombre: 'Belmont Park', pais: 'US', carreras: 25 },
+  { nombre: 'Gulfstream Park', pais: 'US', carreras: 25 },
+  { nombre: 'Los Alamitos', pais: 'US', carreras: 25 },
+  { nombre: 'Los Alamitos Race Course', pais: 'US', carreras: 25 },
+  { nombre: 'Churchill Downs', pais: 'US', carreras: 25 },
+  { nombre: 'Delaware Park', pais: 'US', carreras: 25 },
+  { nombre: 'Ajax Downs', pais: 'US', carreras: 25 },
+  { nombre: 'Thistledown', pais: 'US', carreras: 25 },
+  { nombre: 'Finger Lakes', pais: 'US', carreras: 25 },
+  { nombre: 'Presque Isle Downs', pais: 'US', carreras: 25 },
+  { nombre: 'Louisiana Downs', pais: 'US', carreras: 25 },
+  { nombre: 'Mountaineer', pais: 'US', carreras: 25 },
+  { nombre: 'Assiniboia Downs', pais: 'US', carreras: 25 },
+  { nombre: 'Albuquerque', pais: 'US', carreras: 25 },
+  { nombre: 'Horseshoe Indianapolis', pais: 'US', carreras: 25 },
+  { nombre: 'Belterra Park', pais: 'US', carreras: 25 },
+];
+
+function pintarHipodromos() {
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  const tbodyVE = document.querySelector('#tablaHipodromosVE tbody');
+  const tbodyUS = document.querySelector('#tablaHipodromosUS tbody');
+  tbodyVE.innerHTML = '';
+  tbodyUS.innerHTML = '';
+  HIPODROMOS.forEach(h => {
+    const fila = document.createElement('tr');
+    fila.innerHTML = `<td>${banderaPorPais[h.pais]} ${h.nombre}</td><td class="num">${h.carreras}</td>`;
+    (h.pais === 'VE' ? tbodyVE : tbodyUS).appendChild(fila);
+  });
+
+  const datalist = document.getElementById('listaHipodromosConocidos');
+  datalist.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">`).join('');
+}
+
+function crearHipodromo() {
+  const inputNombre = document.getElementById('inpNombreHipodromo');
+  const nombre = inputNombre.value.trim();
+  const pais = document.getElementById('selPaisHipodromo').value;
+  const carreras = parseInt(document.getElementById('inpCarrerasHipodromo').value, 10) || 25;
+  if (!nombre) return;
+  const yaExiste = HIPODROMOS.some(h => h.nombre.toLowerCase() === nombre.toLowerCase());
+  if (!yaExiste) HIPODROMOS.push({ nombre, pais, carreras });
+  pintarHipodromos();
+  inputNombre.value = '';
+}
+
+// Fecha de Semana: el grupo define cuándo arranca y cuándo cierra su
+// semana (22-09-2026, a pedido del usuario) — normalmente lunes a domingo,
+// pero se puede correr (ej. domingo a sábado) para los grupos que tienen
+// carreras de EE.UU. los lunes y quieren que esa jornada cuente en la
+// semana que está cerrando, no en la que empieza. Esto es lo que alimenta
+// el "Total de la semana" del portal público del cliente.
+function actualizarPreviewSemana() {
+  const inicio = document.getElementById('selInicioSemana').value;
+  const cierre = document.getElementById('selCierreSemana').value;
+  document.getElementById('previewSemana').textContent =
+    `Con esta configuración, cada semana va de ${inicio} a ${cierre}.`;
+}
+
+// ------------------------------------------------------------------
+// Traspasos de Jugadas (22-09-2026): cambiar el nombre de un jugador
+// dentro de un plano ya escrito y generar un plano nuevo con el cambio
+// aplicado. No recalcula nada — es un find & replace de nombre
+// COMPLETO (palabra entera, sin importar mayúsculas/minúsculas), tanto
+// donde el nombre aparece como jugador ("Juega <nombre>") como donde
+// aparece como banquero ("da <nombre>"). El resultado se pega de vuelta
+// en "Cargar Planos" para recalcular con el motor de siempre.
+// ------------------------------------------------------------------
+function cargarPlanoActualEnTraspaso() {
+  document.getElementById('txtTraspasoOriginal').value = document.getElementById('txtPlano').value;
+}
+
+function detectarJugadoresTraspaso() {
+  const texto = document.getElementById('txtTraspasoOriginal').value;
+  const lineaRegex = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|pp|10[\/a]\d+(?:\.\d+)?)\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
+  const nombres = new Set();
+  texto.split('\n').forEach(linea => {
+    const limpia = linea.replace(/\*/g, '').trim();
+    const mm = limpia.match(lineaRegex);
+    if (mm) { nombres.add(mm[1]); nombres.add(mm[5]); }
+  });
+  const cont = document.getElementById('chipsJugadoresTraspaso');
+  cont.innerHTML = '';
+  cont.style.display = 'flex';
+  if (!nombres.size) {
+    cont.innerHTML = '<div class="placeholder-card">No reconocí ningún jugador — revisá que el plano tenga el formato "Juega &lt;nombre&gt; ... da &lt;nombre&gt;".</div>';
+    return;
+  }
+  [...nombres].sort((a, b) => a.localeCompare(b, 'es')).forEach(nombre => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-jugador';
+    chip.textContent = formatNombre(nombre);
+    chip.title = 'Clic para armar un cambio con este nombre';
+    chip.onclick = () => agregarFilaTraspaso(nombre);
+    cont.appendChild(chip);
+  });
+}
+
+let contadorFilaTraspaso = 0;
+function agregarFilaTraspaso(nombreActual) {
+  contadorFilaTraspaso++;
+  const id = contadorFilaTraspaso;
+  const fila = document.createElement('div');
+  fila.className = 'fila-cambio-nombre';
+  fila.id = 'filaTraspaso' + id;
+  const valorInicial = nombreActual ? String(nombreActual).replace(/"/g, '&quot;') : '';
+  fila.innerHTML = `
+    <input type="text" placeholder="Nombre actual (ej: Mujica)" value="${valorInicial}" data-campo="desde">
+    <span class="flecha-cambio">→</span>
+    <input type="text" placeholder="Nombre nuevo (ej: Puertolacruz)" data-campo="hasta">
+    <button type="button" class="btn-quitar-cambio" onclick="document.getElementById('filaTraspaso${id}').remove()" title="Quitar este cambio">✕</button>`;
+  document.getElementById('filasTraspaso').appendChild(fila);
+}
+
+function escaparRegex(txt) {
+  return txt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function generarPlanoTraspaso() {
+  const original = document.getElementById('txtTraspasoOriginal').value;
+  if (!original.trim()) {
+    mostrarToastTraspaso('⚠️ Pegá o cargá un plano primero.', true);
+    return;
+  }
+  const filas = [...document.getElementById('filasTraspaso').children];
+  const cambios = filas.map(fila => {
+    const inputs = fila.querySelectorAll('input');
+    return { desde: inputs[0].value.trim(), hasta: inputs[1].value.trim() };
+  }).filter(c => c.desde && c.hasta);
+
+  if (!cambios.length) {
+    mostrarToastTraspaso('⚠️ Agregá al menos un cambio de nombre (actual → nuevo).', true);
+    return;
+  }
+
+  let salida = original;
+  cambios.forEach(c => {
+    const re = new RegExp('\\b' + escaparRegex(c.desde) + '\\b', 'gi');
+    salida = salida.replace(re, c.hasta);
+  });
+
+  document.getElementById('resultadoVacioTraspaso').style.display = 'none';
+  const caja = document.getElementById('resultadoTraspasoCaja');
+  caja.style.display = 'block';
+  caja.textContent = salida;
+  mostrarToastTraspaso('✅ Plano generado con los cambios.');
+}
+
+function copiarPlanoTraspaso() {
+  const caja = document.getElementById('resultadoTraspasoCaja');
+  if (caja.style.display === 'none' || !caja.textContent.trim()) {
+    mostrarToastTraspaso('⚠️ Generá el plano con los cambios primero.', true);
+    return;
+  }
+  navigator.clipboard.writeText(caja.textContent).then(() => {
+    mostrarToastTraspaso('✅ Copiado — pegalo en "Cargar Planos" para recalcular.');
+  }).catch(() => {
+    mostrarToastTraspaso('⚠️ No se pudo copiar — seleccioná el texto a mano.', true);
+  });
+}
+
+function mostrarToastTraspaso(msg, esError) {
+  const t = document.getElementById('toastTraspaso');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+// ------------------------------------------------------------------
+// Comisiones por Carrera / Comisiones Devueltas / Saldo Comisiones
+// (22-09-2026) — datos de ejemplo. La fórmula exacta de "Devolución de
+// %" todavía está pendiente de confirmar con el usuario (sección 10 del
+// spec) y hoy no hay planos guardados en una base de datos real — estas
+// 3 pantallas muestran la ESTRUCTURA que van a tener apenas eso quede
+// confirmado y haya planos reales para sumar.
+// ------------------------------------------------------------------
+const COMISIONES_POR_CARRERA = [
+  {
+    fecha: '22/09/2026', hipodromo: 'La Rinconada', carrera: '14ta',
+    detalle: [
+      { jugador: 'hernan', jugada: '1/2 (10) con 100,00', comision: 2.50 },
+      { jugador: 'pl', jugada: '1p (10) con 100,00', comision: 5.00 },
+      { jugador: 'gg', jugada: '1p (10) con 100,00', comision: 5.00 },
+      { jugador: 'soyganador', jugada: '1p (10) con 100,00', comision: 5.00 },
+      { jugador: 'rambo', jugada: '1/2 (10) con 100,00', comision: 2.50 },
+      { jugador: 'sammy', jugada: '1/2 + 1p (10) con 300,00', comision: 14.25 },
+      { jugador: 'tykhe', jugada: '3p (2) con 200,00', comision: 9.50 },
+      { jugador: 'gringo', jugada: '1/2 + 1p (10) con 60,00', comision: 4.50 },
+      { jugador: 'mrincreible', jugada: '1/2 (10) con 225,00', comision: 9.75 },
+    ],
+  },
+  {
+    fecha: '21/09/2026', hipodromo: 'Valencia', carrera: '8va',
+    detalle: [
+      { jugador: 'kristian', jugada: '1p (10) con 80,00', comision: 4.00 },
+      { jugador: 'josue', jugada: '1/2 (10) con 60,00', comision: 1.50 },
+      { jugador: 'codino', jugada: '1p (10) con 100,00', comision: 5.00 },
+      { jugador: 'zeta', jugada: '2p (6) con 50,00', comision: 2.50 },
+    ],
+  },
+  {
+    fecha: '19/09/2026', hipodromo: 'Gulfstream Park', carrera: '6ta',
+    detalle: [
+      { jugador: 'houston', jugada: '1/2 (10) con 40,00', comision: 0.95 },
+      { jugador: 'alvarado', jugada: '1/2 (10) con 30,00', comision: 0.71 },
+      { jugador: 'puertolacruz', jugada: 'pp (6x9) con 40,00', comision: 1.90 },
+    ],
+  },
+];
+
+const COMISIONES_DEVUELTAS = [
+  {
+    fecha: '22/09/2026', hipodromo: 'La Rinconada', carrera: '14ta',
+    detalle: [
+      { cliente: 'mujica', porcentaje: 5, montoDevuelto: 4.50 },
+      { cliente: 'sammy', porcentaje: 3, montoDevuelto: 2.10 },
+    ],
+  },
+  {
+    fecha: '21/09/2026', hipodromo: 'Valencia', carrera: '8va',
+    detalle: [
+      { cliente: 'kristian', porcentaje: 3, montoDevuelto: 1.20 },
+    ],
+  },
+];
+
+const SALDO_COMISIONES_CLIENTES = [
+  { nombre: 'mujica', porcentaje: 5, devueltoSemana: 4.50 },
+  { nombre: 'sammy', porcentaje: 3, devueltoSemana: 2.10 },
+  { nombre: 'kristian', porcentaje: 3, devueltoSemana: 1.20 },
+  { nombre: 'puertolacruz', porcentaje: 0, devueltoSemana: 0.00 },
+];
+
+function totalDetalle(detalle, campo) {
+  return detalle.reduce((s, d) => s + d[campo], 0);
+}
+
+function toggleFilaCarrera(id) {
+  document.getElementById(id).classList.toggle('expandida');
+}
+
+function pintarComisionesPorCarrera() {
+  const cont = document.getElementById('listaComisionesPorCarrera');
+  cont.innerHTML = '';
+  COMISIONES_POR_CARRERA.forEach((carrera, idx) => {
+    const total = totalDetalle(carrera.detalle, 'comision');
+    const filasDetalle = carrera.detalle.map(d =>
+      `<tr><td>${formatNombre(d.jugador)}</td><td>${d.jugada}</td><td class="num pos">+${formatMontoTabla(d.comision)}</td></tr>`
+    ).join('');
+    const fila = document.createElement('div');
+    fila.className = 'fila-carrera-comision';
+    fila.id = 'filaComisionCarrera' + idx;
+    fila.innerHTML = `
+      <div class="cabecera-carrera" onclick="toggleFilaCarrera('filaComisionCarrera${idx}')">
+        <span class="flecha-expandir">▶</span>
+        <div class="info-carrera">
+          <div class="hipodromo">🏇 ${carrera.hipodromo} — ${carrera.carrera} Carrera</div>
+          <div class="detalle-fecha">${carrera.fecha}</div>
+        </div>
+        <div class="monto-carrera">+${formatMontoTabla(total)}</div>
+      </div>
+      <div class="detalle-carrera">
+        <table>
+          <thead><tr><th>Cliente</th><th>Jugada</th><th class="num">Comisión</th></tr></thead>
+          <tbody>${filasDetalle}</tbody>
+        </table>
+      </div>`;
+    cont.appendChild(fila);
+  });
+}
+
+function pintarComisionesDevueltas() {
+  const cont = document.getElementById('listaComisionesDevueltas');
+  cont.innerHTML = '';
+  COMISIONES_DEVUELTAS.forEach((carrera, idx) => {
+    const total = totalDetalle(carrera.detalle, 'montoDevuelto');
+    const filasDetalle = carrera.detalle.map(d =>
+      `<tr><td>${formatNombre(d.cliente)}</td><td>${d.porcentaje}%</td><td class="num pos">+${formatMontoTabla(d.montoDevuelto)}</td></tr>`
+    ).join('');
+    const fila = document.createElement('div');
+    fila.className = 'fila-carrera-comision';
+    fila.id = 'filaComisionDevuelta' + idx;
+    fila.innerHTML = `
+      <div class="cabecera-carrera" onclick="toggleFilaCarrera('filaComisionDevuelta${idx}')">
+        <span class="flecha-expandir">▶</span>
+        <div class="info-carrera">
+          <div class="hipodromo">🏇 ${carrera.hipodromo} — ${carrera.carrera} Carrera</div>
+          <div class="detalle-fecha">${carrera.fecha}</div>
+        </div>
+        <div class="monto-carrera">+${formatMontoTabla(total)}</div>
+      </div>
+      <div class="detalle-carrera">
+        <table>
+          <thead><tr><th>Cliente</th><th>% Devuelto</th><th class="num">Monto</th></tr></thead>
+          <tbody>${filasDetalle}</tbody>
+        </table>
+      </div>`;
+    cont.appendChild(fila);
+  });
+}
+
+function pintarSaldoComisiones() {
+  const tbody = document.getElementById('tablaSaldoComisiones');
+  tbody.innerHTML = '';
+  SALDO_COMISIONES_CLIENTES.slice()
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${formatNombre(c.nombre)}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
+      tbody.appendChild(tr);
+    });
+}
+
+// ------------------------------------------------------------------
+// Init
+// ------------------------------------------------------------------
+poblarCarreras();
+document.getElementById('inpFecha').value = new Date().toISOString().slice(0, 10);
+document.getElementById('txtPlano').value = PLANO_EJEMPLO;
+['selHipodromo', 'selCarrera', 'inpRet', 'inpPizarra'].forEach(id => {
+  document.getElementById(id).addEventListener('input', actualizarEncabezado);
+  document.getElementById(id).addEventListener('change', actualizarEncabezado);
+});
+actualizarEncabezado();
+pintarBalanceGeneral();
+document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
+document.getElementById('balanceFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
+actualizarAlertaPozos();
+pintarHipodromos();
+actualizarPreviewSemana();
+pintarCierreFinal(0);
+actualizarColumnasCierre();
+pintarComisionesPorCarrera();
+pintarComisionesDevueltas();
+pintarSaldoComisiones();
+</script>
+
+<!-- html2canvas / jsPDF / XLSX (SheetJS): mismo criterio EXACTO que
+     public/app.js (Saldos Semana de Deportes) — CDN público (cdnjs), sin
+     vendorizar, mismas versiones, para que Pozos y Balance General puedan
+     copiar imagen HD / descargar PDF / descargar Excel igual que Deportes. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</body>
+</html>

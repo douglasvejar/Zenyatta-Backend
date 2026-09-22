@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ludox Hipismo 🇻🇪 — Mis Jugadas (borrador para revisar)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mismo lenguaje visual que hipismo-mockup.html (tema claro, acento verde
+     "pasto") para que el cliente sienta que está en la misma plataforma,
+     pero en un layout de una sola columna pensado para celular — este link
+     se va a abrir casi siempre desde WhatsApp. */
+  :root {
+    --bg-color: #f3f9f4;
+    --card: #ffffff;
+    --card-2: #f1f8f3;
+    --card-border: rgba(15,60,35,0.12);
+    --border-light: rgba(15,60,35,0.18);
+    --text: #15321f;
+    --text-dim: #587264;
+    --accent-grass: #16a34a;
+    --accent-lime: #65a30d;
+    --accent-deep: #14532d;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --warning: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-color);
+    color: var(--text);
+    margin: 0;
+  }
+
+  .banner-demo {
+    background: linear-gradient(100deg, #facc15, #f59e0b);
+    color: #241a03;
+    text-align: center;
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 8px 14px;
+    letter-spacing: 0.2px;
+  }
+
+  .envoltorio { max-width: 560px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .encabezado { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .encabezado .avatar {
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 17px;
+  }
+  .encabezado h1 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0; }
+  .encabezado .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .tarjeta-resumen {
+    background: linear-gradient(120deg, var(--accent-deep), var(--accent-grass) 75%);
+    color: #ffffff; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
+    box-shadow: 0 8px 20px rgba(20,83,45,0.22);
+  }
+  .tarjeta-resumen .etiqueta { font-size: 12px; opacity: 0.85; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
+  .tarjeta-resumen .monto-grande { font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .tarjeta-resumen .rango { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+  .mini-fila { display: flex; gap: 10px; margin-top: 14px; }
+  .mini-fila .mini { flex: 1; background: rgba(255,255,255,0.14); border-radius: 10px; padding: 9px 12px; }
+  .mini-fila .mini .etq { font-size: 11px; opacity: 0.85; }
+  .mini-fila .mini .val { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* Selector de semana: por defecto se ve la semana actual (lunes a
+     domingo); "‹ Semana anterior" pide un click para ver la semana pasada,
+     tal como lo pidió el usuario (22-09-2026). */
+  .switcher-semana { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .switcher-semana .rango { flex: 1; margin-top: 0; text-align: center; }
+  .switcher-semana button {
+    background: rgba(255,255,255,0.16); border: none; color: #fff;
+    font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 700;
+    padding: 7px 11px; border-radius: 20px; cursor: pointer; white-space: nowrap;
+  }
+  .switcher-semana button:disabled { opacity: 0.35; cursor: default; }
+  .switcher-semana button.oculto { visibility: hidden; }
+  .pill-semana-cerrada {
+    display: inline-block; margin-top: 6px; background: rgba(255,255,255,0.16);
+    font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; letter-spacing: 0.2px;
+  }
+
+  .titulo-seccion { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; margin: 20px 2px 10px; }
+
+  .chips-hipodromo { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .chip-hip {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 10px;
+    padding: 8px 12px; font-size: 12.5px; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 140px;
+  }
+  .chip-hip .nombre { font-weight: 600; flex: 1; }
+  .chip-hip .monto { font-weight: 800; font-variant-numeric: tabular-nums; font-family: 'Outfit', sans-serif; }
+
+  .pos { color: var(--ok); }
+  .neg { color: var(--danger); }
+
+  /* ---------- Acordeón por día ---------- */
+  .acordeon-dia { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .dia-header {
+    display: flex; align-items: center; gap: 10px; padding: 13px 14px; cursor: pointer;
+    background: var(--card-2); user-select: none;
+  }
+  .flecha-toggle { font-size: 11px; color: var(--text-dim); transition: transform .18s ease; flex-shrink: 0; width: 14px; text-align: center; }
+  .acordeon-dia.colapsado .flecha-toggle, .hip-bloque.colapsado .flecha-toggle { transform: rotate(-90deg); }
+  .dia-header .fecha { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; flex: 1; }
+  .dia-header .fecha .dow { color: var(--text-dim); font-weight: 500; font-size: 11.5px; display: block; text-transform: uppercase; letter-spacing: 0.3px; }
+  .dia-header .total-dia { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .dia-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .acordeon-dia.colapsado .dia-body { display: none; }
+
+  /* ---------- Bloque por hipódromo (anidado dentro del día) ---------- */
+  .hip-bloque { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; }
+  .hip-header {
+    display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer;
+    background: var(--bg-color); user-select: none;
+  }
+  .hip-header .bandera { font-size: 15px; }
+  .hip-header .nombre-hip { font-weight: 700; font-size: 13.5px; flex: 1; }
+  .hip-header .saldo-hip { font-weight: 800; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .hip-body { padding: 4px 10px 10px; }
+  .hip-bloque.colapsado .hip-body { display: none; }
+
+  .carrera-fila {
+    display: grid; grid-template-columns: 32px 1fr auto; gap: 3px 10px;
+    padding: 9px 4px; border-top: 1px dashed var(--card-border);
+  }
+  .carrera-fila:first-child { border-top: none; }
+  .carrera-fila .num-carrera {
+    grid-row: 1 / 3; align-self: center; text-align: center;
+    background: var(--card-2); border-radius: 8px; padding: 6px 0; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; color: var(--accent-deep);
+  }
+  .carrera-fila .jugada-txt { font-size: 13px; font-weight: 600; }
+  .carrera-fila .pizarra-txt { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .carrera-fila .resultado { text-align: right; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; align-self: center; }
+  .carrera-fila .monto-jugado { display: block; font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-align: right; }
+
+  .pie-nota { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-top: 22px; line-height: 1.6; }
+
+  @media (max-width: 380px) {
+    .mini-fila { flex-wrap: wrap; }
+    .tarjeta-resumen .monto-grande { font-size: 27px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="banner-demo">🔧 BORRADOR — esta vista es un ejemplo con datos de prueba, para revisar el diseño antes de conectarla a los planos reales</div>
+
+  <div class="envoltorio">
+
+    <div class="encabezado">
+      <div class="avatar" id="avatarIniciales">M</div>
+      <div>
+        <h1 id="saludoNombre">Hola, Mujica 👋</h1>
+        <div class="sub">Tus jugadas — Ludox Hipismo 🇻🇪</div>
+      </div>
+    </div>
+
+    <div class="tarjeta-resumen">
+      <div class="etiqueta">Total de la semana</div>
+      <div class="monto-grande" id="totalSemana">—</div>
+      <div class="switcher-semana">
+        <button type="button" id="btnSemanaAnterior" onclick="semanaAnterior()">‹ Semana anterior</button>
+        <div class="rango" id="rangoSemana">—</div>
+        <button type="button" id="btnSemanaSiguiente" onclick="semanaSiguiente()">Semana actual ›</button>
+      </div>
+      <div class="mini-fila">
+        <div class="mini" id="miniHoy">
+          <div class="etq">Hoy</div>
+          <div class="val" id="totalHoy">—</div>
+        </div>
+        <div class="mini">
+          <div class="etq">Jugadas esta semana</div>
+          <div class="val" id="cantidadJugadas">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="titulo-seccion">🏇 Balance por hipódromo</div>
+    <div class="chips-hipodromo" id="chipsHipodromo"><!-- JS --></div>
+
+    <div class="titulo-seccion">📅 Detalle por día</div>
+    <div id="listaDias"><!-- JS --></div>
+
+    <p class="pie-nota">Los montos que ves aquí ya tienen el 5% de comisión aplicado cuando ganás una jugada.<br>Cualquier duda sobre una jugada, escribí al grupo.</p>
+
+  </div>
+
+<script>
+  // ============================================================
+  // DATOS DE EJEMPLO — esta vista es un mockup. En producción,
+  // este arreglo saldrá de las jugadas reales del cliente,
+  // resueltas por el mismo motor de cálculo del panel admin
+  // (misma lógica que "Cargar Planos" en hipismo-mockup.html).
+  // ============================================================
+  const CLIENTE = { nombre: 'Mujica' };
+
+  // La semana es FIJA lunes a domingo (confirmado por el usuario, 22-09-2026:
+  // "dejala fija que la semana arranque el lunes y cierre el domingo"). Los
+  // días se agrupan por semana más abajo (construirSemanas()) y el cliente
+  // puede pasar a la semana anterior con un click (semanaAnterior()/
+  // semanaSiguiente()) — igual pedido explícito del usuario.
+  //
+  // Cada jugada trae "modalidad" + "caballo" (o "caballoA"/"caballoB" en el
+  // caso de PP, que enfrenta 2 caballos) + "rol": 'jugador' cuando el cliente
+  // jugó esa apuesta, 'banquero' cuando el cliente fue quien la banqueó
+  // (la "dio"). El texto que se muestra sale de armarJugadaTexto() más abajo,
+  // según el pedido del usuario: "Jugó 1P del 3" / "Dio 3P del 1" /
+  // "Jugó 2x6 PP" (22-09-2026).
+  const DIAS = [
+    {
+      fecha: '2026-09-22', // hoy (martes de la semana actual: lunes 21 a domingo 27)
+      hipodromos: [
+        {
+          nombre: 'La Rinconada', pais: 'VE',
+          carreras: [
+            { carrera: 4, pizarra: '10-6-8-4-2', modalidad: '1/2', caballo: 6, rol: 'jugador', monto: 200, resultado: 95 },
+            { carrera: 6, pizarra: '5-1-9-3-7',  modalidad: '2P',  caballo: 1, rol: 'jugador', monto: 80,  resultado: 76 },
+          ]
+        },
+        {
+          nombre: 'Gulfstream Park', pais: 'US',
+          carreras: [
+            { carrera: 8, pizarra: '7-3-2-5-9', modalidad: '1P', caballo: 3, rol: 'jugador', monto: 100, resultado: -100 },
+          ]
+        }
+      ]
+    },
+    {
+      fecha: '2026-09-21',
+      hipodromos: [
+        {
+          nombre: 'La Rinconada', pais: 'VE',
+          carreras: [
+            { carrera: 3, pizarra: '6-10-4-8-2', modalidad: '1P',  caballo: 10, rol: 'jugador',  monto: 100, resultado: 95 },
+            { carrera: 5, pizarra: '3-9-1-6-4',  modalidad: '1/2', caballo: 9,  rol: 'jugador',  monto: 50,  resultado: -50 },
+            { carrera: 7, pizarra: '8-2-5-1-9',  modalidad: '3P',  caballo: 5,  rol: 'banquero', monto: 60,  resultado: 57 },
+          ]
+        },
+        {
+          nombre: 'Valencia', pais: 'VE',
+          carreras: [
+            { carrera: 2, pizarra: '4-7-2-9-1', modalidad: '1P', caballo: 4, rol: 'jugador', monto: 40, resultado: 38 },
+          ]
+        }
+      ]
+    },
+    {
+      // Semana anterior (lunes 14 a domingo 20 de septiembre)
+      fecha: '2026-09-19',
+      hipodromos: [
+        {
+          nombre: 'Valencia', pais: 'VE',
+          carreras: [
+            { carrera: 1, pizarra: '2-6-9-1-4', modalidad: 'PP',  caballoA: 2, caballoB: 6, rol: 'jugador', monto: 30, resultado: 28.5 },
+            { carrera: 9, pizarra: '6-3-8-2-5', modalidad: '1/2', caballo: 3, rol: 'jugador', monto: 50, resultado: -25 },
+          ]
+        },
+        {
+          nombre: 'La Rinconada', pais: 'VE',
+          carreras: [
+            { carrera: 12, pizarra: '9-4-1-7-3', modalidad: '1P', caballo: 4, rol: 'banquero', monto: 70, resultado: -70 },
+          ]
+        }
+      ]
+    },
+    {
+      // También semana anterior — para que se vea con más de un día al probar "‹ Semana anterior"
+      fecha: '2026-09-17',
+      hipodromos: [
+        {
+          nombre: 'La Rinconada', pais: 'VE',
+          carreras: [
+            { carrera: 6, pizarra: '7-2-9-4-1', modalidad: '2P', caballo: 7, rol: 'jugador', monto: 60, resultado: -60 },
+          ]
+        }
+      ]
+    }
+  ];
+
+  const BANDERAS = { VE: '🇻🇪', US: '🇺🇸' };
+  const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const HOY_ISO = '2026-09-22';
+
+  function formatMonto(n) {
+    const neg = n < 0;
+    const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (neg ? '-' : '') + abs;
+  }
+  function claseMonto(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
+  function conSigno(n) { return (n > 0 ? '+' : (n < 0 ? '' : '')) + formatMonto(n); }
+
+  function fechaDeIso(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function isoDeFecha(dt) {
+    const p = n => (n < 10 ? '0' + n : '' + n);
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+  }
+  function fechaLegible(iso) {
+    const fecha = fechaDeIso(iso);
+    return { dow: DIAS_SEMANA[fecha.getDay()], texto: `${fecha.getDate()} de ${MESES[fecha.getMonth()]}` };
+  }
+  function fechaCorta(dt) {
+    return `${dt.getDate()} ${MESES_CORTO[dt.getMonth()]}`;
+  }
+
+  function totalCarreras(carreras) {
+    return carreras.reduce((acc, c) => acc + c.resultado, 0);
+  }
+
+  // Agrupa los días en semanas fijas de lunes a domingo (confirmado por el
+  // usuario, 22-09-2026), de más reciente a más vieja. SEMANAS[0] es la
+  // semana más reciente que tiene datos — que es la semana actual siempre
+  // que "hoy" (HOY_ISO) caiga dentro de su rango.
+  function construirSemanas() {
+    const mapa = new Map();
+    DIAS.forEach(dia => {
+      const fecha = fechaDeIso(dia.fecha);
+      const dow = fecha.getDay(); // 0=domingo..6=sábado
+      const diffAlLunes = dow === 0 ? -6 : 1 - dow;
+      const lunes = new Date(fecha);
+      lunes.setDate(lunes.getDate() + diffAlLunes);
+      const domingo = new Date(lunes);
+      domingo.setDate(domingo.getDate() + 6);
+      const clave = isoDeFecha(lunes);
+      if (!mapa.has(clave)) mapa.set(clave, { inicio: lunes, fin: domingo, dias: [] });
+      mapa.get(clave).dias.push(dia);
+    });
+    const lista = Array.from(mapa.values());
+    lista.forEach(s => s.dias.sort((a, b) => b.fecha.localeCompare(a.fecha)));
+    lista.sort((a, b) => b.inicio - a.inicio);
+    return lista;
+  }
+
+  const SEMANAS = construirSemanas();
+  let semanaIndex = 0; // 0 = semana más reciente con datos (la actual, si "hoy" cae en su rango)
+
+  // Arma la frase de la jugada tal como la pidió el usuario: contada en
+  // primera persona, diciéndole al cliente qué hizo — no la notación técnica
+  // del plano del admin ("1/2 (10)"), sino en lenguaje llano:
+  //   jugador, modalidad normal → "Jugó 1P del 3"
+  //   banquero, modalidad normal → "Dio 3P del 1"
+  //   PP (dos caballos cruzados) → "Jugó 2x6 PP" / "Dio 2x6 PP"
+  function armarJugadaTexto(c) {
+    const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
+    if (c.modalidad === 'PP') {
+      return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
+    }
+    return `${verbo} ${c.modalidad} del ${c.caballo}`;
+  }
+
+  // Pinta la semana actualmente seleccionada (SEMANAS[semanaIndex]). Se
+  // llama al cargar la página y cada vez que el cliente hace click en
+  // "‹ Semana anterior" / "Semana actual ›".
+  function renderSemana() {
+    const semana = SEMANAS[semanaIndex];
+    const inicioIso = isoDeFecha(semana.inicio);
+    const finIso = isoDeFecha(semana.fin);
+    const esActual = HOY_ISO >= inicioIso && HOY_ISO <= finIso;
+
+    // --- Totales de la semana seleccionada ---
+    let totalSemana = 0, totalHoy = 0, cantidadJugadas = 0;
+    const saldoPorHip = {}; // nombre -> {monto, pais}
+
+    semana.dias.forEach(dia => {
+      dia.hipodromos.forEach(hip => {
+        const subtotal = totalCarreras(hip.carreras);
+        totalSemana += subtotal;
+        cantidadJugadas += hip.carreras.length;
+        if (dia.fecha === HOY_ISO) totalHoy += subtotal;
+        if (!saldoPorHip[hip.nombre]) saldoPorHip[hip.nombre] = { monto: 0, pais: hip.pais };
+        saldoPorHip[hip.nombre].monto += subtotal;
+      });
+    });
+
+    document.getElementById('totalSemana').textContent = conSigno(totalSemana);
+    document.getElementById('cantidadJugadas').textContent = cantidadJugadas;
+    document.getElementById('rangoSemana').innerHTML =
+      `${fechaCorta(semana.inicio)} – ${fechaCorta(semana.fin)}` +
+      (esActual ? '<span class="pill-semana-cerrada">Semana actual</span>' : '<span class="pill-semana-cerrada">Semana cerrada</span>');
+
+    // El mini-card "Hoy" solo tiene sentido si "hoy" cae dentro de la semana
+    // que se está mostrando.
+    const miniHoy = document.getElementById('miniHoy');
+    if (esActual) {
+      miniHoy.style.display = '';
+      document.getElementById('totalHoy').textContent = conSigno(totalHoy);
+    } else {
+      miniHoy.style.display = 'none';
+    }
+
+    // Botones del selector de semana — "‹ Semana anterior" se deshabilita
+    // cuando no hay datos más viejos; "Semana actual ›" se oculta cuando ya
+    // se está viendo la semana más reciente (pedido del usuario: "un click a
+    // semana anterior en caso de que la necesiten").
+    document.getElementById('btnSemanaAnterior').disabled = semanaIndex >= SEMANAS.length - 1;
+    document.getElementById('btnSemanaSiguiente').classList.toggle('oculto', semanaIndex === 0);
+
+    // --- Chips de balance por hipódromo (de la semana seleccionada) ---
+    const chipsWrap = document.getElementById('chipsHipodromo');
+    chipsWrap.innerHTML = '';
+    Object.keys(saldoPorHip).forEach(nombre => {
+      const info = saldoPorHip[nombre];
+      const chip = document.createElement('div');
+      chip.className = 'chip-hip';
+      chip.innerHTML = `
+        <span class="bandera">${BANDERAS[info.pais] || '🏁'}</span>
+        <span class="nombre">${nombre}</span>
+        <span class="monto ${claseMonto(info.monto)}">${conSigno(info.monto)}</span>`;
+      chipsWrap.appendChild(chip);
+    });
+
+    // --- Acordeón de días (solo los de la semana seleccionada) ---
+    const listaDias = document.getElementById('listaDias');
+    listaDias.innerHTML = '';
+    if (!semana.dias.length) {
+      listaDias.innerHTML = '<p class="pie-nota" style="margin-top:0;">No hay jugadas cargadas en esta semana.</p>';
+    }
+    semana.dias.forEach((dia, idxDia) => {
+      const f = fechaLegible(dia.fecha);
+      const totalDelDia = dia.hipodromos.reduce((acc, h) => acc + totalCarreras(h.carreras), 0);
+
+      const wrapDia = document.createElement('div');
+      wrapDia.className = 'acordeon-dia';
+      wrapDia.id = `dia-${idxDia}`;
+
+      const header = document.createElement('div');
+      header.className = 'dia-header';
+      header.onclick = () => wrapDia.classList.toggle('colapsado');
+      header.innerHTML = `
+        <span class="flecha-toggle">▾</span>
+        <span class="fecha"><span class="dow">${f.dow}</span>${f.texto}${dia.fecha === HOY_ISO ? ' · hoy' : ''}</span>
+        <span class="total-dia ${claseMonto(totalDelDia)}">${conSigno(totalDelDia)}</span>`;
+      wrapDia.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'dia-body';
+
+      dia.hipodromos.forEach(hip => {
+        const subtotalHip = totalCarreras(hip.carreras);
+
+        const bloqueHip = document.createElement('div');
+        bloqueHip.className = 'hip-bloque';
+
+        const headerHip = document.createElement('div');
+        headerHip.className = 'hip-header';
+        headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
+        headerHip.innerHTML = `
+          <span class="flecha-toggle">▾</span>
+          <span class="bandera">${BANDERAS[hip.pais] || '🏁'}</span>
+          <span class="nombre-hip">${hip.nombre}</span>
+          <span class="saldo-hip ${claseMonto(subtotalHip)}">${conSigno(subtotalHip)}</span>`;
+        bloqueHip.appendChild(headerHip);
+
+        const bodyHip = document.createElement('div');
+        bodyHip.className = 'hip-body';
+
+        hip.carreras.forEach(c => {
+          const filaCarrera = document.createElement('div');
+          filaCarrera.className = 'carrera-fila';
+          filaCarrera.innerHTML = `
+            <span class="num-carrera">${c.carrera}ª</span>
+            <span class="jugada-txt">${armarJugadaTexto(c)}</span>
+            <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">con ${formatMonto(c.monto)}</span></span>
+            <span class="pizarra-txt">Pizarra: ${c.pizarra}</span>
+            <span></span>`;
+          bodyHip.appendChild(filaCarrera);
+        });
+
+        bloqueHip.appendChild(bodyHip);
+        body.appendChild(bloqueHip);
+      });
+
+      wrapDia.appendChild(body);
+      listaDias.appendChild(wrapDia);
+    });
+  }
+
+  function semanaAnterior() {
+    if (semanaIndex < SEMANAS.length - 1) {
+      semanaIndex++;
+      renderSemana();
+    }
+  }
+  function semanaSiguiente() {
+    if (semanaIndex > 0) {
+      semanaIndex--;
+      renderSemana();
+    }
+  }
+
+  // Saludo/avatar — no depende de la semana seleccionada.
+  document.getElementById('avatarIniciales').textContent = CLIENTE.nombre.trim().charAt(0).toUpperCase();
+  document.getElementById('saludoNombre').textContent = `Hola, ${CLIENTE.nombre} 👋`;
+
+  renderSemana();
+</script>
+</body>
+</html>
