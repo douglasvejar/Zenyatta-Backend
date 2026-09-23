@@ -8,8 +8,25 @@
 // footballDataApi.js) para confirmar que el cruce arma bien el resultado,
 // incluido el caso más difícil (nombres de equipo MUY distintos entre las
 // 2 fuentes, ej. "Inter Milan" vs "FC Internazionale Milano").
+//
+// ACTUALIZADO 23-09-2026 ("aun hay problemas para leer los partidos 1h de
+// futbol en cualquier liga" — ver el comentario grande en
+// footballDataApi.js con la causa real: exceso de pedidos por minuto al
+// plan gratis de football-data.org, agravado por el auto-refresco de
+// /pizarra cada 20s). Dos cambios en este archivo:
+//   1. football-data.org ahora se pide con UN SOLO endpoint
+//      (`/v4/matches?dateFrom=X&dateTo=X`, filtrado client-side por
+//      competencia) en vez de 6 pedidos por separado — los fixtures y las
+//      URLs esperadas en los mocks de abajo se actualizaron para reflejar
+//      eso.
+//   2. Se agregaron los casos H/I/J que prueban el CACHÉ por fecha (no
+//      pedir de nuevo dentro del TTL, sí pedir de nuevo tras
+//      _resetCacheParaPruebas, y que llamadas simultáneas para la misma
+//      fecha comparten un solo pedido en vuelo) — es la pieza central del
+//      arreglo de esta ronda.
 const assert = require('assert');
 const { obtenerResultadosSoccer, nombresDeEquipoCoinciden } = require('../src/services/soccerApi');
+const { _resetCacheParaPruebas } = require('../src/services/footballDataApi');
 
 let pasaron = 0, fallaron = 0;
 function check(cond, msg) {
@@ -33,14 +50,17 @@ function fixtureESPN(homeDisplayName, awayDisplayName, homeScore, awayScore) {
   };
 }
 
-function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, homeHT, awayHT) {
+// Fixture de UN partido dentro de la respuesta de `/v4/matches` (endpoint
+// general, trae partidos de VARIAS competencias a la vez — cada uno con
+// su propio `competition.code`, que es lo que footballDataApi.js usa para
+// quedarse solo con las 6 ligas que cubre este sistema).
+function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayName, awayShortName, homeHT, awayHT) {
   return {
-    matches: [{
-      status: 'FINISHED',
-      homeTeam: { name: homeName, shortName: homeShortName },
-      awayTeam: { name: awayName, shortName: awayShortName },
-      score: { halfTime: { home: homeHT, away: awayHT }, fullTime: { home: homeHT + 1, away: awayHT } }
-    }]
+    competition: { code: codigoCompetencia },
+    status: 'FINISHED',
+    homeTeam: { name: homeName, shortName: homeShortName },
+    awayTeam: { name: awayName, shortName: awayShortName },
+    score: { halfTime: { home: homeHT, away: awayHT }, fullTime: { home: homeHT + 1, away: awayHT } }
   };
 }
 
@@ -49,17 +69,13 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   // Caso A: con FOOTBALL_DATA_API_KEY configurada, se cruzan 2 partidos
   // por nombre — uno "fácil" (Napoli/SSC Napoli, mismo sufijo de
   // siempre) y uno DIFÍCIL a propósito (Inter Milan/FC Internazionale
-  // Milano, nombres bien distintos entre las 2 APIs).
+  // Milano, nombres bien distintos entre las 2 APIs). Los 2 partidos
+  // vienen en LA MISMA respuesta de `/v4/matches` (competencias PL y SA),
+  // confirmando que un solo pedido alcanza para varias ligas a la vez.
   // -----------------------------------------------------------------
+  _resetCacheParaPruebas();
   process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
-  // NOTA (20-09-2026): todas las respuestas simuladas acá agregan
-  // `ok: true` — footballDataApi.js ahora revisa `res.ok` antes de leer
-  // el JSON (para poder distinguir un error real de football-data.org de
-  // "no hay partidos ese día", ver el comentario grande en ese archivo).
-  // Sin este campo, el mock hacía que TODAS las llamadas parecieran un
-  // error, y las pruebas de esta sección se rompían — no era un bug del
-  // código nuevo, era que el mock no imitaba `fetch` de verdad (que
-  // siempre trae `.ok`).
+  let pedidosAFootballData = 0;
   global.fetch = async (url) => {
     const u = String(url);
     if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
@@ -71,14 +87,18 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
     if (u.includes('site.api.espn.com') && u.includes('/soccer/')) {
       return { ok: true, json: async () => ({ events: [] }) }; // las demás ligas de ESPN: sin partidos ese día
     }
-    if (u.includes('api.football-data.org') && u.includes('/competitions/PL/')) {
-      return { ok: true, json: async () => fixtureFootballData('Manchester City FC', 'Man City', 'Arsenal FC', 'Arsenal', 1, 1) };
-    }
-    if (u.includes('api.football-data.org') && u.includes('/competitions/SA/')) {
-      return { ok: true, json: async () => fixtureFootballData('SSC Napoli', 'Napoli', 'FC Internazionale Milano', 'Inter', 1, 1) };
-    }
-    if (u.includes('api.football-data.org')) {
-      return { ok: true, json: async () => ({ matches: [] }) }; // las demás 4 competiciones cubiertas: sin partidos ese día
+    if (u.includes('api.football-data.org') && u.includes('/v4/matches')) {
+      pedidosAFootballData++;
+      return {
+        ok: true,
+        json: async () => ({
+          matches: [
+            partidoFootballData('PL', 'Manchester City FC', 'Man City', 'Arsenal FC', 'Arsenal', 1, 1),
+            partidoFootballData('SA', 'SSC Napoli', 'Napoli', 'FC Internazionale Milano', 'Inter', 1, 1),
+            partidoFootballData('BL1', 'Bayer Leverkusen', 'Leverkusen', 'Union Berlin', 'Union', 0, 0) // competencia cubierta pero sin relación con los tickets de esta prueba — confirma que el filtro por código no rompe nada
+          ]
+        })
+      };
     }
     throw new Error('URL inesperada en la prueba: ' + url);
   };
@@ -95,11 +115,14 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   check(napoli && napoli.homeScore1H === 1 && napoli.awayScore1H === 1 && napoli.final1H === true,
     'Napoli/Inter Milan (caso difícil): el "1h" se cruza bien aunque football-data.org use "FC Internazionale Milano" (nombre MUY distinto a "Inter Milan" de ESPN) — el match funcionó por el shortName ("Inter") y por prefijo de palabra');
 
+  check(pedidosAFootballData === 1, 'Un solo pedido a football-data.org (/v4/matches) resuelve las 6 ligas cubiertas a la vez, en vez de 6 pedidos por separado — la causa real del "aun hay problemas en cualquier liga" (límite de 10 pedidos/minuto del plan gratis)');
+
   // -----------------------------------------------------------------
   // Caso B: SIN FOOTBALL_DATA_API_KEY configurada, el sistema sigue
   // funcionando exactamente igual que antes — ningún juego trae "1h",
   // pero tampoco se rompe ni se llama a football-data.org.
   // -----------------------------------------------------------------
+  _resetCacheParaPruebas();
   delete process.env.FOOTBALL_DATA_API_KEY;
   let sePidioFootballData = false;
   global.fetch = async (url) => {
@@ -134,6 +157,7 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
 
   // Caso D: liga SÍ cubierta (La Liga) pero SIN la clave configurada —
   // debe marcarse 'sin-clave', no 'liga-no-cubierta'.
+  _resetCacheParaPruebas();
   delete process.env.FOOTBALL_DATA_API_KEY;
   global.fetch = async (url) => {
     const u = String(url);
@@ -147,8 +171,11 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
     'Caso real (La Liga, sin FOOTBALL_DATA_API_KEY en el servidor): se marca "sin-clave", no el genérico de "liga no cubierta" — La Liga SÍ está en la lista');
 
   // Caso E: liga SÍ cubierta (Serie A), clave configurada, pero
-  // football-data.org devuelve un error (401/429/etc.) para esa
-  // competencia — debe marcarse 'error-api'.
+  // football-data.org devuelve un error (401/429/etc.) en el pedido a
+  // /v4/matches — debe marcarse 'error-api' para TODAS las ligas de esa
+  // respuesta (ya no hay "una competencia falla, las otras 5 no" — ahora
+  // es un solo pedido para las 6).
+  _resetCacheParaPruebas();
   process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
   global.fetch = async (url) => {
     const u = String(url);
@@ -158,18 +185,19 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
     if (u.includes('site.api.espn.com')) {
       return { ok: true, json: async () => ({ events: [] }) };
     }
-    if (u.includes('api.football-data.org') && u.includes('/competitions/SA/')) {
+    if (u.includes('api.football-data.org') && u.includes('/v4/matches')) {
       return { ok: false, status: 429, json: async () => ({}) }; // límite de pedidos superado
     }
-    return { ok: true, json: async () => ({ matches: [] }) };
+    throw new Error('URL inesperada en la prueba: ' + url);
   };
   const resE = await obtenerResultadosSoccer('2026-08-31');
   check(resE['roma'] && resE['roma'].motivoSinPrimeraMitad === 'error-api',
-    'Caso real (Serie A, football-data.org responde 429): se marca "error-api", no "liga no cubierta" — Serie A SÍ está en la lista y la clave SÍ está puesta');
+    'Caso real (Serie A, football-data.org responde 429 en /v4/matches): se marca "error-api", no "liga no cubierta" — Serie A SÍ está en la lista y la clave SÍ está puesta');
 
   // Caso F: liga SÍ cubierta, clave OK, la consulta responde 200, pero
   // este partido puntual no aparece ese día (o no cruzó por nombre) —
   // debe marcarse 'sin-cruce'.
+  _resetCacheParaPruebas();
   global.fetch = async (url) => {
     const u = String(url);
     if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
@@ -189,6 +217,58 @@ function fixtureFootballData(homeName, homeShortName, awayName, awayShortName, h
   // original ("puede que esta liga no esté cubierta") sigue siendo
   // preciso.
   check(true, 'Nota: el caso "liga-no-cubierta" ya está cubierto por test_logica.js (testFutbol1hPartidoTerminadoSinDatoDeMitad, liga Europa League)');
+
+  // -----------------------------------------------------------------
+  // Casos H-J (23-09-2026, el arreglo central de esta ronda): el CACHÉ
+  // por fecha en footballDataApi.js — ver el comentario grande ahí con
+  // la causa real reportada por el usuario (límite de 10 pedidos/minuto
+  // superado por el auto-refresco de /pizarra cada 20s).
+  // -----------------------------------------------------------------
+  _resetCacheParaPruebas();
+  process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
+  let pedidosCasoH = 0;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/eng.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Manchester City', 'Arsenal', 2, 1) };
+    }
+    if (u.includes('site.api.espn.com')) {
+      return { ok: true, json: async () => ({ events: [] }) };
+    }
+    if (u.includes('api.football-data.org') && u.includes('/v4/matches')) {
+      pedidosCasoH++;
+      return { ok: true, json: async () => ({ matches: [partidoFootballData('PL', 'Manchester City FC', 'Man City', 'Arsenal FC', 'Arsenal', 1, 1)] }) };
+    }
+    throw new Error('URL inesperada en la prueba: ' + url);
+  };
+
+  // Caso H: 2 llamadas seguidas para la MISMA fecha (simula /pizarra
+  // refrescando cada 20s mientras el caché sigue fresco) — la 2da NO debe
+  // volver a pedirle nada a football-data.org.
+  await obtenerResultadosSoccer('2026-09-23');
+  await obtenerResultadosSoccer('2026-09-23');
+  check(pedidosCasoH === 1, 'Caso H — 2 llamadas seguidas para la misma fecha, dentro del TTL del caché: solo 1 pedido real a football-data.org, no 2 (esto es lo que evita reventar el límite de 10/minuto cuando /pizarra refresca cada 20s)');
+
+  // Caso I: llamadas SIMULTÁNEAS (sin esperar la primera) para la misma
+  // fecha — deben compartir el mismo pedido en vuelo, no disparar 2 en
+  // paralelo (simula /pizarra y /procesar pidiendo la fecha de hoy casi
+  // al mismo tiempo).
+  _resetCacheParaPruebas();
+  pedidosCasoH = 0;
+  const [resI1, resI2] = await Promise.all([
+    obtenerResultadosSoccer('2026-09-23'),
+    obtenerResultadosSoccer('2026-09-23')
+  ]);
+  check(pedidosCasoH === 1, 'Caso I — 2 llamadas simultáneas (sin esperar la primera) para la misma fecha: comparten el mismo pedido en vuelo, 1 solo pedido real a football-data.org');
+  check(resI1['manchester city'].final1H === true && resI2['manchester city'].final1H === true, 'Caso I — ambas llamadas simultáneas devuelven igual el dato de "1h" ya resuelto');
+
+  // Caso J: tras _resetCacheParaPruebas() (equivalente a que el TTL ya
+  // expiró), SÍ se vuelve a pedir — el caché no se queda pegado para
+  // siempre con un dato viejo.
+  _resetCacheParaPruebas();
+  pedidosCasoH = 0;
+  await obtenerResultadosSoccer('2026-09-23');
+  check(pedidosCasoH === 1, 'Caso J — tras vencer el caché (acá simulado con _resetCacheParaPruebas), se vuelve a pedir a football-data.org en vez de quedarse con un dato viejo para siempre');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

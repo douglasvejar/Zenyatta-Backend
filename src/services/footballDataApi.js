@@ -28,17 +28,68 @@
 // JavaScript que no se pudo leer con las herramientas de este sandbox —
 // ver doc del proyecto).
 //
-// Verificado contra la documentación oficial (docs.football-data.org)
-// antes de escribir este conector — NO se pudo hacer una llamada real
-// autenticada desde este sandbox (no hay forma de mandar el header de
-// autenticación con las herramientas de búsqueda web disponibles acá),
-// así que esto se apoya en la documentación pública, no en una respuesta
-// real observada. Confirmado en la documentación: el endpoint
-// `/v4/competitions/{codigo}/matches?dateFrom=X&dateTo=X` devuelve, por
-// cada partido, `match.score.halfTime.{home,away}` (null hasta que el
-// entretiempo pasó de verdad — ahí es cuando se puede usar) y
-// `match.status` (SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED/...). El header
-// de autenticación es `X-Auth-Token`.
+// =================================================================
+// RONDA 23-09-2026 — "aun hay problemas para leer los partidos 1h de
+// futbol en cualquier liga" (reportado por el usuario, sin distinguir
+// liga puntual — a diferencia de los casos anteriores, sección 16/29 del
+// doc de actualizaciones, que sí eran por liga/mensaje). Causa real
+// encontrada leyendo el código, no adivinada:
+//
+// 1) Esta función pedía, CADA VEZ que se llamaba, las 6 competiciones
+//    cubiertas EN PARALELO (6 pedidos a football-data.org de una sola
+//    vez). Y se llama sin ningún caché desde 3 lugares: `/procesar` (cada
+//    sábana), `/dia` (sabanaDia.js) y, el más grave, **`/pizarra`, que el
+//    panel auto-refresca cada 20 segundos** (ver el comentario de
+//    sabana.js). Eso son 6 pedidos cada 20s = 18 pedidos/minuto SOLO por
+//    tener la pizarra abierta — muy por encima del límite del plan
+//    gratis de football-data.org, que es de **10 pedidos/minuto**
+//    (confirmado en su documentación oficial de políticas, 23-09-2026).
+//    Con varios grupos usando el panel a la vez, o con "Procesar Sábana"
+//    corriendo al mismo tiempo que alguien mira la pizarra, el límite se
+//    superaba todavía más rápido. Al pasarse del límite, football-data.org
+//    responde 429 para las competiciones que no llegaron a tiempo — y eso
+//    ya se veía (desde la sección 16/29) como `motivoSinPrimeraMitad:
+//    'error-api'`, pero nunca se atacó la CAUSA (el exceso de pedidos),
+//    solo se mejoró el mensaje. Como el 429 puede tocarle a cualquiera de
+//    las 6 ligas según el orden en que football-data.org las procese, el
+//    síntoma se veía "en cualquier liga", tal como reportó el usuario.
+//
+// 2) Aparte, esas 6 competiciones se pedían con 6 llamadas SEPARADAS
+//    (`/v4/competitions/{codigo}/matches`) pudiendo pedirse las 6 en UNA
+//    sola llamada al endpoint general `/v4/matches?dateFrom=X&dateTo=X`
+//    (confirmado en la documentación oficial, 23-09-2026: acepta
+//    `dateFrom`/`dateTo` y devuelve partidos de TODAS las competiciones a
+//    las que da acceso el plan del usuario, cada uno con su propio objeto
+//    `competition.code`) — no hace falta pedir "todos los partidos de
+//    todas las competencias del mundo" y filtrar, alcanza con filtrar la
+//    respuesta de ESE ÚNICO pedido por los 6 códigos que nos interesan.
+//
+// El arreglo, dos partes:
+//   a) Un solo pedido a `/v4/matches` en vez de 6 a `/competitions/X`
+//      (6 veces menos pedidos de entrada).
+//   b) Un caché en memoria por fecha (ver CACHE_TTL_MS/CACHE_TTL_ERROR_MS
+//      abajo): mientras el caché esté fresco, CUALQUIER cantidad de
+//      llamadas a obtenerPrimeraMitadFutbol() para la MISMA fecha (desde
+//      /pizarra cada 20s, desde /procesar, desde /dia, de cualquier
+//      grupo) reusan el mismo resultado en vez de volver a pedirle nada a
+//      football-data.org. Con (a)+(b), el peor caso pasa de ~18
+//      pedidos/minuto a, como mucho, 1 pedido cada 45 segundos (~1.3
+//      pedidos/minuto) — muy por debajo del límite de 10/minuto del plan
+//      gratis, sin importar cuántos paneles estén abiertos a la vez.
+//
+// No se pudo hacer una llamada real autenticada a `/v4/matches` desde
+// este sandbox (mismo bloqueo de red de siempre para pedidos con clave —
+// ver el resto de este comentario en versiones anteriores del archivo);
+// el endpoint, sus parámetros (`dateFrom`/`dateTo`) y que cada partido
+// trae su propio `competition.code` SÍ se confirmaron contra la
+// documentación oficial vigente (docs.football-data.org, 23-09-2026), lo
+// mismo que el límite de 10 pedidos/minuto del plan gratis. Pendiente de
+// confirmar con tráfico real una vez desplegado.
+//
+// El header de autenticación sigue siendo `X-Auth-Token`, y
+// `match.score.halfTime.{home,away}` sigue siendo `null` hasta que el
+// entretiempo pasó de verdad — eso no cambió, solo CÓMO se piden los
+// partidos.
 //
 // IMPORTANTE — nombres de equipo: football-data.org usa el nombre
 // "oficial" del club (ej. "Manchester City FC", o el nombre completo con
@@ -47,8 +98,7 @@
 // lo hace soccerApi.js con un match flexible (ver
 // normalizarNombreEquipoFutbol/nombresCoinciden ahí) — no es una
 // comparación exacta, así que puede fallar en algún club puntual con un
-// nombre muy distinto entre las 2 APIs. Pendiente de confirmar con
-// tickets reales una vez que el usuario tenga su clave.
+// nombre muy distinto entre las 2 APIs.
 const LIGAS_CON_PRIMERA_MITAD = [
   { codigo: 'PL', nombre: 'Premier League' },
   { codigo: 'PD', nombre: 'La Liga' },
@@ -57,33 +107,31 @@ const LIGAS_CON_PRIMERA_MITAD = [
   { codigo: 'FL1', nombre: 'Ligue 1' },
   { codigo: 'CL', nombre: 'UEFA Champions League' }
 ];
+const CODIGOS_CUBIERTOS = new Set(LIGAS_CON_PRIMERA_MITAD.map(l => l.codigo));
 
-// CORREGIDO (20-09-2026, caso real reportado por el usuario: 2 tickets de
-// "1h" de La Liga y Serie A — ligas SÍ cubiertas acá — quedaron PENDIENTE
-// con el mensaje de "puede que esta liga no esté cubierta", que es
-// engañoso cuando la liga SÍ está en la lista): hasta ahora, si
-// football-data.org respondía con un error (401 clave inválida, 403 plan
-// sin acceso a esa competencia, 429 límite de pedidos por minuto del plan
-// gratis superado, etc.), esta función lo tragaba en silencio y devolvía
-// una lista vacía — exactamente el mismo resultado que si el partido
-// simplemente no hubiera llegado todavía. Ahora se revisa `res.ok` y, si
-// la respuesta no fue 200, se loguea el status real (para verlo en los
-// logs de Railway) y se marca esta competencia puntual como "con error",
-// en vez de mezclarla en silencio con "sin partidos ese día".
-async function obtenerPrimeraMitadDeCompetencia(codigo, fechaISO, apiKey) {
+// Un solo pedido a `/v4/matches?dateFrom=X&dateTo=X` (en vez de 6, uno
+// por competencia — ver el comentario grande de arriba) y se filtra la
+// respuesta por los 6 códigos que nos interesan. `res.ok` se revisa antes
+// de leer el JSON (mismo motivo que antes: distinguir "football-data.org
+// respondió con un error real" de "no hay partidos ese día", ver sección
+// 16 del doc de actualizaciones).
+async function obtenerPartidosDelDia(fechaISO, apiKey) {
   const datos = [];
   try {
     const res = await fetch(
-      'https://api.football-data.org/v4/competitions/' + codigo + '/matches?dateFrom=' + fechaISO + '&dateTo=' + fechaISO,
+      'https://api.football-data.org/v4/matches?dateFrom=' + fechaISO + '&dateTo=' + fechaISO,
       { headers: { 'X-Auth-Token': apiKey } }
     );
     if (!res.ok) {
-      console.error('football-data.org respondió ' + res.status + ' para la competencia ' + codigo + ' — revisar si FOOTBALL_DATA_API_KEY es válida o si se superó el límite de pedidos por minuto del plan gratis.');
+      console.error('football-data.org respondió ' + res.status + ' al pedir /v4/matches — revisar si FOOTBALL_DATA_API_KEY es válida o si se superó el límite de pedidos por minuto del plan gratis.');
       return { datos, huboError: true };
     }
     const json = await res.json();
 
     (json.matches || []).forEach(m => {
+      const codigoCompetencia = (m.competition && m.competition.code) || '';
+      if (!CODIGOS_CUBIERTOS.has(codigoCompetencia)) return; // partido de una competencia que no nos interesa (el endpoint general trae TODAS las que el plan del usuario puede ver)
+
       const halfTime = (m.score && m.score.halfTime) || {};
       const homeScore1H = halfTime.home;
       const awayScore1H = halfTime.away;
@@ -102,31 +150,65 @@ async function obtenerPrimeraMitadDeCompetencia(codigo, fechaISO, apiKey) {
       });
     });
   } catch (e) {
-    console.error('Error al conectar con football-data.org (competencia ' + codigo + '):', e);
+    console.error('Error al conectar con football-data.org (/v4/matches):', e);
     return { datos, huboError: true };
   }
   return { datos, huboError: false };
 }
 
+// Caché en memoria por fecha (23-09-2026, ver el comentario grande de
+// arriba) — evita volver a pedirle a football-data.org lo mismo una y
+// otra vez cuando varias partes del sistema (pizarra cada 20s, procesar
+// sábana, sabanaDia) piden la MISMA fecha en un ratito corto. Guarda la
+// PROMESA (no solo el resultado) para que, si 2 pedidos llegan a la vez
+// mientras el primero todavía está en vuelo, el segundo espere ese mismo
+// pedido en vez de disparar uno nuevo en paralelo.
+//
+// TTL más corto para un resultado con error (CACHE_TTL_ERROR_MS): así, si
+// football-data.org respondió mal por un motivo transitorio (429 por un
+// pico puntual), el sistema reintenta más pronto en vez de quedarse 45s
+// mostrando "error-api" de forma innecesaria — pero nunca tan corto como
+// para volver a golpear el límite de pedidos por minuto.
+const CACHE_TTL_MS = 45000;
+const CACHE_TTL_ERROR_MS = 20000;
+let cachePorFecha = new Map(); // fechaISO -> { creadoEn, ttl, promesa }
+
+function _resetCacheParaPruebas() {
+  cachePorFecha = new Map();
+}
+
 // Devuelve { partidos, claveConfigurada, huboError } en vez de una lista
-// pelada — mismo motivo que el comentario grande de arriba: sin esto,
-// evaluador.js no podía distinguir "esta liga no está cubierta" de "esta
-// liga SÍ está cubierta pero algo falló" (lo más probable siendo que
-// `FOOTBALL_DATA_API_KEY` nunca se configuró en el servidor de
-// producción, o que la clave es inválida/quedó sin cupo) — con estos 2
-// datos expuestos, soccerApi.js/evaluador.js ya pueden armar un mensaje
-// que diga la verdad en cada caso, en vez de un genérico que puede
-// confundir a un partido de una liga SÍ cubierta con uno que no lo está.
+// pelada — así evaluador.js/soccerApi.js pueden distinguir "esta liga no
+// está cubierta" de "esta liga SÍ está cubierta pero algo falló" (por
+// ejemplo, que `FOOTBALL_DATA_API_KEY` nunca se configuró en el servidor
+// de producción, o que la clave es inválida/quedó sin cupo).
 async function obtenerPrimeraMitadFutbol(fechaISO) {
   const apiKey = process.env.FOOTBALL_DATA_API_KEY;
   if (!apiKey) return { partidos: [], claveConfigurada: false, huboError: false };
 
-  const resultados = await Promise.all(
-    LIGAS_CON_PRIMERA_MITAD.map(liga => obtenerPrimeraMitadDeCompetencia(liga.codigo, fechaISO, apiKey))
-  );
-  const partidos = [].concat(...resultados.map(r => r.datos));
-  const huboError = resultados.some(r => r.huboError);
-  return { partidos, claveConfigurada: true, huboError };
+  const entradaCacheada = cachePorFecha.get(fechaISO);
+  if (entradaCacheada && (Date.now() - entradaCacheada.creadoEn) < entradaCacheada.ttl) {
+    return entradaCacheada.promesa;
+  }
+
+  const promesa = obtenerPartidosDelDia(fechaISO, apiKey).then(({ datos, huboError }) => ({
+    partidos: datos,
+    claveConfigurada: true,
+    huboError
+  }));
+  // Se guarda la promesa YA (antes de esperarla) para que llamadas
+  // simultáneas a esta misma fecha reusen este mismo pedido en vez de
+  // disparar uno nuevo cada una.
+  cachePorFecha.set(fechaISO, { creadoEn: Date.now(), ttl: CACHE_TTL_MS, promesa });
+
+  const resultado = await promesa;
+  if (resultado.huboError) {
+    // Se corrige el TTL guardado a uno más corto para un resultado con
+    // error, ahora que ya se sabe que lo fue (no se puede saber antes de
+    // await porque recién ahí se conoce huboError).
+    cachePorFecha.set(fechaISO, { creadoEn: Date.now(), ttl: CACHE_TTL_ERROR_MS, promesa });
+  }
+  return resultado;
 }
 
-module.exports = { obtenerPrimeraMitadFutbol, LIGAS_CON_PRIMERA_MITAD };
+module.exports = { obtenerPrimeraMitadFutbol, LIGAS_CON_PRIMERA_MITAD, _resetCacheParaPruebas };
