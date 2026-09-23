@@ -269,6 +269,16 @@
   //   banquero, modalidad normal → "Dio 3P del 1"
   //   pp (dos caballos cruzados)  → "Jugó 2x6 PP" / "Dio 2x6 PP"
   function armarJugadaTexto(c) {
+    // Remate (23-09-2026, a pedido del usuario: "que le indique que
+    // remate y cuanto") — no tiene rol jugador/banquero ni modalidad, es
+    // una apuesta directa a un caballo puntual del remate. La carrera
+    // (c.carrera), la pizarra y el monto/resultado ya se pintan igual
+    // que cualquier otra fila (ver más abajo) — esto solo cambia el
+    // texto de la jugada para que diga "Remate" en vez de sonar a una
+    // jugada más de Tercios.
+    if (c.tipo === 'remate') {
+      return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}` : `🏆 Remate — jugó ${c.caballo}`;
+    }
     const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
     if ((c.modalidad || '').toLowerCase() === 'pp') {
       return `${verbo} ${c.caballoA}x${c.caballoB} PP`;

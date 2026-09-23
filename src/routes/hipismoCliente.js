@@ -144,7 +144,15 @@ router.get('/:token', asyncHandler(async (req, res) => {
       modalidad: linea.modalidad,
       monto: linea.monto,
       rol: linea.rol,
-      resultado: linea.resultado
+      resultado: linea.resultado,
+      // Remate (23-09-2026, ver la nota grande en
+      // services/hipismoLineasCliente.js): pasa el tipo tal cual para que
+      // el frontend (hipismo-cliente-portal.html) lo pinte distinto y
+      // diga "Remate" en vez de una jugada normal de Tercios. Ausente
+      // (undefined) para una línea de Tercios normal, sin cambiar nada
+      // de su comportamiento actual.
+      tipo: linea.tipo,
+      ganoRemate: linea.ganoRemate
     };
     if (linea.modalidad === 'pp') {
       carrera.caballoA = linea.caballoA;

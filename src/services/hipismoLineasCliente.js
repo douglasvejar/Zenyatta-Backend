@@ -11,6 +11,24 @@
 // =================================================================
 const db = require('../db');
 
+// AMPLIADO (23-09-2026, a pedido del usuario, tras confirmar que el
+// cálculo de "Cargar Remate" ya daba bien: "esos totales se deben
+// guardar en los saldos de los clientes, que le salga reflejado en la
+// carrera y le indique que remate y cuanto... obviamente tambien debe
+// cargarse a balances de saldos"). Hasta acá, esta función SOLO leía
+// hipismo_tickets (las jugadas de "Cargar Planos"/Tercios) — el saldo
+// semanal agregado de Cierre Final (GET /cierre-final en routes/hipismo.js)
+// SÍ sumaba también hipismo_remate_apuestas desde que se construyó
+// "Cargar Remate", pero estos 2 portales de cliente (el único lugar
+// donde un cliente ve sus jugadas UNA POR UNA, con la carrera y el monto
+// de cada una) nunca se habían tocado — un cliente que ganó o perdió un
+// remate no lo veía reflejado en su propio link, aunque su saldo total
+// de la semana en Cierre Final SÍ lo tuviera bien contado. Ahora se
+// agrega una consulta a hipismo_remate_apuestas y se combina con la de
+// Tercios — cada línea de remate lleva `tipo: 'remate'` (las de Tercios
+// no llevan ese campo, por compatibilidad con el resto del código que ya
+// asumía su ausencia) para que el frontend la pinte distinto y diga
+// explícitamente "Remate" en vez de tratarla como una jugada normal.
 async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta) {
   const r = await db.query(
     `SELECT t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto,
@@ -26,7 +44,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     [grupoId, nombreJugador, desde, hasta]
   );
 
-  return r.rows.map(row => {
+  const lineasTercios = r.rows.map(row => {
     const esJugador = row.cliente_nombre === nombreJugador;
     const rol = esJugador ? 'jugador' : 'banquero';
     const resultado = Number(esJugador ? row.resultado_jugador : row.resultado_banquero);
@@ -51,6 +69,43 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     }
     return linea;
   });
+
+  // Remate (ver la nota grande arriba): una línea por apuesta de este
+  // cliente en cada remate — su `resultado` ya viene NETO (pago_ganador
+  // menos lo apostado si ganó esa línea, o -monto si perdió; ver
+  // calcularRemate() en services/hipismoRemateCalc.js), así que se suma
+  // exactamente igual que una línea de Tercios sin ningún ajuste extra.
+  const rRemate = await db.query(
+    `SELECT a.caballo, a.numero_ejemplar, a.monto, a.resultado,
+            rm.fecha, rm.hipodromo_nombre, rm.carrera_numero, rm.pizarra, rm.numero_ganador,
+            h.pais
+       FROM hipismo_remate_apuestas a
+       JOIN hipismo_remates rm ON rm.id = a.remate_id
+       LEFT JOIN hipismo_hipodromos h ON h.id = rm.hipodromo_id
+      WHERE a.grupo_id = $1 AND a.cliente_nombre = $2
+        AND rm.fecha BETWEEN $3 AND $4
+      ORDER BY rm.fecha DESC, rm.creado_en ASC`,
+    [grupoId, nombreJugador, desde, hasta]
+  );
+
+  const lineasRemate = rRemate.rows.map(row => {
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+    return {
+      tipo: 'remate',
+      fecha: fechaIso,
+      hipodromoNombre: row.hipodromo_nombre,
+      pais: row.pais || 'VE',
+      carreraNumero: row.carrera_numero,
+      pizarra: row.pizarra,
+      caballo: row.caballo,
+      numeroEjemplar: row.numero_ejemplar,
+      monto: Number(row.monto),
+      resultado: Number(row.resultado),
+      ganoRemate: row.numero_ejemplar === row.numero_ganador
+    };
+  });
+
+  return [...lineasTercios, ...lineasRemate];
 }
 
 // Mismo texto en primera persona que ya usan hipismo-mockup.html y
@@ -61,6 +116,14 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
 // que venir armado en el JSON (cliente.html reusa su plantilla de ticket
 // de Deportes tal cual, sin lógica nueva de Hipismo del lado del cliente).
 function textoJugadaHipismo(linea) {
+  // Remate (23-09-2026, ver la nota grande arriba): no tiene "rol"
+  // jugador/banquero ni modalidad — es una apuesta directa a un caballo
+  // puntual del remate. Se marca explícitamente como "Remate" (pedido
+  // del usuario: "que le indique que remate y cuanto") en vez de sonar a
+  // una jugada más de Tercios.
+  if (linea.tipo === 'remate') {
+    return linea.ganoRemate ? `🏆 Remate — ganó con ${linea.caballo}` : `🏆 Remate — jugó ${linea.caballo}`;
+  }
   const verbo = linea.rol === 'banquero' ? 'Dio' : 'Jugó';
   if ((linea.modalidad || '').toLowerCase() === 'pp') {
     return `${verbo} ${linea.caballoA}x${linea.caballoB} PP`;
