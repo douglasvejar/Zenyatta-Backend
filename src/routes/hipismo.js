@@ -27,7 +27,7 @@ const express = require('express');
 const db = require('../db');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
-const { calcularPlano, armarTextoResultado } = require('../services/hipismoCalc');
+const { calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO } = require('../services/hipismoCalc');
 // "Cargar Remate" (23-09-2026, a pedido del usuario, con un formato real
 // de ejemplo pegado por él — ver la nota grande en
 // services/hipismoRemateCalc.js y en sql/schema.sql, tablas
@@ -244,6 +244,13 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
   }
 
+  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
+  // "PLANO REFERENCIAL" quedaba en el medio del mensaje, arriba de
+  // "PARADA ADELANTADAS", en vez de al final de todo): cuando esta
+  // carrera SÍ tiene bloque de adelantadas, el pie se omite acá adentro
+  // (incluirPie:false) y se agrega DESPUÉS del bloque, para que quede
+  // siempre como lo último del mensaje.
   let textoResultado = armarTextoResultado({
     nombreGrupo: req.grupo.nombre,
     hipodromoNombre: hipodromoNombre || '',
@@ -251,10 +258,12 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     ret,
     pizarra,
     salidaLineas: resultado.salidaLineas,
-    totalesFinales: resultado.totalesFinales
+    totalesFinales: resultado.totalesFinales,
+    incluirPie: !bloqueAdelantadas
   });
-  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
-  if (bloqueAdelantadas) textoResultado += '\n\n' + bloqueAdelantadas;
+  if (bloqueAdelantadas) {
+    textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
+  }
 
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas, movimientosParaTexto);
 
@@ -305,6 +314,11 @@ router.post('/planos', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
   }
 
+  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  // Ver la nota grande en POST /planos/calcular: el pie "PLANO
+  // REFERENCIAL" se omite acá adentro cuando hay adelantadas para que
+  // quede siempre como lo ÚLTIMO del mensaje, después de "PARADA
+  // ADELANTADAS".
   let textoResultado = armarTextoResultado({
     nombreGrupo: req.grupo.nombre,
     hipodromoNombre: nombreHipodromoFinal,
@@ -312,10 +326,12 @@ router.post('/planos', asyncHandler(async (req, res) => {
     ret,
     pizarra,
     salidaLineas: resultado.salidaLineas,
-    totalesFinales: resultado.totalesFinales
+    totalesFinales: resultado.totalesFinales,
+    incluirPie: !bloqueAdelantadas
   });
-  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
-  if (bloqueAdelantadas) textoResultado += '\n\n' + bloqueAdelantadas;
+  if (bloqueAdelantadas) {
+    textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
+  }
 
   // Da de alta en "jugadores" a cualquier cliente/banquero de este plano
   // que todavía no esté registrado en el grupo — mismo criterio y misma

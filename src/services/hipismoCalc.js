@@ -230,14 +230,29 @@ function calcularPlano({ texto, pizarra, cruzar }) {
   return { huboLineas, salidaLineas, sinReconocer, tickets, totalesFinales, comisionTotal };
 }
 
+// Texto por defecto del "pie" del plano — se guarda como constante propia
+// (23-09-2026) para que routes/hipismo.js pueda agregarlo DESPUÉS del
+// bloque "PARADA ADELANTADAS" cuando corresponda (ver incluirPie abajo),
+// en vez de tener que duplicar este texto en 2 lugares.
+const PIE_PLANO_DEFECTO = '*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gana y se cobra con el chat)\n*USTED ES SU PROPIO CORREDOR*\n*RECLAMOS AL PRIVADO*\n*NO DIGA:* ❌MALO❌; CASA FALTA...\n*TILDE SU JUGADA Y SE REVISARÁ*';
+
 // Arma el bloque de texto final (encabezado + líneas resueltas +
 // ✅GANAN/❌PIERDEN + pie) — spec secciones 1, 2 y 7.1. La comisión NO
 // se imprime acá a propósito (el usuario fue explícito: "no quiero que
 // los clientes vean" la comisión de la banca — sí se guarda aparte en
 // hipismo_planos.comision_total para Balance General/Cierre Final).
-function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret, pizarra, salidaLineas, totalesFinales, piePlano }) {
+//
+// incluirPie (23-09-2026, a pedido del usuario: pegó un plano real donde
+// el aviso "PLANO REFERENCIAL" quedaba en el MEDIO del mensaje —arriba
+// del bloque "PARADA ADELANTADAS"— en vez de al final de todo, y pidió
+// que quede siempre como lo ÚLTIMO. Cuando esta carrera tiene Jugadas
+// Adelantadas para agregar, routes/hipismo.js llama esta función con
+// incluirPie:false (así el pie NO se imprime acá) y lo agrega él mismo
+// después del bloque "PARADA ADELANTADAS" — ver POST /planos y
+// /planos/calcular.
+function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret, pizarra, salidaLineas, totalesFinales, piePlano, incluirPie = true }) {
   const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${carreraNumero}ta Carrera\nRet: ${ret || ''}\nPizarra: ${pizarra}`;
-  const pie = piePlano || '*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gana y se cobra con el chat)\n*USTED ES SU PROPIO CORREDOR*\n*RECLAMOS AL PRIVADO*\n*NO DIGA:* ❌MALO❌; CASA FALTA...\n*TILDE SU JUGADA Y SE REVISARÁ*';
+  const pie = piePlano || PIE_PLANO_DEFECTO;
 
   const entradasFinales = Object.entries(totalesFinales);
   const ganan = entradasFinales.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
@@ -248,8 +263,9 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
   const totalesTexto = bloques.join('\n\n');
 
-  let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto + '\n------------------------------\n------------------------------\n' + pie;
+  let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto;
+  if (incluirPie) salida += '\n------------------------------\n------------------------------\n' + pie;
   return salida;
 }
 
-module.exports = { calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla };
+module.exports = { calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO };

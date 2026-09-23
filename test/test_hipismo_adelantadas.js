@@ -414,6 +414,14 @@ function reqBase(grupoId) {
   check(resPlanos12._json.plano.texto_resultado.includes('PARADA ADELANTADAS'), 'El texto del plano de la carrera 12 incluye el bloque "PARADA ADELANTADAS"');
   check(resPlanos12._json.plano.texto_resultado.includes('Linares +225'), 'El bloque de adelantadas muestra a Linares ganando +225');
   check(resPlanos12._json.plano.texto_resultado.includes('Tablas fijas'), 'El bloque de adelantadas también muestra el neto de "Tablas Fijas" (la banca)');
+  // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
+  // "PLANO REFERENCIAL" quedaba en el MEDIO del mensaje, arriba de
+  // "PARADA ADELANTADAS", en vez de al final de todo): el pie tiene que
+  // aparecer DESPUÉS del bloque de adelantadas, no antes.
+  const idxParada = resPlanos12._json.plano.texto_resultado.indexOf('PARADA ADELANTADAS');
+  const idxPie = resPlanos12._json.plano.texto_resultado.indexOf('PLANO REFERENCIAL');
+  check(idxParada !== -1 && idxPie !== -1 && idxPie > idxParada, 'El aviso "PLANO REFERENCIAL" queda DESPUÉS de "PARADA ADELANTADAS" (al final de todo el mensaje), no en el medio');
+  check((resPlanos12._json.plano.texto_resultado.match(/PLANO REFERENCIAL/g) || []).length === 1, 'El aviso "PLANO REFERENCIAL" aparece una sola vez (no se duplica)');
 
   // --- 9) Balance General (Cargar Planos) también tiene que reflejar las
   // Jugadas Adelantadas de esta misma carrera, no solo el texto — a
@@ -446,6 +454,12 @@ function reqBase(grupoId) {
   check(Number(maturinMarca2.resultado_cliente) === 0, 'Con "sin_decidir" el cliente queda en 0, no se le carga ninguna pérdida ni ganancia');
   const hallandTf2 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.cliente_nombre === 'HALLAND' && j.carrera_numero === 2 && j.tipo === 'tf');
   check(hallandTf2.estado === 'resuelto' && hallandTf2.gano === true, 'La TF de Halland en la 2 (jugó el 5, ganó el 5) SÍ se resuelve normal — a Tablas Fijas no le aplica la regla de 5 puestos, solo necesita el 1er lugar');
+  // Este ES el caso exacto que el usuario pegó como ejemplo (una carrera
+  // sin NINGÚN Tercios en vivo, solo adelantadas): confirma que acá
+  // también el pie queda al final, después de "PARADA ADELANTADAS".
+  const idxParada2 = resPlanos2._json.plano.texto_resultado.indexOf('PARADA ADELANTADAS');
+  const idxPie2 = resPlanos2._json.plano.texto_resultado.indexOf('PLANO REFERENCIAL');
+  check(idxParada2 !== -1 && idxPie2 > idxParada2, 'En una carrera sin Tercios en vivo (solo adelantadas), el aviso "PLANO REFERENCIAL" también queda al final, después de "PARADA ADELANTADAS"');
 
   // --- 7) Banquear la marca de Halland en la 12 (8x4, perdió) ---
   const resBanqueo = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
