@@ -28,6 +28,15 @@ const db = require('../db');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const { calcularPlano, armarTextoResultado } = require('../services/hipismoCalc');
+// "Cargar Remate" (23-09-2026, a pedido del usuario, con un formato real
+// de ejemplo pegado por él — ver la nota grande en
+// services/hipismoRemateCalc.js y en sql/schema.sql, tablas
+// hipismo_remates/hipismo_remate_apuestas). Un remate es un pozo aparte
+// de los Tercios de "Cargar Planos": cada cliente apuesta a UN número de
+// ejemplar, y si ESE número gana la carrera se lleva el pozo completo
+// (menos comisión, o la garantía si el pozo no alcanza) — el resto
+// pierde lo apostado.
+const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoRemate } = require('../services/hipismoRemateCalc');
 // autoRegistrarJugadores (22-09-2026, a pedido del usuario: "al hacer un
 // plano el cliente debe crearse automatico, despues el empleado debera
 // ver si le coloca % o no") — es la MISMA función que ya usa Deportes
@@ -204,6 +213,173 @@ router.get('/planos/:id', asyncHandler(async (req, res) => {
   res.json({ plano, tickets: rTickets.rows });
 }));
 
+// =================================================================
+// REMATE — "Cargar Remate" (23-09-2026, ver la nota grande en
+// services/hipismoRemateCalc.js y sql/schema.sql). A diferencia de
+// "Cargar Planos", acá el ganador de cada remate depende de quién ganó
+// LA CARRERA (posición 1 de la pizarra/llegada), no de una modalidad por
+// línea — así que antes de poder calcular hace falta la llegada de esa
+// carrera puntual: si ya existe un plano cargado para ese mismo
+// hipódromo + carrera + fecha, se usa su pizarra automáticamente; si no,
+// hay que mandarla a mano en el campo "pizarra" del body.
+// =================================================================
+
+// Busca la llegada a usar: la que mandó el Administrador a mano tiene
+// prioridad (por si quiere corregirla o todavía no cargó el plano de esa
+// carrera); si no mandó ninguna, se busca el plano más reciente de ESE
+// mismo hipódromo + carrera + fecha ya guardado en "Cargar Planos".
+async function resolverLlegadaRemate(req, { hipodromoNombre, carreraNumero, fecha, pizarraManual }) {
+  if (pizarraManual && pizarraManual.trim()) {
+    return { pizarra: pizarraManual.trim(), origen: 'manual' };
+  }
+  const rPlano = await db.query(
+    `SELECT pizarra FROM hipismo_planos
+      WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4
+      ORDER BY creado_en DESC LIMIT 1`,
+    [req.grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  if (rPlano.rows.length > 0) return { pizarra: rPlano.rows[0].pizarra, origen: 'plano_existente' };
+  return { pizarra: null, origen: null };
+}
+
+// POST /remates/calcular: calcula SIN guardar — para revisar el remate
+// (y, si hace falta, cargar la llegada a mano) antes de decidir guardarlo.
+router.post('/remates/calcular', asyncHandler(async (req, res) => {
+  const { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del remate.' });
+  if (!hipodromoNombre) return res.status(400).json({ error: 'Falta el hipódromo.' });
+  if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
+  if (comisionPorcentaje === undefined || comisionPorcentaje === null || comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+    return res.status(400).json({ error: 'Falta el % de comisión de este remate (no todos cobran igual).' });
+  }
+
+  const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
+  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
+
+  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const { pizarra: pizarraResuelta, origen } = await resolverLlegadaRemate(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
+  const poolTotal = apuestas.reduce((acc, a) => acc + a.monto, 0);
+
+  if (!pizarraResuelta) {
+    return res.json({
+      apuestas, garantia, sinReconocer, poolTotal,
+      necesitaLlegada: true
+    });
+  }
+
+  const numeroGanador = primerNumeroPizarra(pizarraResuelta);
+  const resultado = calcularRemate({ apuestas, garantia, comisionPorcentaje, numeroGanador });
+  const textoResultado = armarTextoResultadoRemate({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre, carreraNumero,
+    pizarra: pizarraResuelta, apuestas, garantia, numeroGanador, resultado
+  });
+
+  res.json({
+    apuestas, garantia, sinReconocer, poolTotal,
+    pizarra: pizarraResuelta, origenPizarra: origen, numeroGanador,
+    necesitaLlegada: false,
+    hayGanador: resultado.hayGanador,
+    apuestaGanadora: resultado.apuestaGanadora,
+    pagoGanador: resultado.pagoGanador,
+    comisionTotal: resultado.comisionTotal,
+    totalesPorCliente: resultado.totalesPorCliente,
+    textoResultado
+  });
+}));
+
+// POST /remates: calcula Y guarda de verdad (hipismo_remates + hipismo_remate_apuestas).
+router.post('/remates', asyncHandler(async (req, res) => {
+  const { texto, hipodromoId, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del remate.' });
+  if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
+  if (comisionPorcentaje === undefined || comisionPorcentaje === null || comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+    return res.status(400).json({ error: 'Falta el % de comisión de este remate (no todos cobran igual).' });
+  }
+
+  let nombreHipodromoFinal = hipodromoNombre;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromoFinal = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
+  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
+
+  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const { pizarra: pizarraResuelta } = await resolverLlegadaRemate(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
+  if (!pizarraResuelta) {
+    return res.status(400).json({ error: 'Falta la llegada de esta carrera — todavía no hay un plano cargado con la pizarra para este hipódromo/carrera/fecha. Cargala a mano en "Llegada" para poder guardar el remate.' });
+  }
+
+  const numeroGanador = primerNumeroPizarra(pizarraResuelta);
+  const resultado = calcularRemate({ apuestas, garantia, comisionPorcentaje, numeroGanador });
+  const textoResultado = armarTextoResultadoRemate({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre: nombreHipodromoFinal, carreraNumero,
+    pizarra: pizarraResuelta, apuestas, garantia, numeroGanador, resultado
+  });
+
+  // Da de alta en "jugadores" a cualquier cliente nuevo de este remate —
+  // misma tabla compartida, mismo criterio que ya usa "Cargar Planos".
+  const nombresDelRemate = new Set(apuestas.map(a => a.cliente));
+  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
+
+  const remate = await db.transaccion(async (client) => {
+    const rRemate = await client.query(
+      `INSERT INTO hipismo_remates (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, texto_original, comision_porcentaje, garantia, pool_total, pizarra, numero_ganador, hubo_ganador, caballo_ganador, cliente_ganador, pago_ganador, comision_total, texto_resultado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, carreraNumero, fechaFinal, texto, Number(comisionPorcentaje), garantia,
+        resultado.poolTotal, pizarraResuelta, numeroGanador, resultado.hayGanador,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.caballo : null,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.cliente : null,
+        resultado.pagoGanador, resultado.comisionTotal, textoResultado]
+    );
+    const remateCreado = rRemate.rows[0];
+
+    for (const a of apuestas) {
+      const esGanadora = resultado.hayGanador && a.numeroEjemplar === numeroGanador;
+      const lineaResultado = esGanadora ? (resultado.pagoGanador - a.monto) : -a.monto;
+      await client.query(
+        `INSERT INTO hipismo_remate_apuestas (remate_id, grupo_id, numero_ejemplar, caballo, cliente_nombre, monto, resultado)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [remateCreado.id, req.grupoId, a.numeroEjemplar, a.caballo, a.cliente, a.monto, lineaResultado]
+      );
+    }
+    return remateCreado;
+  });
+
+  res.status(201).json({
+    remate, apuestas, sinReconocer, textoResultado,
+    totalesPorCliente: resultado.totalesPorCliente
+  });
+}));
+
+// GET /remates?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
+router.get('/remates', asyncHandler(async (req, res) => {
+  const { fecha, hipodromoId, limite } = req.query;
+  const condiciones = ['grupo_id = $1'];
+  const params = [req.grupoId];
+  if (fecha) { params.push(fecha); condiciones.push(`fecha = $${params.length}`); }
+  if (hipodromoId) { params.push(hipodromoId); condiciones.push(`hipodromo_id = $${params.length}`); }
+  params.push(Math.min(parseInt(limite, 10) || 50, 200));
+  const r = await db.query(
+    `SELECT id, hipodromo_nombre, carrera_numero, fecha, comision_porcentaje, garantia, pool_total, hubo_ganador, cliente_ganador, pago_ganador, comision_total, creado_en
+       FROM hipismo_remates WHERE ${condiciones.join(' AND ')} ORDER BY creado_en DESC LIMIT $${params.length}`,
+    params
+  );
+  res.json(r.rows);
+}));
+
+// GET /remates/:id : detalle completo (cabecera + apuestas), para revisar un remate ya guardado.
+router.get('/remates/:id', asyncHandler(async (req, res) => {
+  const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const remate = rRemate.rows[0];
+  if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+  const rApuestas = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = $1 ORDER BY numero_ejemplar', [remate.id]);
+  res.json({ remate, apuestas: rApuestas.rows });
+}));
+
 // GET /balance-general?fecha= : el "último plano" del día, mismo criterio
 // que hoy usa el mockup (el resultado de lo último que se calculó) pero
 // leído de la base — spec sección 12. Cierre Final (agregado semanal
@@ -347,13 +523,21 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
 // igual que ya hace obtenerLineasHipismoCliente() para un cliente
 // puntual, pero agregado para TODOS los clientes del grupo a la vez.
 //
+// Remate (23-09-2026): sus líneas SÍ entran acá también — un remate es
+// otra forma de jugada de Hipismo, así que su resultado neto por cliente
+// (hipismo_remate_apuestas.resultado) suma/resta al mismo saldo de
+// jugadas de la semana. Su comisión, en cambio, va SEPARADA
+// (comisionRemateSemana) del 5% de "Cargar Planos" (comisionSemana) —
+// "esa comision se coloca en los balances como un item llamado remate",
+// no mezclada con la comisión normal.
+//
 // "traspaso de saldo" y "retiros" que mencionó el usuario TODAVÍA no
 // existen como funciones reales de Hipismo (las pantallas "💸 Retiros" y
 // "🔄 Traspaso de Saldo" del mockup siguen con botones deshabilitados,
 // sin backend) — el día que se construyan de verdad, tienen que sumarse/
-// restarse acá también; por ahora el saldo es 100% de jugadas, que ya es
-// exactamente lo que pidió el usuario en su ejemplo (pozo 400 + ganó 300
-// => Cierre Final debe mostrar 300, no 700).
+// restarse acá también; por ahora el saldo es 100% de jugadas (Tercios +
+// Remate), que ya es exactamente lo que pidió el usuario en su ejemplo
+// (pozo 400 + ganó 300 => Cierre Final debe mostrar 300, no 700).
 //
 // GET /cierre-final?semana=actual|anterior|hace2 — mismo selector de 3
 // semanas que ya usan comisiones-por-carrera y el link del cliente.
@@ -371,6 +555,13 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
+  const rApuestasRemate = await db.query(
+    `SELECT a.cliente_nombre, a.resultado
+       FROM hipismo_remate_apuestas a
+       JOIN hipismo_remates r ON r.id = a.remate_id
+      WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
 
   const porCliente = new Map();
   function acumular(nombre, resultado) {
@@ -385,6 +576,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     acumular(t.cliente_nombre, t.resultado_jugador);
     acumular(t.banquero_nombre, t.resultado_banquero);
   });
+  rApuestasRemate.rows.forEach(a => acumular(a.cliente_nombre, a.resultado));
 
   const clientes = Array.from(porCliente.values())
     .map(c => ({ ...c, saldo: c.gano - c.perdio }))
@@ -397,13 +589,22 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
        FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
+  // Comisión de Remate, aparte (ver la nota grande arriba) — cada remate
+  // ya trae su propio % (no siempre el mismo), así que se suma su
+  // comision_total ya calculado por cada remate guardado en el rango.
+  const rComisionRemate = await db.query(
+    `SELECT COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
 
   res.json({
     rango: { desde, hasta },
     semana,
     esSemanaActual,
     clientes,
-    comisionSemana: Number(rComision.rows[0].total)
+    comisionSemana: Number(rComision.rows[0].total),
+    comisionRemateSemana: Number(rComisionRemate.rows[0].total)
   });
 }));
 

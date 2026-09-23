@@ -289,6 +289,74 @@ create index if not exists idx_hipismo_tickets_plano on hipismo_tickets(plano_id
 create index if not exists idx_hipismo_tickets_grupo_cliente on hipismo_tickets(grupo_id, cliente_nombre);
 
 -- =================================================================
+-- REMATE (23-09-2026, "sección cargar remate" — a pedido del usuario, con
+-- un formato real de ejemplo: "🇻🇪🐴REMATE ADELANTADO ZENYATTA🐴🇻🇪" +
+-- una línea por caballo con su monto y cliente + "PAGANDO/GARANTIZA/PAGA
+-- $X"). Un remate es un pozo aparte de los Tercios normales: cada cliente
+-- le apuesta a UN caballo puntual de la carrera; si ESE caballo gana la
+-- carrera, ese cliente se gana el pozo completo (menos la comisión de la
+-- casa, o el monto garantizado si el pozo no alcanza para sacar esa
+-- comisión) — todos los demás pierden lo que apostaron. Es un modelo de
+-- pago totalmente distinto al de "Cargar Planos" (que paga posición por
+-- posición, línea por línea), así que se guarda en sus propias tablas en
+-- vez de reusar hipismo_planos/hipismo_tickets.
+--
+-- La regla de pago (confirmada con el usuario, 23-09-2026):
+--   - Si el número de caballo que ganó la carrera SÍ está entre los
+--     jugados en el remate: pago_ganador = MAX(pool_total * (1 - %comisión),
+--     garantía) — o sea, se le saca el % de comisión normalmente, salvo
+--     que eso deje al ganador por debajo de lo garantizado/pagando/pagado
+--     en el anuncio, en cuyo caso se le paga esa garantía completa (la
+--     comisión de la casa baja, o hasta se pierde, para cumplirla).
+--     comision_total = pool_total - pago_ganador.
+--   - Si el número de caballo que ganó la carrera NO fue jugado por
+--     nadie en el remate ("quedó para la banca"): nadie gana nada, TODOS
+--     pierden lo que apostaron, no se saca ningún % (ya es el 100% del
+--     pool) y comision_total = pool_total completo.
+-- El % de comisión es un campo aparte porque "no todos los remates cobran
+-- igual porcentaje" (a diferencia del 5% fijo de los Tercios).
+create table if not exists hipismo_remates (
+  id                    uuid primary key default gen_random_uuid(),
+  grupo_id              uuid not null references grupos(id) on delete cascade,
+  hipodromo_id          uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre      text not null,
+  carrera_numero        integer not null,
+  fecha                 date not null,
+  texto_original        text not null, -- el remate tal como lo pegó el administrador
+  comision_porcentaje   numeric not null default 0, -- ej. 20 = 20%
+  garantia              numeric, -- el monto de "PAGANDO/GARANTIZA/PAGA $X" del texto, null si no vino
+  pool_total            numeric not null default 0, -- suma de todos los montos jugados
+  pizarra               text not null, -- llegada usada para saber quién ganó (de un plano ya cargado, o cargada a mano acá)
+  numero_ganador        integer not null, -- número de ejemplar que ganó la carrera (1er lugar de la pizarra)
+  hubo_ganador          boolean not null default false, -- false = "quedó para la banca" (nadie jugó ese número)
+  caballo_ganador       text,
+  cliente_ganador       text,
+  pago_ganador          numeric not null default 0,
+  comision_total        numeric not null default 0, -- pool_total - pago_ganador (= pool_total completo si no hubo ganador)
+  texto_resultado       text not null, -- mensaje ya armado, listo para copiar a WhatsApp
+  creado_en             timestamptz not null default now()
+);
+create index if not exists idx_hipismo_remates_grupo_fecha on hipismo_remates(grupo_id, fecha);
+
+-- Una fila por línea/caballo del remate (spec: número de ejemplar,
+-- caballo, monto, cliente) — mismo criterio que hipismo_tickets: se
+-- guarda el detalle completo, con el resultado NETO de esa línea ya
+-- resuelto (pago_ganador - monto si esa línea ganó, -monto si perdió).
+create table if not exists hipismo_remate_apuestas (
+  id                uuid primary key default gen_random_uuid(),
+  remate_id         uuid not null references hipismo_remates(id) on delete cascade,
+  grupo_id          uuid not null references grupos(id) on delete cascade,
+  numero_ejemplar   integer not null,
+  caballo           text not null,
+  cliente_nombre    text not null,
+  monto             numeric not null,
+  resultado         numeric not null default 0,
+  creado_en         timestamptz not null default now()
+);
+create index if not exists idx_hipismo_remate_apuestas_remate on hipismo_remate_apuestas(remate_id);
+create index if not exists idx_hipismo_remate_apuestas_grupo_cliente on hipismo_remate_apuestas(grupo_id, cliente_nombre);
+
+-- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
 -- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera

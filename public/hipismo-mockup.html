@@ -269,7 +269,7 @@
 </head>
 <body>
 
-<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Comisiones Devueltas/Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
+<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏆 Cargar Remate", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Comisiones Devueltas/Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
 
 <!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
@@ -409,12 +409,52 @@
       </div>
     </section>
 
-    <!-- ============ CARGAR REMATE (pendiente) ============ -->
+    <!-- ============ CARGAR REMATE (funcional, primer formato confirmado) ============ -->
     <section class="vista" id="vista-cargarRemate">
       <div class="card">
-        <h2>🏆 Cargar Remate <span class="badge-pendiente">Pendiente de definir</span></h2>
-        <p class="desc">Igual que "Validar Plano" — falta que me cuentes qué va aquí (probablemente el resultado/pago final de la carrera, pero lo confirmamos cuando me expliques).</p>
-        <div class="placeholder-card">Sin definir todavía</div>
+        <h2>🏆 Cargar Remate</h2>
+        <p class="desc">Pegá el remate (cada línea: número de ejemplar, caballo, monto y cliente), metés el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular y Guardar</b>. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completá "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromoRemate">Hipódromo</label>
+            <select id="selHipodromoRemate">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCarreraRemate">Carrera</label>
+            <select id="selCarreraRemate"></select>
+          </div>
+          <div>
+            <label for="inpFechaRemate">Fecha</label>
+            <input type="date" id="inpFechaRemate">
+          </div>
+        </div>
+
+        <div class="fila">
+          <div>
+            <label for="inpComisionRemate">% Comisión de este remate</label>
+            <input type="text" id="inpComisionRemate" value="20" placeholder="Ej: 20">
+          </div>
+          <div>
+            <label for="inpPizarraRemate">Llegada (opcional si ya cargaste el plano de esta carrera)</label>
+            <input type="text" id="inpPizarraRemate" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar">
+          </div>
+        </div>
+
+        <label for="txtRemate">Remate (pegá aquí el mensaje completo)</label>
+        <textarea id="txtRemate" rows="14" placeholder="Pegá acá el remate, con el encabezado, cada línea numerada y el PAGANDO/GARANTIZA/PAGA $X"></textarea>
+
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" onclick="calcularRemate()">🧮 Calcular y Guardar</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarRemate()">🧹 Limpiar</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultadoRemate()">📋 Copiar Resultado</button>
+          <span class="toast-copiado" id="toastCopiadoRemate">Copiado ✅</span>
+        </div>
+
+        <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.</div>
+        <pre class="resultado-caja" id="resultadoCajaRemate" style="display:none;"></pre>
       </div>
     </section>
 
@@ -927,8 +967,9 @@ Juega Josue 1/2 (10) con 50,00 da Sebastian`;
 
 let ultimosTotales = null; // se comparte con Balance General
 
-function poblarCarreras() {
-  const sel = document.getElementById('selCarrera');
+function poblarCarreras(selId) {
+  const sel = document.getElementById(selId || 'selCarrera');
+  if (!sel) return;
   sel.innerHTML = '';
   for (let i = 1; i <= 25; i++) {
     const op = document.createElement('option');
@@ -1103,6 +1144,99 @@ function limpiarPlano() {
   document.getElementById('resultadoCaja').style.display = 'none';
   document.getElementById('resultadoVacio').style.display = 'block';
   document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';
+}
+
+// ------------------------------------------------------------------
+// "Cargar Remate" (23-09-2026) — mismo patrón que "Cargar Planos"
+// (calcularPlano() arriba): un solo botón calcula Y guarda de verdad
+// contra el servidor (POST /api/hipismo/remates, ver la nota grande en
+// src/routes/hipismo.js y src/services/hipismoRemateCalc.js). Si todavía
+// no hay un plano cargado con la llegada de esa carrera, el servidor
+// responde con un error pidiendo que se cargue a mano en "Llegada" —acá
+// solo se muestra ese mensaje, sin inventar ninguna llegada.
+async function calcularRemate() {
+  const hipodromoNombre = document.getElementById('selHipodromoRemate').value;
+  const carreraNumero = document.getElementById('selCarreraRemate').value;
+  const fecha = document.getElementById('inpFechaRemate').value;
+  const comisionPorcentaje = document.getElementById('inpComisionRemate').value;
+  const pizarra = document.getElementById('inpPizarraRemate').value.trim();
+  const texto = document.getElementById('txtRemate').value;
+
+  const vacio = document.getElementById('resultadoVacioRemate');
+  const caja = document.getElementById('resultadoCajaRemate');
+
+  if (!hipodromoNombre) {
+    vacio.textContent = 'Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  if (!texto.trim()) {
+    vacio.textContent = 'Pegá el remate primero.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  if (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+    vacio.textContent = 'Falta el % de comisión de este remate.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  vacio.textContent = 'Calculando y guardando en el servidor…';
+  vacio.style.display = 'block';
+  caja.style.display = 'none';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/remates', {
+      method: 'POST',
+      body: JSON.stringify({ texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra })
+    });
+  } catch (e) {
+    vacio.textContent = e.message;
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  cargarClientesReales();
+
+  let salida = data.textoResultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+  }
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida;
+}
+
+function limpiarRemate() {
+  document.getElementById('txtRemate').value = '';
+  document.getElementById('inpPizarraRemate').value = '';
+  document.getElementById('resultadoCajaRemate').style.display = 'none';
+  document.getElementById('resultadoVacioRemate').style.display = 'block';
+  document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.';
+}
+
+function copiarResultadoRemate() {
+  const caja = document.getElementById('resultadoCajaRemate');
+  if (caja.style.display === 'none') return;
+  const texto = caja.textContent;
+  const mostrarToast = () => {
+    const t = document.getElementById('toastCopiadoRemate');
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
+      alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+    });
+  } else {
+    alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+  }
 }
 
 function copiarResultado() {
@@ -1662,12 +1796,28 @@ function poblarSelectHipodromo() {
   if (HIPODROMOS.length === 0) {
     sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
     actualizarEncabezado();
+  } else {
+    const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+    sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+    if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+    actualizarEncabezado();
+  }
+  poblarSelectHipodromoRemate();
+}
+
+// "Cargar Remate" (23-09-2026) usa el mismo listado real de hipódromos
+// del grupo — select propio para no interferir con el de "Cargar Planos".
+function poblarSelectHipodromoRemate() {
+  const sel = document.getElementById('selHipodromoRemate');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
   sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
-  actualizarEncabezado();
 }
 
 async function crearHipodromo() {
@@ -2003,7 +2153,9 @@ function pintarSaldoComisiones() {
 // Init
 // ------------------------------------------------------------------
 poblarCarreras();
+poblarCarreras('selCarreraRemate');
 document.getElementById('inpFecha').value = new Date().toISOString().slice(0, 10);
+document.getElementById('inpFechaRemate').value = new Date().toISOString().slice(0, 10);
 document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 ['selHipodromo', 'selCarrera', 'inpRet', 'inpPizarra'].forEach(id => {
   document.getElementById(id).addEventListener('input', actualizarEncabezado);
