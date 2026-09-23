@@ -108,6 +108,36 @@
     animation: parpadeoAlerta 1.1s ease-in-out infinite;
   }
   .alerta-flotante:hover { filter: brightness(1.08); }
+  /* Segunda alerta flotante, para Jugadas Adelantadas (23-09-2026) — se
+     apila DEBAJO de la de Pozo si las 2 están visibles a la vez, en vez
+     de superponerse. Mismo estilo, distinto color para no confundirlas
+     (naranja en vez de rojo — Pozo es una urgencia de saldo, esto es
+     solo "hay algo esperando que le cargues la pizarra"). */
+  .alerta-flotante.alerta-adelantadas {
+    top: 160px;
+    background: #c2650a;
+    box-shadow: 0 6px 18px rgba(194,101,10,0.4);
+  }
+  @media (max-width: 860px) {
+    .alerta-flotante.alerta-adelantadas { top: auto; bottom: 74px; }
+  }
+  /* Botón "×" para cerrar la alerta sin navegar a Pozos (23-09-2026, a
+     pedido del usuario) — stopPropagation en el onclick evita que también
+     dispare la navegación del botón padre. */
+  .alerta-flotante .alerta-cerrar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    font-size: 12px;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  .alerta-flotante .alerta-cerrar:hover { background: rgba(255,255,255,0.4); }
   @media (max-width: 860px) {
     .alerta-flotante { top: auto; bottom: 18px; right: 18px; left: 18px; text-align: center; }
   }
@@ -275,9 +305,31 @@
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
      esa pantalla/scroll) y se pone FIJA en la esquina, encima de todo,
      visible sin importar en qué pestaña estés o cuánto scroll hagas.
-     Solo aparece cuando hay al menos 1 cliente en pozo rojo. -->
+     Solo aparece cuando hay al menos 1 cliente en pozo rojo.
+
+     AMPLIADO (23-09-2026, a pedido del usuario: "la alerta de clientes en
+     rojo por pozo al darle click y abrir pozo debe desaparecer o colocale
+     una x para cerrar, si vuelve a llegar un cliente nuevo a rojo avisar
+     nuevamente") — ahora se puede cerrar de 2 formas: haciendo click en
+     el botón (que además abre Pozos) o en la "×" sin salir de la pantalla
+     en la que estés. Cerrarla "reconoce" a TODOS los clientes que están
+     en rojo en ese momento (ver reconocerAlertaPozos() más abajo) — si
+     más adelante un cliente que ya estaba reconocido se recupera y vuelve
+     a caer en rojo, o aparece un cliente NUEVO en rojo, la alerta se
+     vuelve a mostrar sola. -->
 <button type="button" id="alertaFlotante" class="alerta-flotante" style="display:none;" onclick="irAPozosDesdeAlerta()">
   🚨 <span id="alertaFlotanteTexto">1 cliente en pozo rojo</span>
+  <span class="alerta-cerrar" onclick="cerrarAlertaPozos(event)" title="Cerrar">✕</span>
+</button>
+
+<!-- Jugadas Adelantadas pendientes (23-09-2026, a pedido del usuario: "si
+     llega a quedar alguna jugada adelantada... sin nada... avisa con
+     alerta y enciende titilando la parada adelantada y cual es la
+     jugada para cargar la pizarra en el plano"). Titila igual que la de
+     Pozo, mientras haya al menos 1 jugada esperando pizarra o esperando
+     que se le asigne quién banquea — ver actualizarAlertaAdelantadas(). -->
+<button type="button" id="alertaFlotanteAdelantadas" class="alerta-flotante alerta-adelantadas" style="display:none;" onclick="irAJugadasAdelantadasDesdeAlerta()">
+  🚀 <span id="alertaFlotanteAdelantadasTexto">1 jugada adelantada pendiente</span>
 </button>
 
 <div class="topbar">
@@ -309,6 +361,7 @@
       <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅ Validar Plano</button>
       <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆 Cargar Remate</button>
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁 Traspasos de Jugadas</button>
+      <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀 Jugadas Adelantadas</button>
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰 Pozos</button>
@@ -488,6 +541,56 @@
 
         <div id="resultadoVacioTraspaso" class="resultado-vacio">El plano con los cambios va a aparecer acá cuando le des "Generar plano con los cambios".</div>
         <pre class="resultado-caja" id="resultadoTraspasoCaja" style="display:none;"></pre>
+      </div>
+    </section>
+
+    <!-- ============ JUGADAS ADELANTADAS (23-09-2026, funcional) ============ -->
+    <section class="vista" id="vista-jugadasAdelantadas">
+      <div class="card">
+        <h2>🎯 Tablas Fijas y Marcas</h2>
+        <p class="desc">
+          Pegá el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elegí el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> quedan esperando que les asignes quién banquea, más abajo en "Pendientes de resolver". Si una carrera no tiene NINGÚN Tercios en vivo, igual podés ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
+          <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos más adelante</span>
+        </p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromoAdelantadas">Hipódromo</label>
+            <select id="selHipodromoAdelantadas">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="inpFechaAdelantadas">Día en que se corren estas carreras</label>
+            <input type="date" id="inpFechaAdelantadas">
+          </div>
+          <div>
+            <label for="inpComisionAdelantadas">% Comisión de Tablas Fijas / Marcas</label>
+            <input type="text" id="inpComisionAdelantadas" value="2.5" placeholder="Ej: 2.5">
+          </div>
+        </div>
+
+        <label for="txtAdelantadas">Plano de jugadas adelantadas (pegá aquí el mensaje completo)</label>
+        <textarea id="txtAdelantadas" rows="14" placeholder="Pegá acá el plano, con cada bloque &quot;JUGANDO &lt;cliente&gt;&quot; y sus líneas numeradas por carrera"></textarea>
+
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" onclick="calcularAdelantadas()">🧮 Revisar</button>
+          <button class="btn btn-primario" type="button" onclick="guardarAdelantadas()">💾 Guardar</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarAdelantadas()">🧹 Limpiar</button>
+          <span class="toast-copiado" id="toastAdelantadas"></span>
+        </div>
+
+        <div id="resultadoVacioAdelantadas" class="resultado-vacio">Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.</div>
+        <div id="previewAdelantadas" style="display:none; margin-top:8px;">
+          <table>
+            <thead><tr><th>Cliente</th><th>Carrera</th><th>Tipo</th><th>Jugada</th><th class="num">Monto</th><th></th></tr></thead>
+            <tbody id="tbodyPreviewAdelantadas"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:26px;">🚀 Pendientes de resolver</h3>
+        <p class="desc">Todo lo que todavía está esperando la pizarra de su carrera, o esperando que le asignes quién banquea una Marca ya decidida.</p>
+        <div id="listaPendientesAdelantadas"><div class="placeholder-card">Sin jugadas pendientes por ahora.</div></div>
       </div>
     </section>
 
@@ -898,7 +1001,15 @@ async function apiHipismo(path, options = {}) {
     window.location.href = 'grupo.html';
     throw new Error('Sesión inválida.');
   }
-  if (!res.ok) throw new Error((data && data.error) || ('Error inesperado (' + res.status + ').'));
+  if (!res.ok) {
+    const err = new Error((data && data.error) || ('Error inesperado (' + res.status + ').'));
+    // Jugadas Adelantadas (23-09-2026): POST /adelantadas devuelve, además
+    // del mensaje, el detalle de cada línea con error de cálculo — se
+    // cuelga acá para que guardarAdelantadas() lo pueda pintar sin pedirlo
+    // de nuevo.
+    if (data && data.errores) err.errores = data.errores;
+    throw err;
+  }
   return data;
 }
 
@@ -928,6 +1039,10 @@ function mostrarVista(id, btn) {
   document.getElementById('vista-' + id).classList.add('activa');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('nav-item-active'));
   if (btn) btn.classList.add('nav-item-active');
+  // 23-09-2026: entrar a Pozos (por la sidebar, no solo por la alerta
+  // flotante) también cuenta como "ya lo vi" — apaga la alerta igual que
+  // cerrarla con la "×" (ver reconocerAlertaPozos()).
+  if (id === 'pozos' && typeof reconocerAlertaPozos === 'function') reconocerAlertaPozos();
 }
 function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
@@ -1128,6 +1243,11 @@ async function calcularPlano() {
   // pestaña "Clientes" para que se vea de inmediato, sin tener que
   // cambiar de pestaña e ir a buscarlo.
   cargarClientesReales();
+  // Si esta pizarra resolvió alguna Jugada Adelantada de esta misma
+  // carrera (ver la nota grande en routes/hipismo.js), refresca la
+  // pantalla de "Jugadas Adelantadas" y su alerta — data.plano.texto_resultado
+  // ya trae el bloque "PARADA ADELANTADAS" abajo, listo para copiar.
+  if (data.adelantadasResueltas && data.adelantadasResueltas.length) cargarPendientesAdelantadas();
 
   let salida = data.plano.texto_resultado;
   if (data.sinReconocer && data.sinReconocer.length) {
@@ -1237,6 +1357,205 @@ function copiarResultadoRemate() {
   } else {
     alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
   }
+}
+
+// ------------------------------------------------------------------
+// "Jugadas Adelantadas" — Tablas Fijas y Marcas (23-09-2026, ver la nota
+// grande en services/hipismoAdelantadasCalc.js para el formato y la
+// fórmula completa de cada tipo de jugada).
+// ------------------------------------------------------------------
+function textoJugadaAdelantada(j) {
+  if (j.tipo === 'tf') return `${j.cantidadTf}TF del ${j.numeroEjemplar} a ${j.precioPorTf} (paga ${j.gananciaPotencial})`;
+  return `${j.numero1}x${j.numero2}`;
+}
+
+function pintarPreviewAdelantadas(jugadas) {
+  const tbody = document.getElementById('tbodyPreviewAdelantadas');
+  tbody.innerHTML = jugadas.map(j => `
+    <tr style="${j.errorCalculo ? 'background:rgba(220,38,38,0.10);' : ''}">
+      <td>${j.cliente}</td>
+      <td>${j.carreraNumero}</td>
+      <td>${j.tipo === 'tf' ? 'Tabla Fija' : 'Marca'}</td>
+      <td>${textoJugadaAdelantada(j)}</td>
+      <td class="num">${Number(j.monto).toFixed(2).replace('.', ',')}</td>
+      <td>${j.errorCalculo ? `⚠️ ${j.detalleError}` : ''}</td>
+    </tr>`).join('');
+  document.getElementById('resultadoVacioAdelantadas').style.display = 'none';
+  document.getElementById('previewAdelantadas').style.display = 'block';
+}
+
+function mostrarVacioAdelantadas(texto) {
+  document.getElementById('previewAdelantadas').style.display = 'none';
+  const vacio = document.getElementById('resultadoVacioAdelantadas');
+  vacio.style.display = 'block';
+  vacio.textContent = texto;
+}
+
+async function calcularAdelantadas() {
+  const texto = document.getElementById('txtAdelantadas').value;
+  if (!texto.trim()) { mostrarVacioAdelantadas('Pegá el plano primero.'); return; }
+  mostrarVacioAdelantadas('Revisando…');
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/adelantadas/calcular', { method: 'POST', body: JSON.stringify({ texto }) });
+  } catch (e) {
+    mostrarVacioAdelantadas(e.message);
+    return;
+  }
+  pintarPreviewAdelantadas(data.jugadas);
+  if (data.sinReconocer && data.sinReconocer.length) {
+    alert('⚠️ No reconocí estas líneas (revisá el formato):\n\n' + data.sinReconocer.join('\n'));
+  }
+  const conError = data.jugadas.filter(j => j.errorCalculo);
+  if (conError.length) {
+    alert('⚠️ Hay ' + conError.length + ' jugada(s) con la multiplicación mal calculada (marcadas en rojo abajo) — corregí el plano antes de Guardar.');
+  }
+}
+
+async function guardarAdelantadas() {
+  const texto = document.getElementById('txtAdelantadas').value;
+  const hipodromoNombre = document.getElementById('selHipodromoAdelantadas').value;
+  const fecha = document.getElementById('inpFechaAdelantadas').value;
+  const comisionPorcentaje = document.getElementById('inpComisionAdelantadas').value;
+  if (!texto.trim()) { mostrarVacioAdelantadas('Pegá el plano primero.'); return; }
+  if (!hipodromoNombre) { mostrarVacioAdelantadas('Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).'); return; }
+  if (!fecha) { mostrarVacioAdelantadas('Falta el día en que se corren estas carreras.'); return; }
+
+  mostrarVacioAdelantadas('Guardando…');
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/adelantadas', {
+      method: 'POST',
+      body: JSON.stringify({ texto, hipodromoNombre, fecha, comisionPorcentaje })
+    });
+  } catch (e) {
+    // Si el servidor rechazó por errores de cálculo, mostrarlos igual que
+    // en la vista previa (ver /adelantadas en routes/hipismo.js).
+    if (e.errores) {
+      pintarPreviewAdelantadas(e.errores.map(er => Object.assign({ tipo: 'tf', errorCalculo: true }, er)));
+    }
+    mostrarVacioAdelantadas(e.message);
+    return;
+  }
+  const t = document.getElementById('toastAdelantadas');
+  t.textContent = `✅ Guardado — ${data.cantidadJugadas} jugada(s)`;
+  t.style.color = 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+  document.getElementById('txtAdelantadas').value = '';
+  mostrarVacioAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
+  cargarPendientesAdelantadas();
+}
+
+function limpiarAdelantadas() {
+  document.getElementById('txtAdelantadas').value = '';
+  mostrarVacioAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
+}
+
+// Pendientes: agrupadas por carrera — cada Marca 'falta_banqueo' trae un
+// mini-formulario inline para asignar quién banquea (ver la nota grande
+// en services/hipismoAdelantadasCalc.js: "permite seleccionar quien
+// banquea, cuanto banquea de las marcas y si paga % o no").
+let BANQUEADORES_POR_JUGADA = {}; // { jugadaId: [{nombre, porcentaje, pagaComision}, ...] }
+
+function filaBanqueadorHtml(jugadaId, idx, b) {
+  return `<div class="fila" style="margin-bottom:6px;" data-banquero-fila="${idx}">
+    <input type="text" placeholder="Nombre del banquero" value="${(b && b.nombre) || ''}" onchange="actualizarBanquero('${jugadaId}',${idx},'nombre',this.value)">
+    <input type="text" placeholder="% que banquea" value="${(b && b.porcentaje) || ''}" onchange="actualizarBanquero('${jugadaId}',${idx},'porcentaje',this.value)">
+    <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
+      <input type="checkbox" ${b && b.pagaComision ? 'checked' : ''} onchange="actualizarBanquero('${jugadaId}',${idx},'pagaComision',this.checked)"> Paga %
+    </label>
+  </div>`;
+}
+
+function actualizarBanquero(jugadaId, idx, campo, valor) {
+  const lista = BANQUEADORES_POR_JUGADA[jugadaId] || [];
+  lista[idx] = Object.assign({ nombre: '', porcentaje: '', pagaComision: false }, lista[idx], { [campo]: valor });
+  BANQUEADORES_POR_JUGADA[jugadaId] = lista;
+}
+
+function agregarBanquero(jugadaId) {
+  const lista = BANQUEADORES_POR_JUGADA[jugadaId] || (BANQUEADORES_POR_JUGADA[jugadaId] = []);
+  lista.push({ nombre: '', porcentaje: '', pagaComision: false });
+  cargarPendientesAdelantadas(); // re-pinta con la fila nueva
+}
+
+async function enviarBanqueo(jugadaId) {
+  const lista = (BANQUEADORES_POR_JUGADA[jugadaId] || []).filter(b => b.nombre && b.nombre.trim());
+  if (!lista.length) { alert('Agregá al menos un banquero.'); return; }
+  try {
+    await apiHipismo(`/api/hipismo/adelantadas/jugadas/${jugadaId}/banquear`, {
+      method: 'POST',
+      body: JSON.stringify({ banqueadores: lista.map(b => ({ nombre: b.nombre.trim().toUpperCase(), porcentaje: Number(b.porcentaje) || 0, pagaComision: !!b.pagaComision })) })
+    });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  delete BANQUEADORES_POR_JUGADA[jugadaId];
+  cargarPendientesAdelantadas();
+  cargarClientesReales();
+}
+
+function filaJugadaPendienteHtml(carrera, j) {
+  const etiquetaEstado = j.estado === 'pendiente'
+    ? '<span class="badge-pendiente">esperando pizarra</span>'
+    : '<span class="badge-pendiente" style="background:#fde7c7; color:#7a4a06;">falta banqueo</span>';
+  let extra = '';
+  if (j.estado === 'falta_banqueo') {
+    const lista = BANQUEADORES_POR_JUGADA[j.id] || (BANQUEADORES_POR_JUGADA[j.id] = [{ nombre: '', porcentaje: '', pagaComision: false }]);
+    extra = `
+      <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigná quién banquea (los % deben sumar 100):</div>
+        ${lista.map((b, idx) => filaBanqueadorHtml(j.id, idx, b)).join('')}
+        <div class="btn-fila">
+          <button class="btn btn-secundario" type="button" onclick="agregarBanquero('${j.id}')">+ Agregar banquero</button>
+          <button class="btn btn-primario" type="button" onclick="enviarBanqueo('${j.id}')">✅ Resolver banqueo</button>
+        </div>
+      </div>`;
+  }
+  return `<div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
+    <b>${j.cliente}</b> — Carrera ${j.carreraNumero} — ${textoJugadaAdelantada(j)} ${etiquetaEstado}
+    ${extra}
+  </div>`;
+}
+
+async function cargarPendientesAdelantadas() {
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/adelantadas/pendientes');
+  } catch (e) {
+    return;
+  }
+  const cont = document.getElementById('listaPendientesAdelantadas');
+  if (cont) {
+    if (!data.carreras.length) {
+      cont.innerHTML = '<div class="placeholder-card">Sin jugadas pendientes por ahora.</div>';
+    } else {
+      cont.innerHTML = data.carreras.map(c => `
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700; margin-bottom:4px;">🏟️ ${c.hipodromoNombre} — Carrera ${c.carreraNumero} — ${c.fecha}</div>
+          ${c.jugadas.map(j => filaJugadaPendienteHtml(c, j)).join('')}
+        </div>`).join('');
+    }
+  }
+  actualizarAlertaAdelantadas(data.total);
+}
+
+function actualizarAlertaAdelantadas(total) {
+  const flotante = document.getElementById('alertaFlotanteAdelantadas');
+  const texto = document.getElementById('alertaFlotanteAdelantadasTexto');
+  if (!flotante) return;
+  if (total > 0) {
+    flotante.style.display = 'block';
+    texto.textContent = total + (total === 1 ? ' jugada adelantada pendiente' : ' jugadas adelantadas pendientes');
+  } else {
+    flotante.style.display = 'none';
+  }
+}
+
+function irAJugadasAdelantadasDesdeAlerta() {
+  mostrarVista('jugadasAdelantadas', document.querySelector('[data-vista="jugadasAdelantadas"]'));
 }
 
 function copiarResultado() {
@@ -1410,16 +1729,50 @@ function colorPorPorcentaje(pct) {
   return 'amarillo';
 }
 
+// 23-09-2026, a pedido del usuario ("al darle click y abrir pozo debe
+// desaparecer o colocale una x para cerrar, si vuelve a llegar un cliente
+// nuevo a rojo avisar nuevamente"): nombres ya "vistos" en rojo — cerrar
+// la alerta (con la "×" o entrando a Pozos) los agrega acá, y mientras
+// sigan en rojo no vuelven a disparar la alerta. Vive solo en memoria
+// (se reinicia si se recarga la página), igual que el resto de "Pozos"
+// mientras siga siendo una pantalla de ejemplo sin backend real.
+let pozosRojoReconocidos = new Set();
+
+function nombresPozoRojoActuales() {
+  return Array.from(document.querySelectorAll('#tablaPozos tbody tr.fila-pozo-rojo'))
+    .map(tr => tr.children[0].textContent.trim());
+}
+
 function actualizarAlertaPozos() {
-  const filasRojas = document.querySelectorAll('#tablaPozos tbody tr.fila-pozo-rojo');
+  const rojos = nombresPozoRojoActuales();
   const flotante = document.getElementById('alertaFlotante');
   const texto = document.getElementById('alertaFlotanteTexto');
-  if (filasRojas.length > 0) {
+
+  // Un cliente que se recuperó (ya no está en rojo) se saca de la lista
+  // de "reconocidos" — si más adelante vuelve a caer en rojo, cuenta como
+  // caso nuevo y avisa de nuevo, tal como pidió el usuario.
+  Array.from(pozosRojoReconocidos).forEach(n => { if (!rojos.includes(n)) pozosRojoReconocidos.delete(n); });
+
+  const hayAlgunoSinReconocer = rojos.some(n => !pozosRojoReconocidos.has(n));
+  if (hayAlgunoSinReconocer) {
     flotante.style.display = 'block';
-    texto.textContent = filasRojas.length + (filasRojas.length === 1 ? ' cliente en pozo rojo' : ' clientes en pozo rojo');
+    texto.textContent = rojos.length + (rojos.length === 1 ? ' cliente en pozo rojo' : ' clientes en pozo rojo');
   } else {
     flotante.style.display = 'none';
   }
+}
+
+// Marca como "ya vistos" a todos los que están en rojo ahora mismo y
+// apaga la alerta — la llaman tanto la "×" como entrar a la pantalla de
+// Pozos (ver mostrarVista()).
+function reconocerAlertaPozos() {
+  nombresPozoRojoActuales().forEach(n => pozosRojoReconocidos.add(n));
+  document.getElementById('alertaFlotante').style.display = 'none';
+}
+
+function cerrarAlertaPozos(ev) {
+  ev.stopPropagation();
+  reconocerAlertaPozos();
 }
 
 function irAPozosDesdeAlerta() {
@@ -1803,6 +2156,22 @@ function poblarSelectHipodromo() {
     actualizarEncabezado();
   }
   poblarSelectHipodromoRemate();
+  poblarSelectHipodromoAdelantadas();
+}
+
+// "Jugadas Adelantadas" (23-09-2026) usa el mismo listado real de
+// hipódromos del grupo — select propio para no interferir con los otros.
+function poblarSelectHipodromoAdelantadas() {
+  const sel = document.getElementById('selHipodromoAdelantadas');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
 // "Cargar Remate" (23-09-2026) usa el mismo listado real de hipódromos
@@ -2167,6 +2536,7 @@ document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDa
 document.getElementById('balanceFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 actualizarAlertaPozos();
 cargarHipodromos();
+cargarPendientesAdelantadas();
 cargarClientesReales();
 actualizarPreviewSemana();
 pintarCierreFinal('actual');

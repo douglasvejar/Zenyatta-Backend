@@ -357,6 +357,78 @@ create index if not exists idx_hipismo_remate_apuestas_remate on hipismo_remate_
 create index if not exists idx_hipismo_remate_apuestas_grupo_cliente on hipismo_remate_apuestas(grupo_id, cliente_nombre);
 
 -- =================================================================
+-- JUGADAS ADELANTADAS — "Tablas Fijas y Marcas" (23-09-2026, nueva
+-- pestaña "Apuestas > Jugadas Adelantadas", a pedido del usuario, con un
+-- formato real de ejemplo: "PLANOS MARCAS Y TABLAS ADELANTADAS ZENYATTA"
+-- + bloques "JUGANDO <cliente>" + líneas "N) 5TF DEL X A Y ,monto/pago$"
+-- o "N) AxB monto$"). Ver la nota grande al principio de
+-- src/services/hipismoAdelantadasCalc.js para la fórmula completa de
+-- cada tipo de jugada — acá solo el porqué del esquema.
+--
+-- Un cliente pega ESTAS jugadas ANTES de que corra la carrera (de ahí
+-- "adelantadas") — pueden pasar días hasta que la carrera puntual de
+-- cada línea se corra de verdad y llegue su pizarra. Por eso se separan
+-- en 2 tablas (cabecera del plano pegado + cada línea/jugada suelta,
+-- mismo criterio que hipismo_planos/hipismo_tickets), y cada línea vive
+-- su propio ciclo de vida en `estado`:
+--   'pendiente'      -> todavía no llegó la pizarra de esa carrera.
+--   'resuelto'       -> ya se sabe el resultado final de TODOS (cliente,
+--                       y si es marca, también cada banquero).
+--   'falta_banqueo'  -> SOLO marcas: ya se sabe si acertó y cuánto le
+--                       toca al cliente, pero todavía no se asignó quién
+--                       banquea la marca (paso manual aparte, ver
+--                       POST /adelantadas/jugadas/:id/banquear).
+--   'sin_decidir'    -> SOLO marcas de hipódromos nacionales cuya
+--                       pizarra nunca llegó a tener 5 puestos — se dio
+--                       por resuelta con 0 para todos en vez de quedar
+--                       pendiente para siempre (confirmado con el
+--                       usuario, ver la nota grande en el .js de arriba).
+create table if not exists hipismo_adelantadas_planos (
+  id                uuid primary key default gen_random_uuid(),
+  grupo_id          uuid not null references grupos(id) on delete cascade,
+  hipodromo_id      uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre  text not null,
+  fecha             date not null, -- el día que se JUEGAN las carreras, no el día que se pegó el plano
+  texto_original    text not null,
+  creado_en         timestamptz not null default now()
+);
+create index if not exists idx_hipismo_adelantadas_planos_grupo_fecha on hipismo_adelantadas_planos(grupo_id, fecha);
+
+create table if not exists hipismo_adelantadas_jugadas (
+  id                    uuid primary key default gen_random_uuid(),
+  plano_id              uuid not null references hipismo_adelantadas_planos(id) on delete cascade,
+  grupo_id              uuid not null references grupos(id) on delete cascade,
+  cliente_nombre        text not null,
+  carrera_numero        integer not null,
+  tipo                  text not null check (tipo in ('tf','marca')),
+  -- Tablas Fijas
+  cantidad_tf           integer,
+  numero_ejemplar       integer,
+  precio_por_tf         numeric,
+  ganancia_potencial    numeric,
+  -- Marcas (1er y 2do lugar exactos)
+  numero1               integer,
+  numero2               integer,
+  -- común a los 2 tipos
+  monto                 numeric not null,
+  comision_porcentaje   numeric not null default 2.5, -- configurable al cargar el plano ("permiteme colocar cuanto es el %")
+  texto_original        text not null,
+  error_calculo         boolean not null default false, -- la multiplicación (cantidad×precio, o cantidad×100) no calzó con lo escrito en el plano
+  detalle_error         text,
+  estado                text not null default 'pendiente' check (estado in ('pendiente','resuelto','falta_banqueo','sin_decidir')),
+  gano                  boolean, -- tf: ganó la tabla fija | marca: acertó el 1ro-2do exacto
+  resultado_cliente     numeric, -- neto del cliente que jugó (ya resuelto en cuanto sale de 'pendiente')
+  comision              numeric, -- tf: comisión de esa línea | marca: total de "Comisión Marcas" ya sumado entre los banqueros que cobran
+  banqueadores          jsonb, -- solo marcas ya banqueadas: [{ nombre, porcentaje, pagaComision, comisionPorcentaje, monto }]
+  pizarra_usada         text,
+  resuelto_en           timestamptz,
+  creado_en             timestamptz not null default now()
+);
+create index if not exists idx_hipismo_adelantadas_jugadas_plano on hipismo_adelantadas_jugadas(plano_id);
+create index if not exists idx_hipismo_adelantadas_jugadas_grupo_cliente on hipismo_adelantadas_jugadas(grupo_id, cliente_nombre);
+create index if not exists idx_hipismo_adelantadas_jugadas_pendientes on hipismo_adelantadas_jugadas(grupo_id, estado);
+
+-- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
 -- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera

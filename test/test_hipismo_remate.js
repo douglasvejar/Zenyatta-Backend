@@ -118,6 +118,12 @@ function ejecutarQuery(text, params) {
     return { rows: [{ total }] };
   }
 
+  // GET /cierre-final: Jugadas Adelantadas de la semana (23-09-2026, ver
+  // test_hipismo_adelantadas.js) — esta prueba no crea ninguna, siempre vacío.
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.comision, j\.banqueadores/i.test(sql)) {
+    return { rows: [] };
+  }
+
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

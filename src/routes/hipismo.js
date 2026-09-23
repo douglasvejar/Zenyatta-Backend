@@ -37,6 +37,19 @@ const { calcularPlano, armarTextoResultado } = require('../services/hipismoCalc'
 // (menos comisión, o la garantía si el pozo no alcanza) — el resto
 // pierde lo apostado.
 const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoRemate } = require('../services/hipismoRemateCalc');
+// "Jugadas Adelantadas" — Tablas Fijas y Marcas (23-09-2026, nueva pestaña
+// "Apuestas > Jugadas Adelantadas", ver la nota grande en
+// services/hipismoAdelantadasCalc.js y en sql/schema.sql). Un cliente
+// pega estas jugadas ANTES de que corra la carrera; cada línea queda
+// 'pendiente' hasta que llega un plano de "Cargar Planos" con la pizarra
+// de esa misma carrera (mismo criterio de auto-detección que ya usa
+// Remate, ver resolverLlegadaRemate más abajo) — ahí Tablas Fijas se
+// resuelve sola, y Marcas queda 'falta_banqueo' hasta que el operador le
+// asigna quién banquea (POST /adelantadas/jugadas/:id/banquear).
+const {
+  parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
+  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas
+} = require('../services/hipismoAdelantadasCalc');
 // autoRegistrarJugadores (22-09-2026, a pedido del usuario: "al hacer un
 // plano el cliente debe crearse automatico, despues el empleado debera
 // ver si le coloca % o no") — es la MISMA función que ya usa Deportes
@@ -91,20 +104,123 @@ router.delete('/hipodromos/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// JUGADAS ADELANTADAS — enganche con "Cargar Planos" (23-09-2026, ver la
+// nota grande en services/hipismoAdelantadasCalc.js). En cuanto un plano
+// de Cargar Planos trae la pizarra de una carrera, se buscan las jugadas
+// adelantadas 'pendiente' de ESE MISMO hipódromo + carrera + fecha y se
+// resuelven con esa misma pizarra: Tablas Fijas queda 'resuelto' de una
+// (no depende de ningún banqueo), Marcas queda 'falta_banqueo' (el
+// operador todavía tiene que asignar quién banquea, ver más abajo) o
+// 'sin_decidir' si es un hipódromo nacional y la pizarra no llegó a 5
+// puestos (ver esMarcaDecidible en el .js de arriba).
+//
+// Esto también es lo que permite "jalar" una jugada adelantada aunque
+// esa carrera no tenga NINGÚN plano de Tercios en vivo (a pedido del
+// usuario: "si llega a quedar alguna jugada adelantada... sin nada...
+// en darle a cargar así no pegue nada, jale la jugada adelantada") — ver
+// más abajo cómo /planos y /planos/calcular ya no exigen texto si hay
+// adelantadas pendientes de esa carrera.
+// =================================================================
+async function buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }) {
+  const r = await db.query(
+    `SELECT j.* FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.hipodromo_nombre = $2 AND j.carrera_numero = $3 AND p.fecha = $4
+        AND j.estado = 'pendiente'
+      ORDER BY j.creado_en`,
+    [req.grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  return r.rows;
+}
+
+// Mismo formato/separadores que parsearPizarra() en hipismoCalc.js.
+function parsearPizarraRank(pizarraTxt) {
+  const posiciones = {};
+  (pizarraTxt || '').split(/[^0-9]+/).filter(Boolean).forEach((h, i) => { posiciones[parseInt(h, 10)] = i + 1; });
+  return h => (posiciones[h] !== undefined ? posiciones[h] : 99);
+}
+
+// Calcula (SIN guardar nada) cómo quedarían las jugadas adelantadas
+// pendientes de una carrera contra una pizarra — lo usan tanto la vista
+// previa (POST /planos/calcular) como, con persistencia aparte (ver
+// guardarResolucionAdelantadas), POST /planos.
+async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra }) {
+  const pendientes = await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha });
+  if (!pendientes.length) return { resueltas: [], movimientosParaTexto: [] };
+
+  const rHip = await db.query('SELECT pais FROM hipismo_hipodromos WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, hipodromoNombre]);
+  const esNacional = rHip.rows.length ? rHip.rows[0].pais !== 'US' : true;
+  const rank = parsearPizarraRank(pizarra);
+
+  const resueltas = pendientes.map(j => {
+    if (j.tipo === 'tf') {
+      const r = resolverTablaFija(
+        { numeroEjemplar: j.numero_ejemplar, monto: Number(j.monto), gananciaPotencial: Number(j.ganancia_potencial) },
+        rank, Number(j.comision_porcentaje)
+      );
+      return {
+        id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto',
+        gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision,
+        movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas }]
+      };
+    }
+    // Marca
+    if (!esMarcaDecidible(pizarra, esNacional)) {
+      return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
+    }
+    const c = resolverClienteMarca({ numero1: j.numero1, numero2: j.numero2, monto: Number(j.monto) }, rank);
+    return {
+      id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo',
+      gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null,
+      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente }]
+    };
+  });
+
+  const movimientosParaTexto = [];
+  resueltas.forEach(r => movimientosParaTexto.push(...r.movimientos));
+  return { resueltas, movimientosParaTexto };
+}
+
+// Persiste la resolución ya calculada arriba — SOLO la llama POST /planos
+// (guardar de verdad), nunca /planos/calcular (vista previa).
+async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
+  for (const r of resueltas) {
+    await client.query(
+      `UPDATE hipismo_adelantadas_jugadas
+          SET estado = $1, gano = $2, resultado_cliente = $3, comision = $4, pizarra_usada = $5, resuelto_en = now()
+        WHERE id = $6 AND grupo_id = $7`,
+      [r.estadoNuevo, r.gano, r.resultadoCliente, r.comision, pizarra, r.id, req.grupoId]
+    );
+  }
+}
+
+// =================================================================
 // PLANOS — "Cargar Planos" (spec secciones 1, 5, 6, 7)
 // =================================================================
 // POST /planos/calcular: calcula SIN guardar — para la vista previa del
 // botón "Calcular" antes de decidir si se guarda de verdad.
 router.post('/planos/calcular', asyncHandler(async (req, res) => {
-  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret } = req.body;
-  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
+  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
 
-  const resultado = calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas });
-  if (!resultado.huboLineas) {
+  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const { resueltas, movimientosParaTexto } = (hipodromoNombre && carreraNumero)
+    ? await calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
+    : { resueltas: [], movimientosParaTexto: [] };
+
+  const huboTexto = !!(texto && texto.trim());
+  if (!huboTexto && resueltas.length === 0) {
+    return res.status(400).json({ error: 'Falta el texto del plano.' });
+  }
+
+  const resultado = huboTexto
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
+    : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
+  if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
   }
-  const textoResultado = armarTextoResultado({
+
+  let textoResultado = armarTextoResultado({
     nombreGrupo: req.grupo.nombre,
     hipodromoNombre: hipodromoNombre || '',
     carreraNumero: carreraNumero || '',
@@ -113,20 +229,22 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     salidaLineas: resultado.salidaLineas,
     totalesFinales: resultado.totalesFinales
   });
+  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  if (bloqueAdelantadas) textoResultado += '\n\n' + bloqueAdelantadas;
 
   res.json({
     textoResultado,
     totalesFinales: resultado.totalesFinales,
     comisionTotal: resultado.comisionTotal,
     sinReconocer: resultado.sinReconocer,
-    cantidadTickets: resultado.tickets.length
+    cantidadTickets: resultado.tickets.length,
+    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
   });
 }));
 
 // POST /planos: calcula Y guarda de verdad (hipismo_planos + hipismo_tickets).
 router.post('/planos', asyncHandler(async (req, res) => {
   const { texto, pizarra, cruzaJugadas, hipodromoId, hipodromoNombre, carreraNumero, ret, fecha } = req.body;
-  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
   if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
 
@@ -138,11 +256,30 @@ router.post('/planos', asyncHandler(async (req, res) => {
   }
   if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
 
-  const resultado = calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas });
-  if (!resultado.huboLineas) {
+  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+
+  // Jugadas Adelantadas pendientes de ESTA MISMA carrera (ver la nota
+  // grande arriba) — se resuelven con la pizarra que se está por guardar
+  // acá, existan o no líneas normales de Tercios en este plano.
+  const { resueltas, movimientosParaTexto } = await calcularResolucionAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra });
+
+  // 23-09-2026, a pedido del usuario ("si llega a quedar alguna jugada
+  // adelantada... sin nada... en darle a cargar así no pegue nada, jale
+  // la jugada adelantada"): un plano sin texto YA NO es un error si hay
+  // adelantadas pendientes de esa carrera — sirve para resolverlas solas
+  // aunque nadie haya jugado nada "en vivo" en esa carrera puntual.
+  const huboTexto = !!(texto && texto.trim());
+  if (!huboTexto && resueltas.length === 0) {
+    return res.status(400).json({ error: 'Falta el texto del plano.' });
+  }
+  const resultado = huboTexto
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
+    : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
+  if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
   }
-  const textoResultado = armarTextoResultado({
+
+  let textoResultado = armarTextoResultado({
     nombreGrupo: req.grupo.nombre,
     hipodromoNombre: nombreHipodromoFinal,
     carreraNumero,
@@ -151,6 +288,8 @@ router.post('/planos', asyncHandler(async (req, res) => {
     salidaLineas: resultado.salidaLineas,
     totalesFinales: resultado.totalesFinales
   });
+  const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  if (bloqueAdelantadas) textoResultado += '\n\n' + bloqueAdelantadas;
 
   // Da de alta en "jugadores" a cualquier cliente/banquero de este plano
   // que todavía no esté registrado en el grupo — mismo criterio y misma
@@ -160,13 +299,14 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // (ON CONFLICT (grupo_id, nombre) DO NOTHING adentro de la función).
   const nombresDelPlano = new Set();
   resultado.tickets.forEach(t => { nombresDelPlano.add(t.clienteNombre); nombresDelPlano.add(t.banqueroNombre); });
+  resueltas.forEach(r => nombresDelPlano.add(r.cliente));
   await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelPlano), {});
 
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
       `INSERT INTO hipismo_planos (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, ret, pizarra, cruza_jugadas, texto_original, texto_resultado, comision_total)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, carreraNumero, fecha || new Date().toISOString().slice(0, 10), ret || null, pizarra, !!cruzaJugadas, texto, textoResultado, resultado.comisionTotal]
+      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, carreraNumero, fechaFinal, ret || null, pizarra, !!cruzaJugadas, texto || '', textoResultado, resultado.comisionTotal]
     );
     const planoCreado = rPlano.rows[0];
 
@@ -177,6 +317,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
         [planoCreado.id, req.grupoId, t.clienteNombre, t.banqueroNombre, t.modalidad, t.caballo, t.monto, t.resultadoJugador, t.resultadoBanquero]
       );
     }
+    if (resueltas.length) await guardarResolucionAdelantadas(client, req, resueltas, pizarra);
     return planoCreado;
   });
 
@@ -184,7 +325,8 @@ router.post('/planos', asyncHandler(async (req, res) => {
     plano,
     totalesFinales: resultado.totalesFinales,
     comisionTotal: resultado.comisionTotal,
-    sinReconocer: resultado.sinReconocer
+    sinReconocer: resultado.sinReconocer,
+    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
   });
 }));
 
@@ -211,6 +353,230 @@ router.get('/planos/:id', asyncHandler(async (req, res) => {
   if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
   const rTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
   res.json({ plano, tickets: rTickets.rows });
+}));
+
+// =================================================================
+// JUGADAS ADELANTADAS — "Tablas Fijas y Marcas" (23-09-2026, nueva
+// pestaña Apuestas > Jugadas Adelantadas — ver la nota grande en
+// services/hipismoAdelantadasCalc.js para el formato y la fórmula
+// completa de cada tipo de jugada). Se pega el plano (varios clientes,
+// varias carreras a la vez) junto con el hipódromo y el día en que se
+// van a correr esas carreras — cada línea queda 'pendiente' hasta que
+// "Cargar Planos" trae la pizarra de esa carrera puntual (ver
+// calcularResolucionAdelantadas/guardarResolucionAdelantadas arriba).
+// =================================================================
+function filaJugadaAdelantadaPublica(j) {
+  return {
+    id: j.id,
+    cliente: j.cliente_nombre,
+    carreraNumero: j.carrera_numero,
+    tipo: j.tipo,
+    cantidadTf: j.cantidad_tf,
+    numeroEjemplar: j.numero_ejemplar,
+    precioPorTf: j.precio_por_tf != null ? Number(j.precio_por_tf) : null,
+    gananciaPotencial: j.ganancia_potencial != null ? Number(j.ganancia_potencial) : null,
+    numero1: j.numero1,
+    numero2: j.numero2,
+    monto: Number(j.monto),
+    comisionPorcentaje: Number(j.comision_porcentaje),
+    textoOriginal: j.texto_original,
+    errorCalculo: j.error_calculo,
+    detalleError: j.detalle_error,
+    estado: j.estado,
+    gano: j.gano,
+    resultadoCliente: j.resultado_cliente != null ? Number(j.resultado_cliente) : null,
+    comision: j.comision != null ? Number(j.comision) : null,
+    banqueadores: j.banqueadores,
+    pizarraUsada: j.pizarra_usada,
+    creadoEn: j.creado_en
+  };
+}
+
+// POST /adelantadas/calcular: parsea SIN guardar — vista previa para
+// revisar los errores de cálculo (ver la nota grande del .js) antes de
+// decidir si se guarda de verdad.
+router.post('/adelantadas/calcular', asyncHandler(async (req, res) => {
+  const { texto } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
+
+  const { jugadas, sinReconocer } = parsearJugadasAdelantadas(texto);
+  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas ("N) 5TF DEL X A Y ,monto/pago$" o "N) AxB monto$").' });
+
+  res.json({
+    jugadas,
+    sinReconocer,
+    cantidadErrores: jugadas.filter(j => j.errorCalculo).length
+  });
+}));
+
+// POST /adelantadas: parsea Y guarda de verdad (hipismo_adelantadas_planos
+// + hipismo_adelantadas_jugadas), todas en estado 'pendiente'. Si hay
+// alguna línea con error de cálculo (la multiplicación no calza con lo
+// escrito en el plano — spec: "esta multiplicacion debes revisarla
+// siempre... debes generar alerta identificar en que jugada y que
+// cliente esta el error"), NO se guarda nada — se devuelve la lista de
+// errores para que el operador corrija el texto pegado y vuelva a
+// intentar, en vez de guardar a medias con números que no cierran.
+router.post('/adelantadas', asyncHandler(async (req, res) => {
+  const { texto, hipodromoId, hipodromoNombre, fecha, comisionPorcentaje } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
+  if (!fecha) return res.status(400).json({ error: 'Falta el día en que se corren estas carreras.' });
+
+  let nombreHipodromoFinal = hipodromoNombre;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromoFinal = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  const { jugadas, sinReconocer } = parsearJugadasAdelantadas(texto);
+  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
+
+  const errores = jugadas.filter(j => j.errorCalculo);
+  if (errores.length) {
+    return res.status(400).json({
+      error: 'Hay jugadas con la multiplicación mal calculada — corregí el plano antes de guardar.',
+      errores: errores.map(j => ({ cliente: j.cliente, carreraNumero: j.carreraNumero, textoOriginal: j.textoOriginal, detalleError: j.detalleError }))
+    });
+  }
+
+  const comisionPct = comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje))
+    ? Number(comisionPorcentaje) : 2.5;
+
+  await autoRegistrarJugadores(req.grupoId, Array.from(new Set(jugadas.map(j => j.cliente))), {});
+
+  const plano = await db.transaccion(async (client) => {
+    const rPlano = await client.query(
+      `INSERT INTO hipismo_adelantadas_planos (grupo_id, hipodromo_id, hipodromo_nombre, fecha, texto_original)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, fecha, texto]
+    );
+    const planoCreado = rPlano.rows[0];
+
+    for (const j of jugadas) {
+      await client.query(
+        `INSERT INTO hipismo_adelantadas_jugadas
+           (plano_id, grupo_id, cliente_nombre, carrera_numero, tipo, cantidad_tf, numero_ejemplar, precio_por_tf, ganancia_potencial, numero1, numero2, monto, comision_porcentaje, texto_original, error_calculo, detalle_error)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [planoCreado.id, req.grupoId, j.cliente, j.carreraNumero, j.tipo,
+          j.tipo === 'tf' ? j.cantidadTf : null, j.tipo === 'tf' ? j.numeroEjemplar : null,
+          j.tipo === 'tf' ? j.precioPorTf : null, j.tipo === 'tf' ? j.gananciaPotencial : null,
+          j.tipo === 'marca' ? j.numero1 : null, j.tipo === 'marca' ? j.numero2 : null,
+          j.monto, comisionPct, j.textoOriginal, j.errorCalculo, j.detalleError]
+      );
+    }
+    return planoCreado;
+  });
+
+  res.status(201).json({ plano, cantidadJugadas: jugadas.length, sinReconocer });
+}));
+
+// GET /adelantadas?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
+router.get('/adelantadas', asyncHandler(async (req, res) => {
+  const { fecha, hipodromoId, limite } = req.query;
+  const condiciones = ['grupo_id = $1'];
+  const params = [req.grupoId];
+  if (fecha) { params.push(fecha); condiciones.push(`fecha = $${params.length}`); }
+  if (hipodromoId) { params.push(hipodromoId); condiciones.push(`hipodromo_id = $${params.length}`); }
+  params.push(Math.min(parseInt(limite, 10) || 50, 200));
+  const r = await db.query(
+    `SELECT id, hipodromo_nombre, fecha, creado_en FROM hipismo_adelantadas_planos WHERE ${condiciones.join(' AND ')} ORDER BY creado_en DESC LIMIT $${params.length}`,
+    params
+  );
+  res.json(r.rows);
+}));
+
+// GET /adelantadas/pendientes : todas las jugadas que todavía necesitan
+// algo (esperando pizarra, o esperando que se les asigne banqueo),
+// agrupadas por hipódromo + carrera + fecha — alimenta tanto la alerta
+// titilante ("avisa... y enciende titilando la parada adelantada y cual
+// es la jugada para cargar la pizarra") como la pantalla de Jugadas
+// Adelantadas. OJO: va ANTES de "/adelantadas/:id" para que Express no
+// intente matchear "pendientes" como si fuera un :id.
+router.get('/adelantadas/pendientes', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND j.estado IN ('pendiente','falta_banqueo')
+      ORDER BY p.fecha, p.hipodromo_nombre, j.carrera_numero, j.creado_en`,
+    [req.grupoId]
+  );
+
+  const porCarrera = new Map();
+  r.rows.forEach(j => {
+    const fechaIso = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+    const clave = `${j.hipodromo_nombre}|${j.carrera_numero}|${fechaIso}`;
+    if (!porCarrera.has(clave)) {
+      porCarrera.set(clave, { hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero, fecha: fechaIso, jugadas: [] });
+    }
+    porCarrera.get(clave).jugadas.push(filaJugadaAdelantadaPublica(j));
+  });
+
+  const carreras = Array.from(porCarrera.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  res.json({
+    total: r.rows.length,
+    esperandoPizarra: r.rows.filter(j => j.estado === 'pendiente').length,
+    faltaBanqueo: r.rows.filter(j => j.estado === 'falta_banqueo').length,
+    carreras
+  });
+}));
+
+// GET /adelantadas/:id : detalle completo (cabecera + jugadas).
+router.get('/adelantadas/:id', asyncHandler(async (req, res) => {
+  const rPlano = await db.query('SELECT * FROM hipismo_adelantadas_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+  const rJugadas = await db.query('SELECT * FROM hipismo_adelantadas_jugadas WHERE plano_id = $1 ORDER BY carrera_numero, creado_en', [plano.id]);
+  res.json({ plano, jugadas: rJugadas.rows.map(filaJugadaAdelantadaPublica) });
+}));
+
+// POST /adelantadas/jugadas/:id/banquear: asigna quién banquea una Marca
+// ya decidida (estado 'falta_banqueo') — "en las marcas permite
+// seleccionar quien banquea, cuanto banquea de las marcas y si paga % o
+// no" — cada banquero cubre un % (deben sumar ~100%) y decide aparte si
+// cobra comisión sobre su parte. Deja la jugada en 'resuelto'.
+router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) => {
+  const { banqueadores, comisionPorcentaje } = req.body;
+  if (!Array.isArray(banqueadores) || banqueadores.length === 0) {
+    return res.status(400).json({ error: 'Falta seleccionar quién banquea esta marca.' });
+  }
+  for (const b of banqueadores) {
+    if (!b.nombre || !b.nombre.trim()) return res.status(400).json({ error: 'Todos los banqueadores necesitan un nombre.' });
+    if (b.porcentaje === undefined || b.porcentaje === null || isNaN(Number(b.porcentaje))) {
+      return res.status(400).json({ error: `Falta el % que banquea ${b.nombre}.` });
+    }
+  }
+  const sumaPorcentajes = banqueadores.reduce((acc, b) => acc + Number(b.porcentaje), 0);
+  if (Math.abs(sumaPorcentajes - 100) > 0.5) {
+    return res.status(400).json({ error: `Los % de los banqueadores deben sumar 100% (suman ${sumaPorcentajes}%).` });
+  }
+
+  const rJugada = await db.query('SELECT * FROM hipismo_adelantadas_jugadas WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const jugada = rJugada.rows[0];
+  if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
+  if (jugada.tipo !== 'marca') return res.status(400).json({ error: 'Solo las Marcas necesitan banqueo — las Tablas Fijas se resuelven solas.' });
+  if (jugada.estado !== 'falta_banqueo') return res.status(400).json({ error: `Esta jugada está en estado "${jugada.estado}", no "falta_banqueo" — no se puede banquear (dos veces) o todavía no tiene resultado.` });
+
+  const comisionPctDefecto = comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje))
+    ? Number(comisionPorcentaje) : Number(jugada.comision_porcentaje);
+
+  const { banqueadores: banqueadoresResueltos, comisionMarcas } = resolverBanqueoMarca(
+    { acierta: jugada.gano, base: jugada.gano ? Number(jugada.resultado_cliente) : Number(jugada.monto) },
+    banqueadores, comisionPctDefecto
+  );
+
+  await autoRegistrarJugadores(req.grupoId, banqueadoresResueltos.map(b => b.nombre), {});
+
+  const rActualizada = await db.query(
+    `UPDATE hipismo_adelantadas_jugadas
+        SET estado = 'resuelto', comision = $1, banqueadores = $2
+      WHERE id = $3 AND grupo_id = $4 RETURNING *`,
+    [comisionMarcas, JSON.stringify(banqueadoresResueltos), jugada.id, req.grupoId]
+  );
+
+  res.json({ jugada: filaJugadaAdelantadaPublica(rActualizada.rows[0]) });
 }));
 
 // =================================================================
@@ -562,6 +928,21 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
       WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
+  // Jugadas Adelantadas (23-09-2026, ver la nota grande en
+  // services/hipismoAdelantadasCalc.js): el lado del CLIENTE que jugó
+  // (tf o marca) ya es definitivo apenas sale de 'pendiente' —
+  // 'resuelto', 'falta_banqueo' y 'sin_decidir' entran todos acá (en
+  // 'sin_decidir' resultado_cliente ya quedó en 0). El lado de los
+  // BANQUEADORES de una Marca solo existe una vez 'resuelto' (adentro
+  // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
+  // un cliente más (ej. "MARCAS ZENYATTA").
+  const rAdelantadas = await db.query(
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.comision, j.banqueadores
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [req.grupoId, desde, hasta]
+  );
 
   const porCliente = new Map();
   function acumular(nombre, resultado) {
@@ -577,6 +958,15 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     acumular(t.banquero_nombre, t.resultado_banquero);
   });
   rApuestasRemate.rows.forEach(a => acumular(a.cliente_nombre, a.resultado));
+
+  let comisionAdelantadasSemana = 0;
+  rAdelantadas.rows.forEach(j => {
+    acumular(j.cliente_nombre, j.resultado_cliente);
+    if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
+    if (Array.isArray(j.banqueadores)) {
+      j.banqueadores.forEach(b => acumular(b.nombre, b.monto));
+    }
+  });
 
   const clientes = Array.from(porCliente.values())
     .map(c => ({ ...c, saldo: c.gano - c.perdio }))
@@ -604,7 +994,8 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     esSemanaActual,
     clientes,
     comisionSemana: Number(rComision.rows[0].total),
-    comisionRemateSemana: Number(rComisionRemate.rows[0].total)
+    comisionRemateSemana: Number(rComisionRemate.rows[0].total),
+    comisionAdelantadasSemana
   });
 }));
 
