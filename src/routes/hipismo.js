@@ -48,7 +48,7 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 // asigna quién banquea (POST /adelantadas/jugadas/:id/banquear).
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
-  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas
+  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2
 } = require('../services/hipismoAdelantadasCalc');
 // autoRegistrarJugadores (22-09-2026, a pedido del usuario: "al hacer un
 // plano el cliente debe crearse automatico, despues el empleado debera
@@ -194,6 +194,30 @@ async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
   }
 }
 
+// 23-09-2026, a pedido del usuario ("en balance no me estas cargando los
+// saldos de las jugadas adelantadas.... debes sumarle en la carrera
+// correspondiente si el cliente gana o pierde... y se va colocando
+// positivo a marcas... tambien tablas fijas, su saldo por carrera
+// detallado"): las jugadas adelantadas que se resuelven al cargar el
+// plano de ESA MISMA carrera (Tablas Fijas completa, o el lado del
+// cliente de una Marca que quedó 'falta_banqueo') tienen que verse
+// reflejadas en el mismo Balance General/vista previa que ya arma
+// hipismoCalc.js para los Tercios de esa carrera — no solo en el bloque
+// de texto "PARADA ADELANTADAS". Esto SOLO afecta lo que se le devuelve
+// al operador en la respuesta (para pintar Balance General): lo que se
+// guarda en hipismo_planos.comision_total sigue siendo nada más la
+// comisión de Tercios (columna que usa "Comisiones por Carrera"), así
+// que acá adentro no se toca `resultado` ni lo que se inserta en la base.
+function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas, movimientosParaTexto) {
+  const totales = Object.assign({}, totalesFinales);
+  movimientosParaTexto.forEach(({ nombre, monto }) => {
+    totales[nombre] = round2((totales[nombre] || 0) + monto);
+  });
+  let comision = comisionTotal;
+  resueltas.forEach(r => { if (r.tipo === 'tf' && r.comision) comision = round2(comision + r.comision); });
+  return { totales, comision };
+}
+
 // =================================================================
 // PLANOS — "Cargar Planos" (spec secciones 1, 5, 6, 7)
 // =================================================================
@@ -232,10 +256,12 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
   if (bloqueAdelantadas) textoResultado += '\n\n' + bloqueAdelantadas;
 
+  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas, movimientosParaTexto);
+
   res.json({
     textoResultado,
-    totalesFinales: resultado.totalesFinales,
-    comisionTotal: resultado.comisionTotal,
+    totalesFinales: balance.totales,
+    comisionTotal: balance.comision,
     sinReconocer: resultado.sinReconocer,
     cantidadTickets: resultado.tickets.length,
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
@@ -321,11 +347,21 @@ router.post('/planos', asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
+  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas, movimientosParaTexto);
+
   res.status(201).json({
     plano,
-    totalesFinales: resultado.totalesFinales,
-    comisionTotal: resultado.comisionTotal,
+    totalesFinales: balance.totales,
+    comisionTotal: balance.comision,
     sinReconocer: resultado.sinReconocer,
+    // hipódromo/carrera/fecha de ESTE plano — el frontend los guarda junto
+    // a Balance General para saber, más adelante, si el banqueo de una
+    // Marca (POST /adelantadas/jugadas/:id/banquear) pertenece a la MISMA
+    // carrera que se está mostrando y hay que sumarle en vivo, o si ya se
+    // pasó a otra carrera (ver enviarBanqueo() en hipismo-mockup.html).
+    hipodromoNombre: nombreHipodromoFinal,
+    carreraNumero: Number(carreraNumero),
+    fecha: fechaFinal,
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
   });
 }));
@@ -542,6 +578,13 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
   if (!Array.isArray(banqueadores) || banqueadores.length === 0) {
     return res.status(400).json({ error: 'Falta seleccionar quién banquea esta marca.' });
   }
+  // 23-09-2026, a pedido del usuario ("colocame para agregar hasta 4
+  // marqueros que banqueen la marca") — mismo límite del lado del
+  // servidor, por si alguien llama la ruta directo sin pasar por el
+  // formulario (que ya no deja agregar un 5to).
+  if (banqueadores.length > 4) {
+    return res.status(400).json({ error: 'Una Marca admite hasta 4 banqueadores.' });
+  }
   for (const b of banqueadores) {
     if (!b.nombre || !b.nombre.trim()) return res.status(400).json({ error: 'Todos los banqueadores necesitan un nombre.' });
     if (b.porcentaje === undefined || b.porcentaje === null || isNaN(Number(b.porcentaje))) {
@@ -553,7 +596,13 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
     return res.status(400).json({ error: `Los % de los banqueadores deben sumar 100% (suman ${sumaPorcentajes}%).` });
   }
 
-  const rJugada = await db.query('SELECT * FROM hipismo_adelantadas_jugadas WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const rJugada = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.id = $1 AND j.grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
   const jugada = rJugada.rows[0];
   if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
   if (jugada.tipo !== 'marca') return res.status(400).json({ error: 'Solo las Marcas necesitan banqueo — las Tablas Fijas se resuelven solas.' });
@@ -576,7 +625,22 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
     [comisionMarcas, JSON.stringify(banqueadoresResueltos), jugada.id, req.grupoId]
   );
 
-  res.json({ jugada: filaJugadaAdelantadaPublica(rActualizada.rows[0]) });
+  // 23-09-2026, a pedido del usuario ("colcocarle como se llama y cuanto
+  // [gana o pierde cada marquero]" y "se va colocando positivo a marcas
+  // [en balance]"): se devuelve el detalle ya resuelto (cliente +
+  // banqueadores + comisión) para que la pantalla muestre el resultado
+  // completo del banqueo, y para que, si Balance General está mostrando
+  // justo esta misma carrera, sume ahí mismo estos montos sin tener que
+  // volver a cargar el plano (ver enviarBanqueo() en hipismo-mockup.html).
+  res.json({
+    jugada: filaJugadaAdelantadaPublica(rActualizada.rows[0]),
+    hipodromoNombre: jugada.hipodromo_nombre,
+    carreraNumero: jugada.carrera_numero,
+    fecha: jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha,
+    resultadoCliente: Number(jugada.resultado_cliente),
+    banqueadores: banqueadoresResueltos,
+    comisionMarcas
+  });
 }));
 
 // =================================================================

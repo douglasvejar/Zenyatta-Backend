@@ -327,9 +327,19 @@
      alerta y enciende titilando la parada adelantada y cual es la
      jugada para cargar la pizarra en el plano"). Titila igual que la de
      Pozo, mientras haya al menos 1 jugada esperando pizarra o esperando
-     que se le asigne quién banquea — ver actualizarAlertaAdelantadas(). -->
+     que se le asigne quién banquea — ver actualizarAlertaAdelantadas().
+
+     AMPLIADO (23-09-2026, segundo pedido: "la alarma de jugadas
+     adelantadas, ponle una x para cerrarla y generame alrta cada 1 hora
+     para avisarme de las jugadas adelantadas") — mismo criterio de "×"
+     que ya tiene la de Pozo (cerrarAlertaAdelantadas()), pero como acá NO
+     hay un concepto de "cliente nuevo" para saber cuándo volver a avisar
+     (es la MISMA lista de pendientes hasta que se resuelva), en vez de
+     eso se vuelve a mostrar sola cada 1 hora mientras sigan quedando
+     jugadas pendientes — ver el setInterval al final del archivo. -->
 <button type="button" id="alertaFlotanteAdelantadas" class="alerta-flotante alerta-adelantadas" style="display:none;" onclick="irAJugadasAdelantadasDesdeAlerta()">
   🚀 <span id="alertaFlotanteAdelantadasTexto">1 jugada adelantada pendiente</span>
+  <span class="alerta-cerrar" onclick="cerrarAlertaAdelantadas(event)" title="Cerrar">✕</span>
 </button>
 
 <div class="topbar">
@@ -1043,6 +1053,9 @@ function mostrarVista(id, btn) {
   // flotante) también cuenta como "ya lo vi" — apaga la alerta igual que
   // cerrarla con la "×" (ver reconocerAlertaPozos()).
   if (id === 'pozos' && typeof reconocerAlertaPozos === 'function') reconocerAlertaPozos();
+  // Mismo criterio para Jugadas Adelantadas: entrar a la pestaña (por la
+  // sidebar, no solo por la alerta flotante) también la cierra.
+  if (id === 'jugadasAdelantadas' && typeof cerrarAlertaAdelantadasSilencioso === 'function') cerrarAlertaAdelantadasSilencioso();
 }
 function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
@@ -1081,6 +1094,16 @@ Juega Zmf 3p (6) con 50,00 da Marcopolo
 Juega Josue 1/2 (10) con 50,00 da Sebastian`;
 
 let ultimosTotales = null; // se comparte con Balance General
+// 23-09-2026, a pedido del usuario ("se va colocando positivo a marcas...
+// tambien tablas fijas"): además de los totales, se guarda de qué
+// carrera son (hipódromo/carrera/fecha) — así, cuando más adelante se
+// banquea una Marca de ESA MISMA carrera (POST /adelantadas/jugadas/:id/
+// banquear), enviarBanqueo() puede sumarle en vivo a Balance General sin
+// tener que recalcular el plano. Si el banqueo es de OTRA carrera (ya se
+// cargó otro plano después), no se toca Balance General — esa carrera ya
+// no está en pantalla, así que mezclarla ahí confundiría los números;
+// igual queda bien contado en "Cierre Final", que lee de la base.
+let ultimosTotalesCarrera = null; // { hipodromoNombre, carreraNumero, fecha }
 
 function poblarCarreras(selId) {
   const sel = document.getElementById(selId || 'selCarrera');
@@ -1237,6 +1260,7 @@ async function calcularPlano() {
   }
 
   ultimosTotales = { totales: data.totalesFinales, comision: data.comisionTotal };
+  ultimosTotalesCarrera = { hipodromoNombre: data.hipodromoNombre, carreraNumero: Number(data.carreraNumero), fecha: data.fecha };
   pintarBalanceGeneral();
   // Cualquier cliente/banquero nuevo de este plano ya quedó dado de alta
   // en el servidor (ver POST /api/hipismo/planos) — refresca acá la
@@ -1474,17 +1498,35 @@ function actualizarBanquero(jugadaId, idx, campo, valor) {
   BANQUEADORES_POR_JUGADA[jugadaId] = lista;
 }
 
+// 23-09-2026, a pedido del usuario ("colocame para agregar hasta 4
+// marqueros que banqueen la marca") — una Marca admite hasta 4
+// banqueadores; el botón "+ Agregar banquero" se deshabilita al llegar
+// al 4to (ver filaJugadaPendienteHtml). El mismo límite también se
+// valida del lado del servidor (POST .../banquear), por si acaso.
+const MAX_BANQUEADORES_MARCA = 4;
+
 function agregarBanquero(jugadaId) {
   const lista = BANQUEADORES_POR_JUGADA[jugadaId] || (BANQUEADORES_POR_JUGADA[jugadaId] = []);
+  if (lista.length >= MAX_BANQUEADORES_MARCA) return;
   lista.push({ nombre: '', porcentaje: '', pagaComision: false });
   cargarPendientesAdelantadas(); // re-pinta con la fila nueva
 }
 
-async function enviarBanqueo(jugadaId) {
+// Arma "Nombre ±monto" para el resumen que se muestra al resolver un
+// banqueo — a pedido del usuario ("para saber cuanto pierde o gana cada
+// uno colcocarle como se llama y cuanto").
+function textoMontoConSigno(nombre, monto) {
+  const v = Number(monto);
+  return `${formatNombre(nombre)} ${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(2).replace('.', ',')}`;
+}
+
+async function enviarBanqueo(jugadaId, clienteNombre) {
   const lista = (BANQUEADORES_POR_JUGADA[jugadaId] || []).filter(b => b.nombre && b.nombre.trim());
   if (!lista.length) { alert('Agregá al menos un banquero.'); return; }
+  if (lista.length > MAX_BANQUEADORES_MARCA) { alert(`Una Marca admite hasta ${MAX_BANQUEADORES_MARCA} banqueadores.`); return; }
+  let data;
   try {
-    await apiHipismo(`/api/hipismo/adelantadas/jugadas/${jugadaId}/banquear`, {
+    data = await apiHipismo(`/api/hipismo/adelantadas/jugadas/${jugadaId}/banquear`, {
       method: 'POST',
       body: JSON.stringify({ banqueadores: lista.map(b => ({ nombre: b.nombre.trim().toUpperCase(), porcentaje: Number(b.porcentaje) || 0, pagaComision: !!b.pagaComision })) })
     });
@@ -1495,6 +1537,33 @@ async function enviarBanqueo(jugadaId) {
   delete BANQUEADORES_POR_JUGADA[jugadaId];
   cargarPendientesAdelantadas();
   cargarClientesReales();
+
+  // 23-09-2026, a pedido del usuario ("en jugadas adelantadas tambien
+  // colocame para agregar hasta 4 marqueros... para saber cuanto pierde o
+  // gana cada uno colcocarle como se llama y cuanto"): resumen claro de
+  // cómo quedó el banqueo, nombre por nombre.
+  const lineas = [textoMontoConSigno(clienteNombre || 'Cliente', data.resultadoCliente)];
+  (data.banqueadores || []).forEach(b => lineas.push(textoMontoConSigno(b.nombre, b.monto)));
+  if (data.comisionMarcas) lineas.push(`Comisión Marcas +${Number(data.comisionMarcas).toFixed(2).replace('.', ',')}`);
+  alert('✅ Banqueo resuelto:\n\n' + lineas.join('\n'));
+
+  // Y, a pedido del usuario ("se va colocando positivo a marcas la
+  // cantidad de marqueros que banqueen... todo debe verse siempre
+  // reflejado en los balances"): si Balance General está mostrando
+  // justo la MISMA carrera de esta marca, se le suman ahí mismo los
+  // banqueadores y la comisión, sin tener que volver a cargar el plano.
+  if (ultimosTotales && ultimosTotalesCarrera
+      && ultimosTotalesCarrera.hipodromoNombre === data.hipodromoNombre
+      && ultimosTotalesCarrera.carreraNumero === Number(data.carreraNumero)
+      && ultimosTotalesCarrera.fecha === data.fecha) {
+    (data.banqueadores || []).forEach(b => {
+      ultimosTotales.totales[b.nombre] = Math.round(((ultimosTotales.totales[b.nombre] || 0) + b.monto) * 100) / 100;
+    });
+    if (data.comisionMarcas) {
+      ultimosTotales.comision = Math.round((ultimosTotales.comision + data.comisionMarcas) * 100) / 100;
+    }
+    pintarBalanceGeneral();
+  }
 }
 
 function filaJugadaPendienteHtml(carrera, j) {
@@ -1504,13 +1573,15 @@ function filaJugadaPendienteHtml(carrera, j) {
   let extra = '';
   if (j.estado === 'falta_banqueo') {
     const lista = BANQUEADORES_POR_JUGADA[j.id] || (BANQUEADORES_POR_JUGADA[j.id] = [{ nombre: '', porcentaje: '', pagaComision: false }]);
+    const clienteJs = j.cliente.replace(/'/g, "\\'");
+    const botonAgregarDeshabilitado = lista.length >= MAX_BANQUEADORES_MARCA;
     extra = `
       <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
-        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigná quién banquea (los % deben sumar 100):</div>
+        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigná quién banquea, hasta ${MAX_BANQUEADORES_MARCA} (los % deben sumar 100):</div>
         ${lista.map((b, idx) => filaBanqueadorHtml(j.id, idx, b)).join('')}
         <div class="btn-fila">
-          <button class="btn btn-secundario" type="button" onclick="agregarBanquero('${j.id}')">+ Agregar banquero</button>
-          <button class="btn btn-primario" type="button" onclick="enviarBanqueo('${j.id}')">✅ Resolver banqueo</button>
+          <button class="btn btn-secundario" type="button" ${botonAgregarDeshabilitado ? 'disabled title="Ya son 4 banqueadores"' : ''} onclick="agregarBanquero('${j.id}')">+ Agregar banquero</button>
+          <button class="btn btn-primario" type="button" onclick="enviarBanqueo('${j.id}', '${clienteJs}')">✅ Resolver banqueo</button>
         </div>
       </div>`;
   }
@@ -1542,21 +1613,55 @@ async function cargarPendientesAdelantadas() {
   actualizarAlertaAdelantadas(data.total);
 }
 
+// 23-09-2026, segundo pedido del usuario ("la alarma de jugadas
+// adelantadas, ponle una x para cerrarla y generame alrta cada 1 hora
+// para avisarme de las jugadas adelantadas"): a diferencia de Pozo (que
+// vuelve a avisar solo con un cliente NUEVO en rojo), acá no hay "nuevo"
+// que detectar mientras la jugada sigue pendiente — así que la "×" la
+// apaga por ahora, pero un recordatorio cada 1 hora la vuelve a prender
+// sola mientras sigan quedando jugadas por resolver o por banquear.
+let alertaAdelantadasCerrada = false;
+let totalAdelantadasPendientesActual = 0;
+
 function actualizarAlertaAdelantadas(total) {
   const flotante = document.getElementById('alertaFlotanteAdelantadas');
   const texto = document.getElementById('alertaFlotanteAdelantadasTexto');
   if (!flotante) return;
-  if (total > 0) {
-    flotante.style.display = 'block';
-    texto.textContent = total + (total === 1 ? ' jugada adelantada pendiente' : ' jugadas adelantadas pendientes');
-  } else {
+  totalAdelantadasPendientesActual = total;
+  if (total === 0) {
+    alertaAdelantadasCerrada = false; // si más adelante vuelve a haber pendientes, avisa de una
     flotante.style.display = 'none';
+    return;
   }
+  texto.textContent = total + (total === 1 ? ' jugada adelantada pendiente' : ' jugadas adelantadas pendientes');
+  flotante.style.display = alertaAdelantadasCerrada ? 'none' : 'block';
+}
+
+function cerrarAlertaAdelantadasSilencioso() {
+  alertaAdelantadasCerrada = true;
+  const flotante = document.getElementById('alertaFlotanteAdelantadas');
+  if (flotante) flotante.style.display = 'none';
+}
+
+function cerrarAlertaAdelantadas(ev) {
+  ev.stopPropagation();
+  cerrarAlertaAdelantadasSilencioso();
 }
 
 function irAJugadasAdelantadasDesdeAlerta() {
+  cerrarAlertaAdelantadasSilencioso();
   mostrarVista('jugadasAdelantadas', document.querySelector('[data-vista="jugadasAdelantadas"]'));
 }
+
+// Recordatorio cada 1 hora, pedido explícito del usuario — aunque se
+// haya cerrado con la "×", vuelve a titilar sola mientras sigan quedando
+// jugadas adelantadas pendientes (esperando pizarra o esperando banqueo).
+setInterval(() => {
+  if (totalAdelantadasPendientesActual > 0) {
+    alertaAdelantadasCerrada = false;
+    actualizarAlertaAdelantadas(totalAdelantadasPendientesActual);
+  }
+}, 60 * 60 * 1000);
 
 function copiarResultado() {
   const caja = document.getElementById('resultadoCaja');

@@ -241,7 +241,7 @@ function ejecutarQuery(text, params) {
     if (j) { j.estado = estado; j.gano = gano; j.resultado_cliente = resultadoCliente; j.comision = comision; j.pizarra_usada = pizarraUsada; j.resuelto_en = Date.now(); }
     return { rows: j ? [j] : [] };
   }
-  if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha\s+FROM hipismo_adelantadas_jugadas j/i.test(sql)) {
+  if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND j\.estado IN/i.test(sql)) {
     const [grupoId] = params;
     const filas = TABLAS.hipismo_adelantadas_jugadas
       .filter(j => j.grupo_id === grupoId && (j.estado === 'pendiente' || j.estado === 'falta_banqueo'))
@@ -251,10 +251,17 @@ function ejecutarQuery(text, params) {
       });
     return { rows: filas };
   }
-  if (/^SELECT \* FROM hipismo_adelantadas_jugadas WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
+  // POST /adelantadas/jugadas/:id/banquear — busca la jugada puntual (por
+  // id), trayendo también el hipódromo/fecha de su plano (23-09-2026, a
+  // pedido del usuario: "se va colocando positivo a marcas... en
+  // balance" — hace falta saber de qué carrera es la marca para poder
+  // sumarla en vivo si Balance General está mostrando esa misma carrera).
+  if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.id = \$1 AND j\.grupo_id = \$2$/i.test(sql)) {
     const [id, grupoId] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
-    return { rows: j ? [j] : [] };
+    if (!j) return { rows: [] };
+    const p = TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id);
+    return { rows: [{ ...j, hipodromo_nombre: p.hipodromo_nombre, fecha: p.fecha }] };
   }
   if (/^UPDATE hipismo_adelantadas_jugadas\s+SET estado = 'resuelto', comision = \$1, banqueadores = \$2/i.test(sql)) {
     const [comision, banqueadoresJson, id, grupoId] = params;
@@ -408,6 +415,25 @@ function reqBase(grupoId) {
   check(resPlanos12._json.plano.texto_resultado.includes('Linares +225'), 'El bloque de adelantadas muestra a Linares ganando +225');
   check(resPlanos12._json.plano.texto_resultado.includes('Tablas fijas'), 'El bloque de adelantadas también muestra el neto de "Tablas Fijas" (la banca)');
 
+  // --- 9) Balance General (Cargar Planos) también tiene que reflejar las
+  // Jugadas Adelantadas de esta misma carrera, no solo el texto — a
+  // pedido del usuario: "en balance no me estas cargando los saldos de
+  // las jugadas adelantadas.... debes sumarle en la carrera
+  // correspondiente si el cliente gana o pierde... y se va colocando
+  // positivo a marcas... tambien tablas fijas". El plano de Tercios de
+  // esta carrera solo trae a Sebastian/Flaco (comisión 2,5) — Linares,
+  // Halland, Maturin y "TABLAS FIJAS" son 100% de las adelantadas.
+  check(resPlanos12._json.totalesFinales.LINARES === 225, '9) Balance General de la carrera 12 ya trae a Linares +225 (Tablas Fijas)');
+  check(resPlanos12._json.totalesFinales.HALLAND === -160, 'Balance General trae a Halland -160 (-40 de su Tabla Fija, -120 de su Marca que perdió)');
+  check(resPlanos12._json.totalesFinales.MATURIN === -45, 'Balance General trae a Maturin -45 (su Tabla Fija, perdió)');
+  check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -144.01, 'Balance General trae a "TABLAS FIJAS" (la banca) -144,01, la suma de las 3 tablas fijas de esta carrera');
+  check(resPlanos12._json.comisionTotal === 6.51, 'La Comisión del Balance General suma la de Tercios (2,5) más la de las 3 Tablas Fijas (4,01) = 6,51');
+  // La Marca de Halland todavía no tiene banqueadores asignados (sigue
+  // 'falta_banqueo') — solo entra el lado del cliente por ahora, el de
+  // los banqueadores se suma más adelante cuando se resuelva el banqueo
+  // (ver el punto 10 más abajo).
+  check(!('MARCAS ZENYATTA' in resPlanos12._json.totalesFinales), 'Los banqueadores de la Marca de Halland todavía no aparecen (falta asignarlos)');
+
   // --- 6) Marca de hipódromo NACIONAL con pizarra de solo 3 puestos ->
   // 'sin_decidir' (usa la carrera 2, que tiene 2 TF de Halland/Rambo y 1
   // marca de Maturin). ---
@@ -435,11 +461,41 @@ function reqBase(grupoId) {
   const sumaBanqueoHalland = Number(halland12Marca.resultado_cliente) + bqZenyatta.monto + bqSammy.monto + resBanqueo._json.jugada.comision;
   check(Math.round(sumaBanqueoHalland * 100) === 0, 'Halland + Marcas Zenyatta + Marcas Sammy + Comisión Marcas suman 0 exacto');
 
+  // 23-09-2026, a pedido del usuario ("se va colocando positivo a
+  // marcas... en balance" y "para saber cuanto pierde o gana cada uno
+  // colcocarle como se llama y cuanto"): el banqueo también devuelve de
+  // qué carrera es (para que el frontend pueda sumarlo en vivo a Balance
+  // General si está mostrando esa misma carrera) y el detalle completo
+  // ya resuelto (para mostrarlo nombre por nombre).
+  check(resBanqueo._json.hipodromoNombre === 'La Rinconada' && resBanqueo._json.carreraNumero === 12 && resBanqueo._json.fecha === FECHA_PRUEBA,
+    'El banqueo devuelve el hipódromo/carrera/fecha de la marca banqueada (La Rinconada, carrera 12)');
+  check(resBanqueo._json.resultadoCliente === -120, 'El banqueo devuelve el neto del cliente (Halland -120)');
+  check(resBanqueo._json.banqueadores.length === 2 && resBanqueo._json.banqueadores.find(b => b.nombre === 'MARCAS SAMMY').monto === 46.8,
+    'El banqueo devuelve el detalle de cada banqueador (nombre y monto), no solo el estado');
+  check(resBanqueo._json.comisionMarcas === 1.2, 'El banqueo devuelve la Comisión Marcas por separado');
+
   // Doble banqueo debe rechazarse.
   const resBanqueoDoble = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
     body: { banqueadores: [{ nombre: 'MARCAS ZENYATTA', porcentaje: 100, pagaComision: false }] }
   }), { id: halland12Marca.id });
   check(resBanqueoDoble._status === 400, 'Intentar banquear 2 veces la misma marca responde 400 (ya está "resuelto")');
+
+  // 23-09-2026, a pedido del usuario ("colocame para agregar hasta 4
+  // marqueros que banqueen la marca") — el servidor también rechaza un
+  // 5to banqueador, no solo el formulario del frontend. Se reintenta
+  // sobre la misma marca de Halland (ya "resuelto", pero eso da 400 por
+  // otro motivo — lo que importa acá es que la validación del límite de
+  // 4 corre ANTES de mirar el estado de la jugada).
+  const resBanqueoCincoBanqueros = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
+    body: {
+      banqueadores: [
+        { nombre: 'A', porcentaje: 20, pagaComision: false }, { nombre: 'B', porcentaje: 20, pagaComision: false },
+        { nombre: 'C', porcentaje: 20, pagaComision: false }, { nombre: 'D', porcentaje: 20, pagaComision: false },
+        { nombre: 'E', porcentaje: 20, pagaComision: false }
+      ]
+    }
+  }), { id: halland12Marca.id });
+  check(resBanqueoCincoBanqueros._status === 400, 'Intentar banquear con 5 banqueadores responde 400 (el máximo son 4)');
 
   // Porcentajes que no suman 100 deben rechazarse.
   const resBanqueoMalo = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
