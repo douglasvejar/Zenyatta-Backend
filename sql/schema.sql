@@ -368,6 +368,22 @@ create index if not exists idx_jugadores_token on jugadores(token);
 alter table jugadores add column if not exists modelo_comision text check (modelo_comision is null or modelo_comision in ('plano','por_tipo_jugada'));
 
 -- =================================================================
+-- "Anclar/vincular módulos" (23-09-2026, a pedido del usuario: "hazlo
+-- tambien al revez, pero solo sucedera si yo anclo o lo avctivo esa
+-- funcion al cliente. si no cada pantalla es independiente") — un
+-- cliente que juega Deportes E Hipismo es la MISMA fila acá (mismo
+-- grupo_id + nombre), pero por defecto sus 2 links públicos (Deportes:
+-- routes/cliente.js, Hipismo: routes/hipismoCliente.js) siguen siendo
+-- 100% independientes, cada uno solo con los datos de su propio módulo
+-- — igual que hoy. Si el Administrador prende este interruptor para ese
+-- cliente puntual (PATCH /api/jugadores/:id/modulos-anclados, o desde el
+-- propio formulario de Jugador), los 2 links pasan a mostrar TAMBIÉN los
+-- datos del otro módulo, separados visualmente pero sumados al total.
+-- Default false: ningún cliente existente cambia de comportamiento solo
+-- por correr este ALTER.
+alter table jugadores add column if not exists modulos_anclados boolean not null default false;
+
+-- =================================================================
 -- AVALES — "Avalados por": un jugador (avalador) gana un % adicional
 -- sobre lo que arriesguen sus avalados, aparte de su propia comisión.
 -- =================================================================

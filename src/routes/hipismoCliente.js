@@ -11,7 +11,8 @@
 // ya existente, pensada justo para esto — ver el comentario "link
 // individual del cliente" en sql/schema.sql) ES el acceso, igual que un
 // link "no listado". Cualquiera con el link ve SOLO los datos de ESE
-// jugador en Hipismo, nunca los de otro cliente ni los de Deportes.
+// jugador en Hipismo, y de Deportes SOLO si el Administrador prendió
+// jugadores.modulos_anclados para ese cliente puntual (ver más abajo).
 //
 // A diferencia de Deportes (que lee tickets_historial vía
 // services/historial.js), esta vista lee de las tablas propias del
@@ -30,6 +31,7 @@
 const express = require('express');
 const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
+const { obtenerLineasHipismoCliente } = require('../services/hipismoLineasCliente');
 // leerHistorial (23-09-2026, a pedido del usuario: "separame los datos de
 // deportes con los de hipismo... el cliente que juegue deportes o
 // viceversa, se le puede anclar o incluir la información del otro
@@ -39,8 +41,11 @@ const asyncHandler = require('../middleware/asyncHandler');
 // (routes/cliente.js), reusada tal cual para traer las jugadas de
 // Deportes de ESTE MISMO cliente (mismo "jugadores.nombre", misma fila —
 // un cliente que juega en los 2 módulos es UN SOLO registro en la tabla
-// "jugadores" compartida) cuando el grupo también tiene Deportes
-// habilitado.
+// "jugadores" compartida). SOLO se trae si el Administrador prendió
+// jugadores.modulos_anclados para este cliente puntual — "solo sucedera
+// si yo anclo o lo activo esa funcion al cliente, si no cada pantalla es
+// independiente" (23-09-2026, respuesta del usuario cuando se le
+// preguntó si el anclado debía ser automático o por cliente).
 const { leerHistorial } = require('../services/historial');
 
 const router = express.Router();
@@ -116,19 +121,7 @@ router.get('/:token', asyncHandler(async (req, res) => {
   const { desde, hasta } = rangoSemana(hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
-  const r = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto,
-            t.resultado_jugador, t.resultado_banquero,
-            p.fecha, p.hipodromo_nombre, p.carrera_numero, p.pizarra,
-            h.pais
-       FROM hipismo_tickets t
-       JOIN hipismo_planos p ON p.id = t.plano_id
-       LEFT JOIN hipismo_hipodromos h ON h.id = p.hipodromo_id
-      WHERE t.grupo_id = $1 AND (t.cliente_nombre = $2 OR t.banquero_nombre = $2)
-        AND p.fecha BETWEEN $3 AND $4
-      ORDER BY p.fecha DESC, p.creado_en ASC`,
-    [jugador.grupo_id, jugador.nombre, desde, hasta]
-  );
+  const lineasHipismo = await obtenerLineasHipismoCliente(jugador.grupo_id, jugador.nombre, desde, hasta);
 
   // Agrupa por día > hipódromo — mismo shape que ya esperaba el mockup
   // (DIAS: [{ fecha, hipodromos: [{ nombre, pais, carreras: [...] }] }]),
@@ -137,47 +130,46 @@ router.get('/:token', asyncHandler(async (req, res) => {
   let totalSemana = 0;
   let totalHoy = 0;
 
-  r.rows.forEach(row => {
-    const esJugador = row.cliente_nombre === jugador.nombre;
-    const rol = esJugador ? 'jugador' : 'banquero';
-    const resultado = Number(esJugador ? row.resultado_jugador : row.resultado_banquero);
-    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+  lineasHipismo.forEach(linea => {
+    const fechaIso = linea.fecha;
 
     if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
     const hipMap = porDia.get(fechaIso);
-    const hipNombre = row.hipodromo_nombre;
-    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: row.pais || 'VE', carreras: [] });
+    const hipNombre = linea.hipodromoNombre;
+    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: linea.pais, carreras: [] });
 
     const carrera = {
-      carrera: row.carrera_numero,
-      pizarra: row.pizarra,
-      modalidad: row.modalidad,
-      monto: Number(row.monto),
-      rol,
-      resultado
+      carrera: linea.carreraNumero,
+      pizarra: linea.pizarra,
+      modalidad: linea.modalidad,
+      monto: linea.monto,
+      rol: linea.rol,
+      resultado: linea.resultado
     };
-    if (row.modalidad === 'pp') {
-      const partes = String(row.caballo).split(/x/i);
-      carrera.caballoA = partes[0];
-      carrera.caballoB = partes[1];
+    if (linea.modalidad === 'pp') {
+      carrera.caballoA = linea.caballoA;
+      carrera.caballoB = linea.caballoB;
     } else {
-      carrera.caballo = row.caballo;
+      carrera.caballo = linea.caballo;
     }
     hipMap.get(hipNombre).carreras.push(carrera);
 
-    totalSemana += resultado;
-    if (fechaIso === hoyIso) totalHoy += resultado;
+    totalSemana += linea.resultado;
+    if (fechaIso === hoyIso) totalHoy += linea.resultado;
   });
 
-  let totalHipismo = totalSemana;
+  const totalHipismo = totalSemana;
   let totalDeportes = 0;
   let cantidadJugadasDeportes = 0;
 
-  // Deportes "anclado" (23-09-2026) — solo si el GRUPO tiene el módulo de
-  // Deportes habilitado (un grupo que solo compró Hipismo no tiene nada
-  // que traer acá). Mismo cliente, misma fila en "jugadores" — se busca
-  // por el mismo nombre canónico, ya en MAYÚSCULA en los 2 módulos.
-  if (grupo.modulo_deportes_habilitado) {
+  // Deportes "anclado" (23-09-2026) — SOLO si el grupo tiene el módulo de
+  // Deportes habilitado Y el Administrador prendió jugadores.modulos_anclados
+  // para ESTE cliente puntual ("solo sucedera si yo anclo o lo activo esa
+  // funcion al cliente, si no cada pantalla es independiente"). Mismo
+  // cliente, misma fila en "jugadores" — se busca por el mismo nombre
+  // canónico, ya en MAYÚSCULA en los 2 módulos.
+  const deportesAnclado = !!(jugador.modulos_anclados && grupo.modulo_deportes_habilitado);
+  if (deportesAnclado) {
     const ticketsDeportes = await leerHistorial(jugador.grupo_id, { desde, hasta, cliente: jugador.nombre });
     ticketsDeportes.forEach(t => {
       const resultado = resultadoTicketDeportes(t);
@@ -214,11 +206,11 @@ router.get('/:token', asyncHandler(async (req, res) => {
     rango: { desde, hasta },
     hoy: hoyIso,
     esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
-    // Módulos que este cliente tiene "anclados" en este link — el
-    // frontend usa esto para saber si vale la pena mostrar el desglose
-    // Hipismo/Deportes por separado debajo del total combinado, o si el
-    // grupo directamente no tiene Deportes y ni hace falta mencionarlo.
-    modulos: { hipismo: true, deportes: !!grupo.modulo_deportes_habilitado },
+    // "deportes: true" acá significa "este link SÍ está mostrando
+    // Deportes anclado ahora mismo" (no solo que el grupo lo tenga
+    // habilitado) — el frontend lo usa para decidir si vale la pena
+    // mostrar el desglose Hipismo/Deportes debajo del total combinado.
+    modulos: { hipismo: true, deportes: deportesAnclado },
     resumen: {
       // Combinado (pedido explícito: "en balance general si los uno si
       // saldra un solo saldo que seria la suma de total hipismo mas
@@ -226,10 +218,10 @@ router.get('/:token', asyncHandler(async (req, res) => {
       // mostrarlo si hace falta, sin obligar al frontend a recalcularlo.
       totalSemana,
       totalHoy,
-      cantidadJugadas: r.rows.length + cantidadJugadasDeportes,
+      cantidadJugadas: lineasHipismo.length + cantidadJugadasDeportes,
       totalHipismo,
       totalDeportes,
-      cantidadJugadasHipismo: r.rows.length,
+      cantidadJugadasHipismo: lineasHipismo.length,
       cantidadJugadasDeportes
     },
     dias

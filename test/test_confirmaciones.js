@@ -56,7 +56,7 @@ function ejecutarQuery(text, params) {
     const j = TABLAS.jugadores.find(x => x.token === params[0]);
     return { rows: j ? [j] : [] };
   }
-  if (/^SELECT activo, nombre, logo_url FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT activo, nombre, logo_url, modulo_hipismo_habilitado FROM grupos WHERE id = \$1/i.test(sql)) {
     const g = TABLAS.grupos.find(x => x.id === params[0]);
     return { rows: g ? [g] : [] };
   }

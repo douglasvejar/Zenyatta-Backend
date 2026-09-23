@@ -119,6 +119,15 @@
   .balance-total .monto.positivo { color: var(--accent); }
   .balance-total .monto.negativo { color: var(--danger); }
   .balance-total .rango-fechas { color: var(--text-dim); font-size: 12.5px; margin-top: 4px; }
+  /* Desglose Deportes/Hipismo (23-09-2026, a pedido del usuario: "hazlo
+     tambien al revez" — mismo mecanismo en espejo del que ya tiene
+     hipismo-cliente-portal.html) — el número grande de arriba ya es la
+     suma de los 2 cuando este cliente tiene el anclado prendido; esta
+     línea chica aclara cuánto puso cada módulo. */
+  .desglose-modulos { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .desglose-modulos span { font-variant-numeric: tabular-nums; font-weight: bold; }
+  .desglose-modulos .pos { color: var(--ok); }
+  .desglose-modulos .neg { color: var(--danger); }
 
   /* Jugadas como ítems (02-09-2026, a pedido del usuario: "recuerda que
      cada jugada es un item diferente") en vez de filas de tabla — más
@@ -297,6 +306,7 @@
     <div class="balance-total">
       <div class="etiqueta" id="balanceEtiqueta">Total Semana</div>
       <div class="monto" id="vBalance">$0.00</div>
+      <div class="desglose-modulos" id="desgloseModulos" style="display:none;"></div>
       <div class="rango-fechas" id="balanceRangoFechas"></div>
     </div>
 
@@ -519,6 +529,20 @@ function renderResumen(data) {
   const vBalance = document.getElementById('vBalance');
   vBalance.textContent = formatMoneyConSigno(data.resumen.balance);
   vBalance.className = 'monto ' + (data.resumen.balance >= 0 ? 'positivo' : 'negativo');
+
+  // Desglose Deportes/Hipismo (23-09-2026) — solo si este cliente tiene
+  // el anclado prendido (data.modulos.hipismo); si no, cada link sigue
+  // siendo 100% independiente y esta línea ni se muestra.
+  const desglose = document.getElementById('desgloseModulos');
+  if (data.modulos && data.modulos.hipismo) {
+    desglose.style.display = 'block';
+    const claseMonto = n => (n > 0 ? 'pos' : (n < 0 ? 'neg' : ''));
+    desglose.innerHTML =
+      '⚽ Deportes: <span class="' + claseMonto(data.resumen.totalDeportes) + '">' + formatMoneyConSigno(data.resumen.totalDeportes) + '</span>' +
+      '&nbsp;&nbsp;·&nbsp;&nbsp;🐎 Hipismo: <span class="' + claseMonto(data.resumen.totalHipismo) + '">' + formatMoneyConSigno(data.resumen.totalHipismo) + '</span>';
+  } else {
+    desglose.style.display = 'none';
+  }
 
   document.getElementById('balanceRangoFechas').textContent = data.rango.desde === data.rango.hasta
     ? formatFechaCorta(data.rango.desde)

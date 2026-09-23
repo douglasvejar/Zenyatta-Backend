@@ -1941,6 +1941,15 @@ function actualizarVisibilidadPozoJugador() {
   document.getElementById('contenedorPozoJugador').style.display = (tipo === 'avalado') ? 'block' : 'none';
 }
 
+// "Anclar módulos" (23-09-2026) — mismo criterio que actualizarSelectorModulo():
+// solo tiene sentido ofrecer el interruptor si el grupo tiene los 2 módulos
+// contratados (Deportes Y Hipismo). Si el grupo solo tiene uno de los 2, no
+// hay nada que anclar con nada, así que se oculta para no confundir.
+function actualizarVisibilidadAnclarModulos() {
+  const cont = document.getElementById('contenedorAnclarModulos');
+  if (cont) cont.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+}
+
 // "Moneda del Jugador" (18-09-2026, ver la nota grande en grupo.html
 // junto a #contenedorMonedaJugador) — este selector SOLO se muestra
 // cuando el grupo entero está en modo 'mixto' (MONEDA_MODO_GRUPO, cargada
@@ -1962,10 +1971,13 @@ function cancelarEdicionJugador() {
   document.getElementById('jugadorTipoCuenta').value = 'libre';
   document.getElementById('jugadorPozoInicial').value = '';
   document.getElementById('jugadorActivo').checked = true;
+  const anclarChk = document.getElementById('jugadorModulosAnclados');
+  if (anclarChk) anclarChk.checked = false;
   const monedaSel = document.getElementById('jugadorMoneda');
   if (monedaSel) monedaSel.value = 'USD';
   actualizarVisibilidadPozoJugador();
   actualizarVisibilidadMonedaJugador();
+  actualizarVisibilidadAnclarModulos();
 }
 
 function editarJugador(id) {
@@ -1984,8 +1996,12 @@ function editarJugador(id) {
   // importar el modo del grupo, ver routes/jugadores.js).
   const monedaSel = document.getElementById('jugadorMoneda');
   if (monedaSel) monedaSel.value = j.moneda === 'BS' ? 'BS' : 'USD';
+  // "Anclar módulos" (23-09-2026) — precarga con el valor real guardado.
+  const anclarChk = document.getElementById('jugadorModulosAnclados');
+  if (anclarChk) anclarChk.checked = !!j.modulos_anclados;
   actualizarVisibilidadPozoJugador();
   actualizarVisibilidadMonedaJugador();
+  actualizarVisibilidadAnclarModulos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2005,7 +2021,13 @@ async function guardarJugador() {
     activo: document.getElementById('jugadorActivo').checked,
     tipoCuenta: document.getElementById('jugadorTipoCuenta').value,
     pozoInicial: document.getElementById('jugadorPozoInicial').value || 0,
-    comisionPropia: existente ? existente.comision_propia : 0
+    comisionPropia: existente ? existente.comision_propia : 0,
+    // "Anclar módulos" (23-09-2026) — este formulario SÍ lo edita
+    // directamente (a diferencia de comisionPropia/modeloComision, que
+    // viven en Administración > Comisión). Si el checkbox está oculto
+    // (grupo sin los 2 módulos) se manda su valor por defecto (false), que
+    // ya venía siendo el default de la columna igual.
+    modulosAnclados: document.getElementById('jugadorModulosAnclados') ? document.getElementById('jugadorModulosAnclados').checked : false
   };
 
   // "Moneda del Jugador" (18-09-2026) — solo se manda cuando el selector
@@ -2521,7 +2543,11 @@ async function guardarComisionPropia() {
       body: JSON.stringify({
         nombre: j.nombre, telefono: j.telefono, notas: j.notas, activo: j.activo,
         tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial,
-        comisionPropia: pct === '' ? 0 : Number(pct), modeloComision: modelo || null
+        comisionPropia: pct === '' ? 0 : Number(pct), modeloComision: modelo || null,
+        // Se conserva el interruptor de "Anclar módulos" tal cual estaba —
+        // este formulario no lo toca, así que no hay que pisarlo (ver
+        // jugadorModulosAnclados en app.js/grupo.html).
+        modulosAnclados: j.modulos_anclados
       })
     });
     document.getElementById('comisionPorcentajeInput').value = '';
@@ -2562,7 +2588,8 @@ async function quitarComisionPropia(id) {
       method: 'PUT',
       body: JSON.stringify({
         nombre: j.nombre, telefono: j.telefono, notas: j.notas, activo: j.activo,
-        tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial, comisionPropia: 0, modeloComision: null
+        tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial, comisionPropia: 0, modeloComision: null,
+        modulosAnclados: j.modulos_anclados
       })
     });
     await cargarJugadores();

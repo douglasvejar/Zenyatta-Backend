@@ -269,7 +269,7 @@
 </head>
 <body>
 
-<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos" y "🏟️ Hipódromos" ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Cierre Final, Comisiones Devueltas/Saldo Comisiones, Clientes/link público, Traspasos de saldos ya cerrados, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
+<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Comisiones Devueltas/Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
 
 <!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
@@ -525,9 +525,9 @@
         <p class="desc">El saldo definitivo de cada cliente para la semana completa — todos los ítems de todos los planos/carreras de esos 7 días, ya sumados. El sistema guarda como máximo las últimas 2 semanas cerradas, más la semana que se está trabajando actualmente (3 en total); usá los botones de abajo para ver una semana anterior.</p>
 
         <div class="subnav" id="selectorSemanaCierre">
-          <button type="button" class="activo" data-semana="0" onclick="mostrarSemanaCierre(0, this)">Semana actual</button>
-          <button type="button" data-semana="1" onclick="mostrarSemanaCierre(1, this)">🗓️ Semana anterior</button>
-          <button type="button" data-semana="2" onclick="mostrarSemanaCierre(2, this)">🗓️ Hace 2 semanas</button>
+          <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaCierre('actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="mostrarSemanaCierre('anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="mostrarSemanaCierre('hace2', this)">🗓️ Hace 2 semanas</button>
         </div>
 
         <label style="margin-top:2px;">Columnas a mostrar</label>
@@ -625,9 +625,9 @@
         <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. El % que se ve es el mismo "% de comisión propia" que ya existe para ese cliente — para cambiarlo, todavía se edita desde el panel de Deportes (Administración &gt; Jugador). El portal público del cliente para Hipismo (link individual sin clave) es la única parte de esta pantalla que sigue sin construir — ver el aviso en el botón de abajo.</p>
         <div class="btn-fila"><button class="btn btn-primario" type="button" disabled title="Los clientes se crean solos al calcular un plano — el alta manual todavía no está conectada.">+ Crear cliente</button></div>
         <table style="margin-top:18px;">
-          <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th>Portal del cliente</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Portal del cliente</th></tr></thead>
           <tbody id="tablaClientes">
-            <tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
+            <tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1147,15 +1147,23 @@ function copiarResultado() {
 // entorno donde corra la app, sin tener que tocar este archivo.
 async function cargarClientesReales() {
   const tbody = document.getElementById('tablaClientes');
+  // "Anclar módulos" (23-09-2026) — la columna solo aparece si el grupo
+  // tiene los 2 módulos contratados (mismo criterio que el selector
+  // ⚽/🐎 de arriba); si no, no hay nada que anclar con nada.
+  const hayLos2Modulos = !!(GRUPO && GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado);
+  const thAnclar = document.getElementById('thAnclarModulos');
+  if (thAnclar) thAnclar.style.display = hayLos2Modulos ? '' : 'none';
+  const colspan = hayLos2Modulos ? 5 : 4;
+
   let jugadores;
   try {
     jugadores = await apiHipismo('/api/jugadores');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
     return;
   }
   if (!jugadores.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calculá un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calculá un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
     return;
   }
   tbody.innerHTML = jugadores.map(j => `
@@ -1163,11 +1171,36 @@ async function cargarClientesReales() {
       <td>${formatNombre(j.nombre)}${j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : ''}</td>
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
+      ${hayLos2Modulos ? `
+      <td>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:normal; cursor:pointer;" title="Su link de Hipismo mostrará también Deportes, y su link de Deportes mostrará también Hipismo — separados, pero sumados al balance total.">
+          <input type="checkbox" ${j.modulos_anclados ? 'checked' : ''} onchange="toggleModulosAnclados('${j.id}', this.checked)" style="width:auto;">
+          🔗 Anclado
+        </label>
+      </td>` : ''}
       <td>
         <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
       </td>
     </tr>
   `).join('');
+}
+
+// Interruptor rápido de "Anclar módulos" desde la pestaña Clientes de
+// Hipismo (23-09-2026) — a diferencia de comisión propia/pozo/etc, que se
+// siguen editando solo desde Deportes (Administración > Jugador), este
+// interruptor puntual sí se puede prender/apagar desde acá mismo con un
+// solo click, sin abrir el formulario entero del otro módulo (ver PATCH
+// /api/jugadores/:id/modulos-anclados en routes/jugadores.js).
+async function toggleModulosAnclados(id, anclado) {
+  try {
+    await apiHipismo('/api/jugadores/' + id + '/modulos-anclados', {
+      method: 'PATCH',
+      body: JSON.stringify({ anclado })
+    });
+  } catch (e) {
+    alert('No se pudo actualizar: ' + e.message);
+    cargarClientesReales();
+  }
 }
 
 // Copia al portapapeles el MENSAJE completo (no solo la URL suelta) que
@@ -1409,75 +1442,52 @@ function descargarBalanceExcel() {
 // Datos de ejemplo (en producción esto sale de sumar TODOS los planos ya
 // calculados de esos 7 días, no de números sueltos como acá).
 // ------------------------------------------------------------------
-const CIERRES_SEMANALES = [
-  {
-    rango: '21 – 27 sep 2026 · semana actual, todavía en curso',
-    comision: 186.40,
-    clientes: [
-      { nombre: 'Mujica',       jugadas: 14, gano: 620.00, perdio: 380.00 },
-      { nombre: 'Rambo',        jugadas: 6,  gano: 0,      perdio: 305.00 },
-      { nombre: 'Puertolacruz', jugadas: 9,  gano: 210.00, perdio: 141.12 },
-      { nombre: 'Sebastian',    jugadas: 5,  gano: 90.00,  perdio: 140.00 },
-      { nombre: 'Kristian',     jugadas: 4,  gano: 180.00, perdio: 0 },
-      { nombre: 'Hanry',        jugadas: 3,  gano: 47.50,  perdio: 47.50 },
-    ]
-  },
-  {
-    rango: '14 – 20 sep 2026 · cerrada',
-    comision: 214.75,
-    clientes: [
-      { nombre: 'Mujica',       jugadas: 16, gano: 540.00, perdio: 610.00 },
-      { nombre: 'Rambo',        jugadas: 8,  gano: 285.00, perdio: 90.00 },
-      { nombre: 'Puertolacruz', jugadas: 7,  gano: 133.00, perdio: 200.00 },
-      { nombre: 'Sebastian',    jugadas: 6,  gano: 190.00, perdio: 50.00 },
-      { nombre: 'Kristian',     jugadas: 5,  gano: 0,      perdio: 260.00 },
-    ]
-  },
-  {
-    rango: '7 – 13 sep 2026 · cerrada',
-    comision: 165.90,
-    clientes: [
-      { nombre: 'Mujica',       jugadas: 10, gano: 300.00, perdio: 260.00 },
-      { nombre: 'Rambo',        jugadas: 5,  gano: 95.00,  perdio: 220.00 },
-      { nombre: 'Puertolacruz', jugadas: 8,  gano: 410.00, perdio: 90.00 },
-      { nombre: 'Sebastian',    jugadas: 4,  gano: 60.00,  perdio: 60.00 },
-    ]
-  }
-];
+// "Cierre Final" REAL (23-09-2026, a pedido del usuario — ver la nota
+// grande en src/routes/hipismo.js, GET /cierre-final): reemplaza el
+// CIERRES_SEMANALES de ejemplo. El saldo de cada cliente es SOLO de sus
+// jugadas (gano - perdio) — a propósito NUNCA suma ni resta pozo (eso
+// vive únicamente en la pantalla "🏊 Pozos").
+let CIERRE_FINAL_ACTUAL = null; // último JSON que devolvió el servidor, para los exports (Excel/PDF/Imagen)
 
-let semanaCierreActual = 0;
-
-function pintarCierreFinal(idx) {
-  semanaCierreActual = idx;
-  const semana = CIERRES_SEMANALES[idx];
-  document.getElementById('cierreRangoCaptura').textContent = semana.rango;
-
-  // Orden alfabético por nombre — pedido del usuario, 22-09-2026 (antes
-  // se ordenaba de mayor a menor saldo).
-  const filas = semana.clientes
-    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-
+async function pintarCierreFinal(semana) {
   const tbody = document.getElementById('tablaCierreFinal');
-  tbody.innerHTML = '';
-  filas.forEach(c => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${formatNombre(c.nombre)}</td>
-      <td class="num col-jugadas">${c.jugadas}</td>
-      <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
-      <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
-      <td class="num ${c.saldo >= 0 ? 'pos' : 'neg'}">${c.saldo >= 0 ? '+' : '-'}${formatMontoTabla(c.saldo)}</td>`;
-    tbody.appendChild(tr);
-  });
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/cierre-final?semana=${semana}`);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No se pudo cargar el Cierre Final: ${e.message}</td></tr>`;
+    return;
+  }
+  CIERRE_FINAL_ACTUAL = data;
 
-  document.getElementById('montoComisionCierre').textContent = formatMonto(semana.comision);
+  document.getElementById('cierreRangoCaptura').textContent =
+    `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
+    (data.esSemanaActual ? ' · semana actual, todavía en curso' : ' · cerrada');
+
+  tbody.innerHTML = '';
+  if (!data.clientes.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin jugadas en este rango.</td></tr>';
+  } else {
+    data.clientes.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${formatNombre(c.nombre)}</td>
+        <td class="num col-jugadas">${c.jugadas}</td>
+        <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
+        <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
+        <td class="num ${c.saldo >= 0 ? 'pos' : 'neg'}">${c.saldo >= 0 ? '+' : '-'}${formatMontoTabla(c.saldo)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('montoComisionCierre').textContent = formatMonto(data.comisionSemana);
 }
 
-function mostrarSemanaCierre(idx, btn) {
+function mostrarSemanaCierre(semana, btn) {
   document.querySelectorAll('#selectorSemanaCierre button').forEach(b => b.classList.remove('activo'));
   btn.classList.add('activo');
-  pintarCierreFinal(idx);
+  pintarCierreFinal(semana);
 }
 
 // Columnas opcionales de Cierre Final: por defecto ocultas (arrancan
@@ -1552,7 +1562,8 @@ function descargarCierreExcel() {
     mostrarToastCierre('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
     return;
   }
-  const semana = CIERRES_SEMANALES[semanaCierreActual];
+  const data = CIERRE_FINAL_ACTUAL;
+  if (!data) { mostrarToastCierre('⚠️ Todavía no cargó el Cierre Final.', true); return; }
   // Respeta las mismas columnas que el usuario tildó para ver en pantalla
   // (Jugadas / Ganó / Perdió son opcionales; Cliente y Saldo siempre van).
   const verJugadas = document.getElementById('chkColJugadas').checked;
@@ -1565,24 +1576,22 @@ function descargarCierreExcel() {
   if (verPerdio) encabezados.push('Perdió');
   encabezados.push('Saldo definitivo');
 
-  const filas = semana.clientes
-    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .map(c => {
-      const fila = [formatNombre(c.nombre)];
-      if (verJugadas) fila.push(c.jugadas);
-      if (verGano) fila.push(Number(c.gano.toFixed(2)));
-      if (verPerdio) fila.push(Number((-c.perdio).toFixed(2)));
-      fila.push(Number(c.saldo.toFixed(2)));
-      return fila;
-    });
+  const filas = data.clientes.map(c => {
+    const fila = [formatNombre(c.nombre)];
+    if (verJugadas) fila.push(c.jugadas);
+    if (verGano) fila.push(Number(c.gano.toFixed(2)));
+    if (verPerdio) fila.push(Number((-c.perdio).toFixed(2)));
+    fila.push(Number(c.saldo.toFixed(2)));
+    return fila;
+  });
   const filaComision = ['Comisión de la semana'];
   for (let i = 1; i < encabezados.length - 1; i++) filaComision.push('');
-  filaComision.push(Number(semana.comision.toFixed(2)));
+  filaComision.push(Number(data.comisionSemana.toFixed(2)));
 
+  const rangoTexto = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}`;
   const hoja = XLSX.utils.aoa_to_sheet([
     ['Cierre Final — Zenyatta 🇻🇪'],
-    [semana.rango],
+    [rangoTexto],
     [],
     encabezados,
     ...filas,
@@ -2008,7 +2017,7 @@ actualizarAlertaPozos();
 cargarHipodromos();
 cargarClientesReales();
 actualizarPreviewSemana();
-pintarCierreFinal(0);
+pintarCierreFinal('actual');
 actualizarColumnasCierre();
 pintarComisionesPorCarrera();
 pintarComisionesDevueltas();

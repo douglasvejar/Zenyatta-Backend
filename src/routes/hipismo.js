@@ -329,4 +329,82 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   res.json({ rango: { desde, hasta }, semana, dias, totalGeneral });
 }));
 
+// =================================================================
+// CIERRE FINAL REAL (23-09-2026, a pedido del usuario: "si cierre final
+// es el saldo real de los clientes de sus jugadas no debe estar sumada
+// ni restado pozos.... osea que quiero yo no es que tiene de pozo 400 y
+// se gano 300, me vas a colocar en cierre final 700, no cierre final
+// solo van sus jugadas... solo me susmaras y mostratas los pozos en
+// pozos") — reemplaza el CIERRES_SEMANALES de ejemplo del mockup.
+//
+// A PROPÓSITO no toca hipismo_planos.pozo ni ninguna tabla de Pozos: el
+// saldo de acá es EXCLUSIVAMENTE la suma de resultado_jugador/
+// resultado_banquero de hipismo_tickets de la semana — lo mismo que ya
+// resume "por cliente" services/pozo.js pero SIN el pozo inicial ni el
+// arrastre de semanas anteriores que sí carga esa otra pantalla. Un
+// cliente puede aparecer 2 veces conceptualmente (como jugador en una
+// línea, como banquero en otra) — acá se juntan bajo el mismo nombre,
+// igual que ya hace obtenerLineasHipismoCliente() para un cliente
+// puntual, pero agregado para TODOS los clientes del grupo a la vez.
+//
+// "traspaso de saldo" y "retiros" que mencionó el usuario TODAVÍA no
+// existen como funciones reales de Hipismo (las pantallas "💸 Retiros" y
+// "🔄 Traspaso de Saldo" del mockup siguen con botones deshabilitados,
+// sin backend) — el día que se construyan de verdad, tienen que sumarse/
+// restarse acá también; por ahora el saldo es 100% de jugadas, que ya es
+// exactamente lo que pidió el usuario en su ejemplo (pozo 400 + ganó 300
+// => Cierre Final debe mostrar 300, no 700).
+//
+// GET /cierre-final?semana=actual|anterior|hace2 — mismo selector de 3
+// semanas que ya usan comisiones-por-carrera y el link del cliente.
+router.get('/cierre-final', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const esSemanaActual = isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
+
+  const rTickets = await db.query(
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero
+       FROM hipismo_tickets t
+       JOIN hipismo_planos p ON p.id = t.plano_id
+      WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const porCliente = new Map();
+  function acumular(nombre, resultado) {
+    if (!porCliente.has(nombre)) porCliente.set(nombre, { nombre, jugadas: 0, gano: 0, perdio: 0 });
+    const c = porCliente.get(nombre);
+    c.jugadas += 1;
+    const n = Number(resultado);
+    if (n > 0) c.gano += n;
+    else if (n < 0) c.perdio += -n;
+  }
+  rTickets.rows.forEach(t => {
+    acumular(t.cliente_nombre, t.resultado_jugador);
+    acumular(t.banquero_nombre, t.resultado_banquero);
+  });
+
+  const clientes = Array.from(porCliente.values())
+    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  // Comisión de la semana: mismo total ya guardado por plano (ver
+  // /comisiones-por-carrera arriba) — no depende de los tickets sueltos.
+  const rComision = await db.query(
+    `SELECT COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+
+  res.json({
+    rango: { desde, hasta },
+    semana,
+    esSemanaActual,
+    clientes,
+    comisionSemana: Number(rComision.rows[0].total)
+  });
+}));
+
 module.exports = router;

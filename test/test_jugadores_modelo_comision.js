@@ -27,24 +27,29 @@ function ejecutarQuery(text, params) {
   // columna "moneda" en el INSERT/UPDATE — se agrega acá para que las
   // pruebas de esta excepción de comisión sigan pasando sin tocar nada
   // de lo que ya prueban.
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda] = params;
+  // (23-09-2026, "Anclar módulos") jugadores.js ahora también manda la
+  // columna "modulos_anclados" en el INSERT/UPDATE — se agrega acá para
+  // que las pruebas de esta excepción de comisión sigan pasando sin tocar
+  // nada de lo que ya prueban.
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: 'j' + (siguienteId++), grupo_id: grupoId, nombre, telefono, notas, activo,
-      tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda
+      tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
+      modulos_anclados: modulosAnclados
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
 
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false\s*WHERE id = \$10 AND grupo_id = \$11/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, id, grupoId] = params;
     const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
     if (!fila) return { rows: [] };
-    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda });
+    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados });
     return { rows: [fila] };
   }
 

@@ -1363,6 +1363,20 @@
 
     <div style="margin-top:12px; display:flex; align-items:center; gap:14px;">
       <label style="font-weight:normal; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="jugadorActivo" checked style="width:auto;"> Activo</label>
+      <!-- "Anclar módulos" (23-09-2026, a pedido del usuario: "hazlo tambien
+           al revez, pero solo sucedera si yo anclo o lo avctivo esa funcion
+           al cliente, si no cada pantalla es independiente") — SOLO tiene
+           sentido si el grupo tiene los 2 módulos contratados (Deportes Y
+           Hipismo), así que se oculta si no (ver
+           actualizarVisibilidadAnclarModulos() en app.js, mismo criterio que
+           actualizarSelectorModulo()). Prendido: el link público de este
+           cliente (tanto el de Deportes como el de Hipismo) muestra TAMBIÉN
+           las jugadas del otro módulo, separadas pero sumadas al balance
+           total. Apagado (default): cada link sigue siendo 100%
+           independiente, como siempre. -->
+      <label id="contenedorAnclarModulos" style="display:none; font-weight:normal; align-items:center; gap:6px;" title="Su link de Deportes mostrará también Hipismo, y su link de Hipismo mostrará también Deportes — separados, pero sumados al balance total.">
+        <input type="checkbox" id="jugadorModulosAnclados" style="width:auto;"> 🔗 Anclar Deportes + Hipismo en su link
+      </label>
       <button type="button" class="btn-secundario btn-chico" onclick="cancelarEdicionJugador()">Cancelar edición</button>
     </div>
     <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Este registro no se borra solo porque el jugador no aparezca en la sábana de un día — solo se borra si lo eliminas a mano aquí. Además, cualquier cliente nuevo detectado al procesar una sábana se registra aquí solo automáticamente.</small>
