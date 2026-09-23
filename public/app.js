@@ -2027,7 +2027,12 @@ async function guardarJugador() {
     // viven en Administración > Comisión). Si el checkbox está oculto
     // (grupo sin los 2 módulos) se manda su valor por defecto (false), que
     // ya venía siendo el default de la columna igual.
-    modulosAnclados: document.getElementById('jugadorModulosAnclados') ? document.getElementById('jugadorModulosAnclados').checked : false
+    modulosAnclados: document.getElementById('jugadorModulosAnclados') ? document.getElementById('jugadorModulosAnclados').checked : false,
+    // Aval / destino del "% devuelto" (23-09-2026, pestaña Clientes de
+    // Hipismo) — este formulario general de Administración no los toca, así
+    // que se conservan tal cual estaban (mismo criterio que comisionPropia).
+    avaladoPorId: existente ? existente.avalado_por_id : null,
+    porcentajeDevueltoDestino: existente ? existente.porcentaje_devuelto_destino : 'cliente'
   };
 
   // "Moneda del Jugador" (18-09-2026) — solo se manda cuando el selector
@@ -2546,8 +2551,10 @@ async function guardarComisionPropia() {
         comisionPropia: pct === '' ? 0 : Number(pct), modeloComision: modelo || null,
         // Se conserva el interruptor de "Anclar módulos" tal cual estaba —
         // este formulario no lo toca, así que no hay que pisarlo (ver
-        // jugadorModulosAnclados en app.js/grupo.html).
-        modulosAnclados: j.modulos_anclados
+        // jugadorModulosAnclados en app.js/grupo.html). Mismo criterio para
+        // el aval y el destino del "% devuelto" (23-09-2026).
+        modulosAnclados: j.modulos_anclados,
+        avaladoPorId: j.avalado_por_id, porcentajeDevueltoDestino: j.porcentaje_devuelto_destino
       })
     });
     document.getElementById('comisionPorcentajeInput').value = '';
@@ -2589,7 +2596,8 @@ async function quitarComisionPropia(id) {
       body: JSON.stringify({
         nombre: j.nombre, telefono: j.telefono, notas: j.notas, activo: j.activo,
         tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial, comisionPropia: 0, modeloComision: null,
-        modulosAnclados: j.modulos_anclados
+        modulosAnclados: j.modulos_anclados,
+        avaladoPorId: j.avalado_por_id, porcentajeDevueltoDestino: j.porcentaje_devuelto_destino
       })
     });
     await cargarJugadores();

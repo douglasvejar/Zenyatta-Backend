@@ -230,6 +230,108 @@ function calcularPlano({ texto, pizarra, cruzar }) {
   return { huboLineas, salidaLineas, sinReconocer, tickets, totalesFinales, comisionTotal };
 }
 
+// =================================================================
+// EDITAR un plano ya guardado — "Eliminar Planos" (23-09-2026, a pedido
+// del usuario: "en editar realizare cambios de montos o de jugador, al
+// realizar el cambio click a un boton que diga guardar y eso me editara
+// el plano anterior de esa carrera"). Ver routes/hipismo.js, PUT
+// /planos/:id/tickets/:ticketId.
+//
+// recalcularTicket(): recomputa resultadoJugador/resultadoBanquero de UN
+// ticket puntual después de editar su monto/caballo, con la MISMA
+// pizarra que ya se usó para todo el plano (nunca se le vuelve a pedir
+// al operador) — reusa resolverModalidad() tal cual, sin duplicar la
+// fórmula.
+function recalcularTicket({ modalidad, caballo, monto }, rank) {
+  let resultado;
+  if (modalidad.toLowerCase() === 'pp') {
+    const [hA, hB] = String(caballo).split(/x/i).map(h => parseInt(String(h).trim(), 10));
+    resultado = resolverModalidad('pp', rank(hA), rank(hB));
+  } else {
+    resultado = resolverModalidad(modalidad, rank(parseInt(caballo, 10)));
+  }
+  if (!resultado) return null;
+  const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
+  return { resultadoJugador: montoMostrado(jRaw), resultadoBanquero: montoMostrado(bRaw) };
+}
+
+// recalcularTotalesPlano(tickets, cruzar): recompone totalesFinales +
+// comisionTotal de un plano ENTERO a partir de sus tickets YA guardados
+// (cada uno con resultadoJugador/resultadoBanquero en formato "mostrado",
+// tal como vive en hipismo_tickets) — hace falta después de editar UN
+// ticket, porque en modo "cruza jugadas" el % se cobra sobre el NETO por
+// persona de TODO el plano, no línea por línea, así que un cambio en un
+// solo ticket puede mover el total de cualquier otro cliente que haya
+// jugado más de una línea. EXACTAMENTE la misma fórmula que la sección
+// final de calcularPlano() de arriba (deliberadamente no se tocó esa
+// función para no arriesgar su comportamiento ya verificado/probado) —
+// la única diferencia es que acá el "bruto" de cada línea se reconstruye
+// desde el valor YA guardado (resultado>0 ? resultado/0.95 : resultado,
+// mismo criterio que ya usa comisionDeLado() más abajo en este archivo)
+// en vez de tenerlo a mano en memoria desde el parseo del texto.
+function recalcularTotalesPlano(tickets, cruzar) {
+  const rawPorNombre = {};
+  const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
+  tickets.forEach(t => {
+    const jRaw = t.resultadoJugador > 0 ? t.resultadoJugador / 0.95 : t.resultadoJugador;
+    const bRaw = t.resultadoBanquero > 0 ? t.resultadoBanquero / 0.95 : t.resultadoBanquero;
+    add(t.clienteNombre, jRaw);
+    add(t.banqueroNombre, bRaw);
+  });
+
+  const totalesFinales = {};
+  let comisionTotal = 0;
+
+  if (cruzar) {
+    Object.keys(rawPorNombre).forEach(nombre => {
+      const raw = rawPorNombre[nombre];
+      if (raw > 0) { totalesFinales[nombre] = raw * 0.95; comisionTotal += raw * 0.05; }
+      else { totalesFinales[nombre] = raw; }
+    });
+  } else {
+    Object.keys(rawPorNombre).forEach(nombre => { totalesFinales[nombre] = 0; });
+    tickets.forEach(t => {
+      [[t.clienteNombre, t.resultadoJugador], [t.banqueroNombre, t.resultadoBanquero]].forEach(([nombre, m]) => {
+        totalesFinales[nombre] += m;
+      });
+    });
+    tickets.forEach(t => {
+      const jRawGanador = t.resultadoJugador > 0 ? t.resultadoJugador / 0.95 : 0;
+      const bRawGanador = t.resultadoBanquero > 0 ? t.resultadoBanquero / 0.95 : 0;
+      comisionTotal += (jRawGanador * 0.05) + (bRawGanador * 0.05);
+    });
+  }
+
+  Object.keys(totalesFinales).forEach(n => { totalesFinales[n] = Math.round((totalesFinales[n] + Number.EPSILON) * 100) / 100; });
+  comisionTotal = Math.round((comisionTotal + Number.EPSILON) * 100) / 100;
+  return { totalesFinales, comisionTotal };
+}
+
+// Arma las mismas 3 líneas + línea en blanco que calcularPlano() imprime
+// por cada ticket reconocido (ver más arriba) — para poder regenerar
+// texto_resultado después de editar un ticket, sin reparsear el texto
+// original. Ver la nota grande en la ruta PUT /planos/:id/tickets/:id de
+// routes/hipismo.js sobre cuándo esto se usa y cuándo NO (planos con
+// bloque "PARADA ADELANTADAS" no se regeneran, para no arriesgar
+// mezclarlo mal con ese bloque).
+function armarSalidaLineasDeTickets(tickets) {
+  const salidaLineas = [];
+  tickets.forEach(t => {
+    if (t.modalidad.toLowerCase() === 'pp') {
+      const [hA, hB] = String(t.caballo).split(/x/i).map(h => parseInt(String(h).trim(), 10));
+      salidaLineas.push(`pp (${hA}x${hB}) con ${formatMontoTabla(t.monto)}`);
+      salidaLineas.push(`(${hA}) ${formatNombre(t.clienteNombre)} $ ${t.resultadoJugador >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoJugador)}`);
+      salidaLineas.push(`(${hB}) ${formatNombre(t.banqueroNombre)} $ ${t.resultadoBanquero >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoBanquero)}`);
+    } else {
+      salidaLineas.push(`${t.modalidad} (${t.caballo}) con ${formatMontoTabla(t.monto)}`);
+      salidaLineas.push(`Juega ${formatNombre(t.clienteNombre)} $ ${t.resultadoJugador >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoJugador)}`);
+      salidaLineas.push(`Consigue ${formatNombre(t.banqueroNombre)} $ ${t.resultadoBanquero >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoBanquero)}`);
+    }
+    salidaLineas.push('');
+  });
+  return salidaLineas;
+}
+
 // Texto por defecto del "pie" del plano — se guarda como constante propia
 // (23-09-2026) para que routes/hipismo.js pueda agregarlo DESPUÉS del
 // bloque "PARADA ADELANTADAS" cuando corresponda (ver incluirPie abajo),
@@ -250,7 +352,19 @@ const PIE_PLANO_DEFECTO = '*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gan
 // incluirPie:false (así el pie NO se imprime acá) y lo agrega él mismo
 // después del bloque "PARADA ADELANTADAS" — ver POST /planos y
 // /planos/calcular.
-function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret, pizarra, salidaLineas, totalesFinales, piePlano, incluirPie = true }) {
+// totalJugadas (23-09-2026, a pedido del usuario: "en el plano de las
+// jugadas agrega como plus abajo antes del pie de plano Total Jugadas :
+// y coloca el total de jugadas que hubo en ese plano") — opcional: si no
+// se manda (undefined/null), no se agrega ninguna línea, así que
+// cualquier otro llamador de esta función (o una prueba vieja) sigue
+// funcionando exactamente igual que antes. routes/hipismo.js la manda
+// siempre que arma un plano de "Cargar Planos" (resultado.tickets.length
+// de ESA carrera puntual, nunca un acumulado de otras carreras/planos).
+// Se agrega SIEMPRE antes del pie, tanto si el pie se imprime acá mismo
+// (incluirPie:true) como si routes/hipismo.js lo va a agregar después,
+// tras el bloque "PARADA ADELANTADAS" (incluirPie:false) — en los 2
+// casos esta línea queda inmediatamente después de GANAN/PIERDEN.
+function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret, pizarra, salidaLineas, totalesFinales, piePlano, incluirPie = true, totalJugadas }) {
   const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${carreraNumero}ta Carrera\nRet: ${ret || ''}\nPizarra: ${pizarra}`;
   const pie = piePlano || PIE_PLANO_DEFECTO;
 
@@ -264,8 +378,14 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   const totalesTexto = bloques.join('\n\n');
 
   let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto;
+  if (totalJugadas !== undefined && totalJugadas !== null) {
+    salida += `\n------------------------------\nTotal Jugadas: ${totalJugadas}`;
+  }
   if (incluirPie) salida += '\n------------------------------\n------------------------------\n' + pie;
   return salida;
 }
 
-module.exports = { calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO };
+module.exports = {
+  calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
+  resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets
+};

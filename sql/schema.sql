@@ -429,6 +429,74 @@ create index if not exists idx_hipismo_adelantadas_jugadas_grupo_cliente on hipi
 create index if not exists idx_hipismo_adelantadas_jugadas_pendientes on hipismo_adelantadas_jugadas(grupo_id, estado);
 
 -- =================================================================
+-- HIPISMO_PLANOS_PAPELERA — "papelera recuperable" para "Eliminar Planos"
+-- (23-09-2026, a pedido del usuario: "en apuestas crea un boton de
+-- eliminar planos, alli me saldran todos los planos, yo seleccionare la
+-- fecha... y despues se desplegaran ordenados por hipodromos por carrera
+-- todos los planos"). MISMO criterio ya usado para Deportes
+-- (sabana_papelera, ver la nota grande de esa tabla más abajo — "papelera
+-- recuperable... más seguro para un sistema contable", respuesta textual
+-- del usuario en esa ronda): antes de borrar un plano de verdad
+-- (DELETE /planos/:id) se guarda una COPIA completa acá (el plano entero
+-- + todos sus tickets, con sus mismos ids) para poder deshacer el borrado
+-- con "♻️ Restaurar" (pantalla "🗑️ Planos Eliminados", Administración)
+-- mientras la fila siga acá — se purgan solas pasados 30 días (mismo
+-- plazo que sabana_papelera), tanto restauradas como no.
+--
+-- OJO: borrar un plano de Tercios NO deshace ninguna Jugada Adelantada
+-- que ese plano haya resuelto (esas jugadas ya quedaron 'resuelto'/
+-- 'falta_banqueo'/'sin_decidir' en hipismo_adelantadas_jugadas de forma
+-- independiente) — restaurar el plano solo trae de vuelta el plano y sus
+-- tickets de Tercios, no vuelve a dejar las adelantadas en 'pendiente'.
+-- Esto es una limitación aceptada a propósito (no confirmada con el
+-- usuario) para no complicar el borrado con una cascada de estados de
+-- otra tabla — si hace falta lo contrario, es un cambio aparte.
+create table if not exists hipismo_planos_papelera (
+  id             uuid primary key default gen_random_uuid(),
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  fecha          date not null,
+  hipodromo_nombre text not null,
+  carrera_numero integer not null,
+  plano_json     jsonb not null,       -- copia completa de la fila de hipismo_planos
+  tickets_json   jsonb not null default '[]', -- copia completa de sus hipismo_tickets
+  eliminado_en   timestamptz not null default now(),
+  restaurado_en  timestamptz
+);
+create index if not exists idx_hipismo_planos_papelera_grupo on hipismo_planos_papelera(grupo_id, eliminado_en);
+
+-- =================================================================
+-- HIPISMO_ALERTAS (23-09-2026, duodécima-tercera ronda, a pedido del
+-- usuario: "se genera una alerta en una pestaña que diga alertas que
+-- este debajo de administracion, indicando que se edito y que usuario
+-- se edito..... si el plano lo eliminan se genera la alerta igual
+-- mente"). Registro de auditoría de ediciones/eliminaciones de dinero
+-- real en Hipismo (planos de Tercios y jugadas de Tablas Fijas/Marcas) —
+-- quién lo hizo (req.nombreActor: el Administrador o el nombre del
+-- Empleado) y qué cambió.
+--
+-- A PROPÓSITO una tabla PROPIA de Hipismo en vez de reusar la tabla
+-- "alertas" ya existente (arriba): esa tabla está armada específicamente
+-- para el flujo de AMBIGUA_DEPORTE/SIN_LOGRO de Deportes (candidatos
+-- jsonb para elegir un deporte, resoluciones_ambiguas enlazada, un
+-- índice único parcial que exige "pata" no nulo para des-duplicar
+-- reprocesos de sábana) — nada de eso aplica acá. Mismo criterio ya
+-- usado en el resto del módulo: hipismo_planos_papelera en vez de
+-- reusar sabana_papelera, hipismo_hipodromos en vez de reusar nada de
+-- Deportes, etc.
+create table if not exists hipismo_alertas (
+  id           uuid primary key default gen_random_uuid(),
+  grupo_id     uuid not null references grupos(id) on delete cascade,
+  tipo         text not null check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA')),
+  usuario      text not null,     -- req.nombreActor: nombre del Administrador o del Empleado que hizo el cambio
+  hipodromo_nombre text,
+  carrera_numero   integer,
+  fecha        date,
+  mensaje      text not null,     -- detalle legible ("Editó el ticket de MUJICA: monto 100 -> 120", etc.)
+  creado_en    timestamptz not null default now()
+);
+create index if not exists idx_hipismo_alertas_grupo on hipismo_alertas(grupo_id, creado_en desc);
+
+-- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
 -- cierre de cuenta de WhatsApp del usuario, era que cada Grupo pudiera
@@ -467,6 +535,30 @@ create table if not exists jugadores (
 
 create index if not exists idx_jugadores_grupo on jugadores(grupo_id);
 create index if not exists idx_jugadores_token on jugadores(token);
+
+-- =================================================================
+-- POZO_AJUSTES (23-09-2026, a pedido del usuario: "desde pozo necesito
+-- seleccionar el cliente y editar el pozo, aumentarlo diminuirlo etc").
+-- Registro de CADA ajuste manual al pozo de un jugador (+ para aumentar,
+-- - para disminuir), con motivo opcional — mismo criterio de
+-- "información contable" ya aplicado en el resto del sistema (Papelera
+-- de Sábanas, Papelera de Planos): nunca se pisa el pozo sin dejar
+-- rastro de cuánto cambió y por qué. jugadores.pozo_inicial sigue
+-- siendo el número vigente (se sigue leyendo tal cual en el resto del
+-- sistema, sin tocar ningún otro cálculo) — esta tabla es el HISTORIAL
+-- de cómo se llegó a ese número. Compartida entre Deportes e Hipismo
+-- (misma tabla jugadores, mismo concepto de pozo en los 2 módulos).
+create table if not exists pozo_ajustes (
+  id           uuid primary key default gen_random_uuid(),
+  grupo_id     uuid not null references grupos(id) on delete cascade,
+  jugador_id   uuid not null references jugadores(id) on delete cascade,
+  monto        numeric not null,   -- positivo = aumento, negativo = disminución
+  motivo       text,
+  pozo_resultante numeric not null, -- pozo_inicial YA con este ajuste aplicado, para mostrar el historial sin recalcular
+  usuario      text not null,      -- req.nombreActor
+  creado_en    timestamptz not null default now()
+);
+create index if not exists idx_pozo_ajustes_jugador on pozo_ajustes(jugador_id, creado_en desc);
 
 -- =================================================================
 -- MODELO DE COMISIÓN INDIVIDUAL POR JUGADOR (09-09-2026, "grupo mixto" —
@@ -1016,6 +1108,32 @@ alter table grupos add column if not exists moneda_modo text not null default 'u
 alter table jugadores add column if not exists moneda text not null default 'USD' check (moneda in ('USD', 'BS'));
 
 -- =================================================================
+-- "AVALADO POR" + destino del "% devuelto" (23-09-2026, a pedido del
+-- usuario: "quiero... quien lo avala, su pozo, si se le devuelve
+-- porcentaje, si el porcentaje que se le devuelve no es para el si no
+-- para su aval, cuanto se le da de %" — pantalla Clientes de Hipismo).
+--
+-- avalado_por_id: a qué OTRO jugador del mismo grupo responde este
+-- cliente — un simple puntero informativo. A PROPÓSITO no es la tabla
+-- "avales" que ya existe arriba (avalador_id/avalado_id/porcentaje): esa
+-- tabla es un concepto DISTINTO y ya en uso por Deportes (el avalador
+-- gana un % EXTRA propio sobre lo que arriesga su avalado, aparte de su
+-- propia comisión — ver services/comisiones.js). Mezclar los 2 conceptos
+-- en la misma fila haría que marcar "quién avala a Pedro" desde Hipismo
+-- disparara sin querer esa lógica de comisión extra de Deportes, que no
+-- tiene nada que ver con esto.
+--
+-- porcentaje_devuelto_destino: a quién se le suma el ítem "{nombre} -
+-- PORCENTAJE" que ya arma agregarPorcentajeDevuelto() en routes/hipismo.js
+-- (el % de jugadores.comision_propia sobre lo que este cliente apuesta,
+-- carrera a carrera) — 'cliente' (default, sin cambios de comportamiento
+-- para nadie que no toque esto) o 'aval' (se le suma, en cambio, a la
+-- cuenta de avalado_por_id — el jugador arriesga y pierde/gana normal
+-- en SU balance, pero el "premio" del % lo cobra su aval).
+alter table jugadores add column if not exists avalado_por_id uuid references jugadores(id) on delete set null;
+alter table jugadores add column if not exists porcentaje_devuelto_destino text not null default 'cliente' check (porcentaje_devuelto_destino in ('cliente','aval'));
+
+-- =================================================================
 -- CUENTAS POR EMPLEADO DENTRO DE UN GRUPO (18-09-2026, a pedido del
 -- usuario: "soluciona la cuentas separas por empleado dentro de un
 -- grupo... un administrador que tiene acceso 100% y los empleados
@@ -1073,6 +1191,9 @@ alter table whatsapp_dia_estado enable row level security;
 alter table mensajes_contacto enable row level security;
 alter table pagos_grupo enable row level security;
 alter table empleados enable row level security;
+alter table hipismo_planos_papelera enable row level security;
+alter table hipismo_alertas enable row level security;
+alter table pozo_ajustes enable row level security;
 -- Sin políticas = acceso denegado por defecto para las claves anon/
 -- authenticated. Solo la clave service_role (la que usa el backend)
 -- puede leer/escribir. Ver nota al inicio del archivo.

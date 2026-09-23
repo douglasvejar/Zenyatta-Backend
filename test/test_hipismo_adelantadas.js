@@ -190,9 +190,30 @@ function ejecutarQuery(text, params) {
   if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial\)/i.test(sql)) {
     const [grupoId, nombre] = params;
     if (!TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
-      TABLAS.jugadores.push({ id: nuevoId('j'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0 });
+      TABLAS.jugadores.push({ id: nuevoId('j'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0, comision_propia: 0 });
     }
     return { rows: [] };
+  }
+  // "% devuelto" (undécima ronda) — obtenerComisionesPropias() en
+  // routes/hipismo.js. Ningún cliente de esta prueba tiene % propio
+  // configurado salvo el que se agrega a mano puntualmente (ver más abajo
+  // en PARTE 2), así que por defecto devuelve 0/nada para todos.
+  // (23-09-2026, duodécima-tercera ronda) obtenerComisionesPropias() ahora
+  // hace un LEFT JOIN contra la misma tabla para resolver el nombre del
+  // aval (redirección de "% devuelto" — ver la nota grande en
+  // routes/hipismo.js). Ningún jugador de esta prueba tiene
+  // avalado_por_id/porcentaje_devuelto_destino configurado, así que
+  // aval_nombre siempre da null y el comportamiento queda igual que antes.
+  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, av\.nombre AS aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    return {
+      rows: filas.map(j => ({
+        nombre: j.nombre, comision_propia: j.comision_propia || 0,
+        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
+        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null
+      }))
+    };
   }
 
   if (/^SELECT pais FROM hipismo_hipodromos/i.test(sql)) {
@@ -241,6 +262,32 @@ function ejecutarQuery(text, params) {
     if (j) { j.estado = estado; j.gano = gano; j.resultado_cliente = resultadoCliente; j.comision = comision; j.pizarra_usada = pizarraUsada; j.resuelto_en = Date.now(); }
     return { rows: j ? [j] : [] };
   }
+  // PUT /adelantadas/jugadas/:id (duodécima-tercera ronda, editar).
+  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET cliente_nombre = \$1, monto = \$2, numero_ejemplar = \$3, numero1 = \$4, numero2 = \$5,\s*estado = \$6, gano = \$7, resultado_cliente = \$8, comision = \$9, banqueadores = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [cliente, monto, numeroEjemplar, numero1, numero2, estado, gano, resultadoCliente, comision, banqueadores, id, grupoId] = params;
+    const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
+    if (j) {
+      Object.assign(j, {
+        cliente_nombre: cliente, monto, numero_ejemplar: numeroEjemplar, numero1, numero2,
+        estado, gano, resultado_cliente: resultadoCliente, comision,
+        banqueadores: banqueadores == null ? null : JSON.parse(banqueadores)
+      });
+    }
+    return { rows: j ? [j] : [] };
+  }
+  // DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, eliminar).
+  if (/^DELETE FROM hipismo_adelantadas_jugadas WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
+    const [id, grupoId] = params;
+    TABLAS.hipismo_adelantadas_jugadas = TABLAS.hipismo_adelantadas_jugadas.filter(x => !(x.id === id && x.grupo_id === grupoId));
+    return { rows: [] };
+  }
+  // Alertas (duodécima-tercera ronda, registrarAlerta()).
+  if (/^INSERT INTO hipismo_alertas \(grupo_id, tipo, usuario, hipodromo_nombre, carrera_numero, fecha, mensaje\)/i.test(sql)) {
+    const [grupoId, tipo, usuario, hipodromoNombre, carreraNumero, fecha, mensaje] = params;
+    TABLAS.hipismo_alertas = TABLAS.hipismo_alertas || [];
+    TABLAS.hipismo_alertas.push({ id: nuevoId('alerta'), grupo_id: grupoId, tipo, usuario, hipodromo_nombre: hipodromoNombre, carrera_numero: carreraNumero, fecha, mensaje, creado_en: Date.now() });
+    return { rows: [] };
+  }
   if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND j\.estado IN/i.test(sql)) {
     const [grupoId] = params;
     const filas = TABLAS.hipismo_adelantadas_jugadas
@@ -278,7 +325,7 @@ function ejecutarQuery(text, params) {
         const p = TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id);
         return p && p.fecha >= desde && p.fecha <= hasta;
       });
-    return { rows: filas.map(j => ({ cliente_nombre: j.cliente_nombre, resultado_cliente: j.resultado_cliente, comision: j.comision, banqueadores: j.banqueadores })) };
+    return { rows: filas.map(j => ({ cliente_nombre: j.cliente_nombre, resultado_cliente: j.resultado_cliente, comision: j.comision, banqueadores: j.banqueadores, monto: j.monto })) };
   }
 
   // ---- Cargar Planos ----
@@ -293,8 +340,16 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- Cierre Final: resto de las consultas (todas vacías en esta prueba) ----
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero\s*FROM hipismo_tickets/i.test(sql)) return { rows: [] };
-  if (/^SELECT a\.cliente_nombre, a\.resultado\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero, t\.monto/i.test(sql)) return { rows: [] };
+  if (/^SELECT a\.cliente_nombre, a\.resultado, a\.monto/i.test(sql)) return { rows: [] };
+  // GET /montos-apostados / GET /comisiones-devueltas (undécima ronda) —
+  // usan las mismas 3 consultas de "una fecha puntual" (no semana);
+  // ninguna prueba de este archivo ejercita estas 2 rutas nuevas todavía
+  // (ver test_hipismo_reportes.js), pero quedan cubiertas acá también por
+  // si algún otro flujo las toca sin querer.
+  if (/^SELECT t\.cliente_nombre, t\.modalidad, t\.caballo, t\.monto, p\.hipodromo_nombre, p\.carrera_numero/i.test(sql)) return { rows: [] };
+  if (/^SELECT a\.cliente_nombre, a\.caballo, a\.monto, r\.hipodromo_nombre, r\.carrera_numero/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.monto, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, p\.hipodromo_nombre/i.test(sql)) return { rows: [] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_remates/i.test(sql)) return { rows: [{ total: 0 }] };
 
@@ -341,6 +396,8 @@ const handlerAdelantadasCalcular = handlerDe('post', '/adelantadas/calcular');
 const handlerAdelantadasGuardar = handlerDe('post', '/adelantadas');
 const handlerAdelantadasPendientes = handlerDe('get', '/adelantadas/pendientes');
 const handlerAdelantadasBanquear = handlerDe('post', '/adelantadas/jugadas/:id/banquear');
+const handlerAdelantadasEditar = handlerDe('put', '/adelantadas/jugadas/:id');
+const handlerAdelantadasEliminar = handlerDe('delete', '/adelantadas/jugadas/:id');
 const handlerPlanosGuardar = handlerDe('post', '/planos');
 const handlerCierreFinal = handlerDe('get', '/cierre-final');
 
@@ -357,7 +414,7 @@ function invocarRuta(handler, req, paramsExtra) {
 }
 
 function reqBase(grupoId) {
-  return { grupoId, grupo: { nombre: 'Zenyatta' }, params: {} };
+  return { grupoId, grupo: { nombre: 'Zenyatta' }, nombreActor: 'Zenyatta', params: {} };
 }
 
 (async function main() {
@@ -389,6 +446,15 @@ function reqBase(grupoId) {
   check(resPendientes1._json.total === 18 && resPendientes1._json.esperandoPizarra === 18, 'GET /adelantadas/pendientes ve las 18 jugadas esperando pizarra');
   const carrera12 = resPendientes1._json.carreras.find(c => c.carreraNumero === 12 && c.hipodromoNombre === 'La Rinconada');
   check(!!carrera12 && carrera12.jugadas.length === 4, 'La carrera 12 de La Rinconada tiene sus 4 jugadas adelantadas juntas (Halland TF + Halland marca 8x4, Maturin TF, Linares TF)');
+
+  // 23-09-2026 (undécima ronda), a pedido del usuario ("un item llama
+  // pedro - porcentaje... pedro tiene 1% de porcentaje entonces pedro
+  // jugo 100 y los pierde... pedro -100... pero en el item pedro -
+  // porcentaje le va a salir en esa carrera +1"): se le carga a LINARES
+  // un 1% de comisión propia para probar que, en esta MISMA carrera 12,
+  // aparece su propio ítem "LINARES - PORCENTAJE" aparte, sin tocar su
+  // resultado normal (+225, sin ajustar).
+  TABLAS.jugadores.find(j => j.nombre === 'LINARES').comision_propia = 1;
 
   // --- 4) POST /planos con la pizarra de la carrera 12 (el 3 gana, único
   // caso de TF que gana en esa carrera puntual: Linares) — el 4 llega 2do
@@ -434,8 +500,20 @@ function reqBase(grupoId) {
   check(resPlanos12._json.totalesFinales.LINARES === 225, '9) Balance General de la carrera 12 ya trae a Linares +225 (Tablas Fijas)');
   check(resPlanos12._json.totalesFinales.HALLAND === -160, 'Balance General trae a Halland -160 (-40 de su Tabla Fija, -120 de su Marca que perdió)');
   check(resPlanos12._json.totalesFinales.MATURIN === -45, 'Balance General trae a Maturin -45 (su Tabla Fija, perdió)');
-  check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -144.01, 'Balance General trae a "TABLAS FIJAS" (la banca) -144,01, la suma de las 3 tablas fijas de esta carrera');
-  check(resPlanos12._json.comisionTotal === 6.51, 'La Comisión del Balance General suma la de Tercios (2,5) más la de las 3 Tablas Fijas (4,01) = 6,51');
+  // 23-09-2026 (undécima ronda), a pedido del usuario ("necesito me
+  // coloques el resultado de las tablas SIN el 2.5% y ese 2.5% aparte en
+  // un item llamado % de tablas fijas"): "TABLAS FIJAS" ya no absorbe la
+  // comisión (antes daba -144,01) — ahora es el espejo exacto de los 3
+  // clientes (-225 de Linares que ganó, +40 y +45 de Halland/Maturin que
+  // perdieron = -140) y la comisión de las 3 Tablas Fijas (1,88+1,00+1,13
+  // = 4,01) vive en su propio ítem aparte.
+  check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -140, 'Balance General trae a "TABLAS FIJAS" (la banca) -140, el espejo exacto de los 3 clientes, SIN la comisión adentro');
+  check(resPlanos12._json.totalesFinales['% DE TABLAS FIJAS'] === 4.01, 'Balance General trae un ítem aparte "% DE TABLAS FIJAS" +4,01 (la comisión de las 3 tablas fijas de esta carrera, separada de "TABLAS FIJAS")');
+  check(resPlanos12._json.comisionTotal === 6.51, 'La Comisión (footer) del Balance General SIGUE sumando la de Tercios (2,5) más la de las 3 Tablas Fijas (4,01) = 6,51 — sin cambios, el ítem nuevo es una vista adicional');
+  // 23-09-2026 (undécima ronda), "% devuelto" — LINARES tiene 1% de
+  // comisión propia (cargado arriba): se gana 1% de lo que jugó en su
+  // Tabla Fija (75) = 0,75, SIN que su resultado normal (+225) se toque.
+  check(resPlanos12._json.totalesFinales['LINARES - PORCENTAJE'] === 0.75, 'Balance General trae el ítem "LINARES - PORCENTAJE" +0,75 (1% de los 75 que jugó en su Tabla Fija), sin tocar su +225 normal');
   // La Marca de Halland todavía no tiene banqueadores asignados (sigue
   // 'falta_banqueo') — solo entra el lado del cliente por ahora, el de
   // los banqueadores se suma más adelante cuando se resuelva el banqueo
@@ -528,6 +606,76 @@ function reqBase(grupoId) {
   const linaresFila = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.cliente_nombre === 'LINARES' && j.estado !== 'pendiente');
   check(linaresFila.length === 1 && Number(linaresFila[0].resultado_cliente) === 225, 'Confirmado en la base: Linares tiene su +225 de Tablas Fijas guardado, listo para que Cierre Final lo sume en la semana que corresponda');
   check(typeof resCierre._json.comisionAdelantadasSemana === 'number', 'GET /cierre-final devuelve comisionAdelantadasSemana como un campo separado (aunque sea 0 si la fecha de prueba no cae en la semana actual)');
+
+  // =================================================================
+  // 10) PUT/DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, a
+  // pedido del usuario: "en jugadas adelantadas quiero poder seleccionar
+  // cada jugada, eliminarla, editarla"). Reusa los fixtures ya resueltos
+  // de los puntos anteriores (linaresResuelto = TF ganada carrera 12,
+  // halland12Marca = Marca YA banqueada carrera 12, maturinMarca2 =
+  // Marca 'sin_decidir' carrera 2) para probar los 3 caminos de
+  // recálculo posibles, más una jugada todavía 'pendiente'.
+  // =================================================================
+
+  // --- 10a) Editar una TF ya resuelta (Linares, ganó) -> recalcula con
+  // la MISMA pizarra que ya se usó (3 en 1er lugar) ---
+  const resEditarTf = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 100 } }), { id: linaresResuelto.id });
+  check(resEditarTf._status === 200, '10a) PUT /adelantadas/jugadas/:id edita la TF de Linares (200)');
+  check(resEditarTf._json.monto === 100, 'El monto queda en 100');
+  check(resEditarTf._json.estado === 'resuelto' && resEditarTf._json.gano === true, 'Sigue "resuelto" y ganada (mismo caballo, misma pizarra)');
+  check(resEditarTf._json.resultadoCliente === 200, 'Recalculado: 300 (ganancia potencial, sin tocar) - 100 (monto nuevo) = 200');
+  check(resEditarTf._json.comision === 2.5, 'Comisión recalculada: 2.5% de 100 = 2,5');
+
+  // --- 10b) Editar una Marca YA banqueada (Halland, perdió su 8x4) ->
+  // recalcula el cliente Y vuelve a resolver el banqueo con los MISMOS
+  // banqueadores/porcentajes/decisiones de comisión que ya tenía ---
+  const resEditarMarca = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 200 } }), { id: halland12Marca.id });
+  check(resEditarMarca._status === 200, '10b) PUT /adelantadas/jugadas/:id edita la Marca ya banqueada de Halland (200)');
+  check(resEditarMarca._json.monto === 200 && resEditarMarca._json.gano === false, 'Sigue sin acertar (8 no llegó 1ro) con el monto nuevo (200)');
+  check(resEditarMarca._json.resultadoCliente === -200, 'Halland pierde el monto completo nuevo (-200)');
+  const bqZenyattaEditado = resEditarMarca._json.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA');
+  const bqSammyEditado = resEditarMarca._json.banqueadores.find(b => b.nombre === 'MARCAS SAMMY');
+  check(bqZenyattaEditado.monto === 120, 'Marcas Zenyatta (60%, no cobra comisión) recalculado a +120 (60% de 200)');
+  check(bqSammyEditado.monto === 78, 'Marcas Sammy (40%, cobra 2.5%) recalculado a +78 (80 - 2 de comisión)');
+  check(resEditarMarca._json.comision === 2, 'Comisión Marcas recalculada a 2 (2.5% de la parte de Sammy, 80)');
+  const sumaEditada = resEditarMarca._json.resultadoCliente + bqZenyattaEditado.monto + bqSammyEditado.monto + resEditarMarca._json.comision;
+  check(Math.round(sumaEditada * 100) === 0, 'Después de editar, Halland + los 2 banqueadores + la comisión siguen sumando 0 exacto');
+
+  // --- 10c) Editar una Marca "sin_decidir" -> el monto se actualiza pero
+  // el estado/resultado NO se recalculan (nunca se pudo decidir, y eso no
+  // depende de lo que se esté editando) ---
+  const resEditarSinDecidir = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 999 } }), { id: maturinMarca2.id });
+  check(resEditarSinDecidir._status === 200 && resEditarSinDecidir._json.monto === 999, '10c) PUT edita el monto de una marca "sin_decidir"');
+  check(resEditarSinDecidir._json.estado === 'sin_decidir' && resEditarSinDecidir._json.resultadoCliente === 0, 'Pero el estado sigue "sin_decidir" y el resultado sigue en 0 (nunca se pudo decidir esa carrera)');
+
+  // --- 10d) Editar una jugada todavía 'pendiente' (sin pizarra_usada) ->
+  // solo cambian los campos editados, nada se recalcula ---
+  const houstonPendiente = TABLAS.hipismo_adelantadas_jugadas.find(j => j.cliente_nombre === 'HOUSTON' && j.estado === 'pendiente');
+  const resEditarPendiente = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 150, cliente: 'HOUSTON EDITADO' } }), { id: houstonPendiente.id });
+  check(resEditarPendiente._status === 200 && resEditarPendiente._json.monto === 150 && resEditarPendiente._json.cliente === 'HOUSTON EDITADO', '10d) PUT edita cliente y monto de una jugada pendiente');
+  check(resEditarPendiente._json.estado === 'pendiente' && resEditarPendiente._json.resultadoCliente === null, 'Sigue "pendiente" — no hay pizarra_usada todavía, nada que recalcular');
+  check(TABLAS.jugadores.some(j => j.nombre === 'HOUSTON EDITADO'), 'El nuevo nombre del cliente queda auto-registrado en jugadores');
+
+  // --- Alertas: las 4 ediciones de arriba generaron su alerta ---
+  check(TABLAS.hipismo_alertas.filter(a => a.tipo === 'ADELANTADA_EDITADA').length === 4, 'Cada PUT de arriba generó su alerta "ADELANTADA_EDITADA"');
+  check(TABLAS.hipismo_alertas.every(a => a.usuario === 'Zenyatta'), 'Todas las alertas quedan con el usuario que las hizo (req.nombreActor)');
+
+  // --- 10e) Editar una jugada que no existe -> 404 ---
+  const resEditarNoExiste = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 10 } }), { id: 'jad-no-existe' });
+  check(resEditarNoExiste._status === 404, '10e) PUT sobre una jugada que no existe responde 404');
+
+  // --- 10f) Eliminar una jugada pendiente (borrado definitivo, sin
+  // papelera — ver la nota grande en routes/hipismo.js) ---
+  const cantidadAntesDeBorrar = TABLAS.hipismo_adelantadas_jugadas.length;
+  const resEliminar = await invocarRuta(handlerAdelantadasEliminar, reqBase(GRUPO_ID), { id: houstonPendiente.id });
+  check(resEliminar._status === 200 && resEliminar._json.ok === true, '10f) DELETE /adelantadas/jugadas/:id elimina la jugada (200)');
+  check(TABLAS.hipismo_adelantadas_jugadas.length === cantidadAntesDeBorrar - 1, 'La jugada desaparece de verdad de la tabla (borrado definitivo, no papelera)');
+  check(!TABLAS.hipismo_adelantadas_jugadas.some(j => j.id === houstonPendiente.id), 'Ya no está por id');
+  check(TABLAS.hipismo_alertas.some(a => a.tipo === 'ADELANTADA_ELIMINADA' && a.usuario === 'Zenyatta'), 'El borrado también generó su alerta "ADELANTADA_ELIMINADA"');
+
+  // --- 10g) Eliminar una jugada que no existe -> 404 ---
+  const resEliminarNoExiste = await invocarRuta(handlerAdelantadasEliminar, reqBase(GRUPO_ID), { id: 'jad-no-existe' });
+  check(resEliminarNoExiste._status === 404, '10g) DELETE sobre una jugada que no existe responde 404');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

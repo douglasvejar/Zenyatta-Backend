@@ -50,9 +50,22 @@ function ejecutarQuery(text, params) {
   if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial\)/i.test(sql)) {
     const [grupoId, nombre] = params;
     if (!TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
-      TABLAS.jugadores.push({ id: nuevoId('j'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0 });
+      TABLAS.jugadores.push({ id: nuevoId('j'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0, comision_propia: 0 });
     }
     return { rows: [] };
+  }
+  // "% devuelto" (undécima ronda) — obtenerComisionesPropias() en
+  // routes/hipismo.js. Ningún cliente de esta prueba tiene % propio.
+  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, av\.nombre AS aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    return {
+      rows: filas.map(j => ({
+        nombre: j.nombre, comision_propia: j.comision_propia || 0,
+        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
+        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null
+      }))
+    };
   }
 
   // resolverLlegadaRemate(): busca el plano más reciente de ese hipódromo+carrera+fecha.
@@ -88,12 +101,12 @@ function ejecutarQuery(text, params) {
   }
 
   // GET /cierre-final: tickets de "Cargar Planos" de la semana (vacío en esta prueba).
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero\s*FROM hipismo_tickets/i.test(sql)) {
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero, t\.monto/i.test(sql)) {
     return { rows: [] };
   }
 
   // GET /cierre-final: apuestas de remate de la semana.
-  if (/^SELECT a\.cliente_nombre, a\.resultado\s*FROM hipismo_remate_apuestas/i.test(sql)) {
+  if (/^SELECT a\.cliente_nombre, a\.resultado, a\.monto/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_remate_apuestas
       .filter(a => a.grupo_id === grupoId)
@@ -101,7 +114,7 @@ function ejecutarQuery(text, params) {
         const remate = TABLAS.hipismo_remates.find(r => r.id === a.remate_id);
         return remate && remate.fecha >= desde && remate.fecha <= hasta;
       });
-    return { rows: filas.map(a => ({ cliente_nombre: a.cliente_nombre, resultado: a.resultado })) };
+    return { rows: filas.map(a => ({ cliente_nombre: a.cliente_nombre, resultado: a.resultado, monto: a.monto })) };
   }
 
   // GET /cierre-final: comisión de "Cargar Planos" de la semana (0 en esta prueba).
@@ -287,6 +300,12 @@ function check(cond, msg) {
     global.Date = OriginalDate;
   }
   check(res4._status === 200, 'GET /api/hipismo/cierre-final responde 200');
+  // 23-09-2026 (duodécima-tercera ronda, a pedido del usuario: "...y
+  // semana xxx... que seria la semana del año en la que estamos") — la
+  // semana lunes 21 al domingo 27 de septiembre de 2026 es la semana
+  // ISO-8601 número 39 de 2026 (ver services/fechaSemana.js).
+  check(!!res4._json.numeroSemana, 'GET /cierre-final ahora también trae numeroSemana');
+  check(res4._json.numeroSemana && res4._json.numeroSemana.anio === 2026 && res4._json.numeroSemana.semana === 39, 'numeroSemana calcula bien la semana 39 de 2026 para el lunes 21 al domingo 27 de septiembre');
   // JUNKO jugó el caballo #2 en LOS 2 remates de la prueba (mismo texto de
   // ejemplo reusado): en el primero ganó (+496), en el segundo ("banca",
   // el #9 no fue jugado por nadie) también perdió su apuesta al #2 (-40)

@@ -31,26 +31,41 @@ function ejecutarQuery(text, params) {
   // columna "modulos_anclados" en el INSERT/UPDATE — se agrega acá para
   // que las pruebas de esta excepción de comisión sigan pasando sin tocar
   // nada de lo que ya prueban.
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados] = params;
+  // (23-09-2026, aval/"% devuelto" — duodécima-tercera ronda) jugadores.js
+  // ahora también manda "avalado_por_id" y "porcentaje_devuelto_destino" en
+  // el INSERT/UPDATE — se agregan acá por el mismo motivo que las 2 notas
+  // de arriba, sin que esta prueba necesite cubrir esas columnas puntuales
+  // (eso vive en test_jugadores_aval.js, nuevo de esta ronda).
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: 'j' + (siguienteId++), grupo_id: grupoId, nombre, telefono, notas, activo,
       tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
-      modulos_anclados: modulosAnclados
+      modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: porcentajeDevueltoDestino
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
 
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*avalado_por_id = \$11, porcentaje_devuelto_destino = \$12\s*WHERE id = \$13 AND grupo_id = \$14/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, id, grupoId] = params;
     const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
     if (!fila) return { rows: [] };
-    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados });
+    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: porcentajeDevueltoDestino });
     return { rows: [fila] };
+  }
+
+  // Búsqueda por id (validarAvaladoPorId) -- sólo se dispara si el body
+  // manda avaladoPorId con algo adentro; ninguna prueba de este archivo lo
+  // manda, así que no debería llegar a matchear nunca, pero se deja acá
+  // para no romper si algún día una prueba nueva de este archivo lo manda.
+  if (/^SELECT id FROM jugadores WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
+    const [id, grupoId] = params;
+    const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
+    return { rows: fila ? [{ id: fila.id }] : [] };
   }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

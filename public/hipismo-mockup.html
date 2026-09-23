@@ -157,6 +157,21 @@
   .check-fila input { width: auto; }
   .check-fila label { margin: 0; color: var(--text); font-size: 13.5px; }
 
+  /* 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en
+     cargar planos haz la parte de arriba donde se selcciona el
+     hipodromo la carrera etc, esa parte mas resumida, mas pequeña para
+     ahorrar espacio y trabajar mas rapido" — mismos campos de siempre
+     (Hipódromo/Carrera/Fecha/Ret/Pizarra/Cruzar), todos en UNA sola
+     fila compacta en vez de 2 filas + el check aparte, con labels/inputs
+     más chicos SOLO acá adentro (no toca el resto de la página, que
+     sigue usando label/input/.fila normales). */
+  #selectorPlanoCompacto { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; padding: 10px 12px; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; }
+  #selectorPlanoCompacto > div { flex: 1; min-width: 108px; }
+  #selectorPlanoCompacto label { font-size: 10.5px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #selectorPlanoCompacto input, #selectorPlanoCompacto select { padding: 6px 8px; font-size: 12.5px; }
+  #selectorPlanoCompacto .check-fila { margin-bottom: 0; flex: 0 1 auto; }
+  #selectorPlanoCompacto .check-fila label { font-size: 11px; white-space: normal; }
+
   button.btn { font-family: 'Outfit', sans-serif; border: none; padding: 11px 18px; font-size: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; }
   .btn-primario { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; }
   .btn-secundario { background: var(--card-2); color: var(--text); border: 1px solid var(--border-light) !important; }
@@ -299,7 +314,7 @@
 </head>
 <body>
 
-<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏆 Cargar Remate", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Comisiones Devueltas/Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
+<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏆 Cargar Remate", "🚀 Jugadas Adelantadas", "🗑️ Eliminar Planos", "💰 Montos Apostados", "↩️ Comisiones Devueltas", "🗑️ Planos Eliminados", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
 
 <!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
@@ -372,6 +387,22 @@
       <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆 Cargar Remate</button>
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁 Traspasos de Jugadas</button>
       <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀 Jugadas Adelantadas</button>
+      <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "en apuestas
+           crea un boton de eliminar planos", "un boton en apuestas llamado
+           montos apostados" y "un boton en apuestas llamado comisiones
+           devueltas" — las 3 van juntas acá, en ese mismo orden. Comisiones
+           Devueltas vivía antes en el grupo "💼 Comisiones" — se mueve
+           para acá tal cual pidió el usuario (la pantalla en sí sigue
+           siendo la misma, solo cambia de dónde se entra). -->
+      <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️ Eliminar Planos</button>
+      <button type="button" class="nav-item nav-child" data-vista="montosApostados" onclick="mostrarVista('montosApostados', this)">💰 Montos Apostados</button>
+      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️ Comisiones Devueltas</button>
+      <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "crea
+           en apuesta un pestaña que diga Cargar Winners" — respondió "crea
+           la pestaña despues te explico como es" cuando se le preguntó el
+           formato. Solo el tab + una pantalla vacía por ahora, sin backend
+           — ver claude/plan-modulo-hipismo.md. -->
+      <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆 Cargar Winners</button>
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰 Pozos</button>
@@ -383,7 +414,6 @@
     <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('comisiones')">💼 Comisiones <span id="caretComisiones">▾</span></button>
     <div class="nav-children" id="grupoComisiones">
       <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈 Comisiones por Carrera</button>
-      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️ Comisiones Devueltas</button>
       <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳 Saldo Comisiones</button>
     </div>
 
@@ -401,6 +431,12 @@
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝 Cabeza y Pie de Plano</button>
       <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥 Usuarios</button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️ Planos Eliminados</button>
+      <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "se
+           genera una alerta en una pestaña que diga alertas que este
+           debajo de administracion". Lista hipismo_alertas (GET
+           /api/hipismo/alertas) — quién editó/eliminó un plano o una
+           jugada adelantada, y cuándo. -->
+      <button type="button" class="nav-item nav-child" data-vista="alertasHipismo" onclick="mostrarVista('alertasHipismo', this)">🔔 Alertas</button>
     </div>
   </nav>
 
@@ -412,7 +448,7 @@
         <h2>📥 Cargar Planos</h2>
         <p class="desc">Pegá el plano de una carrera, metés la pizarra (orden de llegada) y le das <b>Calcular</b>. Ya tiene programadas las modalidades de Tercios (1p...10p, 1/2, 2n, 3n, 2y2, 2y3, pp) más el sistema de cuotas 10/N, con el 5% de comisión y la opción de "cruzar jugadas" que confirmaste. <span class="badge-pendiente">Formato exacto de 10/N todavía en revisión</span></p>
 
-        <div class="fila">
+        <div id="selectorPlanoCompacto">
           <div>
             <label for="selHipodromo">Hipódromo</label>
             <select id="selHipodromo">
@@ -427,22 +463,18 @@
             <label for="inpFecha">Fecha</label>
             <input type="date" id="inpFecha">
           </div>
-        </div>
-
-        <div class="fila">
           <div>
-            <label for="inpRet">Ret (retirados) — opcional</label>
+            <label for="inpRet">Ret — opcional</label>
             <input type="text" id="inpRet" placeholder="Ej: 3, 7">
           </div>
           <div>
-            <label for="inpPizarra">Pizarra (orden de llegada, ej: 6.10.4.8.2)</label>
-            <input type="text" id="inpPizarra" value="6.10.4.8.2">
+            <label for="inpPizarra">Pizarra (llegada)</label>
+            <input type="text" id="inpPizarra" value="6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
           </div>
-        </div>
-
-        <div class="check-fila">
-          <input type="checkbox" id="chkCruzar" checked>
-          <label for="chkCruzar">Cruzar jugadas para este grupo (se activa/desactiva por grupo desde Súper-admin)</label>
+          <div class="check-fila">
+            <input type="checkbox" id="chkCruzar" checked>
+            <label for="chkCruzar" title="Se activa/desactiva por grupo desde Súper-admin">Cruzar jugadas</label>
+          </div>
         </div>
 
         <label for="txtEncabezado">Encabezado (se arma solo — vista previa)</label>
@@ -502,7 +534,7 @@
           </div>
           <div>
             <label for="inpPizarraRemate">Llegada (opcional si ya cargaste el plano de esta carrera)</label>
-            <input type="text" id="inpPizarraRemate" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar">
+            <input type="text" id="inpPizarraRemate" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar" title="Aceptado con punto, guion, coma o barra: 2.5.1 / 2-5-1 / 2,5,1 / 2/5/1">
           </div>
         </div>
 
@@ -604,6 +636,54 @@
       </div>
     </section>
 
+    <!-- ============ ELIMINAR PLANOS (23-09-2026, duodécima ronda; rediseño
+         duodécima-tercera ronda) ============
+         A pedido del usuario: "en apuestas crea un boton de eliminar
+         planos, alli me saldran todos los planos" (duodécima ronda), y
+         después: "al entrar alli vere ordenado por dia, al seleccionar
+         el dia ordenado por hipodromo, los planos, al seleccionarlos
+         tengo dos botones editar o eliminar, en editar realizare
+         cambios de montos o de jugador... se genera una alerta"
+         (duodécima-tercera ronda). 3 pantallas encadenadas dentro del
+         mismo div#listaEliminarPlanos — ver pintarEliminarPlanos() y
+         compañía más abajo en el script: días (GET /planos/dias) >
+         planos de ese día por hipódromo (GET /planos?fecha=) > detalle
+         de un plano con Editar (por ticket) o Eliminar. Borrar manda el
+         plano a la Papelera recuperable (30 días) — ver "🗑️ Planos
+         Eliminados" en Administración para restaurar; editar y eliminar
+         quedan registrados en 🔔 Alertas (debajo de Administración). -->
+    <section class="vista" id="vista-eliminarPlanos">
+      <div class="card">
+        <h2>🗑️ Eliminar Planos</h2>
+        <p class="desc">Elegí el día, después el hipódromo y la carrera. Desde el plano podés editar un ticket (cliente, banquero o monto) o eliminar el plano completo — se puede restaurar durante 30 días desde Administración &gt; 🗑️ Planos Eliminados, y cada cambio queda anotado en 🔔 Alertas.</p>
+        <div id="listaEliminarPlanos"><div class="resultado-vacio">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- ============ MONTOS APOSTADOS (23-09-2026, duodécima ronda) ============
+         A pedido del usuario: "un boton en apuestas llamado montos
+         apostados, alli vere por cliente cuanto han apostado en el
+         grupo, igual ordenado por fecha... y si lo selcciono en la
+         fechita al lado izquierdo de su nombre se despliega toda su
+         informacion". Usa GET /montos-apostados?fecha= (suma Tercios +
+         Remate + Jugadas Adelantadas de esa fecha puntual, por cliente). -->
+    <section class="vista" id="vista-montosApostados">
+      <div class="card">
+        <h2>💰 Montos Apostados</h2>
+        <p class="desc">Cuánto apostó cada cliente en el grupo esa fecha, sumando Tercios, Remate y Jugadas Adelantadas. Hacé clic en un cliente para desplegar toda su información (carrera por carrera).</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpFechaMontosApostados">Fecha</label>
+            <input type="date" id="inpFechaMontosApostados">
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-primario" type="button" onclick="buscarMontosApostados()">🔎 Buscar</button>
+          </div>
+        </div>
+        <div id="listaMontosApostados"><div class="placeholder-card">Elegí una fecha y dale Buscar.</div></div>
+      </div>
+    </section>
+
     <!-- ============ POZOS ============ -->
     <section class="vista" id="vista-pozos">
       <div class="card">
@@ -627,6 +707,37 @@
               <tr data-pct="10" class="fila-pozo-rojo"><td>Mujica</td><td class="num">500,00</td><td class="num neg">-450,00</td><td class="num pos">50,00</td><td><span class="punto punto-rojo"></span> 10%</td></tr>
               <tr><td>Sammy</td><td class="num">Libre (sin pozo)</td><td class="num">—</td><td class="num">—</td><td><span class="punto punto-gris"></span> Libre</td></tr>
             </tbody>
+          </table>
+        </div>
+
+        <!-- ============ AJUSTAR POZO (23-09-2026, duodécima-tercera ronda) ============
+             A pedido del usuario: "desde pozo necesito seleccionar el
+             cliente y editar el pozo, aumentarlo diminuirlo etc" —
+             respondió "Ajuste +/- con motivo" cuando se le preguntó cómo
+             debía funcionar. La tabla de arriba sigue siendo de ejemplo
+             (ver el aviso al principio de esta pantalla); esto de acá
+             abajo SÍ es real: selecciona cualquier cliente Avalado real
+             (POST/GET /api/jugadores/:id/pozo-ajuste(s), tabla
+             pozo_ajustes — nunca se pisa el pozo de golpe, cada ajuste
+             queda guardado con motivo y quién lo hizo). -->
+        <div class="card" style="margin-top:18px;">
+          <h3 style="margin:0 0 10px;">✏️ Ajustar pozo de un cliente</h3>
+          <p class="desc">Elegí el cliente (solo aparecen los de cuenta "Avalado", que son los que tienen pozo) y aplicá un ajuste: positivo para aumentar, negativo para disminuir. Queda guardado con motivo y con quién lo hizo — nunca se pisa el pozo de un golpe.</p>
+          <div class="fila" style="align-items:flex-end;">
+            <div>
+              <label>Cliente</label>
+              <select id="selPozoAjusteCliente" onchange="cambiarClientePozoAjuste()">
+                <option value="">— Elegí un cliente —</option>
+              </select>
+            </div>
+            <div><label>Monto del ajuste (+/-)</label><input type="number" id="pozoAjusteMonto" step="0.01" placeholder="Ej: 200 o -150"></div>
+            <div><label>Motivo (opcional)</label><input type="text" id="pozoAjusteMotivo" placeholder="Ej: recarga semanal"></div>
+            <div style="flex:0; min-width:auto;"><button class="btn btn-primario" type="button" onclick="guardarAjustePozoPantallaPozos()">✅ Aplicar ajuste</button></div>
+          </div>
+          <div id="pozoAjustePozoActual" style="margin-top:10px; font-size:13px; color:var(--text-dim);"></div>
+          <table style="margin-top:14px;">
+            <thead><tr><th>Cuándo</th><th class="num">Ajuste</th><th class="num">Pozo quedó en</th><th>Motivo</th><th>Usuario</th></tr></thead>
+            <tbody id="tablaHistorialPozoPantallaPozos"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elegí un cliente arriba para ver su historial.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -750,12 +861,30 @@
       </div>
     </section>
 
-    <!-- ============ COMISIONES DEVUELTAS ============ -->
+    <!-- ============ COMISIONES DEVUELTAS ============
+         REAL desde el 23-09-2026 (duodécima ronda) — la fórmula que
+         llevaba varias rondas pendiente ya quedó confirmada: cada
+         cliente con % propio configurado (jugadores.comision_propia, el
+         mismo campo de Deportes) se gana ese % de TODO lo que apostó,
+         carrera a carrera, gane o pierda esa jugada puntual — sin tocar
+         su resultado normal. Usa GET /comisiones-devueltas?fecha=,
+         "ordenado como Montos Apostados" (pedido explícito del usuario):
+         una fecha, un cliente por fila con su total devuelto ese día, y
+         al expandirlo, el detalle agrupado por hipódromo > carrera. -->
     <section class="vista" id="vista-comisionesDevueltas">
       <div class="card">
         <h2>↩️ Comisiones Devueltas</h2>
-        <p class="desc">Cuánto se devolvió de comisión, carrera por carrera, a los clientes que tienen configurado un % de devolución (sección 10 del spec — a sí mismos o a quien los avala). Hacé clic en una carrera para ver a quién se le devolvió y cuánto. <span class="badge-pendiente">Datos de ejemplo — la fórmula exacta de la devolución todavía está pendiente de confirmar con vos</span></p>
-        <div id="listaComisionesDevueltas"></div>
+        <p class="desc">Cuánto se le devuelve a cada cliente por su % propio configurado, sobre TODO lo que apostó esa fecha (gane o pierda cada jugada puntual). Hacé clic en un cliente para ver el detalle por hipódromo y carrera.</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpFechaComisionesDevueltas">Fecha</label>
+            <input type="date" id="inpFechaComisionesDevueltas">
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-primario" type="button" onclick="buscarComisionesDevueltas()">🔎 Buscar</button>
+          </div>
+        </div>
+        <div id="listaComisionesDevueltas"><div class="placeholder-card">Elegí una fecha y dale Buscar.</div></div>
       </div>
     </section>
 
@@ -775,14 +904,17 @@
     <section class="vista" id="vista-clientes">
       <div class="card">
         <h2>👤 Clientes</h2>
-        <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. El % que se ve es el mismo "% de comisión propia" que ya existe para ese cliente — para cambiarlo, todavía se edita desde el panel de Deportes (Administración &gt; Jugador). El portal público del cliente para Hipismo (link individual sin clave) es la única parte de esta pantalla que sigue sin construir — ver el aviso en el botón de abajo.</p>
+        <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. Desde el 23-09-2026 (duodécima-tercera ronda, a pedido del usuario: "en la pestaña clientes quiero al seleccionarlo me abra una pantalla donde salgan todos sus datos, y poder editarlo, su nombre, telefono contacto, quien lo avala, su pozo, si se le devuelve porcentaje, si el porcentaje que se le devuelve no es para el si no para su aval, cuanto se le da de %") ya no hace falta ir a Deportes para eso — "👁️ Ver / Editar" abre el detalle completo del cliente acá mismo (ver pintarDetalleCliente() más abajo).</p>
         <div class="btn-fila"><button class="btn btn-primario" type="button" disabled title="Los clientes se crean solos al calcular un plano — el alta manual todavía no está conectada.">+ Crear cliente</button></div>
-        <table style="margin-top:18px;">
-          <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Portal del cliente</th></tr></thead>
-          <tbody id="tablaClientes">
-            <tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
-          </tbody>
-        </table>
+        <div id="tablaClientesWrap">
+          <table style="margin-top:18px;">
+            <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
+            <tbody id="tablaClientes">
+              <tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="clienteDetalleWrap" style="display:none; margin-top:18px;"></div>
       </div>
     </section>
 
@@ -954,17 +1086,47 @@ Pizarra: [se llena al calcular]</textarea>
       </div>
     </section>
 
-    <!-- ============ ADMINISTRACIÓN: PLANOS ELIMINADOS ============ -->
+    <!-- ============ ADMINISTRACIÓN: PLANOS ELIMINADOS ============
+         REAL desde el 23-09-2026 (duodécima ronda) — la Papelera
+         recuperable de "🗑️ Eliminar Planos" (Apuestas). Ver la nota
+         grande en services/hipismoPlanosPapelera.js: nada se borra de
+         verdad hasta pasados 30 días, y mientras tanto se puede
+         restaurar desde acá. No lleva "Eliminado por" todavía (no se
+         audita el usuario que borró, a diferencia de la Papelera de
+         Sábanas de Deportes — ver la nota en el servicio). -->
     <section class="vista" id="vista-planosEliminados">
       <div class="card">
         <h2>🗑️ Planos Eliminados</h2>
-        <p class="desc">Todos los planos que se eliminaron, organizados por fecha y por hipódromo.</p>
+        <p class="desc">Todos los planos que se eliminaron desde "Eliminar Planos", organizados por fecha en que se borraron. Restaurar devuelve el plano y sus tickets exactamente como estaban.</p>
         <table>
-          <thead><tr><th>Fecha</th><th>Hipódromo</th><th>Carrera</th><th>Eliminado por</th><th></th></tr></thead>
-          <tbody>
-            <tr><td>20/09/2026</td><td>La Rinconada</td><td>9na</td><td>Admin</td><td><a href="#" style="color:var(--accent-grass);">Ver</a></td></tr>
-          </tbody>
+          <thead><tr><th>Eliminado</th><th>Fecha del plano</th><th>Hipódromo</th><th>Carrera</th><th>Tickets</th><th>Vence en</th><th></th></tr></thead>
+          <tbody id="tablaPlanosEliminados"><tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- ============ ALERTAS (23-09-2026, duodécima-tercera ronda) ============ -->
+    <section class="vista" id="vista-alertasHipismo">
+      <div class="card">
+        <h2>🔔 Alertas</h2>
+        <p class="desc">Cada vez que se edita o se elimina un plano (o una jugada de "Jugadas Adelantadas"), queda registrado acá: qué se hizo, en qué carrera y quién lo hizo.</p>
+        <table>
+          <thead><tr><th>Cuándo</th><th>Tipo</th><th>Hipódromo / Carrera</th><th>Detalle</th><th>Usuario</th></tr></thead>
+          <tbody id="tablaAlertasHipismo"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ CARGAR WINNERS (23-09-2026, duodécima-tercera ronda) ============
+         Placeholder — el usuario pidió la pestaña ahora y explica el
+         formato más adelante. Sin backend todavía. -->
+    <section class="vista" id="vista-cargarWinners">
+      <div class="card">
+        <h2>🏆 Cargar Winners</h2>
+        <p class="desc">
+          <span class="badge-pendiente">Todavía sin definir</span>
+        </p>
+        <div class="placeholder-card">Esta pantalla está reservada — falta que se defina el formato de "Winners" para construirla de verdad.</div>
       </div>
     </section>
 
@@ -1566,6 +1728,79 @@ async function enviarBanqueo(jugadaId, clienteNombre) {
   }
 }
 
+// 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en jugadas
+// adelantadas quiero poder seleccionar cada jugada, eliminarla, editarla
+// en caso de que lo necesite, desde esa misma ventana seleccionando la
+// jugada" — edita/elimina sin salir del listado de pendientes.
+// PUT/DELETE /api/hipismo/adelantadas/jugadas/:id.
+let JUGADA_ADELANTADA_EN_EDICION = null;
+
+function abrirEdicionAdelantada(jugadaId) {
+  JUGADA_ADELANTADA_EN_EDICION = jugadaId;
+  cargarPendientesAdelantadas();
+}
+
+function cerrarEdicionAdelantada() {
+  JUGADA_ADELANTADA_EN_EDICION = null;
+  cargarPendientesAdelantadas();
+}
+
+function filaEdicionAdelantadaHtml(j) {
+  const clienteVal = (j.cliente || '').replace(/"/g, '&quot;');
+  const camposNumero = j.tipo === 'tf'
+    ? `<input type="number" id="editAdelantadaEjemplar_${j.id}" placeholder="N° ejemplar" value="${j.numeroEjemplar != null ? j.numeroEjemplar : ''}">`
+    : `<input type="number" id="editAdelantadaNumero1_${j.id}" placeholder="1er número" value="${j.numero1 != null ? j.numero1 : ''}">
+       <input type="number" id="editAdelantadaNumero2_${j.id}" placeholder="2do número" value="${j.numero2 != null ? j.numero2 : ''}">`;
+  return `
+    <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div style="font-size:13px; margin-bottom:6px;">✏️ Editando esta jugada:</div>
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editAdelantadaCliente_${j.id}" placeholder="Cliente" value="${clienteVal}">
+        <input type="number" id="editAdelantadaMonto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto}">
+        ${camposNumero}
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarEdicionAdelantada('${j.id}')">💾 Guardar</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionAdelantada()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarEdicionAdelantada(jugadaId) {
+  const body = {
+    cliente: document.getElementById(`editAdelantadaCliente_${jugadaId}`).value.trim(),
+    monto: document.getElementById(`editAdelantadaMonto_${jugadaId}`).value
+  };
+  const elEjemplar = document.getElementById(`editAdelantadaEjemplar_${jugadaId}`);
+  if (elEjemplar) body.numeroEjemplar = elEjemplar.value;
+  const elN1 = document.getElementById(`editAdelantadaNumero1_${jugadaId}`);
+  const elN2 = document.getElementById(`editAdelantadaNumero2_${jugadaId}`);
+  if (elN1) body.numero1 = elN1.value;
+  if (elN2) body.numero2 = elN2.value;
+  try {
+    await apiHipismo(`/api/hipismo/adelantadas/jugadas/${jugadaId}`, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  JUGADA_ADELANTADA_EN_EDICION = null;
+  cargarPendientesAdelantadas();
+  cargarClientesReales();
+}
+
+async function eliminarJugadaAdelantada(jugadaId, clienteNombre) {
+  if (!confirm(`¿Eliminar la jugada adelantada de ${clienteNombre || 'este cliente'}? No se puede deshacer.`)) return;
+  try {
+    await apiHipismo(`/api/hipismo/adelantadas/jugadas/${jugadaId}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  if (JUGADA_ADELANTADA_EN_EDICION === jugadaId) JUGADA_ADELANTADA_EN_EDICION = null;
+  cargarPendientesAdelantadas();
+  cargarClientesReales();
+}
+
 function filaJugadaPendienteHtml(carrera, j) {
   const etiquetaEstado = j.estado === 'pendiente'
     ? '<span class="badge-pendiente">esperando pizarra</span>'
@@ -1585,9 +1820,16 @@ function filaJugadaPendienteHtml(carrera, j) {
         </div>
       </div>`;
   }
+  const clienteJsBtn = j.cliente.replace(/'/g, "\\'");
+  const botonesAccion = `<span style="display:inline-flex; gap:6px; margin-left:10px;">
+      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="abrirEdicionAdelantada('${j.id}')">✏️ Editar</button>
+      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="eliminarJugadaAdelantada('${j.id}', '${clienteJsBtn}')">🗑️ Eliminar</button>
+    </span>`;
+  const edicion = JUGADA_ADELANTADA_EN_EDICION === j.id ? filaEdicionAdelantadaHtml(j) : '';
   return `<div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
-    <b>${j.cliente}</b> — Carrera ${j.carreraNumero} — ${textoJugadaAdelantada(j)} ${etiquetaEstado}
+    <b>${j.cliente}</b> — Carrera ${j.carreraNumero} — ${textoJugadaAdelantada(j)} ${etiquetaEstado}${botonesAccion}
     ${extra}
+    ${edicion}
   </div>`;
 }
 
@@ -1720,6 +1962,11 @@ async function cargarClientesReales() {
     tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
     return;
   }
+  // Cache (23-09-2026, duodécima-tercera ronda) — para armar el detalle de
+  // un cliente (pintarDetalleCliente()) y la lista de posibles avales sin
+  // tener que pedir /api/jugadores de nuevo.
+  CLIENTES_HIPISMO_CACHE = jugadores;
+  poblarSelectPozoAjusteCliente();
   if (!jugadores.length) {
     tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calculá un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
     return;
@@ -1736,18 +1983,181 @@ async function cargarClientesReales() {
           🔗 Anclado
         </label>
       </td>` : ''}
-      <td>
+      <td style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirDetalleCliente('${j.id}')">👁️ Ver / Editar</button>
         <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
       </td>
     </tr>
   `).join('');
 }
 
+// ------------------------------------------------------------------
+// Detalle / Edición de un Cliente (23-09-2026, duodécima-tercera ronda),
+// a pedido del usuario: "en la pestaña clientes quiero al seleccionarlo
+// me abra una pantalla donde salgan todos sus datos, y poder editarlo,
+// su nombre, telefono contacto, quien lo avala, su pozo, si se le
+// devuelve porcentaje, si el porcentaje que se le devuelve no es para el
+// si no para su aval, cuanto se le da de %". Reusa PUT /api/jugadores/:id
+// (el mismo que ya usa Administración > Jugador de Deportes) — así que
+// cualquier cambio hecho acá también se ve reflejado allá y viceversa,
+// una sola tabla "jugadores" compartida.
+//
+// El pozo NO se edita directo desde este formulario (se muestra de solo
+// lectura) — para cambiarlo hay un mini-ajuste +/- con motivo debajo, que
+// llama al MISMO POST /api/jugadores/:id/pozo-ajuste que "Pozos" (ver
+// más abajo, sección "Ajustar pozo" de la vista Pozos) — así nunca se
+// pisa el pozo de golpe por accidente al guardar otro campo del cliente
+// (ver AskUserQuestion de esta ronda: "Ajuste +/- con motivo").
+let CLIENTE_DETALLE_ID = null;
+let CLIENTES_HIPISMO_CACHE = [];
+
+function abrirDetalleCliente(id) {
+  CLIENTE_DETALLE_ID = id;
+  pintarDetalleCliente();
+}
+
+function cerrarDetalleCliente() {
+  CLIENTE_DETALLE_ID = null;
+  const wrap = document.getElementById('clienteDetalleWrap');
+  if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = ''; }
+  const tablaWrap = document.getElementById('tablaClientesWrap');
+  if (tablaWrap) tablaWrap.style.display = '';
+}
+
+function actualizarVisibilidadPozoDetalleCliente() {
+  const sel = document.getElementById('detCteTipoCuenta');
+  const wrap = document.getElementById('detCtePozoWrap');
+  if (sel && wrap) wrap.style.display = sel.value === 'avalado' ? 'block' : 'none';
+}
+
+async function pintarDetalleCliente() {
+  const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(CLIENTE_DETALLE_ID));
+  const wrap = document.getElementById('clienteDetalleWrap');
+  const tablaWrap = document.getElementById('tablaClientesWrap');
+  if (!j || !wrap) return;
+  if (tablaWrap) tablaWrap.style.display = 'none';
+  wrap.style.display = 'block';
+  wrap.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+
+  const otrosClientes = CLIENTES_HIPISMO_CACHE.filter(x => String(x.id) !== String(j.id));
+  const opcionesAval = otrosClientes
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(x => `<option value="${x.id}" ${String(j.avalado_por_id) === String(x.id) ? 'selected' : ''}>${formatNombre(x.nombre)}</option>`)
+    .join('');
+
+  const historial = await obtenerHistorialPozo(j.id);
+
+  wrap.innerHTML = `
+    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">&lsaquo; Volver a la lista</button></div>
+    <div class="card" style="padding:16px;">
+      <h3 style="margin:0 0 12px;">👁️ ${formatNombre(j.nombre)}</h3>
+      <div class="fila">
+        <div><label>Nombre</label><input type="text" id="detCteNombre" value="${(j.nombre || '').replace(/"/g, '&quot;')}"></div>
+        <div><label>Teléfono / contacto</label><input type="text" id="detCteTelefono" value="${(j.telefono || '').replace(/"/g, '&quot;')}"></div>
+      </div>
+      <div class="fila">
+        <div><label>Notas</label><input type="text" id="detCteNotas" value="${(j.notas || '').replace(/"/g, '&quot;')}"></div>
+        <div class="check-fila" style="align-self:flex-end; margin-bottom:10px;">
+          <input type="checkbox" id="detCteActivo" ${j.activo ? 'checked' : ''}>
+          <label for="detCteActivo" style="margin:0;">Activo</label>
+        </div>
+      </div>
+      <div class="fila">
+        <div>
+          <label>Tipo de cuenta</label>
+          <select id="detCteTipoCuenta" onchange="actualizarVisibilidadPozoDetalleCliente()">
+            <option value="libre" ${j.tipo_cuenta !== 'avalado' ? 'selected' : ''}>Libre</option>
+            <option value="avalado" ${j.tipo_cuenta === 'avalado' ? 'selected' : ''}>Avalado (con pozo)</option>
+          </select>
+        </div>
+        <div id="detCtePozoWrap" style="display:${j.tipo_cuenta === 'avalado' ? 'block' : 'none'};">
+          <label>Pozo actual</label>
+          <div style="padding:10px 12px; background:var(--card-2); border:1px solid var(--card-border); border-radius:8px; font-weight:700;">${formatMontoTabla(j.pozo_inicial || 0)}</div>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Para cambiarlo usá "Ajustar pozo" ahí abajo — no se pisa directo.</div>
+        </div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
+      <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión?</div>
+      <div class="fila">
+        <div><label>% que se le devuelve</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}"></div>
+        <div>
+          <label>Ese % es para…</label>
+          <select id="detCteDestino">
+            <option value="cliente" ${j.porcentaje_devuelto_destino !== 'aval' ? 'selected' : ''}>El propio cliente</option>
+            <option value="aval" ${j.porcentaje_devuelto_destino === 'aval' ? 'selected' : ''}>Su aval (otro cliente)</option>
+          </select>
+        </div>
+      </div>
+      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval)</label>
+        <select id="detCteAval">
+          <option value="">— Nadie / no aplica —</option>
+          ${opcionesAval}
+        </select>
+      </div>
+      <div class="btn-fila" style="margin-top:14px;">
+        <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
+      </div>
+    </div>
+    <div class="card" style="padding:16px;">
+      <h3 style="margin:0 0 10px;">💰 Ajustar pozo</h3>
+      <p class="desc">Nunca se pisa de golpe: cada ajuste (positivo para aumentar, negativo para disminuir) queda guardado con su motivo y quién lo hizo, y el pozo vigente es la suma de todos.</p>
+      <div class="fila" style="align-items:flex-end;">
+        <div><label>Monto del ajuste (+/-)</label><input type="number" id="detCteAjusteMonto" step="0.01" placeholder="Ej: 200 o -150"></div>
+        <div><label>Motivo (opcional)</label><input type="text" id="detCteAjusteMotivo" placeholder="Ej: recarga semanal"></div>
+        <div style="flex:0; min-width:auto;"><button class="btn btn-primario" type="button" onclick="guardarAjustePozoDetalleCliente('${j.id}')">✅ Aplicar ajuste</button></div>
+      </div>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Cuándo</th><th class="num">Ajuste</th><th class="num">Pozo quedó en</th><th>Motivo</th><th>Usuario</th></tr></thead>
+        <tbody id="tablaHistorialPozoCliente">
+          ${historial.length ? historial.map(filaHistorialPozoHtml).join('') : '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin ajustes todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function guardarDetalleCliente(id) {
+  const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
+  const payload = {
+    nombre: document.getElementById('detCteNombre').value.trim(),
+    telefono: document.getElementById('detCteTelefono').value.trim(),
+    notas: document.getElementById('detCteNotas').value.trim(),
+    activo: document.getElementById('detCteActivo').checked,
+    tipoCuenta: document.getElementById('detCteTipoCuenta').value,
+    // El pozo NO lo toca este formulario — se conserva tal cual estaba
+    // (se edita aparte, con el ajuste +/- de abajo).
+    pozoInicial: j ? j.pozo_inicial : 0,
+    comisionPropia: document.getElementById('detCteComisionPropia').value || 0,
+    modeloComision: j ? j.modelo_comision : null,
+    moneda: j ? j.moneda : 'USD',
+    modulosAnclados: j ? !!j.modulos_anclados : false,
+    avaladoPorId: document.getElementById('detCteAval').value || null,
+    porcentajeDevueltoDestino: document.getElementById('detCteDestino').value
+  };
+  if (!payload.nombre) { alert('Ingresá el nombre del cliente.'); return; }
+  try {
+    await apiHipismo(`/api/jugadores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  await cargarClientesReales();
+  CLIENTE_DETALLE_ID = id;
+  await pintarDetalleCliente();
+  alert('✅ Cliente actualizado.');
+}
+
+async function guardarAjustePozoDetalleCliente(id) {
+  await enviarAjustePozo(id, 'detCteAjusteMonto', 'detCteAjusteMotivo', async () => {
+    await cargarClientesReales();
+    CLIENTE_DETALLE_ID = id;
+    await pintarDetalleCliente();
+  });
+}
+
 // Interruptor rápido de "Anclar módulos" desde la pestaña Clientes de
-// Hipismo (23-09-2026) — a diferencia de comisión propia/pozo/etc, que se
-// siguen editando solo desde Deportes (Administración > Jugador), este
-// interruptor puntual sí se puede prender/apagar desde acá mismo con un
-// solo click, sin abrir el formulario entero del otro módulo (ver PATCH
+// Hipismo (23-09-2026) — aparte del detalle completo de arriba, este
+// interruptor puntual se puede prender/apagar desde la lista con un solo
+// click, sin entrar al detalle (ver PATCH
 // /api/jugadores/:id/modulos-anclados en routes/jugadores.js).
 async function toggleModulosAnclados(id, anclado) {
   try {
@@ -1781,6 +2191,27 @@ function copiarLinkClienteHipismo(token, nombre) {
       .catch(() => prompt(`Copiá el mensaje para ${nombre}:`, mensaje));
   } else {
     prompt(`Copiá el mensaje para ${nombre}:`, mensaje);
+  }
+}
+
+// 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en
+// balance general al ver los saldos... colocame arriba la fecha que
+// este comprendida la semana es decir del 15-08 al 22-08 por ejemplo, y
+// semana xxx... que seria la semana del año en la que estamos". Balance
+// General (a diferencia de Cierre Final) no agrega nada por semana del
+// lado del servidor — solo muestra lo último calculado en "Cargar
+// Planos" — así que esto es puramente informativo: "en qué semana del
+// año estamos ahora mismo" (GET /api/hipismo/semana-actual).
+async function actualizarEncabezadoBalanceGeneral() {
+  const el = document.getElementById('balanceFechaCaptura');
+  if (!el) return;
+  const hoyTxt = new Date().toLocaleDateString('es-VE');
+  el.textContent = hoyTxt;
+  try {
+    const data = await apiHipismo('/api/hipismo/semana-actual');
+    el.textContent = `${hoyTxt} · Semana del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}`;
+  } catch (e) {
+    // Se queda con solo la fecha de hoy si no se pudo cargar la semana.
   }
 }
 
@@ -1820,6 +2251,91 @@ function pintarBalanceGeneral() {
   if (!ganan.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en este plano.</div>';
 
   document.getElementById('montoComision').textContent = formatMonto(ultimosTotales.comision);
+}
+
+// ------------------------------------------------------------------
+// Ajuste de pozo (23-09-2026, duodécima-tercera ronda) — helpers
+// compartidos entre "👁️ Ver/Editar" de un Cliente (arriba) y "✏️ Ajustar
+// pozo" de esta pantalla Pozos. Ambos pegan contra el MISMO
+// POST/GET /api/jugadores/:id/pozo-ajuste(s).
+// ------------------------------------------------------------------
+async function enviarAjustePozo(jugadorId, montoInputId, motivoInputId, onOk) {
+  const monto = Number(document.getElementById(montoInputId).value);
+  if (!monto || isNaN(monto)) { alert('El ajuste tiene que ser un número distinto de 0 (positivo para aumentar, negativo para disminuir).'); return; }
+  const motivo = document.getElementById(motivoInputId).value.trim();
+  try {
+    await apiHipismo(`/api/jugadores/${jugadorId}/pozo-ajuste`, { method: 'POST', body: JSON.stringify({ monto, motivo }) });
+  } catch (e) {
+    alert('No se pudo ajustar el pozo: ' + e.message);
+    return;
+  }
+  document.getElementById(montoInputId).value = '';
+  document.getElementById(motivoInputId).value = '';
+  if (onOk) await onOk();
+}
+
+async function obtenerHistorialPozo(jugadorId) {
+  try {
+    return await apiHipismo(`/api/jugadores/${jugadorId}/pozo-ajustes`);
+  } catch (e) {
+    return [];
+  }
+}
+
+function filaHistorialPozoHtml(a) {
+  const cuando = new Date(a.creado_en).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const v = Number(a.monto);
+  return `<tr>
+    <td>${cuando}</td>
+    <td class="num ${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '-'}${formatMontoTabla(v)}</td>
+    <td class="num">${formatMontoTabla(a.pozo_resultante)}</td>
+    <td>${a.motivo || '—'}</td>
+    <td>${a.usuario}</td>
+  </tr>`;
+}
+
+// Select de cliente de "✏️ Ajustar pozo" (solo los de cuenta Avalado —
+// los "Libre" no tienen pozo). Se repuebla cada vez que se refresca la
+// lista de Clientes (cargarClientesReales()), para no depender de un
+// pedido aparte.
+function poblarSelectPozoAjusteCliente() {
+  const sel = document.getElementById('selPozoAjusteCliente');
+  if (!sel) return;
+  const idPrevio = sel.value;
+  const avalados = CLIENTES_HIPISMO_CACHE
+    .filter(j => j.tipo_cuenta === 'avalado')
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  sel.innerHTML = '<option value="">— Elegí un cliente —</option>' +
+    avalados.map(j => `<option value="${j.id}">${formatNombre(j.nombre)}</option>`).join('');
+  if (idPrevio && avalados.some(j => String(j.id) === String(idPrevio))) sel.value = idPrevio;
+}
+
+async function cambiarClientePozoAjuste() {
+  const id = document.getElementById('selPozoAjusteCliente').value;
+  const infoEl = document.getElementById('pozoAjustePozoActual');
+  const tbody = document.getElementById('tablaHistorialPozoPantallaPozos');
+  if (!id) {
+    infoEl.textContent = '';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elegí un cliente arriba para ver su historial.</td></tr>';
+    return;
+  }
+  const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
+  infoEl.innerHTML = j ? `Pozo actual de <b>${formatNombre(j.nombre)}</b>: ${formatMontoTabla(j.pozo_inicial || 0)}` : '';
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
+  const historial = await obtenerHistorialPozo(id);
+  tbody.innerHTML = historial.length
+    ? historial.map(filaHistorialPozoHtml).join('')
+    : '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin ajustes todavía.</td></tr>';
+}
+
+async function guardarAjustePozoPantallaPozos() {
+  const id = document.getElementById('selPozoAjusteCliente').value;
+  if (!id) { alert('Elegí primero un cliente.'); return; }
+  await enviarAjustePozo(id, 'pozoAjusteMonto', 'pozoAjusteMotivo', async () => {
+    await cargarClientesReales();
+    document.getElementById('selPozoAjusteCliente').value = id;
+    await cambiarClientePozoAjuste();
+  });
 }
 
 // ------------------------------------------------------------------
@@ -2053,8 +2569,14 @@ async function pintarCierreFinal(semana) {
   }
   CIERRE_FINAL_ACTUAL = data;
 
+  // 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en...
+  // cierre final colocame arriba la fecha que este comprendida la
+  // semana es decir del 15-08 al 22-08 por ejemplo, y semana xxx... que
+  // seria la semana del año en la que estamos" — data.numeroSemana ya
+  // viene calculado del backend (ver GET /cierre-final, numeroSemanaISO).
   document.getElementById('cierreRangoCaptura').textContent =
     `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
+    (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '') +
     (data.esSemanaActual ? ' · semana actual, todavía en curso' : ' · cerrada');
 
   tbody.innerHTML = '';
@@ -2315,11 +2837,37 @@ async function crearHipodromo() {
 // carreras de EE.UU. los lunes y quieren que esa jornada cuente en la
 // semana que está cerrando, no en la que empieza. Esto es lo que alimenta
 // el "Total de la semana" del portal público del cliente.
+//
+// 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "fecha de
+// semana esta bien que pueda sleccionar de lunes a lunes, pero muestrame
+// que fecha es lunes a lunes" — el selector de días (Lunes/Martes/.../
+// Domingo) se queda igual, pero el preview de abajo ahora también
+// calcula y muestra las FECHAS concretas de la semana actual con esa
+// configuración (ej. "del 15/09/2026 al 21/09/2026"), no solo los
+// nombres de los días.
+const DIA_SEMANA_INDICE = { 'Domingo': 0, 'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 'Viernes': 5, 'Sábado': 6 };
+
+function formatFechaDMY(d) {
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 function actualizarPreviewSemana() {
   const inicio = document.getElementById('selInicioSemana').value;
   const cierre = document.getElementById('selCierreSemana').value;
+  const idxInicio = DIA_SEMANA_INDICE[inicio];
+  const idxCierre = DIA_SEMANA_INDICE[cierre];
+
+  const hoy = new Date();
+  let diffDesdeInicio = hoy.getDay() - idxInicio;
+  if (diffDesdeInicio < 0) diffDesdeInicio += 7;
+  const fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - diffDesdeInicio);
+
+  let diffHastaCierre = idxCierre - idxInicio;
+  if (diffHastaCierre <= 0) diffHastaCierre += 7; // el cierre siempre cae DESPUÉS del inicio, nunca el mismo día
+  const fechaFin = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate() + diffHastaCierre);
+
   document.getElementById('previewSemana').textContent =
-    `Con esta configuración, cada semana va de ${inicio} a ${cierre}.`;
+    `Con esta configuración, cada semana va de ${inicio} a ${cierre} — la semana actual concretamente es del ${formatFechaDMY(fechaInicio)} al ${formatFechaDMY(fechaFin)}.`;
 }
 
 // ------------------------------------------------------------------
@@ -2434,29 +2982,12 @@ function mostrarToastTraspaso(msg, esError) {
 }
 
 // ------------------------------------------------------------------
-// Comisiones Devueltas / Saldo Comisiones (22-09-2026) — siguen con
-// datos de ejemplo. La fórmula exacta de "Devolución de %" todavía está
-// pendiente de confirmar con el usuario (sección 10 del spec) — estas 2
-// pantallas muestran la ESTRUCTURA que van a tener apenas eso quede
-// confirmado. "Comisiones por Carrera" (más abajo) ya es real desde el
+// Saldo Comisiones (22-09-2026) — sigue con datos de ejemplo (no pedido
+// todavía en esta ronda). "Comisiones Devueltas" ya es REAL desde el
+// 23-09-2026 (duodécima ronda) — ver buscarComisionesDevueltas() más
+// abajo. "Comisiones por Carrera" (más abajo) también es real desde el
 // 23-09-2026 — ver comisionesPorCarreraSemana()/pintarComisionesPorCarrera().
 // ------------------------------------------------------------------
-const COMISIONES_DEVUELTAS = [
-  {
-    fecha: '22/09/2026', hipodromo: 'La Rinconada', carrera: '14ta',
-    detalle: [
-      { cliente: 'mujica', porcentaje: 5, montoDevuelto: 4.50 },
-      { cliente: 'sammy', porcentaje: 3, montoDevuelto: 2.10 },
-    ],
-  },
-  {
-    fecha: '21/09/2026', hipodromo: 'Valencia', carrera: '8va',
-    detalle: [
-      { cliente: 'kristian', porcentaje: 3, montoDevuelto: 1.20 },
-    ],
-  },
-];
-
 const SALDO_COMISIONES_CLIENTES = [
   { nombre: 'mujica', porcentaje: 5, devueltoSemana: 4.50 },
   { nombre: 'sammy', porcentaje: 3, devueltoSemana: 2.10 },
@@ -2581,34 +3112,421 @@ function formatFechaCortaDMY(iso) {
   return `${d}/${m}/${y}`;
 }
 
-function pintarComisionesDevueltas() {
+// ------------------------------------------------------------------
+// "Comisiones Devueltas" REAL (23-09-2026, duodécima ronda) — ver la nota
+// grande en la sección <vista-comisionesDevueltas> de arriba. Estructura
+// pedida por el usuario ("ordenado como Montos Apostados"): un cliente
+// por fila con el total devuelto esa fecha; al expandirlo, sus
+// hipódromos; al expandir un hipódromo, sus carreras con el detalle de
+// cómo se fue sumando el %.
+let idComisionDevueltaSeq = 0;
+
+function buscarComisionesDevueltas() {
+  const fecha = document.getElementById('inpFechaComisionesDevueltas').value;
+  pintarComisionesDevueltas(fecha);
+}
+
+async function pintarComisionesDevueltas(fechaForzada) {
+  const inp = document.getElementById('inpFechaComisionesDevueltas');
+  const fecha = fechaForzada || inp.value || new Date().toISOString().slice(0, 10);
+  if (!fechaForzada) inp.value = fecha;
   const cont = document.getElementById('listaComisionesDevueltas');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-devueltas?fecha=${fecha}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  if (!data.clientes.length) {
+    cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó ese día.</div>';
+    return;
+  }
   cont.innerHTML = '';
-  COMISIONES_DEVUELTAS.forEach((carrera, idx) => {
-    const total = totalDetalle(carrera.detalle, 'montoDevuelto');
-    const filasDetalle = carrera.detalle.map(d =>
-      `<tr><td>${formatNombre(d.cliente)}</td><td>${d.porcentaje}%</td><td class="num pos">+${formatMontoTabla(d.montoDevuelto)}</td></tr>`
-    ).join('');
-    const fila = document.createElement('div');
-    fila.className = 'fila-carrera-comision';
-    fila.id = 'filaComisionDevuelta' + idx;
-    fila.innerHTML = `
-      <div class="cabecera-carrera" onclick="toggleFilaCarrera('filaComisionDevuelta${idx}')">
+  data.clientes.forEach(cliente => {
+    const idCliente = 'comDev' + (idComisionDevueltaSeq++);
+    const filaCliente = document.createElement('div');
+    filaCliente.className = 'fila-carrera-comision';
+    filaCliente.id = idCliente;
+    filaCliente.innerHTML = `
+      <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCliente}')">
         <span class="flecha-expandir">▶</span>
         <div class="info-carrera">
-          <div class="hipodromo">🏇 ${carrera.hipodromo} — ${carrera.carrera} Carrera</div>
-          <div class="detalle-fecha">${carrera.fecha}</div>
+          <div class="hipodromo">👤 ${formatNombre(cliente.nombre)}</div>
+          <div class="detalle-fecha">${cliente.porcentaje}% de porcentaje propio</div>
         </div>
-        <div class="monto-carrera">+${formatMontoTabla(total)}</div>
+        <div class="monto-carrera">+${formatMontoTabla(cliente.total)}</div>
+      </div>
+      <div class="detalle-carrera comision-nivel-hipodromos"></div>`;
+    const contHipodromos = filaCliente.querySelector('.comision-nivel-hipodromos');
+
+    cliente.hipodromos.forEach(hip => {
+      const idHip = 'comDevHip' + (idComisionDevueltaSeq++);
+      const filaHip = document.createElement('div');
+      filaHip.className = 'fila-carrera-comision';
+      filaHip.id = idHip;
+      const filasDetalle = hip.carreras.map(c =>
+        `<tr><td>${c.carreraNumero}ta — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
+      ).join('');
+      filaHip.innerHTML = `
+        <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idHip}')">
+          <span class="flecha-expandir">▶</span>
+          <div class="info-carrera">
+            <div class="hipodromo">🏟️ ${hip.nombre}</div>
+            <div class="detalle-fecha">${hip.carreras.length} carrera${hip.carreras.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="monto-carrera">+${formatMontoTabla(hip.total)}</div>
+        </div>
+        <div class="detalle-carrera">
+          <table>
+            <thead><tr><th>Carrera / Jugada</th><th class="num">Apostado</th><th class="num">Devuelto</th></tr></thead>
+            <tbody>${filasDetalle}</tbody>
+          </table>
+        </div>`;
+      contHipodromos.appendChild(filaHip);
+    });
+
+    cont.appendChild(filaCliente);
+  });
+}
+
+// ------------------------------------------------------------------
+// "Montos Apostados" REAL (23-09-2026, duodécima ronda) — a pedido del
+// usuario: "por cliente cuanto han apostado en el grupo... si lo
+// selcciono en la fechita al lado izquierdo de su nombre se despliega
+// toda su informacion".
+let idMontoApostadoSeq = 0;
+
+function buscarMontosApostados() {
+  const fecha = document.getElementById('inpFechaMontosApostados').value;
+  pintarMontosApostados(fecha);
+}
+
+async function pintarMontosApostados(fechaForzada) {
+  const inp = document.getElementById('inpFechaMontosApostados');
+  const fecha = fechaForzada || inp.value || new Date().toISOString().slice(0, 10);
+  if (!fechaForzada) inp.value = fecha;
+  const cont = document.getElementById('listaMontosApostados');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/montos-apostados?fecha=${fecha}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  if (!data.clientes.length) {
+    cont.innerHTML = '<div class="placeholder-card">Nadie apostó nada ese día.</div>';
+    return;
+  }
+  const TIPO_TEXTO = { tercios: 'Tercios', remate: 'Remate', tabla_fija: 'Tabla fija', marca: 'Marca' };
+  cont.innerHTML = '';
+  data.clientes.forEach(cliente => {
+    const idCliente = 'montoCli' + (idMontoApostadoSeq++);
+    const filasDetalle = cliente.detalle
+      .slice()
+      .sort((a, b) => a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
+      .map(d => `<tr><td>${d.hipodromoNombre}</td><td>${d.carreraNumero}ta</td><td>${TIPO_TEXTO[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td></tr>`)
+      .join('');
+    const fila = document.createElement('div');
+    fila.className = 'fila-carrera-comision';
+    fila.id = idCliente;
+    fila.innerHTML = `
+      <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCliente}')">
+        <span class="flecha-expandir">▶</span>
+        <div class="info-carrera">
+          <div class="hipodromo">👤 ${formatNombre(cliente.nombre)}</div>
+          <div class="detalle-fecha">${cliente.detalle.length} jugada${cliente.detalle.length === 1 ? '' : 's'}</div>
+        </div>
+        <div class="monto-carrera">${formatMontoTabla(cliente.total)}</div>
       </div>
       <div class="detalle-carrera">
         <table>
-          <thead><tr><th>Cliente</th><th>% Devuelto</th><th class="num">Monto</th></tr></thead>
+          <thead><tr><th>Hipódromo</th><th>Carrera</th><th>Jugada</th><th class="num">Monto</th></tr></thead>
           <tbody>${filasDetalle}</tbody>
         </table>
       </div>`;
     cont.appendChild(fila);
   });
+}
+
+// ------------------------------------------------------------------
+// "Eliminar Planos" REAL (23-09-2026, duodécima ronda) — a pedido del
+// usuario: "yo seleccionare la fecha que quiero que me muestre y despues
+// se desplegaran ordenados por hipodromos por carrera todos los
+// planos". Reusa GET /planos?fecha= (ya existía, la misma que arma el
+// detalle de un plano guardado) y agrupa del lado del cliente por
+// hipódromo > carrera; el borrado real es DELETE /planos/:id (Papelera
+// recuperable, ver services/hipismoPlanosPapelera.js).
+// ------------------------------------------------------------------
+// "Eliminar Planos" — rediseño (23-09-2026, duodécima-tercera ronda), a
+// pedido del usuario: "al entrar alli vere ordenado por dia, al
+// seleccionar el dia ordenado por hipodromo, los planos, al
+// seleccionarlos tengo dos botones editar o eliminar, en editar
+// realizare cambios de montos o de jugador, al realizar el cambio
+// click a un boton que diga guardar". 3 pantallas dentro del mismo
+// div#listaEliminarPlanos, según el estado ELIMINAR_PLANOS_DIA /
+// ELIMINAR_PLANOS_PLANO: 1) días con planos (GET /planos/dias),
+// 2) planos de ese día por hipódromo (GET /planos?fecha=, ya existía),
+// 3) detalle del plano (GET /planos/:id) con Editar por ticket (PUT
+// /planos/:id/tickets/:ticketId) o Eliminar (DELETE /planos/:id,
+// papelera recuperable). Editar/Eliminar generan alerta del lado del
+// servidor — ver 🔔 Alertas.
+let ELIMINAR_PLANOS_DIA = null;
+let ELIMINAR_PLANOS_PLANO = null;
+let ELIMINAR_PLANOS_TICKET_EN_EDICION = null;
+
+function pintarEliminarPlanos() {
+  if (ELIMINAR_PLANOS_PLANO) return pintarEliminarPlanosDetallePlano();
+  if (ELIMINAR_PLANOS_DIA) return pintarEliminarPlanosDia();
+  return pintarEliminarPlanosDias();
+}
+
+async function pintarEliminarPlanosDias() {
+  const cont = document.getElementById('listaEliminarPlanos');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let dias;
+  try {
+    dias = await apiHipismo('/api/hipismo/planos/dias');
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar los días: ${e.message}</div>`;
+    return;
+  }
+  if (!dias.length) {
+    cont.innerHTML = '<div class="placeholder-card">Todavía no hay planos guardados.</div>';
+    return;
+  }
+  cont.innerHTML = dias.map(d => `
+    <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarDiaEliminarPlanos('${d.fecha}')">
+      <span class="nombre">📅 ${formatFechaCortaDMY(d.fecha)} <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— ${d.cantidad} plano${d.cantidad === 1 ? '' : 's'}</span></span>
+      <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
+    </div>`).join('');
+}
+
+function seleccionarDiaEliminarPlanos(fecha) {
+  ELIMINAR_PLANOS_DIA = fecha;
+  ELIMINAR_PLANOS_PLANO = null;
+  pintarEliminarPlanos();
+}
+
+function volverADiasEliminarPlanos() {
+  ELIMINAR_PLANOS_DIA = null;
+  ELIMINAR_PLANOS_PLANO = null;
+  pintarEliminarPlanos();
+}
+
+async function pintarEliminarPlanosDia() {
+  const cont = document.getElementById('listaEliminarPlanos');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let planos;
+  try {
+    planos = await apiHipismo(`/api/hipismo/planos?fecha=${ELIMINAR_PLANOS_DIA}&limite=200`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar los planos: ${e.message}</div>`;
+    return;
+  }
+  const volver = `<div class="btn-fila" style="margin-bottom:10px;"><button class="btn btn-secundario" type="button" onclick="volverADiasEliminarPlanos()">&lsaquo; Volver a los días</button></div>`;
+  if (!planos.length) {
+    cont.innerHTML = volver + '<div class="placeholder-card">Sin planos guardados ese día.</div>';
+    return;
+  }
+  const porHipodromo = new Map();
+  planos.forEach(p => {
+    if (!porHipodromo.has(p.hipodromo_nombre)) porHipodromo.set(p.hipodromo_nombre, []);
+    porHipodromo.get(p.hipodromo_nombre).push(p);
+  });
+  let html = volver + `<div style="font-weight:700; margin-bottom:8px;">📅 ${formatFechaCortaDMY(ELIMINAR_PLANOS_DIA)}</div>`;
+  Array.from(porHipodromo.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(hipodromoNombre => {
+    const carrerasHtml = porHipodromo.get(hipodromoNombre)
+      .slice()
+      .sort((a, b) => a.carrera_numero - b.carrera_numero)
+      .map(p => `
+        <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarPlanoEliminarPlanos('${p.id}')">
+          <span class="nombre">${p.carrera_numero}ta Carrera <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— comisión ${formatMontoTabla(p.comision_total)}</span></span>
+          <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
+        </div>`)
+      .join('');
+    html += `<div style="margin-bottom:14px;"><h3 style="margin:0 0 8px; font-size:14px;">🏟️ ${hipodromoNombre}</h3>${carrerasHtml}</div>`;
+  });
+  cont.innerHTML = html;
+}
+
+function seleccionarPlanoEliminarPlanos(planoId) {
+  ELIMINAR_PLANOS_PLANO = planoId;
+  ELIMINAR_PLANOS_TICKET_EN_EDICION = null;
+  pintarEliminarPlanos();
+}
+
+function volverAPlanosEliminarPlanos() {
+  ELIMINAR_PLANOS_PLANO = null;
+  ELIMINAR_PLANOS_TICKET_EN_EDICION = null;
+  pintarEliminarPlanos();
+}
+
+function abrirEdicionTicket(ticketId) {
+  ELIMINAR_PLANOS_TICKET_EN_EDICION = ticketId;
+  pintarEliminarPlanosDetallePlano();
+}
+
+function cerrarEdicionTicket() {
+  ELIMINAR_PLANOS_TICKET_EN_EDICION = null;
+  pintarEliminarPlanosDetallePlano();
+}
+
+function filaEdicionTicketHtml(planoId, t) {
+  const clienteVal = (t.cliente_nombre || '').replace(/"/g, '&quot;');
+  const banqueroVal = (t.banquero_nombre || '').replace(/"/g, '&quot;');
+  return `
+    <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editTicketCliente_${t.id}" placeholder="Cliente" value="${clienteVal}">
+        <input type="text" id="editTicketBanquero_${t.id}" placeholder="Banquero (si tiene)" value="${banqueroVal}">
+        <input type="number" id="editTicketMonto_${t.id}" placeholder="Monto" step="0.01" value="${t.monto}">
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarEdicionTicket('${planoId}', '${t.id}')">💾 Guardar</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionTicket()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarEdicionTicket(planoId, ticketId) {
+  const body = {
+    clienteNombre: document.getElementById(`editTicketCliente_${ticketId}`).value.trim(),
+    banqueroNombre: document.getElementById(`editTicketBanquero_${ticketId}`).value.trim(),
+    monto: document.getElementById(`editTicketMonto_${ticketId}`).value
+  };
+  try {
+    await apiHipismo(`/api/hipismo/planos/${planoId}/tickets/${ticketId}`, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  ELIMINAR_PLANOS_TICKET_EN_EDICION = null;
+  pintarEliminarPlanosDetallePlano();
+  cargarClientesReales();
+}
+
+function textoResultadoConSigno(v) {
+  const n = Number(v);
+  return `${n >= 0 ? '+' : '-'}${formatMontoTabla(n)}`;
+}
+
+async function pintarEliminarPlanosDetallePlano() {
+  const cont = document.getElementById('listaEliminarPlanos');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/planos/${ELIMINAR_PLANOS_PLANO}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar el plano: ${e.message}</div>`;
+    return;
+  }
+  const { plano, tickets } = data;
+  const volver = `<div class="btn-fila" style="margin-bottom:10px;"><button class="btn btn-secundario" type="button" onclick="volverAPlanosEliminarPlanos()">&lsaquo; Volver a los planos</button></div>`;
+  const filasTickets = tickets.map(t => `
+    <div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
+      <b>${t.cliente_nombre}</b>${t.banquero_nombre ? ` vs ${t.banquero_nombre}` : ''} — ${formatMontoTabla(t.monto)}
+      <span style="color:var(--text-dim); font-size:12px;"> (jugador ${textoResultadoConSigno(t.resultado_jugador)}${t.banquero_nombre ? `, banquero ${textoResultadoConSigno(t.resultado_banquero)}` : ''})</span>
+      <span style="display:inline-flex; gap:6px; margin-left:10px;">
+        <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="abrirEdicionTicket('${t.id}')">✏️ Editar</button>
+      </span>
+      ${ELIMINAR_PLANOS_TICKET_EN_EDICION === t.id ? filaEdicionTicketHtml(plano.id, t) : ''}
+    </div>`).join('');
+  cont.innerHTML = `${volver}
+    <div class="card" style="padding:14px; margin-bottom:12px;">
+      <div style="font-weight:700; margin-bottom:4px;">🏟️ ${plano.hipodromo_nombre} — ${plano.carrera_numero}ta Carrera — 📅 ${formatFechaCortaDMY(plano.fecha)}</div>
+      <div style="color:var(--text-dim); font-size:13px;">Comisión total: ${formatMontoTabla(plano.comision_total)} — ${tickets.length} ticket${tickets.length === 1 ? '' : 's'}</div>
+    </div>
+    <div class="card" style="padding:14px;">
+      ${filasTickets || '<div class="placeholder-card">Este plano no tiene tickets.</div>'}
+    </div>
+    <div class="btn-fila" style="margin-top:12px;">
+      <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarPlanoDesdeDetalle('${plano.id}')">🗑️ Eliminar este plano</button>
+    </div>`;
+}
+
+async function eliminarPlanoDesdeDetalle(planoId) {
+  if (!confirm('¿Eliminar este plano? Se puede restaurar durante 30 días desde Administración > Planos Eliminados.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/planos/${planoId}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  volverAPlanosEliminarPlanos();
+}
+
+// ------------------------------------------------------------------
+// Papelera de Planos (Administración > 🗑️ Planos Eliminados) — restaura
+// lo que se borró desde "Eliminar Planos", arriba.
+async function pintarPlanosEliminados() {
+  const tbody = document.getElementById('tablaPlanosEliminados');
+  let filas;
+  try {
+    filas = await apiHipismo('/api/hipismo/planos/papelera');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+    return;
+  }
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">La Papelera está vacía.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filas.map(f => `
+    <tr id="filaPapelera${f.id}">
+      <td>${formatFechaCortaDMY(f.eliminadoEn.slice(0, 10))}</td>
+      <td>${formatFechaCortaDMY(f.fecha)}</td>
+      <td>${f.hipodromoNombre}</td>
+      <td>${f.carreraNumero}ta</td>
+      <td>${f.cantidadTickets}</td>
+      <td>${f.restaurado ? 'Restaurado' : f.diasRestantes + ' días'}</td>
+      <td>${f.restaurado ? '—' : `<a href="#" style="color:var(--accent-grass);" onclick="restaurarPlanoPapelera('${f.id}'); return false;">♻️ Restaurar</a>`}</td>
+    </tr>`).join('');
+}
+
+// ------------------------------------------------------------------
+// Alertas (23-09-2026, duodécima-tercera ronda) — GET /api/hipismo/alertas.
+const TIPOS_ALERTA_TEXTO = {
+  PLANO_EDITADO: '✏️ Plano editado', PLANO_ELIMINADO: '🗑️ Plano eliminado',
+  ADELANTADA_EDITADA: '✏️ Adelantada editada', ADELANTADA_ELIMINADA: '🗑️ Adelantada eliminada'
+};
+async function pintarAlertasHipismo() {
+  const tbody = document.getElementById('tablaAlertasHipismo');
+  let filas;
+  try {
+    filas = await apiHipismo('/api/hipismo/alertas');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+    return;
+  }
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin alertas por ahora.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filas.map(f => {
+    const cuando = new Date(f.creado_en).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const hc = f.hipodromo_nombre ? `${f.hipodromo_nombre}${f.carrera_numero ? ' — ' + f.carrera_numero + 'ta' : ''}` : '—';
+    return `<tr>
+      <td>${cuando}</td>
+      <td>${TIPOS_ALERTA_TEXTO[f.tipo] || f.tipo}</td>
+      <td>${hc}</td>
+      <td>${f.mensaje}</td>
+      <td>${f.usuario}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function restaurarPlanoPapelera(papeleraId) {
+  if (!confirm('¿Restaurar este plano? Vuelve a "Cargar Planos" tal como estaba antes de borrarlo.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/planos/papelera/${papeleraId}/restaurar`, { method: 'POST' });
+  } catch (e) {
+    alert('No se pudo restaurar: ' + e.message);
+    return;
+  }
+  pintarPlanosEliminados();
 }
 
 function pintarSaldoComisiones() {
@@ -2630,6 +3548,8 @@ poblarCarreras();
 poblarCarreras('selCarreraRemate');
 document.getElementById('inpFecha').value = new Date().toISOString().slice(0, 10);
 document.getElementById('inpFechaRemate').value = new Date().toISOString().slice(0, 10);
+document.getElementById('inpFechaMontosApostados').value = new Date().toISOString().slice(0, 10);
+document.getElementById('inpFechaComisionesDevueltas').value = new Date().toISOString().slice(0, 10);
 document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 ['selHipodromo', 'selCarrera', 'inpRet', 'inpPizarra'].forEach(id => {
   document.getElementById(id).addEventListener('input', actualizarEncabezado);
@@ -2638,7 +3558,7 @@ document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 actualizarEncabezado();
 pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
-document.getElementById('balanceFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
+actualizarEncabezadoBalanceGeneral();
 actualizarAlertaPozos();
 cargarHipodromos();
 cargarPendientesAdelantadas();
@@ -2649,6 +3569,10 @@ actualizarColumnasCierre();
 pintarComisionesPorCarrera();
 pintarComisionesDevueltas();
 pintarSaldoComisiones();
+pintarEliminarPlanos();
+pintarMontosApostados();
+pintarPlanosEliminados();
+pintarAlertasHipismo();
 </script>
 
 <!-- html2canvas / jsPDF / XLSX (SheetJS): mismo criterio EXACTO que

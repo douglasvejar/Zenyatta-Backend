@@ -27,7 +27,18 @@ const express = require('express');
 const db = require('../db');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
-const { calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO } = require('../services/hipismoCalc');
+// numeroSemanaISO (23-09-2026, duodécima-tercera ronda, a pedido del
+// usuario: "en balance general al ver los saldos y en cierre final
+// colocame arriba la fecha que este comprendida la semana es decir del
+// 15-08 al 22-08 por ejemplo, y semana xxx... que seria la semana del
+// año en la que estamos") — MISMO cálculo de "número de semana del año"
+// que ya usa Deportes en "📅 Saldos Semana" (ver services/fechaSemana.js,
+// convención ISO-8601), reusado tal cual en vez de reinventarlo acá.
+const { numeroSemanaISO } = require('../services/fechaSemana');
+const {
+  calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO,
+  parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets
+} = require('../services/hipismoCalc');
 // "Cargar Remate" (23-09-2026, a pedido del usuario, con un formato real
 // de ejemplo pegado por él — ver la nota grande en
 // services/hipismoRemateCalc.js y en sql/schema.sql, tablas
@@ -60,6 +71,12 @@ const {
 // tipo_cuenta='libre', comisión 0% — el empleado decide después, desde
 // Administración > Jugador, si le carga un % propio o lo deja así.
 const { autoRegistrarJugadores } = require('../services/procesarSabana');
+// "Eliminar Planos" — papelera recuperable (23-09-2026, a pedido del
+// usuario: "en apuestas crea un boton de eliminar planos"). Ver la nota
+// grande en services/hipismoPlanosPapelera.js — mismo criterio ya usado
+// para la sábana de Deportes (papelera recuperable, nunca borrado
+// definitivo, para un sistema contable).
+const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 
 const router = express.Router();
 router.use(requiereGrupo);
@@ -72,6 +89,41 @@ function requiereModuloHipismo(req, res, next) {
   next();
 }
 router.use(requiereModuloHipismo);
+
+// =================================================================
+// ALERTAS DE HIPISMO (23-09-2026, duodécima-tercera ronda, a pedido del
+// usuario: "se genera una alerta en una pestaña que diga alertas que
+// este debajo de administracion, indicando que se edito y que usuario
+// se edito.... si el plano lo eliminan se genera la alerta igual
+// mente"). Ver la nota grande en sql/schema.sql, tabla hipismo_alertas,
+// para por qué es una tabla NUEVA y no la "alertas" de Deportes (esa
+// vive atada al flujo de AMBIGUA_DEPORTE/SIN_LOGRO, con columnas
+// obligatorias — "pata" NOT NULL, candidatos jsonb — que no tienen
+// sentido acá). registrarAlerta() es el único punto de escritura, usado
+// tanto por Jugadas Adelantadas (editar/eliminar una jugada) como por
+// "Eliminar Planos" (editar/eliminar un plano) — nunca se le pide
+// confirmación al operador para generarla, es automática en cuanto la
+// acción de verdad se concreta.
+async function registrarAlerta(req, { tipo, hipodromoNombre, carreraNumero, fecha, mensaje }) {
+  await db.query(
+    `INSERT INTO hipismo_alertas (grupo_id, tipo, usuario, hipodromo_nombre, carrera_numero, fecha, mensaje)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [req.grupoId, tipo, req.nombreActor, hipodromoNombre || null, carreraNumero || null, fecha || null, mensaje]
+  );
+}
+
+// GET /alertas : lista completa para la pestaña "Alertas" bajo
+// Administración, más reciente primero. Sin filtro de fecha por ahora
+// (el volumen esperado es bajo — ediciones/borrados son la excepción,
+// no la regla) — si hace falta paginar/filtrar más adelante es un
+// agregado aparte.
+router.get('/alertas', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    'SELECT * FROM hipismo_alertas WHERE grupo_id = $1 ORDER BY creado_en DESC LIMIT 300',
+    [req.grupoId]
+  );
+  res.json(r.rows);
+}));
 
 // =================================================================
 // HIPÓDROMOS (Administración > Hipódromos, spec sección 3)
@@ -159,18 +211,18 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
         rank, Number(j.comision_porcentaje)
       );
       return {
-        id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto',
+        id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto', monto: Number(j.monto),
         gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision,
         movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas }]
       };
     }
     // Marca
     if (!esMarcaDecidible(pizarra, esNacional)) {
-      return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
+      return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
     }
     const c = resolverClienteMarca({ numero1: j.numero1, numero2: j.numero2, monto: Number(j.monto) }, rank);
     return {
-      id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo',
+      id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo', monto: Number(j.monto),
       gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null,
       movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente }]
     };
@@ -208,14 +260,108 @@ async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
 // guarda en hipismo_planos.comision_total sigue siendo nada más la
 // comisión de Tercios (columna que usa "Comisiones por Carrera"), así
 // que acá adentro no se toca `resultado` ni lo que se inserta en la base.
-function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas, movimientosParaTexto) {
+//
+// 23-09-2026 (undécima ronda), a pedido del usuario ("en balance no me
+// estas cargando... necesito me coloques el resultado de las tablas SIN
+// el 2.5% y ese 2.5% aparte en un item llamado % de tablas fijas ya que
+// ese 2.5% es comision para el grupo"): el bloque "PARADA ADELANTADAS"
+// del plano de WhatsApp (armarBloqueAdelantadas, más abajo) SIGUE
+// mostrando "Tablas fijas" combinado (pago al cliente + comisión juntos,
+// sin cambios ahí — el usuario confirmó que ESE quedó "excelente"). Pero
+// ACÁ, en Balance General, se separan en 2 ítems distintos: "TABLAS
+// FIJAS" ahora es SOLO el espejo exacto de lo que le tocó al cliente (sin
+// comisión adentro), y la comisión de Tablas Fijas tiene su PROPIO ítem
+// aparte, "% DE TABLAS FIJAS" — para que se vea de un vistazo cuánto es
+// plata que se movió con el cliente y cuánto es comisión del grupo. El
+// total "Comisión" del pie de Balance General SIGUE sumando también esta
+// comisión (sin cambios ahí) — este ítem nuevo es una vista adicional,
+// no un reemplazo.
+function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
   const totales = Object.assign({}, totalesFinales);
-  movimientosParaTexto.forEach(({ nombre, monto }) => {
-    totales[nombre] = round2((totales[nombre] || 0) + monto);
-  });
   let comision = comisionTotal;
-  resueltas.forEach(r => { if (r.tipo === 'tf' && r.comision) comision = round2(comision + r.comision); });
+
+  resueltas.forEach(r => {
+    totales[r.cliente] = round2((totales[r.cliente] || 0) + r.resultadoCliente);
+
+    if (r.tipo === 'tf') {
+      totales['TABLAS FIJAS'] = round2((totales['TABLAS FIJAS'] || 0) - r.resultadoCliente);
+      if (r.comision) {
+        totales['% DE TABLAS FIJAS'] = round2((totales['% DE TABLAS FIJAS'] || 0) + r.comision);
+        comision = round2(comision + r.comision);
+      }
+    }
+  });
+
   return { totales, comision };
+}
+
+// =================================================================
+// "% DEVUELTO" POR CLIENTE (23-09-2026, undécima ronda) — a pedido del
+// usuario, con un ejemplo numérico exacto: "si alguno de lo que pierde
+// lleva comision o %... el cliente siempre va a jugar: si pierde pierde
+// completo, si gana, gana -5%.... y APARTE en un item llama (nombre del
+// cliente - porcentaje) alli es donde vas a colocar ese porcentaje que se
+// va ganando el cliente carrera a carrera... supongamo... pedro tiene 1%
+// de porcentaje entonces pedro jugo 100 y los pierde, en el plano... va a
+// salir pedro -100, en el balance... esa carrera pedro -100 pero en el
+// item pedro - porcentaje le va a salir en esa carrera +1".
+//
+// Reusa jugadores.comision_propia — el MISMO campo que ya usa Deportes
+// para esto (ver services/comisiones.js: "% que gana sobre lo que ÉL
+// arriesga"), compartido entre los 2 módulos en la misma tabla — nunca se
+// aplica en el resultado normal del cliente (que siempre queda "pierde
+// completo"/"gana -5%" tal cual, sin ajustar), sino en su propio ítem
+// "{NOMBRE} - PORCENTAJE", siempre positivo (1% de lo que jugó, gane o
+// pierda esa jugada puntual).
+//
+// REDIRECCIÓN AL AVAL (23-09-2026, duodécima-tercera ronda, a pedido del
+// usuario: "en la pestaña clientes... si el porcentaje que se le
+// devuelve no es para el si no para su aval, cuanto se le da de %"). Ver
+// la nota grande en sql/schema.sql, columnas jugadores.avalado_por_id/
+// porcentaje_devuelto_destino, y por qué esto NO reusa la tabla "avales"
+// existente (concepto totalmente distinto, ver
+// src/routes/jugadores.js). Cada nombre ahora resuelve a { pct, destino }
+// — `destino` es el nombre del AVAL cuando porcentaje_devuelto_destino
+// = 'aval' Y el aval está configurado; si no, es el mismo cliente (el
+// comportamiento de siempre). El ítem "{destino} - PORCENTAJE" es a
+// donde se acredita la plata; el cliente que lo GENERÓ (`nombre`) nunca
+// se pierde — lo sigue mostrando GET /comisiones-devueltas tal cual
+// (agrupado por quien apostó, no por quien cobra), a propósito, para que
+// se pueda auditar "quién generó cuánto" aparte de "a quién se le pagó".
+async function obtenerComisionesPropias(grupoId, nombres) {
+  const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
+  if (!unicos.length) return {};
+  const r = await db.query(
+    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, av.nombre AS aval_nombre
+       FROM jugadores j
+       LEFT JOIN jugadores av ON av.id = j.avalado_por_id
+      WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
+    [grupoId, unicos]
+  );
+  const mapa = {};
+  r.rows.forEach(j => {
+    const destino = (j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre) ? j.aval_nombre : j.nombre;
+    mapa[j.nombre] = { pct: Number(j.comision_propia) || 0, destino };
+  });
+  return mapa;
+}
+
+// Acumula en `totales` el ítem "{destino} - PORCENTAJE" de cada entrada
+// { nombre, monto } (el monto APOSTADO de esa línea puntual, nunca el
+// resultado) cuyo cliente tenga % propio configurado (> 0) — `destino`
+// es el propio cliente, o su aval si así está configurado (ver la nota
+// grande de obtenerComisionesPropias). Muta `totales` en el lugar (mismo
+// criterio que el resto de los merges de Balance General de este
+// archivo).
+function agregarPorcentajeDevuelto(totales, comisionesPropias, entradas) {
+  (entradas || []).forEach(({ nombre, monto }) => {
+    const info = comisionesPropias[nombre];
+    if (!info || !info.pct) return;
+    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+    if (!devuelto) return;
+    const clave = `${info.destino} - PORCENTAJE`;
+    totales[clave] = round2((totales[clave] || 0) + devuelto);
+  });
 }
 
 // =================================================================
@@ -259,13 +405,31 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     pizarra,
     salidaLineas: resultado.salidaLineas,
     totalesFinales: resultado.totalesFinales,
-    incluirPie: !bloqueAdelantadas
+    incluirPie: !bloqueAdelantadas,
+    // "Total Jugadas: N" (23-09-2026) — ver la nota grande en
+    // hipismoCalc.js/armarTextoResultado. Cuenta los tickets de Tercios de
+    // ESTA carrera puntual (huboTexto puede ser false si el plano solo
+    // trajo la pizarra para resolver adelantadas — ahí tickets.length ya
+    // da 0 solo, sin necesitar chequear huboTexto acá).
+    totalJugadas: resultado.tickets.length
   });
   if (bloqueAdelantadas) {
     textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
   }
 
-  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas, movimientosParaTexto);
+  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
+
+  // 23-09-2026, a pedido del usuario ("un item llama pedro - porcentaje
+  // alli es donde vas a colocar ese porcentaje que se va ganando el
+  // cliente carrera a carrera"): se calcula sobre lo APOSTADO en esta
+  // carrera puntual (tickets de Tercios, lado jugador, + el monto de las
+  // adelantadas que se resolvieron acá) para cualquier cliente con % propio
+  // configurado (jugadores.comision_propia) — nunca toca el resultado
+  // normal del cliente, solo agrega su propio ítem aparte.
+  const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
+    .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
+  agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
   res.json({
     textoResultado,
@@ -327,7 +491,8 @@ router.post('/planos', asyncHandler(async (req, res) => {
     pizarra,
     salidaLineas: resultado.salidaLineas,
     totalesFinales: resultado.totalesFinales,
-    incluirPie: !bloqueAdelantadas
+    incluirPie: !bloqueAdelantadas,
+    totalJugadas: resultado.tickets.length
   });
   if (bloqueAdelantadas) {
     textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
@@ -363,7 +528,14 @@ router.post('/planos', asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
-  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas, movimientosParaTexto);
+  const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
+
+  // Ver la nota grande en POST /planos/calcular — mismo cálculo de "%
+  // devuelto" acá, sobre lo que de verdad se guardó en este plano.
+  const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
+    .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
+  agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
   res.status(201).json({
     plano,
@@ -398,6 +570,49 @@ router.get('/planos', asyncHandler(async (req, res) => {
   res.json(r.rows);
 }));
 
+// =================================================================
+// "ELIMINAR PLANOS" — papelera recuperable (23-09-2026, a pedido del
+// usuario: "en apuestas crea un boton de eliminar planos, alli me
+// saldran todos los planos, yo seleccionare la fecha que quiero que me
+// muestre y despues se desplegaran ordenados por hipodromos por carrera
+// todos los planos"). Ver la nota grande en
+// services/hipismoPlanosPapelera.js. GET /planos (arriba) ya sirve para
+// "todos los planos, filtrables por fecha" — el frontend los agrupa por
+// hipódromo>carrera; acá solo hace falta borrar (a la Papelera) y
+// listar/restaurar la Papelera.
+//
+// OJO: "GET /planos/papelera" va ANTES de "GET /planos/:id" (más arriba)
+// para que Express no intente matchear "papelera" como si fuera un :id
+// — mismo criterio ya usado para "GET /adelantadas/pendientes".
+router.get('/planos/papelera', asyncHandler(async (req, res) => {
+  const filas = await hipismoPlanosPapelera.listarPapelera(req.grupoId);
+  res.json(filas);
+}));
+
+// GET /planos/dias : fechas distintas con planos guardados, para la
+// pantalla "Eliminar Planos" rediseñada (23-09-2026, duodécima-tercera
+// ronda, a pedido del usuario: "al entrar alli vere ordenado por dia,
+// al seleccionar el dia ordenado por hipodromo, los planos") — la
+// pantalla arranca mostrando SOLO los días que tienen algo, sin pedirle
+// al usuario que adivine o tipee una fecha a ciegas. OJO: va ANTES de
+// "GET /planos/:id" para que Express no intente matchear "dias" como si
+// fuera un :id — mismo criterio ya usado arriba para "papelera".
+router.get('/planos/dias', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT fecha, COUNT(*)::int AS cantidad
+       FROM hipismo_planos
+      WHERE grupo_id = $1
+      GROUP BY fecha
+      ORDER BY fecha DESC
+      LIMIT 120`,
+    [req.grupoId]
+  );
+  res.json(r.rows.map(row => ({
+    fecha: row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha,
+    cantidad: row.cantidad
+  })));
+}));
+
 // GET /planos/:id : detalle completo (cabecera + tickets), para revisar un plano ya guardado.
 router.get('/planos/:id', asyncHandler(async (req, res) => {
   const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
@@ -405,6 +620,119 @@ router.get('/planos/:id', asyncHandler(async (req, res) => {
   if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
   const rTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
   res.json({ plano, tickets: rTickets.rows });
+}));
+
+// PUT /planos/:id/tickets/:ticketId : edita UN ticket puntual de un plano
+// ya guardado — "en editar realizare cambios de montos o de jugador, al
+// realizar el cambio click a un boton que diga guardar y eso me editara
+// el plano anterior de esa carrera y la carrera quedara como se edito
+// este" (23-09-2026). Body: { clienteNombre?, banqueroNombre?, monto? }.
+// Recalcula el ticket editado con la MISMA pizarra del plano
+// (recalcularTicket), y DESPUÉS recompone totalesFinales/comisionTotal de
+// TODO el plano (recalcularTotalesPlano) porque en modo "cruza jugadas"
+// el % se cobra sobre el neto por persona de todo el plano, no línea por
+// línea — ver la nota grande de las 2 funciones en hipismoCalc.js.
+//
+// texto_resultado (el mensaje ya armado para WhatsApp) SOLO se regenera
+// si ese plano NO tiene un bloque "PARADA ADELANTADAS" pegado abajo — si
+// lo tiene, se deja tal cual estaba para no arriesgar mezclarlo mal con
+// ese bloque (decisión tomada sin volver a preguntar; lo que sí queda
+// siempre correcto en los dos casos son los números que alimentan Balance
+// General/Comisiones por Carrera/Montos Apostados/Cierre Final, que leen
+// directo de hipismo_tickets/hipismo_planos.comision_total, nunca del
+// texto guardado).
+router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
+  const { clienteNombre, banqueroNombre, monto } = req.body;
+
+  const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+
+  const rTicket = await db.query('SELECT * FROM hipismo_tickets WHERE id = $1 AND plano_id = $2', [req.params.ticketId, plano.id]);
+  const ticket = rTicket.rows[0];
+  if (!ticket) return res.status(404).json({ error: 'Ese ticket no pertenece a este plano.' });
+
+  const clienteFinal = ((clienteNombre || ticket.cliente_nombre) + '').trim().toUpperCase();
+  const banqueroFinal = ((banqueroNombre || ticket.banquero_nombre) + '').trim().toUpperCase();
+  const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(ticket.monto);
+  if (!clienteFinal || !banqueroFinal) return res.status(400).json({ error: 'Faltan el cliente y/o el banquero.' });
+  if (isNaN(montoFinal) || montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
+
+  const rank = parsearPizarra(plano.pizarra);
+  const recalculado = recalcularTicket({ modalidad: ticket.modalidad, caballo: ticket.caballo, monto: montoFinal }, rank);
+  if (!recalculado) return res.status(400).json({ error: `No se pudo recalcular este ticket (modalidad "${ticket.modalidad}" no reconocida).` });
+
+  const nombresNuevos = [];
+  if (clienteFinal !== ticket.cliente_nombre) nombresNuevos.push(clienteFinal);
+  if (banqueroFinal !== ticket.banquero_nombre) nombresNuevos.push(banqueroFinal);
+  if (nombresNuevos.length) await autoRegistrarJugadores(req.grupoId, nombresNuevos, {});
+
+  await db.query(
+    `UPDATE hipismo_tickets SET cliente_nombre = $1, banquero_nombre = $2, monto = $3, resultado_jugador = $4, resultado_banquero = $5
+      WHERE id = $6 AND plano_id = $7`,
+    [clienteFinal, banqueroFinal, montoFinal, recalculado.resultadoJugador, recalculado.resultadoBanquero, ticket.id, plano.id]
+  );
+
+  const rTodosTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
+  const ticketsPlanos = rTodosTickets.rows.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre, modalidad: t.modalidad, caballo: t.caballo,
+    monto: Number(t.monto), resultadoJugador: Number(t.resultado_jugador), resultadoBanquero: Number(t.resultado_banquero)
+  }));
+  const { totalesFinales, comisionTotal } = recalcularTotalesPlano(ticketsPlanos, plano.cruza_jugadas);
+
+  let textoResultadoFinal = plano.texto_resultado;
+  if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
+    textoResultadoFinal = armarTextoResultado({
+      nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      totalesFinales, totalJugadas: ticketsPlanos.length
+    });
+  }
+
+  await db.query('UPDATE hipismo_planos SET comision_total = $1, texto_resultado = $2 WHERE id = $3', [comisionTotal, textoResultadoFinal, plano.id]);
+
+  await registrarAlerta(req, {
+    tipo: 'PLANO_EDITADO', hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+    fecha: plano.fecha instanceof Date ? plano.fecha.toISOString().slice(0, 10) : plano.fecha,
+    mensaje: `Se editó un ticket del plano de ${plano.hipodromo_nombre}, carrera ${plano.carrera_numero} (${clienteFinal} / ${banqueroFinal}).`
+  });
+
+  res.json({
+    plano: { ...plano, comision_total: comisionTotal, texto_resultado: textoResultadoFinal },
+    tickets: rTodosTickets.rows,
+    totalesFinales
+  });
+}));
+
+// DELETE /planos/:id : borra UN plano puntual (con papelera recuperable).
+// 23-09-2026, duodécima-tercera ronda — a diferencia de la ronda
+// anterior (ver la nota grande en services/hipismoPlanosPapelera.js),
+// AHORA el usuario pidió explícitamente que el borrado desde "Eliminar
+// Planos" SÍ genere una alerta ("si el plano lo eliminan se genera la
+// alerta igual mente") — cambio de criterio respecto a la ronda pasada,
+// documentado en claude/plan-modulo-hipismo.md.
+router.delete('/planos/:id', asyncHandler(async (req, res) => {
+  try {
+    const resultado = await hipismoPlanosPapelera.eliminarPlano(req.grupoId, req.params.id);
+    await registrarAlerta(req, {
+      tipo: 'PLANO_ELIMINADO', hipodromoNombre: resultado.hipodromoNombre, carreraNumero: resultado.carreraNumero,
+      fecha: resultado.fecha instanceof Date ? resultado.fecha.toISOString().slice(0, 10) : resultado.fecha,
+      mensaje: `Se eliminó el plano de ${resultado.hipodromoNombre}, carrera ${resultado.carreraNumero}.`
+    });
+    res.json({ ok: true, ...resultado });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'No se pudo eliminar ese plano.' });
+  }
+}));
+
+// POST /planos/papelera/:id/restaurar : deshace un borrado.
+router.post('/planos/papelera/:id/restaurar', asyncHandler(async (req, res) => {
+  try {
+    const resultado = await hipismoPlanosPapelera.restaurarPlano(req.grupoId, req.params.id);
+    res.json({ ok: true, ...resultado });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'No se pudo restaurar ese plano.' });
+  }
 }));
 
 // =================================================================
@@ -660,6 +988,122 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
 }));
 
 // =================================================================
+// EDITAR / ELIMINAR una Jugada Adelantada puntual (23-09-2026, a pedido
+// del usuario: "en jugadas adelantadas quiero poder seleccionar cada
+// jugada, eliminarla, editarla en caso de que lo necesite, desde esa
+// misma ventana seleccionando la jugada"). A diferencia de "Eliminar
+// Planos" (abajo), que tiene su propia papelera recuperable, acá el
+// borrado es DEFINITIVO — decisión tomada sin volver a preguntar: cada
+// línea de Jugadas Adelantadas es un ítem chico, autocontenido, y esta
+// pantalla ya funciona línea por línea con el operador mirando toda la
+// lista — el "rastro" de qué se borró/editó y quién lo hizo queda en la
+// nueva pestaña "Alertas" (registrarAlerta(), arriba de todo el
+// archivo), igual criterio de auditoría que se usa para Eliminar Planos.
+//
+// Si la jugada YA estaba resuelta (tiene pizarra_usada guardada) se
+// recalcula con la MISMA pizarra que ya se usó — nunca se le vuelve a
+// pedir al operador que la pegue. Si es una Marca que YA tenía
+// banqueadores asignados (estado 'resuelto'), se vuelven a resolver con
+// los MISMOS % y las mismas decisiones de "paga comisión" que ya tenía
+// cada banquero (resolverBanqueoMarca de nuevo, sobre la base nueva) —
+// así que si el operador solo corrigió el monto o el número marcado, no
+// hace falta rehacer el banqueo a mano. Una jugada 'sin_decidir' (la
+// pizarra de esa carrera nunca llegó a los puestos necesarios) se deja
+// tal cual quedó — no depende de los datos que se estén editando.
+router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
+  const { cliente, monto, numeroEjemplar, numero1, numero2 } = req.body;
+
+  const rJugada = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.id = $1 AND j.grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
+  const jugada = rJugada.rows[0];
+  if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
+
+  const clienteFinal = ((cliente || jugada.cliente_nombre) + '').trim().toUpperCase();
+  if (!clienteFinal) return res.status(400).json({ error: 'Falta el cliente.' });
+  const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(jugada.monto);
+  if (isNaN(montoFinal) || montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
+
+  const numeroEjemplarFinal = jugada.tipo === 'tf'
+    ? ((numeroEjemplar !== undefined && numeroEjemplar !== null && numeroEjemplar !== '') ? parseInt(numeroEjemplar, 10) : jugada.numero_ejemplar)
+    : jugada.numero_ejemplar;
+  const numero1Final = jugada.tipo === 'marca'
+    ? ((numero1 !== undefined && numero1 !== null && numero1 !== '') ? parseInt(numero1, 10) : jugada.numero1)
+    : jugada.numero1;
+  const numero2Final = jugada.tipo === 'marca'
+    ? ((numero2 !== undefined && numero2 !== null && numero2 !== '') ? parseInt(numero2, 10) : jugada.numero2)
+    : jugada.numero2;
+
+  if (clienteFinal !== jugada.cliente_nombre) await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+
+  let recalculo = { estado: jugada.estado, gano: jugada.gano, resultadoCliente: jugada.resultado_cliente, comision: jugada.comision, banqueadores: jugada.banqueadores };
+  if (jugada.pizarra_usada && jugada.estado !== 'sin_decidir') {
+    const rank = parsearPizarraRank(jugada.pizarra_usada);
+    if (jugada.tipo === 'tf') {
+      const r = resolverTablaFija(
+        { numeroEjemplar: numeroEjemplarFinal, monto: montoFinal, gananciaPotencial: Number(jugada.ganancia_potencial) },
+        rank, Number(jugada.comision_porcentaje)
+      );
+      recalculo = { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision, banqueadores: jugada.banqueadores };
+    } else {
+      const c = resolverClienteMarca({ numero1: numero1Final, numero2: numero2Final, monto: montoFinal }, rank);
+      if (jugada.banqueadores) {
+        const banqueadoresPrevios = typeof jugada.banqueadores === 'string' ? JSON.parse(jugada.banqueadores) : jugada.banqueadores;
+        const base = c.acierta ? c.resultadoCliente : montoFinal;
+        const { banqueadores, comisionMarcas } = resolverBanqueoMarca({ acierta: c.acierta, base }, banqueadoresPrevios, Number(jugada.comision_porcentaje));
+        recalculo = { estado: 'resuelto', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: comisionMarcas, banqueadores: JSON.stringify(banqueadores) };
+      } else {
+        recalculo = { estado: 'falta_banqueo', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null, banqueadores: null };
+      }
+    }
+  }
+
+  const r = await db.query(
+    `UPDATE hipismo_adelantadas_jugadas
+        SET cliente_nombre = $1, monto = $2, numero_ejemplar = $3, numero1 = $4, numero2 = $5,
+            estado = $6, gano = $7, resultado_cliente = $8, comision = $9, banqueadores = $10
+      WHERE id = $11 AND grupo_id = $12 RETURNING *`,
+    [clienteFinal, montoFinal, numeroEjemplarFinal, numero1Final, numero2Final,
+      recalculo.estado, recalculo.gano, recalculo.resultadoCliente, recalculo.comision, recalculo.banqueadores,
+      jugada.id, req.grupoId]
+  );
+
+  const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
+  await registrarAlerta(req, {
+    tipo: 'ADELANTADA_EDITADA', hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se editó la jugada adelantada de ${clienteFinal} (carrera ${jugada.carrera_numero}, ${jugada.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json(filaJugadaAdelantadaPublica(r.rows[0]));
+}));
+
+router.delete('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
+  const rJugada = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.id = $1 AND j.grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
+  const jugada = rJugada.rows[0];
+  if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
+
+  await db.query('DELETE FROM hipismo_adelantadas_jugadas WHERE id = $1 AND grupo_id = $2', [jugada.id, req.grupoId]);
+
+  const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
+  await registrarAlerta(req, {
+    tipo: 'ADELANTADA_ELIMINADA', hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se eliminó la jugada adelantada de ${jugada.cliente_nombre} (carrera ${jugada.carrera_numero}, ${jugada.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json({ ok: true });
+}));
+
+// =================================================================
 // REMATE — "Cargar Remate" (23-09-2026, ver la nota grande en
 // services/hipismoRemateCalc.js y sql/schema.sql). A diferencia de
 // "Cargar Planos", acá el ganador de cada remate depende de quién ganó
@@ -890,10 +1334,27 @@ function textoJugadaTicket(t) {
   return `${t.modalidad} (${t.caballo}) con ${Number(t.monto).toFixed(2).replace('.', ',')}`;
 }
 
+// GET /semana-actual?semana=actual|anterior|hace2 (23-09-2026,
+// duodécima-tercera ronda, a pedido del usuario: "en balance general al
+// ver los saldos... colocame arriba la fecha que este comprendida la
+// semana... y semana xxx... que seria la semana del año en la que
+// estamos") — "Balance General" (de "Cargar Planos") no agrega nada por
+// semana del lado del servidor, así que no tenía de dónde sacar este
+// dato; este endpoint chiquito le da el MISMO rango/número de semana que
+// ya calculan Comisiones por Carrera y Cierre Final, solo para pintar el
+// encabezado.
+router.get('/semana-actual', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoSemana(hoyVenezuela(), offset);
+  res.json({ rango: { desde, hasta }, numeroSemana: numeroSemanaISO(desde) });
+}));
+
 router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const { desde, hasta } = rangoSemana(hoyVenezuela(), offset);
+  const numeroSemana = numeroSemanaISO(desde);
 
   const rPlanos = await db.query(
     `SELECT id, fecha, hipodromo_nombre, carrera_numero, comision_total
@@ -903,7 +1364,7 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   if (rPlanos.rows.length === 0) {
-    return res.json({ rango: { desde, hasta }, semana, dias: [], totalGeneral: 0 });
+    return res.json({ rango: { desde, hasta }, semana, numeroSemana, dias: [], totalGeneral: 0 });
   }
 
   const rTickets = await db.query(
@@ -948,7 +1409,176 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
     .map(d => ({ fecha: d.fecha, totalComision: d.totalComision, hipodromos: Array.from(d.hipodromosMap.values()) }))
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
-  res.json({ rango: { desde, hasta }, semana, dias, totalGeneral });
+  res.json({ rango: { desde, hasta }, semana, numeroSemana, dias, totalGeneral });
+}));
+
+// =================================================================
+// "MONTOS APOSTADOS" (23-09-2026, undécima ronda, a pedido del usuario:
+// "un boton en apuestas llamado montos apostados, alli vere por cliente
+// cuanto han apostado en el grupo, igual ordenado por fecha, alli me
+// saldra el cliente al lado de su nombre el total en la fecha que
+// seleccione y si lo selcciono... se despliega toda su informacion").
+//
+// Suma, para UNA fecha puntual (no un rango semanal, a propósito — el
+// usuario pidió "la fecha que seleccione", singular), lo que cada
+// cliente apostó como JUGADOR (nunca lo que banqueó/cubrió — banquear no
+// es "apostar") en los 3 tipos de jugada de Hipismo: Tercios (Cargar
+// Planos), Remate, y Jugadas Adelantadas (Tablas Fijas y Marcas, tomando
+// la fecha en que se CORRE la carrera, igual que el resto del sistema
+// las agrupa). Esta misma función se reusa para "Comisiones Devueltas"
+// (más abajo), que necesita exactamente la misma base.
+async function obtenerApuestasDelDia(grupoId, fecha) {
+  const detalle = [];
+
+  const rTickets = await db.query(
+    `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, p.hipodromo_nombre, p.carrera_numero
+       FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
+      WHERE t.grupo_id = $1 AND p.fecha = $2`,
+    [grupoId, fecha]
+  );
+  rTickets.rows.forEach(t => detalle.push({
+    id: t.id, tabla: 'hipismo_tickets',
+    cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
+    tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto)
+  }));
+
+  const rRemate = await db.query(
+    `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero
+       FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
+      WHERE a.grupo_id = $1 AND r.fecha = $2`,
+    [grupoId, fecha]
+  );
+  rRemate.rows.forEach(a => detalle.push({
+    id: a.id, tabla: 'hipismo_remate_apuestas',
+    cliente: a.cliente_nombre, hipodromoNombre: a.hipodromo_nombre, carreraNumero: a.carrera_numero,
+    tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto)
+  }));
+
+  const rAdelantadas = await db.query(
+    `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, p.hipodromo_nombre
+       FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha = $2`,
+    [grupoId, fecha]
+  );
+  rAdelantadas.rows.forEach(j => detalle.push({
+    id: j.id, tabla: 'hipismo_adelantadas_jugadas',
+    cliente: j.cliente_nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
+    tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
+    detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
+    monto: Number(j.monto)
+  }));
+
+  return detalle;
+}
+
+// =================================================================
+// TRASPASO DE JUGADAS (23-09-2026, duodécima-tercera ronda — rediseño a
+// pedido del usuario: "al entrar alli seleccionaremos primero la fecha,
+// despues el cliente al sleccionar el cliente me saldra ordenado por
+// hipodromo las jugadas, seleccionar la jugada y despues eligir en la
+// lista a que cliente se le pasa... el otro cliente que se le quita ya
+// no tendra registro de esa jugada, se le eliminara ese registro de
+// balance y de todos lados". Alcance confirmado con AskUserQuestion:
+// SOLO Tercios + Jugadas Adelantadas (Remate queda afuera a propósito).
+//
+// Es un UPDATE simple de cliente_nombre sobre la fila puntual — no hace
+// falta ningún borrado aparte: Balance General, Montos Apostados,
+// Comisiones Devueltas y Cierre Final son todos LIVE, derivados de estas
+// mismas filas por cliente_nombre, así que en cuanto cambia ese campo el
+// cliente viejo deja de tener rastro de esa jugada en cualquier reporte,
+// automáticamente.
+// =================================================================
+router.get('/traspasos/jugadas', asyncHandler(async (req, res) => {
+  const { fecha, cliente } = req.query;
+  if (!fecha || !cliente) return res.status(400).json({ error: 'Falta la fecha y/o el cliente.' });
+  const detalle = (await obtenerApuestasDelDia(req.grupoId, fecha))
+    .filter(d => d.cliente === cliente.trim().toUpperCase() && d.tipo !== 'remate');
+
+  const porHipodromo = new Map();
+  detalle.forEach(d => {
+    if (!porHipodromo.has(d.hipodromoNombre)) porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, jugadas: [] });
+    porHipodromo.get(d.hipodromoNombre).jugadas.push(d);
+  });
+  res.json({ fecha, cliente: cliente.trim().toUpperCase(), hipodromos: Array.from(porHipodromo.values()) });
+}));
+
+router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
+  const { tabla, id, clienteNuevo } = req.body;
+  if (!['hipismo_tickets', 'hipismo_adelantadas_jugadas'].includes(tabla)) {
+    return res.status(400).json({ error: 'Solo se pueden traspasar jugadas de Tercios o de Jugadas Adelantadas.' });
+  }
+  const clienteNuevoFinal = ((clienteNuevo || '') + '').trim().toUpperCase();
+  if (!clienteNuevoFinal) return res.status(400).json({ error: 'Falta el cliente al que se le pasa la jugada.' });
+
+  const r = await db.query(
+    `UPDATE ${tabla} SET cliente_nombre = $1 WHERE id = $2 AND grupo_id = $3 RETURNING *`,
+    [clienteNuevoFinal, id, req.grupoId]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Esa jugada no existe.' });
+
+  await autoRegistrarJugadores(req.grupoId, [clienteNuevoFinal], {});
+  res.json({ ok: true, jugada: r.rows[0] });
+}));
+
+// GET /montos-apostados?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+router.get('/montos-apostados', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
+  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+
+  const porCliente = new Map();
+  detalle.forEach(d => {
+    if (!porCliente.has(d.cliente)) porCliente.set(d.cliente, { nombre: d.cliente, total: 0, detalle: [] });
+    const c = porCliente.get(d.cliente);
+    c.total = round2(c.total + d.monto);
+    c.detalle.push(d);
+  });
+  const clientes = Array.from(porCliente.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  res.json({ fecha, clientes });
+}));
+
+// =================================================================
+// "COMISIONES DEVUELTAS" (23-09-2026, undécima ronda) — a pedido del
+// usuario, con un ejemplo numérico exacto que confirmó la fórmula que
+// llevaba varias rondas pendiente (ver la nota grande arriba de
+// agregarPorcentajeDevuelto): % configurado por cliente
+// (jugadores.comision_propia) sobre lo que apostó, carrera a carrera,
+// SIEMPRE — gane o pierda esa jugada puntual. "ordenado como Montos
+// Apostados" (pedido explícito del usuario): una fecha, un cliente por
+// fila con su total devuelto ese día, y al expandirlo, el detalle
+// ordenado por hipódromo > carrera de cómo se fue sumando ese %.
+//
+// GET /comisiones-devueltas?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
+  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
+
+  const porCliente = new Map();
+  detalle.forEach(d => {
+    const info = comisionesPropias[d.cliente];
+    if (!info || !info.pct) return; // sin % configurado, no aparece en este reporte
+    const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
+    if (!devuelto) return;
+    // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
+    // destino — este reporte audita "quién generó cuánto %"; `destino` se
+    // agrega aparte para que el frontend pueda avisar "va acreditado a
+    // {destino}" cuando el cliente tiene un aval configurado (ver la nota
+    // grande de obtenerComisionesPropias más arriba).
+    if (!porCliente.has(d.cliente)) porCliente.set(d.cliente, { nombre: d.cliente, porcentaje: info.pct, destino: info.destino, total: 0, hipodromos: new Map() });
+    const c = porCliente.get(d.cliente);
+    c.total = round2(c.total + devuelto);
+    if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, total: 0, carreras: [] });
+    const h = c.hipodromos.get(d.hipodromoNombre);
+    h.total = round2(h.total + devuelto);
+    h.carreras.push({ carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
+  });
+
+  const clientes = Array.from(porCliente.values())
+    .map(c => ({ nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, total: c.total, hipodromos: Array.from(c.hipodromos.values()) }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  res.json({ fecha, clientes });
 }));
 
 // =================================================================
@@ -993,16 +1623,17 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   const hoyVe = hoyVenezuela();
   const { desde, hasta } = rangoSemana(hoyVe, offset);
   const esSemanaActual = isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
+  const numeroSemana = numeroSemanaISO(desde);
 
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
   const rApuestasRemate = await db.query(
-    `SELECT a.cliente_nombre, a.resultado
+    `SELECT a.cliente_nombre, a.resultado, a.monto
        FROM hipismo_remate_apuestas a
        JOIN hipismo_remates r ON r.id = a.remate_id
       WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
@@ -1017,7 +1648,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
   // un cliente más (ej. "MARCAS ZENYATTA").
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.resultado_cliente, j.comision, j.banqueadores
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.comision, j.banqueadores, j.monto
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -1048,6 +1679,33 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     }
   });
 
+  // "% DEVUELTO" (23-09-2026, undécima ronda, a pedido del usuario: "un
+  // item llama pedro - porcentaje... recuerda todo debe verse reflejado
+  // en balances") — mismo cálculo que Balance General de "Cargar Planos"
+  // (ver agregarPorcentajeDevuelto más arriba), pero agregado para TODA
+  // la semana: cada cliente con % propio configurado
+  // (jugadores.comision_propia) se gana ese % de TODO lo que apostó como
+  // JUGADOR (Tercios + Remate + Adelantadas — nunca lo que banqueó), gane
+  // o pierda cada jugada puntual, sumado como su propio "cliente" aparte
+  // ("{NOMBRE} - PORCENTAJE") en esta misma lista.
+  const nombresJugadores = new Set();
+  rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
+  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
+  function acumularDevuelto(nombre, monto) {
+    const info = comisionesPropias[nombre];
+    if (!info || !info.pct) return;
+    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+    if (!devuelto) return;
+    // Ver la nota grande de obtenerComisionesPropias: se acredita al
+    // AVAL (info.destino) cuando así está configurado.
+    acumular(`${info.destino} - PORCENTAJE`, devuelto);
+  }
+  rTickets.rows.forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
+  rApuestasRemate.rows.forEach(a => acumularDevuelto(a.cliente_nombre, a.monto));
+  rAdelantadas.rows.forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
+
   const clientes = Array.from(porCliente.values())
     .map(c => ({ ...c, saldo: c.gano - c.perdio }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -1071,6 +1729,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   res.json({
     rango: { desde, hasta },
     semana,
+    numeroSemana,
     esSemanaActual,
     clientes,
     comisionSemana: Number(rComision.rows[0].total),
