@@ -412,7 +412,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
-    return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
+    return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
   }
 
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
@@ -500,7 +500,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
     ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
-    return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
+    return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
   }
 
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
@@ -805,7 +805,7 @@ router.post('/adelantadas/calcular', asyncHandler(async (req, res) => {
   if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
 
   const { jugadas, sinReconocer } = parsearJugadasAdelantadas(texto);
-  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas ("N) 5TF DEL X A Y ,monto/pago$" o "N) AxB monto$").' });
+  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas ("N) 5TF DEL X A Y ,monto/pago$" o "N) AxB monto$").' });
 
   res.json({
     jugadas,
@@ -836,12 +836,12 @@ router.post('/adelantadas', asyncHandler(async (req, res) => {
   if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
 
   const { jugadas, sinReconocer } = parsearJugadasAdelantadas(texto);
-  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisá el formato de las líneas.' });
+  if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
 
   const errores = jugadas.filter(j => j.errorCalculo);
   if (errores.length) {
     return res.status(400).json({
-      error: 'Hay jugadas con la multiplicación mal calculada — corregí el plano antes de guardar.',
+      error: 'Hay jugadas con la multiplicación mal calculada — corrige el plano antes de guardar.',
       errores: errores.map(j => ({ cliente: j.cliente, carreraNumero: j.carreraNumero, textoOriginal: j.textoOriginal, detalleError: j.detalleError }))
     });
   }
@@ -1169,7 +1169,7 @@ router.post('/remates/calcular', asyncHandler(async (req, res) => {
   }
 
   const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
-  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
+  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisa el formato de las líneas.' });
 
   const fechaFinal = fecha || fechaHoyVenezuela();
   const { pizarra: pizarraResuelta, origen } = await resolverLlegadaRemate(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
@@ -1220,7 +1220,7 @@ router.post('/remates', asyncHandler(async (req, res) => {
   if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
 
   const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
-  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
+  if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisa el formato de las líneas.' });
 
   const fechaFinal = fecha || fechaHoyVenezuela();
   const { pizarra: pizarraResuelta } = await resolverLlegadaRemate(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
@@ -1645,7 +1645,57 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
     .map(c => ({ nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, total: c.total, hipodromos: Array.from(c.hipodromos.values()) }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  res.json({ fecha, clientes });
+  const totalGeneralDevueltas = round2(clientes.reduce((s, c) => s + c.total, 0));
+
+  res.json({ fecha, clientes, totalGeneral: totalGeneralDevueltas });
+}));
+
+// =================================================================
+// "COMISIONES DEVUELTAS POR HIPÓDROMO" (24-09-2026, a pedido del usuario:
+// "la ventana comisiones devueltas metela en la pestaña comisiones... y
+// colocale como nombre comisiones devuelta por hipodromo, alli debo ver
+// ordenado por hipodromo por carrera, cuanto se a devuelto de comision").
+// Mismos datos que /comisiones-devueltas (arriba) — el mismo universo de
+// apuestas de UN día puntual, filtrado a clientes con % propio
+// configurado — pero agregados por hipódromo > carrera, SUMANDO entre
+// TODOS los clientes de esa carrera (a diferencia de /comisiones-
+// devueltas, que agrupa por cliente primero). Mismo formato/estructura
+// que ya usa /comisiones-por-hipodromo (comisión GANADA por el grupo),
+// solo que acá el monto es lo DEVUELTO a los clientes con % propio.
+//
+// GET /comisiones-devueltas-por-hipodromo?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
+  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
+
+  const porHipodromo = new Map();
+  let totalGeneral = 0;
+  detalle.forEach(d => {
+    const info = comisionesPropias[d.cliente];
+    if (!info || !info.pct) return;
+    const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
+    if (!devuelto) return;
+    if (!porHipodromo.has(d.hipodromoNombre)) {
+      porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, totalDevuelto: 0, carrerasMap: new Map() });
+    }
+    const hip = porHipodromo.get(d.hipodromoNombre);
+    hip.totalDevuelto = round2(hip.totalDevuelto + devuelto);
+    totalGeneral = round2(totalGeneral + devuelto);
+    hip.carrerasMap.set(d.carreraNumero, round2((hip.carrerasMap.get(d.carreraNumero) || 0) + devuelto));
+  });
+
+  const hipodromos = Array.from(porHipodromo.values())
+    .map(h => ({
+      nombre: h.nombre,
+      totalDevuelto: h.totalDevuelto,
+      carreras: Array.from(h.carrerasMap.entries())
+        .map(([carreraNumero, devuelto]) => ({ carreraNumero, devuelto }))
+        .sort((a, b) => a.carreraNumero - b.carreraNumero)
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  res.json({ fecha, hipodromos, totalGeneral });
 }));
 
 // =================================================================
@@ -1803,6 +1853,74 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
     comisionAdelantadasSemana
   });
+}));
+
+// =================================================================
+// "SALDO COMISIONES" REAL (24-09-2026, a pedido del usuario: "saldo
+// comisiones si esta sacando el % que se le devuelve a cada cliente" —
+// hasta esta ronda la pantalla mostraba datos de ejemplo fijos). Mismo %
+// propio por cliente (jugadores.comision_propia, ver la nota grande de
+// obtenerComisionesPropias) y el mismo cálculo "% de todo lo apostado
+// como jugador, gane o pierda" que ya usan /comisiones-devueltas (por
+// día) y el ítem "{destino} - PORCENTAJE" de /cierre-final — acá,
+// agregado para TODA la semana (mismo selector de 3 semanas que Cierre
+// Final/Balance General), un renglón por cliente con su % configurado y
+// cuánto lleva devuelto en esa semana.
+//
+// GET /saldo-comisiones?semana=actual|anterior|hace2
+router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const numeroSemana = numeroSemanaISO(desde);
+
+  const rTickets = await db.query(
+    `SELECT t.cliente_nombre, t.monto
+       FROM hipismo_tickets t
+       JOIN hipismo_planos p ON p.id = t.plano_id
+      WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+  const rApuestasRemate = await db.query(
+    `SELECT a.cliente_nombre, a.monto
+       FROM hipismo_remate_apuestas a
+       JOIN hipismo_remates r ON r.id = a.remate_id
+      WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+  const rAdelantadas = await db.query(
+    `SELECT j.cliente_nombre, j.monto
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const nombresJugadores = new Set();
+  rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
+  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
+
+  const porCliente = new Map();
+  function acumularSaldo(nombre, monto) {
+    const info = comisionesPropias[nombre];
+    if (!info || !info.pct) return;
+    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+    if (!devuelto) return;
+    if (!porCliente.has(nombre)) porCliente.set(nombre, { nombre, porcentaje: info.pct, destino: info.destino, devueltoSemana: 0 });
+    const c = porCliente.get(nombre);
+    c.devueltoSemana = round2(c.devueltoSemana + devuelto);
+  }
+  rTickets.rows.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
+  rApuestasRemate.rows.forEach(a => acumularSaldo(a.cliente_nombre, a.monto));
+  rAdelantadas.rows.forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
+
+  const clientes = Array.from(porCliente.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const totalGeneral = round2(clientes.reduce((s, c) => s + c.devueltoSemana, 0));
+
+  res.json({ rango: { desde, hasta }, semana, numeroSemana, clientes, totalGeneral });
 }));
 
 // =================================================================

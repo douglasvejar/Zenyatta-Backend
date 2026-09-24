@@ -254,7 +254,7 @@
          disponen de 24 horas, colocalo al final" — antes iba arriba,
          justo debajo del saludo; ahora va acá, al cierre de la página,
          después de todo el detalle. -->
-    <div class="aviso-confirmacion" id="avisoConfirmacion">⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia</span></div>
+    <div class="aviso-confirmacion" id="avisoConfirmacion">⏰ <b>Importante:</b> dispones de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia</span></div>
 
     <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
@@ -358,7 +358,7 @@
     // Aviso de confirmación de 24 horas, firmado con el nombre real del
     // grupo (pedido del usuario: "gerencia (nombre del grupo)").
     document.getElementById('avisoConfirmacion').innerHTML =
-      `⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia, ${data.grupo.nombre}</span>`;
+      `⏰ <b>Importante:</b> dispones de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia, ${data.grupo.nombre}</span>`;
     const logo = document.getElementById('logoGrupo');
     const avatar = document.getElementById('avatarIniciales');
     if (data.grupo.logoUrl) {
@@ -526,7 +526,7 @@
       semanaActual = data.semana;
       renderDatos(data);
     } catch (e) {
-      mostrarError('No se pudo conectar con el servidor. Probá de nuevo en un momento.');
+      mostrarError('No se pudo conectar con el servidor. Prueba de nuevo en un momento.');
     }
   }
 

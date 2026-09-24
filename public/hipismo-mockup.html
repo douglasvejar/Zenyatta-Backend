@@ -98,7 +98,7 @@
      medio camino entre 64px y 224px, donde el navegador puede pintar el
      texto recién recalculado como vacío — un cuadro intermedio real de
      la animación, no un dato faltante, pero se ve exactamente como un
-     error. Pidió explícitamente "dejalo fijo": se quita la animación de
+     error. Pidió explícitamente "déjalo fijo": se quita la animación de
      ancho, el colapsado a solo-íconos y el temporizador de 30s — el
      rail queda siempre expandido (mismo ancho de antes, 224px), sin
      ningún estado intermedio que pueda pintarse a medias. Sigue aplicando
@@ -312,6 +312,14 @@
   .balance-fila .nombre { font-weight: 600; }
   .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
   .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
+  /* 24-09-2026: renglón "{cliente} - PORCENTAJE" (% devuelto), anidado
+     siempre justo debajo de su cliente base — ver la nota grande en
+     pintarBalanceGeneral. Mismo fondo/borde que .balance-fila, pero más
+     angosto, con sangría y en tono más claro, para que se note que es
+     un ítem aparte del cliente, no otro cliente más. */
+  .balance-fila-porcentaje { margin-left: 18px; padding: 5px 12px; background: var(--card); opacity: 0.85; font-size: 12.5px; }
+  .balance-fila-porcentaje .nombre { font-weight: 500; font-style: italic; color: var(--text-dim); }
+  .balance-fila-porcentaje .monto { color: var(--ok); font-weight: 700; }
   .comision-caja { margin-top: 16px; background: linear-gradient(100deg, var(--warning), #f59e0b 75%); border: none; border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 3px 10px rgba(217,119,6,0.25); }
   .comision-caja .etiqueta { font-family: 'Outfit', sans-serif; font-size: 15px; color: #2b1c02; font-weight: 800; letter-spacing: 0.2px; }
   .comision-caja .monto { font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; color: #2b1c02; }
@@ -378,6 +386,12 @@
   #cierreFinalCaptura th:first-child, #cierreFinalCaptura td:first-child { text-align: left; }
   #cierreFinalCaptura td.num { text-align: center; }
   #cierreFinalCaptura tbody tr:nth-child(even) { background: var(--card-2); }
+  /* 24-09-2026: renglón "↳ {cliente} - Porcentaje" (% devuelto) dentro de
+     Cierre Final — ya sale pegado debajo de su cliente base por orden
+     alfabético; acá solo se le baja un poco el tono para que se note que
+     es un ítem aparte, sin cambiar el layout de la tabla. */
+  #cierreFinalCaptura tr.fila-porcentaje td:first-child { font-style: italic; color: var(--text-dim); }
+  #cierreFinalCaptura tr.fila-porcentaje { opacity: 0.85; }
 
   /* "Semana por Días" (24-09-2026) — mismo tratamiento visual que Cierre
      Final: grilla con borde en cada celda, números centrados bajo su
@@ -622,15 +636,15 @@
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁<span class="nav-lbl"> Traspasos de Jugadas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Jugadas Adelantadas</span></button>
       <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "en apuestas
-           crea un boton de eliminar planos", "un boton en apuestas llamado
-           montos apostados" y "un boton en apuestas llamado comisiones
-           devueltas" — las 3 van juntas acá, en ese mismo orden. Comisiones
-           Devueltas vivía antes en el grupo "💼 Comisiones" — se mueve
-           para acá tal cual pidió el usuario (la pantalla en sí sigue
-           siendo la misma, solo cambia de dónde se entra). -->
+           crea un boton de eliminar planos" y "un boton en apuestas llamado
+           montos apostados" — van juntas acá, en ese mismo orden.
+           "Comisiones Devueltas" vivía acá desde esa misma ronda; el
+           24-09-2026 (vigesimocuarta ronda) el usuario pidió devolverla al
+           grupo "💼 Comisiones" y partirla en 2 pantallas — ver
+           vista-comisionesDevueltas (renombrada "por Cliente") y
+           vista-comisionesDevueltasPorHipodromo, ambas más abajo. -->
       <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️<span class="nav-lbl"> Eliminar Planos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="montosApostados" onclick="mostrarVista('montosApostados', this)">💰<span class="nav-lbl"> Montos Apostados</span></button>
-      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️<span class="nav-lbl"> Comisiones Devueltas</span></button>
       <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "crea
            en apuesta un pestaña que diga Cargar Winners" — respondió "crea
            la pestaña despues te explico como es" cuando se le preguntó el
@@ -671,6 +685,17 @@
            una nueva que se va a llamar comsiones totales por hipodromo" —
            ver vista-comisionesTotalesPorHipodromo más abajo. -->
       <button type="button" class="nav-item nav-child" data-vista="comisionesTotalesPorHipodromo" onclick="mostrarVista('comisionesTotalesPorHipodromo', this)">🏇<span class="nav-lbl"> Comisiones Totales por Hipódromo</span></button>
+      <!-- 24-09-2026 (vigesimocuarta ronda), a pedido del usuario: "la
+           venta comisiones devueltas metela en la pestaña comisiones...
+           colocale como nombre comisiones devuelta por hipodromo" (esta
+           es NUEVA, agrupada por hipódromo > carrera, sumando entre TODOS
+           los clientes) y "crea otra ventana igual en comisiones que se
+           llame comisiones devueltas por cliente" (esta es la pantalla
+           que YA existía como "Comisiones Devueltas" — mismo backend
+           /comisiones-devueltas, mismo id de vista, solo se le cambia la
+           etiqueta y se le agrega el total general que pidió). -->
+      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltasPorHipodromo" onclick="mostrarVista('comisionesDevueltasPorHipodromo', this)">↩️<span class="nav-lbl"> Comisiones Devueltas por Hipódromo</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">👤<span class="nav-lbl"> Comisiones Devueltas por Cliente</span></button>
       <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳<span class="nav-lbl"> Saldo Comisiones</span></button>
     </div>
 
@@ -712,7 +737,7 @@
     <section class="vista activa" id="vista-cargarPlanos">
       <div class="card">
         <h2>📥 Cargar Planos</h2>
-        <p class="desc">Pegá el plano de una carrera, metés la pizarra (orden de llegada) y le das <b>Calcular</b>. Ya tiene programadas las modalidades de Tercios (1p...10p, 1/2, 2n, 3n, 2y2, 2y3, pp) más el sistema de cuotas 10/N, con el 5% de comisión y la opción de "cruzar jugadas" que confirmaste. <span class="badge-pendiente">Formato exacto de 10/N todavía en revisión</span></p>
+        <p class="desc">Pega el plano de una carrera, metes la pizarra (orden de llegada) y le das <b>Calcular</b>. Ya tiene programadas las modalidades de Tercios (1p...10p, 1/2, 2n, 3n, 2y2, 2y3, pp) más el sistema de cuotas 10/N, con el 5% de comisión y la opción de "cruzar jugadas" que confirmaste. <span class="badge-pendiente">Formato exacto de 10/N todavía en revisión</span></p>
 
         <div id="selectorPlanoCompacto">
           <div>
@@ -743,7 +768,7 @@
           </div>
         </div>
 
-        <label for="txtPlano">Plano (pegá aquí las jugadas — podés pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
+        <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
         <textarea id="txtPlano" rows="14"></textarea>
 
         <div class="btn-fila">
@@ -771,7 +796,7 @@
     <section class="vista" id="vista-cargarRemate">
       <div class="card">
         <h2>🏆 Cargar Remate</h2>
-        <p class="desc">Pegá el remate (cada línea: número de ejemplar, caballo, monto y cliente), metés el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular y Guardar</b>. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completá "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
+        <p class="desc">Pega el remate (cada línea: número de ejemplar, caballo, monto y cliente), metes el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular y Guardar</b>. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completa "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
 
         <div class="fila">
           <div>
@@ -801,8 +826,8 @@
           </div>
         </div>
 
-        <label for="txtRemate">Remate (pegá aquí el mensaje completo)</label>
-        <textarea id="txtRemate" rows="14" placeholder="Pegá acá el remate, con el encabezado, cada línea numerada y el PAGANDO/GARANTIZA/PAGA $X"></textarea>
+        <label for="txtRemate">Remate (pega aquí el mensaje completo)</label>
+        <textarea id="txtRemate" rows="14" placeholder="Pega acá el remate, con el encabezado, cada línea numerada y el PAGANDO/GARANTIZA/PAGA $X"></textarea>
 
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" onclick="calcularRemate()">🧮 Calcular y Guardar</button>
@@ -820,10 +845,10 @@
     <section class="vista" id="vista-traspasosJugadas">
       <div class="card">
         <h2>🔁 Traspasos de Jugadas</h2>
-        <p class="desc">Para cuando una jugada quedó cargada con el nombre de cliente equivocado, o hay que pasarle una jugada de un cliente a otro: pegá el plano (o cargá el que ya está en "Cargar Planos"), elegí qué nombre cambiar y por cuál, y generá un plano nuevo con el cambio ya aplicado — listo para pegar de vuelta en "Cargar Planos" y recalcular. Esto NO recalcula nada acá — solo arma el texto del plano con los nombres ya cambiados.</p>
+        <p class="desc">Para cuando una jugada quedó cargada con el nombre de cliente equivocado, o hay que pasarle una jugada de un cliente a otro: pega el plano (o carga el que ya está en "Cargar Planos"), elige qué nombre cambiar y por cuál, y genera un plano nuevo con el cambio ya aplicado — listo para pegar de vuelta en "Cargar Planos" y recalcular. Esto NO recalcula nada acá — solo arma el texto del plano con los nombres ya cambiados.</p>
 
         <label for="txtTraspasoOriginal">Plano original</label>
-        <textarea id="txtTraspasoOriginal" rows="12" placeholder="Pegá acá el plano..."></textarea>
+        <textarea id="txtTraspasoOriginal" rows="12" placeholder="Pega acá el plano..."></textarea>
         <div class="btn-fila" style="margin-top:8px; margin-bottom:16px;">
           <button class="btn btn-secundario" type="button" onclick="cargarPlanoActualEnTraspaso()">📋 Cargar el plano actual de "Cargar Planos"</button>
           <button class="btn btn-secundario" type="button" onclick="detectarJugadoresTraspaso()">🔍 Detectar jugadores</button>
@@ -832,7 +857,7 @@
         <div id="chipsJugadoresTraspaso" class="chips-jugadores" style="display:none; margin-bottom:18px;"></div>
 
         <label>Cambios de nombre</label>
-        <p class="desc" style="margin-bottom:8px;">Agregá uno o varios cambios — cada uno reemplaza TODAS las veces que aparece ese nombre en el plano (tanto donde jugó como donde banqueó).</p>
+        <p class="desc" style="margin-bottom:8px;">Agrega uno o varios cambios — cada uno reemplaza TODAS las veces que aparece ese nombre en el plano (tanto donde jugó como donde banqueó).</p>
         <div id="filasTraspaso"></div>
         <div class="btn-fila" style="margin-bottom:16px;">
           <button class="btn btn-secundario" type="button" onclick="agregarFilaTraspaso()">+ Agregar cambio</button>
@@ -854,7 +879,7 @@
       <div class="card">
         <h2>🎯 Tablas Fijas y Marcas</h2>
         <p class="desc">
-          Pegá el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elegí el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> quedan esperando que les asignes quién banquea, más abajo en "Pendientes de resolver". Si una carrera no tiene NINGÚN Tercios en vivo, igual podés ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
+          Pega el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elige el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> quedan esperando que les asignes quién banquea, más abajo en "Pendientes de resolver". Si una carrera no tiene NINGÚN Tercios en vivo, igual puedes ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
           <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos más adelante</span>
         </p>
 
@@ -875,8 +900,8 @@
           </div>
         </div>
 
-        <label for="txtAdelantadas">Plano de jugadas adelantadas (pegá aquí el mensaje completo)</label>
-        <textarea id="txtAdelantadas" rows="14" placeholder="Pegá acá el plano, con cada bloque &quot;JUGANDO &lt;cliente&gt;&quot; y sus líneas numeradas por carrera"></textarea>
+        <label for="txtAdelantadas">Plano de jugadas adelantadas (pega aquí el mensaje completo)</label>
+        <textarea id="txtAdelantadas" rows="14" placeholder="Pega acá el plano, con cada bloque &quot;JUGANDO &lt;cliente&gt;&quot; y sus líneas numeradas por carrera"></textarea>
 
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" onclick="calcularAdelantadas()">🧮 Revisar</button>
@@ -918,7 +943,7 @@
     <section class="vista" id="vista-eliminarPlanos">
       <div class="card">
         <h2>🗑️ Eliminar Planos</h2>
-        <p class="desc">Elegí el día, después el hipódromo y la carrera. Desde el plano podés editar un ticket (cliente, banquero o monto) o eliminar el plano completo — se puede restaurar durante 30 días desde Administración &gt; 🗑️ Planos Eliminados, y cada cambio queda anotado en 🔔 Alertas.</p>
+        <p class="desc">Elige el día, después el hipódromo y la carrera. Desde el plano puedes editar un ticket (cliente, banquero o monto) o eliminar el plano completo — se puede restaurar durante 30 días desde Administración &gt; 🗑️ Planos Eliminados, y cada cambio queda anotado en 🔔 Alertas.</p>
         <div id="listaEliminarPlanos"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
@@ -933,7 +958,7 @@
     <section class="vista" id="vista-montosApostados">
       <div class="card">
         <h2>💰 Montos Apostados</h2>
-        <p class="desc">Cuánto apostó cada cliente en el grupo esa fecha, sumando Tercios, Remate y Jugadas Adelantadas. Hacé clic en un cliente para desplegar toda su información (carrera por carrera).</p>
+        <p class="desc">Cuánto apostó cada cliente en el grupo esa fecha, sumando Tercios, Remate y Jugadas Adelantadas. Haz clic en un cliente para desplegar toda su información (carrera por carrera).</p>
         <div class="fila" style="align-items:flex-end;">
           <div>
             <label for="inpFechaMontosApostados">Fecha</label>
@@ -943,7 +968,7 @@
             <button class="btn btn-primario" type="button" onclick="buscarMontosApostados()">🔎 Buscar</button>
           </div>
         </div>
-        <div id="listaMontosApostados"><div class="placeholder-card">Elegí una fecha y dale Buscar.</div></div>
+        <div id="listaMontosApostados"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
       </div>
     </section>
 
@@ -990,12 +1015,12 @@
              queda guardado con motivo y quién lo hizo). -->
         <div class="card" style="margin-top:18px;">
           <h3 style="margin:0 0 10px;">✏️ Ajustar pozo de un cliente</h3>
-          <p class="desc">Elegí el cliente (solo aparecen los de cuenta "Avalado", que son los que tienen pozo) y aplicá un ajuste: positivo para aumentar, negativo para disminuir. Queda guardado con motivo y con quién lo hizo — nunca se pisa el pozo de un golpe.</p>
+          <p class="desc">Elige el cliente (solo aparecen los de cuenta "Avalado", que son los que tienen pozo) y aplica un ajuste: positivo para aumentar, negativo para disminuir. Queda guardado con motivo y con quién lo hizo — nunca se pisa el pozo de un golpe.</p>
           <div class="fila" style="align-items:flex-end;">
             <div>
               <label>Cliente</label>
               <select id="selPozoAjusteCliente" onchange="cambiarClientePozoAjuste()">
-                <option value="">— Elegí un cliente —</option>
+                <option value="">— Elige un cliente —</option>
               </select>
             </div>
             <div><label>Monto del ajuste (+/-)</label><input type="number" id="pozoAjusteMonto" step="0.01" placeholder="Ej: 200 o -150"></div>
@@ -1005,7 +1030,7 @@
           <div id="pozoAjustePozoActual" style="margin-top:10px; font-size:13px; color:var(--text-dim);"></div>
           <table style="margin-top:14px;">
             <thead><tr><th>Cuándo</th><th class="num">Ajuste</th><th class="num">Pozo quedó en</th><th>Motivo</th><th>Usuario</th></tr></thead>
-            <tbody id="tablaHistorialPozoPantallaPozos"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elegí un cliente arriba para ver su historial.</td></tr></tbody>
+            <tbody id="tablaHistorialPozoPantallaPozos"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elige un cliente arriba para ver su historial.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1015,7 +1040,7 @@
     <section class="vista" id="vista-detalladoCliente">
       <div class="card">
         <h2>🧾 Detallado por Cliente</h2>
-        <p class="desc">Lo mismo que Balance General, pero por cuadros: hacé click en un cliente para ver todas sus jugadas de la semana, exactamente como las ve él mismo en su link personalizado. Sirve, entre otras cosas, para mandarle el reporte a mano (con "Copiar Imagen HD") a un cliente que no pueda abrir su link.</p>
+        <p class="desc">Lo mismo que Balance General, pero por cuadros: haz click en un cliente para ver todas sus jugadas de la semana, exactamente como las ve él mismo en su link personalizado. Sirve, entre otras cosas, para mandarle el reporte a mano (con "Copiar Imagen HD") a un cliente que no pueda abrir su link.</p>
         <div class="grid-clientes-detallado" id="gridClientesDetallado">
           <div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>
         </div>
@@ -1098,7 +1123,7 @@
     <section class="vista" id="vista-cierreFinal">
       <div class="card">
         <h2>🏁 Cierre Final</h2>
-        <p class="desc">El saldo definitivo de cada cliente para la semana completa — todos los ítems de todos los planos/carreras de esos 7 días, ya sumados. El sistema guarda como máximo las últimas 2 semanas cerradas, más la semana que se está trabajando actualmente (3 en total); usá los botones de abajo para ver una semana anterior.</p>
+        <p class="desc">El saldo definitivo de cada cliente para la semana completa — todos los ítems de todos los planos/carreras de esos 7 días, ya sumados. El sistema guarda como máximo las últimas 2 semanas cerradas, más la semana que se está trabajando actualmente (3 en total); usa los botones de abajo para ver una semana anterior.</p>
 
         <div class="subnav" id="selectorSemanaCierre">
           <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaCierre('actual', this)">Semana actual</button>
@@ -1107,7 +1132,7 @@
         </div>
 
         <label style="margin-top:2px;">Columnas a mostrar</label>
-        <p class="desc" style="margin-bottom:8px;">Por defecto solo se ve el saldo definitivo de cada cliente, que es lo que mayormente se envía. Marcá acá si además necesitás ver cuántas jugadas hizo, cuánto ganó o cuánto perdió — esto también se refleja en lo que copiás/descargás.</p>
+        <p class="desc" style="margin-bottom:8px;">Por defecto solo se ve el saldo definitivo de cada cliente, que es lo que mayormente se envía. Marca acá si además necesitas ver cuántas jugadas hizo, cuánto ganó o cuánto perdió — esto también se refleja en lo que copias/descargas.</p>
         <div class="fila" style="margin-bottom:6px;">
           <div class="check-fila" style="margin-bottom:0;">
             <input type="checkbox" id="chkColJugadas" onchange="actualizarColumnasCierre()">
@@ -1153,15 +1178,15 @@
     </section>
 
     <!-- ============ SEMANA POR DÍAS (24-09-2026) ============
-         "creá una pestaña en apuestas que diga semana por días... allí
-         me mostrás cada cliente con sus totales por días" — una fila por
+         "crea una pestaña en apuestas que diga semana por días... allí
+         me muestras cada cliente con sus totales por días" — una fila por
          cliente, una columna por día de la semana (lunes a domingo) con
          su resultado neto ESE día, más el total de la semana al final.
          Mismo selector de 3 semanas que Cierre Final, orden alfabético. -->
     <section class="vista" id="vista-semanaPorDias">
       <div class="card">
         <h2>📅 Semana por Días</h2>
-        <p class="desc">El resultado neto de cada cliente, día por día — Tercios, Remate y Jugadas Adelantadas ya sumados. Para ver el detalle de una jugada puntual, andá a la ficha del cliente.</p>
+        <p class="desc">El resultado neto de cada cliente, día por día — Tercios, Remate y Jugadas Adelantadas ya sumados. Para ver el detalle de una jugada puntual, anda a la ficha del cliente.</p>
 
         <div class="subnav" id="selectorSemanaPorDias">
           <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaPorDias('actual', this)">Semana actual</button>
@@ -1218,7 +1243,7 @@
     <section class="vista" id="vista-comisionesPorCarrera">
       <div class="card">
         <h2>📈 Comisión por Carrera de Clientes</h2>
-        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec), agrupado por DÍA — hacé clic en un día para ver sus hipódromos, clic en un hipódromo para ver sus carreras, y clic en una carrera para ver el total de comisión de cada cliente (si un cliente tuvo más de una jugada en esa carrera, su flechita se despliega con el detalle jugada por jugada). Ya sale de sumar la comisión real de cada plano guardado en "Cargar Planos".</p>
+        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec), agrupado por DÍA — haz clic en un día para ver sus hipódromos, clic en un hipódromo para ver sus carreras, y clic en una carrera para ver el total de comisión de cada cliente (si un cliente tuvo más de una jugada en esa carrera, su flechita se despliega con el detalle jugada por jugada). Ya sale de sumar la comisión real de cada plano guardado en "Cargar Planos".</p>
 
         <div class="subnav" id="selectorSemanaComisiones">
           <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaComisiones('actual', this)">Semana actual</button>
@@ -1305,7 +1330,61 @@
       </div>
     </section>
 
-    <!-- ============ COMISIONES DEVUELTAS ============
+    <!-- ============ COMISIONES DEVUELTAS POR HIPÓDROMO ============
+         24-09-2026 (vigesimocuarta ronda), pantalla NUEVA a pedido del
+         usuario: "la venta comisiones devueltas metela en la pestaña
+         comisiones... colocale como nombre comisiones devuelta por
+         hipodromo, alli debo ver ordenado por hipodromo por carrera,
+         cuanto se a devuelto de comision". Mismo universo de apuestas
+         que "Comisiones Devueltas por Cliente" (de abajo) — % propio de
+         cada cliente sobre lo que apostó, UN día puntual — pero acá se
+         suma entre TODOS los clientes, agrupado por hipódromo > carrera
+         (mismo formato visual y de exportación que ya usa "🏇 Comisiones
+         Totales por Hipódromo", solo que este monto es lo DEVUELTO a los
+         clientes, no lo ganado por el grupo). -->
+    <section class="vista" id="vista-comisionesDevueltasPorHipodromo">
+      <div class="card">
+        <h2>↩️ Comisiones Devueltas por Hipódromo</h2>
+        <p class="desc">Cuánto se devolvió de comisión ese día por el % propio de los clientes, sumado entre todos y agrupado por hipódromo &gt; carrera.</p>
+
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpFechaComisionesDevueltasHipodromo">Fecha</label>
+            <input type="date" id="inpFechaComisionesDevueltasHipodromo">
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-primario" type="button" onclick="buscarComisionesDevueltasPorHipodromo()">🔎 Buscar</button>
+          </div>
+        </div>
+
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesDevueltasHipodromoTexto()">📋 Descargar en Texto</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesDevueltasHipodromoImagen()">📸 Descargar en Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesDevueltasHipodromoPDF()">📄 Descargar en PDF</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesDevueltasHipodromoExcel()">📊 Descargar en Excel</button>
+          <span class="toast-copiado" id="toastComisionesDevueltasHipodromo"></span>
+        </div>
+
+        <div id="comisionesDevueltasHipodromoCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="encabezado-captura">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="hipodromoDevueltasNombreGrupoCaptura">↩️ Comisiones Devueltas por Hipódromo / Carrera</div>
+              <div class="fecha" id="hipodromoDevueltasFechaCaptura"></div>
+            </div>
+          </div>
+
+          <div class="comision-caja" style="margin:14px 0;">
+            <span class="etiqueta">↩️ Total devuelto del día</span>
+            <span class="monto" id="montoComisionesDevueltasHipodromoTotal">$0.00</span>
+          </div>
+
+          <div id="listaComisionesDevueltasPorHipodromo"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMISIONES DEVUELTAS POR CLIENTE ============
          REAL desde el 23-09-2026 (duodécima ronda) — la fórmula que
          llevaba varias rondas pendiente ya quedó confirmada: cada
          cliente con % propio configurado (jugadores.comision_propia, el
@@ -1314,11 +1393,16 @@
          su resultado normal. Usa GET /comisiones-devueltas?fecha=,
          "ordenado como Montos Apostados" (pedido explícito del usuario):
          una fecha, un cliente por fila con su total devuelto ese día, y
-         al expandirlo, el detalle agrupado por hipódromo > carrera. -->
+         al expandirlo, el detalle agrupado por hipódromo > carrera.
+         Renombrada "Comisiones Devueltas por Cliente" el 24-09-2026
+         (vigesimocuarta ronda, para distinguirla de "por Hipódromo" de
+         arriba) — mismo id de vista y mismo backend de siempre, solo
+         cambió la etiqueta del nav y se le agregó el total general que
+         pidió el usuario ("ambas pantallas con total devolucion"). -->
     <section class="vista" id="vista-comisionesDevueltas">
       <div class="card">
-        <h2>↩️ Comisiones Devueltas</h2>
-        <p class="desc">Cuánto se le devuelve a cada cliente por su % propio configurado, sobre TODO lo que apostó esa fecha (gane o pierda cada jugada puntual). Hacé clic en un cliente para ver el detalle por hipódromo y carrera.</p>
+        <h2>👤 Comisiones Devueltas por Cliente</h2>
+        <p class="desc">Cuánto se le devuelve a cada cliente por su % propio configurado, sobre TODO lo que apostó esa fecha (gane o pierda cada jugada puntual). Haz clic en un cliente para ver el detalle por hipódromo y carrera.</p>
         <div class="fila" style="align-items:flex-end;">
           <div>
             <label for="inpFechaComisionesDevueltas">Fecha</label>
@@ -1328,15 +1412,28 @@
             <button class="btn btn-primario" type="button" onclick="buscarComisionesDevueltas()">🔎 Buscar</button>
           </div>
         </div>
-        <div id="listaComisionesDevueltas"><div class="placeholder-card">Elegí una fecha y dale Buscar.</div></div>
+        <div class="comision-caja" style="margin:14px 0;">
+          <span class="etiqueta">↩️ Total devuelto del día</span>
+          <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
+        </div>
+        <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
       </div>
     </section>
 
-    <!-- ============ SALDO COMISIONES ============ -->
+    <!-- ============ SALDO COMISIONES ============
+         REAL desde el 24-09-2026 (vigesimocuarta ronda, a pedido del
+         usuario: "saldo comisiones si esta sacando el % que se le
+         devuelve a cada cliente" — hasta esta ronda mostraba datos de
+         ejemplo fijos). Usa GET /saldo-comisiones?semana=actual, el
+         mismo % propio por cliente y el mismo cálculo "% de todo lo
+         apostado como jugador, gane o pierda" que ya usan "Comisiones
+         Devueltas por Cliente" (por día) y el ítem "{cliente} -
+         PORCENTAJE" de Balance General/Cierre Final — acá, sumado para
+         TODA la semana actual. -->
     <section class="vista" id="vista-saldoComisiones">
       <div class="card">
         <h2>💳 Saldo Comisiones</h2>
-        <p class="desc">Por cliente: su % de devolución configurado y cuánto lleva acumulado devuelto en la semana actual. <span class="badge-pendiente">Datos de ejemplo</span></p>
+        <p class="desc">Por cliente: su % de devolución configurado y cuánto lleva acumulado devuelto en la semana actual.</p>
         <table>
           <thead><tr><th>Cliente</th><th class="num">% Devolución</th><th class="num">Devuelto esta semana</th></tr></thead>
           <tbody id="tablaSaldoComisiones"></tbody>
@@ -1427,7 +1524,7 @@
         <div class="fila">
           <div>
             <label for="inpNombreHipodromo">Nombre del hipódromo</label>
-            <input type="text" id="inpNombreHipodromo" placeholder="Empezá a escribir…" list="listaHipodromosConocidos" autocomplete="off">
+            <input type="text" id="inpNombreHipodromo" placeholder="Empieza a escribir…" list="listaHipodromosConocidos" autocomplete="off">
             <!-- 22-09-2026, a pedido del usuario: que al crear un hipódromo quede
                  "guardado" para que la próxima vez no haya que escribirlo
                  completo — en este mockup se simula con un <datalist> HTML
@@ -1566,7 +1663,7 @@ Pizarra: [se llena al calcular]
           <div><label for="inpFechaEliminarJornada">Día a eliminar</label><input type="date" id="inpFechaEliminarJornada" onchange="cargarResumenJornada()"></div>
         </div>
 
-        <div id="resumenEliminarJornada" class="resultado-vacio">Elegí un día para ver qué hay cargado.</div>
+        <div id="resumenEliminarJornada" class="resultado-vacio">Elige un día para ver qué hay cargado.</div>
 
         <div class="fila" id="filaClaveEliminarJornada" style="display:none; margin-top:14px; padding:12px 14px; background:#fdecea; border:1.5px solid #b3261e; border-radius:8px;">
           <div style="width:100%;">
@@ -1624,7 +1721,7 @@ Pizarra: [se llena al calcular]
 //
 // OJO: si iniciaste sesión ANTES de este cambio, tu sesión guardada
 // todavía no trae moduloHipismoHabilitado (se agregó recién al login) —
-// cerrá sesión y volvé a entrar una vez para que se actualice.
+// cierra sesión y vuelve a entrar una vez para que se actualice.
 // ------------------------------------------------------------------
 let TOKEN = localStorage.getItem('zenyatta_token') || null;
 let GRUPO = null;
@@ -1734,7 +1831,11 @@ function pintarLogosGrupo() {
     // de "💼 Comisiones" (ver vista-comisionesPorCarrera y
     // vista-comisionesTotalesPorHipodromo).
     comisionesPorCarreraNombreGrupoCaptura: `📈 Comisión por Carrera de Clientes — ${nombreGrupo} 🇻🇪`,
-    hipodromoNombreGrupoCaptura: `🏇 Comisiones por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`
+    hipodromoNombreGrupoCaptura: `🏇 Comisiones por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`,
+    // 24-09-2026 (vigesimocuarta ronda): título de captura de "↩️
+    // Comisiones Devueltas por Hipódromo" (ver vista-
+    // comisionesDevueltasPorHipodromo).
+    hipodromoDevueltasNombreGrupoCaptura: `↩️ Comisiones Devueltas por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`
   };
   Object.keys(titulos).forEach(id => {
     const el = document.getElementById(id);
@@ -1789,7 +1890,14 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // criterio de fecha+Buscar que Comisiones Devueltas/Montos Apostados —
   // ver pintarComisionesPorHipodromo() más abajo.
   comisionesTotalesPorHipodromo: () => pintarComisionesPorHipodromo(),
+  // 24-09-2026 (vigesimocuarta ronda): "Comisiones Devueltas por
+  // Hipódromo" es nueva (mismo criterio de fecha+Buscar) y "Saldo
+  // Comisiones" pasó de datos de ejemplo a real — ver
+  // pintarComisionesDevueltasPorHipodromo() y pintarSaldoComisiones()
+  // más abajo.
+  comisionesDevueltasPorHipodromo: () => pintarComisionesDevueltasPorHipodromo(),
   comisionesDevueltas: () => pintarComisionesDevueltas(),
+  saldoComisiones: () => pintarSaldoComisiones(),
   montosApostados: () => pintarMontosApostados()
 };
 function semanaActivaDeSelector(idSelector) {
@@ -1963,7 +2071,7 @@ async function calcularPlano() {
   const caja = document.getElementById('resultadoCaja');
 
   if (!hipodromoNombre) {
-    vacio.textContent = 'Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).';
+    vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
@@ -2010,7 +2118,7 @@ async function calcularPlano() {
 
   let salida = data.plano.texto_resultado;
   if (data.sinReconocer && data.sinReconocer.length) {
-    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+    salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
 
   vacio.style.display = 'none';
@@ -2045,13 +2153,13 @@ async function calcularRemate() {
   const caja = document.getElementById('resultadoCajaRemate');
 
   if (!hipodromoNombre) {
-    vacio.textContent = 'Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).';
+    vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
   }
   if (!texto.trim()) {
-    vacio.textContent = 'Pegá el remate primero.';
+    vacio.textContent = 'Pega el remate primero.';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
@@ -2084,7 +2192,7 @@ async function calcularRemate() {
 
   let salida = data.textoResultado;
   if (data.sinReconocer && data.sinReconocer.length) {
-    salida = '⚠️ Líneas que no reconocí (revisá el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+    salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
 
   vacio.style.display = 'none';
@@ -2111,10 +2219,10 @@ function copiarResultadoRemate() {
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
-      alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+      alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
     });
   } else {
-    alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+    alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
   }
 }
 
@@ -2152,7 +2260,7 @@ function mostrarVacioAdelantadas(texto) {
 
 async function calcularAdelantadas() {
   const texto = document.getElementById('txtAdelantadas').value;
-  if (!texto.trim()) { mostrarVacioAdelantadas('Pegá el plano primero.'); return; }
+  if (!texto.trim()) { mostrarVacioAdelantadas('Pega el plano primero.'); return; }
   mostrarVacioAdelantadas('Revisando…');
   let data;
   try {
@@ -2163,11 +2271,11 @@ async function calcularAdelantadas() {
   }
   pintarPreviewAdelantadas(data.jugadas);
   if (data.sinReconocer && data.sinReconocer.length) {
-    alert('⚠️ No reconocí estas líneas (revisá el formato):\n\n' + data.sinReconocer.join('\n'));
+    alert('⚠️ No reconocí estas líneas (revisa el formato):\n\n' + data.sinReconocer.join('\n'));
   }
   const conError = data.jugadas.filter(j => j.errorCalculo);
   if (conError.length) {
-    alert('⚠️ Hay ' + conError.length + ' jugada(s) con la multiplicación mal calculada (marcadas en rojo abajo) — corregí el plano antes de Guardar.');
+    alert('⚠️ Hay ' + conError.length + ' jugada(s) con la multiplicación mal calculada (marcadas en rojo abajo) — corrige el plano antes de Guardar.');
   }
 }
 
@@ -2176,8 +2284,8 @@ async function guardarAdelantadas() {
   const hipodromoNombre = document.getElementById('selHipodromoAdelantadas').value;
   const fecha = document.getElementById('inpFechaAdelantadas').value;
   const comisionPorcentaje = document.getElementById('inpComisionAdelantadas').value;
-  if (!texto.trim()) { mostrarVacioAdelantadas('Pegá el plano primero.'); return; }
-  if (!hipodromoNombre) { mostrarVacioAdelantadas('Elegí un hipódromo primero (creá uno en Administración > Hipódromos si todavía no tenés ninguno).'); return; }
+  if (!texto.trim()) { mostrarVacioAdelantadas('Pega el plano primero.'); return; }
+  if (!hipodromoNombre) { mostrarVacioAdelantadas('Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).'); return; }
   if (!fecha) { mostrarVacioAdelantadas('Falta el día en que se corren estas carreras.'); return; }
 
   mostrarVacioAdelantadas('Guardando…');
@@ -2257,7 +2365,7 @@ function textoMontoConSigno(nombre, monto) {
 
 async function enviarBanqueo(jugadaId, clienteNombre) {
   const lista = (BANQUEADORES_POR_JUGADA[jugadaId] || []).filter(b => b.nombre && b.nombre.trim());
-  if (!lista.length) { alert('Agregá al menos un banquero.'); return; }
+  if (!lista.length) { alert('Agrega al menos un banquero.'); return; }
   if (lista.length > MAX_BANQUEADORES_MARCA) { alert(`Una Marca admite hasta ${MAX_BANQUEADORES_MARCA} banqueadores.`); return; }
   let data;
   try {
@@ -2376,7 +2484,7 @@ function filaJugadaPendienteHtml(carrera, j) {
     const botonAgregarDeshabilitado = lista.length >= MAX_BANQUEADORES_MARCA;
     extra = `
       <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
-        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigná quién banquea, hasta ${MAX_BANQUEADORES_MARCA} (los % deben sumar 100):</div>
+        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigna quién banquea, hasta ${MAX_BANQUEADORES_MARCA} (los % deben sumar 100):</div>
         ${lista.map((b, idx) => filaBanqueadorHtml(j.id, idx, b)).join('')}
         <div class="btn-fila">
           <button class="btn btn-secundario" type="button" ${botonAgregarDeshabilitado ? 'disabled title="Ya son 4 banqueadores"' : ''} onclick="agregarBanquero('${j.id}')">+ Agregar banquero</button>
@@ -2480,10 +2588,10 @@ function copiarResultado() {
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
-      alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+      alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
     });
   } else {
-    alert('No se pudo copiar automáticamente — seleccioná el texto y copiá manualmente.');
+    alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
   }
 }
 
@@ -2532,7 +2640,7 @@ async function cargarClientesReales() {
   CLIENTES_HIPISMO_CACHE = jugadores;
   poblarSelectPozoAjusteCliente();
   if (!jugadores.length) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calculá un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
     return;
   }
   tbody.innerHTML = jugadores.map(j => `
@@ -2660,7 +2768,7 @@ function abrirCrearCliente() {
 
 async function guardarNuevoCliente() {
   const nombre = document.getElementById('nvoCteNombre').value.trim();
-  if (!nombre) { alert('Ingresá el nombre del cliente.'); return; }
+  if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
   const payload = {
     nombre,
     telefono: document.getElementById('nvoCteTelefono').value.trim(),
@@ -2745,7 +2853,7 @@ async function pintarDetalleCliente() {
         <div id="detCtePozoWrap" style="display:${j.tipo_cuenta === 'avalado' ? 'block' : 'none'};">
           <label>Pozo actual</label>
           <div style="padding:10px 12px; background:var(--card-2); border:1px solid var(--card-border); border-radius:8px; font-weight:700;">${formatMontoTabla(j.pozo_inicial || 0)}</div>
-          <div style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Para cambiarlo usá "Ajustar pozo" ahí abajo — no se pisa directo.</div>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Para cambiarlo usa "Ajustar pozo" ahí abajo — no se pisa directo.</div>
         </div>
       </div>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
@@ -2805,7 +2913,7 @@ async function guardarDetalleCliente(id) {
     avaladoPorId: document.getElementById('detCteAval').value || null,
     porcentajeDevueltoDestino: document.getElementById('detCteDestino').value
   };
-  if (!payload.nombre) { alert('Ingresá el nombre del cliente.'); return; }
+  if (!payload.nombre) { alert('Ingresa el nombre del cliente.'); return; }
   try {
     await apiHipismo(`/api/jugadores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   } catch (e) {
@@ -2860,9 +2968,9 @@ function copiarLinkClienteHipismo(token, nombre) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(mensaje)
       .then(() => alert(`✅ Mensaje de ${nombre} copiado — pegalo directo en WhatsApp:\n\n${mensaje}`))
-      .catch(() => prompt(`Copiá el mensaje para ${nombre}:`, mensaje));
+      .catch(() => prompt(`Copia el mensaje para ${nombre}:`, mensaje));
   } else {
-    prompt(`Copiá el mensaje para ${nombre}:`, mensaje);
+    prompt(`Copia el mensaje para ${nombre}:`, mensaje);
   }
 }
 
@@ -2915,23 +3023,67 @@ async function pintarBalanceGeneral() {
   listaPierden.innerHTML = '';
   listaGanan.innerHTML = '';
 
-  const pierden = data.clientes.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
-  const ganan = data.clientes.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+  // 24-09-2026 (vigesimocuarta ronda), a pedido del usuario: "debo ver en
+  // balances... que son todas sus jugadas como cliente y otro item
+  // siempre abajo del cliente a que pertenezca en la celda de abajo
+  // llamado en este caso Sammy Porcentajes" — el ítem "{cliente} -
+  // PORCENTAJE" (ver agregarPorcentajeDevuelto en routes/hipismo.js) ya
+  // venía en data.clientes desde la ronda "undécima", pero acá se pintaba
+  // como un cliente más, ordenado por MONTO junto a los demás — podía
+  // salir en cualquier parte de la lista, lejos del cliente al que
+  // pertenece. Ahora se separa aparte y se inserta SIEMPRE justo debajo
+  // de la fila de su cliente base (en la misma columna Pierden/Ganan en
+  // la que haya caído ese cliente, sin importar que el "% Porcentaje" en
+  // sí sea siempre positivo).
+  const SUFIJO_PORCENTAJE = ' - PORCENTAJE';
+  const normales = data.clientes.filter(c => !c.nombre.endsWith(SUFIJO_PORCENTAJE));
+  const porcentajePorBase = new Map();
+  data.clientes.filter(c => c.nombre.endsWith(SUFIJO_PORCENTAJE)).forEach(p => {
+    porcentajePorBase.set(p.nombre.slice(0, -SUFIJO_PORCENTAJE.length), p);
+  });
+
+  const pierden = normales.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
+  const ganan = normales.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+  const basesConPorcentajePintado = new Set();
+
+  function filaBalance(nombre, monto, clase) {
+    const fila = document.createElement('div');
+    fila.className = 'balance-fila ' + clase;
+    const signo = monto > 0 ? '+' : '';
+    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">${signo}${formatMonto(monto)}</span>`;
+    return fila;
+  }
+  function filaPorcentaje(p) {
+    const fila = document.createElement('div');
+    fila.className = 'balance-fila balance-fila-porcentaje';
+    fila.innerHTML = `<span class="nombre">↳ ${formatNombre(p.nombre)}</span><span class="monto">+${formatMonto(p.saldo)}</span>`;
+    return fila;
+  }
 
   pierden.forEach(c => {
-    const fila = document.createElement('div');
-    fila.className = 'balance-fila perdedor';
-    fila.innerHTML = `<span class="nombre">${formatNombre(c.nombre)}</span><span class="monto">${formatMonto(c.saldo)}</span>`;
-    listaPierden.appendChild(fila);
+    listaPierden.appendChild(filaBalance(c.nombre, c.saldo, 'perdedor'));
+    const p = porcentajePorBase.get(c.nombre);
+    if (p) { listaPierden.appendChild(filaPorcentaje(p)); basesConPorcentajePintado.add(p.nombre); }
   });
   ganan.forEach(c => {
-    const fila = document.createElement('div');
-    fila.className = 'balance-fila ganador';
-    fila.innerHTML = `<span class="nombre">${formatNombre(c.nombre)}</span><span class="monto">+${formatMonto(c.saldo)}</span>`;
-    listaGanan.appendChild(fila);
+    listaGanan.appendChild(filaBalance(c.nombre, c.saldo, 'ganador'));
+    const p = porcentajePorBase.get(c.nombre);
+    if (p) { listaGanan.appendChild(filaPorcentaje(p)); basesConPorcentajePintado.add(p.nombre); }
   });
-  if (!pierden.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
-  if (!ganan.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
+  // Un "% Porcentaje" cuyo cliente base NO tuvo jugadas propias esta
+  // semana (ej. un aval que solo recibe % de otro, sin jugar él mismo)
+  // no tiene dónde anidarse — se muestra suelto en Ganan, como siempre
+  // (el % devuelto nunca es negativo).
+  Array.from(porcentajePorBase.values())
+    .filter(p => !basesConPorcentajePintado.has(p.nombre))
+    .sort((a, b) => b.saldo - a.saldo)
+    .forEach(p => listaGanan.appendChild(filaPorcentaje(p)));
+  // Ojo: se chequea .children.length del contenedor (no pierden.length/
+  // ganan.length) porque un "% Porcentaje" suelto (sin cliente base en
+  // esta lista) puede haber quedado pintado en listaGanan aunque `ganan`
+  // en sí esté vacío — no hay que pisar esa fila con el placeholder.
+  if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
+  if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
 
   // Misma comisión total que Cierre Final (Tercios + Remate + Adelantadas
   // — ver el arreglo en pintarCierreFinal más abajo), para que los 2
@@ -2969,7 +3121,13 @@ async function pintarDetalladoCliente() {
     grid.innerHTML = `<div class="placeholder-card" style="grid-column:1/-1;">No se pudo cargar: ${e.message}</div>`;
     return;
   }
-  const clientes = data.clientes.slice().sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  // 24-09-2026: el ítem "{cliente} - PORCENTAJE" (% devuelto, ver la nota
+  // grande en pintarBalanceGeneral) no es un cliente real con jugadas ni
+  // con link propio — se excluye acá para no ofrecer un cuadro que al
+  // hacerle click no tiene detalle-semana que mostrar.
+  const clientes = data.clientes
+    .filter(c => !c.nombre.endsWith(' - PORCENTAJE'))
+    .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   grid.innerHTML = '';
   if (!clientes.length) {
     grid.innerHTML = '<div class="placeholder-card" style="grid-column:1/-1;">No hay clientes con jugadas en esta semana.</div>';
@@ -3155,7 +3313,7 @@ function mostrarToastDetalleCliente(msg, esError) {
 }
 async function copiarDetalleClienteImagen() {
   if (typeof html2canvas !== 'function') {
-    mostrarToastDetalleCliente('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastDetalleCliente('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -3232,7 +3390,7 @@ function poblarSelectPozoAjusteCliente() {
   const avalados = CLIENTES_HIPISMO_CACHE
     .filter(j => j.tipo_cuenta === 'avalado')
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-  sel.innerHTML = '<option value="">— Elegí un cliente —</option>' +
+  sel.innerHTML = '<option value="">— Elige un cliente —</option>' +
     avalados.map(j => `<option value="${j.id}">${formatNombre(j.nombre)}</option>`).join('');
   if (idPrevio && avalados.some(j => String(j.id) === String(idPrevio))) sel.value = idPrevio;
 }
@@ -3243,7 +3401,7 @@ async function cambiarClientePozoAjuste() {
   const tbody = document.getElementById('tablaHistorialPozoPantallaPozos');
   if (!id) {
     infoEl.textContent = '';
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elegí un cliente arriba para ver su historial.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elige un cliente arriba para ver su historial.</td></tr>';
     return;
   }
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
@@ -3257,7 +3415,7 @@ async function cambiarClientePozoAjuste() {
 
 async function guardarAjustePozoPantallaPozos() {
   const id = document.getElementById('selPozoAjusteCliente').value;
-  if (!id) { alert('Elegí primero un cliente.'); return; }
+  if (!id) { alert('Elige primero un cliente.'); return; }
   await enviarAjustePozo(id, 'pozoAjusteMonto', 'pozoAjusteMotivo', async () => {
     await cargarClientesReales();
     document.getElementById('selPozoAjusteCliente').value = id;
@@ -3337,7 +3495,7 @@ function mostrarToastPozos(msg, esError) {
 
 async function copiarPozosImagen() {
   if (typeof html2canvas !== 'function') {
-    mostrarToastPozos('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastPozos('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -3382,9 +3540,9 @@ function copiarPozosTexto() {
   });
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(() => mostrarToastPozos('✅ Texto copiado — pegalo en el grupo.'))
-      .catch(() => mostrarToastPozos('No se pudo copiar — seleccioná el texto a mano.', true));
+      .catch(() => mostrarToastPozos('No se pudo copiar — selecciona el texto a mano.', true));
   } else {
-    mostrarToastPozos('No se pudo copiar — seleccioná el texto a mano.', true);
+    mostrarToastPozos('No se pudo copiar — selecciona el texto a mano.', true);
   }
 }
 
@@ -3402,9 +3560,9 @@ function mostrarToastBalance(msg, esError) {
 }
 
 async function copiarBalanceImagen() {
-  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function') {
-    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -3430,9 +3588,9 @@ async function copiarBalanceImagen() {
 }
 
 async function descargarBalancePDF() {
-  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
-    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
     return;
   }
   try {
@@ -3452,9 +3610,9 @@ async function descargarBalancePDF() {
 }
 
 function descargarBalanceExcel() {
-  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — espera un momento.', true); return; }
   if (typeof XLSX === 'undefined') {
-    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    mostrarToastBalance('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
     return;
   }
   const entradas = BALANCE_GENERAL_ACTUAL.clientes.map(c => [c.nombre, c.saldo]).sort((a, b) => a[1] - b[1]);
@@ -3512,9 +3670,17 @@ async function pintarCierreFinal(semana) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin jugadas en este rango.</td></tr>';
   } else {
     data.clientes.forEach(c => {
+      // 24-09-2026: el ítem "{cliente} - PORCENTAJE" (% devuelto) ya
+      // sale pegado justo debajo de su cliente base gracias al orden
+      // alfabético de siempre (ver la nota grande en pintarBalanceGeneral
+      // — acá no hace falta reordenar nada) — se le agrega una marca
+      // visual sutil ("↳" + fila más clara) para que se note que es un
+      // renglón de devolución, no otro cliente más.
+      const esPorcentaje = c.nombre.endsWith(' - PORCENTAJE');
       const tr = document.createElement('tr');
+      if (esPorcentaje) tr.className = 'fila-porcentaje';
       tr.innerHTML = `
-        <td>${formatNombre(c.nombre)}</td>
+        <td>${esPorcentaje ? '↳ ' : ''}${formatNombre(c.nombre)}</td>
         <td class="num col-jugadas">${c.jugadas}</td>
         <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
         <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
@@ -3633,7 +3799,7 @@ function mostrarToastSemana(msg, esError) {
 
 async function copiarSemanaImagen() {
   if (typeof html2canvas !== 'function') {
-    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -3660,7 +3826,7 @@ async function copiarSemanaImagen() {
 
 async function descargarSemanaPDF() {
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
-    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
     return;
   }
   try {
@@ -3682,7 +3848,7 @@ async function descargarSemanaPDF() {
 
 function descargarSemanaExcel() {
   if (typeof XLSX === 'undefined') {
-    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
     return;
   }
   const data = SEMANA_POR_DIAS_ACTUAL;
@@ -3731,7 +3897,7 @@ function mostrarToastCierre(msg, esError) {
 
 async function copiarCierreImagen() {
   if (typeof html2canvas !== 'function') {
-    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -3758,7 +3924,7 @@ async function copiarCierreImagen() {
 
 async function descargarCierrePDF() {
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
-    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
     return;
   }
   try {
@@ -3779,7 +3945,7 @@ async function descargarCierrePDF() {
 
 function descargarCierreExcel() {
   if (typeof XLSX === 'undefined') {
-    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    mostrarToastCierre('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
     return;
   }
   const data = CIERRE_FINAL_ACTUAL;
@@ -3881,7 +4047,7 @@ function poblarSelectHipodromo() {
   const sel = document.getElementById('selHipodromo');
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
-    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
   } else {
     const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
     sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
@@ -3898,7 +4064,7 @@ function poblarSelectHipodromoAdelantadas() {
   if (!sel) return;
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
-    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
@@ -3913,7 +4079,7 @@ function poblarSelectHipodromoRemate() {
   if (!sel) return;
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
-    sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
@@ -4001,7 +4167,7 @@ function detectarJugadoresTraspaso() {
   cont.innerHTML = '';
   cont.style.display = 'flex';
   if (!nombres.size) {
-    cont.innerHTML = '<div class="placeholder-card">No reconocí ningún jugador — revisá que el plano tenga el formato "Juega &lt;nombre&gt; ... da &lt;nombre&gt;".</div>';
+    cont.innerHTML = '<div class="placeholder-card">No reconocí ningún jugador — revisa que el plano tenga el formato "Juega &lt;nombre&gt; ... da &lt;nombre&gt;".</div>';
     return;
   }
   [...nombres].sort((a, b) => a.localeCompare(b, 'es')).forEach(nombre => {
@@ -4038,7 +4204,7 @@ function escaparRegex(txt) {
 function generarPlanoTraspaso() {
   const original = document.getElementById('txtTraspasoOriginal').value;
   if (!original.trim()) {
-    mostrarToastTraspaso('⚠️ Pegá o cargá un plano primero.', true);
+    mostrarToastTraspaso('⚠️ Pega o carga un plano primero.', true);
     return;
   }
   const filas = [...document.getElementById('filasTraspaso').children];
@@ -4048,7 +4214,7 @@ function generarPlanoTraspaso() {
   }).filter(c => c.desde && c.hasta);
 
   if (!cambios.length) {
-    mostrarToastTraspaso('⚠️ Agregá al menos un cambio de nombre (actual → nuevo).', true);
+    mostrarToastTraspaso('⚠️ Agrega al menos un cambio de nombre (actual → nuevo).', true);
     return;
   }
 
@@ -4068,13 +4234,13 @@ function generarPlanoTraspaso() {
 function copiarPlanoTraspaso() {
   const caja = document.getElementById('resultadoTraspasoCaja');
   if (caja.style.display === 'none' || !caja.textContent.trim()) {
-    mostrarToastTraspaso('⚠️ Generá el plano con los cambios primero.', true);
+    mostrarToastTraspaso('⚠️ Genera el plano con los cambios primero.', true);
     return;
   }
   navigator.clipboard.writeText(caja.textContent).then(() => {
     mostrarToastTraspaso('✅ Copiado — pegalo en "Cargar Planos" para recalcular.');
   }).catch(() => {
-    mostrarToastTraspaso('⚠️ No se pudo copiar — seleccioná el texto a mano.', true);
+    mostrarToastTraspaso('⚠️ No se pudo copiar — selecciona el texto a mano.', true);
   });
 }
 
@@ -4085,20 +4251,6 @@ function mostrarToastTraspaso(msg, esError) {
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
 }
-
-// ------------------------------------------------------------------
-// Saldo Comisiones (22-09-2026) — sigue con datos de ejemplo (no pedido
-// todavía en esta ronda). "Comisiones Devueltas" ya es REAL desde el
-// 23-09-2026 (duodécima ronda) — ver buscarComisionesDevueltas() más
-// abajo. "Comisiones por Carrera" (más abajo) también es real desde el
-// 23-09-2026 — ver comisionesPorCarreraSemana()/pintarComisionesPorCarrera().
-// ------------------------------------------------------------------
-const SALDO_COMISIONES_CLIENTES = [
-  { nombre: 'mujica', porcentaje: 5, devueltoSemana: 4.50 },
-  { nombre: 'sammy', porcentaje: 3, devueltoSemana: 2.10 },
-  { nombre: 'kristian', porcentaje: 3, devueltoSemana: 1.20 },
-  { nombre: 'puertolacruz', porcentaje: 0, devueltoSemana: 0.00 },
-];
 
 function totalDetalle(detalle, campo) {
   return detalle.reduce((s, d) => s + d[campo], 0);
@@ -4302,20 +4454,20 @@ function textoComisionesPorCarrera(data) {
 }
 
 function copiarComisionesPorCarreraTexto() {
-  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — espera un momento.', true); return; }
   const texto = textoComisionesPorCarrera(COMISIONES_POR_CARRERA_ACTUAL);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesPorCarrera('✅ Texto copiado — pegalo en el grupo.'))
-      .catch(() => mostrarToastComisionesPorCarrera('No se pudo copiar — seleccioná el texto a mano.', true));
+      .catch(() => mostrarToastComisionesPorCarrera('No se pudo copiar — selecciona el texto a mano.', true));
   } else {
-    mostrarToastComisionesPorCarrera('No se pudo copiar — seleccioná el texto a mano.', true);
+    mostrarToastComisionesPorCarrera('No se pudo copiar — selecciona el texto a mano.', true);
   }
 }
 
 async function copiarComisionesPorCarreraImagen() {
-  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function') {
-    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -4341,9 +4493,9 @@ async function copiarComisionesPorCarreraImagen() {
 }
 
 async function descargarComisionesPorCarreraPDF() {
-  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
-    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
     return;
   }
   try {
@@ -4363,9 +4515,9 @@ async function descargarComisionesPorCarreraPDF() {
 }
 
 function descargarComisionesPorCarreraExcel() {
-  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof XLSX === 'undefined') {
-    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
     return;
   }
   const filas = [['Día', 'Hipódromo', 'Carrera', 'Cliente', 'Comisión']];
@@ -4468,20 +4620,20 @@ function textoComisionesPorHipodromo(data) {
 }
 
 function copiarComisionesHipodromoTexto() {
-  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — espera un momento.', true); return; }
   const texto = textoComisionesPorHipodromo(COMISIONES_HIPODROMO_ACTUAL);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesHipodromo('✅ Texto copiado — pegalo en el grupo.'))
-      .catch(() => mostrarToastComisionesHipodromo('No se pudo copiar — seleccioná el texto a mano.', true));
+      .catch(() => mostrarToastComisionesHipodromo('No se pudo copiar — selecciona el texto a mano.', true));
   } else {
-    mostrarToastComisionesHipodromo('No se pudo copiar — seleccioná el texto a mano.', true);
+    mostrarToastComisionesHipodromo('No se pudo copiar — selecciona el texto a mano.', true);
   }
 }
 
 async function copiarComisionesHipodromoImagen() {
-  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function') {
-    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
   try {
@@ -4507,9 +4659,9 @@ async function copiarComisionesHipodromoImagen() {
 }
 
 async function descargarComisionesHipodromoPDF() {
-  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
-    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
     return;
   }
   try {
@@ -4529,9 +4681,9 @@ async function descargarComisionesHipodromoPDF() {
 }
 
 function descargarComisionesHipodromoExcel() {
-  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — espera un momento.', true); return; }
   if (typeof XLSX === 'undefined') {
-    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
     return;
   }
   const filas = [['Hipódromo', 'Carrera', 'Comisión']];
@@ -4576,6 +4728,10 @@ async function pintarComisionesDevueltas(fechaForzada) {
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
     return;
   }
+  // 24-09-2026: total general que pidió el usuario ("ambas pantallas con
+  // total devolucion") — el backend ya lo trae calculado (data.totalGeneral).
+  const montoTotalEl = document.getElementById('montoComisionesDevueltasTotal');
+  if (montoTotalEl) montoTotalEl.textContent = '$' + Number(data.totalGeneral || 0).toFixed(2);
   if (!data.clientes.length) {
     cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó ese día.</div>';
     return;
@@ -4626,6 +4782,154 @@ async function pintarComisionesDevueltas(fechaForzada) {
 
     cont.appendChild(filaCliente);
   });
+}
+
+// ------------------------------------------------------------------
+// "Comisiones Devueltas por Hipódromo" (24-09-2026, vigesimocuarta
+// ronda, nueva a pedido del usuario) — mismo universo de apuestas que
+// "Comisiones Devueltas por Cliente" de arriba (UN día puntual, % propio
+// de cada cliente), pero sumado entre TODOS los clientes y agrupado por
+// hipódromo > carrera — mismo formato visual/de exportación que ya usa
+// "Comisiones Totales por Hipódromo" (ver pintarComisionesPorHipodromo
+// más arriba), solo que acá el monto es lo DEVUELTO, no lo ganado.
+// ------------------------------------------------------------------
+let COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL = null;
+
+function buscarComisionesDevueltasPorHipodromo() {
+  const fecha = document.getElementById('inpFechaComisionesDevueltasHipodromo').value;
+  pintarComisionesDevueltasPorHipodromo(fecha);
+}
+
+async function pintarComisionesDevueltasPorHipodromo(fechaForzada) {
+  const inp = document.getElementById('inpFechaComisionesDevueltasHipodromo');
+  const fecha = fechaForzada || inp.value || fechaLocalHoy();
+  if (!fechaForzada) inp.value = fecha;
+  const cont = document.getElementById('listaComisionesDevueltasPorHipodromo');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-devueltas-por-hipodromo?fecha=${fecha}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL = data;
+  document.getElementById('hipodromoDevueltasFechaCaptura').textContent = formatFechaCortaDMY(data.fecha);
+  document.getElementById('montoComisionesDevueltasHipodromoTotal').textContent = '$' + data.totalGeneral.toFixed(2);
+
+  if (!data.hipodromos.length) {
+    cont.innerHTML = '<div class="resultado-vacio">Ningún cliente con % propio configurado apostó ese día — no hay devolución que mostrar.</div>';
+    return;
+  }
+
+  cont.innerHTML = data.hipodromos.map(hip => `
+    <div class="bloque-hipodromo">
+      <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
+      <div class="cabecera-columnas">Carrera | Devuelto</div>
+      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${c.devuelto.toFixed(2)}</span></div>`).join('')}
+      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${hip.totalDevuelto.toFixed(2)}</span></div>
+    </div>
+  `).join('');
+}
+
+function mostrarToastComisionesDevueltasHipodromo(msg, esError) {
+  const t = document.getElementById('toastComisionesDevueltasHipodromo');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+function textoComisionesDevueltasPorHipodromo(data) {
+  let texto = `↩️ *Comisiones Devueltas por Hipódromo / Carrera*\n*Total devuelto: $${data.totalGeneral.toFixed(2)}*\n`;
+  data.hipodromos.forEach(hip => {
+    texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Devuelto*\n`;
+    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${c.devuelto.toFixed(2)}\n`; });
+    texto += `*Subtotal ${hip.nombre}: $${hip.totalDevuelto.toFixed(2)}*\n`;
+  });
+  return texto;
+}
+
+function copiarComisionesDevueltasHipodromoTexto() {
+  if (!COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL) { mostrarToastComisionesDevueltasHipodromo('Todavía se está cargando — espera un momento.', true); return; }
+  const texto = textoComisionesDevueltasPorHipodromo(COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesDevueltasHipodromo('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastComisionesDevueltasHipodromo('No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarToastComisionesDevueltasHipodromo('No se pudo copiar — selecciona el texto a mano.', true);
+  }
+}
+
+async function copiarComisionesDevueltasHipodromoImagen() {
+  if (!COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL) { mostrarToastComisionesDevueltasHipodromo('Todavía se está cargando — espera un momento.', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesDevueltasHipodromoCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastComisionesDevueltasHipodromo('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'comisiones_devueltas_por_hipodromo.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastComisionesDevueltasHipodromo('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarComisionesDevueltasHipodromoPDF() {
+  if (!COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL) { mostrarToastComisionesDevueltasHipodromo('Todavía se está cargando — espera un momento.', true); return; }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesDevueltasHipodromoCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('comisiones_devueltas_por_hipodromo.pdf');
+    mostrarToastComisionesDevueltasHipodromo('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarComisionesDevueltasHipodromoExcel() {
+  if (!COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL) { mostrarToastComisionesDevueltasHipodromo('Todavía se está cargando — espera un momento.', true); return; }
+  if (typeof XLSX === 'undefined') {
+    mostrarToastComisionesDevueltasHipodromo('⚠️ No se pudo cargar la herramienta de Excel (revisa la conexión).', true);
+    return;
+  }
+  const filas = [['Hipódromo', 'Carrera', 'Devuelto']];
+  COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL.hipodromos.forEach(hip => {
+    hip.carreras.forEach(c => filas.push([hip.nombre, ordinalFemenino(c.carreraNumero), Number(c.devuelto.toFixed(2))]));
+    filas.push(['Subtotal ' + hip.nombre, '', Number(hip.totalDevuelto.toFixed(2))]);
+    filas.push([]);
+  });
+  filas.push(['Total general', '', Number(COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones Devueltas por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoDevueltasFechaCaptura').textContent], [], ...filas]);
+  hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Comisiones Devueltas');
+  XLSX.writeFile(libro, 'comisiones_devueltas_por_hipodromo.xlsx');
+  mostrarToastComisionesDevueltasHipodromo('✅ Excel descargado.');
 }
 
 // ------------------------------------------------------------------
@@ -4935,7 +5239,7 @@ async function cargarResumenJornada() {
   const resumenDiv = document.getElementById('resumenEliminarJornada');
   const filaClave = document.getElementById('filaClaveEliminarJornada');
   const filaBtn = document.getElementById('btnFilaEliminarJornada');
-  if (!fecha) { resumenDiv.textContent = 'Elegí un día para ver qué hay cargado.'; filaClave.style.display = 'none'; filaBtn.style.display = 'none'; return; }
+  if (!fecha) { resumenDiv.textContent = 'Elige un día para ver qué hay cargado.'; filaClave.style.display = 'none'; filaBtn.style.display = 'none'; return; }
   resumenDiv.textContent = 'Buscando…';
   filaClave.style.display = 'none';
   filaBtn.style.display = 'none';
@@ -4953,7 +5257,7 @@ async function cargarResumenJornada() {
   resumenDiv.innerHTML = `
     <div style="padding:12px 14px; background:#fdecea; border:1px solid #f2b8b5; border-radius:8px; color:#611a15;">
       El ${formatFechaCortaDMY(fecha)} hay <b>${r.planos} plano(s) de Tercios</b>, <b>${r.remates} remate(s)</b> y <b>${r.adelantadas} plano(s) de Jugadas Adelantadas</b>${r.hipodromos && r.hipodromos.length ? ` en: ${r.hipodromos.join(', ')}` : ''}.
-      <br>Si eliminás la jornada, TODO esto se borra <b>para siempre</b>, sin posibilidad de recuperarlo.
+      <br>Si eliminas la jornada, TODO esto se borra <b>para siempre</b>, sin posibilidad de recuperarlo.
     </div>`;
   filaClave.style.display = '';
   filaBtn.style.display = '';
@@ -4970,9 +5274,9 @@ async function cargarResumenJornada() {
 async function confirmarEliminarJornada() {
   const fecha = document.getElementById('inpFechaEliminarJornada').value;
   const password = document.getElementById('inpClaveEliminarJornada').value;
-  if (!fecha) { alert('Elegí un día primero.'); return; }
-  if (!password) { alert('Ingresá tu clave de acceso para confirmar.'); return; }
-  if (!confirm(`¿SEGURO que querés eliminar TODA la jornada del ${formatFechaCortaDMY(fecha)}?\n\nEsto borra TODOS los planos, remates y jugadas adelantadas de ese día, en todos los hipódromos, PARA SIEMPRE. No hay papelera ni forma de deshacerlo.`)) return;
+  if (!fecha) { alert('Elige un día primero.'); return; }
+  if (!password) { alert('Ingresa tu clave de acceso para confirmar.'); return; }
+  if (!confirm(`¿SEGURO que quieres eliminar TODA la jornada del ${formatFechaCortaDMY(fecha)}?\n\nEsto borra TODOS los planos, remates y jugadas adelantadas de ese día, en todos los hipódromos, PARA SIEMPRE. No hay papelera ni forma de deshacerlo.`)) return;
 
   let r;
   try {
@@ -5031,16 +5335,30 @@ async function restaurarPlanoPapelera(papeleraId) {
   pintarPlanosEliminados();
 }
 
-function pintarSaldoComisiones() {
+// "Saldo Comisiones" REAL (24-09-2026, vigesimocuarta ronda) — ver la
+// nota grande en <vista-saldoComisiones>. GET /api/hipismo/saldo-
+// comisiones?semana=actual, un renglón por cliente con % propio
+// configurado y cuánto lleva devuelto en la semana actual.
+async function pintarSaldoComisiones() {
   const tbody = document.getElementById('tablaSaldoComisiones');
+  tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/saldo-comisiones?semana=actual');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+    return;
+  }
   tbody.innerHTML = '';
-  SALDO_COMISIONES_CLIENTES.slice()
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${formatNombre(c.nombre)}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
-      tbody.appendChild(tr);
-    });
+  if (!data.clientes.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Ningún cliente con % propio configurado esta semana.</td></tr>';
+    return;
+  }
+  data.clientes.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${formatNombre(c.nombre)}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
+    tbody.appendChild(tr);
+  });
 }
 
 // ------------------------------------------------------------------
