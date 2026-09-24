@@ -189,10 +189,16 @@
     font-weight: 600;
     line-height: 1.5;
     text-align: center;
-    margin-bottom: 14px;
+    margin-top: 22px;
     animation: parpadeoAlerta 1.4s ease-in-out infinite;
   }
   .aviso-confirmacion .firma { display: block; margin-top: 5px; font-size: 11.5px; opacity: 0.92; font-style: italic; }
+
+  /* 24-09-2026 (ronda 21), a pedido del usuario: "agrega tambien como pie
+     e pagina en todos lados : Sistema Ludox Since 2026 al final solo
+     como una firma" — mismo criterio/clase ".pie-pagina" que ya usaban
+     cliente.html y grupo.html (Deportes), ahora también acá. */
+  footer.pie-pagina { text-align: center; padding: 18px 10px 4px; margin-top: 10px; color: var(--text-dim); font-size: 11px; letter-spacing: .3px; }
 
   @media (max-width: 380px) {
     .mini-fila { flex-wrap: wrap; }
@@ -216,8 +222,6 @@
         <div class="sub" id="subGrupo">Tus jugadas — Ludox Hipismo 🇻🇪</div>
       </div>
     </div>
-
-    <div class="aviso-confirmacion" id="avisoConfirmacion">⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia</span></div>
 
     <div class="tarjeta-resumen">
       <div class="etiqueta">Total de la semana</div>
@@ -246,7 +250,13 @@
     <div class="titulo-seccion">📅 Detalle por día</div>
     <div id="listaDias"><!-- JS --></div>
 
-    <p class="pie-nota">Los montos que ves aquí ya tienen el 5% de comisión aplicado cuando ganás una jugada.<br>Cualquier duda sobre una jugada, escribí al grupo.</p>
+    <!-- 24-09-2026 (ronda 21), a pedido del usuario: "el mensaje de que
+         disponen de 24 horas, colocalo al final" — antes iba arriba,
+         justo debajo del saludo; ahora va acá, al cierre de la página,
+         después de todo el detalle. -->
+    <div class="aviso-confirmacion" id="avisoConfirmacion">⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia</span></div>
+
+    <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
   </div>
 

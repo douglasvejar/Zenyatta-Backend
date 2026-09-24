@@ -258,6 +258,43 @@
   .comision-nivel-carreras .info-carrera .hipodromo { font-size: 12.5px; }
   .comision-nivel-carreras .monto-carrera { font-size: 13.5px; }
 
+  /* 4to nivel: dentro de una carrera, un renglón por CLIENTE con su total
+     (24-09-2026, a pedido del usuario: "uneme todas las jugadas de un
+     mismo cliente en una pestaña que yo le de a la flechita y se
+     expanda... pero en si un solo reglon con el monto total de esa
+     carrera, al yo darle a la flechita si es que tiene mas de una
+     jugada me saldran todas"). Un cliente con 1 sola jugada en la
+     carrera se pinta con .sin-expandir (sin flechita, no clickeable);
+     con más de 1 jugada usa el mismo toggleFilaCarrera(id) de siempre. */
+  .comision-nivel-clientes { padding: 2px 0; }
+  .fila-cliente-comision { border-top: 1px solid var(--card-border); }
+  .fila-cliente-comision:first-child { border-top: none; }
+  .fila-cliente-comision .cabecera-cliente,
+  .fila-cliente-comision.sin-expandir { display: flex; align-items: center; gap: 10px; padding: 9px 4px; }
+  .fila-cliente-comision .cabecera-cliente { cursor: pointer; }
+  .fila-cliente-comision .cabecera-cliente:hover { background: rgba(15,60,35,0.05); }
+  .fila-cliente-comision.sin-expandir { padding-left: 22px; }
+  .flecha-expandir-mini { font-size: 11px; color: var(--text-dim); transition: transform .18s; flex-shrink: 0; width: 12px; text-align: center; }
+  .fila-cliente-comision.expandida .flecha-expandir-mini { transform: rotate(90deg); }
+  .nombre-cliente { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #15321f; }
+  .monto-cliente { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13.5px; color: var(--accent-grass); flex-shrink: 0; }
+  .detalle-cliente-jugadas { display: none; padding: 2px 0 8px 22px; }
+  .fila-cliente-comision.expandida .detalle-cliente-jugadas { display: block; }
+  .detalle-cliente-jugadas table { font-size: 12.5px; }
+
+  /* "Comisiones Totales por Hipódromo" (24-09-2026) — lista plana en el
+     MISMO formato que pegó el usuario como ejemplo (título, total
+     general, y por cada hipódromo un subtítulo "Carrera | Comisión" con
+     una línea "Nª $X.XX" por carrera y un subtotal al cierre), para que
+     la pantalla se vea igual a lo que después genera "📋 Descargar en
+     Texto" para pegar en WhatsApp. */
+  .bloque-hipodromo { margin-bottom: 18px; }
+  .bloque-hipodromo:last-child { margin-bottom: 0; }
+  .bloque-hipodromo .titulo-hipodromo { font-weight: 800; font-size: 14px; color: #15321f; margin-bottom: 4px; }
+  .bloque-hipodromo .cabecera-columnas { font-size: 11.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 0; border-bottom: 1px solid var(--card-border); margin-bottom: 2px; }
+  .fila-carrera-hipodromo { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .bloque-hipodromo .subtotal-hipodromo { display: flex; justify-content: space-between; font-weight: 800; font-size: 13.5px; color: var(--accent-grass); padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--card-border); }
+
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--card-border); }
   th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -479,6 +516,14 @@
   .detmodal-pos { color: var(--ok); }
   .detmodal-neg { color: var(--danger); }
 
+  /* 24-09-2026 (ronda 21), a pedido del usuario: "agrega tambien como pie
+     e pagina en todos lados : Sistema Ludox Since 2026 al final solo
+     como una firma" — mismo criterio/clase ".pie-pagina" que ya usaban
+     cliente.html y grupo.html (Deportes), ahora también en el panel de
+     Hipismo. Va al final de <main>, así se ve debajo de CUALQUIER
+     pantalla que esté activa (no hace falta repetirlo en cada <section>). */
+  footer.pie-pagina { text-align: center; padding: 22px 10px; margin-top: 10px; color: var(--text-dim); font-size: 12px; letter-spacing: .3px; }
+
   .punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .punto-verde { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
   .punto-amarillo { background: #eab308; box-shadow: 0 0 0 3px rgba(234,179,8,0.18); }
@@ -618,7 +663,14 @@
 
     <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('comisiones')">💼<span class="nav-lbl"> Comisiones </span><span id="caretComisiones">▾</span></button>
     <div class="nav-children" id="grupoComisiones">
-      <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈<span class="nav-lbl"> Comisiones por Carrera</span></button>
+      <!-- 24-09-2026, a pedido del usuario: "cambiale el nombre y
+           colocale comision por carrera de clientes" — antes se llamaba
+           "Comisiones por Carrera". -->
+      <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈<span class="nav-lbl"> Comisión por Carrera de Clientes</span></button>
+      <!-- 24-09-2026, nueva pantalla a pedido del usuario: "crea abajo
+           una nueva que se va a llamar comsiones totales por hipodromo" —
+           ver vista-comisionesTotalesPorHipodromo más abajo. -->
+      <button type="button" class="nav-item nav-child" data-vista="comisionesTotalesPorHipodromo" onclick="mostrarVista('comisionesTotalesPorHipodromo', this)">🏇<span class="nav-lbl"> Comisiones Totales por Hipódromo</span></button>
       <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳<span class="nav-lbl"> Saldo Comisiones</span></button>
     </div>
 
@@ -1149,11 +1201,24 @@
       </div>
     </section>
 
-    <!-- ============ COMISIONES POR CARRERA ============ -->
+    <!-- ============ COMISIÓN POR CARRERA DE CLIENTES ============
+         24-09-2026: renombrada a pedido del usuario ("cambiale el nombre
+         y colocale comision por carrera de clientes" — antes
+         "Comisiones por Carrera"). También a pedido del usuario, el
+         detalle de cada carrera ahora agrupa las jugadas por CLIENTE
+         ("uneme todas las jugadas de un mismo cliente en una pestaña que
+         yo le de a la flechita y se expanda todas las jugadas pero en si
+         un solo reglon con el monto total de esa carrera, al yo darle a
+         la flechita si es que tiene mas de una jugada me saldran
+         todas") — ver pintarComisionesPorCarrera() más abajo, ahora
+         agrupa carrera.detalle por cliente antes de pintar, y la
+         flechita de un cliente solo aparece/funciona si tiene más de 1
+         jugada en esa carrera. Se agregan también los 4 botones de
+         descarga (Texto/Imagen/PDF/Excel) que pidió el usuario. -->
     <section class="vista" id="vista-comisionesPorCarrera">
       <div class="card">
-        <h2>📈 Comisiones por Carrera</h2>
-        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec), agrupado por DÍA — hacé clic en un día para ver sus hipódromos, clic en un hipódromo para ver sus carreras, y clic en una carrera para ver el detalle jugada por jugada de cómo se armó esa comisión. Ya sale de sumar la comisión real de cada plano guardado en "Cargar Planos".</p>
+        <h2>📈 Comisión por Carrera de Clientes</h2>
+        <p class="desc">Cuánto ganó la banca de comisión (el 5% fijo de las secciones 6-8 del spec), agrupado por DÍA — hacé clic en un día para ver sus hipódromos, clic en un hipódromo para ver sus carreras, y clic en una carrera para ver el total de comisión de cada cliente (si un cliente tuvo más de una jugada en esa carrera, su flechita se despliega con el detalle jugada por jugada). Ya sale de sumar la comisión real de cada plano guardado en "Cargar Planos".</p>
 
         <div class="subnav" id="selectorSemanaComisiones">
           <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaComisiones('actual', this)">Semana actual</button>
@@ -1161,12 +1226,82 @@
           <button type="button" data-semana="hace2" onclick="cambiarSemanaComisiones('hace2', this)">🗓️ Hace 2 semanas</button>
         </div>
 
-        <div class="comision-caja" style="margin-bottom:16px;">
-          <span class="etiqueta">💼 Total de la semana</span>
-          <span class="monto" id="montoComisionesPorCarreraTotal">$ 0,00</span>
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesPorCarreraTexto()">📋 Descargar en Texto</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesPorCarreraImagen()">📸 Descargar en Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesPorCarreraPDF()">📄 Descargar en PDF</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesPorCarreraExcel()">📊 Descargar en Excel</button>
+          <span class="toast-copiado" id="toastComisionesPorCarrera"></span>
         </div>
 
-        <div id="listaComisionesPorCarrera"></div>
+        <div id="comisionesPorCarreraCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="encabezado-captura">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="comisionesPorCarreraNombreGrupoCaptura">📈 Comisión por Carrera de Clientes</div>
+              <div class="fecha" id="comisionesPorCarreraRangoCaptura"></div>
+            </div>
+          </div>
+
+          <div class="comision-caja" style="margin:14px 0;">
+            <span class="etiqueta">💼 Total de la semana</span>
+            <span class="monto" id="montoComisionesPorCarreraTotal">$ 0,00</span>
+          </div>
+
+          <div id="listaComisionesPorCarrera"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMISIONES TOTALES POR HIPÓDROMO ============
+         24-09-2026, nueva pantalla a pedido del usuario: "crea abajo una
+         nueva que se va a llamar comsiones totales por hipodromo : alli
+         saldria el total por carrea por hipodromo del dia seleccionado".
+         A propósito es de UN SOLO DÍA (no semana, "del dia
+         seleccionado") — misma mecánica de fecha + Buscar que ya usan
+         "Comisiones Devueltas" y "Montos Apostados". El formato de la
+         lista y del texto para copiar en WhatsApp sigue EXACTO el
+         ejemplo que pegó el usuario (con $ y decimales de punto, y
+         *negrita* de WhatsApp con un solo asterisco). -->
+    <section class="vista" id="vista-comisionesTotalesPorHipodromo">
+      <div class="card">
+        <h2>🏇 Comisiones Totales por Hipódromo</h2>
+        <p class="desc">El total de comisión de cada carrera, agrupado por hipódromo, de UN día puntual — listo para copiar y pegar tal cual en el grupo de WhatsApp con "📋 Descargar en Texto".</p>
+
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpFechaComisionesHipodromo">Fecha</label>
+            <input type="date" id="inpFechaComisionesHipodromo">
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-primario" type="button" onclick="buscarComisionesPorHipodromo()">🔎 Buscar</button>
+          </div>
+        </div>
+
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesHipodromoTexto()">📋 Descargar en Texto</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesHipodromoImagen()">📸 Descargar en Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesHipodromoPDF()">📄 Descargar en PDF</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarComisionesHipodromoExcel()">📊 Descargar en Excel</button>
+          <span class="toast-copiado" id="toastComisionesHipodromo"></span>
+        </div>
+
+        <div id="comisionesHipodromoCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="encabezado-captura">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="hipodromoNombreGrupoCaptura">🏇 Comisiones por Hipódromo / Carrera</div>
+              <div class="fecha" id="hipodromoFechaCaptura"></div>
+            </div>
+          </div>
+
+          <div class="comision-caja" style="margin:14px 0;">
+            <span class="etiqueta">💼 Total del día</span>
+            <span class="monto" id="montoComisionesHipodromoTotal">$0.00</span>
+          </div>
+
+          <div id="listaComisionesPorHipodromo"></div>
+        </div>
       </div>
     </section>
 
@@ -1471,6 +1606,8 @@ Pizarra: [se llena al calcular]
       </div>
     </section>
 
+    <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
+
   </main>
 </div>
 
@@ -1592,7 +1729,12 @@ function pintarLogosGrupo() {
     balanceNombreGrupoCaptura: `📒 Balance General — ${nombreGrupo} 🇻🇪`,
     cierreNombreGrupoCaptura: `🏁 Cierre Final — ${nombreGrupo} 🇻🇪`,
     semanaNombreGrupoCaptura: `📅 Semana por Días — ${nombreGrupo} 🇻🇪`,
-    pozosNombreGrupoCaptura: `💰 Pozos — ${nombreGrupo} 🇻🇪`
+    pozosNombreGrupoCaptura: `💰 Pozos — ${nombreGrupo} 🇻🇪`,
+    // 24-09-2026: títulos de captura de las 2 pantallas nuevas/renombradas
+    // de "💼 Comisiones" (ver vista-comisionesPorCarrera y
+    // vista-comisionesTotalesPorHipodromo).
+    comisionesPorCarreraNombreGrupoCaptura: `📈 Comisión por Carrera de Clientes — ${nombreGrupo} 🇻🇪`,
+    hipodromoNombreGrupoCaptura: `🏇 Comisiones por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`
   };
   Object.keys(titulos).forEach(id => {
     const el = document.getElementById(id);
@@ -1643,6 +1785,10 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
   semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
   comisionesPorCarrera: () => pintarComisionesPorCarrera(),
+  // 24-09-2026: "Comisiones Totales por Hipódromo" es nueva, mismo
+  // criterio de fecha+Buscar que Comisiones Devueltas/Montos Apostados —
+  // ver pintarComisionesPorHipodromo() más abajo.
+  comisionesTotalesPorHipodromo: () => pintarComisionesPorHipodromo(),
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   montosApostados: () => pintarMontosApostados()
 };
@@ -3971,13 +4117,55 @@ function toggleFilaCarrera(id) {
 // suma la comisión ya guardada de cada plano — no hace falta recalcular
 // nada acá.
 let semanaComisionesPorCarrera = 'actual';
-let idComisionSeq = 0; // ids únicos para los 3 niveles de acordeón, sin colisionar entre semanas repintadas
+let idComisionSeq = 0; // ids únicos para los 3 (ahora 4) niveles de acordeón, sin colisionar entre semanas repintadas
+let COMISIONES_POR_CARRERA_ACTUAL = null; // último JSON que devolvió el servidor, para los exports (Texto/Imagen/PDF/Excel)
 
 function cambiarSemanaComisiones(semana, btn) {
   semanaComisionesPorCarrera = semana;
   document.querySelectorAll('#selectorSemanaComisiones button').forEach(b => b.classList.remove('activo'));
   if (btn) btn.classList.add('activo');
   pintarComisionesPorCarrera();
+}
+
+// 24-09-2026, a pedido del usuario: agrupa el detalle jugada-por-jugada de
+// una carrera (que puede traer al mismo cliente repetido si tuvo más de
+// una jugada ahí) en un renglón por cliente con su comisión TOTAL de esa
+// carrera — ver filaClienteComisionHtml() más abajo, que solo agrega la
+// flechita de expandir cuando el cliente tiene más de 1 jugada.
+function agruparDetallePorCliente(detalle) {
+  const porCliente = new Map();
+  detalle.forEach(d => {
+    if (!porCliente.has(d.cliente)) porCliente.set(d.cliente, { cliente: d.cliente, total: 0, jugadas: [] });
+    const c = porCliente.get(d.cliente);
+    c.total += d.comision;
+    c.jugadas.push(d);
+  });
+  return Array.from(porCliente.values());
+}
+function filaClienteComisionHtml(c) {
+  if (c.jugadas.length <= 1) {
+    return `
+      <div class="fila-cliente-comision sin-expandir">
+        <span class="nombre-cliente">${formatNombre(c.cliente)}</span>
+        <span class="monto-cliente">+${formatMontoTabla(c.total)}</span>
+      </div>`;
+  }
+  const idCliente = 'comCliente' + (idComisionSeq++);
+  const filasJugadas = c.jugadas.map(j => `<tr><td>${j.jugada}</td><td class="num pos">+${formatMontoTabla(j.comision)}</td></tr>`).join('');
+  return `
+    <div class="fila-cliente-comision" id="${idCliente}">
+      <div class="cabecera-cliente" onclick="toggleFilaCarrera('${idCliente}')">
+        <span class="flecha-expandir-mini">▶</span>
+        <span class="nombre-cliente">${formatNombre(c.cliente)}</span>
+        <span class="monto-cliente">+${formatMontoTabla(c.total)}</span>
+      </div>
+      <div class="detalle-cliente-jugadas">
+        <table>
+          <thead><tr><th>Jugada</th><th class="num">Comisión</th></tr></thead>
+          <tbody>${filasJugadas}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 async function pintarComisionesPorCarrera() {
@@ -3990,8 +4178,12 @@ async function pintarComisionesPorCarrera() {
     cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar las comisiones: ${e.message}</div>`;
     return;
   }
+  COMISIONES_POR_CARRERA_ACTUAL = data;
 
   document.getElementById('montoComisionesPorCarreraTotal').textContent = '$ ' + formatMontoTabla(data.totalGeneral);
+  document.getElementById('comisionesPorCarreraRangoCaptura').textContent =
+    `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
+    (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '');
 
   if (!data.dias.length) {
     cont.innerHTML = '<div class="resultado-vacio">Sin planos calculados en este rango — no hay comisión que mostrar todavía.</div>';
@@ -4035,9 +4227,10 @@ async function pintarComisionesPorCarrera() {
 
       hip.carreras.forEach(carrera => {
         const idCarrera = 'comCarrera' + (idComisionSeq++);
-        const filasDetalle = carrera.detalle.length
-          ? carrera.detalle.map(d => `<tr><td>${formatNombre(d.cliente)}</td><td>${d.jugada}</td><td class="num pos">+${formatMontoTabla(d.comision)}</td></tr>`).join('')
-          : '<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Sin comisión en esta carrera (nadie ganó ninguna línea).</td></tr>';
+        const clientesCarrera = agruparDetallePorCliente(carrera.detalle);
+        const filasClientes = clientesCarrera.length
+          ? clientesCarrera.map(c => filaClienteComisionHtml(c)).join('')
+          : '<div style="padding:10px 4px; text-align:center; color:var(--text-dim); font-size:12.5px;">Sin comisión en esta carrera (nadie ganó ninguna línea).</div>';
         const filaCarrera = document.createElement('div');
         filaCarrera.className = 'fila-carrera-comision';
         filaCarrera.id = idCarrera;
@@ -4049,12 +4242,7 @@ async function pintarComisionesPorCarrera() {
             </div>
             <div class="monto-carrera">+${formatMontoTabla(carrera.totalComision)}</div>
           </div>
-          <div class="detalle-carrera">
-            <table>
-              <thead><tr><th>Cliente</th><th>Jugada</th><th class="num">Comisión</th></tr></thead>
-              <tbody>${filasDetalle}</tbody>
-            </table>
-          </div>`;
+          <div class="detalle-carrera comision-nivel-clientes">${filasClientes}</div>`;
         contCarreras.appendChild(filaCarrera);
       });
 
@@ -4069,6 +4257,288 @@ async function pintarComisionesPorCarrera() {
 function formatFechaCortaDMY(iso) {
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+
+// ------------------------------------------------------------------
+// Exports de "Comisión por Carrera de Clientes" — Texto (WhatsApp,
+// negrita con un solo asterisco)/Imagen HD/PDF/Excel (24-09-2026, a
+// pedido del usuario, mismo patrón que ya usan Balance General/Cierre
+// Final/Pozos más abajo).
+// ------------------------------------------------------------------
+function mostrarToastComisionesPorCarrera(msg, esError) {
+  const t = document.getElementById('toastComisionesPorCarrera');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+function textoComisionesPorCarrera(data) {
+  let texto = `📈 *Comisión por Carrera de Clientes*\n*Total semana: $${data.totalGeneral.toFixed(2)}*\n`;
+  if (data.rango) texto += `📅 ${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}\n`;
+  data.dias.forEach(dia => {
+    texto += `\n📅 *${formatFechaCortaDMY(dia.fecha)}*\n`;
+    dia.hipodromos.forEach(hip => {
+      texto += `🏟️ *${hip.nombre}*\n`;
+      hip.carreras.forEach(carrera => {
+        const clientes = agruparDetallePorCliente(carrera.detalle);
+        const listaClientes = clientes.length
+          ? clientes.map(c => `${formatNombre(c.cliente)} $${c.total.toFixed(2)}`).join(', ')
+          : 'sin comisión';
+        texto += `${ordinalCarrera(carrera.carreraNumero)}: ${listaClientes}\n`;
+      });
+      texto += `*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
+    });
+  });
+  return texto;
+}
+
+function copiarComisionesPorCarreraTexto() {
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  const texto = textoComisionesPorCarrera(COMISIONES_POR_CARRERA_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesPorCarrera('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastComisionesPorCarrera('No se pudo copiar — seleccioná el texto a mano.', true));
+  } else {
+    mostrarToastComisionesPorCarrera('No se pudo copiar — seleccioná el texto a mano.', true);
+  }
+}
+
+async function copiarComisionesPorCarreraImagen() {
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesPorCarreraCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastComisionesPorCarrera('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastComisionesPorCarrera('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'comision_por_carrera_clientes.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastComisionesPorCarrera('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarComisionesPorCarreraPDF() {
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesPorCarreraCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('comision_por_carrera_clientes.pdf');
+    mostrarToastComisionesPorCarrera('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarComisionesPorCarreraExcel() {
+  if (!COMISIONES_POR_CARRERA_ACTUAL) { mostrarToastComisionesPorCarrera('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof XLSX === 'undefined') {
+    mostrarToastComisionesPorCarrera('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    return;
+  }
+  const filas = [['Día', 'Hipódromo', 'Carrera', 'Cliente', 'Comisión']];
+  COMISIONES_POR_CARRERA_ACTUAL.dias.forEach(dia => {
+    dia.hipodromos.forEach(hip => {
+      hip.carreras.forEach(carrera => {
+        const clientes = agruparDetallePorCliente(carrera.detalle);
+        if (!clientes.length) {
+          filas.push([formatFechaCortaDMY(dia.fecha), hip.nombre, ordinalCarrera(carrera.carreraNumero), '—', 0]);
+        } else {
+          clientes.forEach(c => filas.push([formatFechaCortaDMY(dia.fecha), hip.nombre, ordinalCarrera(carrera.carreraNumero), formatNombre(c.cliente), Number(c.total.toFixed(2))]));
+        }
+      });
+    });
+  });
+  filas.push([]);
+  filas.push(['Total general', '', '', '', Number(COMISIONES_POR_CARRERA_ACTUAL.totalGeneral.toFixed(2))]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisión por Carrera de Clientes — Zenyatta 🇻🇪'], [document.getElementById('comisionesPorCarreraRangoCaptura').textContent], [], ...filas]);
+  hoja['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 20 }, { wch: 12 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Comisión por Carrera');
+  XLSX.writeFile(libro, 'comision_por_carrera_clientes.xlsx');
+  mostrarToastComisionesPorCarrera('✅ Excel descargado.');
+}
+
+// ------------------------------------------------------------------
+// "Comisiones Totales por Hipódromo" (24-09-2026, nueva a pedido del
+// usuario) — total de comisión por carrera, agrupado por hipódromo, de
+// UN día puntual (mismo criterio de fecha+Buscar que ya usan
+// "Comisiones Devueltas"/"Montos Apostados"). El formato de la lista y
+// del texto para copiar sigue EXACTO el ejemplo que pegó el usuario:
+// "1ª $3.25" (ordinal femenino + $ con decimales de punto) y
+// "*Subtotal {hipódromo}: $X.XX*" al cierre de cada bloque.
+// ------------------------------------------------------------------
+let COMISIONES_HIPODROMO_ACTUAL = null; // último JSON que devolvió el servidor, para los exports
+
+// "3" -> "3ª" (distinto de ordinalCarrera(), que da "3ra"/"3ta" — acá se
+// usa el ordinal femenino tal cual lo pegó el usuario en su ejemplo).
+function ordinalFemenino(n) {
+  return `${n}ª`;
+}
+
+function buscarComisionesPorHipodromo() {
+  const fecha = document.getElementById('inpFechaComisionesHipodromo').value;
+  pintarComisionesPorHipodromo(fecha);
+}
+
+async function pintarComisionesPorHipodromo(fechaForzada) {
+  const inp = document.getElementById('inpFechaComisionesHipodromo');
+  const fecha = fechaForzada || inp.value || fechaLocalHoy();
+  if (!fechaForzada) inp.value = fecha;
+  const cont = document.getElementById('listaComisionesPorHipodromo');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-por-hipodromo?fecha=${fecha}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  COMISIONES_HIPODROMO_ACTUAL = data;
+  document.getElementById('hipodromoFechaCaptura').textContent = formatFechaCortaDMY(data.fecha);
+  document.getElementById('montoComisionesHipodromoTotal').textContent = '$' + data.totalGeneral.toFixed(2);
+
+  if (!data.hipodromos.length) {
+    cont.innerHTML = '<div class="resultado-vacio">Sin planos calculados ese día — no hay comisión que mostrar todavía.</div>';
+    return;
+  }
+
+  cont.innerHTML = data.hipodromos.map(hip => `
+    <div class="bloque-hipodromo">
+      <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
+      <div class="cabecera-columnas">Carrera | Comisión</div>
+      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${c.comision.toFixed(2)}</span></div>`).join('')}
+      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${hip.totalComision.toFixed(2)}</span></div>
+    </div>
+  `).join('');
+}
+
+function mostrarToastComisionesHipodromo(msg, esError) {
+  const t = document.getElementById('toastComisionesHipodromo');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+// Arma EXACTO el texto que pegó el usuario como ejemplo (título, total
+// general, y por cada hipódromo: subtítulo "Carrera | Comisión", una
+// línea "Nª $X.XX" por carrera y "Subtotal {hipódromo}: $X.XX" al
+// cierre) — *negrita* con un solo asterisco, así se ve en WhatsApp.
+function textoComisionesPorHipodromo(data) {
+  let texto = `🏇 *Comisiones por Hipódromo / Carrera*\n*Total: $${data.totalGeneral.toFixed(2)}*\n`;
+  data.hipodromos.forEach(hip => {
+    texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Comisión*\n`;
+    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${c.comision.toFixed(2)}\n`; });
+    texto += `*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
+  });
+  return texto;
+}
+
+function copiarComisionesHipodromoTexto() {
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  const texto = textoComisionesPorHipodromo(COMISIONES_HIPODROMO_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesHipodromo('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastComisionesHipodromo('No se pudo copiar — seleccioná el texto a mano.', true));
+  } else {
+    mostrarToastComisionesHipodromo('No se pudo copiar — seleccioná el texto a mano.', true);
+  }
+}
+
+async function copiarComisionesHipodromoImagen() {
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesHipodromoCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastComisionesHipodromo('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastComisionesHipodromo('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'comisiones_por_hipodromo.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastComisionesHipodromo('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastComisionesHipodromo('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarComisionesHipodromoPDF() {
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesHipodromoCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('comisiones_por_hipodromo.pdf');
+    mostrarToastComisionesHipodromo('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastComisionesHipodromo('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarComisionesHipodromoExcel() {
+  if (!COMISIONES_HIPODROMO_ACTUAL) { mostrarToastComisionesHipodromo('Todavía se está cargando — esperá un momento.', true); return; }
+  if (typeof XLSX === 'undefined') {
+    mostrarToastComisionesHipodromo('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    return;
+  }
+  const filas = [['Hipódromo', 'Carrera', 'Comisión']];
+  COMISIONES_HIPODROMO_ACTUAL.hipodromos.forEach(hip => {
+    hip.carreras.forEach(c => filas.push([hip.nombre, ordinalFemenino(c.carreraNumero), Number(c.comision.toFixed(2))]));
+    filas.push(['Subtotal ' + hip.nombre, '', Number(hip.totalComision.toFixed(2))]);
+    filas.push([]);
+  });
+  filas.push(['Total general', '', Number(COMISIONES_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoFechaCaptura').textContent], [], ...filas]);
+  hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Comisiones por Hipódromo');
+  XLSX.writeFile(libro, 'comisiones_por_hipodromo.xlsx');
+  mostrarToastComisionesHipodromo('✅ Excel descargado.');
 }
 
 // ------------------------------------------------------------------

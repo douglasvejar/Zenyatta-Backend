@@ -1438,6 +1438,48 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// "COMISIONES TOTALES POR HIPÓDROMO" (24-09-2026, a pedido del usuario:
+// "crea abajo una nueva que se va a llamar comsiones totales por
+// hipodromo : alli saldria el total por carrea por hipodromo del dia
+// seleccionado"). A propósito de UN SOLO DÍA (no semana, como sí lo es
+// /comisiones-por-carrera de arriba) — el ejemplo que pegó el usuario es
+// una lista plana de hipódromos con el total de CADA carrera y un
+// subtotal por hipódromo, sin agrupar por día ni por cliente. Como
+// hipismo_planos.comision_total YA es la comisión total de esa
+// carrera puntual (ver la nota grande de /comisiones-por-carrera más
+// arriba), esta ruta no necesita tocar hipismo_tickets en absoluto.
+//
+// GET /comisiones-por-hipodromo?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+router.get('/comisiones-por-hipodromo', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
+
+  const rPlanos = await db.query(
+    `SELECT hipodromo_nombre, carrera_numero, comision_total
+       FROM hipismo_planos
+      WHERE grupo_id = $1 AND fecha = $2
+      ORDER BY hipodromo_nombre, carrera_numero`,
+    [req.grupoId, fecha]
+  );
+
+  const porHipodromo = new Map();
+  let totalGeneral = 0;
+  rPlanos.rows.forEach(p => {
+    if (!porHipodromo.has(p.hipodromo_nombre)) {
+      porHipodromo.set(p.hipodromo_nombre, { nombre: p.hipodromo_nombre, totalComision: 0, carreras: [] });
+    }
+    const hip = porHipodromo.get(p.hipodromo_nombre);
+    const comisionCarrera = Number(p.comision_total);
+    hip.carreras.push({ carreraNumero: p.carrera_numero, comision: comisionCarrera });
+    hip.totalComision = round2(hip.totalComision + comisionCarrera);
+    totalGeneral = round2(totalGeneral + comisionCarrera);
+  });
+
+  const hipodromos = Array.from(porHipodromo.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  res.json({ fecha, hipodromos, totalGeneral });
+}));
+
+// =================================================================
 // "MONTOS APOSTADOS" (23-09-2026, undécima ronda, a pedido del usuario:
 // "un boton en apuestas llamado montos apostados, alli vere por cliente
 // cuanto han apostado en el grupo, igual ordenado por fecha, alli me
