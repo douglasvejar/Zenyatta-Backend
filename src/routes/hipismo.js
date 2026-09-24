@@ -78,6 +78,13 @@ const { autoRegistrarJugadores } = require('../services/procesarSabana');
 // para la sábana de Deportes (papelera recuperable, nunca borrado
 // definitivo, para un sistema contable).
 const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
+// construirResumenClienteHipismo (24-09-2026) — la nueva pestaña "Saldos >
+// Detallado por Cliente" pide EXACTAMENTE la misma respuesta que ya arma
+// GET /api/hipismo-cliente/:token (el portal público) para un cliente
+// puntual, buscado por nombre en vez de por token — ver
+// GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
+// services/hipismoResumenCliente.js.
+const { construirResumenClienteHipismo } = require('../services/hipismoResumenCliente');
 
 // fechaHoyVenezuela() (24-09-2026) — BUG encontrado a partir de "al
 // cargar plano no me esta jalando las jugadas adelantadas": el respaldo
@@ -1754,6 +1761,31 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
     comisionAdelantadasSemana
   });
+}));
+
+// =================================================================
+// "Saldos > Detallado por Cliente" (24-09-2026, a pedido del usuario:
+// "detallado por cliente es basicamente lo mismo que balance general
+// pero al darle click al cliente puedo ver todas sus jugadas, asi como
+// ellos la ven en sus links personalizados"). Esta ruta le devuelve al
+// Administrador/Empleado EXACTAMENTE la misma respuesta que ya arma
+// GET /api/hipismo-cliente/:token (el portal público, sin login) para
+// ESE cliente puntual — mismo shape, misma función compartida
+// (construirResumenClienteHipismo, ver services/hipismoResumenCliente.js)
+// — así nunca puede mostrar algo distinto de lo que el cliente ve en su
+// propio link. La diferencia es solo CÓMO se identifica al cliente: acá
+// por su nombre (ya en MAYÚSCULA, mismo criterio de todo el módulo) más
+// el grupo de la sesión, en vez de por su token público.
+router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => {
+  const rJugador = await db.query(
+    'SELECT * FROM jugadores WHERE grupo_id = $1 AND nombre = $2',
+    [req.grupoId, req.params.nombre]
+  );
+  const jugador = rJugador.rows[0];
+  if (!jugador) return res.status(404).json({ error: 'No se encontró ese cliente.' });
+
+  const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana);
+  res.json(resultado);
 }));
 
 // =================================================================

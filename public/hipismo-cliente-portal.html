@@ -163,8 +163,36 @@
   .ticket-detalle { flex: 1; min-width: 150px; }
   .ticket-num { display: block; font-size: 10.5px; color: var(--text-dim); }
   .ticket-estado { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; }
+  /* 24-09-2026: a .carrera-fila .resultado/.monto-jugado (más abajo) les
+     falta el equivalente acá para .ticket-fila — sin esto, el resultado y
+     "arriesga $X" de un ticket de Deportes quedaban pegados en una sola
+     línea sin alinear (se nota en cuentas ancladas a Deportes). */
+  .ticket-fila .resultado { text-align: right; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .ticket-fila .monto-jugado { display: block; font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-align: right; }
 
   .pie-nota { text-align: center; font-size: 11.5px; color: var(--text-dim); margin-top: 22px; line-height: 1.6; }
+
+  /* Aviso de confirmación de 24 horas (24-09-2026, a pedido del usuario:
+     "a los reportes de los clientes en el link colcoale un anuncio
+     itermitente importante : es una nota que diga, que dispone de 24
+     horas para indicar alguna diferencia o reclamo, de lo contrario se
+     tomara por confirmada su cuenta y no tendra modificacion, gerencia
+     (nombre del grupo)"). Intermitente = parpadea, mismo @keyframes que
+     ya usa hipismo-mockup.html para sus alertas de Pozos/Adelantadas. */
+  @keyframes parpadeoAlerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .aviso-confirmacion {
+    background: linear-gradient(100deg, var(--warning), #b45309);
+    color: #fff;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+    margin-bottom: 14px;
+    animation: parpadeoAlerta 1.4s ease-in-out infinite;
+  }
+  .aviso-confirmacion .firma { display: block; margin-top: 5px; font-size: 11.5px; opacity: 0.92; font-style: italic; }
 
   @media (max-width: 380px) {
     .mini-fila { flex-wrap: wrap; }
@@ -188,6 +216,8 @@
         <div class="sub" id="subGrupo">Tus jugadas — Ludox Hipismo 🇻🇪</div>
       </div>
     </div>
+
+    <div class="aviso-confirmacion" id="avisoConfirmacion">⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia</span></div>
 
     <div class="tarjeta-resumen">
       <div class="etiqueta">Total de la semana</div>
@@ -314,6 +344,11 @@
     // --- Encabezado (grupo + cliente) ---
     document.getElementById('subGrupo').textContent = `Tus jugadas — ${data.grupo.nombre}`;
     document.getElementById('saludoNombre').textContent = `Hola, ${data.jugador.nombre} 👋`;
+
+    // Aviso de confirmación de 24 horas, firmado con el nombre real del
+    // grupo (pedido del usuario: "gerencia (nombre del grupo)").
+    document.getElementById('avisoConfirmacion').innerHTML =
+      `⏰ <b>Importante:</b> disponés de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia, ${data.grupo.nombre}</span>`;
     const logo = document.getElementById('logoGrupo');
     const avatar = document.getElementById('avatarIniciales');
     if (data.grupo.logoUrl) {

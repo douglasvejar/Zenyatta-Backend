@@ -397,6 +397,88 @@
 
   .placeholder-card { border: 1px dashed var(--card-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
 
+  /* ------------------------------------------------------------------
+     Detallado por Cliente (24-09-2026, dentro de "📊 Saldos") — a pedido
+     del usuario: "puedes colocar los clientes no uno debajo del otro si
+     no por cuadros que se vea su nombre y saldo y darle click me abre
+     sus detallados". El modal reusa, con el prefijo "detmodal-", el
+     mismo esqueleto visual día > hipódromo > carrera de
+     hipismo-cliente-portal.html — así lo que ve el Administrador acá es
+     igual (misma agrupación, mismos textos de jugada) a lo que ve el
+     cliente en su link, tal como lo pidió el usuario.
+     ------------------------------------------------------------------ */
+  .grid-clientes-detallado { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tarjeta-cliente-detallado {
+    background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; text-align: left; font-family: inherit; color: var(--text);
+    transition: border-color .15s, transform .1s;
+  }
+  .tarjeta-cliente-detallado:hover { border-color: var(--accent-grass); transform: translateY(-1px); }
+  .tarjeta-cliente-detallado .nombre-cliente { font-weight: 700; font-size: 13.5px; display: block; margin-bottom: 4px; word-break: break-word; }
+  .tarjeta-cliente-detallado .saldo-cliente { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .tarjeta-cliente-detallado .saldo-cliente.pos { color: var(--ok); }
+  .tarjeta-cliente-detallado .saldo-cliente.neg { color: var(--danger); }
+
+  .modal-fondo {
+    position: fixed; inset: 0; background: rgba(10,25,15,0.55); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-detalle-cliente {
+    position: relative; background: var(--card); border-radius: 14px; max-width: 560px; width: 100%;
+    max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  }
+  .modal-detalle-cliente .modal-cerrar {
+    position: absolute; top: 10px; right: 12px; z-index: 5; background: none; border: none;
+    font-size: 22px; cursor: pointer; color: var(--text-dim); line-height: 1; padding: 4px 8px;
+  }
+  .modal-detalle-header { padding: 16px 44px 4px 18px; flex-shrink: 0; }
+  .modal-detalle-header .subnav { margin: 10px 0 0; padding: 0 18px 14px; margin: 8px -18px -0px; }
+  .modal-detalle-body { padding: 4px 18px 16px; overflow-y: auto; flex: 1; border-top: 1px solid var(--card-border); }
+  .modal-detalle-acciones { padding: 12px 18px; border-top: 1px solid var(--card-border); display: flex; gap: 10px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+
+  #detalleClienteCaptura { background: #fff; border-radius: 10px; }
+
+  .detmodal-resumen { text-align: center; padding: 4px 0 12px; }
+  .detmodal-resumen .monto-grande { font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .detmodal-resumen .rango { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+
+  .detmodal-dia { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+  .detmodal-dia-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
+  .detmodal-dia-header .fecha { font-weight: 700; font-size: 13px; flex: 1; }
+  .detmodal-dia-header .fecha .dow { color: var(--text-dim); font-weight: 500; font-size: 10.5px; display: block; text-transform: uppercase; letter-spacing: 0.3px; }
+  .detmodal-dia-header .total-dia { font-weight: 800; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .detmodal-dia-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .detmodal-dia.colapsado .detmodal-dia-body { display: none; }
+  .detmodal-flecha { font-size: 10px; color: var(--text-dim); transition: transform .15s; width: 12px; text-align: center; flex-shrink: 0; }
+  .detmodal-dia.colapsado .detmodal-flecha { transform: rotate(-90deg); }
+
+  .detmodal-hip { border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: var(--card); }
+  .detmodal-hip-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; user-select: none; background: var(--card-2); }
+  .detmodal-hip-header .nombre-hip { font-weight: 700; font-size: 12.5px; flex: 1; }
+  .detmodal-hip-header .saldo-hip { font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .detmodal-hip-body { padding: 2px 10px 8px; }
+  .detmodal-hip.colapsado .detmodal-hip-body { display: none; }
+
+  .detmodal-carrera-fila { display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 8px; padding: 7px 2px; border-top: 1px dashed var(--card-border); }
+  .detmodal-carrera-fila:first-child { border-top: none; }
+  .detmodal-carrera-fila .num-carrera { grid-row: 1/3; align-self: center; text-align: center; background: var(--card-2); border-radius: 6px; padding: 5px 0; font-weight: 800; font-size: 11.5px; color: var(--accent-deep, var(--accent-grass)); }
+  .detmodal-carrera-fila .jugada-txt { font-size: 12px; font-weight: 600; }
+  .detmodal-carrera-fila .pizarra-txt { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .detmodal-carrera-fila .resultado { text-align: right; font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums; align-self: center; }
+  .detmodal-carrera-fila .monto-jugado { display: block; font-size: 10px; color: var(--text-dim); font-weight: 500; text-align: right; }
+
+  .detmodal-ticket-fila { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 7px 2px; border-top: 1px dashed var(--card-border); flex-wrap: wrap; }
+  .detmodal-ticket-fila:first-child { border-top: none; }
+  .detmodal-ticket-fila .detalle { flex: 1; min-width: 130px; }
+  .detmodal-ticket-fila .num { display: block; font-size: 9.5px; color: var(--text-dim); }
+  .detmodal-ticket-fila .estado { display: inline-block; margin-top: 2px; font-size: 9.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; }
+  .detmodal-ticket-fila .resultado { text-align: right; font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .detmodal-ticket-fila .monto-jugado { display: block; font-size: 10px; color: var(--text-dim); font-weight: 500; text-align: right; }
+
+  .detmodal-pos { color: var(--ok); }
+  .detmodal-neg { color: var(--danger); }
+
   .punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .punto-verde { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
   .punto-amarillo { background: #eab308; box-shadow: 0 0 0 3px rgba(234,179,8,0.18); }
@@ -510,17 +592,27 @@
            formato. Solo el tab + una pantalla vacía por ahora, sin backend
            — ver claude/plan-modulo-hipismo.md. -->
       <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆<span class="nav-lbl"> Cargar Winners</span></button>
-      <!-- 24-09-2026, a pedido del usuario: "crea una pestaña en apuestas
-           que diga semana por dias.... alli me mostraras cada cliente con
-           sus totales por dias" (ej: Ramon miércoles +200, jueves -100,
-           viernes +400, total semana +500) — ver GET
-           /api/hipismo/semana-por-dias en routes/hipismo.js. -->
-      <button type="button" class="nav-item nav-child" data-vista="semanaPorDias" onclick="mostrarVista('semanaPorDias', this)">📅<span class="nav-lbl"> Semana por Días</span></button>
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
-    <button type="button" class="nav-item" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
-    <button type="button" class="nav-item" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
+
+    <hr>
+
+    <!-- 24-09-2026, a pedido del usuario: "mete en una pestaña llamada
+         saldos: detallado por cliente, semana por dias, balance general,
+         cierre final (asi en este orden)" — agrupa las 4 pantallas que ya
+         existían (Semana por Días vivía en "Apuestas", Balance General y
+         Cierre Final eran botones sueltos) más la nueva "Detallado por
+         Cliente", todas bajo un mismo grupo colapsable, en ESE orden
+         exacto. Ninguna pantalla cambió de nombre ni de ruta — solo de
+         dónde se entra. -->
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('saldos')">📊<span class="nav-lbl"> Saldos </span><span id="caretSaldos">▾</span></button>
+    <div class="nav-children" id="grupoSaldos">
+      <button type="button" class="nav-item nav-child" data-vista="detalladoCliente" onclick="mostrarVista('detalladoCliente', this)">🧾<span class="nav-lbl"> Detallado por Cliente</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="semanaPorDias" onclick="mostrarVista('semanaPorDias', this)">📅<span class="nav-lbl"> Semana por Días</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
+    </div>
 
     <hr>
 
@@ -866,6 +958,50 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ DETALLADO POR CLIENTE (24-09-2026) ============ -->
+    <section class="vista" id="vista-detalladoCliente">
+      <div class="card">
+        <h2>🧾 Detallado por Cliente</h2>
+        <p class="desc">Lo mismo que Balance General, pero por cuadros: hacé click en un cliente para ver todas sus jugadas de la semana, exactamente como las ve él mismo en su link personalizado. Sirve, entre otras cosas, para mandarle el reporte a mano (con "Copiar Imagen HD") a un cliente que no pueda abrir su link.</p>
+        <div class="grid-clientes-detallado" id="gridClientesDetallado">
+          <div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal de detalle de un cliente puntual (oculto hasta que se abre) -->
+    <div class="modal-fondo" id="modalDetalleCliente" style="display:none;" onclick="if (event.target === this) cerrarDetalleCliente();">
+      <div class="modal-detalle-cliente">
+        <button type="button" class="modal-cerrar" onclick="cerrarDetalleCliente()" aria-label="Cerrar">✕</button>
+        <div class="modal-detalle-header">
+          <div class="encabezado-captura" style="margin-bottom:0;">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="detalleClienteNombre" style="font-size:15px;">—</div>
+              <div class="fecha" id="detalleClienteRango" style="font-size:11.5px;"></div>
+            </div>
+          </div>
+          <div class="subnav" id="selectorSemanaDetalleCliente">
+            <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaDetalleCliente('actual', this)">Semana actual</button>
+            <button type="button" data-semana="anterior" onclick="cambiarSemanaDetalleCliente('anterior', this)">🗓️ Semana anterior</button>
+          </div>
+        </div>
+        <div class="modal-detalle-body">
+          <div id="detalleClienteCaptura">
+            <div class="detmodal-resumen">
+              <div class="monto-grande" id="detalleClienteTotal">—</div>
+              <div class="rango">Total de la semana</div>
+            </div>
+            <div id="detalleClienteDias"><div class="placeholder-card">Cargando…</div></div>
+          </div>
+        </div>
+        <div class="modal-detalle-acciones">
+          <button class="btn btn-primario" type="button" onclick="copiarDetalleClienteImagen()">📸 Copiar Imagen HD</button>
+          <span class="toast-copiado" id="toastDetalleCliente"></span>
+        </div>
+      </div>
+    </div>
 
     <!-- ============ BALANCE GENERAL ============ -->
     <section class="vista" id="vista-balanceGeneral">
@@ -1501,6 +1637,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // reportes reales — ver la nota grande en pintarBalanceGeneral: antes
   // no estaba acá porque no pedía nada al servidor.
   balanceGeneral: () => pintarBalanceGeneral(),
+  // Detallado por Cliente (24-09-2026) — mismos cuadros de nombre/saldo
+  // que Balance General; ver pintarDetalladoCliente() más abajo.
+  detalladoCliente: () => pintarDetalladoCliente(),
   cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
   semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
   comisionesPorCarrera: () => pintarComisionesPorCarrera(),
@@ -2653,6 +2792,246 @@ async function pintarBalanceGeneral() {
   // reportes cuadren también en este número, no solo en los saldos.
   const comisionTotal = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
   document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
+}
+
+// ------------------------------------------------------------------
+// Detallado por Cliente (24-09-2026, dentro de "📊 Saldos") — a pedido
+// del usuario: "detallado por cliente es basicamente lo mismo que
+// balance general pero al darle click al cliente puedo ver todas sus
+// jugadas, asi como ellos la ven en sus links personalizados... por
+// cuadros que se vea su nombre y saldo y darle click me abre sus
+// detallados con un boton de copiar imagen hd".
+//
+// Los cuadros usan los mismos datos que Balance General
+// (GET /api/hipismo/cierre-final?semana=actual, campo "clientes"). El
+// detalle de un cliente puntual pide GET
+// /api/hipismo/clientes/:nombre/detalle-semana, que en el servidor
+// llama a la MISMA función (construirResumenClienteHipismo) que arma la
+// respuesta del link público del cliente — así lo que ve acá el
+// Administrador NUNCA puede desviarse de lo que ve el cliente en su
+// link (ver la nota grande en src/services/hipismoResumenCliente.js;
+// esta es la lección directa del bug de "Balance General" reportado
+// antes, donde 2 pantallas mostraban 2 saldos distintos).
+// ------------------------------------------------------------------
+async function pintarDetalladoCliente() {
+  const grid = document.getElementById('gridClientesDetallado');
+  grid.innerHTML = '<div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
+  } catch (e) {
+    grid.innerHTML = `<div class="placeholder-card" style="grid-column:1/-1;">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  const clientes = data.clientes.slice().sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  grid.innerHTML = '';
+  if (!clientes.length) {
+    grid.innerHTML = '<div class="placeholder-card" style="grid-column:1/-1;">No hay clientes con jugadas en esta semana.</div>';
+    return;
+  }
+  clientes.forEach(c => {
+    const tarjeta = document.createElement('button');
+    tarjeta.type = 'button';
+    tarjeta.className = 'tarjeta-cliente-detallado';
+    tarjeta.innerHTML = `
+      <span class="nombre-cliente">${formatNombre(c.nombre)}</span>
+      <span class="saldo-cliente ${c.saldo > 0 ? 'pos' : (c.saldo < 0 ? 'neg' : '')}">${c.saldo > 0 ? '+' : ''}${formatMonto(c.saldo)}</span>`;
+    tarjeta.onclick = () => abrirDetalleCliente(c.nombre);
+    grid.appendChild(tarjeta);
+  });
+}
+
+// ---- Modal de detalle de un cliente: helpers de formato PROPIOS
+// (distintos de formatMonto()/formatNombre() de más arriba, que llevan
+// el signo "$" y se usan para otras pantallas) para reproducir el MISMO
+// texto/formato que ve el cliente en su link personalizado — copiados a
+// propósito de hipismo-cliente-portal.html (son 2 archivos estáticos
+// servidos por separado, no un módulo común: si el día de mañana se
+// cambia la redacción de una jugada, hay que tocar los 2 archivos). ----
+const DIAS_SEMANA_DET = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const MESES_DET = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const BANDERAS_DET = { VE: '🇻🇪', US: '🇺🇸' };
+let DETALLE_CLIENTE_NOMBRE = null;
+
+function formatMontoDet(n) {
+  const neg = n < 0;
+  const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (neg ? '-' : '') + abs;
+}
+function claseMontoDet(n) { return n > 0 ? 'detmodal-pos' : (n < 0 ? 'detmodal-neg' : ''); }
+function conSignoDet(n) { return (n > 0 ? '+' : (n < 0 ? '' : '')) + formatMontoDet(n); }
+function fechaDeIsoDet(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function fechaLegibleDet(iso) {
+  const f = fechaDeIsoDet(iso);
+  return { dow: DIAS_SEMANA_DET[f.getDay()], texto: `${f.getDate()} de ${MESES_DET[f.getMonth()]}` };
+}
+function totalCarrerasDet(carreras) { return carreras.reduce((acc, c) => acc + c.resultado, 0); }
+
+// Mismo texto EXACTO que armarJugadaTexto() en hipismo-cliente-portal.html.
+function armarJugadaTextoDetallado(c) {
+  if (c.tipo === 'remate') {
+    return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}` : `🏆 Remate — jugó ${c.caballo}`;
+  }
+  if (c.tipo === 'adelantada') {
+    const detalle = c.subtipo === 'tf' ? `Tabla fija (${c.numeroEjemplar})` : `Marca (${c.numero1}x${c.numero2})`;
+    return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
+  }
+  const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
+  if ((c.modalidad || '').toLowerCase() === 'pp') {
+    return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
+  }
+  return `${verbo} ${c.modalidad} del ${c.caballo}`;
+}
+
+async function abrirDetalleCliente(nombre) {
+  DETALLE_CLIENTE_NOMBRE = nombre;
+  document.getElementById('modalDetalleCliente').style.display = 'flex';
+  document.getElementById('detalleClienteNombre').textContent = formatNombre(nombre);
+  document.getElementById('detalleClienteRango').textContent = '';
+  document.getElementById('detalleClienteDias').innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.toggle('activo', b.dataset.semana === 'actual'));
+  await cargarDetalleCliente('actual');
+}
+function cerrarDetalleCliente() {
+  document.getElementById('modalDetalleCliente').style.display = 'none';
+  DETALLE_CLIENTE_NOMBRE = null;
+}
+function cambiarSemanaDetalleCliente(semana, btn) {
+  document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  cargarDetalleCliente(semana);
+}
+async function cargarDetalleCliente(semana) {
+  const cont = document.getElementById('detalleClienteDias');
+  cont.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/clientes/${encodeURIComponent(DETALLE_CLIENTE_NOMBRE)}/detalle-semana?semana=${semana}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  renderDetalleClienteModal(data);
+}
+function renderDetalleClienteModal(data) {
+  document.getElementById('detalleClienteNombre').textContent = formatNombre(data.jugador.nombre);
+  document.getElementById('detalleClienteRango').textContent =
+    `${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)}${data.esSemanaActual ? ' · Semana actual' : ' · Semana cerrada'}`;
+  const elTotal = document.getElementById('detalleClienteTotal');
+  elTotal.textContent = conSignoDet(data.resumen.totalSemana);
+  elTotal.className = 'monto-grande ' + claseMontoDet(data.resumen.totalSemana);
+
+  const cont = document.getElementById('detalleClienteDias');
+  cont.innerHTML = '';
+  if (!data.dias.length) {
+    cont.innerHTML = '<div class="placeholder-card">No hay jugadas cargadas en esta semana.</div>';
+    return;
+  }
+  data.dias.forEach(dia => {
+    const f = fechaLegibleDet(dia.fecha);
+    const totalDia = dia.hipodromos.reduce((acc, h) => acc + totalCarrerasDet(h.carreras), 0);
+
+    const wrapDia = document.createElement('div');
+    wrapDia.className = 'detmodal-dia';
+    const header = document.createElement('div');
+    header.className = 'detmodal-dia-header';
+    header.onclick = () => wrapDia.classList.toggle('colapsado');
+    header.innerHTML = `
+      <span class="detmodal-flecha">▾</span>
+      <span class="fecha"><span class="dow">${f.dow}</span>${f.texto}${dia.fecha === data.hoy ? ' · hoy' : ''}</span>
+      <span class="total-dia ${claseMontoDet(totalDia)}">${conSignoDet(totalDia)}</span>`;
+    wrapDia.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'detmodal-dia-body';
+
+    dia.hipodromos.forEach(hip => {
+      const subtotalHip = totalCarrerasDet(hip.carreras);
+      const bloqueHip = document.createElement('div');
+      bloqueHip.className = 'detmodal-hip';
+      const esDeportes = hip.tipo === 'deportes';
+      const headerHip = document.createElement('div');
+      headerHip.className = 'detmodal-hip-header';
+      headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
+      headerHip.innerHTML = `
+        <span class="detmodal-flecha">▾</span>
+        <span>${esDeportes ? '⚽' : (BANDERAS_DET[hip.pais] || '🏁')}</span>
+        <span class="nombre-hip">${hip.nombre}</span>
+        <span class="saldo-hip ${claseMontoDet(subtotalHip)}">${conSignoDet(subtotalHip)}</span>`;
+      bloqueHip.appendChild(headerHip);
+
+      const bodyHip = document.createElement('div');
+      bodyHip.className = 'detmodal-hip-body';
+      if (esDeportes) {
+        hip.carreras.forEach(c => {
+          const fila = document.createElement('div');
+          fila.className = 'detmodal-ticket-fila';
+          fila.innerHTML = `
+            <span class="detalle">
+              <span class="num">${c.ticket || ''}</span>
+              <span class="jugada-txt">${c.detalle || ''}</span>
+              <span class="estado">${c.estado}</span>
+            </span>
+            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}<span class="monto-jugado">arriesga ${formatMontoDet(c.monto)}</span></span>`;
+          bodyHip.appendChild(fila);
+        });
+      } else {
+        hip.carreras.forEach(c => {
+          const fila = document.createElement('div');
+          fila.className = 'detmodal-carrera-fila';
+          fila.innerHTML = `
+            <span class="num-carrera">${c.carrera}ª</span>
+            <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
+            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}<span class="monto-jugado">con ${formatMontoDet(c.monto)}</span></span>
+            <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
+            <span></span>`;
+          bodyHip.appendChild(fila);
+        });
+      }
+      bloqueHip.appendChild(bodyHip);
+      body.appendChild(bloqueHip);
+    });
+
+    wrapDia.appendChild(body);
+    cont.appendChild(wrapDia);
+  });
+}
+
+function mostrarToastDetalleCliente(msg, esError) {
+  const t = document.getElementById('toastDetalleCliente');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+async function copiarDetalleClienteImagen() {
+  if (typeof html2canvas !== 'function') {
+    mostrarToastDetalleCliente('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('detalleClienteCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastDetalleCliente('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'detalle_cliente.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastDetalleCliente('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
 }
 
 // ------------------------------------------------------------------
