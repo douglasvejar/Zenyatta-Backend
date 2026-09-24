@@ -469,8 +469,20 @@
      !important mientras esta colapsado, sin importar si el grupo estaba
      abierto o cerrado — al expandir vuelve a verse tal cual estaba. */
   @media (min-width: 861px) {
-    .sidebar-admin { width: 64px; overflow: hidden; transition: width .25s cubic-bezier(.4,0,.2,1); }
-    .sidebar-admin.rail-expanded { width: 214px; overflow: visible; }
+    /* 24-09-2026 (mismo arreglo que hipismo-mockup.html): el rail no
+       tenía su propia región de scroll, así que mover la rueda del mouse
+       encima de él scrolleaba TODA la página en vez de solo el panel.
+       Acotarlo a la altura visible y darle su propio overflow-y:auto hace
+       que el navegador lo scrollee solo a él mientras el mouse esté
+       encima (sin JS extra). */
+    .sidebar-admin {
+      width: 64px; overflow-x: hidden; transition: width .25s cubic-bezier(.4,0,.2,1);
+      max-height: calc(100vh - 40px); overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
+    }
+    .sidebar-admin::-webkit-scrollbar { width: 6px; }
+    .sidebar-admin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 6px; }
+    .sidebar-admin.rail-expanded { width: 214px; overflow-x: visible; }
     .sidebar-admin .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar-admin:not(.rail-expanded) .nav-lbl,
     .sidebar-admin:not(.rail-expanded) .nav-badge,

@@ -1780,7 +1780,12 @@ function diasDeLaSemanaHipismo(desde) {
     dias.push({ fecha, nombre: DIAS_LARGO_HIPISMO[actual.getUTCDay()], corta: DIAS_CORTO_HIPISMO[actual.getUTCDay()] });
     actual = new Date(actual.getTime() + 24 * 60 * 60 * 1000);
   }
-  return dias;
+  // 24-09-2026, a pedido del usuario: "cuando hay carreras los lunes el
+  // lunes va al lado del domingo" — `rangoSemana()` sigue definiendo la
+  // semana lunes-a-domingo para el CÁLCULO (eso no cambia), pero para
+  // MOSTRAR las columnas el lunes se corre al final, pegado al domingo,
+  // en vez de encabezar la fila (dias[0] es siempre el lunes acá arriba).
+  return [...dias.slice(1), dias[0]];
 }
 
 router.get('/semana-por-dias', asyncHandler(async (req, res) => {
@@ -1835,17 +1840,59 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     }
   });
 
+  // "la tabla va mostrando los dias a medida que vayan cargando y
+  // teniendo informacion... si estamos a jueves, no muestres viernes
+  // sabado y domingo vacios" (24-09-2026) — se esconden del TODO (thead
+  // y cada fila) los días donde NINGÚN cliente tuvo ni jugó ni banqueó
+  // nada, sin importar si el día ya pasó o todavía no llegó; el criterio
+  // es simplemente "¿hay algo cargado ese día?".
+  const todosLosClientes = Array.from(porCliente.values());
+  const diasConDatos = dias.filter(d => todosLosClientes.some(c => Math.abs(c.porDia[d.fecha] || 0) > 0.0001));
+
   // Orden alfabético (a pedido del usuario: "ordenado en orden
   // alfabetico") — mismo criterio de localeCompare('es') que Cierre Final.
-  const clientes = Array.from(porCliente.values())
+  const clientes = todosLosClientes
     .map(c => ({
       nombre: c.nombre,
-      porDia: dias.map(d => round2(c.porDia[d.fecha] || 0)),
+      porDia: diasConDatos.map(d => round2(c.porDia[d.fecha] || 0)),
       totalSemana: round2(c.totalSemana)
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias, clientes });
+  // "COMISIÓN GRUPO" al pie de la tabla (24-09-2026, a pedido del
+  // usuario) — mismas 3 fuentes que ya suma Cierre Final (comisión de
+  // Tercios por plano, comisión de Remate por remate, comisión de
+  // Jugadas Adelantadas por jugada resuelta), pero agrupada por DÍA para
+  // poder mostrar una columna por día igual que el resto de la fila.
+  const rComisionPlanos = await db.query(
+    `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
+    [req.grupoId, desde, hasta]
+  );
+  const rComisionRemates = await db.query(
+    `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
+    [req.grupoId, desde, hasta]
+  );
+  const rComisionAdelantadas = await db.query(
+    `SELECT p.fecha AS fecha, j.comision
+       FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [req.grupoId, desde, hasta]
+  );
+  const comisionPorFecha = {};
+  function acumularComisionFecha(fechaFila, monto) {
+    if (monto == null) return;
+    const fechaIso = fechaFila instanceof Date ? isoDeFechaUTC(fechaFila) : fechaFila;
+    comisionPorFecha[fechaIso] = round2((comisionPorFecha[fechaIso] || 0) + Number(monto));
+  }
+  rComisionPlanos.rows.forEach(r => acumularComisionFecha(r.fecha, r.total));
+  rComisionRemates.rows.forEach(r => acumularComisionFecha(r.fecha, r.total));
+  rComisionAdelantadas.rows.forEach(r => acumularComisionFecha(r.fecha, r.comision));
+  const comisionPorDia = diasConDatos.map(d => round2(comisionPorFecha[d.fecha] || 0));
+  const comisionSemana = round2(Object.values(comisionPorFecha).reduce((a, b) => a + b, 0));
+
+  res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias: diasConDatos, clientes, comisionPorDia, comisionSemana });
 }));
 
 // =================================================================

@@ -42,19 +42,28 @@ router.post('/login', asyncHandler(async (req, res) => {
     // claude/plan-modulo-hipismo.md) van en la respuesta del login para
     // que grupo.html/hipismo-mockup.html decidan, sin otra llamada
     // aparte, a qué módulo entrar solo y si mostrar el botón de cambio.
+    //
+    // logoUrl (24-09-2026, a pedido del usuario: "en todos los reportes
+    // quiero que se vea el logo del grupo arriba") — grupo.logo_url ya
+    // existía (lo carga el Súper-admin, ver superadmin.js/html) y ya se
+    // usaba en los links públicos de cliente (cliente.js/hipismoCliente.js)
+    // pero nunca había viajado en la sesión del propio Administrador/
+    // Empleado — sin esto, Cierre Final/Balance General/Semana por Días/
+    // Pozos no tenían de dónde sacar el logo real para sus encabezados.
     return res.json({
       token,
       grupo: {
         id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null,
         moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
-        moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado
+        moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
+        logoUrl: grupo.logo_url || null
       }
     });
   }
 
   // No es el Administrador de ningún grupo — probamos si es un Empleado.
   const r2 = await db.query(
-    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre,
+    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
@@ -81,7 +90,8 @@ router.post('/login', asyncHandler(async (req, res) => {
     grupo: {
       id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre,
       moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
-      moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado
+      moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
+      logoUrl: empleado.grupo_logo_url || null
     }
   });
 }));

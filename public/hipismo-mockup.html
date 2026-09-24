@@ -99,8 +99,26 @@
      importar si un grupo estaba abierto o cerrado — al expandir el rail
      vuelve a verse tal cual estaba. */
   @media (min-width: 861px) {
-    .sidebar-admin { width: 64px; overflow: hidden; transition: width .25s cubic-bezier(.4,0,.2,1); }
-    .sidebar-admin.rail-expanded { width: 224px; overflow: visible; }
+    /* 24-09-2026: "al mover la ruedita del mouse hacia abajo y arriba si
+       estoy encima del panel y el panel esta abierto debe moverse solo el
+       panel no la informacion o ventana que tenga abierta" — antes el
+       rail no tenía su propia región de scroll (solo `position:sticky`,
+       sin alto acotado), así que si la lista de secciones no entraba
+       completa en la pantalla, mover la rueda del mouse scrolleaba TODA
+       la página (rail + contenido) en vez de solo el rail. Acotarlo a la
+       altura visible (`max-height`) y darle su propio `overflow-y:auto`
+       hace que el navegador scrollee el rail solo mientras el mouse esté
+       encima de él (comportamiento nativo del browser, sin JS extra) —
+       recién si el rail llega a su propio tope/final el scroll pasa a la
+       página, como cualquier panel con scroll interno. */
+    .sidebar-admin {
+      width: 64px; overflow-x: hidden; transition: width .25s cubic-bezier(.4,0,.2,1);
+      max-height: calc(100vh - 36px); overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: rgba(15,60,35,0.30) transparent;
+    }
+    .sidebar-admin::-webkit-scrollbar { width: 6px; }
+    .sidebar-admin::-webkit-scrollbar-thumb { background: rgba(15,60,35,0.30); border-radius: 6px; }
+    .sidebar-admin.rail-expanded { width: 224px; overflow-x: visible; }
     .sidebar-admin .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar-admin:not(.rail-expanded) .nav-lbl,
     .sidebar-admin:not(.rail-expanded) .nav-badge,
@@ -334,11 +352,52 @@
      para mayor diferencia", "en formato de tablas con color de linea
      intermedio para mejor lectura" — mismas palabras que usó el usuario
      para las dos pantallas, mismo criterio para las dos). */
-  #semanaPorDiasCaptura table { border: 1px solid var(--card-border); }
+  #semanaPorDiasCaptura table { border: 1px solid var(--card-border); border-collapse: collapse; }
   #semanaPorDiasCaptura th, #semanaPorDiasCaptura td { border: 1px solid var(--card-border); text-align: center; white-space: nowrap; }
   #semanaPorDiasCaptura th:first-child, #semanaPorDiasCaptura td:first-child { text-align: left; }
   #semanaPorDiasCaptura td.num { text-align: center; }
   #semanaPorDiasCaptura tbody tr:nth-child(even) { background: var(--card-2); }
+
+  /* 24-09-2026, a pedido del usuario:
+     "la parte de arriba donde dice cliente nombres semana y total otro
+     color para que se vea como cabecera de la tabla" — el <thead> pasa a
+     tener su propio fondo (mismo verde de acento que el resto de la app)
+     con texto blanco, en vez del mismo blanco de las filas de datos.
+     "haz esa lista un poco mas compacta para cuando se envie por
+     whatssap se vea lo mas nitido posible ya que la lista de clientes
+     puede ser muy larga" — celdas más chicas (menos padding, letra más
+     chica) que el resto de la app, SOLO dentro de esta tabla, para que
+     una lista larga de clientes siga entrando nítida en una sola imagen
+     de WhatsApp en vez de quedar gigante/pixelada al achicarla. */
+  #semanaPorDiasCaptura th {
+    background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 70%);
+    color: #ffffff; font-family: 'Outfit', sans-serif; font-weight: 800;
+    padding: 6px 8px; font-size: 11.5px; letter-spacing: 0.2px;
+  }
+  #semanaPorDiasCaptura td { padding: 4px 8px; font-size: 12px; }
+  #semanaPorDiasCaptura td:first-child { font-weight: 600; }
+
+  /* "abajo a final de la lista debe ir el item comision grupo subrayado
+     que resalte" — fila aparte al pie de la tabla (no es un cliente más),
+     con fondo propio, negrita y subrayado para que resalte del resto. */
+  #semanaPorDiasCaptura tr.fila-comision-grupo td {
+    background: var(--warning); background: linear-gradient(100deg, #fde68a, #fbbf24 85%);
+    color: #2b1c02; font-weight: 800; text-decoration: underline; text-underline-offset: 2px;
+    border-top: 2px solid #b45309;
+  }
+  #semanaPorDiasCaptura tr.fila-comision-grupo td:first-child { text-decoration: underline; }
+
+  /* Logo real del grupo (24-09-2026) — en todos los reportes que se
+     copian/descargan como imagen (Balance General, Cierre Final, Semana
+     por Días, Pozos) el círculo de ícono ahora muestra el logo real que
+     cargó el Súper-admin para este grupo (grupos.logo_url, vía el proxy
+     /api/imagenes/logo-grupo/:grupoId — mismo logo que ya ven los
+     clientes en su link público) en vez del 🏇 fijo. pintarLogosGrupo()
+     llena estos círculos (marcados con .js-logo-grupo) apenas carga la
+     sesión; si el grupo no tiene logo cargado, se queda con el 🏇 de
+     siempre. */
+  .js-logo-grupo { overflow: hidden; }
+  .js-logo-grupo img.logo-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 
   .placeholder-card { border: 1px dashed var(--card-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
 
@@ -761,8 +820,13 @@
         </div>
 
         <div id="pozosCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
-          <div style="font-family:'Outfit',sans-serif; font-weight:800; font-size:16px; color:#15321f; margin-bottom:2px;">💰 Pozos — Zenyatta 🇻🇪</div>
-          <div style="font-size:12px; color:#587264; margin-bottom:14px;" id="pozosFechaCaptura"></div>
+          <div class="encabezado-captura" style="margin-bottom:12px;">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" style="font-family:'Outfit',sans-serif; font-weight:800; font-size:16px; color:#15321f;"><span id="pozosNombreGrupoCaptura">💰 Pozos</span></div>
+              <div class="fecha" id="pozosFechaCaptura"></div>
+            </div>
+          </div>
           <table id="tablaPozos">
             <thead><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Perdido en el período</th><th class="num">Pozo restante</th><th>Estado</th></tr></thead>
             <tbody>
@@ -822,9 +886,9 @@
 
         <div id="balanceCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
           <div class="encabezado-captura">
-            <div class="logo-grupo">🏇</div>
+            <div class="logo-grupo js-logo-grupo">🏇</div>
             <div>
-              <div class="titulo">📒 Balance General — Zenyatta 🇻🇪</div>
+              <div class="titulo" id="balanceNombreGrupoCaptura">📒 Balance General</div>
               <div class="fecha" id="balanceFechaCaptura"></div>
             </div>
           </div>
@@ -884,9 +948,9 @@
 
         <div id="cierreFinalCaptura" class="ocultar-jugadas ocultar-gano ocultar-perdio" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
           <div class="logo-grupo-grande">
-            <div class="logo-grande-icono">🏇</div>
+            <div class="logo-grande-icono js-logo-grupo">🏇</div>
             <div>
-              <div class="titulo">🏁 Cierre Final — Zenyatta 🇻🇪</div>
+              <div class="titulo" id="cierreNombreGrupoCaptura">🏁 Cierre Final</div>
               <div class="fecha" id="cierreRangoCaptura"></div>
             </div>
           </div>
@@ -921,13 +985,34 @@
           <button type="button" data-semana="hace2" onclick="mostrarSemanaPorDias('hace2', this)">🗓️ Hace 2 semanas</button>
         </div>
 
-        <div id="rangoSemanaPorDias" class="desc" style="margin-top:10px; font-weight:600;"></div>
+        <!-- 24-09-2026, a pedido del usuario: mismos 3 botones de exportar
+             que ya tenía Cierre Final (imagen HD para pegar directo en
+             WhatsApp, Excel, PDF). -->
+        <div class="btn-fila" style="margin-top:14px; margin-bottom:16px;">
+          <button class="btn btn-primario" type="button" onclick="copiarSemanaImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarSemanaExcel()">📊 Descargar Excel</button>
+          <button class="btn btn-secundario" type="button" onclick="descargarSemanaPDF()">📄 Descargar PDF</button>
+          <span class="toast-copiado" id="toastSemana"></span>
+        </div>
 
-        <div id="semanaPorDiasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:auto; margin-top:10px;">
-          <table>
-            <thead><tr id="filaEncabezadoSemanaPorDias"><th>Cliente</th></tr></thead>
-            <tbody id="tablaSemanaPorDias"><tr><td style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
-          </table>
+        <!-- Mismo banner con logo real del grupo que Cierre Final
+             (.logo-grupo-grande/.cierre-final-cuerpo, ver <style> arriba) —
+             así la imagen exportada sale con el logo del grupo arriba,
+             igual que Cierre Final. -->
+        <div id="semanaPorDiasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
+          <div class="logo-grupo-grande">
+            <div class="logo-grande-icono js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="semanaNombreGrupoCaptura">📅 Semana por Días</div>
+              <div class="fecha" id="rangoSemanaPorDias"></div>
+            </div>
+          </div>
+          <div class="cierre-final-cuerpo" style="overflow-x:auto;">
+            <table>
+              <thead><tr id="filaEncabezadoSemanaPorDias"><th>Cliente</th></tr></thead>
+              <tbody id="tablaSemanaPorDias"><tr><td style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
@@ -1349,6 +1434,41 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ------------------------------------------------------------------
+// Logo real del grupo en los reportes (24-09-2026, a pedido del usuario:
+// "en todos los reportes quiero que se vea el logo del grupo arriba como
+// se ve en la primera foto"). GRUPO.logoUrl viaja en la sesión desde esta
+// misma ronda (ver POST /api/auth/login) — el logo en sí ya existía
+// (grupos.logo_url, lo carga el Súper-admin) y ya lo usaban los links
+// públicos de cliente; esto lo suma también a las 4 pantallas que se
+// copian/descargan como imagen para el grupo: Balance General, Cierre
+// Final, Semana por Días y Pozos.
+//
+// Ojo: una sesión iniciada ANTES de este cambio no trae logoUrl todavía
+// (undefined, no null) — en ese caso se comporta igual que "sin logo"
+// (🏇 de siempre) hasta que el usuario cierre sesión y vuelva a entrar.
+function pintarLogosGrupo() {
+  const nombreGrupo = (GRUPO && GRUPO.nombre) || 'nuestro grupo';
+  const logoUrl = (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : null;
+  document.querySelectorAll('.js-logo-grupo').forEach(el => {
+    if (logoUrl) {
+      el.innerHTML = `<img src="${logoUrl}" alt="" class="logo-img" onerror="this.parentElement.textContent='🏇';">`;
+    } else {
+      el.textContent = '🏇';
+    }
+  });
+  const titulos = {
+    balanceNombreGrupoCaptura: `📒 Balance General — ${nombreGrupo} 🇻🇪`,
+    cierreNombreGrupoCaptura: `🏁 Cierre Final — ${nombreGrupo} 🇻🇪`,
+    semanaNombreGrupoCaptura: `📅 Semana por Días — ${nombreGrupo} 🇻🇪`,
+    pozosNombreGrupoCaptura: `💰 Pozos — ${nombreGrupo} 🇻🇪`
+  };
+  Object.keys(titulos).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = titulos[id];
+  });
+}
+
+// ------------------------------------------------------------------
 // Navegación (sidebar + subnav) — solo maqueta visual
 // ------------------------------------------------------------------
 function mostrarVista(id, btn) {
@@ -1363,6 +1483,33 @@ function mostrarVista(id, btn) {
   // Mismo criterio para Jugadas Adelantadas: entrar a la pestaña (por la
   // sidebar, no solo por la alerta flotante) también la cierra.
   if (id === 'jugadasAdelantadas' && typeof cerrarAlertaAdelantadasSilencioso === 'function') cerrarAlertaAdelantadasSilencioso();
+  // 24-09-2026, a pedido del usuario: "al editar o eliminar o agregar
+  // eso se debe sircronizar automatico" — hasta ahora estos reportes
+  // solo se pedían al servidor UNA vez (al cargar la página) y quedaban
+  // pintados en el HTML desde entonces; si después el operador borraba
+  // una jornada, editaba un plano, etc. desde OTRA pantalla, Cierre
+  // Final/Semana por Días/Comisiones Devueltas/Montos Apostados/
+  // Comisiones por Carrera seguían mostrando esos números viejos hasta
+  // que se volvía a tocar el selector de semana/fecha a mano o se
+  // recargaba toda la página — eso es lo que reportó el usuario como
+  // "borré todas las jornadas y aún hay datos en Comisiones Devueltas y
+  // Cierre Final". Ahora, cada vez que se ENTRA a una de estas pantallas
+  // por la barra lateral, se vuelve a pedir al servidor con el mismo
+  // filtro (semana/fecha) que ya tenía elegido, así siempre refleja el
+  // estado real más reciente sin depender de que el operador se acuerde
+  // de refrescar.
+  if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
+}
+const REFRESCAR_AL_ENTRAR_VISTA = {
+  cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
+  semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
+  comisionesPorCarrera: () => pintarComisionesPorCarrera(),
+  comisionesDevueltas: () => pintarComisionesDevueltas(),
+  montosApostados: () => pintarMontosApostados()
+};
+function semanaActivaDeSelector(idSelector) {
+  const btn = document.querySelector('#' + idSelector + ' button.activo');
+  return (btn && btn.dataset.semana) || 'actual';
 }
 function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
@@ -2885,7 +3032,16 @@ function mostrarSemanaCierre(semana, btn) {
 // en routes/hipismo.js. Arma el encabezado de la tabla dinámicamente (un
 // <th> por cada día que trae la respuesta) porque los 7 días de la
 // semana cambian de nombre según qué lunes le tocó a cada semana.
+//
+// El backend ya manda `dias` filtrado (solo los días con alguna jugada
+// — "no muestres viernes sabado y domingo vacios" — y con el lunes
+// reordenado al final, pegado al domingo, "cuando hay carreras los
+// lunes el lunes va al lado del domingo"), así que acá solo hace falta
+// pintar tal cual vino, sin reordenar ni filtrar nada del lado del
+// cliente.
 // ------------------------------------------------------------------
+let SEMANA_POR_DIAS_ACTUAL = null; // último JSON del servidor, para los exports (Excel/PDF/Imagen)
+
 async function pintarSemanaPorDias(semana) {
   const thead = document.getElementById('filaEncabezadoSemanaPorDias');
   const tbody = document.getElementById('tablaSemanaPorDias');
@@ -2897,6 +3053,8 @@ async function pintarSemanaPorDias(semana) {
     tbody.innerHTML = `<tr><td style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
     return;
   }
+  SEMANA_POR_DIAS_ACTUAL = data;
+  pintarLogosGrupo();
 
   document.getElementById('rangoSemanaPorDias').textContent =
     `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
@@ -2927,12 +3085,113 @@ async function pintarSemanaPorDias(semana) {
     tr.innerHTML = `<td>${formatNombre(c.nombre)}</td>${celdasDias}<td class="num ${claseTotal}">${signoTotal}${formatMontoTabla(Math.abs(c.totalSemana))}</td>`;
     tbody.appendChild(tr);
   });
+
+  // "abajo a final de la lista debe ir el item comision grupo subrayado
+  // que resalte" — fila aparte al pie, no es un cliente más (ver
+  // .fila-comision-grupo en el <style>). data.comisionPorDia ya viene
+  // alineado día a día con data.dias (mismo orden filtrado/reordenado).
+  if (data.comisionPorDia && data.comisionPorDia.length === data.dias.length) {
+    const trComision = document.createElement('tr');
+    trComision.className = 'fila-comision-grupo';
+    const celdas = data.comisionPorDia.map(monto =>
+      `<td class="num">${monto ? formatMontoTabla(monto) : '—'}</td>`
+    ).join('');
+    trComision.innerHTML = `<td>💼 COMISIÓN GRUPO</td>${celdas}<td class="num">${formatMontoTabla(data.comisionSemana || 0)}</td>`;
+    tbody.appendChild(trComision);
+  }
 }
 
 function mostrarSemanaPorDias(semana, btn) {
   document.querySelectorAll('#selectorSemanaPorDias button').forEach(b => b.classList.remove('activo'));
   btn.classList.add('activo');
   pintarSemanaPorDias(semana);
+}
+
+function mostrarToastSemana(msg, esError) {
+  const t = document.getElementById('toastSemana');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+async function copiarSemanaImagen() {
+  if (typeof html2canvas !== 'function') {
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('semanaPorDiasCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastSemana('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastSemana('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'semana_por_dias.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastSemana('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastSemana('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+async function descargarSemanaPDF() {
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('semanaPorDiasCaptura');
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const orientacion = canvas.width > canvas.height ? 'l' : 'p';
+    const pdf = new jsPDF({ orientation: orientacion, unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const escala = anchoPagina / canvas.width;
+    const altoEnPDF = canvas.height * escala;
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, anchoPagina, altoEnPDF);
+    pdf.save('semana_por_dias.pdf');
+    mostrarToastSemana('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastSemana('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
+}
+
+function descargarSemanaExcel() {
+  if (typeof XLSX === 'undefined') {
+    mostrarToastSemana('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
+    return;
+  }
+  const data = SEMANA_POR_DIAS_ACTUAL;
+  if (!data) { mostrarToastSemana('⚠️ Todavía no cargó Semana por Días.', true); return; }
+
+  const encabezados = ['Cliente', ...data.dias.map(d => d.corta), 'Total Semana'];
+  const filas = data.clientes.map(c => [formatNombre(c.nombre), ...c.porDia.map(m => Number(m.toFixed(2))), Number(c.totalSemana.toFixed(2))]);
+  const filaComision = ['COMISIÓN GRUPO', ...(data.comisionPorDia || data.dias.map(() => 0)).map(m => Number((m || 0).toFixed(2))), Number((data.comisionSemana || 0).toFixed(2))];
+
+  const rangoTexto = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}`;
+  const nombreGrupo = (GRUPO && GRUPO.nombre) || 'Grupo';
+  const hoja = XLSX.utils.aoa_to_sheet([
+    [`Semana por Días — ${nombreGrupo}`],
+    [rangoTexto],
+    [],
+    encabezados,
+    ...filas,
+    [],
+    filaComision
+  ]);
+  hoja['!cols'] = encabezados.map((_, i) => ({ wch: i === 0 ? 18 : 12 }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Semana por Días');
+  XLSX.writeFile(libro, 'semana_por_dias.xlsx');
+  mostrarToastSemana('✅ Excel descargado.');
 }
 
 // Columnas opcionales de Cierre Final: por defecto ocultas (arrancan
@@ -3949,6 +4208,7 @@ cargarResumenJornada();
 document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
+pintarLogosGrupo();
 actualizarEncabezadoBalanceGeneral();
 actualizarAlertaPozos();
 cargarHipodromos();
