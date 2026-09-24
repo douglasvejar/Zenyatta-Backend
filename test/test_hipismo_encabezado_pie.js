@@ -23,9 +23,11 @@
 //      toca en absoluto.
 //   3. calcularPlano() end-to-end con el plano REAL que pegó el usuario
 //      (encabezado + jugadas + pie): no duplica el encabezado/pie en el
-//      resultado, reconoce las líneas con modalidades soportadas, y dos
-//      líneas con una modalidad NO soportada todavía ("2/3") quedan
-//      señaladas en sinReconocer (no se pierden en silencio).
+//      resultado, reconoce las líneas con modalidades soportadas, y una
+//      modalidad genuinamente inexistente sigue quedando marcada en
+//      sinReconocer (no se pierde en silencio) — "2/3" y "2/2" YA NO caen
+//      acá desde que el usuario confirmó que son alias de "2y3"/"2y2" (ver
+//      test_hipismo_modalidades_23_22.js para su cobertura completa).
 //   4. armarTextoResultado(): el encabezado que arma siempre usa
 //      ordinalCarrera() y agrega "*TERCIOS*" como parte fija — sin
 //      importar qué traiga el texto de entrada.
@@ -101,12 +103,22 @@ check(resultado.tickets.length === 6, 'Reconoce las 6 jugadas (1/2, 1/2, 2n, 1/2
 check(resultado.sinReconocer.length === 0, 'Ninguna línea sin reconocer con estas modalidades');
 check(!resultado.salidaLineas.some(l => /ZENYATTA|PLANO REFERENCIAL|Pizarra:/.test(l)), 'El encabezado/pie pegado NUNCA aparece mezclado en salidaLineas');
 
-// Con una modalidad NO soportada todavía ("2/3") en el medio: no se
-// pierde en silencio, queda marcada para que el operador la revise.
-const CON_MODALIDAD_NO_SOPORTADA = PLANO_PEGADO_USUARIO.replace('Juega Rambo 1/2 (8) con 150,00 da Tykhe', 'Juega Rambo 2/3 (8) con 150,00 da Tykhe');
-const resultado2 = calcularPlano({ texto: CON_MODALIDAD_NO_SOPORTADA, pizarra: '8.1.4', cruzar: true });
-check(resultado2.sinReconocer.some(l => /2\/3/.test(l)), 'Una modalidad todavía no soportada ("2/3") queda en sinReconocer, no se calcula ni se pierde en silencio');
-check(resultado2.tickets.length === 5, 'Las otras 5 líneas SÍ se calculan bien aunque una quede sin reconocer');
+// "2/3" (24-09-2026): el usuario confirmó que es alias de "2y3" ("2/3 ES
+// IGUAL A 2P/3N" — ver claude/spec-modulo-hipismo.md sección 6). Ya NO cae
+// en sinReconocer — se calcula de verdad como "2y3".
+const CON_2_3 = PLANO_PEGADO_USUARIO.replace('Juega Rambo 1/2 (8) con 150,00 da Tykhe', 'Juega Rambo 2/3 (8) con 150,00 da Tykhe');
+const resultado2 = calcularPlano({ texto: CON_2_3, pizarra: '8.1.4', cruzar: true });
+check(resultado2.sinReconocer.length === 0, '"2/3" ya se reconoce y se calcula — no cae en sinReconocer');
+check(resultado2.tickets.length === 6, 'Las 6 líneas se calculan, incluyendo la de "2/3"');
+check(resultado2.tickets.some(t => t.modalidad === '2/3'), 'El ticket de Rambo queda guardado con la modalidad tal cual se escribió ("2/3")');
+
+// Una modalidad genuinamente NO soportada (inventada para esta prueba, no
+// existe en ningún lado) sigue cayendo en sinReconocer, sin perderse en
+// silencio — el "safety net" del sistema sigue funcionando.
+const CON_MODALIDAD_INEXISTENTE = PLANO_PEGADO_USUARIO.replace('Juega Rambo 1/2 (8) con 150,00 da Tykhe', 'Juega Rambo 4/5 (8) con 150,00 da Tykhe');
+const resultado3 = calcularPlano({ texto: CON_MODALIDAD_INEXISTENTE, pizarra: '8.1.4', cruzar: true });
+check(resultado3.sinReconocer.some(l => /4\/5/.test(l)), 'Una modalidad que de verdad no existe ("4/5") queda en sinReconocer, no se calcula ni se pierde en silencio');
+check(resultado3.tickets.length === 5, 'Las otras 5 líneas SÍ se calculan bien aunque una quede sin reconocer');
 
 // --- 4) armarTextoResultado(): encabezado fijo con ordinalCarrera() + "*TERCIOS*" ---
 const texto = armarTextoResultado({

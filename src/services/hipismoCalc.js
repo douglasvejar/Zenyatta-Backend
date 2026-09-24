@@ -20,10 +20,15 @@
 //   - "2n"/"2nini", "3n"/"3nn": gana completo -5% en las posiciones
 //     anteriores a N, "no se decide" (0 y 0) en la posición N, pierde
 //     completo de ahí en adelante.
-//   - "2y2": gana completo -5% si 1ro, gana LA MITAD -5% si 2do, pierde
+//   - "2y2" (o "2/2", "2p/2n", "2py2n" — alias confirmados por el usuario
+//     el 24-09-2026, mismo patrón que "1/2"≡"1y2": ver
+//     claude/spec-modulo-hipismo.md sección 6, familia "AP/BN" donde
+//     A===B): gana completo -5% si 1ro, gana LA MITAD -5% si 2do, pierde
 //     completo si peor.
-//   - "2y3": gana completo -5% en 1ro y 2do, pierde la mitad (banquero
-//     gana esa mitad -5%) si 3ro, pierde completo si peor.
+//   - "2y3" (o "2/3", "2p/3n" — alias confirmado por el usuario el
+//     24-09-2026, mismo patrón, familia "AP/BN" donde B=A+1): gana
+//     completo -5% en 1ro y 2do, pierde la mitad (banquero gana esa mitad
+//     -5%) si 3ro, pierde completo si peor.
 //   - "pp (AxB)": cruzado — gana completo -5% quien de los 2 caballos
 //     llegue mejor colocado entre sí (si hay empate/ninguno colocó,
 //     gana el banquero — mismo criterio que ya tenía el mockup, ver
@@ -63,12 +68,16 @@ function resolverModalidad(modalidadCruda, pos, posB) {
     if (pos === 3) return { j: 0, b: 0 };
     return { j: -1, b: 1 };
   }
-  if (modalidad === '2y2') {
+  // "2/2" es alias de "2y2" (confirmado por el usuario 24-09-2026: "2/2 ES
+  // IGUAL A 2PY2N O 2P/2N" — mismo patrón ya establecido para "1/2"≡"1y2").
+  if (modalidad === '2y2' || modalidad === '2/2') {
     if (pos === 1) return { j: 1, b: -1 };
     if (pos === 2) return { j: 0.5, b: -0.5 };
     return { j: -1, b: 1 };
   }
-  if (modalidad === '2y3') {
+  // "2/3" es alias de "2y3" (confirmado por el usuario 24-09-2026: "2/3 ES
+  // IGUAL A 2P/3N").
+  if (modalidad === '2y3' || modalidad === '2/3') {
     if (pos === 1) return { j: 1, b: -1 };
     if (pos === 2) return { j: 1, b: -1 };
     if (pos === 3) return { j: -0.5, b: 0.5 };
@@ -93,7 +102,13 @@ function resolverModalidad(modalidadCruda, pos, posB) {
   return null; // modalidad no reconocida
 }
 
-const LINEA_REGEX = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|pp|10[/a]\d+(?:\.\d+)?)\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
+// (?:\s+del)? (24-09-2026): tolera la palabra suelta "del" entre la
+// modalidad y el paréntesis del caballo — el ejemplo real que mandó el
+// usuario trae una línea así ("Juega Pedrito 2/2 del (8) con 4.000,00 da
+// Tykhe"), mismo criterio ya usado en otras partes del sistema (ej. "3TF
+// DEL 3 A 25" en Jugadas Adelantadas) donde "del" es puro relleno del
+// lenguaje hablado, sin significado para el cálculo.
+const LINEA_REGEX = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|2\/2|2\/3|pp|10[/a]\d+(?:\.\d+)?)(?:\s+del)?\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
 
 // Monto tal cual se MUESTRA en el texto de cada línea: ya con el 5%
 // descontado si es una ganancia (spec sección 6), independiente de si el
