@@ -2652,6 +2652,25 @@ function copiarResultado() {
 // login). location.origin en vez de un dominio fijo, para que el link
 // copiado sirva igual en producción (ludoxapp.com) o en cualquier otro
 // entorno donde corra la app, sin tener que tocar este archivo.
+// 24-09-2026, a pedido del usuario ("así como me muestras que ese
+// cliente tiene el 1% al lado, colócame si se le da también a un
+// avalador cuánto % y abajo entre paréntesis a quién le cae ese otro
+// %"): en la columna "%" de la tabla de Clientes, debajo del % propio
+// de siempre, se agrega — SOLO si este cliente tiene configurado el %
+// ADICIONAL para su aval (jugadores.porcentaje_devuelto_aval, ver la
+// nota grande de obtenerComisionesPropias en routes/hipismo.js) — una
+// segunda línea chica con ese % y, entre paréntesis, el nombre de quién
+// lo recibe. `jugadores` es la misma lista completa que ya trajo GET
+// /api/jugadores para esta pantalla, así que el nombre del aval se
+// resuelve ahí mismo sin pedir nada más al servidor.
+function etiquetaPctAvalTabla(j, jugadores) {
+  const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
+  if (!pctAval) return '';
+  const aval = jugadores.find(x => String(x.id) === String(j.avalado_por_id));
+  if (!aval) return '';
+  return `<br><span style="font-size:11px; color:var(--text-dim);">+${pctAval}% (${formatNombre(aval.nombre)})</span>`;
+}
+
 async function cargarClientesReales() {
   const tbody = document.getElementById('tablaClientes');
   // "Anclar módulos" (23-09-2026) — la columna solo aparece si el grupo
@@ -2681,7 +2700,7 @@ async function cargarClientesReales() {
   tbody.innerHTML = jugadores.map(j => `
     <tr data-cliente="${j.nombre}">
       <td>${formatNombre(j.nombre)}${j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : ''}</td>
-      <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
+      <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}${etiquetaPctAvalTabla(j, jugadores)}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
       ${hayLos2Modulos ? `
       <td>
