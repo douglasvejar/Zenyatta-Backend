@@ -668,7 +668,82 @@ const DICCIONARIO_EQUIPOS_SOCCER_BASE = {
   'excelsior': { nombre: 'Excelsior', deporte: 'soccer' },
   'telstar': { nombre: 'Telstar', deporte: 'soccer' },
   'fc volendam': { nombre: 'FC Volendam', deporte: 'soccer' },
-  'volendam': { nombre: 'FC Volendam', deporte: 'soccer' }
+  'volendam': { nombre: 'FC Volendam', deporte: 'soccer' },
+
+  // --- SELECCIONES NACIONALES — agregado 24-09-2026, a pedido del
+  // usuario ("están los partidos amistosos y la Nations League en el
+  // soccer? ... si agregalos todos"), junto con las 4 competencias
+  // nuevas de LIGAS_SOCCER en soccerApi.js (Amistoso Internacional,
+  // Eliminatorias Conmebol, Copa América, UEFA Nations League).
+  //
+  // OJO — mismo criterio "semilla" que el resto de este diccionario,
+  // pero con una diferencia importante: a diferencia de un club (que
+  // solo juega SU liga), una selección puede aparecer en CUALQUIERA de
+  // estas 4 competencias el mismo mes (ej. Venezuela jugando Eliminatorias
+  // un jueves y un Amistoso el martes siguiente) — no hace falta ninguna
+  // distinción especial para eso: como ya pasa con los clubes, este
+  // diccionario no separa por torneo (evaluador.js trata TODO fútbol
+  // como un solo deporte "soccer"), así que una selección con partido en
+  // CUALQUIERA de las 4 se encuentra igual.
+  //
+  // El campo "nombre" es el nombre del país EN INGLÉS (confirmado por
+  // búsqueda web contra partidos reales de ESPN — ver el comentario
+  // grande en soccerApi.js) porque así es como ESPN devuelve
+  // team.displayName en su marcador en vivo — el apodo (la clave de acá
+  // abajo) sí está en español, para que el cliente/operador pueda seguir
+  // escribiendo el nombre del país como lo escribe siempre en el chat.
+  //
+  // Se cargaron las 10 selecciones de la CONMEBOL completas (las que
+  // juegan Eliminatorias Conmebol y Copa América, el core de este pedido
+  // — con "vinotinto", el apodo de siempre de la Selección Venezolana) +
+  // una selección amplia de selecciones europeas conocidas (las que más
+  // probablemente aparezcan en un Amistoso o en la UEFA Nations League).
+  // No están las ~55 selecciones de la UEFA ni las de otras
+  // confederaciones (CONCACAF/AFC/CAF) — como con los clubes, este
+  // diccionario va a ir creciendo con las selecciones reales que
+  // aparezcan en una sábana, a medida que el usuario las reporte.
+  'argentina': { nombre: 'Argentina', deporte: 'soccer' },
+  'bolivia': { nombre: 'Bolivia', deporte: 'soccer' },
+  'brasil': { nombre: 'Brazil', deporte: 'soccer' },
+  'chile': { nombre: 'Chile', deporte: 'soccer' },
+  'colombia': { nombre: 'Colombia', deporte: 'soccer' },
+  'ecuador': { nombre: 'Ecuador', deporte: 'soccer' },
+  'paraguay': { nombre: 'Paraguay', deporte: 'soccer' },
+  'peru': { nombre: 'Peru', deporte: 'soccer' },
+  'uruguay': { nombre: 'Uruguay', deporte: 'soccer' },
+  'venezuela': { nombre: 'Venezuela', deporte: 'soccer' },
+  'vinotinto': { nombre: 'Venezuela', deporte: 'soccer' },
+  'la vinotinto': { nombre: 'Venezuela', deporte: 'soccer' },
+
+  'espana': { nombre: 'Spain', deporte: 'soccer' },
+  'portugal': { nombre: 'Portugal', deporte: 'soccer' },
+  'francia': { nombre: 'France', deporte: 'soccer' },
+  'alemania': { nombre: 'Germany', deporte: 'soccer' },
+  'inglaterra': { nombre: 'England', deporte: 'soccer' },
+  'italia': { nombre: 'Italy', deporte: 'soccer' },
+  'holanda': { nombre: 'Netherlands', deporte: 'soccer' },
+  'belgica': { nombre: 'Belgium', deporte: 'soccer' },
+  'croacia': { nombre: 'Croatia', deporte: 'soccer' },
+  'dinamarca': { nombre: 'Denmark', deporte: 'soccer' },
+  'suiza': { nombre: 'Switzerland', deporte: 'soccer' },
+  'austria': { nombre: 'Austria', deporte: 'soccer' },
+  'polonia': { nombre: 'Poland', deporte: 'soccer' },
+  'serbia': { nombre: 'Serbia', deporte: 'soccer' },
+  'ucrania': { nombre: 'Ukraine', deporte: 'soccer' },
+  'gales': { nombre: 'Wales', deporte: 'soccer' },
+  'escocia': { nombre: 'Scotland', deporte: 'soccer' },
+  'suecia': { nombre: 'Sweden', deporte: 'soccer' },
+  'noruega': { nombre: 'Norway', deporte: 'soccer' },
+  'turquia': { nombre: 'Turkey', deporte: 'soccer' },
+  'hungria': { nombre: 'Hungary', deporte: 'soccer' },
+  'republica checa': { nombre: 'Czech Republic', deporte: 'soccer' },
+  'grecia': { nombre: 'Greece', deporte: 'soccer' },
+  'irlanda': { nombre: 'Republic of Ireland', deporte: 'soccer' },
+  'islandia': { nombre: 'Iceland', deporte: 'soccer' },
+  'finlandia': { nombre: 'Finland', deporte: 'soccer' },
+  'eslovaquia': { nombre: 'Slovakia', deporte: 'soccer' },
+  'eslovenia': { nombre: 'Slovenia', deporte: 'soccer' },
+  'rumania': { nombre: 'Romania', deporte: 'soccer' }
 };
 
 // =================================================================

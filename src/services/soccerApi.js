@@ -46,6 +46,32 @@
 // red documentada en el doc del proyecto) confirman el slug y, de paso,
 // el nombre EXACTO que ESPN usa para cada club (importante: no siempre es
 // el nombre completo — ver diccionarioEquipos.js, sección Eredivisie).
+//
+// SELECCIONES NACIONALES (24-09-2026, a pedido del usuario: "están los
+// partidos amistosos y la Nations League en el soccer? Para determinar
+// los juegos que hay hoy?" y, tras confirmar que no, "si agregalos
+// todos"): se agregan 4 competencias de SELECCIONES (a diferencia de las
+// 13 de arriba, que son todas de CLUBES) — Amistoso Internacional,
+// Eliminatorias Conmebol, Copa América y UEFA Nations League. Los 4
+// slugs se confirmaron por búsqueda web (mismo criterio de siempre: no
+// se pudo pegarle directo a la API en vivo desde este sandbox) contra
+// varias páginas reales de espn.com con ese /league/<slug> en la URL:
+// 'fifa.friendly' (ej. "2026 Men's International Friendly Schedule"),
+// 'fifa.worldq.conmebol' (ej. "FIFA World Cup Qualifying - CONMEBOL
+// Scores"), 'conmebol.america' (ej. "Copa América News, Stats, Scores")
+// y 'uefa.nations' (ej. "UEFA Nations League Scores"), además de
+// partidos reales puntuales (ej. "Argentina 3-0 Venezuela", Eliminatorias
+// Conmebol, 04-09-2025; "Spain 5-4 France", final UEFA Nations League,
+// 05-06-2025) que confirman que ESPN usa el nombre del PAÍS en inglés
+// tal cual (ej. "Venezuela", "Spain") como team.displayName — igual que
+// con los clubes, este es el nombre que hay que usar como "nombre" en el
+// diccionario para que el marcador en vivo lo encuentre (ver
+// diccionarioEquipos.js, sección "SELECCIONES NACIONALES").
+//
+// No se agregó Eliminatorias de otras confederaciones (UEFA/CONCACAF/
+// AFC/CAF) ni el Mundial en sí — el usuario, en esta ronda, solo pidió
+// estas 4; agregar otra confederación más adelante es, de nuevo, solo
+// sumar su slug acá.
 const LIGAS_SOCCER = [
   { slug: 'eng.1', nombre: 'Premier League' },
   { slug: 'esp.1', nombre: 'La Liga' },
@@ -59,7 +85,11 @@ const LIGAS_SOCCER = [
   { slug: 'uefa.europa.conf', nombre: 'UEFA Conference League' },
   { slug: 'conmebol.libertadores', nombre: 'Copa Libertadores' },
   { slug: 'conmebol.sudamericana', nombre: 'Copa Sudamericana' },
-  { slug: 'ned.1', nombre: 'Eredivisie' }
+  { slug: 'ned.1', nombre: 'Eredivisie' },
+  { slug: 'fifa.friendly', nombre: 'Amistoso Internacional' },
+  { slug: 'fifa.worldq.conmebol', nombre: 'Eliminatorias Conmebol' },
+  { slug: 'conmebol.america', nombre: 'Copa América' },
+  { slug: 'uefa.nations', nombre: 'UEFA Nations League' }
 ];
 
 async function obtenerResultadosDeLiga(slug, nombreLiga, fechaCompacta) {

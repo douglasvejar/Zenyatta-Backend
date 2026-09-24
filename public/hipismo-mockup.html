@@ -1439,7 +1439,12 @@
     <section class="vista" id="vista-clientes">
       <div class="card">
         <h2>👤 Clientes</h2>
-        <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. Desde el 23-09-2026 (duodécima-tercera ronda, a pedido del usuario: "en la pestaña clientes quiero al seleccionarlo me abra una pantalla donde salgan todos sus datos, y poder editarlo, su nombre, telefono contacto, quien lo avala, su pozo, si se le devuelve porcentaje, si el porcentaje que se le devuelve no es para el si no para su aval, cuanto se le da de %") ya no hace falta ir a Deportes para eso — "👁️ Ver / Editar" abre el detalle completo del cliente acá mismo (ver pintarDetalleCliente() más abajo).</p>
+        <!-- 24-09-2026, a pedido del usuario: se quita el párrafo de notas
+             de desarrollo que se veía acá (explicaba cuándo se construyó
+             cada parte, con las citas textuales de los pedidos) — quedaba
+             visible para cualquiera que entrara a esta pantalla, y no es
+             información que le sirva al operador del día a día. -->
+        <p class="desc">Ficha completa de cada cliente: datos personales, pozo, % de devolución y quién es su aval. Un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo.</p>
         <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button></div>
         <div id="tablaClientesWrap">
           <table style="margin-top:18px;">
@@ -2629,7 +2634,7 @@ async function cargarClientesReales() {
     return;
   }
   // Cache (23-09-2026, duodécima-tercera ronda) — para armar el detalle de
-  // un cliente (pintarDetalleCliente()) y la lista de posibles avales sin
+  // un cliente (pintarFichaCliente()) y la lista de posibles avales sin
   // tener que pedir /api/jugadores de nuevo.
   CLIENTES_HIPISMO_CACHE = jugadores;
   poblarSelectPozoAjusteCliente();
@@ -2650,7 +2655,7 @@ async function cargarClientesReales() {
         </label>
       </td>` : ''}
       <td style="display:flex; gap:6px; flex-wrap:wrap;">
-        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirDetalleCliente('${j.id}')">👁️ Ver / Editar</button>
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirFichaCliente('${j.id}')">👁️ Ver / Editar</button>
         <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
       </td>
     </tr>
@@ -2693,7 +2698,7 @@ let CLIENTES_HIPISMO_CACHE = [];
 // Reusa el mismo contenedor "clienteDetalleWrap" que el detalle/edición
 // de un cliente existente (mismo patrón de "una sola pantalla, se
 // reemplaza el innerHTML" que el resto del mockup) — así "Cancelar"
-// vuelve a la tabla con cerrarDetalleCliente(), sin duplicar código.
+// vuelve a la tabla con cerrarFichaCliente(), sin duplicar código.
 function abrirCrearCliente() {
   CLIENTE_DETALLE_ID = null;
   const wrap = document.getElementById('clienteDetalleWrap');
@@ -2708,7 +2713,7 @@ function abrirCrearCliente() {
     .join('');
 
   wrap.innerHTML = `
-    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">&lsaquo; Volver a la lista</button></div>
+    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">&lsaquo; Volver a la lista</button></div>
     <div class="card" style="padding:16px;">
       <h3 style="margin:0 0 12px;">➕ Crear cliente</h3>
       <div class="fila">
@@ -2755,7 +2760,7 @@ function abrirCrearCliente() {
       </div>
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
-        <button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">Cancelar</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">Cancelar</button>
       </div>
     </div>`;
 }
@@ -2781,16 +2786,16 @@ async function guardarNuevoCliente() {
     return;
   }
   await cargarClientesReales();
-  cerrarDetalleCliente();
+  cerrarFichaCliente();
   alert('✅ Cliente creado.');
 }
 
-function abrirDetalleCliente(id) {
+function abrirFichaCliente(id) {
   CLIENTE_DETALLE_ID = id;
-  pintarDetalleCliente();
+  pintarFichaCliente();
 }
 
-function cerrarDetalleCliente() {
+function cerrarFichaCliente() {
   CLIENTE_DETALLE_ID = null;
   const wrap = document.getElementById('clienteDetalleWrap');
   if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = ''; }
@@ -2804,7 +2809,7 @@ function actualizarVisibilidadPozoDetalleCliente() {
   if (sel && wrap) wrap.style.display = sel.value === 'avalado' ? 'block' : 'none';
 }
 
-async function pintarDetalleCliente() {
+async function pintarFichaCliente() {
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(CLIENTE_DETALLE_ID));
   const wrap = document.getElementById('clienteDetalleWrap');
   const tablaWrap = document.getElementById('tablaClientesWrap');
@@ -2822,7 +2827,7 @@ async function pintarDetalleCliente() {
   const historial = await obtenerHistorialPozo(j.id);
 
   wrap.innerHTML = `
-    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">&lsaquo; Volver a la lista</button></div>
+    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">&lsaquo; Volver a la lista</button></div>
     <div class="card" style="padding:16px;">
       <h3 style="margin:0 0 12px;">👁️ ${formatNombre(j.nombre)}</h3>
       <div class="fila">
@@ -2916,7 +2921,7 @@ async function guardarDetalleCliente(id) {
   }
   await cargarClientesReales();
   CLIENTE_DETALLE_ID = id;
-  await pintarDetalleCliente();
+  await pintarFichaCliente();
   alert('✅ Cliente actualizado.');
 }
 
@@ -2924,7 +2929,7 @@ async function guardarAjustePozoDetalleCliente(id) {
   await enviarAjustePozo(id, 'detCteAjusteMonto', 'detCteAjusteMotivo', async () => {
     await cargarClientesReales();
     CLIENTE_DETALLE_ID = id;
-    await pintarDetalleCliente();
+    await pintarFichaCliente();
   });
 }
 
