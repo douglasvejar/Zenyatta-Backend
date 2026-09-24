@@ -138,7 +138,7 @@
     <div class="caja-pendiente">
       <div class="icono">🚧</div>
       <h2>Estamos armando esta página</h2>
-      <p>Muy pronto vas a encontrar acá el detalle completo de este producto — funciones, capturas y todo lo que incluye. Mientras tanto, pedí una demo y te lo mostramos en vivo.</p>
+      <p>Muy pronto vas a encontrar acá el detalle completo de este producto — funciones, capturas y todo lo que incluye. Mientras tanto, pide una demo y te lo mostramos en vivo.</p>
     </div>
 
     <div class="acciones-pagina">
@@ -153,7 +153,7 @@
     <div class="modal">
       <div class="modal-header">
         <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
-        <h2>Solicitá tu demo</h2>
+        <h2>Solicita tu demo</h2>
         <p class="sub">Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.</p>
       </div>
       <a class="canal-contacto" id="canalEmail" href="mailto:">
@@ -176,7 +176,7 @@
         </div>
         <div class="campo">
           <label for="ctMensaje">Mensaje</label>
-          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitás..."></textarea>
+          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitas..."></textarea>
         </div>
         <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
         <div class="msg-form" id="msgFormContacto"></div>
@@ -220,7 +220,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   const textoMensaje = document.getElementById('ctMensaje').value.trim();
 
   if (!contacto || !textoMensaje) {
-    msgEl.textContent = 'Completá al menos el contacto y el mensaje.';
+    msgEl.textContent = 'Completa al menos el contacto y el mensaje.';
     msgEl.className = 'msg-form error';
     return;
   }
@@ -241,7 +241,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
     msgEl.className = 'msg-form ok';
     document.getElementById('formContacto').reset();
   } catch (err) {
-    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intentá de nuevo.';
+    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intenta de nuevo.';
     msgEl.className = 'msg-form error';
   } finally {
     btn.disabled = false;

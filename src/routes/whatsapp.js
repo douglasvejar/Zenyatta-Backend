@@ -119,7 +119,7 @@ router.get('/estado', asyncHandler(async (req, res) => {
 router.post('/dias/:fecha/enviar-resumen', asyncHandler(async (req, res) => {
   if (!servicioHabilitado(req)) {
     // 400, a propósito NUNCA 401/403: el frontend (api() en app.js) trata
-    // 401/403 como "la sesión venció" y cierra sesión sola — "no tenés
+    // 401/403 como "la sesión venció" y cierra sesión sola — "no tienes
     // este servicio contratado" es un estado de negocio normal, no un
     // problema de autenticación, y no puede tumbarle la sesión a un Grupo
     // que simplemente no compró este plus.
@@ -134,7 +134,7 @@ router.post('/dias/:fecha/enviar-resumen', asyncHandler(async (req, res) => {
   const { obtenerSockActivo, procesarDiaAbierto } = require('../services/whatsappBot');
   const sock = obtenerSockActivo();
   if (!sock) {
-    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisá el QR/la conexión).' });
+    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisa el QR/la conexión).' });
   }
   const resultado = await procesarDiaAbierto(sock, req.grupoId, req.grupo.whatsapp_grupo_jid, req.params.fecha, { forzar: true });
   res.json(resultado);
@@ -165,7 +165,7 @@ router.post('/diagnosticar-sesiones', asyncHandler(async (req, res) => {
   const { obtenerSockActivo, diagnosticarSesionesGrupo } = require('../services/whatsappBot');
   const sock = obtenerSockActivo();
   if (!sock) {
-    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisá el QR/la conexión).' });
+    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisa el QR/la conexión).' });
   }
   const resultado = await diagnosticarSesionesGrupo(sock, req.grupo.whatsapp_grupo_jid);
   res.json(resultado);
@@ -189,7 +189,7 @@ router.post('/diagnosticar-sesiones', asyncHandler(async (req, res) => {
 router.get('/dias/:fecha/resumen', asyncHandler(async (req, res) => {
   if (!servicioHabilitado(req)) {
     // 400, a propósito NUNCA 401/403: el frontend (api() en app.js) trata
-    // 401/403 como "la sesión venció" y cierra sesión sola — "no tenés
+    // 401/403 como "la sesión venció" y cierra sesión sola — "no tienes
     // este servicio contratado" es un estado de negocio normal, no un
     // problema de autenticación, y no puede tumbarle la sesión a un Grupo
     // que simplemente no compró este plus.

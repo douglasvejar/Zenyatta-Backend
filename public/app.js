@@ -637,9 +637,9 @@ function actualizarDatalistEquiposOficiales() {
   const ayuda = document.getElementById('ayudaNombreOficialEquipo');
   if (ayuda) {
     if (nombres.length > 0) {
-      ayuda.textContent = '💡 El campo "Nombre Oficial API" te sugiere los ' + nombres.length + ' equipos reales de ' + NOMBRE_LARGO_DEPORTE(deporte) + ' mientras escribís, para que no se desalinee con la API.';
+      ayuda.textContent = '💡 El campo "Nombre Oficial API" te sugiere los ' + nombres.length + ' equipos reales de ' + NOMBRE_LARGO_DEPORTE(deporte) + ' mientras escribes, para que no se desalinee con la API.';
     } else {
-      ayuda.textContent = '💡 Este deporte todavía no tiene su API conectada, así que no hay sugerencias todavía — podés escribir el nombre oficial a mano, y va a quedar guardado listo para cuando se conecte.';
+      ayuda.textContent = '💡 Este deporte todavía no tiene su API conectada, así que no hay sugerencias todavía — puedes escribir el nombre oficial a mano, y va a quedar guardado listo para cuando se conecte.';
     }
   }
 }
@@ -1734,10 +1734,10 @@ async function diagnosticarSesionesGrupoWhatsapp() {
   try {
     const r = await api('/api/whatsapp/diagnosticar-sesiones', { method: 'POST' });
     if (!r.conProblema || r.conProblema.length === 0) {
-      caja.innerHTML = '✅ Se probó la sesión de los ' + r.revisados + ' participantes del grupo ("' + escapeHtml(r.grupoNombre || '') + '") uno por uno y ninguno dio problema individual. El "not-acceptable" podría estar pasando por otro motivo (por ejemplo, con muchos participantes a la vez) — copiá el detalle del error de arriba y pasámelo junto con este resultado.';
+      caja.innerHTML = '✅ Se probó la sesión de los ' + r.revisados + ' participantes del grupo ("' + escapeHtml(r.grupoNombre || '') + '") uno por uno y ninguno dio problema individual. El "not-acceptable" podría estar pasando por otro motivo (por ejemplo, con muchos participantes a la vez) — copia el detalle del error de arriba y pasámelo junto con este resultado.';
     } else {
       const lista = r.conProblema.map(p => '<li>+' + escapeHtml(p.numero || p.jid) + ' — ' + escapeHtml(p.mensaje) + '</li>').join('');
-      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + escapeHtml(r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisá si siguen en WhatsApp y, si no, sacalos del grupo.';
+      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + escapeHtml(r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisa si siguen en WhatsApp y, si no, sacalos del grupo.';
     }
   } catch (e) {
     caja.textContent = '⚠️ No se pudo diagnosticar: ' + e.message;
@@ -3845,7 +3845,7 @@ function generarTextoSabanaWhatsApp(tickets) {
 
 function extraerTextoSabanaWhatsApp() {
   if (!ULTIMA_SABANA_DIA || !ULTIMA_SABANA_DIA.tickets || ULTIMA_SABANA_DIA.tickets.length === 0) {
-    alert('Primero elegí y cargá una fecha con sábana.');
+    alert('Primero elige y carga una fecha con sábana.');
     return;
   }
   const fechaTitulo = document.getElementById('sabanasTituloFecha');
@@ -4517,10 +4517,10 @@ async function reportarPago() {
   const fileInput = document.getElementById('pagoCapturaInput');
   const file = fileInput.files[0];
 
-  if (!fecha) { alert('Elegí la fecha del pago.'); return; }
-  if (!file) { alert('Adjuntá la captura del pago.'); return; }
+  if (!fecha) { alert('Elige la fecha del pago.'); return; }
+  if (!file) { alert('Adjunta la captura del pago.'); return; }
   if (file.size > TOPE_CAPTURA_PAGO_BYTES) {
-    alert('La imagen es muy pesada (máx. 4MB) — probá con una captura de pantalla en vez de la foto original de la cámara.');
+    alert('La imagen es muy pesada (máx. 4MB) — prueba con una captura de pantalla en vez de la foto original de la cámara.');
     return;
   }
 

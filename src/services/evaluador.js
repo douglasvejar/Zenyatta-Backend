@@ -920,7 +920,7 @@ function evaluarJugada(lineaJugada, datosPorDeporte, diccionarioEquipos, opcione
       const listaCandidatos = candidatosConDeporte.map(c => c.nombre + ' (' + c.deporte.toUpperCase() + ')');
       return {
         estado: 'AMBIGUA (VARIOS DEPORTES)',
-        razon: '"' + apodoEncontrado + '" podría ser ' + listaCandidatos.join(' o ') + ' — los dos (o los varios) juegan hoy y no se pudo determinar cuál. Aclará escribiendo el nombre completo del equipo, poniendo un emoji/palabra clave del deporte junto al equipo (ej. "🏈" o "nba"), o resolviéndolo desde la pestaña Alertas.',
+        razon: '"' + apodoEncontrado + '" podría ser ' + listaCandidatos.join(' o ') + ' — los dos (o los varios) juegan hoy y no se pudo determinar cuál. Aclara escribiendo el nombre completo del equipo, poniendo un emoji/palabra clave del deporte junto al equipo (ej. "🏈" o "nba"), o resolviéndolo desde la pestaña Alertas.',
         debug: { pata: lineaJugada, apodoDetectado: apodoEncontrado, equipoOficial: null, candidatosAmbiguos: listaCandidatos, candidatosAmbiguosDetalle: candidatosConDeporte }
       };
     }

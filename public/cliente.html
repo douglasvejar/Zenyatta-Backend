@@ -332,7 +332,12 @@
     </div>
   </div>
 
-  <footer class="pie-pagina">Desarrollado por Ludox Venezuela since 2026 - Soluciones Digitales</footer>
+  <!-- 24-09-2026 (ronda 21), a pedido del usuario: "agrega tambien como
+       pie e pagina en todos lados : Sistema Ludox Since 2026 al final
+       solo como una firma" — texto unificado con el resto de los
+       paneles/links (antes decía "Desarrollado por Ludox Venezuela
+       since 2026 - Soluciones Digitales"). -->
+  <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 </div>
 
 <script>
@@ -595,7 +600,7 @@ function mostrarMensajeConfirmacion(tipo) {
     mensaje.textContent = '✅ Gracias por confirmar tu cuenta, feliz semana y éxitos en tus jugadas.';
   } else {
     mensaje.className = 'confirmacion-mensaje alerta';
-    mensaje.textContent = '⚠️ Ya avisaste tu diferencia hoy — el grupo ya lo sabe. Podés volver a usar estos botones mañana.';
+    mensaje.textContent = '⚠️ Ya avisaste tu diferencia hoy — el grupo ya lo sabe. Puedes volver a usar estos botones mañana.';
   }
 }
 
@@ -631,7 +636,7 @@ async function confirmarCuenta(tipo) {
 // =================================================================
 // Jugadas agrupadas POR DÍA (01-09-2026, a pedido del usuario, a partir
 // de una captura de otro programa de apuestas que le gustó: "se ordena
-// por día, en lo que seleccionás el día ves el detallado de qué hizo ese
+// por día, en lo que seleccionas el día ves el detallado de qué hizo ese
 // día"). Cada día es un acordeón con su propio balance (misma cuenta que
 // el resumen de arriba: GANADA suma "gana", PERDIDA resta "arriesga") y
 // un badge de si esa fecha ya quedó confirmada como la sábana oficial

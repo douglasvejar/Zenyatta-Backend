@@ -25,10 +25,10 @@
 //     whatsapp_habilitado=true, los dos EXCLUSIVOS del Súper-admin.
 //   - Usar una librería no oficial conlleva un riesgo real de que
 //     WhatsApp bloquee el número usado para conectarse — el 18-09-2026 le
-//     pasó de verdad al usuario con el número que tenía vinculado. Usá
+//     pasó de verdad al usuario con el número que tenía vinculado. Usa
 //     SIEMPRE un número dedicado solo a este bot, nunca tu línea
 //     personal ni la línea principal del negocio — si ese número se
-//     banea, se pierde solo ese número, no todo lo demás. Preferí además
+//     banea, se pierde solo ese número, no todo lo demás. Prefiere además
 //     un número con algo de historial real (no recién activado) y que ya
 //     venga registrado en WhatsApp Business, no en el WhatsApp normal.
 //   - (18-09-2026, tras ese cierre de cuenta) Este archivo TUVO durante
@@ -160,7 +160,7 @@ async function estaAutorizadoParaComandos(grupoId, participantJid) {
       // sin exponer nada por el propio WhatsApp: acá, ni siquiera está
       // prendido el interruptor en Súper-admin todavía (o el grupo no
       // existe), así que ni hace falta mirar el número del remitente.
-      console.log('[whatsappBot] Comando ignorado (grupo ' + grupoId + '): "Comandos por WhatsApp" está APAGADO (o sin cargar) en Súper-admin — prendelo y cargá el número autorizado en el detalle del grupo, sección "📟 Comandos por WhatsApp".');
+      console.log('[whatsappBot] Comando ignorado (grupo ' + grupoId + '): "Comandos por WhatsApp" está APAGADO (o sin cargar) en Súper-admin — préndelo y carga el número autorizado en el detalle del grupo, sección "📟 Comandos por WhatsApp".');
       return false;
     }
     const numeroConfigurado = normalizarTelefono(fila.comandos_whatsapp_numero);
@@ -181,7 +181,7 @@ async function estaAutorizadoParaComandos(grupoId, participantJid) {
         // nuevo: cargar en Súper-admin, como "número autorizado", estos
         // mismos dígitos ("' + digitosRemitente + '") en vez de un
         // teléfono — se compara igual, dígito por dígito.
-        msg += ' ⚠️ Este remitente usa un identificador @lid de WhatsApp (no pudo resolverse a un número de teléfono real) — como solución inmediata, podés cargar en Súper-admin, como "número autorizado", estos mismos dígitos ("' + digitosRemitente + '") en vez de un número de teléfono.';
+        msg += ' ⚠️ Este remitente usa un identificador @lid de WhatsApp (no pudo resolverse a un número de teléfono real) — como solución inmediata, puedes cargar en Súper-admin, como "número autorizado", estos mismos dígitos ("' + digitosRemitente + '") en vez de un número de teléfono.';
       }
       console.log(msg);
     }
@@ -293,7 +293,7 @@ function programarOAlertarCaidaWhatsapp(motivoTexto, urgente) {
       '🔴 LUDOX: se cayó la conexión de WhatsApp',
       'El bot de WhatsApp se desconectó (' + motivoTexto + ').\n\n' +
         'Desde: ' + desconectadoDesdeEn.toLocaleString('es-VE') + '\n\n' +
-        'Entrá al panel de Súper-admin para revisar/reconectar.'
+        'Entra al panel de Súper-admin para revisar/reconectar.'
     ).catch(() => {});
   };
 
@@ -776,7 +776,7 @@ async function manejarComandoSaldoDia(sock, grupoId, jid) {
   if (!todosResueltos) {
     const textoListado = generarTextoListadoSabana(resp, { esFinal: false, nombreGrupo });
     await avisar(sock, jid, textoListado);
-    await avisar(sock, jid, '⏳ Todavía faltan jugadas por decidirse o juegos por terminar — apenas todos tengan resultado, volvé a pedir *saldo final*/*saldo del día* para ver los totales.');
+    await avisar(sock, jid, '⏳ Todavía faltan jugadas por decidirse o juegos por terminar — apenas todos tengan resultado, vuelve a pedir *saldo final*/*saldo del día* para ver los totales.');
     await whatsappDiaEstado.registrarEnvioResumen(grupoId, fecha, hashActual);
     return { accion: 'FALTAN_JUEGOS', resp };
   }
@@ -947,7 +947,7 @@ async function manejarMensajeEntrante(sock, msg) {
     if (!fechaEncontrada) {
       const pendiente = await crearPendiente(grupoId, { texto: textoLimpio, fechaDetectada: null, remitente, remitenteNombre });
       await marcarError(grupoId, pendiente.id, 'Falta la fecha (o no se pudo leer) en la línea de abajo de "SABANA DE JUGADAS".');
-      await avisar(sock, remoteJid, '⚠️ No se pudo leer la fecha. Recordá el formato:\n*SABANA DE JUGADAS*\nDD-MM-YYYY\n(las jugadas...)\n\nVolvé a mandar el mensaje con la fecha en la línea de abajo del disparador.');
+      await avisar(sock, remoteJid, '⚠️ No se pudo leer la fecha. Recuerda el formato:\n*SABANA DE JUGADAS*\nDD-MM-YYYY\n(las jugadas...)\n\nVuelve a mandar el mensaje con la fecha en la línea de abajo del disparador.');
       return;
     }
     const fecha = fechaDetectada;
@@ -962,7 +962,7 @@ async function manejarMensajeEntrante(sock, msg) {
     // abajo).
     if (estadoDiaPrevio && estadoDiaPrevio.sabanaFinalEn && !esFinal) {
       await marcarError(grupoId, pendiente.id, 'Se ignoró: la fecha ' + fecha + ' ya fue cerrada con SABANA DE JUGADAS FINAL. No se aceptan más actualizaciones de sábana para esa fecha.');
-      await avisar(sock, remoteJid, '⚠️ La fecha ' + formatFechaAviso(fecha) + ' ya fue cerrada con *SABANA DE JUGADAS FINAL* — este mensaje se ignoró. Si hace falta corregir algo, hacelo desde el panel.');
+      await avisar(sock, remoteJid, '⚠️ La fecha ' + formatFechaAviso(fecha) + ' ya fue cerrada con *SABANA DE JUGADAS FINAL* — este mensaje se ignoró. Si hace falta corregir algo, hazlo desde el panel.');
       return;
     }
 
@@ -1019,7 +1019,7 @@ async function manejarMensajeEntrante(sock, msg) {
       await descartarPendiente(grupoId, pendiente.id, 'Mensaje de cierre sin jugadas nuevas — se sigue usando la última sábana ya cargada para esta fecha' + (motivoError ? (' (' + motivoError + ')') : '') + '.');
     } else {
       await marcarError(grupoId, pendiente.id, motivoError || 'No se pudo leer ninguna jugada en el mensaje.');
-      await avisar(sock, remoteJid, '⚠️ No se pudo leer la sábana: ' + (motivoError || 'no se reconoció ninguna jugada') + '\nRevisá el formato del mensaje y volvé a mandarla.');
+      await avisar(sock, remoteJid, '⚠️ No se pudo leer la sábana: ' + (motivoError || 'no se reconoció ninguna jugada') + '\nRevisa el formato del mensaje y vuelve a mandarla.');
       return; // sin una sábana válida cargada para hoy, no hay nada más que verificar/mandar
     }
 
@@ -1039,7 +1039,7 @@ async function listarGruposDisponibles(sock) {
     const grupos = await sock.groupFetchAllParticipating();
     const lista = Object.values(grupos).map(g => ({ jid: g.id, nombre: g.subject }));
     estadoConexion.gruposDisponibles = lista;
-    console.log('[whatsappBot] Grupos de WhatsApp a los que pertenece este número (copiá el JID del que corresponda al Súper-admin, para que lo cargue en el detalle del Grupo → "📲 Sábana automática por WhatsApp"):');
+    console.log('[whatsappBot] Grupos de WhatsApp a los que pertenece este número (copia el JID del que corresponda al Súper-admin, para que lo cargue en el detalle del Grupo → "📲 Sábana automática por WhatsApp"):');
     lista.forEach(g => console.log('  - "' + g.nombre + '" -> ' + g.jid));
   } catch (e) {
     console.error('[whatsappBot] No se pudo listar los grupos de WhatsApp:', e.message);
@@ -1064,7 +1064,7 @@ async function listarGruposDisponibles(sock) {
 // bot se reconecte solo) para cubrir justo ese caso.
 async function refrescarGruposDisponibles() {
   if (!sockActual) {
-    throw new Error('El bot no está conectado a WhatsApp en este momento — esperá a que se reconecte y volvé a intentar.');
+    throw new Error('El bot no está conectado a WhatsApp en este momento — espera a que se reconecte y vuelve a intentar.');
   }
   await listarGruposDisponibles(sockActual);
   return estadoConexion.gruposDisponibles;
@@ -1147,7 +1147,7 @@ async function iniciarBotWhatsApp() {
 
     if (qr) {
       estadoConexion.ultimoQr = qr;
-      console.log('[whatsappBot] Escaneá este código QR con el WhatsApp que va a "escuchar" el grupo (Ajustes > Dispositivos vinculados > Vincular un dispositivo):');
+      console.log('[whatsappBot] Escanea este código QR con el WhatsApp que va a "escuchar" el grupo (Ajustes > Dispositivos vinculados > Vincular un dispositivo):');
       qrcode.generate(qr, { small: true });
     }
 
@@ -1170,7 +1170,7 @@ async function iniciarBotWhatsApp() {
         // y reiniciar el servidor — ahora alcanza con el botón "🗑️ Olvidar
         // sesión y generar un QR nuevo" en Súper-admin (ver
         // olvidarSesionWhatsapp() más abajo), sin tocar nada por fuera.
-        estadoConexion.ultimoError = 'Se cerró la sesión de WhatsApp (hay que volver a escanear el QR) — tocá "🗑️ Olvidar sesión y generar un QR nuevo" en Súper-admin.';
+        estadoConexion.ultimoError = 'Se cerró la sesión de WhatsApp (hay que volver a escanear el QR) — toca "🗑️ Olvidar sesión y generar un QR nuevo" en Súper-admin.';
         console.error('[whatsappBot] ' + estadoConexion.ultimoError);
         // Urgente: esto NUNCA se arregla solo reconectando, necesita a
         // alguien escaneando un QR nuevo — se avisa ya, sin esperar.

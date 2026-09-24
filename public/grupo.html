@@ -469,7 +469,7 @@
      una ventana, a medio camino de la animación, donde el navegador
      puede pintar el texto recalculado como vacío — un cuadro intermedio
      real, no un dato faltante, pero se ve igual que un error. Pidió
-     explícitamente "dejalo fijo": se quita la animación de ancho, el
+     explícitamente "déjalo fijo": se quita la animación de ancho, el
      colapsado a solo-íconos y el temporizador de 30s — el rail queda
      siempre expandido (mismo ancho de antes, 214px). Solo en escritorio
      (861px+) — en el breakpoint móvil de más abajo el sidebar sigue
@@ -1162,16 +1162,16 @@
       <span id="whatsappPanelBadge" class="nav-badge" style="display:none; background-color:#25d366; margin-left:0;">0</span>
     </h3>
     <div id="whatsappNoConfigurado" style="display:none;">
-      <small style="display:block; color:var(--text-dim);">💡 El servidor todavía no tiene esta función activada. Contactá a soporte.</small>
+      <small style="display:block; color:var(--text-dim);">💡 El servidor todavía no tiene esta función activada. Contacta a soporte.</small>
     </div>
     <div id="whatsappSinVincular" style="display:none;">
-      <small style="display:block; color:#facc15;">⚠️ Tenés contratado el servicio de sábana automática, pero todavía no está vinculado tu grupo de WhatsApp — eso lo hace el equipo de soporte al activarte el servicio. Mientras tanto, seguí cargando la sábana a mano, como siempre.</small>
+      <small style="display:block; color:#facc15;">⚠️ Tienes contratado el servicio de sábana automática, pero todavía no está vinculado tu grupo de WhatsApp — eso lo hace el equipo de soporte al activarte el servicio. Mientras tanto, sigue cargando la sábana a mano, como siempre.</small>
     </div>
     <div id="whatsappVinculado" style="display:none;">
       <div id="whatsappEstadoConexion" style="font-size:12px; color:var(--text-dim); margin-bottom:6px;"></div>
       <!-- (18-09-2026) El envío automático a secas se sacó del todo — este
            aviso ahora es fijo, no un interruptor del Súper-admin. -->
-      <div style="font-size:12px; background:#1e3a5f22; border:1px solid #3b82f655; border-radius:6px; padding:8px 10px; margin-bottom:8px; color:var(--text);">🛡️ Las sábanas se siguen leyendo e importando solas, pero el resumen ya NO se manda solo al grupo — usá el botón "📤 Enviar resumen ahora" de cada día cuando quieras mandarlo.</div>
+      <div style="font-size:12px; background:#1e3a5f22; border:1px solid #3b82f655; border-radius:6px; padding:8px 10px; margin-bottom:8px; color:var(--text);">🛡️ Las sábanas se siguen leyendo e importando solas, pero el resumen ya NO se manda solo al grupo — usa el botón "📤 Enviar resumen ahora" de cada día cuando quieras mandarlo.</div>
       <!-- =========================================================
            ÚLTIMO ERROR DE ENVÍO (15-09-2026, a pedido del usuario tras
            reportar "la sábana automática no se envía por WhatsApp"
@@ -1214,7 +1214,7 @@
       <p id="whatsappRecientesVacio" style="display:none; color:var(--text-dim); font-size:13px; margin:6px 0 0;">Todavía no llegó ningún mensaje.</p>
     </div>
   </div>
-  <p id="whatsappSinServicio" style="display:none; color:var(--text-dim); font-size:14px;">💡 Tu grupo todavía no tiene contratado el servicio de sábana automática por WhatsApp. Contactá a soporte si te interesa activarlo.</p>
+  <p id="whatsappSinServicio" style="display:none; color:var(--text-dim); font-size:14px;">💡 Tu grupo todavía no tiene contratado el servicio de sábana automática por WhatsApp. Contacta a soporte si te interesa activarlo.</p>
 </div>
 
 <!-- =================================================================
@@ -1247,11 +1247,11 @@
       </div>
       <div>
         <strong>💵 Zelle</strong><br>
-        <span style="color:var(--text-dim); font-size:13px;">Solicitá la cuenta y se te enviará.</span>
+        <span style="color:var(--text-dim); font-size:13px;">Solicita la cuenta y se te enviará.</span>
       </div>
       <div>
         <strong>🇵🇦 Banesco Panamá</strong><br>
-        <span style="color:var(--text-dim); font-size:13px;">Solicitá la cuenta y se te enviará.</span>
+        <span style="color:var(--text-dim); font-size:13px;">Solicita la cuenta y se te enviará.</span>
       </div>
     </div>
   </div>
@@ -1282,7 +1282,7 @@
       </div>
       <button type="button" onclick="reportarPago()">📤 Reportar pago</button>
     </div>
-    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 La imagen no puede pesar más de 4MB — si la foto de tu cámara pesa más, usá una captura de pantalla en su lugar.</small>
+    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 La imagen no puede pesar más de 4MB — si la foto de tu cámara pesa más, usa una captura de pantalla en su lugar.</small>
   </div>
 
   <h2>Historial de tus pagos</h2>
@@ -2132,7 +2132,12 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
     </div>
   </div>
 
-  <footer class="pie-pagina">Desarrollado por Ludox Venezuela since 2026 - Soluciones Digitales</footer>
+  <!-- 24-09-2026 (ronda 21), a pedido del usuario: "agrega tambien como
+       pie e pagina en todos lados : Sistema Ludox Since 2026 al final
+       solo como una firma" — texto unificado con el resto de los
+       paneles/links (antes decía "Desarrollado por Ludox Venezuela
+       since 2026 - Soluciones Digitales"). -->
+  <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
   <!-- ================================================================= -->
   <!-- BANDEJA DE CHAT FLOTANTE — ver comentario grande de la sección CSS. -->

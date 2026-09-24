@@ -58,7 +58,7 @@ router.post('/', asyncHandler(async (req, res) => {
   // sirve para esto (crece ~33% por la propia codificación).
   const bytes = Buffer.from(String(capturaBase64), 'base64').length;
   if (bytes > TOPE_CAPTURA_BYTES) {
-    return res.status(400).json({ error: 'La captura pesa demasiado (máx. 4MB). Probá con una captura de pantalla en vez de la foto original de la cámara.' });
+    return res.status(400).json({ error: 'La captura pesa demasiado (máx. 4MB). Prueba con una captura de pantalla en vez de la foto original de la cámara.' });
   }
 
   const r = await db.query(

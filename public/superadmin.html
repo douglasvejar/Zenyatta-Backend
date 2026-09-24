@@ -655,7 +655,7 @@
 <!-- está en el .env del servidor) una sola vez y lo guarda en el      -->
 <!-- localStorage de ESTE navegador. Esta pantalla no tiene nada que   -->
 <!-- ver con el login de un Grupo (email+password) — es un secreto     -->
-<!-- aparte, pensado solo para vos.                                     -->
+<!-- aparte, pensado solo para ti.                                      -->
 <!-- ================================================================= -->
 <div id="vistaAcceso" class="acceso-shell">
   <div class="container">
@@ -730,7 +730,7 @@
     </div>
 
     <h2>Grupos existentes</h2>
-    <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hacé clic en un Grupo para ver su detalle (jugadores activos, saldo, último inicio de sesión, y cambiar su contraseña).</p>
+    <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Haz clic en un Grupo para ver su detalle (jugadores activos, saldo, último inicio de sesión, y cambiar su contraseña).</p>
     <table id="tablaGrupos">
       <thead>
         <tr><th>Nombre</th><th>Email</th><th>Estado</th><th>Creado</th><th>Acción</th></tr>
@@ -833,7 +833,7 @@
   <!-- ================================================================= -->
   <div class="container" id="vistaWhatsappQr" style="display:none;">
     <h1>📶 Vincular WhatsApp (bot central)</h1>
-    <p class="subtitulo">Este es el ÚNICO número de WhatsApp que necesitás vincular — después lo agregás como miembro al grupo de WhatsApp de cada cliente al que le actives la sábana automática (ver "Sábana automática por WhatsApp" en el detalle de cada Grupo). No es un QR por cliente, es uno solo para toda la plataforma.</p>
+    <p class="subtitulo">Este es el ÚNICO número de WhatsApp que necesitas vincular — después lo agregas como miembro al grupo de WhatsApp de cada cliente al que le actives la sábana automática (ver "Sábana automática por WhatsApp" en el detalle de cada Grupo). No es un QR por cliente, es uno solo para toda la plataforma.</p>
 
     <div id="whatsappQrEstadoTexto" style="font-weight:600; margin-bottom:14px;">Consultando estado…</div>
 
@@ -861,7 +861,7 @@
     <div id="whatsappErrorEnvioCaja" style="display:none; margin-top:14px; background:rgba(255,107,107,0.08); border:1px solid rgba(255,107,107,0.3); border-radius:8px; padding:14px;">
       <strong style="color:var(--danger);">⚠️ El último intento de mandar un mensaje a un grupo falló</strong>
       <div id="whatsappErrorEnvioTexto" style="color:var(--danger); font-size:13px; margin-top:6px;"></div>
-      <p style="color:var(--danger); font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:rgba(255,255,255,0.08); color:var(--text); padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, probá "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
+      <p style="color:var(--danger); font-size:12px; margin:8px 0 0;">Si el error dice <span class="mono" style="background:rgba(255,255,255,0.08); color:var(--text); padding:1px 5px; border-radius:3px;">No sessions</span> y sigue pasando después de un rato, prueba "🗑️ Olvidar sesión" de abajo — suele arreglarlo, aunque haya que volver a escanear el QR.</p>
       <!-- "Copiar detalle del error" (16-09-2026, a pedido del usuario:
            "hay una forma de yo ver el error en otro lado y pasartelo
            para que se pueda corregir") — copia TODO lo que el servidor
@@ -892,7 +892,7 @@
          hace falta tocarlo nunca. ============================================================= -->
     <div style="margin-top:20px; padding-top:14px; border-top:1px solid var(--border-light);">
       <button type="button" class="btn-secundario" onclick="olvidarSesionWhatsapp()" style="color:var(--danger); border-color:rgba(255,107,107,0.35);">🗑️ Olvidar sesión y generar un QR nuevo</button>
-      <p style="color:var(--text-dim); font-size:12px; margin-top:6px;">Solo tocá esto si algo anda mal (ej. error "No sessions" al mandar mensajes, o se perdió el vínculo sin explicación). Desvincula el número — vas a tener que escanear un QR nuevo después.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:6px;">Solo toca esto si algo anda mal (ej. error "No sessions" al mandar mensajes, o se perdió el vínculo sin explicación). Desvincula el número — vas a tener que escanear un QR nuevo después.</p>
       <div id="whatsappOlvidarSesionMsg"></div>
     </div>
   </div>
@@ -1086,7 +1086,7 @@
                reusa la misma que usa "🗑️ Mantenimiento"). -->
           <div class="detalle-tab-panel" data-tab-panel="sabanas">
             <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">📁 Sábanas</h3>
-            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Elegí una fecha con datos para ver los tickets y el resumen por cliente de ese día — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
+            <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Elige una fecha con datos para ver los tickets y el resumen por cliente de ese día — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
             <div class="cambiar-password-inline" style="margin-bottom:10px;">
               <select id="sabanasFechaSelect" onchange="cargarSabanaDiaDetalle()" style="flex:1;">
                 <option value="">Cargando fechas…</option>
@@ -1178,7 +1178,7 @@
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
               <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
               <div class="cambiar-password-inline">
-                <input type="text" id="logoUrlInput" placeholder="https://... (dejalo vacío para quitar el logo)">
+                <input type="text" id="logoUrlInput" placeholder="https://... (déjalo vacío para quitar el logo)">
                 <button type="button" class="btn-secundario" onclick="guardarLogoGrupo()">Guardar</button>
               </div>
               <div id="logoError"></div>
@@ -1215,21 +1215,21 @@
               <button type="button" class="btn-secundario" id="btnToggleWhatsappHabilitado" onclick="toggleWhatsappHabilitadoGrupo()" style="margin-top:6px;"></button>
 
               <div style="margin-top:12px;">
-                <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp (elegí de la lista)</label>
+                <label for="whatsappJidSelectSuperadmin" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp (elige de la lista)</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                   <select id="whatsappJidSelectSuperadmin" onchange="elegirWhatsappJidDeLista()" style="flex:1; min-width:220px;">
                     <option value="">Cargando lista de grupos…</option>
                   </select>
                   <button type="button" class="btn-secundario" onclick="cargarWhatsappGruposDisponibles(true)" style="font-size:12px; white-space:nowrap;">🔄 Actualizar lista</button>
                 </div>
-                <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".</small>
+                <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;" id="whatsappGruposAyuda">Esta lista se arma sola con los grupos del número vinculado al bot. Si acabas de agregar el bot a un grupo nuevo, toca "Actualizar lista".</small>
               </div>
 
               <div class="cambiar-password-inline" style="margin-top:12px;">
                 <input type="text" id="whatsappJidInputSuperadmin" placeholder="JID del grupo de WhatsApp (ej: 1203630000000001@g.us)">
                 <button type="button" class="btn-secundario" onclick="guardarWhatsappJidGrupo()">Guardar</button>
               </div>
-              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También podés pegarlo a mano acá (por si no aparece en la lista de arriba). Dejalo vacío y guardá para desvincular.</small>
+              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">También puedes pegarlo a mano acá (por si no aparece en la lista de arriba). Déjalo vacío y guarda para desvincular.</small>
               <div id="whatsappJidError"></div>
               <div id="whatsappJidOk"></div>
             </div>
@@ -1246,7 +1246,7 @@
                 <input type="text" id="comandosWhatsappNumeroInput" placeholder="Número autorizado (ej: +58 412-123-4567)">
                 <button type="button" class="btn-secundario" onclick="guardarComandosWhatsappNumero()">Guardar</button>
               </div>
-              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Dejalo vacío y guardá para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
+              <small style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Con o sin "+"/espacios/guiones, no importa — se compara solo por los dígitos. Déjalo vacío y guarda para desvincular (sin ningún número cargado, ningún comando se acepta de nadie).</small>
               <div id="comandosWhatsappNumeroError"></div>
               <div id="comandosWhatsappNumeroOk"></div>
             </div>
@@ -1264,7 +1264,7 @@
                 </select>
               </div>
               <div id="comisionTiersBox" style="display:none; margin-top:10px;">
-                <small style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así podés agregar un nivel nuevo más adelante sin romper nada.</small>
+                <small style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px;">"Logros" = cantidad de patas del ticket (1 = jugada directa, 2 = parley de 2 logros, etc.). El nivel más alto que cargues también aplica a cualquier parley MÁS grande (ej. si el más alto es "3", un parley de 5 logros también usa ese %) — así puedes agregar un nivel nuevo más adelante sin romper nada.</small>
                 <div id="listaComisionTiers"></div>
                 <button type="button" class="btn-secundario" onclick="agregarFilaComisionTier()" style="margin-top:6px;">+ Agregar nivel</button>
               </div>
@@ -1278,8 +1278,8 @@
           <div class="detalle-tab-panel" data-tab-panel="muestra">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
               <h3>📝 Sábana de muestra</h3>
-              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pegá acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para vos — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
-              <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pegá acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pega acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para ti — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
+              <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pega acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
               <button type="button" class="btn-secundario" onclick="guardarSabanaMuestra()" style="margin-top:8px;">Guardar</button>
               <div id="sabanaMuestraError"></div>
               <div id="sabanaMuestraOk"></div>
@@ -1302,7 +1302,7 @@
           <div class="detalle-tab-panel" data-tab-panel="seguridad">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
               <h3>🔑 Cambiar contraseña</h3>
-              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijás una nueva.</p>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">No se puede ver la contraseña actual (queda encriptada, ni el propio sistema puede leerla de vuelta) — acá le fijas una nueva.</p>
               <div class="cambiar-password-inline">
                 <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
                 <button type="button" class="btn-secundario" onclick="cambiarPasswordGrupo()">Cambiar</button>
@@ -1686,7 +1686,7 @@ async function diagnosticarSesionesGrupoWhatsapp() {
       caja.innerHTML = '✅ Se probó la sesión de los ' + r.revisados + ' participantes del grupo ("' + (r.grupoNombre || '') + '") uno por uno y ninguno dio problema individual. El "not-acceptable" podría estar pasando por otro motivo (por ejemplo, con muchos participantes a la vez) — pedile a Luisangel que copie el detalle del error de arriba junto con este resultado.';
     } else {
       const lista = r.conProblema.map(p => '<li>+' + (p.numero || p.jid) + ' — ' + p.mensaje + '</li>').join('');
-      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + (r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisá si siguen en WhatsApp y, si no, sacalos del grupo.';
+      caja.innerHTML = '⚠️ De ' + r.revisados + ' participantes revisados en "' + (r.grupoNombre || '') + '", estos ' + r.conProblema.length + ' número(s) no dejan armar una sesión cifrada (probablemente se borraron de WhatsApp o bloquearon este número) — mientras sigan en el grupo, el envío automático se va a seguir cayendo para TODOS:<ul style="margin:6px 0 0 18px; padding:0;">' + lista + '</ul>Revisa si siguen en WhatsApp y, si no, sacalos del grupo.';
     }
   } catch (e) {
     caja.innerHTML = '<span style="color:var(--danger);">⚠️ No se pudo diagnosticar: ' + e.message + '</span>';
@@ -1700,7 +1700,7 @@ async function diagnosticarSesionesGrupoWhatsapp() {
 async function olvidarSesionWhatsapp() {
   const msgEl = document.getElementById('whatsappOlvidarSesionMsg');
   msgEl.textContent = '';
-  if (!confirm('Esto va a desvincular el número de WhatsApp actual — vas a tener que escanear un QR nuevo después. ¿Seguro que querés continuar?')) return;
+  if (!confirm('Esto va a desvincular el número de WhatsApp actual — vas a tener que escanear un QR nuevo después. ¿Seguro que quieres continuar?')) return;
 
   try {
     await apiSuperadmin('/api/superadmin/whatsapp-olvidar-sesion', { method: 'POST' });
@@ -3019,7 +3019,7 @@ async function cargarWhatsappGruposDisponibles(forzarActualizar) {
     const optionVacia = document.createElement('option');
     optionVacia.value = '';
     optionVacia.textContent = grupos.length
-      ? '— Elegí un grupo de WhatsApp —'
+      ? '— Elige un grupo de WhatsApp —'
       : (r.conectado === false ? 'El bot todavía no está conectado a WhatsApp' : 'No se encontró ningún grupo (¿ya agregaste el número vinculado a ese grupo?)');
     select.appendChild(optionVacia);
     grupos.forEach(g => {
@@ -3031,8 +3031,8 @@ async function cargarWhatsappGruposDisponibles(forzarActualizar) {
 
     marcarSeleccionActualEnListaWhatsapp();
     ayuda.textContent = grupos.length
-      ? 'Esta lista se arma sola con los grupos del número vinculado al bot. Si acabás de agregar el bot a un grupo nuevo, tocá "Actualizar lista".'
-      : 'Todavía no aparece ningún grupo — agregá el número vinculado (el que escaneó el QR) como miembro del grupo de WhatsApp del cliente, después tocá "Actualizar lista".';
+      ? 'Esta lista se arma sola con los grupos del número vinculado al bot. Si acabas de agregar el bot a un grupo nuevo, toca "Actualizar lista".'
+      : 'Todavía no aparece ningún grupo — agrega el número vinculado (el que escaneó el QR) como miembro del grupo de WhatsApp del cliente, después toca "Actualizar lista".';
   } catch (e) {
     select.innerHTML = '<option value="">⚠️ No se pudo cargar la lista</option>';
     ayuda.textContent = '⚠️ ' + e.message;
@@ -3044,7 +3044,7 @@ async function cargarWhatsappGruposDisponibles(forzarActualizar) {
 // Si el JID ya guardado para este Grupo coincide con alguno de la lista,
 // lo deja seleccionado (así se ve de un vistazo a cuál grupo apunta hoy)
 // — si no coincide con ninguno (ej. el bot no está en ese grupo o
-// todavía no se actualizó la lista), el desplegable queda en "— Elegí
+// todavía no se actualizó la lista), el desplegable queda en "— Elige
 // un grupo —" sin tocar el campo de texto, que sigue mostrando el JID
 // real guardado.
 function marcarSeleccionActualEnListaWhatsapp() {
@@ -3056,7 +3056,7 @@ function marcarSeleccionActualEnListaWhatsapp() {
 
 function elegirWhatsappJidDeLista() {
   const select = document.getElementById('whatsappJidSelectSuperadmin');
-  if (!select.value) return; // "— Elegí un grupo —": no toca el campo de texto
+  if (!select.value) return; // "— Elige un grupo —": no toca el campo de texto
   document.getElementById('whatsappJidInputSuperadmin').value = select.value;
 }
 
@@ -3126,7 +3126,7 @@ function cambiarModeloComisionUI() {
 function pintarTiersComision() {
   const cont = document.getElementById('listaComisionTiers');
   if (GRUPO_COMISION_TIERS.length === 0) {
-    cont.innerHTML = '<div style="color:#888; font-size:12px;">Todavía no hay ningún nivel cargado — agregá al menos uno (ej. 1 logro = 2%).</div>';
+    cont.innerHTML = '<div style="color:#888; font-size:12px;">Todavía no hay ningún nivel cargado — agrega al menos uno (ej. 1 logro = 2%).</div>';
     return;
   }
   cont.innerHTML = '';
@@ -3582,7 +3582,7 @@ async function rechazarPagoSuperadmin(id) {
   // línea, no hace falta un modal aparte. La nota es opcional a
   // propósito (ver el comentario en sql/schema.sql, columna nota_admin):
   // se puede rechazar sin nota y avisar el motivo después por WhatsApp/chat.
-  const nota = prompt('¿Por qué se rechaza este pago? (opcional, dejá vacío para no aclarar nada acá)');
+  const nota = prompt('¿Por qué se rechaza este pago? (opcional, deja vacío para no aclarar nada acá)');
   if (nota === null) return; // canceló el prompt
   try {
     await apiSuperadmin('/api/superadmin/pagos/' + id + '/rechazar', { method: 'POST', body: JSON.stringify({ notaAdmin: nota || null }) });

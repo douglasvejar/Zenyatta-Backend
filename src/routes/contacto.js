@@ -17,7 +17,7 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Dejanos un email o teléfono para poder responderte.' });
   }
   if (!mensaje || !String(mensaje).trim()) {
-    return res.status(400).json({ error: 'Escribí tu mensaje.' });
+    return res.status(400).json({ error: 'Escribe tu mensaje.' });
   }
 
   await db.query(

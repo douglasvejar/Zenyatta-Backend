@@ -555,7 +555,7 @@
       <div class="modal-header">
         <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
         <h2 id="tituloModalContacto">Hablemos</h2>
-        <p class="sub" id="subModalContacto">¿Querés contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.</p>
+        <p class="sub" id="subModalContacto">¿Quieres contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.</p>
       </div>
 
       <a class="canal-contacto" id="canalEmail" href="mailto:">
@@ -580,7 +580,7 @@
         </div>
         <div class="campo">
           <label for="ctMensaje">Mensaje</label>
-          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitás..."></textarea>
+          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitas..."></textarea>
         </div>
         <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
         <div class="msg-form" id="msgFormContacto"></div>
@@ -615,8 +615,8 @@ const overlay = document.getElementById('overlayContacto');
 // solicitud de demo (ver TEXTOS_MODAL_CONTACTO y el submit más abajo).
 let origenModalContacto = 'contacto';
 const TEXTOS_MODAL_CONTACTO = {
-  contacto: { titulo: 'Hablemos', sub: '¿Querés contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.' },
-  demo: { titulo: 'Solicitá tu demo', sub: 'Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.' }
+  contacto: { titulo: 'Hablemos', sub: '¿Quieres contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.' },
+  demo: { titulo: 'Solicita tu demo', sub: 'Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.' }
 };
 
 function abrirContacto(origen) {
@@ -644,7 +644,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   let mensaje = document.getElementById('ctMensaje').value.trim();
 
   if (!contacto || !mensaje) {
-    msgEl.textContent = 'Completá al menos el contacto y el mensaje.';
+    msgEl.textContent = 'Completa al menos el contacto y el mensaje.';
     msgEl.className = 'msg-form error';
     return;
   }
@@ -672,7 +672,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
     msgEl.className = 'msg-form ok';
     document.getElementById('formContacto').reset();
   } catch (err) {
-    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intentá de nuevo.';
+    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intenta de nuevo.';
     msgEl.className = 'msg-form error';
   } finally {
     btn.disabled = false;

@@ -37,7 +37,7 @@ router.get('/grupos', asyncHandler(async (req, res) => {
   res.json(r.rows);
 }));
 
-// Crea un grupo nuevo. Queda INACTIVO por defecto — vos lo activas aparte
+// Crea un grupo nuevo. Queda INACTIVO por defecto — tú lo activas aparte
 // una vez que arreglaste el cobro con ese cliente.
 router.post('/grupos', asyncHandler(async (req, res) => {
   try {
@@ -317,7 +317,7 @@ router.patch('/grupos/:id/logo', asyncHandler(async (req, res) => {
   const { logoUrl } = req.body;
   const valor = (logoUrl || '').trim();
   if (valor && !/^https?:\/\//i.test(valor)) {
-    return res.status(400).json({ error: 'El logo tiene que ser una URL que empiece con http:// o https:// (por ejemplo, un link a una imagen ya subida a algún lado). Dejalo vacío para quitar el logo.' });
+    return res.status(400).json({ error: 'El logo tiene que ser una URL que empiece con http:// o https:// (por ejemplo, un link a una imagen ya subida a algún lado). Déjalo vacío para quitar el logo.' });
   }
   const r = await db.query(
     'UPDATE grupos SET logo_url = $1 WHERE id = $2 RETURNING logo_url',
@@ -515,7 +515,7 @@ router.post('/whatsapp-diagnosticar-sesiones', asyncHandler(async (req, res) => 
   const { obtenerSockActivo, diagnosticarSesionesGrupo } = require('../services/whatsappBot');
   const sock = obtenerSockActivo();
   if (!sock) {
-    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisá el QR/la conexión).' });
+    return res.status(409).json({ error: 'El bot no está conectado a WhatsApp en este momento (revisa el QR/la conexión).' });
   }
   const resultado = await diagnosticarSesionesGrupo(sock, jid);
   res.json(resultado);
@@ -525,7 +525,7 @@ router.get('/whatsapp-qr.png', asyncHandler(async (req, res) => {
   const { obtenerEstadoConexion } = require('../services/whatsappBot');
   const estado = obtenerEstadoConexion();
   if (!estado.ultimoQr) {
-    return res.status(404).json({ error: estado.conectado ? 'El WhatsApp ya está vinculado, no hay ningún QR pendiente.' : 'Todavía no llegó ningún código QR — esperá unos segundos y volvé a pedirlo.' });
+    return res.status(404).json({ error: estado.conectado ? 'El WhatsApp ya está vinculado, no hay ningún QR pendiente.' : 'Todavía no llegó ningún código QR — espera unos segundos y vuelve a pedirlo.' });
   }
   const QRCode = require('qrcode');
   const buffer = await QRCode.toBuffer(estado.ultimoQr, { type: 'png', width: 320, margin: 2 });
@@ -709,7 +709,7 @@ router.delete('/grupos/:id/telefonos/:telId', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
-// EQUIPOS_GLOBALES — diccionario "capa del medio": apodos que vos vas
+// EQUIPOS_GLOBALES — diccionario "capa del medio": apodos que tú vas
 // promoviendo para que los usen TODOS los grupos (no solo el que lo pidió
 // primero). Ver la nota grande en sql/schema.sql y en
 // src/services/diccionarioEquipos.js para el orden de capas completo.
