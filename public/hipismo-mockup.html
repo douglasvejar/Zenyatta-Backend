@@ -313,6 +313,33 @@
   #cierreFinalCaptura.ocultar-gano .col-gano { display: none; }
   #cierreFinalCaptura.ocultar-perdio .col-perdio { display: none; }
 
+  /* Cierre Final (24-09-2026), a pedido del usuario: "los numeros deben
+     estar ordenados bajo la columna que pertenecen centrados, hazlo
+     dividido en tablas y de color entre lineas para mayor diferencia" —
+     grilla con borde visible en cada celda (antes solo tenía una línea
+     debajo de cada fila, sin separar columnas), números centrados bajo
+     su encabezado (antes quedaban pegados al borde derecho de la celda)
+     y color intermedio alternado entre filas. Se scopea a
+     #cierreFinalCaptura para no tocarle el aspecto a ninguna otra tabla
+     de la app (Balance General, Comisiones, Alertas, etc. siguen igual). */
+  #cierreFinalCaptura table { border: 1px solid var(--card-border); }
+  #cierreFinalCaptura th, #cierreFinalCaptura td { border: 1px solid var(--card-border); text-align: center; }
+  #cierreFinalCaptura th:first-child, #cierreFinalCaptura td:first-child { text-align: left; }
+  #cierreFinalCaptura td.num { text-align: center; }
+  #cierreFinalCaptura tbody tr:nth-child(even) { background: var(--card-2); }
+
+  /* "Semana por Días" (24-09-2026) — mismo tratamiento visual que Cierre
+     Final: grilla con borde en cada celda, números centrados bajo su
+     día, color intermedio alternado entre filas ("de color entre lineas
+     para mayor diferencia", "en formato de tablas con color de linea
+     intermedio para mejor lectura" — mismas palabras que usó el usuario
+     para las dos pantallas, mismo criterio para las dos). */
+  #semanaPorDiasCaptura table { border: 1px solid var(--card-border); }
+  #semanaPorDiasCaptura th, #semanaPorDiasCaptura td { border: 1px solid var(--card-border); text-align: center; white-space: nowrap; }
+  #semanaPorDiasCaptura th:first-child, #semanaPorDiasCaptura td:first-child { text-align: left; }
+  #semanaPorDiasCaptura td.num { text-align: center; }
+  #semanaPorDiasCaptura tbody tr:nth-child(even) { background: var(--card-2); }
+
   .placeholder-card { border: 1px dashed var(--card-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
 
   .punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
@@ -428,6 +455,12 @@
            formato. Solo el tab + una pantalla vacía por ahora, sin backend
            — ver claude/plan-modulo-hipismo.md. -->
       <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆<span class="nav-lbl"> Cargar Winners</span></button>
+      <!-- 24-09-2026, a pedido del usuario: "crea una pestaña en apuestas
+           que diga semana por dias.... alli me mostraras cada cliente con
+           sus totales por dias" (ej: Ramon miércoles +200, jueves -100,
+           viernes +400, total semana +500) — ver GET
+           /api/hipismo/semana-por-dias en routes/hipismo.js. -->
+      <button type="button" class="nav-item nav-child" data-vista="semanaPorDias" onclick="mostrarVista('semanaPorDias', this)">📅<span class="nav-lbl"> Semana por Días</span></button>
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
@@ -871,6 +904,34 @@
       </div>
     </section>
 
+    <!-- ============ SEMANA POR DÍAS (24-09-2026) ============
+         "creá una pestaña en apuestas que diga semana por días... allí
+         me mostrás cada cliente con sus totales por días" — una fila por
+         cliente, una columna por día de la semana (lunes a domingo) con
+         su resultado neto ESE día, más el total de la semana al final.
+         Mismo selector de 3 semanas que Cierre Final, orden alfabético. -->
+    <section class="vista" id="vista-semanaPorDias">
+      <div class="card">
+        <h2>📅 Semana por Días</h2>
+        <p class="desc">El resultado neto de cada cliente, día por día — Tercios, Remate y Jugadas Adelantadas ya sumados. Para ver el detalle de una jugada puntual, andá a la ficha del cliente.</p>
+
+        <div class="subnav" id="selectorSemanaPorDias">
+          <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaPorDias('actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="mostrarSemanaPorDias('anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="mostrarSemanaPorDias('hace2', this)">🗓️ Hace 2 semanas</button>
+        </div>
+
+        <div id="rangoSemanaPorDias" class="desc" style="margin-top:10px; font-weight:600;"></div>
+
+        <div id="semanaPorDiasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:auto; margin-top:10px;">
+          <table>
+            <thead><tr id="filaEncabezadoSemanaPorDias"><th>Cliente</th></tr></thead>
+            <tbody id="tablaSemanaPorDias"><tr><td style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ COMISIONES POR CARRERA ============ -->
     <section class="vista" id="vista-comisionesPorCarrera">
       <div class="card">
@@ -1155,10 +1216,10 @@ Pizarra: [se llena al calcular]
 
         <div id="resumenEliminarJornada" class="resultado-vacio">Elegí un día para ver qué hay cargado.</div>
 
-        <div class="fila" id="filaClaveEliminarJornada" style="display:none; margin-top:14px;">
-          <div>
-            <label for="inpClaveEliminarJornada">Tu clave de acceso (para confirmar)</label>
-            <input type="password" id="inpClaveEliminarJornada" placeholder="Tu contraseña de siempre">
+        <div class="fila" id="filaClaveEliminarJornada" style="display:none; margin-top:14px; padding:12px 14px; background:#fdecea; border:1.5px solid #b3261e; border-radius:8px;">
+          <div style="width:100%;">
+            <label for="inpClaveEliminarJornada" style="color:#611a15;">🔒 Tu clave de acceso (para confirmar)</label>
+            <input type="password" id="inpClaveEliminarJornada" placeholder="Tu contraseña de siempre" style="border:1.5px solid #b3261e; background:#ffffff; color:#20241f;">
           </div>
         </div>
 
@@ -1217,6 +1278,27 @@ try { GRUPO = JSON.parse(localStorage.getItem('zenyatta_grupo') || 'null'); } ca
 
 if (!TOKEN || !GRUPO || !GRUPO.moduloHipismoHabilitado) {
   window.location.href = 'grupo.html';
+}
+
+// ------------------------------------------------------------------
+// fechaLocalHoy() (24-09-2026) — BUG encontrado a partir de "al cargar
+// plano no me esta jalando las jugadas adelantadas": todos los campos de
+// fecha de esta pantalla se llenaban por defecto con
+// `new Date().toISOString().slice(0,10)`, que da la fecha en UTC, NO en
+// la fecha local de Venezuela (UTC-4). Entre las 8pm y la medianoche
+// hora Venezuela, UTC ya cambió de día — así que el campo "Fecha" de
+// Cargar Planos se llenaba solo con el día SIGUIENTE, sin que el
+// operador lo notara. Esa fecha viaja tal cual a POST /api/hipismo/planos
+// y ahí se compara contra p.fecha de la jugada adelantada pendiente (ver
+// buscarAdelantadasPendientes() en routes/hipismo.js) — si no coinciden
+// exacto, la jugada adelantada simplemente no se jala, sin ningún error
+// visible. Esta funcion arma la fecha de HOY en el huso horario local del
+// navegador (no UTC) para que el campo quede bien sin que el operador
+// tenga que acordarse de corregirlo a mano.
+function fechaLocalHoy() {
+  const ahora = new Date();
+  const desplazadoATz = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+  return desplazadoATz.toISOString().slice(0, 10);
 }
 
 async function apiHipismo(path, options = {}) {
@@ -2798,6 +2880,61 @@ function mostrarSemanaCierre(semana, btn) {
   pintarCierreFinal(semana);
 }
 
+// ------------------------------------------------------------------
+// "Semana por Días" (24-09-2026) — ver GET /api/hipismo/semana-por-dias
+// en routes/hipismo.js. Arma el encabezado de la tabla dinámicamente (un
+// <th> por cada día que trae la respuesta) porque los 7 días de la
+// semana cambian de nombre según qué lunes le tocó a cada semana.
+// ------------------------------------------------------------------
+async function pintarSemanaPorDias(semana) {
+  const thead = document.getElementById('filaEncabezadoSemanaPorDias');
+  const tbody = document.getElementById('tablaSemanaPorDias');
+  tbody.innerHTML = '<tr><td style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/semana-por-dias?semana=${semana}`);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+    return;
+  }
+
+  document.getElementById('rangoSemanaPorDias').textContent =
+    `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
+    (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '') +
+    (data.esSemanaActual ? ' · semana actual, todavía en curso' : ' · cerrada');
+
+  // Encabezado: Cliente + un <th> por día (nombre corto) + Total Semana.
+  thead.innerHTML = '<th>Cliente</th>' +
+    data.dias.map(d => `<th class="num">${d.corta}</th>`).join('') +
+    '<th class="num">Total Semana</th>';
+
+  tbody.innerHTML = '';
+  const colspan = data.dias.length + 2;
+  if (!data.clientes.length) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Sin jugadas en este rango.</td></tr>`;
+    return;
+  }
+  data.clientes.forEach(c => {
+    const tr = document.createElement('tr');
+    const celdasDias = c.porDia.map(monto => {
+      if (!monto) return `<td class="num" style="color:var(--text-dim);">—</td>`;
+      const clase = monto > 0 ? 'pos' : 'neg';
+      const signo = monto > 0 ? '+' : '-';
+      return `<td class="num ${clase}">${signo}${formatMontoTabla(Math.abs(monto))}</td>`;
+    }).join('');
+    const claseTotal = c.totalSemana >= 0 ? 'pos' : 'neg';
+    const signoTotal = c.totalSemana >= 0 ? '+' : '-';
+    tr.innerHTML = `<td>${formatNombre(c.nombre)}</td>${celdasDias}<td class="num ${claseTotal}">${signoTotal}${formatMontoTabla(Math.abs(c.totalSemana))}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function mostrarSemanaPorDias(semana, btn) {
+  document.querySelectorAll('#selectorSemanaPorDias button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  pintarSemanaPorDias(semana);
+}
+
 // Columnas opcionales de Cierre Final: por defecto ocultas (arrancan
 // desmarcadas en el HTML) — el usuario dijo que mayormente solo envía el
 // saldo total de la semana, pero puede tildarlas para ver/exportar el
@@ -3320,7 +3457,7 @@ function buscarComisionesDevueltas() {
 
 async function pintarComisionesDevueltas(fechaForzada) {
   const inp = document.getElementById('inpFechaComisionesDevueltas');
-  const fecha = fechaForzada || inp.value || new Date().toISOString().slice(0, 10);
+  const fecha = fechaForzada || inp.value || fechaLocalHoy();
   if (!fechaForzada) inp.value = fecha;
   const cont = document.getElementById('listaComisionesDevueltas');
   cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
@@ -3397,7 +3534,7 @@ function buscarMontosApostados() {
 
 async function pintarMontosApostados(fechaForzada) {
   const inp = document.getElementById('inpFechaMontosApostados');
-  const fecha = fechaForzada || inp.value || new Date().toISOString().slice(0, 10);
+  const fecha = fechaForzada || inp.value || fechaLocalHoy();
   if (!fechaForzada) inp.value = fecha;
   const cont = document.getElementById('listaMontosApostados');
   cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
@@ -3712,6 +3849,14 @@ async function cargarResumenJornada() {
     </div>`;
   filaClave.style.display = '';
   filaBtn.style.display = '';
+  // 24-09-2026, a pedido del usuario ("me pide la clave pero no tengo
+  // donde escribirla"): el campo ya existía y se mostraba, pero quedaba
+  // debajo del cuadro de aviso sin que se notara. Ahora se le agrega
+  // fondo/borde en rojo para que resalte (ver el <div> de arriba) y
+  // además se hace scroll hasta el campo y se le pone el foco solo, para
+  // que no haya forma de no verlo.
+  filaClave.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('inpClaveEliminarJornada').focus();
 }
 
 async function confirmarEliminarJornada() {
@@ -3795,11 +3940,11 @@ function pintarSaldoComisiones() {
 // ------------------------------------------------------------------
 poblarCarreras();
 poblarCarreras('selCarreraRemate');
-document.getElementById('inpFecha').value = new Date().toISOString().slice(0, 10);
-document.getElementById('inpFechaRemate').value = new Date().toISOString().slice(0, 10);
-document.getElementById('inpFechaMontosApostados').value = new Date().toISOString().slice(0, 10);
-document.getElementById('inpFechaComisionesDevueltas').value = new Date().toISOString().slice(0, 10);
-document.getElementById('inpFechaEliminarJornada').value = new Date().toISOString().slice(0, 10);
+document.getElementById('inpFecha').value = fechaLocalHoy();
+document.getElementById('inpFechaRemate').value = fechaLocalHoy();
+document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
+document.getElementById('inpFechaComisionesDevueltas').value = fechaLocalHoy();
+document.getElementById('inpFechaEliminarJornada').value = fechaLocalHoy();
 cargarResumenJornada();
 document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 pintarBalanceGeneral();
@@ -3812,6 +3957,7 @@ cargarClientesReales();
 actualizarPreviewSemana();
 pintarCierreFinal('actual');
 actualizarColumnasCierre();
+pintarSemanaPorDias('actual');
 pintarComisionesPorCarrera();
 pintarComisionesDevueltas();
 pintarSaldoComisiones();

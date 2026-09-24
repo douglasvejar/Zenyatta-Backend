@@ -79,6 +79,23 @@ const { autoRegistrarJugadores } = require('../services/procesarSabana');
 // definitivo, para un sistema contable).
 const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 
+// fechaHoyVenezuela() (24-09-2026) — BUG encontrado a partir de "al
+// cargar plano no me esta jalando las jugadas adelantadas": el respaldo
+// de "fecha" cuando el request no manda ninguna usaba
+// `new Date().toISOString().slice(0,10)`, que da la fecha en UTC. Entre
+// las 8pm y la medianoche hora Venezuela (UTC-4 fijo, sin horario de
+// verano) UTC ya cambió de día, así que un plano cargado en ese rango
+// horario podía guardarse con la fecha de MAÑANA sin que nadie lo
+// notara — y buscarAdelantadasPendientes() compara esa fecha contra la
+// de la jugada adelantada exacto, así que si no coinciden, no se jala.
+// El frontend (hipismo-mockup.html) ya manda la fecha bien calculada
+// desde fechaLocalHoy() (misma corrección, del lado del navegador); esto
+// es solo el último respaldo por si algún request llega sin fecha.
+function fechaHoyVenezuela() {
+  const OFFSET_VENEZUELA_MS = 4 * 60 * 60 * 1000; // UTC-4, Venezuela no tiene horario de verano
+  return new Date(Date.now() - OFFSET_VENEZUELA_MS).toISOString().slice(0, 10);
+}
+
 const router = express.Router();
 router.use(requiereGrupo);
 router.use(requierePermiso('hipismo'));
@@ -374,7 +391,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
 
-  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const fechaFinal = fecha || fechaHoyVenezuela();
   const { resueltas, movimientosParaTexto } = (hipodromoNombre && carreraNumero)
     ? await calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
     : { resueltas: [], movimientosParaTexto: [] };
@@ -456,7 +473,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
   }
   if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
 
-  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const fechaFinal = fecha || fechaHoyVenezuela();
 
   // Jugadas Adelantadas pendientes de ESTA MISMA carrera (ver la nota
   // grande arriba) — se resuelven con la pizarra que se está por guardar
@@ -1147,7 +1164,7 @@ router.post('/remates/calcular', asyncHandler(async (req, res) => {
   const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
   if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
 
-  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const fechaFinal = fecha || fechaHoyVenezuela();
   const { pizarra: pizarraResuelta, origen } = await resolverLlegadaRemate(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
   const poolTotal = apuestas.reduce((acc, a) => acc + a.monto, 0);
 
@@ -1198,7 +1215,7 @@ router.post('/remates', asyncHandler(async (req, res) => {
   const { apuestas, garantia, sinReconocer } = parsearRemate(texto);
   if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisá el formato de las líneas.' });
 
-  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const fechaFinal = fecha || fechaHoyVenezuela();
   const { pizarra: pizarraResuelta } = await resolverLlegadaRemate(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarraManual: pizarra });
   if (!pizarraResuelta) {
     return res.status(400).json({ error: 'Falta la llegada de esta carrera — todavía no hay un plano cargado con la pizarra para este hipódromo/carrera/fecha. Cargala a mano en "Llegada" para poder guardar el remate.' });
@@ -1737,6 +1754,98 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
     comisionAdelantadasSemana
   });
+}));
+
+// =================================================================
+// "SEMANA POR DÍAS" (24-09-2026, pestaña nueva en Apuestas) — a pedido
+// del usuario: "creá una pestaña en apuestas que diga semana por días...
+// allí me mostrás cada cliente con sus totales por días (ej: Ramon
+// miércoles +200, jueves -100, viernes +400, total semana +500)". Mismo
+// rango lunes-a-domingo y mismo selector de 3 semanas que ya usa Cierre
+// Final (mismo bloque de arriba), y las MISMAS 3 fuentes (tickets de
+// Tercios, apuestas de Remate, jugadas Adelantadas) — la diferencia es
+// que acá se agrupa por (cliente, DÍA) en vez de por cliente solo para
+// toda la semana, para poder mostrar una columna por día. El resultado
+// de cada día es neto (ganó - perdió ESE día), igual que "Saldos Semana"
+// de Deportes (ver services/saldosSemana.js) — mismo patrón, pero sin
+// reusar ese archivo porque ahí lee las tablas de Deportes, no las de
+// Hipismo.
+const DIAS_LARGO_HIPISMO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const DIAS_CORTO_HIPISMO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+function diasDeLaSemanaHipismo(desde) {
+  const dias = [];
+  let actual = new Date(desde + 'T00:00:00Z');
+  for (let i = 0; i < 7; i++) {
+    const fecha = isoDeFechaUTC(actual);
+    dias.push({ fecha, nombre: DIAS_LARGO_HIPISMO[actual.getUTCDay()], corta: DIAS_CORTO_HIPISMO[actual.getUTCDay()] });
+    actual = new Date(actual.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return dias;
+}
+
+router.get('/semana-por-dias', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const esSemanaActual = isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
+  const numeroSemana = numeroSemanaISO(desde);
+  const dias = diasDeLaSemanaHipismo(desde);
+
+  const rTickets = await db.query(
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, p.fecha
+       FROM hipismo_tickets t
+       JOIN hipismo_planos p ON p.id = t.plano_id
+      WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+  const rApuestasRemate = await db.query(
+    `SELECT a.cliente_nombre, a.resultado, r.fecha
+       FROM hipismo_remate_apuestas a
+       JOIN hipismo_remates r ON r.id = a.remate_id
+      WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+  const rAdelantadas = await db.query(
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const porCliente = new Map();
+  function acumularDia(nombre, fechaFila, resultado) {
+    const fechaIso = fechaFila instanceof Date ? isoDeFechaUTC(fechaFila) : fechaFila;
+    if (!porCliente.has(nombre)) porCliente.set(nombre, { nombre, porDia: {}, totalSemana: 0 });
+    const c = porCliente.get(nombre);
+    const n = Number(resultado) || 0;
+    c.porDia[fechaIso] = (c.porDia[fechaIso] || 0) + n;
+    c.totalSemana += n;
+  }
+  rTickets.rows.forEach(t => {
+    acumularDia(t.cliente_nombre, t.fecha, t.resultado_jugador);
+    acumularDia(t.banquero_nombre, t.fecha, t.resultado_banquero);
+  });
+  rApuestasRemate.rows.forEach(a => acumularDia(a.cliente_nombre, a.fecha, a.resultado));
+  rAdelantadas.rows.forEach(j => {
+    acumularDia(j.cliente_nombre, j.fecha, j.resultado_cliente);
+    if (Array.isArray(j.banqueadores)) {
+      j.banqueadores.forEach(b => acumularDia(b.nombre, j.fecha, b.monto));
+    }
+  });
+
+  // Orden alfabético (a pedido del usuario: "ordenado en orden
+  // alfabetico") — mismo criterio de localeCompare('es') que Cierre Final.
+  const clientes = Array.from(porCliente.values())
+    .map(c => ({
+      nombre: c.nombre,
+      porDia: dias.map(d => round2(c.porDia[d.fecha] || 0)),
+      totalSemana: round2(c.totalSemana)
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias, clientes });
 }));
 
 // =================================================================
