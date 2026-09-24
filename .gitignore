@@ -2,12 +2,12 @@ node_modules/
 .env
 *.log
 
-# Carpeta donde el bot de WhatsApp guarda su sesión ya vinculada (las
-# claves del vínculo con WhatsApp, no código) — NUNCA debe subirse a git;
-# en el servidor real vive en un volumen persistente aparte (ver DEPLOY.md).
-whatsapp-session/
-
 # Archivo que crea solo el Finder de macOS en cada carpeta que abrís (guarda
 # cosas puramente visuales de tu Mac, como el orden de los íconos) — no
 # tiene nada que ver con el código, así que nunca debe subirse a git.
 .DS_Store
+
+# Carpeta donde el bot de WhatsApp guarda su sesión ya vinculada (las
+# claves del vínculo con WhatsApp, no código) — NUNCA debe subirse a git;
+# en el servidor real vive en un volumen persistente aparte (ver DEPLOY.md).
+whatsapp-session/

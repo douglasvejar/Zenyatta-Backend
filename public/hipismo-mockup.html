@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ludox Hipismo 🇻🇪 — Vista Previa del Panel (borrador para revisar)</title>
+<title>Ludox Hipismo 🇻🇪 — Panel del Grupo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -50,16 +50,6 @@
   /* Sin resplandores difuminados de fondo: quedaban bien en el tema oscuro,
      pero en un tema claro pensado para jornadas largas de trabajo suman
      ruido visual en vez de ambiente — mejor una superficie plana y limpia. */
-
-  .banner-borrador {
-    background: linear-gradient(100deg, #facc15, #f59e0b);
-    color: #241a03;
-    text-align: center;
-    font-weight: 700;
-    font-size: 13px;
-    padding: 8px 14px;
-    letter-spacing: 0.2px;
-  }
 
   .app-shell { display: flex; gap: 18px; max-width: 1400px; margin: 0 auto; padding: 18px; align-items: flex-start; }
 
@@ -562,7 +552,11 @@
 </head>
 <body>
 
-<div class="banner-borrador">🚧 EN CONSTRUCCIÓN — "📥 Cargar Planos", "🏆 Cargar Remate", "🚀 Jugadas Adelantadas", "🗑️ Eliminar Planos", "💰 Montos Apostados", "↩️ Comisiones Devueltas", "🗑️ Planos Eliminados", "🏟️ Hipódromos", "📈 Comisiones por Carrera", "🏁 Cierre Final" y "👤 Clientes" (con su link público) ya son reales (se calculan y se guardan de verdad en el servidor). El resto de las pantallas (Pozos, Saldo Comisiones, Retiros, Traspaso de Saldo, WhatsApp propio de Hipismo) todavía muestran datos de ejemplo o botones deshabilitados — ver claude/plan-modulo-hipismo.md para el detalle de qué falta.</div>
+<!-- 24-09-2026, a pedido del usuario ("elimina esa barra naranaja que dice en
+     construccion... ya vamos a empezar a trabajar creo que ya estamos
+     listos"): se quita el banner amarillo/naranja "EN CONSTRUCCIÓN" que
+     listaba qué pantallas ya eran reales y cuáles no — el módulo ya se
+     considera listo para uso real, ese aviso de borrador dejó de aplicar. -->
 
 <!-- 22-09-2026, a pedido del usuario: "Alerta colócala afuera que siempre se
      vea" — se saca de la barra lateral (donde solo se veía si estabas en
