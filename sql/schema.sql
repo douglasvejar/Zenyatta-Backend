@@ -279,14 +279,37 @@ create table if not exists hipismo_tickets (
   cliente_nombre      text not null, -- quien jugó (el "jugador" de la línea)
   banquero_nombre     text not null, -- quien banqueó/cubrió esa línea
   modalidad           text not null, -- '1p'..'10p', '1/2', '2n', '2y2', '2y3', '3n', 'pp', '10/N'
-  caballo             text,          -- número de caballo tal cual se escribió ("10", o "9x2" para pp)
+                                      -- ("a premio" — 24-09-2026: también admite "10@N"/"aN"/"a N",
+                                      -- ver DECIMOS_RE en services/hipismoCalc.js), y combos de 2 a
+                                      -- la vez guardados SIEMPRE con guion pegado, ej. '1/2-1p',
+                                      -- '2n-1y2' (24-09-2026, ver resolverModalidadCompuesta())
+  caballo             text,          -- número de caballo tal cual se escribió ("10", "9x2" para pp,
+                                      -- o "6,10" para una "morocha" — varios caballos con la MISMA
+                                      -- modalidad, "o uno o el otro" — 2 o más, guardados SIEMPRE
+                                      -- separados por coma aunque el operador los haya escrito con
+                                      -- "y" o guion, 24-09-2026, ver resolverModalidadMultiCaballo())
   monto               numeric not null,
   resultado_jugador   numeric not null default 0,  -- ya con comisión aplicada si ganó esta línea puntual
+                                                     -- (salvo sin_comision=true, ver abajo)
   resultado_banquero  numeric not null default 0,
+  sin_comision        boolean not null default false, -- 24-09-2026: esta línea es una jugada "a
+                                      -- premio" que el operador marcó, ANTES de calcular esa carrera,
+                                      -- para que el 5% NO se descuente al ganador (ver
+                                      -- esModalidadSinComision()/montoMostrado() en hipismoCalc.js) —
+                                      -- queda guardado por ticket para que editar OTRO ticket del
+                                      -- mismo plano (recalcularTotalesPlano) no le aplique/quite la
+                                      -- comisión por error.
   creado_en           timestamptz not null default now()
 );
 create index if not exists idx_hipismo_tickets_plano on hipismo_tickets(plano_id);
 create index if not exists idx_hipismo_tickets_grupo_cliente on hipismo_tickets(grupo_id, cliente_nombre);
+
+-- 24-09-2026: columna nueva para una base que YA tenía hipismo_tickets
+-- creada antes de esta ronda (el "create table if not exists" de arriba
+-- no la agrega sola en ese caso) — función de "sin comisión" para
+-- jugadas "a premio", ver la nota grande junto a la definición de la
+-- columna más arriba.
+alter table hipismo_tickets add column if not exists sin_comision boolean not null default false;
 
 -- =================================================================
 -- REMATE (23-09-2026, "sección cargar remate" — a pedido del usuario, con

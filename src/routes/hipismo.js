@@ -38,7 +38,8 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { numeroSemanaISO } = require('../services/fechaSemana');
 const {
   calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO,
-  parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets
+  parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
+  parsearValoresSinComision
 } = require('../services/hipismoCalc');
 // "Cargar Remate" (23-09-2026, a pedido del usuario, con un formato real
 // de ejemplo pegado por él — ver la nota grande en
@@ -425,7 +426,7 @@ function agregarPorcentajeDevuelto(totales, comisionesPropias, entradas) {
 // POST /planos/calcular: calcula SIN guardar — para la vista previa del
 // botón "Calcular" antes de decidir si se guarda de verdad.
 router.post('/planos/calcular', asyncHandler(async (req, res) => {
-  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha } = req.body;
+  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
 
   const fechaFinal = fecha || fechaHoyVenezuela();
@@ -439,7 +440,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   }
 
   const resultado = huboTexto
-    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision) })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
@@ -498,7 +499,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
 
 // POST /planos: calcula Y guarda de verdad (hipismo_planos + hipismo_tickets).
 router.post('/planos', asyncHandler(async (req, res) => {
-  const { texto, pizarra, cruzaJugadas, hipodromoId, hipodromoNombre, carreraNumero, ret, fecha } = req.body;
+  const { texto, pizarra, cruzaJugadas, hipodromoId, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
   if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
 
@@ -527,7 +528,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Falta el texto del plano.' });
   }
   const resultado = huboTexto
-    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas })
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision) })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
@@ -574,9 +575,9 @@ router.post('/planos', asyncHandler(async (req, res) => {
 
     for (const t of resultado.tickets) {
       await client.query(
-        `INSERT INTO hipismo_tickets (plano_id, grupo_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [planoCreado.id, req.grupoId, t.clienteNombre, t.banqueroNombre, t.modalidad, t.caballo, t.monto, t.resultadoJugador, t.resultadoBanquero]
+        `INSERT INTO hipismo_tickets (plano_id, grupo_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero, sin_comision)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [planoCreado.id, req.grupoId, t.clienteNombre, t.banqueroNombre, t.modalidad, t.caballo, t.monto, t.resultadoJugador, t.resultadoBanquero, !!t.sinComision]
       );
     }
     if (resueltas.length) await guardarResolucionAdelantadas(client, req, resueltas, pizarra);
@@ -714,7 +715,10 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   if (isNaN(montoFinal) || montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
 
   const rank = parsearPizarra(plano.pizarra);
-  const recalculado = recalcularTicket({ modalidad: ticket.modalidad, caballo: ticket.caballo, monto: montoFinal }, rank);
+  // sin_comision (24-09-2026) viaja tal cual quedó guardado ese ticket al
+  // calcular el plano — editar monto/cliente/banquero NUNCA cambia si esa
+  // línea va o no sin comisión (eso se decide una sola vez, al calcular).
+  const recalculado = recalcularTicket({ modalidad: ticket.modalidad, caballo: ticket.caballo, monto: montoFinal, sinComision: ticket.sin_comision }, rank);
   if (!recalculado) return res.status(400).json({ error: `No se pudo recalcular este ticket (modalidad "${ticket.modalidad}" no reconocida).` });
 
   const nombresNuevos = [];
@@ -731,7 +735,8 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   const rTodosTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
   const ticketsPlanos = rTodosTickets.rows.map(t => ({
     clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre, modalidad: t.modalidad, caballo: t.caballo,
-    monto: Number(t.monto), resultadoJugador: Number(t.resultado_jugador), resultadoBanquero: Number(t.resultado_banquero)
+    monto: Number(t.monto), resultadoJugador: Number(t.resultado_jugador), resultadoBanquero: Number(t.resultado_banquero),
+    sinComision: !!t.sin_comision
   }));
   const { totalesFinales, comisionTotal } = recalcularTotalesPlano(ticketsPlanos, plano.cruza_jugadas);
 
@@ -1378,9 +1383,14 @@ function rangoSemana(fecha, offsetSemanas) {
 // el que pierde no paga nada. Sumar esto por carrera da lo mismo que
 // hipismo_planos.comision_total (ya guardado) — se usa ese total como
 // el número "oficial" de cada carrera y esto solo arma el detalle.
-function comisionDeLado(resultadoMostrado) {
+// sinComision (24-09-2026): un ticket exento (jugada "a premio" marcada
+// sin el 5%, ver hipismoCalc.js) nunca tuvo comisión que reconstruir —
+// sin este chequeo, dividir su resultado por 0.95 inventaría una
+// comisión que en realidad nunca se cobró, y ese ticket aparecería con
+// un detalle de comisión falso en este reporte.
+function comisionDeLado(resultadoMostrado, sinComision) {
   const n = Number(resultadoMostrado);
-  if (n <= 0) return 0;
+  if (n <= 0 || sinComision) return 0;
   const bruto = n / 0.95;
   return bruto - n;
 }
@@ -1423,7 +1433,7 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   }
 
   const rTickets = await db.query(
-    `SELECT plano_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero
+    `SELECT plano_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero, sin_comision
        FROM hipismo_tickets WHERE plano_id = ANY($1::uuid[])`,
     [rPlanos.rows.map(p => p.id)]
   );
@@ -1431,8 +1441,8 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   rTickets.rows.forEach(t => {
     if (!ticketsPorPlano.has(t.plano_id)) ticketsPorPlano.set(t.plano_id, []);
     const detalle = [];
-    const comJugador = comisionDeLado(t.resultado_jugador);
-    const comBanquero = comisionDeLado(t.resultado_banquero);
+    const comJugador = comisionDeLado(t.resultado_jugador, t.sin_comision);
+    const comBanquero = comisionDeLado(t.resultado_banquero, t.sin_comision);
     if (comJugador > 0) detalle.push({ cliente: t.cliente_nombre, jugada: textoJugadaTicket(t), comision: comJugador });
     if (comBanquero > 0) detalle.push({ cliente: t.banquero_nombre, jugada: textoJugadaTicket(t), comision: comBanquero });
     ticketsPorPlano.get(t.plano_id).push(...detalle);

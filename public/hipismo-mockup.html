@@ -760,6 +760,10 @@
             <input type="checkbox" id="chkCruzar" checked>
             <label for="chkCruzar" title="Se activa/desactiva por grupo desde Súper-admin">Cruzar jugadas</label>
           </div>
+          <div>
+            <label for="inpSinComision" title="Jugadas 'a premio' (10a1...10a9, con o sin decimales) — a las que elijas acá el ganador se le paga NETO, SIN el 5% de comisión, solo para las jugadas de ESTA carrera. Elige mínimo 3 valores separados por coma, ej: 2, 3, 1.75">Valores "a premio" SIN comisión</label>
+            <input type="text" id="inpSinComision" placeholder="Ej: 2, 3, 1.75 (déjalo vacío si ninguno aplica)">
+          </div>
         </div>
 
         <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
@@ -2101,6 +2105,12 @@ async function calcularPlano() {
   const ret = document.getElementById('inpRet').value;
   const cruzar = document.getElementById('chkCruzar').checked;
   const texto = document.getElementById('txtPlano').value;
+  // Valores "a premio" sin comisión (24-09-2026, a pedido del usuario) —
+  // se elige ANTES de calcular, por carrera: texto separado por comas
+  // ("2, 3, 1.75") que el servidor parsea con parsearValoresSinComision()
+  // (ver hipismoCalc.js) — se manda tal cual, vacío si el operador no
+  // puso nada (comportamiento de siempre, nadie exento).
+  const valoresSinComision = document.getElementById('inpSinComision').value;
 
   const vacio = document.getElementById('resultadoVacio');
   const caja = document.getElementById('resultadoCaja');
@@ -2126,7 +2136,7 @@ async function calcularPlano() {
   try {
     data = await apiHipismo('/api/hipismo/planos', {
       method: 'POST',
-      body: JSON.stringify({ texto, pizarra: pizarraTxt, cruzaJugadas: cruzar, hipodromoNombre, carreraNumero, ret, fecha })
+      body: JSON.stringify({ texto, pizarra: pizarraTxt, cruzaJugadas: cruzar, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision })
     });
   } catch (e) {
     vacio.textContent = e.message;
@@ -2163,6 +2173,7 @@ async function calcularPlano() {
 
 function limpiarPlano() {
   document.getElementById('txtPlano').value = '';
+  document.getElementById('inpSinComision').value = '';
   document.getElementById('resultadoCaja').style.display = 'none';
   document.getElementById('resultadoVacio').style.display = 'block';
   document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';

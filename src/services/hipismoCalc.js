@@ -48,6 +48,86 @@
 // que confirmar primero si el token real que se pega en un plano es
 // distinto de "pp" (que ya esta tomado por el cruzado de 2 caballos de
 // arriba) antes de agregarlo.
+//
+// AGREGADO 24-09-2026 (plano real de otro grupo de WhatsApp, "Grupo
+// Gorila", que mandó el usuario como ejemplo de "otra manera de leer
+// jugadas"):
+//   - Jugadas MIXTAS de 2 modalidades a la vez, del MISMO caballo y
+//     MISMO monto (ej. "1/2-1p", "2n-1y2"): el monto se reparte 50/50
+//     entre las 2 modalidades, cada mitad se resuelve por separado y se
+//     suman — confirmado con 2 ejemplos numéricos del usuario (ver
+//     resolverModalidadCompuesta() más abajo). El separador puede venir
+//     pegado con guion ("1/2-1p") o con espacio ("2n 1y2") — se
+//     normalizan las 2 formas a guion antes de calcular/guardar (ver
+//     normalizarModalidadCombo()).
+//   - Jugadas a VARIOS caballos con una sola modalidad y un solo monto
+//     (ej. "1p 6,10" = 1p jugado a los caballos 6 y 10 con un mismo
+//     monto): es una apuesta "o uno o el otro" — el monto COMPLETO se
+//     resuelve con el MEJOR resultado entre los caballos listados
+//     (confirmado por el usuario vía pregunta directa) — nunca se
+//     reparte el monto entre los caballos (ver
+//     resolverModalidadMultiCaballo()).
+//   - Formato de línea COMPACTO, sin las palabras "Juega"/"con"/"da" ni
+//     paréntesis: "<cliente> <modalidad> <caballo(s)> <banquero>
+//     <monto>" (ver LINEA_REGEX_COMPACTA) — calcularPlano() prueba
+//     primero el formato viejo y, si no calza, este — un mismo plano
+//     pegado puede traer líneas de cualquiera de los 2 formatos.
+//   - limpiarEncabezadoYPie() ahora también sabe recortar un encabezado
+//     que NO trae ninguna línea "Pizarra:" (el caso de este plano de
+//     ejemplo) — descarta todo lo que esté antes de la PRIMERA línea
+//     que de verdad calce como una jugada.
+//
+// AGREGADO 24-09-2026, segunda ronda del mismo día (el usuario siguió
+// explicando variantes reales de jugadas después de la entrega de arriba):
+//   - "Morocha" (término del propio usuario) es como ahora se le dice a
+//     la jugada de "varios caballos, o uno o el otro" de arriba (lo que
+//     hizo Boss) — confirmado que puede ser de 2, 3 o más caballos (la
+//     fórmula de resolverModalidadMultiCaballo() ya era genérica para
+//     cualquier cantidad, no hizo falta cambiar nada ahí) y que también
+//     se puede jugar con modalidades décimos ("10/7", "10a8"), no solo
+//     con "Np" — ya funcionaba igual (resolverModalidadCompuesta() llama
+//     resolverModalidad() sin restringir la familia), se agregó una
+//     prueba de regresión para dejarlo confirmado.
+//   - Los caballos de una morocha ahora también se pueden separar con
+//     "y" o con guion, no solo coma: "6,10" ≡ "6y10" ≡ "6-10" (ver
+//     CABALLO_SRC y el split en resolverResultadoLinea() más abajo). Un
+//     caballo pegado SIN separador (ej. "43") sigue siendo SIEMPRE un
+//     solo caballo (el 43) — confirmado explícitamente por el usuario
+//     como la lectura más segura, nunca se intenta adivinar si son 2
+//     caballos de una cifra pegados.
+//   - Jugadas "A PREMIO" (término del usuario para la familia décimos,
+//     10a9 hasta 10a1, o con decimales — paga N/10 si el caballo GANA):
+//     se generalizó la notación para reconocer, además de "10/N"/
+//     "10aN"/"10 a N" ya existentes, "10@N" y la forma corta "aN"/"a N"
+//     (sin el "10" adelante), y N con coma decimal ("10a1,75") además de
+//     punto — ver DECIMOS_RE/DECIMOS_SRC más abajo, un solo patrón
+//     reusado por resolverModalidad() (el cálculo) y decimosN() (la
+//     función de "sin comisión" de abajo), para que nunca se
+//     desincronicen sobre qué es una jugada a premio.
+//   - Función de "SIN COMISIÓN" para jugadas a premio (a pedido del
+//     usuario: "hay grupos que a esas jugadas... no le quitan % al
+//     ganador... se gana neto"): calcularPlano() ahora acepta
+//     valoresSinComision (lista de valores N elegidos por el operador
+//     ANTES de calcular esa carrera, en la pantalla de "Cargar Planos")
+//     — si una línea es una jugada a premio SOLA (nunca combinada, nunca
+//     "pp") y su N está en esa lista, el 5% no se descuenta cuando el
+//     caballo gana (ver esModalidadSinComision()/montoMostrado()). Esa
+//     bandera queda GUARDADA por ticket (hipismo_tickets.sin_comision —
+//     hizo falta una columna nueva, ver sql/schema.sql) porque, aunque el
+//     usuario confirmó que solo se elige antes de calcular (no se puede
+//     tocar después), sí hace falta para que recalcularTicket()/
+//     recalcularTotalesPlano() (que se usan cuando se EDITA cualquier
+//     ticket del plano más adelante) sigan calculando bien ese ticket sin
+//     volverle a aplicar o quitar la comisión por error. En modo "cruza
+//     jugadas" (spec sección 7) los tickets exentos se liquidan APARTE,
+//     con su propio monto ya neto — no entran al pozo que se netea al 5%
+//     al final (ese pozo es solo para las jugadas de comisión normal),
+//     ver la nota grande en calcularPlano()/recalcularTotalesPlano().
+//   - PENDIENTE (no entregado en esta ronda, falta un ejemplo numérico
+//     del usuario de cómo se resuelve el dinero): la jugada de "cliente
+//     contra cliente" (ej. "raul 4y3 x adrian 5 con 400", cada cliente
+//     con su propio grupo de caballos, incluso desparejo) — distinta de
+//     la "morocha" de arriba (que es UN cliente con varios caballos).
 // =================================================================
 
 // Devuelve {j, b} como FRACCIÓN del monto (antes de comisión), desde la
@@ -67,13 +147,17 @@ function resolverModalidad(modalidadCruda, pos, posB) {
     return (pos <= n) ? { j: 1, b: -1 } : { j: -1, b: 1 };
   }
 
-  // "10/N", "10aN", "10 a N" (decimos, spec seccion 8) — se revisa ANTES
-  // que la familia generica "A/B" de mas abajo porque ambas usan "/", y
-  // "10/3" tiene que leerse como decimos (paga 3/10), no como A=10,B=3 de
-  // la familia AyB.
-  m = modalidad.match(/^10\s*[/a]\s*(\d+(?:\.\d+)?)$/);
+  // "10/N", "10aN", "10 a N", "10@N" o simplemente "aN"/"a N" (decimos —
+  // "jugadas A PREMIO", 24-09-2026: el usuario confirmó que "10a2" se
+  // puede escribir también "10/2", "10@2" o solo "a2", y así con
+  // cualquier N — ver DECIMOS_RE más abajo, que centraliza TODAS estas
+  // formas en un solo patrón). Se revisa ANTES que la familia generica
+  // "A/B" de mas abajo porque ambas usan "/", y "10/3" tiene que leerse
+  // como decimos (paga 3/10), no como A=10,B=3 de la familia AyB.
+  m = modalidad.match(DECIMOS_RE);
   if (m) {
-    const frac = parseFloat(m[1]) / 10;
+    const nTxt = (m[1] !== undefined ? m[1] : m[2]).replace(',', '.');
+    const frac = parseFloat(nTxt) / 10;
     if (pos === 1) return { j: frac, b: -frac };
     return { j: -1, b: 1 };
   }
@@ -123,6 +207,94 @@ function resolverModalidad(modalidadCruda, pos, posB) {
   return null; // modalidad no reconocida
 }
 
+// =================================================================
+// Jugadas MIXTAS de 2 modalidades a la vez (24-09-2026, a pedido del
+// usuario, con un plano real de otro grupo — "Grupo Gorila" — donde
+// líneas como "Yellowtone 1/2-1p 10 puertolacruz 36" juegan 2
+// modalidades del MISMO caballo con el MISMO monto). El usuario
+// confirmó el cálculo con números reales: el monto se reparte 50/50
+// entre las 2 modalidades, cada mitad se resuelve por separado contra
+// la MISMA posición del caballo, y se suman — ej. "1/2-1p" con 55,00 y
+// el caballo llega 2do: pierde el 1p completo (27,50) + la mitad del
+// 1/2 (13,75) = 41,25 de pérdida total; si gana, gana completo -5%.
+// También confirmó "2n" (ya existente, "no se decide") combinado con
+// "1y2": con 100,00 y el caballo llega 2do, pierde solo 25 (la mitad
+// de "2n" no se decide = 0, la mitad de "1y2" pierde la mitad = 25).
+// resolverModalidadCompuesta() generaliza esto: separa hasta 2
+// sub-modalidades (ya vienen normalizadas con guion, ver
+// normalizarModalidadCombo() más abajo), resuelve cada una con
+// resolverModalidad() tal cual (sin duplicar ninguna fórmula) y
+// PROMEDIA sus fracciones {j,b} — matemáticamente idéntico a repartir
+// el monto en 2 mitades y sumar los resultados de cada mitad por
+// separado (confirmado contra los 2 ejemplos numéricos de arriba). Si
+// alguna de las 2 sub-modalidades es "pp" (que necesita 2 caballos y un
+// formato de caballo distinto, "AxB") no se combina — se devuelve null
+// a propósito para que esa línea caiga en "sinReconocer" en vez de
+// calcular algo silenciosamente mal.
+function resolverModalidadCompuesta(modalidadCruda, pos, posB) {
+  const partes = (modalidadCruda || '').toLowerCase().trim().split('-').map(s => s.trim()).filter(Boolean);
+  if (partes.length === 1) return resolverModalidad(partes[0], pos, posB);
+  if (partes.length === 2) {
+    if (partes[0] === 'pp' || partes[1] === 'pp') return null;
+    const r1 = resolverModalidad(partes[0], pos, posB);
+    const r2 = resolverModalidad(partes[1], pos, posB);
+    if (!r1 || !r2) return null;
+    return { j: (r1.j + r2.j) / 2, b: (r1.b + r2.b) / 2 };
+  }
+  return null; // 3 o mas modalidades combinadas: no soportado
+}
+
+// normalizarModalidadCombo() (24-09-2026): el usuario confirmó que el
+// separador entre 2 modalidades combinadas puede venir con guion pegado
+// ("1/2-1p", como en el plano real de Grupo Gorila) O con espacio
+// ("2n 1y2") — acá se normalizan AMBAS formas a guion pegado ANTES de
+// resolver o guardar, así el resto del código (resolverModalidadCompuesta
+// de arriba, que solo separa por "-") y lo que queda guardado en
+// hipismo_tickets.modalidad son siempre consistentes, sin importar cómo
+// lo haya escrito el operador.
+// OJO (bug encontrado y corregido en esta misma ronda, ANTES de
+// entregar): NO se puede partir por cualquier espacio a lo bruto — la
+// modalidad "10 a 5" (décimos, ver resolverModalidad) es UN SOLO token
+// que de por sí trae espacios adentro ("10", espacio, "a", espacio,
+// "5") — partirla a lo bruto la convertía en "10-a-5" (3 pedazos,
+// ninguno reconocido) y rompía esa modalidad ya confirmada. Por eso acá
+// se usa MODALIDAD_COMBO_SPLIT_RE (definida más abajo junto a MOD_SRC):
+// solo separa cuando el texto es EXACTAMENTE 2 modalidades válidas
+// completas separadas por espacio(s)/guion — si no calza esa forma
+// exacta (como "10 a 5", que es una modalidad válida ENTERA), se deja
+// tal cual, sin tocarla.
+function normalizarModalidadCombo(modalidadCruda) {
+  const texto = (modalidadCruda || '').trim();
+  const m = texto.match(MODALIDAD_COMBO_SPLIT_RE);
+  if (m) return `${m[1]}-${m[2]}`;
+  return texto;
+}
+
+// Jugadas a VARIOS caballos con una sola modalidad y un solo monto
+// (24-09-2026, a pedido del usuario, ejemplo real: "Boss 1p 6,10
+// journalism 300" — Boss juega 1p a los caballos 6 y 10 con un solo
+// monto de 300). Confirmado por el usuario (AskUserQuestion): es una
+// apuesta "o uno o el otro" — el monto COMPLETO se resuelve con el
+// MEJOR resultado entre los caballos listados (gana completo si
+// CUALQUIERA de los caballos cumple la modalidad, pierde completo solo
+// si NINGUNO la cumple) — nunca se reparte el monto entre los
+// caballos. Para modalidades con resultados parciales (ej. una mitad),
+// "mejor resultado" se generaliza como la fracción `j` más alta entre
+// todos los caballos. Si algún caballo de la lista no se puede resolver
+// (modalidad no reconocida), se devuelve null a propósito — la línea
+// completa cae en "sinReconocer" en vez de arriesgar un cálculo
+// parcial/incorrecto.
+function resolverModalidadMultiCaballo(modalidadCruda, caballos, rank) {
+  let mejor = null;
+  for (const h of caballos) {
+    if (!Number.isFinite(h)) return null;
+    const r = resolverModalidadCompuesta(modalidadCruda, rank(h));
+    if (!r) return null;
+    if (!mejor || r.j > mejor.j) mejor = r;
+  }
+  return mejor;
+}
+
 // (?:\s+del)? (24-09-2026): tolera la palabra suelta "del" entre la
 // modalidad y el paréntesis del caballo — el ejemplo real que mandó el
 // usuario trae una línea así ("Juega Pedrito 2/2 del (8) con 4.000,00 da
@@ -136,14 +308,124 @@ function resolverModalidad(modalidadCruda, pos, posB) {
 // "3y3","4y4","4y5","5y5", "4n","5n"..."10n", etc. quedan reconocidas sin
 // tener que volver a tocar este regex cada vez que aparece una posición
 // nueva.
-const LINEA_REGEX = /^juega\s+(\S+)\s+(\d{1,2}p|10\s*[/a]\s*\d+(?:\.\d+)?|\d{1,2}n(?:ini)?|\d{1,2}nn|\d{1,2}y\d{1,2}n?|\d{1,2}\/\d{1,2}|pp)(?:\s+del)?\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
+// MOD_SRC (24-09-2026): la MISMA alternación de modalidades de siempre,
+// factorizada en una constante de texto para poder reusarla tal cual en
+// 2 lugares — el regex viejo ("Juega...da...") y el regex nuevo del
+// formato compacto de abajo — sin arriesgar que se desincronicen entre
+// sí. MODALIDAD_SRC envuelve 2 MOD_SRC opcionalmente unidos por guion O
+// espacio(s) ("[\s-]+"), para las jugadas mixtas de 2 modalidades a la
+// vez (ver resolverModalidadCompuesta()/normalizarModalidadCombo() más
+// arriba) — el jugador puede escribir "1/2-1p" (pegado, como en el
+// plano real de Grupo Gorila) o "2n 1y2" (con espacio), ambas formas
+// quedan en el MISMO grupo de captura de modalidad.
+// DECIMOS_RE / DECIMOS_SRC (24-09-2026, "jugadas A PREMIO" — el usuario
+// explicó que las jugadas décimos "10a9" hasta "10a1" (o con decimales,
+// "10a1,75", "10a2,5") se llaman así, "a premio", y que se escriben de
+// varias formas equivalentes: "10/N", "10aN", "10 a N", "10@N", o
+// directo "aN"/"a N" sin el "10" (se sobreentiende) — y que N puede
+// traer coma decimal en vez de punto, como se escribe normalmente en
+// Venezuela. Se centraliza el patrón acá en una sola constante para que
+// resolverModalidad() (el cálculo) y decimosN()/esModalidadSinComision()
+// (la función de "sin comisión" de más abajo) nunca se desincronicen
+// sobre qué cuenta como una jugada a premio y cuál es su valor N.
+const DECIMOS_RE = /^(?:10\s*[/a@]\s*(\d+(?:[.,]\d+)?)|a\s*(\d+(?:[.,]\d+)?))$/i;
+const DECIMOS_SRC = '(?:10\\s*[/a@]\\s*\\d+(?:[.,]\\d+)?|a\\s*\\d+(?:[.,]\\d+)?)';
+const MOD_SRC = '(?:\\d{1,2}p|' + DECIMOS_SRC + '|\\d{1,2}n(?:ini)?|\\d{1,2}nn|\\d{1,2}y\\d{1,2}n?|\\d{1,2}\\/\\d{1,2}|pp)';
+const MODALIDAD_SRC = '(' + MOD_SRC + '(?:[\\s-]+' + MOD_SRC + ')?)';
+// MODALIDAD_COMBO_SPLIT_RE: usada por normalizarModalidadCombo() de más
+// arriba — exige que el texto ENTERO sean 2 modalidades válidas
+// completas (cada una un MOD_SRC de principio a fin) separadas por
+// espacio(s)/guion, para no confundir una modalidad que de por sí trae
+// espacios adentro (ej. "10 a 5") con una combinación de 2.
+const MODALIDAD_COMBO_SPLIT_RE = new RegExp('^(' + MOD_SRC + ')[\\s-]+(' + MOD_SRC + ')$', 'i');
+const LINEA_REGEX = new RegExp('^juega\\s+(\\S+)\\s+' + MODALIDAD_SRC + '(?:\\s+del)?\\s*\\(([^)]+)\\)\\s*con\\s+([\\d.,]+)\\s*da\\s+(\\S+)', 'i');
+
+// LINEA_REGEX_COMPACTA (24-09-2026, a pedido del usuario, con un plano
+// real de otro grupo de WhatsApp — "Grupo Gorila" — como ejemplo: "otro
+// plano, otra manera de leer jugadas"): formato SIN las palabras
+// "Juega"/"con"/"da" y sin paréntesis alrededor del caballo — 5 campos
+// separados por espacio, en este orden fijo: cliente, modalidad,
+// caballo(s), banquero, monto. Ejemplos reales confirmados:
+//   "Gordo 1/2 10 soyganador 100"        -> Gordo juega 1/2 del caballo
+//                                           10 con 100, se lo da soyganador.
+//   "Yellowtone 1/2-1p 10 puertolacruz 36" -> modalidad mixta (ver arriba).
+//   "Boss 1p 6,10 journalism 300"        -> 1p a 2 caballos (6 y 10) con
+//                                           un solo monto — "o uno o el
+//                                           otro", ver
+//                                           resolverModalidadMultiCaballo().
+// El campo de caballo(s) acepta uno o más números separados por coma
+// (apuesta a varios caballos, "o uno o el otro") O un par "AxB" (cruzado
+// "pp", mismo formato que ya usaba el regex viejo). calcularPlano()
+// intenta primero LINEA_REGEX (formato "Juega...") y, si no calza,
+// intenta este — así un mismo plano pegado puede tener líneas de
+// cualquiera de los 2 formatos, sin que el operador tenga que avisar
+// cuál está usando.
+// CABALLO_SRC (extendido 24-09-2026: el usuario confirmó que una "morocha"
+// —su término para lo que ya hacía Boss, un mismo cliente jugando la
+// MISMA modalidad en 2 o más caballos con un solo monto— también se
+// escribe separando los caballos con "y" o con guion, no solo con coma:
+// "6,10", "6y10" o "6-10" son la MISMA jugada. Un caballo SOLO sin
+// separador (ej. "43") se sigue leyendo SIEMPRE como un solo caballo,
+// nunca como 2 caballos pegados — confirmado explícitamente por el
+// usuario, es la lectura más segura).
+const CABALLO_SRC = '((?:\\d{1,2}(?:\\s*[,y-]\\s*\\d{1,2})*)|(?:\\d{1,2}\\s*x\\s*\\d{1,2}))';
+const LINEA_REGEX_COMPACTA = new RegExp('^(\\S+)\\s+' + MODALIDAD_SRC + '\\s+' + CABALLO_SRC + '\\s+(\\S+)\\s+([\\d.,]+)\\s*$', 'i');
+
+// PARECE_JUGADA_RE: heurística para no perder de vista una línea que de
+// verdad parece una jugada (compacta, sin la palabra "Juega") pero que
+// no terminó de calzar ningún formato — mismo criterio que ya existía
+// para el formato viejo (que se fija si la línea contiene "Juega"), acá
+// generalizado buscando cualquier token de modalidad conocido como
+// palabra suelta dentro de la línea.
+const PARECE_JUGADA_RE = new RegExp('\\b' + MOD_SRC + '\\b', 'i');
+
+// decimosN(modalidadNorm) -> el valor N de una jugada "a premio" (familia
+// décimos, ver DECIMOS_RE más arriba), como número, o null si la
+// modalidad no es una jugada a premio SOLA (una combinada con guion,
+// ej. "10a2-1p", NUNCA cuenta acá a propósito — la función de "sin
+// comisión" de más abajo solo aplica a una jugada a premio sin mezclar,
+// tal como la explicó el usuario).
+function decimosN(modalidadNorm) {
+  const m = (modalidadNorm || '').toLowerCase().trim().match(DECIMOS_RE);
+  if (!m) return null;
+  return parseFloat((m[1] !== undefined ? m[1] : m[2]).replace(',', '.'));
+}
+
+// esModalidadSinComision() (24-09-2026, a pedido del usuario: "hay grupos
+// que a esas jugadas [a premio, ej. 10a2, 10a3]... no le quitan % al
+// ganador... se gana neto (solo si el caballo gana)") — valoresSinComision
+// es la lista de valores N (números) que el operador eligió para ESTA
+// carrera antes de calcular (ver calcularPlano/POST /planos). Si la
+// modalidad de la línea es una jugada a premio sola y su N está en esa
+// lista, el 5% no se descuenta cuando el caballo gana (ver montoMostrado
+// más abajo). Comparación con tolerancia (0.001) para que "1.75"/"1,75"
+// no falle por redondeo de punto flotante.
+function esModalidadSinComision(modalidadNorm, valoresSinComision) {
+  if (!valoresSinComision || !valoresSinComision.length) return false;
+  const n = decimosN(modalidadNorm);
+  if (n === null) return false;
+  return valoresSinComision.some(v => Math.abs(parseFloat(v) - n) < 0.001);
+}
+
+// parsearValoresSinComision(): normaliza lo que llega del formulario de
+// "Cargar Planos" (un array, o un texto separado por comas como
+// "2, 3, 1.75") a un array de números — usado por routes/hipismo.js para
+// no repetir este parseo en /planos/calcular y /planos.
+function parsearValoresSinComision(raw) {
+  const partes = Array.isArray(raw) ? raw : (typeof raw === 'string' ? raw.split(',') : []);
+  return partes.map(v => parseFloat(String(v).trim().replace(',', '.'))).filter(Number.isFinite);
+}
 
 // Monto tal cual se MUESTRA en el texto de cada línea: ya con el 5%
 // descontado si es una ganancia (spec sección 6), independiente de si el
 // grupo cruza jugadas — el cruce (sección 7) solo cambia el TOTAL por
-// persona al final, no cada línea individual.
-function montoMostrado(fraccionMonto) {
-  return fraccionMonto > 0 ? fraccionMonto * 0.95 : fraccionMonto;
+// persona al final, no cada línea individual. sinComision (24-09-2026,
+// ver esModalidadSinComision arriba): si es true y la fracción es una
+// ganancia, NO se descuenta el 5% — se muestra/guarda neto tal cual. Una
+// pérdida nunca llevó comisión de por sí, así que sinComision no cambia
+// nada en ese caso (coincide con "pierden neto" que explicó el usuario).
+function montoMostrado(fraccionMonto, sinComision) {
+  return (fraccionMonto > 0 && !sinComision) ? fraccionMonto * 0.95 : fraccionMonto;
 }
 
 function formatNombre(nombre) {
@@ -214,12 +496,34 @@ function limpiarEncabezadoYPie(texto) {
   const lineas = texto.split('\n');
 
   let inicio = 0;
+  let encontroPizarra = false;
   for (let i = 0; i < Math.min(lineas.length, 8); i++) {
-    if (/^\s*pizarra\s*:/i.test(lineas[i])) { inicio = i + 1; break; }
+    if (/^\s*pizarra\s*:/i.test(lineas[i])) { inicio = i + 1; encontroPizarra = true; break; }
   }
-  while (inicio < lineas.length) {
-    const l = lineas[inicio].replace(/\*/g, '').trim();
-    if (l === '' || /^-{3,}$/.test(l) || /^tercios$/i.test(l)) { inicio++; } else break;
+  if (encontroPizarra) {
+    while (inicio < lineas.length) {
+      const l = lineas[inicio].replace(/\*/g, '').trim();
+      if (l === '' || /^-{3,}$/.test(l) || /^tercios$/i.test(l)) { inicio++; } else break;
+    }
+  } else {
+    // 24-09-2026 (plano real de "Grupo Gorila"): ese formato NO trae
+    // ninguna línea "Pizarra:" en el encabezado (nombre del grupo +
+    // hipódromo/carrera + "*TERCIOS*" directo) — sin este segundo
+    // mecanismo, esas líneas se colaban tal cual a salidaLineas y el
+    // "*TERCIOS*" del operador terminaba duplicado con el que ya arma
+    // armarTextoResultado() más abajo. Mismo espíritu que el mecanismo
+    // de "Pizarra:" (2 anclas, tolerante a que el encabezado varíe): acá
+    // la ancla es la PRIMERA línea que de verdad calza como una jugada
+    // (LINEA_REGEX o LINEA_REGEX_COMPACTA) — todo lo de ANTES de esa
+    // línea se descarta. Si ninguna línea del texto llega a calzar como
+    // jugada, no se toca nada (mismo comportamiento de siempre).
+    let i = 0;
+    while (i < lineas.length) {
+      const l = lineas[i].replace(/\*/g, '').trim();
+      if (l !== '' && (LINEA_REGEX.test(l) || LINEA_REGEX_COMPACTA.test(l))) break;
+      i++;
+    }
+    if (i < lineas.length) inicio = i;
   }
 
   let fin = lineas.length;
@@ -234,16 +538,67 @@ function limpiarEncabezadoYPie(texto) {
   return lineas.slice(inicio, fin).join('\n');
 }
 
-// calcularPlano({ texto, pizarra, cruzar }) -> {
+// resolverResultadoLinea() (24-09-2026): junta en un solo lugar los 3
+// casos posibles de UNA línea de jugada ya con sus campos separados —
+// "pp" (cruzado, caballoTxt viene como "AxB"), varios caballos con la
+// misma modalidad (caballoTxt trae comas, ver
+// resolverModalidadMultiCaballo — "o uno o el otro") o un caballo solo
+// (con o sin modalidad mixta, ver resolverModalidadCompuesta) — para
+// que calcularPlano() y no tenga que repetir esta lógica y
+// recalcularTicket() (edición de un ticket ya guardado, más abajo)
+// puedan compartirla tal cual. Devuelve null si no se pudo resolver (la
+// línea cae en "sinReconocer" en vez de arriesgar un cálculo mal
+// hecho). caballoGuardado es lo que se guarda en hipismo_tickets.caballo
+// (formato "de archivo") y caballoDisplay es lo que se imprime en el
+// texto de vuelta al operador — para el caso de un caballo solo estos 2
+// pueden diferir un poco (ej. "08" guardado vs "8" mostrado) porque así
+// se comportaba ya el código antes de este cambio, y no había motivo
+// para tocar ese detalle.
+function resolverResultadoLinea({ modalidadNorm, caballoTxt, rank }) {
+  if (modalidadNorm.toLowerCase() === 'pp') {
+    const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
+    if (!Number.isFinite(hA) || !Number.isFinite(hB)) return null;
+    const resultado = resolverModalidad('pp', rank(hA), rank(hB));
+    if (!resultado) return null;
+    return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${hA}x${hB}`, esPP: true, hA, hB };
+  }
+  // "morocha" (24-09-2026, término del usuario para esto): varios
+  // caballos con la MISMA modalidad y un solo monto, separados por coma,
+  // "y" o guion ("6,10", "6y10", "6-10" son la misma jugada — ver
+  // CABALLO_SRC más arriba). Un token SIN separador (ej. "43") nunca
+  // entra por acá — el split de abajo lo deja en 1 sola parte y cae al
+  // caso de caballo solo, más abajo (confirmado por el usuario: "43"
+  // pegado es siempre UN caballo, el 43, nunca 2 caballos pegados).
+  const partesCaballo = caballoTxt.split(/\s*[,y-]\s*/).map(s => s.trim()).filter(Boolean);
+  if (partesCaballo.length > 1) {
+    const caballos = partesCaballo.map(h => parseInt(h, 10));
+    if (caballos.some(h => !Number.isFinite(h))) return null;
+    const resultado = resolverModalidadMultiCaballo(modalidadNorm, caballos, rank);
+    if (!resultado) return null;
+    const texto = caballos.join(',');
+    return { resultado, caballoGuardado: texto, caballoDisplay: texto, esPP: false };
+  }
+  const caballo = parseInt(caballoTxt.trim(), 10);
+  if (!Number.isFinite(caballo)) return null;
+  const resultado = resolverModalidadCompuesta(modalidadNorm, rank(caballo));
+  if (!resultado) return null;
+  return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${caballo}`, esPP: false };
+}
+
+// calcularPlano({ texto, pizarra, cruzar, valoresSinComision }) -> {
 //   ok, error, huboLineas, salidaLineas: [texto por línea, para armar el
 //   bloque de jugadas resuelto], sinReconocer: [líneas que no calzaron
 //   con ninguna modalidad conocida], tickets: [{ clienteNombre,
 //   banqueroNombre, modalidad, caballo, monto, resultadoJugador,
-//   resultadoBanquero }] (una fila por línea reconocida, para guardar en
-//   hipismo_tickets), totalesFinales: { nombre: montoFinal, ... },
-//   comisionTotal
-// }
-function calcularPlano({ texto, pizarra, cruzar }) {
+//   resultadoBanquero, sinComision }] (una fila por línea reconocida,
+//   para guardar en hipismo_tickets), totalesFinales: { nombre:
+//   montoFinal, ... }, comisionTotal
+//
+// valoresSinComision (24-09-2026, ver esModalidadSinComision más arriba):
+// array de valores N (ej. [2, 3]) de jugadas "a premio" (10a2, 10a3...)
+// que para ESTA carrera van SIN el 5% de comisión al ganador — opcional,
+// default [] (comportamiento de siempre, nadie exento).
+function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
   const rank = parsearPizarra(pizarra);
   // 24-09-2026: se descarta el encabezado/pie que venga pegado en el
   // texto (ver la nota grande de limpiarEncabezadoYPie más arriba) ANTES
@@ -264,18 +619,31 @@ function calcularPlano({ texto, pizarra, cruzar }) {
   lineas.forEach(linea => {
     const limpia = linea.replace(/\*/g, '').trim();
     if (!limpia) { salidaLineas.push(''); return; }
-    const mm = limpia.match(LINEA_REGEX);
+
+    // 24-09-2026: se intenta primero el formato viejo ("Juega... con...
+    // da...") y, si no calza, el formato compacto nuevo (ver
+    // LINEA_REGEX_COMPACTA más arriba) — así un mismo plano pegado puede
+    // traer líneas de cualquiera de los 2 formatos.
+    let jugadorCrudo, modalidadCruda, caballoTxt, montoTxt, bancoCrudo;
+    let mm = limpia.match(LINEA_REGEX);
+    if (mm) {
+      [, jugadorCrudo, modalidadCruda, caballoTxt, montoTxt, bancoCrudo] = mm;
+    } else {
+      mm = limpia.match(LINEA_REGEX_COMPACTA);
+      if (mm) [, jugadorCrudo, modalidadCruda, caballoTxt, bancoCrudo, montoTxt] = mm;
+    }
     if (!mm) {
       // Encabezados de categoría (ej. "TERCIOS") u otras líneas se dejan
       // igual — solo se marca como "sin reconocer" si de verdad parece
-      // una jugada mal escrita (contiene "Juega" pero no calzó el formato).
+      // una jugada mal escrita (formato viejo: contiene "Juega" pero no
+      // calzó; formato compacto: trae un token de modalidad conocido
+      // como palabra suelta pero no calzó el resto de los campos).
       salidaLineas.push(limpia);
-      if (/juega/i.test(limpia)) sinReconocer.push(limpia);
+      if (/juega/i.test(limpia) || PARECE_JUGADA_RE.test(limpia)) sinReconocer.push(limpia);
       return;
     }
     huboLineas = true;
-    const [, jugadorCrudo, modalidad, caballoTxt, montoTxt, bancoCrudo] = mm;
-    const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
+
     // Nombre CANÓNICO en MAYÚSCULA (22-09-2026, a pedido del usuario: "si
     // esta escrito en mayusuculas o minuscula no afecta contal se lea lo
     // mismo es igual") — mismo criterio que ya usa Deportes (ver
@@ -287,50 +655,69 @@ function calcularPlano({ texto, pizarra, cruzar }) {
     // el texto que se copia a WhatsApp — esto es la clave interna.
     const jugador = jugadorCrudo.trim().toUpperCase();
     const banco = bancoCrudo.trim().toUpperCase();
+    // modalidadNorm: normaliza "guion pegado" vs "con espacio" en una
+    // jugada mixta a SIEMPRE guion pegado (ver normalizarModalidadCombo
+    // más arriba) — para una modalidad simple (sin combinar) esto no
+    // cambia nada (queda igual que antes).
+    const modalidadNorm = normalizarModalidadCombo(modalidadCruda);
+    const resuelto = resolverResultadoLinea({ modalidadNorm, caballoTxt, rank });
+    if (!resuelto) { sinReconocer.push(limpia); salidaLineas.push(limpia); return; }
 
-    let resultado, caballoGuardado = caballoTxt.trim();
-    if (modalidad.toLowerCase() === 'pp') {
-      const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
-      resultado = resolverModalidad('pp', rank(hA), rank(hB));
-      const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-      add(jugador, jRaw); add(banco, bRaw);
-      const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
+    const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
+    const { resultado, caballoGuardado, caballoDisplay, esPP, hA, hB } = resuelto;
+    // sinComision (24-09-2026): solo aplica a una jugada a premio SOLA
+    // (nunca a "pp" ni a una modalidad combinada — decimosN() ya lo
+    // filtra). Si esta línea está exenta, su bruto NO entra al pozo
+    // "rawPorNombre" (que sirve para el neteo de "cruza jugadas" con 5%
+    // al final) — se liquida aparte, ver la sección de totales más abajo.
+    const sinComision = esModalidadSinComision(modalidadNorm, valoresSinComision);
+    const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
+    if (!sinComision) { add(jugador, jRaw); add(banco, bRaw); }
+    const jMostrado = montoMostrado(jRaw, sinComision), bMostrado = montoMostrado(bRaw, sinComision);
+    if (esPP) {
       salidaLineas.push(`pp (${hA}x${hB}) con ${montoTxt}`);
       salidaLineas.push(`(${hA}) ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
       salidaLineas.push(`(${hB}) ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
-      salidaLineas.push('');
-      tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: 'pp', caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado });
-      return;
+    } else {
+      salidaLineas.push(`${modalidadNorm} (${caballoDisplay}) con ${montoTxt}`);
+      salidaLineas.push(`Juega ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
+      salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
     }
-
-    const caballo = parseInt(caballoTxt.trim(), 10);
-    resultado = resolverModalidad(modalidad, rank(caballo));
-    if (!resultado) { sinReconocer.push(limpia); salidaLineas.push(limpia); return; }
-    const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-    add(jugador, jRaw); add(banco, bRaw);
-    const jMostrado = montoMostrado(jRaw), bMostrado = montoMostrado(bRaw);
-    salidaLineas.push(`${modalidad} (${caballo}) con ${montoTxt}`);
-    salidaLineas.push(`Juega ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
-    salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
     salidaLineas.push('');
-    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado });
+    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: esPP ? 'pp' : modalidadNorm, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado, sinComision });
   });
 
   const totalesFinales = {};
   let comisionTotal = 0;
+  // Nombres de TODOS los tickets (jugador y banquero), sin importar si
+  // están o no en rawPorNombre — una línea sin comisión no agrega ahí
+  // (ver arriba), así que si un cliente SOLO tuvo líneas sin comisión no
+  // aparecería si se inicializara desde rawPorNombre nada más.
+  const todosNombres = new Set();
+  tickets.forEach(t => { todosNombres.add(t.clienteNombre); todosNombres.add(t.banqueroNombre); });
+  todosNombres.forEach(nombre => { totalesFinales[nombre] = 0; });
 
   if (cruzar) {
+    // Las líneas sin comisión (24-09-2026) se liquidan DIRECTO con su
+    // propio resultado ya neto (nunca entraron a rawPorNombre) — el
+    // resto de las líneas (comisión normal) se netea entre sí como
+    // siempre y paga 5% una sola vez al final si el neto es positivo.
+    tickets.forEach(t => {
+      if (t.sinComision) {
+        totalesFinales[t.clienteNombre] += t.resultadoJugador;
+        totalesFinales[t.banqueroNombre] += t.resultadoBanquero;
+      }
+    });
     Object.keys(rawPorNombre).forEach(nombre => {
       const raw = rawPorNombre[nombre];
       if (raw > 0) {
-        totalesFinales[nombre] = raw * 0.95;
+        totalesFinales[nombre] += raw * 0.95;
         comisionTotal += raw * 0.05;
       } else {
-        totalesFinales[nombre] = raw;
+        totalesFinales[nombre] += raw;
       }
     });
   } else {
-    Object.keys(rawPorNombre).forEach(nombre => { totalesFinales[nombre] = 0; });
     tickets.forEach(t => {
       [[t.clienteNombre, t.resultadoJugador], [t.banqueroNombre, t.resultadoBanquero]].forEach(([nombre, montoMostradoLinea]) => {
         // resultadoJugador/resultadoBanquero YA vienen con el 5%
@@ -341,8 +728,10 @@ function calcularPlano({ texto, pizarra, cruzar }) {
     });
     // La comisión total "sin cruzar" es la suma de lo efectivamente
     // descontado línea por línea (spec sección 6): por cada línea, el
-    // lado que ganó pagó 5% sobre su bruto.
+    // lado que ganó pagó 5% sobre su bruto. Una línea sin comisión
+    // (24-09-2026) no descontó nada — no suma a comisionTotal.
     tickets.forEach(t => {
+      if (t.sinComision) return;
       const jRawGanador = t.resultadoJugador > 0 ? t.resultadoJugador / 0.95 : 0;
       const bRawGanador = t.resultadoBanquero > 0 ? t.resultadoBanquero / 0.95 : 0;
       comisionTotal += (jRawGanador * 0.05) + (bRawGanador * 0.05);
@@ -364,17 +753,35 @@ function calcularPlano({ texto, pizarra, cruzar }) {
 // pizarra que ya se usó para todo el plano (nunca se le vuelve a pedir
 // al operador) — reusa resolverModalidad() tal cual, sin duplicar la
 // fórmula.
-function recalcularTicket({ modalidad, caballo, monto }, rank) {
+// sinComision (24-09-2026): viene de hipismo_tickets.sin_comision, tal
+// cual quedó guardado ese ticket al calcular el plano — editar un ticket
+// (monto/caballo) NUNCA cambia si va o no sin comisión, eso se decide
+// una sola vez, al calcular (ver POST /planos y la respuesta a la
+// pregunta del usuario: "solo antes de calcular").
+function recalcularTicket({ modalidad, caballo, monto, sinComision }, rank) {
   let resultado;
   if (modalidad.toLowerCase() === 'pp') {
     const [hA, hB] = String(caballo).split(/x/i).map(h => parseInt(String(h).trim(), 10));
     resultado = resolverModalidad('pp', rank(hA), rank(hB));
+  } else if (String(caballo).includes(',')) {
+    // 24-09-2026: ticket de "varios caballos, o uno o el otro" (morocha,
+    // ver resolverModalidadMultiCaballo más arriba) — se reconoce por la
+    // coma guardada en hipismo_tickets.caballo (siempre coma: los
+    // separadores "y"/guion que acepta el parseo se normalizan a coma
+    // ANTES de guardar, ver resolverResultadoLinea).
+    const caballos = String(caballo).split(',').map(h => parseInt(String(h).trim(), 10));
+    resultado = resolverModalidadMultiCaballo(modalidad, caballos, rank);
   } else {
-    resultado = resolverModalidad(modalidad, rank(parseInt(caballo, 10)));
+    // resolverModalidadCompuesta (24-09-2026) reemplaza la llamada
+    // directa a resolverModalidad — para una modalidad simple (sin
+    // combinar) se comporta exactamente igual que antes (delega en
+    // resolverModalidad tal cual), y además soporta modalidades mixtas
+    // ya guardadas con guion (ej. "1/2-1p").
+    resultado = resolverModalidadCompuesta(modalidad, rank(parseInt(caballo, 10)));
   }
   if (!resultado) return null;
   const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-  return { resultadoJugador: montoMostrado(jRaw), resultadoBanquero: montoMostrado(bRaw) };
+  return { resultadoJugador: montoMostrado(jRaw, sinComision), resultadoBanquero: montoMostrado(bRaw, sinComision) };
 }
 
 // recalcularTotalesPlano(tickets, cruzar): recompone totalesFinales +
@@ -394,7 +801,16 @@ function recalcularTicket({ modalidad, caballo, monto }, rank) {
 function recalcularTotalesPlano(tickets, cruzar) {
   const rawPorNombre = {};
   const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
+  const todosNombres = new Set();
+  tickets.forEach(t => { todosNombres.add(t.clienteNombre); todosNombres.add(t.banqueroNombre); });
+
   tickets.forEach(t => {
+    // sinComision (24-09-2026): un ticket exento NUNCA tuvo el 5%
+    // aplicado — su resultado guardado YA es el bruto, dividirlo por
+    // 0.95 acá lo inflaría mal. No entra al pozo neto de "cruza
+    // jugadas" — se liquida aparte, más abajo (mismo criterio que
+    // calcularPlano()).
+    if (t.sinComision) return;
     const jRaw = t.resultadoJugador > 0 ? t.resultadoJugador / 0.95 : t.resultadoJugador;
     const bRaw = t.resultadoBanquero > 0 ? t.resultadoBanquero / 0.95 : t.resultadoBanquero;
     add(t.clienteNombre, jRaw);
@@ -403,21 +819,28 @@ function recalcularTotalesPlano(tickets, cruzar) {
 
   const totalesFinales = {};
   let comisionTotal = 0;
+  todosNombres.forEach(nombre => { totalesFinales[nombre] = 0; });
 
   if (cruzar) {
+    tickets.forEach(t => {
+      if (t.sinComision) {
+        totalesFinales[t.clienteNombre] += t.resultadoJugador;
+        totalesFinales[t.banqueroNombre] += t.resultadoBanquero;
+      }
+    });
     Object.keys(rawPorNombre).forEach(nombre => {
       const raw = rawPorNombre[nombre];
-      if (raw > 0) { totalesFinales[nombre] = raw * 0.95; comisionTotal += raw * 0.05; }
-      else { totalesFinales[nombre] = raw; }
+      if (raw > 0) { totalesFinales[nombre] += raw * 0.95; comisionTotal += raw * 0.05; }
+      else { totalesFinales[nombre] += raw; }
     });
   } else {
-    Object.keys(rawPorNombre).forEach(nombre => { totalesFinales[nombre] = 0; });
     tickets.forEach(t => {
       [[t.clienteNombre, t.resultadoJugador], [t.banqueroNombre, t.resultadoBanquero]].forEach(([nombre, m]) => {
         totalesFinales[nombre] += m;
       });
     });
     tickets.forEach(t => {
+      if (t.sinComision) return;
       const jRawGanador = t.resultadoJugador > 0 ? t.resultadoJugador / 0.95 : 0;
       const bRawGanador = t.resultadoBanquero > 0 ? t.resultadoBanquero / 0.95 : 0;
       comisionTotal += (jRawGanador * 0.05) + (bRawGanador * 0.05);
@@ -517,5 +940,11 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
 module.exports = {
   calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
-  ordinalCarrera, limpiarEncabezadoYPie
+  ordinalCarrera, limpiarEncabezadoYPie,
+  // 24-09-2026 (jugadas mixtas + formato compacto "Grupo Gorila"):
+  resolverModalidadCompuesta, resolverModalidadMultiCaballo, normalizarModalidadCombo,
+  LINEA_REGEX, LINEA_REGEX_COMPACTA,
+  // 24-09-2026 (segunda ronda — jugadas "a premio" con notación extendida
+  // y función de "sin comisión"):
+  decimosN, esModalidadSinComision, parsearValoresSinComision, DECIMOS_RE
 };
