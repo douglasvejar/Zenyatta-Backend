@@ -25,6 +25,7 @@
 // muestre el botón.
 const express = require('express');
 const db = require('../db');
+const bcrypt = require('bcryptjs');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 // numeroSemanaISO (23-09-2026, duodécima-tercera ronda, a pedido del
@@ -1736,6 +1737,92 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
     comisionAdelantadasSemana
   });
+}));
+
+// =================================================================
+// "ELIMINAR JORNADA" (24-09-2026, Administración) — a pedido del usuario:
+// "crea un boton que diga eliminar jornada.... al seleccionar un dia
+// borra todo lo que este ese dia, todas las jugadas, remate, ganadores,
+// jugadas entre tercios, todo absolutamente todo del dia". Es un borrado
+// MUCHO más grande que "Eliminar Planos" (que borra un plano de Tercios
+// a la vez, con papelera recuperable de 30 días): acá se borra, de UNA
+// fecha completa, TODO lo de Hipismo de un solo golpe — Tercios
+// (hipismo_planos, cascada a hipismo_tickets), Remate (hipismo_remates,
+// cascada a hipismo_remate_apuestas) y Jugadas Adelantadas
+// (hipismo_adelantadas_planos, cascada a hipismo_adelantadas_jugadas —
+// las 3 tablas "cabecera" tienen ON DELETE CASCADE hacia sus tablas de
+// detalle, ver sql/schema.sql, así que basta con borrar las 3 cabeceras).
+//
+// Se le preguntó al usuario si esto debía ser recuperable (papelera,
+// mismo criterio que "Eliminar Planos") o permanente. Respuesta textual:
+// "PIDEME LA CLAVE DE ACCESO PARA VERIFICAR QUE QUIERO ELIMINARLO, AL
+// ELIMINARLO SE BORRA PARA SIEMPRE" — o sea: PERMANENTE (sin papelera,
+// nada que restaurar después), pero protegido con una re-autenticación:
+// se le vuelve a pedir su propia contraseña de sesión (la del
+// Administrador, o la del Empleado si es quien está logueado) y se
+// valida contra su password_hash real (bcrypt.compare, exactamente el
+// mismo mecanismo que ya usa POST /api/auth/login) antes de borrar nada
+// — no es un PIN nuevo ni compartido entre todos, es la clave real de
+// quien está pidiendo el borrado. Si la clave no es la correcta, no se
+// borra nada (401) y no se genera ninguna alerta.
+//
+// Genera una alerta (tipo JORNADA_ELIMINADA — ver el ALTER que amplía el
+// check de hipismo_alertas.tipo en sql/schema.sql) con el detalle de
+// cuánto se borró, mismo criterio que "Eliminar Planos".
+async function verificarClaveAccesoActor(req, password) {
+  if (!password) return false;
+  const tabla = req.rol === 'empleado' ? 'empleados' : 'grupos';
+  const id = req.rol === 'empleado' ? req.empleadoId : req.grupoId;
+  const r = await db.query(`SELECT password_hash FROM ${tabla} WHERE id = $1`, [id]);
+  if (!r.rows.length || !r.rows[0].password_hash) return false;
+  return bcrypt.compare(password, r.rows[0].password_hash);
+}
+
+// GET /jornada/resumen?fecha=YYYY-MM-DD — cuenta cuánto hay ANTES de
+// pedir la clave, para que el operador vea bien qué está por borrar
+// ("vas a borrar 4 planos, 1 remate y 2 jugadas adelantadas de ese día")
+// antes de confirmar.
+router.get('/jornada/resumen', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha;
+  if (!fecha) return res.status(400).json({ error: 'Falta la fecha.' });
+  const [rPlanos, rRemates, rAdelantadas] = await Promise.all([
+    db.query('SELECT COUNT(*)::int AS n, COALESCE(array_agg(DISTINCT hipodromo_nombre), ARRAY[]::text[]) AS hipodromos FROM hipismo_planos WHERE grupo_id = $1 AND fecha = $2', [req.grupoId, fecha]),
+    db.query('SELECT COUNT(*)::int AS n FROM hipismo_remates WHERE grupo_id = $1 AND fecha = $2', [req.grupoId, fecha]),
+    db.query('SELECT COUNT(*)::int AS n FROM hipismo_adelantadas_planos WHERE grupo_id = $1 AND fecha = $2', [req.grupoId, fecha])
+  ]);
+  const planos = rPlanos.rows[0].n, remates = rRemates.rows[0].n, adelantadas = rAdelantadas.rows[0].n;
+  res.json({
+    fecha,
+    planos, remates, adelantadas,
+    hipodromos: rPlanos.rows[0].hipodromos,
+    vacio: planos === 0 && remates === 0 && adelantadas === 0
+  });
+}));
+
+// POST /jornada/eliminar — body: { fecha, password }. Borra TODO
+// (Tercios + Remate + Jugadas Adelantadas) de esa fecha, de forma
+// PERMANENTE (sin papelera), solo si `password` coincide con la clave
+// real de quien está logueado ahora mismo.
+router.post('/jornada/eliminar', asyncHandler(async (req, res) => {
+  const { fecha, password } = req.body;
+  if (!fecha) return res.status(400).json({ error: 'Falta la fecha.' });
+  const claveOk = await verificarClaveAccesoActor(req, password);
+  if (!claveOk) return res.status(401).json({ error: 'Clave incorrecta — no se borró nada.' });
+
+  const resultado = await db.transaccion(async (client) => {
+    const rPlanos = await client.query('DELETE FROM hipismo_planos WHERE grupo_id = $1 AND fecha = $2 RETURNING id', [req.grupoId, fecha]);
+    const rRemates = await client.query('DELETE FROM hipismo_remates WHERE grupo_id = $1 AND fecha = $2 RETURNING id', [req.grupoId, fecha]);
+    const rAdelantadas = await client.query('DELETE FROM hipismo_adelantadas_planos WHERE grupo_id = $1 AND fecha = $2 RETURNING id', [req.grupoId, fecha]);
+    return { planos: rPlanos.rows.length, remates: rRemates.rows.length, adelantadas: rAdelantadas.rows.length };
+  });
+
+  await registrarAlerta(req, {
+    tipo: 'JORNADA_ELIMINADA',
+    fecha,
+    mensaje: `Eliminó TODA la jornada del ${fecha}: ${resultado.planos} plano(s) de Tercios, ${resultado.remates} remate(s) y ${resultado.adelantadas} plano(s) de Jugadas Adelantadas — borrado permanente, sin papelera.`
+  });
+
+  res.json({ ok: true, fecha, ...resultado });
 }));
 
 module.exports = router;

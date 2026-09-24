@@ -496,6 +496,24 @@ create table if not exists hipismo_alertas (
 );
 create index if not exists idx_hipismo_alertas_grupo on hipismo_alertas(grupo_id, creado_en desc);
 
+-- JORNADA_ELIMINADA (24-09-2026) — se agrega un 5to tipo al check de
+-- arriba, para "Eliminar Jornada" (Administración): a pedido del usuario
+-- ("crea un boton que diga eliminar jornada... al seleccionar un dia
+-- borra todo lo que este ese dia, todas las jugadas, remate, ganadores,
+-- jugadas entre tercios, todo absolutamente todo del dia"). A diferencia
+-- de los otros 4 tipos (que son sobre UN plano/jugada puntual), este es
+-- sobre TODA una fecha de una — ver routes/hipismo.js, POST /jornada/
+-- eliminar. El usuario pidió explícitamente que fuera un borrado
+-- PERMANENTE (no recuperable como "Eliminar Planos"), protegido con su
+-- propia clave de acceso ("PIDEME LA CLAVE DE ACCESO PARA VERIFICAR QUE
+-- QUIERO ELIMINARLO, AL ELIMINARLO SE BORRA PARA SIEMPRE") — se valida
+-- contra la MISMA contraseña con la que esa sesión inició sesión
+-- (grupos.password_hash o empleados.password_hash, bcrypt.compare, igual
+-- que /api/auth/login), no un PIN aparte.
+alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
+alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA'));
+
 -- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el

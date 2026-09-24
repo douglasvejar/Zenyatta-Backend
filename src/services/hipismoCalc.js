@@ -118,6 +118,79 @@ function parsearPizarra(pizarraTxt) {
   return h => (posiciones[h] !== undefined ? posiciones[h] : 99);
 }
 
+// ordinalCarrera(n) -> "1ra", "2da", "3ra", "4ta"..."7ma", "8va", "9na",
+// "10ma", "11ma"... (24-09-2026, a pedido del usuario, que pegó un plano
+// real con "La Rinconada, 11ma Carrera" como ejemplo del encabezado
+// configurado). ANTES esto estaba mal: armarTextoResultado() le pegaba
+// "ta" a CUALQUIER número ("11ta Carrera" en vez de "11ma Carrera") — acá
+// se arregla con el sufijo correcto en español para 1-9, y "ma" del 10 en
+// adelante (10ma, 11ma, 12ma...), que es exactamente lo que confirmó el
+// ejemplo del usuario.
+const SUFIJOS_ORDINALES = { 1: 'ra', 2: 'da', 3: 'ra', 4: 'ta', 5: 'ta', 6: 'ta', 7: 'ma', 8: 'va', 9: 'na' };
+function ordinalCarrera(n) {
+  const num = parseInt(n, 10);
+  if (!Number.isFinite(num)) return `${n || ''}`;
+  return num + (SUFIJOS_ORDINALES[num] || 'ma');
+}
+
+// =================================================================
+// limpiarEncabezadoYPie() (24-09-2026, a pedido del usuario: pegó un
+// plano REAL ya armado con encabezado ("🇻🇪🏇🏟️ZENYATTA🏟️🏇🇻🇪", hipódromo +
+// carrera, "Ret:", "Pizarra:", "*TERCIOS*") y pie ("*PLANO REFERENCIAL*"
+// completo) y pidió: "debes leerlo y calcularlo, si el encabezado o el
+// pie cambia no importa, lo que te importa es que leas y me des de
+// vuelta las jugadas con el encabezado y el pie que te configuro". O
+// sea: el encabezado/pie que venga PEGADO en el texto es ruido — puede
+// variar, no importa su contenido exacto — hay que descartarlo y usar
+// SIEMPRE el que arma armarTextoResultado() (con el nombre del grupo,
+// hipódromo, carrera, Ret y Pizarra que el operador ya eligió en el
+// formulario de arriba, no lo que diga el texto pegado).
+//
+// Sin este filtro, si el operador pega el mensaje COMPLETO (como en su
+// ejemplo, con encabezado y pie incluidos), esas líneas no calzan con
+// LINEA_REGEX y quedaban pasando "tal cual" a salidaLineas (mismo
+// criterio que cualquier línea no reconocida, para no perder categorías
+// como "TERCIOS" escritas a mano) — el resultado final quedaba con el
+// encabezado/pie DUPLICADO (una vez el que arma armarTextoResultado(),
+// y otra vez el que venía pegado, colado en el medio del texto).
+//
+// Estrategia (tolerante a que el texto varíe, como pidió el usuario): se
+// usan 2 anclas ESTABLES en vez de tratar de matchear el texto exacto —
+// "Pizarra:" para saber dónde termina el encabezado, y "PLANO
+// REFERENCIAL" para saber dónde empieza el pie. Todo lo que esté ANTES
+// de "Pizarra:" (si aparece entre las primeras 8 líneas) y todo lo que
+// esté DESDE "PLANO REFERENCIAL" hasta el final se descarta, junto con
+// las líneas en blanco/rayas separadoras y un "*TERCIOS*" suelto que
+// hayan quedado pegados justo después del ancla del encabezado (el
+// propio armarTextoResultado() ya agrega su propio "*TERCIOS*"). Si el
+// texto pegado NO trae ninguna de las 2 anclas (el caso de siempre: el
+// operador pega solo las líneas "Juega..."), no se toca nada — el
+// comportamiento de antes queda exactamente igual.
+function limpiarEncabezadoYPie(texto) {
+  if (!texto) return texto || '';
+  const lineas = texto.split('\n');
+
+  let inicio = 0;
+  for (let i = 0; i < Math.min(lineas.length, 8); i++) {
+    if (/^\s*pizarra\s*:/i.test(lineas[i])) { inicio = i + 1; break; }
+  }
+  while (inicio < lineas.length) {
+    const l = lineas[inicio].replace(/\*/g, '').trim();
+    if (l === '' || /^-{3,}$/.test(l) || /^tercios$/i.test(l)) { inicio++; } else break;
+  }
+
+  let fin = lineas.length;
+  for (let i = inicio; i < lineas.length; i++) {
+    if (/plano\s+referencial/i.test(lineas[i])) { fin = i; break; }
+  }
+  while (fin > inicio) {
+    const l = lineas[fin - 1].replace(/\*/g, '').trim();
+    if (l === '' || /^-{3,}$/.test(l)) fin--; else break;
+  }
+
+  return lineas.slice(inicio, fin).join('\n');
+}
+
 // calcularPlano({ texto, pizarra, cruzar }) -> {
 //   ok, error, huboLineas, salidaLineas: [texto por línea, para armar el
 //   bloque de jugadas resuelto], sinReconocer: [líneas que no calzaron
@@ -129,7 +202,13 @@ function parsearPizarra(pizarraTxt) {
 // }
 function calcularPlano({ texto, pizarra, cruzar }) {
   const rank = parsearPizarra(pizarra);
-  const lineas = (texto || '').split('\n');
+  // 24-09-2026: se descarta el encabezado/pie que venga pegado en el
+  // texto (ver la nota grande de limpiarEncabezadoYPie más arriba) ANTES
+  // de partirlo en líneas — así, si el operador pega el plano completo
+  // (con "🇻🇪🏇🏟️ZENYATTA..." y "PLANO REFERENCIAL" incluidos), esas líneas
+  // nunca llegan a salidaLineas ni se duplican con el encabezado/pie que
+  // arma armarTextoResultado() más abajo.
+  const lineas = limpiarEncabezadoYPie(texto || '').split('\n');
 
   const rawPorNombre = {};
   const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
@@ -365,7 +444,14 @@ const PIE_PLANO_DEFECTO = '*PLANO REFERENCIAL*\n*_La guía es el chat_*\n(se gan
 // tras el bloque "PARADA ADELANTADAS" (incluirPie:false) — en los 2
 // casos esta línea queda inmediatamente después de GANAN/PIERDEN.
 function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret, pizarra, salidaLineas, totalesFinales, piePlano, incluirPie = true, totalJugadas }) {
-  const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${carreraNumero}ta Carrera\nRet: ${ret || ''}\nPizarra: ${pizarra}`;
+  // 24-09-2026: encabezado FIJO/configurado (a pedido del usuario, que
+  // pegó un plano real con exactamente este formato y pidió que sea
+  // SIEMPRE este el que se devuelve, sin importar lo que traiga pegado el
+  // texto de entrada — ver limpiarEncabezadoYPie() más arriba). Incluye
+  // "*TERCIOS*" como parte fija del encabezado (antes no estaba) y usa
+  // ordinalCarrera() en vez del sufijo "ta" fijo que tenía antes (bug:
+  // "11ta Carrera" en vez de "11ma Carrera").
+  const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${ordinalCarrera(carreraNumero)} Carrera\nRet: ${ret || ''}\nPizarra: ${pizarra}\n\n*TERCIOS*`;
   const pie = piePlano || PIE_PLANO_DEFECTO;
 
   const entradasFinales = Object.entries(totalesFinales);
@@ -377,7 +463,7 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
   const totalesTexto = bloques.join('\n\n');
 
-  let salida = encabezado + '\n\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto;
+  let salida = encabezado + '\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto;
   if (totalJugadas !== undefined && totalJugadas !== null) {
     salida += `\n------------------------------\nTotal Jugadas: ${totalJugadas}`;
   }
@@ -387,5 +473,6 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
 
 module.exports = {
   calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
-  resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets
+  resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
+  ordinalCarrera, limpiarEncabezadoYPie
 };

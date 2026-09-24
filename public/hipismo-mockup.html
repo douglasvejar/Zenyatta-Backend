@@ -431,6 +431,15 @@
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝 Cabeza y Pie de Plano</button>
       <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥 Usuarios</button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️ Planos Eliminados</button>
+      <!-- 24-09-2026, a pedido del usuario: "crea un boton que diga
+           eliminar jornada.... al seleccionar un dia borra todo lo que
+           este ese dia, todas las jugadas, remate, ganadores, jugadas
+           entre tercios, todo absolutamente todo del dia". A diferencia
+           de "Planos Eliminados" (papelera recuperable, plano por
+           plano), esto es un borrado PERMANENTE de TODO un día completo
+           — pidió expresamente que se le pida su clave de acceso antes
+           de borrar. -->
+      <button type="button" class="nav-item nav-child" data-vista="eliminarJornada" onclick="mostrarVista('eliminarJornada', this)">🔥 Eliminar Jornada</button>
       <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "se
            genera una alerta en una pestaña que diga alertas que este
            debajo de administracion". Lista hipismo_alertas (GET
@@ -477,10 +486,7 @@
           </div>
         </div>
 
-        <label for="txtEncabezado">Encabezado (se arma solo — vista previa)</label>
-        <textarea id="txtEncabezado" rows="4" readonly style="opacity:0.85; margin-bottom:14px;"></textarea>
-
-        <label for="txtPlano">Plano (pegá aquí las jugadas)</label>
+        <label for="txtPlano">Plano (pegá aquí las jugadas — podés pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
         <textarea id="txtPlano" rows="14"></textarea>
 
         <div class="btn-fila">
@@ -905,7 +911,7 @@
       <div class="card">
         <h2>👤 Clientes</h2>
         <p class="desc">REAL desde el 22-09-2026 (a pedido del usuario: "quiero me los cree automaticamente si llega un plano nuevo con un cliente nuevo se crea automatico"): esta lista es la MISMA tabla de clientes que usa Deportes — un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo, sin tener que crearlo a mano. Desde el 23-09-2026 (duodécima-tercera ronda, a pedido del usuario: "en la pestaña clientes quiero al seleccionarlo me abra una pantalla donde salgan todos sus datos, y poder editarlo, su nombre, telefono contacto, quien lo avala, su pozo, si se le devuelve porcentaje, si el porcentaje que se le devuelve no es para el si no para su aval, cuanto se le da de %") ya no hace falta ir a Deportes para eso — "👁️ Ver / Editar" abre el detalle completo del cliente acá mismo (ver pintarDetalleCliente() más abajo).</p>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled title="Los clientes se crean solos al calcular un plano — el alta manual todavía no está conectada.">+ Crear cliente</button></div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button></div>
         <div id="tablaClientesWrap">
           <table style="margin-top:18px;">
             <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
@@ -1055,12 +1061,14 @@
     <section class="vista" id="vista-cabezaPie">
       <div class="card">
         <h2>📝 Cabeza y Pie de Plano</h2>
-        <p class="desc">Lo que va arriba y abajo de cada plano que se manda al grupo. Se edita una vez y queda por defecto (se puede cambiar cuando quieran).</p>
+        <p class="desc">Lo que va arriba y abajo de cada plano que se manda al grupo — este es el formato FIJO y configurado (24-09-2026, a pedido del usuario, con un plano real como ejemplo): sin importar qué traiga pegado el texto que se calcula, el plano que sale siempre usa este encabezado y este pie. Todavía es de solo lectura acá (no hay edición de este formato desde la pantalla, solo se muestra para referencia).</p>
         <label>Cabeza (encabezado)</label>
-        <textarea rows="4" readonly>*🇻🇪🏇🏟️ [NOMBRE DEL GRUPO] 🏟️🏇🇻🇪*
-[Hipódromo], [N]ta Carrera
+        <textarea rows="6" readonly>*🇻🇪🏇🏟️ [NOMBRE DEL GRUPO] 🏟️🏇🇻🇪*
+[Hipódromo], [N]ma Carrera  (ej: "11ma Carrera" — el sufijo se ajusta solo: 1ra, 2da, 3ra, 4ta...9na, 10ma, 11ma...)
 Ret: [retirados]
-Pizarra: [se llena al calcular]</textarea>
+Pizarra: [se llena al calcular]
+
+*TERCIOS*</textarea>
         <label style="margin-top:14px;">Pie (referencial)</label>
         <textarea rows="8" readonly>*PLANO REFERENCIAL*
 *_La guía es el chat_*
@@ -1102,6 +1110,36 @@ Pizarra: [se llena al calcular]</textarea>
           <thead><tr><th>Eliminado</th><th>Fecha del plano</th><th>Hipódromo</th><th>Carrera</th><th>Tickets</th><th>Vence en</th><th></th></tr></thead>
           <tbody id="tablaPlanosEliminados"><tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- ============ ELIMINAR JORNADA (24-09-2026) ============
+         Borrado PERMANENTE de TODO un día (Tercios + Remate + Jugadas
+         Adelantadas), protegido con la propia clave de acceso de quien
+         está logueado — a pedido del usuario: "PIDEME LA CLAVE DE ACCESO
+         PARA VERIFICAR QUE QUIERO ELIMINARLO, AL ELIMINARLO SE BORRA
+         PARA SIEMPRE". Ver POST /api/hipismo/jornada/eliminar. -->
+    <section class="vista" id="vista-eliminarJornada">
+      <div class="card">
+        <h2>🔥 Eliminar Jornada</h2>
+        <p class="desc">Borra TODO lo de un día — Tercios, Remate y Jugadas Adelantadas, en todos los hipódromos — de una sola vez. <b>Es un borrado permanente, sin papelera</b>: no se puede deshacer después. Por eso pide tu clave de acceso (la misma con la que iniciaste sesión) antes de ejecutar el borrado.</p>
+
+        <div class="fila">
+          <div><label for="inpFechaEliminarJornada">Día a eliminar</label><input type="date" id="inpFechaEliminarJornada" onchange="cargarResumenJornada()"></div>
+        </div>
+
+        <div id="resumenEliminarJornada" class="resultado-vacio">Elegí un día para ver qué hay cargado.</div>
+
+        <div class="fila" id="filaClaveEliminarJornada" style="display:none; margin-top:14px;">
+          <div>
+            <label for="inpClaveEliminarJornada">Tu clave de acceso (para confirmar)</label>
+            <input type="password" id="inpClaveEliminarJornada" placeholder="Tu contraseña de siempre">
+          </div>
+        </div>
+
+        <div class="btn-fila" id="btnFilaEliminarJornada" style="display:none; margin-top:10px;">
+          <button class="btn btn-primario" type="button" style="background:#b3261e; border-color:#b3261e;" onclick="confirmarEliminarJornada()">🔥 Eliminar TODO ese día</button>
+        </div>
       </div>
     </section>
 
@@ -1267,27 +1305,26 @@ let ultimosTotales = null; // se comparte con Balance General
 // igual queda bien contado en "Cierre Final", que lee de la base.
 let ultimosTotalesCarrera = null; // { hipodromoNombre, carreraNumero, fecha }
 
+// ordinalCarrera(n) -> "1ra","2da","3ra","4ta"..."7ma","8va","9na","10ma",
+// "11ma"... (24-09-2026, mismo arreglo que en src/services/hipismoCalc.js
+// del lado del servidor — acá se usa solo para el <select> de carrera, que
+// antes le pegaba "ta" a cualquier número, ej. "11ta" en vez de "11ma").
+const SUFIJOS_ORDINALES_CARRERA = { 1: 'ra', 2: 'da', 3: 'ra', 4: 'ta', 5: 'ta', 6: 'ta', 7: 'ma', 8: 'va', 9: 'na' };
+function ordinalCarrera(n) {
+  const num = parseInt(n, 10);
+  return num + (SUFIJOS_ORDINALES_CARRERA[num] || 'ma');
+}
+
 function poblarCarreras(selId) {
   const sel = document.getElementById(selId || 'selCarrera');
   if (!sel) return;
   sel.innerHTML = '';
   for (let i = 1; i <= 25; i++) {
     const op = document.createElement('option');
-    op.value = i; op.textContent = i + 'ta';
+    op.value = i; op.textContent = ordinalCarrera(i);
     if (i === 14) op.selected = true;
     sel.appendChild(op);
   }
-}
-
-function nombreOrdinal(n) { return n + 'ta'; }
-
-function actualizarEncabezado() {
-  const hip = document.getElementById('selHipodromo').value;
-  const car = document.getElementById('selCarrera').value;
-  const ret = document.getElementById('inpRet').value || '';
-  const pizarra = document.getElementById('inpPizarra').value || '.....';
-  const txt = `*🇻🇪🏇🏟️ZENYATTA🏟️🏇🇻🇪*\n${hip}, ${nombreOrdinal(car)} Carrera\nRet: ${ret}\nPizarra: ${pizarra}`;
-  document.getElementById('txtEncabezado').value = txt;
 }
 
 function formatMonto(n) {
@@ -2010,6 +2047,114 @@ async function cargarClientesReales() {
 // (ver AskUserQuestion de esta ronda: "Ajuste +/- con motivo").
 let CLIENTE_DETALLE_ID = null;
 let CLIENTES_HIPISMO_CACHE = [];
+
+// =================================================================
+// "+ Crear cliente" (24-09-2026) — a pedido del usuario: "en cliente el
+// boton de crear clientes no funciona, quiero poder crear clientes a
+// traves del boton". Antes el botón estaba deshabilitado a propósito
+// ("el alta manual todavía no está conectada" — los clientes solo se
+// creaban solos al calcular un plano). Ahora llama al MISMO POST
+// /api/jugadores que ya usa Deportes (y que ya usa guardarDetalleCliente
+// para EDITAR) — la única ruta real que faltaba conectar era esta, la de
+// crear. El nombre se guarda SIEMPRE en MAYÚSCULA del lado del servidor
+// (routes/jugadores.js: nombre.trim().toUpperCase()), así que da lo
+// mismo si acá se escribe "Luis", "luis" o "LuiS" — siempre queda LUIS,
+// mismo criterio ya usado para el auto-registro al cargar un plano (ver
+// la nota grande de calcularPlano() en services/hipismoCalc.js).
+// Reusa el mismo contenedor "clienteDetalleWrap" que el detalle/edición
+// de un cliente existente (mismo patrón de "una sola pantalla, se
+// reemplaza el innerHTML" que el resto del mockup) — así "Cancelar"
+// vuelve a la tabla con cerrarDetalleCliente(), sin duplicar código.
+function abrirCrearCliente() {
+  CLIENTE_DETALLE_ID = null;
+  const wrap = document.getElementById('clienteDetalleWrap');
+  const tablaWrap = document.getElementById('tablaClientesWrap');
+  if (!wrap) return;
+  if (tablaWrap) tablaWrap.style.display = 'none';
+  wrap.style.display = 'block';
+
+  const opcionesAval = CLIENTES_HIPISMO_CACHE
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(x => `<option value="${x.id}">${formatNombre(x.nombre)}</option>`)
+    .join('');
+
+  wrap.innerHTML = `
+    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">&lsaquo; Volver a la lista</button></div>
+    <div class="card" style="padding:16px;">
+      <h3 style="margin:0 0 12px;">➕ Crear cliente</h3>
+      <div class="fila">
+        <div><label>Nombre *</label><input type="text" id="nvoCteNombre" placeholder="Ej: Luis" autofocus></div>
+        <div><label>Teléfono / contacto</label><input type="text" id="nvoCteTelefono" placeholder="Opcional"></div>
+      </div>
+      <div class="fila">
+        <div><label>Notas</label><input type="text" id="nvoCteNotas" placeholder="Opcional"></div>
+        <div class="check-fila" style="align-self:flex-end; margin-bottom:10px;">
+          <input type="checkbox" id="nvoCteActivo" checked>
+          <label for="nvoCteActivo" style="margin:0;">Activo</label>
+        </div>
+      </div>
+      <div class="fila">
+        <div>
+          <label>Tipo de cuenta</label>
+          <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').style.display = this.value === 'avalado' ? 'block' : 'none';">
+            <option value="libre" selected>Libre</option>
+            <option value="avalado">Avalado (con pozo)</option>
+          </select>
+        </div>
+        <div id="nvoCtePozoWrap" style="display:none;">
+          <label>Pozo inicial</label>
+          <input type="number" id="nvoCtePozoInicial" step="0.01" value="0">
+        </div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
+      <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión? (opcional)</div>
+      <div class="fila">
+        <div><label>% que se le devuelve</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0"></div>
+        <div>
+          <label>Ese % es para…</label>
+          <select id="nvoCteDestino">
+            <option value="cliente" selected>El propio cliente</option>
+            <option value="aval">Su aval (otro cliente)</option>
+          </select>
+        </div>
+      </div>
+      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval)</label>
+        <select id="nvoCteAval">
+          <option value="">— Nadie / no aplica —</option>
+          ${opcionesAval}
+        </select>
+      </div>
+      <div class="btn-fila" style="margin-top:14px;">
+        <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarDetalleCliente()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarNuevoCliente() {
+  const nombre = document.getElementById('nvoCteNombre').value.trim();
+  if (!nombre) { alert('Ingresá el nombre del cliente.'); return; }
+  const payload = {
+    nombre,
+    telefono: document.getElementById('nvoCteTelefono').value.trim(),
+    notas: document.getElementById('nvoCteNotas').value.trim(),
+    activo: document.getElementById('nvoCteActivo').checked,
+    tipoCuenta: document.getElementById('nvoCteTipoCuenta').value,
+    pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
+    comisionPropia: document.getElementById('nvoCteComisionPropia').value || 0,
+    avaladoPorId: document.getElementById('nvoCteAval').value || null,
+    porcentajeDevueltoDestino: document.getElementById('nvoCteDestino').value
+  };
+  try {
+    await apiHipismo('/api/jugadores', { method: 'POST', body: JSON.stringify(payload) });
+  } catch (e) {
+    alert('No se pudo crear el cliente: ' + e.message);
+    return;
+  }
+  await cargarClientesReales();
+  cerrarDetalleCliente();
+  alert('✅ Cliente creado.');
+}
 
 function abrirDetalleCliente(id) {
   CLIENTE_DETALLE_ID = id;
@@ -2775,12 +2920,10 @@ function poblarSelectHipodromo() {
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
     sel.innerHTML = '<option value="">Creá un hipódromo primero (Administración &gt; Hipódromos)</option>';
-    actualizarEncabezado();
   } else {
     const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
     sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
     if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
-    actualizarEncabezado();
   }
   poblarSelectHipodromoRemate();
   poblarSelectHipodromoAdelantadas();
@@ -3086,7 +3229,7 @@ async function pintarComisionesPorCarrera() {
           <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCarrera}')">
             <span class="flecha-expandir">▶</span>
             <div class="info-carrera">
-              <div class="hipodromo">🏇 ${carrera.carreraNumero}ta Carrera</div>
+              <div class="hipodromo">🏇 ${ordinalCarrera(carrera.carreraNumero)} Carrera</div>
             </div>
             <div class="monto-carrera">+${formatMontoTabla(carrera.totalComision)}</div>
           </div>
@@ -3167,7 +3310,7 @@ async function pintarComisionesDevueltas(fechaForzada) {
       filaHip.className = 'fila-carrera-comision';
       filaHip.id = idHip;
       const filasDetalle = hip.carreras.map(c =>
-        `<tr><td>${c.carreraNumero}ta — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
+        `<tr><td>${ordinalCarrera(c.carreraNumero)} — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
       ).join('');
       filaHip.innerHTML = `
         <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idHip}')">
@@ -3227,7 +3370,7 @@ async function pintarMontosApostados(fechaForzada) {
     const filasDetalle = cliente.detalle
       .slice()
       .sort((a, b) => a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
-      .map(d => `<tr><td>${d.hipodromoNombre}</td><td>${d.carreraNumero}ta</td><td>${TIPO_TEXTO[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td></tr>`)
+      .map(d => `<tr><td>${d.hipodromoNombre}</td><td>${ordinalCarrera(d.carreraNumero)}</td><td>${TIPO_TEXTO[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td></tr>`)
       .join('');
     const fila = document.createElement('div');
     fila.className = 'fila-carrera-comision';
@@ -3343,7 +3486,7 @@ async function pintarEliminarPlanosDia() {
       .sort((a, b) => a.carrera_numero - b.carrera_numero)
       .map(p => `
         <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarPlanoEliminarPlanos('${p.id}')">
-          <span class="nombre">${p.carrera_numero}ta Carrera <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— comisión ${formatMontoTabla(p.comision_total)}</span></span>
+          <span class="nombre">${ordinalCarrera(p.carrera_numero)} Carrera <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— comisión ${formatMontoTabla(p.comision_total)}</span></span>
           <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
         </div>`)
       .join('');
@@ -3436,7 +3579,7 @@ async function pintarEliminarPlanosDetallePlano() {
     </div>`).join('');
   cont.innerHTML = `${volver}
     <div class="card" style="padding:14px; margin-bottom:12px;">
-      <div style="font-weight:700; margin-bottom:4px;">🏟️ ${plano.hipodromo_nombre} — ${plano.carrera_numero}ta Carrera — 📅 ${formatFechaCortaDMY(plano.fecha)}</div>
+      <div style="font-weight:700; margin-bottom:4px;">🏟️ ${plano.hipodromo_nombre} — ${ordinalCarrera(plano.carrera_numero)} Carrera — 📅 ${formatFechaCortaDMY(plano.fecha)}</div>
       <div style="color:var(--text-dim); font-size:13px;">Comisión total: ${formatMontoTabla(plano.comision_total)} — ${tickets.length} ticket${tickets.length === 1 ? '' : 's'}</div>
     </div>
     <div class="card" style="padding:14px;">
@@ -3479,7 +3622,7 @@ async function pintarPlanosEliminados() {
       <td>${formatFechaCortaDMY(f.eliminadoEn.slice(0, 10))}</td>
       <td>${formatFechaCortaDMY(f.fecha)}</td>
       <td>${f.hipodromoNombre}</td>
-      <td>${f.carreraNumero}ta</td>
+      <td>${ordinalCarrera(f.carreraNumero)}</td>
       <td>${f.cantidadTickets}</td>
       <td>${f.restaurado ? 'Restaurado' : f.diasRestantes + ' días'}</td>
       <td>${f.restaurado ? '—' : `<a href="#" style="color:var(--accent-grass);" onclick="restaurarPlanoPapelera('${f.id}'); return false;">♻️ Restaurar</a>`}</td>
@@ -3487,10 +3630,67 @@ async function pintarPlanosEliminados() {
 }
 
 // ------------------------------------------------------------------
+// "Eliminar Jornada" (24-09-2026) — GET /api/hipismo/jornada/resumen +
+// POST /api/hipismo/jornada/eliminar. Ver la nota grande en
+// routes/hipismo.js: borrado PERMANENTE de un día completo (Tercios +
+// Remate + Jugadas Adelantadas), protegido con la clave de acceso real
+// de la sesión — a pedido del usuario: "PIDEME LA CLAVE DE ACCESO PARA
+// VERIFICAR QUE QUIERO ELIMINARLO, AL ELIMINARLO SE BORRA PARA SIEMPRE".
+async function cargarResumenJornada() {
+  const fecha = document.getElementById('inpFechaEliminarJornada').value;
+  const resumenDiv = document.getElementById('resumenEliminarJornada');
+  const filaClave = document.getElementById('filaClaveEliminarJornada');
+  const filaBtn = document.getElementById('btnFilaEliminarJornada');
+  if (!fecha) { resumenDiv.textContent = 'Elegí un día para ver qué hay cargado.'; filaClave.style.display = 'none'; filaBtn.style.display = 'none'; return; }
+  resumenDiv.textContent = 'Buscando…';
+  filaClave.style.display = 'none';
+  filaBtn.style.display = 'none';
+  let r;
+  try {
+    r = await apiHipismo(`/api/hipismo/jornada/resumen?fecha=${fecha}`);
+  } catch (e) {
+    resumenDiv.textContent = 'No se pudo consultar: ' + e.message;
+    return;
+  }
+  if (r.vacio) {
+    resumenDiv.innerHTML = `No hay nada cargado el ${formatFechaCortaDMY(fecha)} — no hay nada que borrar.`;
+    return;
+  }
+  resumenDiv.innerHTML = `
+    <div style="padding:12px 14px; background:#fdecea; border:1px solid #f2b8b5; border-radius:8px; color:#611a15;">
+      El ${formatFechaCortaDMY(fecha)} hay <b>${r.planos} plano(s) de Tercios</b>, <b>${r.remates} remate(s)</b> y <b>${r.adelantadas} plano(s) de Jugadas Adelantadas</b>${r.hipodromos && r.hipodromos.length ? ` en: ${r.hipodromos.join(', ')}` : ''}.
+      <br>Si eliminás la jornada, TODO esto se borra <b>para siempre</b>, sin posibilidad de recuperarlo.
+    </div>`;
+  filaClave.style.display = '';
+  filaBtn.style.display = '';
+}
+
+async function confirmarEliminarJornada() {
+  const fecha = document.getElementById('inpFechaEliminarJornada').value;
+  const password = document.getElementById('inpClaveEliminarJornada').value;
+  if (!fecha) { alert('Elegí un día primero.'); return; }
+  if (!password) { alert('Ingresá tu clave de acceso para confirmar.'); return; }
+  if (!confirm(`¿SEGURO que querés eliminar TODA la jornada del ${formatFechaCortaDMY(fecha)}?\n\nEsto borra TODOS los planos, remates y jugadas adelantadas de ese día, en todos los hipódromos, PARA SIEMPRE. No hay papelera ni forma de deshacerlo.`)) return;
+
+  let r;
+  try {
+    r = await apiHipismo('/api/hipismo/jornada/eliminar', { method: 'POST', body: JSON.stringify({ fecha, password }) });
+  } catch (e) {
+    alert('No se eliminó nada: ' + e.message);
+    return;
+  }
+  document.getElementById('inpClaveEliminarJornada').value = '';
+  alert(`✅ Jornada del ${formatFechaCortaDMY(fecha)} eliminada: ${r.planos} plano(s), ${r.remates} remate(s), ${r.adelantadas} adelantada(s).`);
+  await cargarResumenJornada();
+  pintarAlertasHipismo();
+}
+
+// ------------------------------------------------------------------
 // Alertas (23-09-2026, duodécima-tercera ronda) — GET /api/hipismo/alertas.
 const TIPOS_ALERTA_TEXTO = {
   PLANO_EDITADO: '✏️ Plano editado', PLANO_ELIMINADO: '🗑️ Plano eliminado',
-  ADELANTADA_EDITADA: '✏️ Adelantada editada', ADELANTADA_ELIMINADA: '🗑️ Adelantada eliminada'
+  ADELANTADA_EDITADA: '✏️ Adelantada editada', ADELANTADA_ELIMINADA: '🗑️ Adelantada eliminada',
+  JORNADA_ELIMINADA: '🔥 Jornada eliminada (TODO el día)'
 };
 async function pintarAlertasHipismo() {
   const tbody = document.getElementById('tablaAlertasHipismo');
@@ -3507,7 +3707,7 @@ async function pintarAlertasHipismo() {
   }
   tbody.innerHTML = filas.map(f => {
     const cuando = new Date(f.creado_en).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const hc = f.hipodromo_nombre ? `${f.hipodromo_nombre}${f.carrera_numero ? ' — ' + f.carrera_numero + 'ta' : ''}` : '—';
+    const hc = f.hipodromo_nombre ? `${f.hipodromo_nombre}${f.carrera_numero ? ' — ' + ordinalCarrera(f.carrera_numero) : ''}` : '—';
     return `<tr>
       <td>${cuando}</td>
       <td>${TIPOS_ALERTA_TEXTO[f.tipo] || f.tipo}</td>
@@ -3550,12 +3750,9 @@ document.getElementById('inpFecha').value = new Date().toISOString().slice(0, 10
 document.getElementById('inpFechaRemate').value = new Date().toISOString().slice(0, 10);
 document.getElementById('inpFechaMontosApostados').value = new Date().toISOString().slice(0, 10);
 document.getElementById('inpFechaComisionesDevueltas').value = new Date().toISOString().slice(0, 10);
+document.getElementById('inpFechaEliminarJornada').value = new Date().toISOString().slice(0, 10);
+cargarResumenJornada();
 document.getElementById('txtPlano').value = PLANO_EJEMPLO;
-['selHipodromo', 'selCarrera', 'inpRet', 'inpPizarra'].forEach(id => {
-  document.getElementById(id).addEventListener('input', actualizarEncabezado);
-  document.getElementById(id).addEventListener('change', actualizarEncabezado);
-});
-actualizarEncabezado();
 pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 actualizarEncabezadoBalanceGeneral();
