@@ -112,12 +112,13 @@ check(resultado2.sinReconocer.length === 0, '"2/3" ya se reconoce y se calcula �
 check(resultado2.tickets.length === 6, 'Las 6 líneas se calculan, incluyendo la de "2/3"');
 check(resultado2.tickets.some(t => t.modalidad === '2/3'), 'El ticket de Rambo queda guardado con la modalidad tal cual se escribió ("2/3")');
 
-// Una modalidad genuinamente NO soportada (inventada para esta prueba, no
-// existe en ningún lado) sigue cayendo en sinReconocer, sin perderse en
-// silencio — el "safety net" del sistema sigue funcionando.
-const CON_MODALIDAD_INEXISTENTE = PLANO_PEGADO_USUARIO.replace('Juega Rambo 1/2 (8) con 150,00 da Tykhe', 'Juega Rambo 4/5 (8) con 150,00 da Tykhe');
+// Una combinación A/B que NO sigue el patrón confirmado (B tiene que ser
+// igual a A o A+1 — "3/7" no es ninguno de los 2) sigue cayendo en
+// sinReconocer, sin perderse en silencio — el "safety net" del sistema
+// sigue funcionando incluso con la familia "AyB" ya generalizada.
+const CON_MODALIDAD_INEXISTENTE = PLANO_PEGADO_USUARIO.replace('Juega Rambo 1/2 (8) con 150,00 da Tykhe', 'Juega Rambo 3/7 (8) con 150,00 da Tykhe');
 const resultado3 = calcularPlano({ texto: CON_MODALIDAD_INEXISTENTE, pizarra: '8.1.4', cruzar: true });
-check(resultado3.sinReconocer.some(l => /4\/5/.test(l)), 'Una modalidad que de verdad no existe ("4/5") queda en sinReconocer, no se calcula ni se pierde en silencio');
+check(resultado3.sinReconocer.some(l => /3\/7/.test(l)), 'Una combinación A/B que no sigue el patrón ("3/7") queda en sinReconocer, no se calcula ni se pierde en silencio');
 check(resultado3.tickets.length === 5, 'Las otras 5 líneas SÍ se calculan bien aunque una quede sin reconocer');
 
 // --- 4) armarTextoResultado(): encabezado fijo con ordinalCarrera() + "*TERCIOS*" ---

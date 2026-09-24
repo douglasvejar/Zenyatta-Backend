@@ -12,77 +12,106 @@
 // navegador — pero el ALGORITMO no cambió ni un poco a propósito, para
 // no arriesgar resultados ya confirmados con el usuario.
 //
-// Modalidades soportadas hoy (las mismas que ya reconocía el mockup):
-//   - "N puestos": 1p..10p (gana completo -5% si coloca entre las
-//     primeras N posiciones, si no pierde completo)
-//   - "1/2" (o "1y2"): gana completo -5% si 1ro; pierde la MITAD (el
-//     banquero gana esa mitad -5%) si 2do; pierde completo si peor.
-//   - "2n"/"2nini", "3n"/"3nn": gana completo -5% en las posiciones
-//     anteriores a N, "no se decide" (0 y 0) en la posición N, pierde
-//     completo de ahí en adelante.
-//   - "2y2" (o "2/2", "2p/2n", "2py2n" — alias confirmados por el usuario
-//     el 24-09-2026, mismo patrón que "1/2"≡"1y2": ver
-//     claude/spec-modulo-hipismo.md sección 6, familia "AP/BN" donde
-//     A===B): gana completo -5% si 1ro, gana LA MITAD -5% si 2do, pierde
-//     completo si peor.
-//   - "2y3" (o "2/3", "2p/3n" — alias confirmado por el usuario el
-//     24-09-2026, mismo patrón, familia "AP/BN" donde B=A+1): gana
-//     completo -5% en 1ro y 2do, pierde la mitad (banquero gana esa mitad
-//     -5%) si 3ro, pierde completo si peor.
+// Modalidades soportadas hoy (generalizadas el 24-09-2026, a partir de la
+// lista completa "ASI SE JUEGA EN LAS OFICINAS" que mandó el usuario —
+// confirma y extiende el patrón "AP/BN" ya confirmado desde el 22-09-2026
+// en claude/spec-modulo-hipismo.md sección 6, generalizando a cualquier N
+// las 2 familias que antes solo estaban hardcodeadas para N=2/N=3):
+//   - "N puestos" (1p, 2p, 3p... sin tope fijo, "ASI HASTA LOS 10P" dijo
+//     el usuario, pero la formula no depende de un limite): gana completo
+//     -5% si coloca entre las primeras N posiciones, si no pierde
+//     completo.
+//   - Familia "Nn" (empata en la posicion N: "2N" empata en el 2do, "3N"
+//     empata en el 3ro, generalizado ahora para 4n, 5n... 10n): gana
+//     completo -5% en las posiciones ANTERIORES a N, "no se decide" (0 y
+//     0) en la posicion N, pierde completo de ahi en adelante. Alias
+//     historicos tolerados: "Nnini", "Nnn".
+//   - Familia "AyB" (o "A/B" — alias de la misma matematica, generalizado
+//     el 24-09-2026 a partir del patron "AP/BN" ya confirmado por el
+//     usuario para CUALQUIER A/B, no solo A=1,2): cuando B===A ("2y2",
+//     "3y3", "4y4"...): gana completo en 1..(A-1), gana LA MITAD -5% en la
+//     posicion A, pierde completo despues. Cuando B===A+1 ("1/2"≡"1y2",
+//     "2y3", "3y4"...): gana completo en 1..A, PIERDE la mitad (el
+//     banquero gana esa mitad -5%) en la posicion B, pierde completo
+//     despues. Se acepta con o sin la "n" final y con "/" en vez de "y" —
+//     todas apuntan a la MISMA formula, ya verificada con ejemplos
+//     numericos del usuario (spec seccion 6).
 //   - "pp (AxB)": cruzado — gana completo -5% quien de los 2 caballos
-//     llegue mejor colocado entre sí (si hay empate/ninguno colocó,
-//     gana el banquero — mismo criterio que ya tenía el mockup, ver
-//     resolverModalidad('pp', ...) ahí).
-//   - "10/N" o "10aN" (décimos, spec sección 8 — formato de línea
-//     todavía no confirmado del todo con el usuario, se soporta igual
-//     porque la regla de pago SÍ está confirmada): paga N/10 del monto
-//     -5% si el caballo gana (llega 1ro), pierde completo si no.
+//     llegue mejor colocado entre si (si hay empate/ninguno coloco,
+//     gana el banquero — mismo criterio que ya tenia el mockup, ver
+//     resolverModalidad('pp', ...) ahi).
+//   - "10/N", "10aN" o "10 a N" (decimos, spec seccion 8): paga N/10 del
+//     monto -5% si el caballo gana (llega 1ro), pierde completo si no.
+//
+// "PELO A PELO" (que el usuario listo como sinonimo de "1 puesto") queda
+// AFUERA a proposito — ver la nota en claude/plan-modulo-hipismo.md, hay
+// que confirmar primero si el token real que se pega en un plano es
+// distinto de "pp" (que ya esta tomado por el cruzado de 2 caballos de
+// arriba) antes de agregarlo.
 // =================================================================
 
 // Devuelve {j, b} como FRACCIÓN del monto (antes de comisión), desde la
 // perspectiva del jugador (j) y del banquero (b) — siempre espejados
-// (j === -b) salvo en un "no se decide" (0, 0).
+// (j === -b) salvo en un "no se decide" (0, 0). El lado del banquero es
+// SIEMPRE la inversa exacta del jugador (confirmado explicitamente por el
+// usuario el 24-09-2026: "esto ya te lo habia explicado... los que dan o
+// banquea seria la inversa") — asi fue disenado desde el principio, nunca
+// hizo falta un caso aparte para el lado del banquero.
 function resolverModalidad(modalidadCruda, pos, posB) {
   const modalidad = modalidadCruda.toLowerCase().trim();
 
-  // familia "N puestos": 1p, 2p, 3p ... 10p
+  // familia "N puestos": 1p, 2p, 3p ... sin tope fijo
   let m = modalidad.match(/^(\d{1,2})p$/);
   if (m) {
     const n = parseInt(m[1], 10);
     return (pos <= n) ? { j: 1, b: -1 } : { j: -1, b: 1 };
   }
 
-  if (modalidad === '1/2' || modalidad === '1y2') {
-    if (pos === 1) return { j: 1, b: -1 };
-    if (pos === 2) return { j: -0.5, b: 0.5 };
+  // "10/N", "10aN", "10 a N" (decimos, spec seccion 8) — se revisa ANTES
+  // que la familia generica "A/B" de mas abajo porque ambas usan "/", y
+  // "10/3" tiene que leerse como decimos (paga 3/10), no como A=10,B=3 de
+  // la familia AyB.
+  m = modalidad.match(/^10\s*[/a]\s*(\d+(?:\.\d+)?)$/);
+  if (m) {
+    const frac = parseFloat(m[1]) / 10;
+    if (pos === 1) return { j: frac, b: -frac };
     return { j: -1, b: 1 };
   }
-  if (modalidad === '2n' || modalidad === '2nini') {
-    if (pos === 1) return { j: 1, b: -1 };
-    if (pos === 2) return { j: 0, b: 0 };
+
+  // familia "Nn" (empata en la posicion N): 2n, 3n, 4n... 10n, y los
+  // alias historicos "Nnini"/"Nnn" (generalizado 24-09-2026 — antes solo
+  // estaban hardcodeados 2n y 3n).
+  m = modalidad.match(/^(\d{1,2})n(?:ini)?$/) || modalidad.match(/^(\d{1,2})nn$/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (pos < n) return { j: 1, b: -1 };
+    if (pos === n) return { j: 0, b: 0 };
     return { j: -1, b: 1 };
   }
-  if (modalidad === '3n' || modalidad === '3nn') {
-    if (pos === 1) return { j: 1, b: -1 };
-    if (pos === 2) return { j: 1, b: -1 };
-    if (pos === 3) return { j: 0, b: 0 };
-    return { j: -1, b: 1 };
+
+  // familia "AyB" (o "A/B", con o sin "n" final): patron general
+  // confirmado por el usuario para CUALQUIER A/B (generalizado 24-09-2026
+  // — antes solo estaban hardcodeados 1/2, 2y2 y 2y3). Reproduce EXACTO
+  // el mismo resultado que las reglas anteriores para esos 3 casos ya
+  // verificados (ver test_hipismo_modalidades_generalizadas.js).
+  m = modalidad.match(/^(\d{1,2})y(\d{1,2})n?$/) || modalidad.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (m) {
+    const A = parseInt(m[1], 10), B = parseInt(m[2], 10);
+    if (B === A) {
+      // "gana la mitad" en la posicion A (ej. 2y2, 3y3, 4y4...)
+      if (pos < A) return { j: 1, b: -1 };
+      if (pos === A) return { j: 0.5, b: -0.5 };
+      return { j: -1, b: 1 };
+    }
+    if (B === A + 1) {
+      // "pierde la mitad" en la posicion B=A+1 (ej. 1/2≡1y2, 2y3, 3y4...)
+      if (pos <= A) return { j: 1, b: -1 };
+      if (pos === B) return { j: -0.5, b: 0.5 };
+      return { j: -1, b: 1 };
+    }
+    return null; // combinacion A/B que no sigue el patron confirmado
   }
-  // "2/2" es alias de "2y2" (confirmado por el usuario 24-09-2026: "2/2 ES
-  // IGUAL A 2PY2N O 2P/2N" — mismo patrón ya establecido para "1/2"≡"1y2").
-  if (modalidad === '2y2' || modalidad === '2/2') {
-    if (pos === 1) return { j: 1, b: -1 };
-    if (pos === 2) return { j: 0.5, b: -0.5 };
-    return { j: -1, b: 1 };
-  }
-  // "2/3" es alias de "2y3" (confirmado por el usuario 24-09-2026: "2/3 ES
-  // IGUAL A 2P/3N").
-  if (modalidad === '2y3' || modalidad === '2/3') {
-    if (pos === 1) return { j: 1, b: -1 };
-    if (pos === 2) return { j: 1, b: -1 };
-    if (pos === 3) return { j: -0.5, b: 0.5 };
-    return { j: -1, b: 1 };
-  }
+
   if (modalidad === 'pp') {
     // pos = ranking del caballo A, posB = ranking del caballo B — gana
     // quien tenga el número MENOR (mejor colocado). Empate/ninguno
@@ -90,14 +119,6 @@ function resolverModalidad(modalidadCruda, pos, posB) {
     // tenía el mockup (caso no confirmado explícitamente con el
     // usuario, documentado como tal en claude/spec-modulo-hipismo.md).
     return (pos < posB) ? { j: 1, b: -1 } : { j: -1, b: 1 };
-  }
-  // "10/N" o "10aN" (décimos, spec sección 8) — experimental, formato de
-  // línea pendiente de confirmar con el usuario.
-  m = modalidad.match(/^10[/a](\d+(?:\.\d+)?)$/);
-  if (m) {
-    const frac = parseFloat(m[1]) / 10;
-    if (pos === 1) return { j: frac, b: -frac };
-    return { j: -1, b: 1 };
   }
   return null; // modalidad no reconocida
 }
@@ -108,7 +129,14 @@ function resolverModalidad(modalidadCruda, pos, posB) {
 // Tykhe"), mismo criterio ya usado en otras partes del sistema (ej. "3TF
 // DEL 3 A 25" en Jugadas Adelantadas) donde "del" es puro relleno del
 // lenguaje hablado, sin significado para el cálculo.
-const LINEA_REGEX = /^juega\s+(\S+)\s+(\d{1,2}p|1\/2|1y2|2n|2nini|3n|3nn|2y2|2y3|2\/2|2\/3|pp|10[/a]\d+(?:\.\d+)?)(?:\s+del)?\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
+// Modalidad generalizada (24-09-2026): en vez de enumerar cada token
+// literal ("1/2","2y2","2y3",...), el grupo de modalidad ahora matchea
+// las FORMAS generales de cada familia (Np, Nn, AyB/A-B, décimos, pp) —
+// resolverModalidad() es quien decide después qué significa cada una. Así
+// "3y3","4y4","4y5","5y5", "4n","5n"..."10n", etc. quedan reconocidas sin
+// tener que volver a tocar este regex cada vez que aparece una posición
+// nueva.
+const LINEA_REGEX = /^juega\s+(\S+)\s+(\d{1,2}p|10\s*[/a]\s*\d+(?:\.\d+)?|\d{1,2}n(?:ini)?|\d{1,2}nn|\d{1,2}y\d{1,2}n?|\d{1,2}\/\d{1,2}|pp)(?:\s+del)?\s*\(([^)]+)\)\s*con\s+([\d.,]+)\s*da\s+(\S+)/i;
 
 // Monto tal cual se MUESTRA en el texto de cada línea: ya con el 5%
 // descontado si es una ganancia (spec sección 6), independiente de si el
