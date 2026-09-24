@@ -29,7 +29,9 @@ const TABLAS = {
   hipismo_planos: [],
   hipismo_hipodromos: [],
   hipismo_remate_apuestas: [],
-  hipismo_remates: []
+  hipismo_remates: [],
+  hipismo_adelantadas_jugadas: [],
+  hipismo_adelantadas_planos: []
 };
 
 function ejecutarQuery(text, params) {
@@ -77,6 +79,40 @@ function ejecutarQuery(text, params) {
           caballo: a.caballo, numero_ejemplar: a.numero_ejemplar, monto: a.monto, resultado: a.resultado,
           fecha: remate.fecha, hipodromo_nombre: remate.hipodromo_nombre, carrera_numero: remate.carrera_numero,
           pizarra: remate.pizarra, numero_ganador: remate.numero_ganador, pais: hip ? hip.pais : null
+        };
+      })
+    };
+  }
+
+  // obtenerLineasHipismoCliente(): Jugadas Adelantadas (24-09-2026, a
+  // pedido del usuario: "los que los clientes ven en su link debe
+  // contener toda sus jugadas no puede faltar nada" — reportó que el
+  // saldo de Balance General y el de su propio link no coincidían, y
+  // esta función nunca había leído hipismo_adelantadas_jugadas).
+  if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    const estadosValidos = ['resuelto', 'falta_banqueo', 'sin_decidir'];
+    const filas = TABLAS.hipismo_adelantadas_jugadas
+      .filter(j => j.grupo_id === grupoId && estadosValidos.includes(j.estado))
+      .filter(j => {
+        const esJugador = j.cliente_nombre === nombre;
+        const esBanqueador = Array.isArray(j.banqueadores) && j.banqueadores.some(b => b.nombre === nombre);
+        return esJugador || esBanqueador;
+      })
+      .map(j => {
+        const plano = TABLAS.hipismo_adelantadas_planos.find(p => p.id === j.plano_id);
+        return { j, plano };
+      })
+      .filter(({ plano }) => plano && plano.fecha >= desde && plano.fecha <= hasta)
+      .sort((a, b) => b.plano.fecha.localeCompare(a.plano.fecha));
+    return {
+      rows: filas.map(({ j, plano }) => {
+        const hip = TABLAS.hipismo_hipodromos.find(h => h.id === plano.hipodromo_id);
+        return {
+          tipo: j.tipo, cliente_nombre: j.cliente_nombre, carrera_numero: j.carrera_numero,
+          cantidad_tf: j.cantidad_tf, numero_ejemplar: j.numero_ejemplar, numero1: j.numero1, numero2: j.numero2,
+          monto: j.monto, resultado_cliente: j.resultado_cliente, banqueadores: j.banqueadores, pizarra_usada: j.pizarra_usada,
+          fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre, pais: hip ? hip.pais : null
         };
       })
     };
@@ -181,6 +217,54 @@ function check(cond, msg) {
   const lineasSoloTercios = await obtenerLineasHipismoCliente(GRUPO_ID, 'JUNKO', '2026-09-20', '2026-09-20');
   check(lineasSoloTercios.length === 1 && lineasSoloTercios[0].tipo !== 'remate',
     'Regresión: si el rango de fechas no toca ningún remate, solo trae la línea de Tercios (la consulta de remate no revienta ni trae de más)');
+
+  // =================================================================
+  // Jugadas Adelantadas (24-09-2026, a pedido del usuario: "el link de
+  // hanry me da otro [saldo]... eso no puede suceder... yo no puedo
+  // tener un saldo y ellos otros"). Fixture: HANRY jugó una Tabla Fija
+  // ya resuelta (gana), y además banqueó la Marca de OTRO cliente (ya
+  // resuelta). Una tercera adelantada de HANRY sigue 'pendiente' — no
+  // debe aparecer todavía, igual que Cierre Final la excluye hasta que
+  // se resuelva.
+  // =================================================================
+  TABLAS.hipismo_adelantadas_planos.push({
+    id: 'plano-adel-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', fecha: '2026-09-24'
+  });
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'adel-1', plano_id: 'plano-adel-1', grupo_id: GRUPO_ID, cliente_nombre: 'HANRY', carrera_numero: 9,
+    tipo: 'tf', cantidad_tf: 1, numero_ejemplar: 5, monto: 50, resultado_cliente: 47.5, banqueadores: null,
+    pizarra_usada: '6.10.4.8.2', estado: 'resuelto'
+  });
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'adel-2', plano_id: 'plano-adel-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', carrera_numero: 10,
+    tipo: 'marca', numero1: 6, numero2: 10, monto: 100, resultado_cliente: 190,
+    banqueadores: [{ nombre: 'HANRY', porcentaje: 50, pagaComision: true, comisionPorcentaje: 5, monto: 15 }],
+    pizarra_usada: '6.10.4.8.2', estado: 'resuelto'
+  });
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'adel-3', plano_id: 'plano-adel-1', grupo_id: GRUPO_ID, cliente_nombre: 'HANRY', carrera_numero: 11,
+    tipo: 'tf', cantidad_tf: 1, numero_ejemplar: 3, monto: 20, resultado_cliente: null, banqueadores: null,
+    pizarra_usada: null, estado: 'pendiente'
+  });
+
+  const lineasHanry = await obtenerLineasHipismoCliente(GRUPO_ID, 'HANRY', '2026-09-01', '2026-09-30');
+  check(lineasHanry.length === 2, 'HANRY ve sus 2 jugadas adelantadas ya resueltas (su TF como jugador + su banqueo de la Marca de OTRO) — la pendiente no aparece');
+
+  const lineaTf = lineasHanry.find(l => l.tipo === 'adelantada' && l.rol === 'jugador');
+  check(!!lineaTf && lineaTf.resultado === 47.5 && lineaTf.subtipo === 'tf' && lineaTf.numeroEjemplar === 5,
+    'La Tabla Fija de HANRY (jugador) trae tipo "adelantada", su resultado real y el número de ejemplar');
+  check(lineaTf.fecha === '2026-09-24' && lineaTf.hipodromoNombre === 'La Rinconada' && lineaTf.carreraNumero === 9 && lineaTf.pizarra === '6.10.4.8.2',
+    'La Tabla Fija de HANRY trae la fecha/hipódromo/carrera/pizarra reales del plano de Jugadas Adelantadas');
+
+  const lineaBanquero = lineasHanry.find(l => l.tipo === 'adelantada' && l.rol === 'banquero');
+  check(!!lineaBanquero && lineaBanquero.resultado === 15 && lineaBanquero.subtipo === 'marca' && lineaBanquero.numero1 === 6 && lineaBanquero.numero2 === 10,
+    'HANRY también ve, como línea aparte, lo que ganó BANQUEANDO la Marca de OTRO cliente (mismo criterio que ya usa Cierre Final con acumular(b.nombre, b.monto))');
+
+  const totalHanryConAdelantadas = lineasHanry.reduce((acc, l) => acc + l.resultado, 0);
+  check(totalHanryConAdelantadas === 62.5, 'El saldo total de HANRY con sus adelantadas (47.5 + 15 = 62.5) es lo que ahora ve reflejado en su link, igual que en Cierre Final/Balance General');
+
+  check(textoJugadaHipismo(lineaTf) === '🕐 Adelantada — Tabla fija (5)', 'textoJugadaHipismo de una Tabla Fija jugada dice "Adelantada" y el número de ejemplar');
+  check(textoJugadaHipismo(lineaBanquero) === '🕐 Adelantada — Banqueó Marca (6x10)', 'textoJugadaHipismo de un banqueo de Marca dice "Banqueó" y los 2 números de la marca');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

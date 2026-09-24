@@ -279,6 +279,16 @@
     if (c.tipo === 'remate') {
       return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}` : `🏆 Remate — jugó ${c.caballo}`;
     }
+    // Adelantada (24-09-2026, a pedido del usuario: "los que los clientes
+    // ven en su link debe contener toda sus jugadas no puede faltar
+    // nada") — mismo texto y el mismo prefijo 🕐 que ya usa el sistema
+    // para distinguirla de una jugada normal de Tercios.
+    if (c.tipo === 'adelantada') {
+      const detalle = c.subtipo === 'tf'
+        ? `Tabla fija (${c.numeroEjemplar})`
+        : `Marca (${c.numero1}x${c.numero2})`;
+      return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
+    }
     const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
     if ((c.modalidad || '').toLowerCase() === 'pp') {
       return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
@@ -445,7 +455,7 @@
               <span class="num-carrera">${c.carrera}ª</span>
               <span class="jugada-txt">${armarJugadaTexto(c)}</span>
               <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">con ${formatMonto(c.monto)}</span></span>
-              <span class="pizarra-txt">Pizarra: ${c.pizarra}</span>
+              <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyHip.appendChild(filaCarrera);
           });

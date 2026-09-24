@@ -152,12 +152,21 @@ router.get('/:token', asyncHandler(async (req, res) => {
       // (undefined) para una línea de Tercios normal, sin cambiar nada
       // de su comportamiento actual.
       tipo: linea.tipo,
-      ganoRemate: linea.ganoRemate
+      ganoRemate: linea.ganoRemate,
+      // Adelantada (24-09-2026, ver la nota grande en
+      // services/hipismoLineasCliente.js): no tiene modalidad/caballo
+      // como Tercios, sino subtipo ('tf'|'marca') + sus propios números —
+      // se pasan tal cual para que armarJugadaTexto() en
+      // hipismo-cliente-portal.html arme el texto correcto.
+      subtipo: linea.subtipo,
+      numeroEjemplar: linea.numeroEjemplar,
+      numero1: linea.numero1,
+      numero2: linea.numero2
     };
     if (linea.modalidad === 'pp') {
       carrera.caballoA = linea.caballoA;
       carrera.caballoB = linea.caballoB;
-    } else {
+    } else if (linea.tipo !== 'adelantada') {
       carrera.caballo = linea.caballo;
     }
     hipMap.get(hipNombre).carreras.push(carrera);

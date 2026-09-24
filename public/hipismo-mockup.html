@@ -875,7 +875,7 @@
     <section class="vista" id="vista-balanceGeneral">
       <div class="card">
         <h2>📒 Balance General</h2>
-        <p class="desc">Dos listas: a la izquierda los que van perdiendo, del mayor perdedor al menor; a la derecha los que van ganando, del mayor ganador al menor. En rojo/negativo los que pierden, en verde/positivo los que ganan. Se llena solo con lo último que calculaste en "Cargar Planos" — probá calcular el plano de ejemplo y volvé acá.</p>
+        <p class="desc">Dos listas: a la izquierda los que van perdiendo, del mayor perdedor al menor; a la derecha los que van ganando, del mayor ganador al menor. En rojo/negativo los que pierden, en verde/positivo los que ganan. Es el saldo real de la semana actual, sacado directo del servidor — exactamente el mismo número que vas a ver en "Cierre Final" y en el link de cada cliente.</p>
 
         <div class="btn-fila" style="margin-bottom:16px;">
           <button class="btn btn-primario" type="button" onclick="copiarBalanceImagen()">📸 Copiar Imagen HD</button>
@@ -1501,6 +1501,10 @@ function mostrarVista(id, btn) {
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
+  // Balance General (24-09-2026) entra a esta lista junto con el resto de
+  // reportes reales — ver la nota grande en pintarBalanceGeneral: antes
+  // no estaba acá porque no pedía nada al servidor.
+  balanceGeneral: () => pintarBalanceGeneral(),
   cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
   semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
   comisionesPorCarrera: () => pintarComisionesPorCarrera(),
@@ -1571,17 +1575,6 @@ Juega Alvarado 2n (10) con 30,00 da Hernan
 Juega Zmf 3p (6) con 50,00 da Marcopolo
 Juega Josue 1/2 (10) con 50,00 da Sebastian`;
 
-let ultimosTotales = null; // se comparte con Balance General
-// 23-09-2026, a pedido del usuario ("se va colocando positivo a marcas...
-// tambien tablas fijas"): además de los totales, se guarda de qué
-// carrera son (hipódromo/carrera/fecha) — así, cuando más adelante se
-// banquea una Marca de ESA MISMA carrera (POST /adelantadas/jugadas/:id/
-// banquear), enviarBanqueo() puede sumarle en vivo a Balance General sin
-// tener que recalcular el plano. Si el banqueo es de OTRA carrera (ya se
-// cargó otro plano después), no se toca Balance General — esa carrera ya
-// no está en pantalla, así que mezclarla ahí confundiría los números;
-// igual queda bien contado en "Cierre Final", que lee de la base.
-let ultimosTotalesCarrera = null; // { hipodromoNombre, carreraNumero, fecha }
 
 // ordinalCarrera(n) -> "1ra","2da","3ra","4ta"..."7ma","8va","9na","10ma",
 // "11ma"... (24-09-2026, mismo arreglo que en src/services/hipismoCalc.js
@@ -1736,8 +1729,10 @@ async function calcularPlano() {
     return;
   }
 
-  ultimosTotales = { totales: data.totalesFinales, comision: data.comisionTotal };
-  ultimosTotalesCarrera = { hipodromoNombre: data.hipodromoNombre, carreraNumero: Number(data.carreraNumero), fecha: data.fecha };
+  // Balance General (24-09-2026) ya no depende de lo que se acaba de
+  // calcular acá — se refresca pidiendo al servidor el saldo real y
+  // completo de la semana (ver pintarBalanceGeneral más abajo), así
+  // siempre coincide con Cierre Final y con el link de cada cliente.
   pintarBalanceGeneral();
   // Cualquier cliente/banquero nuevo de este plano ya quedó dado de alta
   // en el servidor (ver POST /api/hipismo/planos) — refresca acá la
@@ -2026,21 +2021,12 @@ async function enviarBanqueo(jugadaId, clienteNombre) {
 
   // Y, a pedido del usuario ("se va colocando positivo a marcas la
   // cantidad de marqueros que banqueen... todo debe verse siempre
-  // reflejado en los balances"): si Balance General está mostrando
-  // justo la MISMA carrera de esta marca, se le suman ahí mismo los
-  // banqueadores y la comisión, sin tener que volver a cargar el plano.
-  if (ultimosTotales && ultimosTotalesCarrera
-      && ultimosTotalesCarrera.hipodromoNombre === data.hipodromoNombre
-      && ultimosTotalesCarrera.carreraNumero === Number(data.carreraNumero)
-      && ultimosTotalesCarrera.fecha === data.fecha) {
-    (data.banqueadores || []).forEach(b => {
-      ultimosTotales.totales[b.nombre] = Math.round(((ultimosTotales.totales[b.nombre] || 0) + b.monto) * 100) / 100;
-    });
-    if (data.comisionMarcas) {
-      ultimosTotales.comision = Math.round((ultimosTotales.comision + data.comisionMarcas) * 100) / 100;
-    }
-    pintarBalanceGeneral();
-  }
+  // reflejado en los balances"): Balance General (24-09-2026, ya no
+  // depende de memoria del navegador — ver pintarBalanceGeneral) se
+  // refresca pidiendo de nuevo al servidor, así el banqueo recién resuelto
+  // queda reflejado de inmediato, coincida o no con la carrera que se
+  // tenía en pantalla.
+  pintarBalanceGeneral();
 }
 
 // 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en jugadas
@@ -2617,63 +2603,78 @@ function copiarLinkClienteHipismo(token, nombre) {
   }
 }
 
-// 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en
-// balance general al ver los saldos... colocame arriba la fecha que
-// este comprendida la semana es decir del 15-08 al 22-08 por ejemplo, y
-// semana xxx... que seria la semana del año en la que estamos". Balance
-// General (a diferencia de Cierre Final) no agrega nada por semana del
-// lado del servidor — solo muestra lo último calculado en "Cargar
-// Planos" — así que esto es puramente informativo: "en qué semana del
-// año estamos ahora mismo" (GET /api/hipismo/semana-actual).
-async function actualizarEncabezadoBalanceGeneral() {
-  const el = document.getElementById('balanceFechaCaptura');
-  if (!el) return;
-  const hoyTxt = new Date().toLocaleDateString('es-VE');
-  el.textContent = hoyTxt;
-  try {
-    const data = await apiHipismo('/api/hipismo/semana-actual');
-    el.textContent = `${hoyTxt} · Semana del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}`;
-  } catch (e) {
-    // Se queda con solo la fecha de hoy si no se pudo cargar la semana.
-  }
-}
+// ------------------------------------------------------------------
+// Balance General (24-09-2026, corregido a pedido del usuario: "balance
+// general me da una información, por ejemplo el link de hanry me da
+// otro, eso no puede suceder... yo no puedo tener un saldo y ellos
+// otros"). ANTES esta pantalla solo mostraba `ultimosTotales` — los
+// totales de LO ÚLTIMO calculado en "Cargar Planos" en ESTE navegador,
+// guardados en memoria (ni siquiera venían del servidor). Eso significa
+// que dependiendo de qué plano se calculó último en esa pestaña, podía
+// mostrar cualquier cosa — nunca fue el saldo real acumulado del
+// cliente, que es justo lo que reportó el usuario: un cliente veía un
+// saldo en su link (real, sacado de la base) y el Administrador veía
+// otro completamente distinto acá (leftover de una prueba vieja).
+//
+// Ahora Balance General pide al servidor EXACTAMENTE los mismos datos
+// que ya usa Cierre Final para la semana actual (GET /cierre-final?semana=actual,
+// la única fuente real de saldos por cliente) y los pinta en las 2
+// columnas Pierden/Ganan — así los 2 reportes (y el link de cada
+// cliente, que sale de esas mismas tablas) SIEMPRE dan exactamente
+// igual, como pidió el usuario ("estos saldos siempre deben dar
+// igual"). Se guarda en BALANCE_GENERAL_ACTUAL para que los 3 botones de
+// exportar (imagen/PDF/Excel) usen los mismos datos ya pintados, sin
+// tener que volver a pedirlos.
+let BALANCE_GENERAL_ACTUAL = null;
 
-// ------------------------------------------------------------------
-// Balance General — se llena con lo último calculado en Cargar Planos
-// ------------------------------------------------------------------
-function pintarBalanceGeneral() {
+async function pintarBalanceGeneral() {
   const listaPierden = document.getElementById('listaPierden');
   const listaGanan = document.getElementById('listaGanan');
+  const elFecha = document.getElementById('balanceFechaCaptura');
+  listaPierden.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  listaGanan.innerHTML = '';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
+  } catch (e) {
+    listaPierden.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
+    listaGanan.innerHTML = '';
+    return;
+  }
+  BALANCE_GENERAL_ACTUAL = data;
+
+  if (elFecha) {
+    const hoyTxt = new Date().toLocaleDateString('es-VE');
+    elFecha.textContent = `${hoyTxt} · Semana del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}`;
+  }
+
   listaPierden.innerHTML = '';
   listaGanan.innerHTML = '';
 
-  if (!ultimosTotales) {
-    listaPierden.innerHTML = '<div class="placeholder-card">Todavía no calculaste ningún plano.</div>';
-    listaGanan.innerHTML = '<div class="placeholder-card">Todavía no calculaste ningún plano.</div>';
-    document.getElementById('montoComision').textContent = '$ 0,00';
-    return;
-  }
+  const pierden = data.clientes.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
+  const ganan = data.clientes.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
 
-  const entradas = Object.entries(ultimosTotales.totales);
-  const pierden = entradas.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
-  const ganan = entradas.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-
-  pierden.forEach(([nombre, v]) => {
+  pierden.forEach(c => {
     const fila = document.createElement('div');
     fila.className = 'balance-fila perdedor';
-    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">${formatMonto(v)}</span>`;
+    fila.innerHTML = `<span class="nombre">${formatNombre(c.nombre)}</span><span class="monto">${formatMonto(c.saldo)}</span>`;
     listaPierden.appendChild(fila);
   });
-  ganan.forEach(([nombre, v]) => {
+  ganan.forEach(c => {
     const fila = document.createElement('div');
     fila.className = 'balance-fila ganador';
-    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">+${formatMonto(v).replace('$ ', '$ ')}</span>`;
+    fila.innerHTML = `<span class="nombre">${formatNombre(c.nombre)}</span><span class="monto">+${formatMonto(c.saldo)}</span>`;
     listaGanan.appendChild(fila);
   });
-  if (!pierden.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en este plano.</div>';
-  if (!ganan.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en este plano.</div>';
+  if (!pierden.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
+  if (!ganan.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
 
-  document.getElementById('montoComision').textContent = formatMonto(ultimosTotales.comision);
+  // Misma comisión total que Cierre Final (Tercios + Remate + Adelantadas
+  // — ver el arreglo en pintarCierreFinal más abajo), para que los 2
+  // reportes cuadren también en este número, no solo en los saldos.
+  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
 }
 
 // ------------------------------------------------------------------
@@ -2898,7 +2899,7 @@ function mostrarToastBalance(msg, esError) {
 }
 
 async function copiarBalanceImagen() {
-  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
   if (typeof html2canvas !== 'function') {
     mostrarToastBalance('⚠️ No se pudo cargar la herramienta de imagen (revisá la conexión).', true);
     return;
@@ -2926,7 +2927,7 @@ async function copiarBalanceImagen() {
 }
 
 async function descargarBalancePDF() {
-  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
   if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
     mostrarToastBalance('⚠️ No se pudo cargar la herramienta de PDF (revisá la conexión).', true);
     return;
@@ -2948,13 +2949,14 @@ async function descargarBalancePDF() {
 }
 
 function descargarBalanceExcel() {
-  if (!ultimosTotales) { mostrarToastBalance('Calculá un plano primero en "Cargar Planos".', true); return; }
+  if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — esperá un momento.', true); return; }
   if (typeof XLSX === 'undefined') {
     mostrarToastBalance('⚠️ No se pudo cargar la herramienta de Excel (revisá la conexión).', true);
     return;
   }
-  const entradas = Object.entries(ultimosTotales.totales).sort((a, b) => a[1] - b[1]);
-  const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(ultimosTotales.comision.toFixed(2))]];
+  const entradas = BALANCE_GENERAL_ACTUAL.clientes.map(c => [c.nombre, c.saldo]).sort((a, b) => a[1] - b[1]);
+  const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana) + Number(BALANCE_GENERAL_ACTUAL.comisionRemateSemana) + Number(BALANCE_GENERAL_ACTUAL.comisionAdelantadasSemana);
+  const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(comisionTotal.toFixed(2))]];
   const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
   const libro = XLSX.utils.book_new();
@@ -3018,7 +3020,18 @@ async function pintarCierreFinal(semana) {
     });
   }
 
-  document.getElementById('montoComisionCierre').textContent = formatMonto(data.comisionSemana);
+  // 24-09-2026: el backend siempre devolvió comisionSemana (solo
+  // Tercios), comisionRemateSemana y comisionAdelantadasSemana por
+  // separado — pero acá solo se pintaba comisionSemana, así que la
+  // "Comisión de la semana" de Cierre Final quedaba incompleta cada vez
+  // que hubo Remate o Jugadas Adelantadas esa semana (encontrado
+  // revisando por qué los saldos no cuadraban entre pantallas, a pedido
+  // del usuario: "no puedo tener un saldo y ellos otros"). Ahora suma
+  // las 3, igual que ya hace la fila "Comisión Grupo" de Semana por
+  // Días y Balance General (ver pintarBalanceGeneral), así el mismo
+  // número sale igual en los 3 reportes.
+  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  document.getElementById('montoComisionCierre').textContent = formatMonto(comisionTotal);
 }
 
 function mostrarSemanaCierre(semana, btn) {
@@ -3290,7 +3303,8 @@ function descargarCierreExcel() {
   });
   const filaComision = ['Comisión de la semana'];
   for (let i = 1; i < encabezados.length - 1; i++) filaComision.push('');
-  filaComision.push(Number(data.comisionSemana.toFixed(2)));
+  const comisionTotalExport = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  filaComision.push(Number(comisionTotalExport.toFixed(2)));
 
   const rangoTexto = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}`;
   const hoja = XLSX.utils.aoa_to_sheet([
@@ -4209,7 +4223,6 @@ document.getElementById('txtPlano').value = PLANO_EJEMPLO;
 pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 pintarLogosGrupo();
-actualizarEncabezadoBalanceGeneral();
 actualizarAlertaPozos();
 cargarHipodromos();
 cargarPendientesAdelantadas();

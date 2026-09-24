@@ -105,7 +105,69 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     };
   });
 
-  return [...lineasTercios, ...lineasRemate];
+  // Jugadas Adelantadas (24-09-2026, a pedido del usuario: "los que los
+  // clientes ven en su link debe contener toda sus jugadas no puede
+  // faltar nada, yo no puedo tener un saldo y ellos otros" — reportó que
+  // el saldo de Balance General y el del link de un cliente no
+  // coincidían). Hasta acá, este archivo NUNCA leía
+  // hipismo_adelantadas_jugadas: un cliente con una Tabla Fija o una
+  // Marca ya resuelta no la veía reflejada en su propio link, aunque su
+  // saldo real (el que usan Cierre Final/Semana por Días) sí la tuviera
+  // contada. Mismo criterio de estados que ya usa GET /cierre-final
+  // (routes/hipismo.js): el lado del CLIENTE que jugó (tf o marca) ya es
+  // definitivo apenas sale de 'pendiente' — 'resuelto', 'falta_banqueo' y
+  // 'sin_decidir' entran los 3. El lado de los BANQUEADORES de una Marca
+  // (jsonb `banqueadores`) solo existe una vez 'resuelto' — si este mismo
+  // jugador banqueó la marca de otro cliente, también le sale reflejado
+  // acá como una línea aparte con rol 'banquero', igual que ya hace
+  // Cierre Final con `acumular(b.nombre, b.monto)`.
+  const rAdelantadas = await db.query(
+    `SELECT j.tipo, j.cliente_nombre, j.carrera_numero, j.cantidad_tf, j.numero_ejemplar,
+            j.numero1, j.numero2, j.monto, j.resultado_cliente, j.banqueadores, j.pizarra_usada,
+            p.fecha, p.hipodromo_nombre, h.pais
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+       LEFT JOIN hipismo_hipodromos h ON h.id = p.hipodromo_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $3 AND $4
+        AND j.estado IN ('resuelto', 'falta_banqueo', 'sin_decidir')
+        AND (
+          j.cliente_nombre = $2
+          OR (j.banqueadores IS NOT NULL
+              AND EXISTS (SELECT 1 FROM jsonb_array_elements(j.banqueadores) b WHERE b->>'nombre' = $2))
+        )
+      ORDER BY p.fecha DESC, j.creado_en ASC`,
+    [grupoId, nombreJugador, desde, hasta]
+  );
+
+  const lineasAdelantadas = [];
+  rAdelantadas.rows.forEach(row => {
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+    const base = {
+      tipo: 'adelantada',
+      subtipo: row.tipo, // 'tf' | 'marca'
+      fecha: fechaIso,
+      hipodromoNombre: row.hipodromo_nombre,
+      pais: row.pais || 'VE',
+      carreraNumero: row.carrera_numero,
+      pizarra: row.pizarra_usada || null,
+      numeroEjemplar: row.numero_ejemplar,
+      numero1: row.numero1,
+      numero2: row.numero2,
+      monto: Number(row.monto)
+    };
+    if (row.cliente_nombre === nombreJugador) {
+      lineasAdelantadas.push({ ...base, rol: 'jugador', resultado: Number(row.resultado_cliente) });
+    }
+    if (Array.isArray(row.banqueadores)) {
+      row.banqueadores.forEach(b => {
+        if (b.nombre === nombreJugador) {
+          lineasAdelantadas.push({ ...base, rol: 'banquero', resultado: Number(b.monto) });
+        }
+      });
+    }
+  });
+
+  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas];
 }
 
 // Mismo texto en primera persona que ya usan hipismo-mockup.html y
@@ -123,6 +185,17 @@ function textoJugadaHipismo(linea) {
   // una jugada más de Tercios.
   if (linea.tipo === 'remate') {
     return linea.ganoRemate ? `🏆 Remate — ganó con ${linea.caballo}` : `🏆 Remate — jugó ${linea.caballo}`;
+  }
+  // Adelantada (24-09-2026, ver la nota grande de obtenerLineasHipismoCliente
+  // arriba): mismo texto ("Tabla fija (N)" / "Marca (AxB)") que ya usa
+  // GET /adelantadas/pendientes en routes/hipismo.js para el operador,
+  // con el mismo prefijo 🕐 que usa "Cargar Planos"/Cierre Final para
+  // distinguirla de una jugada normal de Tercios.
+  if (linea.tipo === 'adelantada') {
+    const detalle = linea.subtipo === 'tf'
+      ? `Tabla fija (${linea.numeroEjemplar})`
+      : `Marca (${linea.numero1}x${linea.numero2})`;
+    return linea.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
   }
   const verbo = linea.rol === 'banquero' ? 'Dio' : 'Jugó';
   if ((linea.modalidad || '').toLowerCase() === 'pp') {
