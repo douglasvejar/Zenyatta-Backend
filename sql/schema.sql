@@ -1152,6 +1152,35 @@ alter table jugadores add column if not exists avalado_por_id uuid references ju
 alter table jugadores add column if not exists porcentaje_devuelto_destino text not null default 'cliente' check (porcentaje_devuelto_destino in ('cliente','aval'));
 
 -- =================================================================
+-- "% DEVUELTO ADICIONAL PARA EL AVAL" (24-09-2026, a pedido del usuario:
+-- "hay clientes que generan % para el mismo y aparte le generan % a su
+-- avalador....." — respuesta confirmada por AskUserQuestion: "Dos %
+-- independientes y simultáneos"). Hasta esta ronda, comision_propia +
+-- porcentaje_devuelto_destino solo permitían UN destino a la vez, o
+-- para el cliente o para su aval (nunca los dos). Este cliente puede
+-- necesitar los DOS al mismo tiempo, con % distintos: uno para él mismo
+-- (o para su aval, si así lo dejaste arriba con destino='aval' — eso NO
+-- cambia) Y, APARTE, otro % que se le suma a su aval — DOS ítems
+-- "{destino} - PORCENTAJE" distintos por el mismo ticket, no uno solo.
+--
+-- porcentaje_devuelto_aval: % adicional, 100% INDEPENDIENTE de
+-- comision_propia/porcentaje_devuelto_destino de arriba (nunca los
+-- reemplaza ni los toca — todo cliente ya configurado sigue funcionando
+-- exactamente igual, default 0 = "sin cambios para nadie que no toque
+-- esto"). Solo tiene efecto si además avalado_por_id está configurado —
+-- ver obtenerComisionesPropias() en routes/hipismo.js, que ahora puede
+-- devolver hasta 2 entradas por cliente (la de comision_propia y esta)
+-- en vez de una sola.
+--
+-- A PROPÓSITO sigue sin tocar la tabla "avales" (avalador_id/avalado_id/
+-- porcentaje) de arriba, por la misma razón ya explicada en la nota de
+-- avalado_por_id: esa tabla alimenta la comisión propia de DEPORTES
+-- (services/comisiones.js) y no tiene nada que ver con el "% devuelto"
+-- de Hipismo — reusarla acá dispararía sin querer esa lógica de
+-- Deportes para cualquier grupo que solo quiera esto en Hipismo.
+alter table jugadores add column if not exists porcentaje_devuelto_aval numeric not null default 0;
+
+-- =================================================================
 -- CUENTAS POR EMPLEADO DENTRO DE UN GRUPO (18-09-2026, a pedido del
 -- usuario: "soluciona la cuentas separas por empleado dentro de un
 -- grupo... un administrador que tiene acceso 100% y los empleados

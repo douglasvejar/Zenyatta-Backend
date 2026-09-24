@@ -1614,17 +1614,52 @@ Pizarra: [se llena al calcular]
       </div>
     </section>
 
-    <!-- ============ ADMINISTRACIÓN: USUARIOS ============ -->
+    <!-- ============ ADMINISTRACIÓN: USUARIOS ============
+         REAL desde el 24-09-2026, a pedido del usuario ("crar sub usario
+         el boton al apretarlo no hace nada"): el botón "+ Crear usuario"
+         estaba deshabilitado a propósito — esto era todavía un mockup sin
+         conectar. Se conecta a la MISMA API de Empleados que ya usa
+         Deportes (GET/POST/PUT/DELETE /api/empleados,
+         src/routes/empleados.js) — es una sola tabla "empleados"
+         compartida entre los 2 módulos (igual que "jugadores" con
+         Clientes), así que un Empleado que se cree/edite acá también se
+         ve reflejado en Deportes y viceversa. Los permisos disponibles
+         (incluido "🐎 Módulo Hipismo completo", el que de verdad importa
+         acá) salen de PERMISOS_VALIDOS en middleware/auth.js vía GET
+         /api/empleados/permisos-disponibles — si el backend agrega un
+         permiso nuevo el día de mañana, el checklist lo muestra solo. -->
     <section class="vista" id="vista-usuarios">
       <div class="card">
         <h2>👥 Usuarios</h2>
-        <p class="desc">Para crear sub-usuarios para los empleados (mismo concepto que ya existe en Deportes).</p>
+        <p class="desc">Sub-usuarios (Empleados) con su propio login — cada uno solo ve las pestañas para las que le marques permiso. Es la MISMA lista de Empleados que Deportes.</p>
+        <input type="hidden" id="empHipEditandoId" value="">
+        <h3 id="empHipFormTitulo" style="margin:14px 0 8px;">➕ Registrar Empleado Nuevo</h3>
         <div class="fila">
-          <div><label>Nombre</label><input type="text" placeholder="Ej: Carlos"></div>
-          <div><label>Usuario</label><input type="text" placeholder="Ej: carlos.hipismo"></div>
-          <div><label>Contraseña</label><input type="password" placeholder="••••••••"></div>
+          <div><label>Nombre</label><input type="text" id="empHipNombre" placeholder="Ej: Carlos"></div>
+          <div><label>Email (para iniciar sesión)</label><input type="email" id="empHipEmail" placeholder="Ej: carlos@correo.com"></div>
+          <div><label>Contraseña<span id="empHipPasswordNota" style="font-weight:normal;"> (mín. 6 caracteres)</span></label><input type="password" id="empHipPassword" placeholder="••••••••"></div>
         </div>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Crear usuario</button></div>
+        <div style="margin-top:6px;">
+          <label>¿Qué puede ver/hacer este Empleado?</label>
+          <div class="btn-fila" style="margin:8px 0;">
+            <button type="button" class="btn btn-secundario" style="padding:6px 12px; font-size:12.5px;" onclick="marcarTodosPermisosEmpHip(true)">✅ Marcar todos (acceso total)</button>
+            <button type="button" class="btn btn-secundario" style="padding:6px 12px; font-size:12.5px;" onclick="marcarTodosPermisosEmpHip(false)">⬜ Desmarcar todos</button>
+          </div>
+          <div id="empHipPermisosChecklist" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
+        </div>
+        <div class="check-fila" style="margin-top:14px;">
+          <input type="checkbox" id="empHipActivo" checked>
+          <label for="empHipActivo">Activo</label>
+        </div>
+        <div class="btn-fila" style="margin-top:10px;">
+          <button class="btn btn-primario" type="button" onclick="guardarEmpleadoHip()">💾 Guardar Empleado</button>
+          <button class="btn btn-secundario" type="button" onclick="cancelarEdicionEmpHip()">Cancelar edición</button>
+        </div>
+        <p class="desc" style="margin-top:10px;">💡 Un Empleado inicia sesión con su propio email/contraseña, en la misma pantalla de login, y solo ve en su barra lateral las pestañas para las que le marcaste permiso. El Administrador (esta cuenta) siempre tiene acceso a todo.</p>
+        <table style="margin-top:18px;">
+          <thead><tr><th>Nombre</th><th>Email</th><th>Permisos</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="tablaEmpleadosHip"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+        </table>
       </div>
     </section>
 
@@ -1897,7 +1932,8 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   comisionesDevueltasPorHipodromo: () => pintarComisionesDevueltasPorHipodromo(),
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   saldoComisiones: () => pintarSaldoComisiones(),
-  montosApostados: () => pintarMontosApostados()
+  montosApostados: () => pintarMontosApostados(),
+  usuarios: () => cargarEmpleadosHip()
 };
 function semanaActivaDeSelector(idSelector) {
   const btn = document.querySelector('#' + idSelector + ' button.activo');
@@ -2752,11 +2788,15 @@ function abrirCrearCliente() {
           </select>
         </div>
       </div>
-      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval)</label>
+      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval, o si le pones % adicional abajo)</label>
         <select id="nvoCteAval">
           <option value="">— Nadie / no aplica —</option>
           ${opcionesAval}
         </select>
+      </div>
+      <div class="fila">
+        <div><label>% ADICIONAL para su avalador (aparte, simultáneo)</label><input type="number" id="nvoCteComisionAval" step="0.01" min="0" value="0"></div>
+        <div style="align-self:flex-end;"><p class="desc" style="margin:0;">Se suma AL MISMO TIEMPO que el % de arriba — déjalo en 0 si no aplica.</p></div>
       </div>
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
@@ -2777,7 +2817,8 @@ async function guardarNuevoCliente() {
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia: document.getElementById('nvoCteComisionPropia').value || 0,
     avaladoPorId: document.getElementById('nvoCteAval').value || null,
-    porcentajeDevueltoDestino: document.getElementById('nvoCteDestino').value
+    porcentajeDevueltoDestino: document.getElementById('nvoCteDestino').value,
+    porcentajeDevueltoAval: document.getElementById('nvoCteComisionAval').value || 0
   };
   try {
     await apiHipismo('/api/jugadores', { method: 'POST', body: JSON.stringify(payload) });
@@ -2867,11 +2908,24 @@ async function pintarFichaCliente() {
           </select>
         </div>
       </div>
-      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval)</label>
+      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval, o si le pones % adicional abajo)</label>
         <select id="detCteAval">
           <option value="">— Nadie / no aplica —</option>
           ${opcionesAval}
         </select>
+      </div>
+      <!-- 24-09-2026, a pedido del usuario: "hay clientes que generan %
+           para el mismo y aparte le generan % a su avalador....."
+           (confirmado por AskUserQuestion: "Dos % independientes y
+           simultáneos") — este % es 100% APARTE del de arriba: puede
+           tener valor aunque el de arriba también lo tenga (y aunque el
+           de arriba esté puesto "para el propio cliente"), y siempre se
+           acredita al aval, nunca al cliente. Ver
+           jugadores.porcentaje_devuelto_aval en la nota grande de
+           sql/schema.sql. -->
+      <div class="fila">
+        <div><label>% ADICIONAL para su avalador (aparte, simultáneo)</label><input type="number" id="detCteComisionAval" step="0.01" min="0" value="${j.porcentaje_devuelto_aval || 0}"></div>
+        <div style="align-self:flex-end;"><p class="desc" style="margin:0;">Se suma AL MISMO TIEMPO que el % de arriba (aunque ese vaya para el propio cliente) — siempre se acredita al aval elegido arriba. Déjalo en 0 si este cliente no necesita esto.</p></div>
       </div>
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
@@ -2910,7 +2964,10 @@ async function guardarDetalleCliente(id) {
     moneda: j ? j.moneda : 'USD',
     modulosAnclados: j ? !!j.modulos_anclados : false,
     avaladoPorId: document.getElementById('detCteAval').value || null,
-    porcentajeDevueltoDestino: document.getElementById('detCteDestino').value
+    porcentajeDevueltoDestino: document.getElementById('detCteDestino').value,
+    // % ADICIONAL para el aval (24-09-2026) — ver la nota grande arriba
+    // de este mismo campo en pintarFichaCliente().
+    porcentajeDevueltoAval: document.getElementById('detCteComisionAval').value || 0
   };
   if (!payload.nombre) { alert('Ingresa el nombre del cliente.'); return; }
   try {
@@ -2948,6 +3005,181 @@ async function toggleModulosAnclados(id, anclado) {
     alert('No se pudo actualizar: ' + e.message);
     cargarClientesReales();
   }
+}
+
+// =================================================================
+// "👥 Usuarios" (Administración > Usuarios) — REAL desde el 24-09-2026,
+// a pedido del usuario: "crar sub usario el boton al apretarlo no hace
+// nada". El botón estaba deshabilitado a propósito (mockup sin
+// conectar) — se conecta acá a la MISMA API de Empleados que ya usa
+// Deportes (GET/POST/PUT/DELETE /api/empleados, exclusiva del
+// Administrador — ver requiereAdministrador en src/routes/empleados.js)
+// y a la MISMA lista de permisos válidos (GET
+// /api/empleados/permisos-disponibles, PERMISOS_VALIDOS en
+// middleware/auth.js) — es una sola tabla "empleados" para toda la
+// cuenta, no una por módulo, así que un Empleado creado/editado acá
+// también existe en Deportes y viceversa; lo único que cambia entre los
+// 2 módulos es cuál permiso ('hipismo' acá, 'sabana'/etc. en Deportes)
+// le marques.
+//
+// Nombrado con sufijo "Hip"/"EmpHip" (no "Empleado" pelado) a propósito
+// — este archivo ya tuvo un bug real por 2 funciones con el mismo
+// nombre pisándose entre sí (ver el comentario grande de
+// abrirFichaCliente() más arriba) y esta vez el riesgo es más
+// concreto todavía: app.js (el script de Deportes) SÍ tiene funciones
+// llamadas guardarEmpleado()/editarEmpleado()/etc., pero es un archivo
+// aparte (Deportes y esta página no comparten script), así que no hay
+// colisión real — este sufijo es, aun así, la misma precaución.
+let EMPLEADOS_HIP_CACHE = [];
+let PERMISOS_DISPONIBLES_HIP_CACHE = [];
+
+// Mismas 13 claves/etiquetas que ETIQUETAS_PERMISOS en app.js (Deportes)
+// — es el mismo backend/PERMISOS_VALIDOS para los 2 módulos, así que
+// tienen que decir lo mismo en los 2 lugares.
+const ETIQUETAS_PERMISOS_HIP = {
+  sabana: '📋 Sábana (vista diaria)',
+  sabanas: '🗂️ Sábanas (historial, papelera)',
+  whatsapp: '📲 Sábana Automática (WhatsApp)',
+  equipos: '🏷️ Apodos de Equipos',
+  pagos: '💳 Pagos',
+  jugador: '👤 Jugador (clientes)',
+  porcentajes: '📊 % Devueltos',
+  balanceGeneral: '📒 Balance General',
+  transferencias: '🔄 Transferencias',
+  polla: '🎲 Polla',
+  alertas: '🔔 Alertas / Chat',
+  descargar: '⬇️ Descargar (Saldos Semana, Excel, PDF)',
+  hipismo: '🐎 Módulo Hipismo'
+};
+
+async function cargarEmpleadosHip() {
+  try {
+    const [empleados, permisos] = await Promise.all([
+      apiHipismo('/api/empleados'),
+      PERMISOS_DISPONIBLES_HIP_CACHE.length > 0 ? PERMISOS_DISPONIBLES_HIP_CACHE : apiHipismo('/api/empleados/permisos-disponibles')
+    ]);
+    EMPLEADOS_HIP_CACHE = empleados;
+    PERMISOS_DISPONIBLES_HIP_CACHE = permisos;
+    renderChecklistPermisosEmpHip();
+    renderTablaEmpleadosHip();
+  } catch (e) {
+    const tbody = document.getElementById('tablaEmpleadosHip');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+  }
+}
+
+function renderChecklistPermisosEmpHip() {
+  const cont = document.getElementById('empHipPermisosChecklist');
+  if (!cont) return;
+  cont.innerHTML = PERMISOS_DISPONIBLES_HIP_CACHE.map(clave =>
+    `<label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;">
+      <input type="checkbox" class="chk-permiso-emp-hip" value="${clave}" style="width:auto;"> ${ETIQUETAS_PERMISOS_HIP[clave] || clave}
+    </label>`
+  ).join('');
+}
+
+function marcarTodosPermisosEmpHip(marcar) {
+  document.querySelectorAll('.chk-permiso-emp-hip').forEach(cb => { cb.checked = marcar; });
+}
+
+function cancelarEdicionEmpHip() {
+  document.getElementById('empHipEditandoId').value = '';
+  document.getElementById('empHipFormTitulo').textContent = '➕ Registrar Empleado Nuevo';
+  document.getElementById('empHipNombre').value = '';
+  document.getElementById('empHipEmail').value = '';
+  document.getElementById('empHipPassword').value = '';
+  document.getElementById('empHipPassword').placeholder = '••••••••';
+  const nota = document.getElementById('empHipPasswordNota');
+  if (nota) nota.textContent = ' (mín. 6 caracteres)';
+  document.getElementById('empHipActivo').checked = true;
+  marcarTodosPermisosEmpHip(false);
+}
+
+function editarEmpleadoHip(id) {
+  const emp = EMPLEADOS_HIP_CACHE.find(x => String(x.id) === String(id));
+  if (!emp) return;
+  document.getElementById('empHipEditandoId').value = emp.id;
+  document.getElementById('empHipFormTitulo').textContent = '✏️ Editando: ' + emp.nombre;
+  document.getElementById('empHipNombre').value = emp.nombre;
+  document.getElementById('empHipEmail').value = emp.email;
+  // La contraseña NUNCA se precarga (el backend no la devuelve, solo
+  // guarda el hash) — dejarla en blanco al editar significa "no
+  // cambiarla" (PUT /api/empleados/:id soporta actualización parcial).
+  document.getElementById('empHipPassword').value = '';
+  document.getElementById('empHipPassword').placeholder = 'Deja en blanco para no cambiarla';
+  const nota = document.getElementById('empHipPasswordNota');
+  if (nota) nota.textContent = ' (deja en blanco para no cambiarla)';
+  document.getElementById('empHipActivo').checked = !!emp.activo;
+  const permisosDeEste = Array.isArray(emp.permisos) ? emp.permisos : [];
+  document.querySelectorAll('.chk-permiso-emp-hip').forEach(cb => { cb.checked = permisosDeEste.includes(cb.value); });
+  document.getElementById('vista-usuarios').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function guardarEmpleadoHip() {
+  const id = document.getElementById('empHipEditandoId').value;
+  const nombre = document.getElementById('empHipNombre').value.trim();
+  const email = document.getElementById('empHipEmail').value.trim();
+  const password = document.getElementById('empHipPassword').value;
+  const permisos = Array.from(document.querySelectorAll('.chk-permiso-emp-hip:checked')).map(cb => cb.value);
+
+  if (!nombre) { alert('Ingresa el nombre del empleado.'); return; }
+  if (!email) { alert('Ingresa el email del empleado.'); return; }
+  if (!id && (!password || password.length < 6)) { alert('Ingresa una contraseña de al menos 6 caracteres.'); return; }
+  if (id && password && password.length < 6) { alert('Si vas a cambiar la contraseña, debe tener al menos 6 caracteres.'); return; }
+
+  const payload = { nombre, email, permisos, activo: document.getElementById('empHipActivo').checked };
+  if (password) payload.password = password;
+
+  try {
+    if (id) {
+      await apiHipismo('/api/empleados/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await apiHipismo('/api/empleados', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    cancelarEdicionEmpHip();
+    await cargarEmpleadosHip();
+  } catch (e) {
+    // El 409 ("ya existe una cuenta con ese email") ya viene con un
+    // mensaje legible desde el backend, igual que en Deportes.
+    alert('No se pudo guardar el empleado: ' + e.message);
+  }
+}
+
+async function eliminarEmpleadoHip(id) {
+  const emp = EMPLEADOS_HIP_CACHE.find(x => String(x.id) === String(id));
+  if (!confirm('¿Eliminar la cuenta de "' + (emp ? emp.nombre : id) + '"? Ya no va a poder iniciar sesión.')) return;
+  try {
+    await apiHipismo('/api/empleados/' + id, { method: 'DELETE' });
+    await cargarEmpleadosHip();
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+  }
+}
+
+function renderTablaEmpleadosHip() {
+  const tbody = document.getElementById('tablaEmpleadosHip');
+  if (!tbody) return;
+  if (!EMPLEADOS_HIP_CACHE.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Todavía no registraste ningún Empleado.</td></tr>';
+    return;
+  }
+  const totalDisponibles = PERMISOS_DISPONIBLES_HIP_CACHE.length;
+  tbody.innerHTML = EMPLEADOS_HIP_CACHE.map(emp => {
+    const cantidad = Array.isArray(emp.permisos) ? emp.permisos.length : 0;
+    const permisosTexto = (totalDisponibles > 0 && cantidad === totalDisponibles)
+      ? '✅ Acceso total (' + cantidad + ')'
+      : cantidad + ' permiso(s)';
+    return `<tr>
+      <td>${emp.nombre}</td>
+      <td>${emp.email}</td>
+      <td>${permisosTexto}</td>
+      <td>${emp.activo ? 'Activo' : 'Inactivo'}</td>
+      <td style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="editarEmpleadoHip('${emp.id}')">✏️ Editar</button>
+        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px; color:var(--danger);" onclick="eliminarEmpleadoHip('${emp.id}')">🗑️ Eliminar</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 // Copia al portapapeles el MENSAJE completo (no solo la URL suelta) que
@@ -4741,12 +4973,24 @@ async function pintarComisionesDevueltas(fechaForzada) {
     const filaCliente = document.createElement('div');
     filaCliente.className = 'fila-carrera-comision';
     filaCliente.id = idCliente;
+    // 24-09-2026: un mismo cliente puede salir en hasta 2 renglones
+    // simultáneos (su % propio y el % ADICIONAL de su aval — "hay
+    // clientes que generan % para el mismo y aparte le generan % a su
+    // avalador") — la etiqueta de abajo distingue los 3 casos posibles.
+    let etiqueta;
+    if (cliente.destino === cliente.nombre) {
+      etiqueta = `${cliente.porcentaje}% de porcentaje propio`;
+    } else if (cliente.esAvalAdicional) {
+      etiqueta = `${cliente.porcentaje}% ADICIONAL para su aval ${formatNombre(cliente.destino)}`;
+    } else {
+      etiqueta = `${cliente.porcentaje}% — va para su aval ${formatNombre(cliente.destino)}`;
+    }
     filaCliente.innerHTML = `
       <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCliente}')">
         <span class="flecha-expandir">▶</span>
         <div class="info-carrera">
           <div class="hipodromo">👤 ${formatNombre(cliente.nombre)}</div>
-          <div class="detalle-fecha">${cliente.porcentaje}% de porcentaje propio</div>
+          <div class="detalle-fecha">${etiqueta}</div>
         </div>
         <div class="monto-carrera">+${formatMontoTabla(cliente.total)}</div>
       </div>
@@ -5353,9 +5597,16 @@ async function pintarSaldoComisiones() {
     tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Ningún cliente con % propio configurado esta semana.</td></tr>';
     return;
   }
+  // 24-09-2026: si el cliente tiene su % propio Y APARTE un % adicional
+  // para su aval ("hay clientes que generan % para el mismo y aparte le
+  // generan % a su avalador"), salen 2 renglones — el segundo aclara a
+  // quién se le acredita.
   data.clientes.forEach(c => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${formatNombre(c.nombre)}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
+    const nombreMostrado = c.destino === c.nombre
+      ? formatNombre(c.nombre)
+      : `${formatNombre(c.nombre)} <span style="color:var(--text-dim); font-size:12px;">→ ${c.esAvalAdicional ? 'adicional para' : 'va para'} ${formatNombre(c.destino)}</span>`;
+    tr.innerHTML = `<td>${nombreMostrado}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
     tbody.appendChild(tr);
   });
 }

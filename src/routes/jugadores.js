@@ -82,17 +82,17 @@ async function validarAvaladoPorId(grupoId, avaladoPorId, propioId) {
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, porcentajeDevueltoAval } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const avaladoPorIdFinal = await validarAvaladoPorId(req.grupoId, avaladoPorId, null);
     const r = await db.query(
-      `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino, porcentaje_devuelto_aval)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
         tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados,
-        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino)]
+        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino), Number(porcentajeDevueltoAval) || 0]
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -105,18 +105,18 @@ router.post('/', asyncHandler(async (req, res) => {
 
 router.put('/:id', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, porcentajeDevueltoAval } = req.body;
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const avaladoPorIdFinal = await validarAvaladoPorId(req.grupoId, avaladoPorId, req.params.id);
     const r = await db.query(
       `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
          pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10,
-         avalado_por_id = $11, porcentaje_devuelto_destino = $12
-       WHERE id = $13 AND grupo_id = $14 RETURNING *`,
+         avalado_por_id = $11, porcentaje_devuelto_destino = $12, porcentaje_devuelto_aval = $13
+       WHERE id = $14 AND grupo_id = $15 RETURNING *`,
       [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
         tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados,
-        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino), req.params.id, req.grupoId]
+        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino), Number(porcentajeDevueltoAval) || 0, req.params.id, req.grupoId]
     );
     if (r.rows.length === 0) return res.status(404).json({ error: 'Jugador no encontrado.' });
     res.json(r.rows[0]);

@@ -353,11 +353,21 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
 // se pierde — lo sigue mostrando GET /comisiones-devueltas tal cual
 // (agrupado por quien apostó, no por quien cobra), a propósito, para que
 // se pueda auditar "quién generó cuánto" aparte de "a quién se le pagó".
+//
+// ACTUALIZACIÓN 24-09-2026 ("hay clientes que generan % para el mismo y
+// aparte le generan % a su avalador....." — confirmado por
+// AskUserQuestion: "Dos % independientes y simultáneos"): cada cliente
+// puede ahora generar HASTA 2 créditos de "% devuelto" a la vez sobre el
+// MISMO monto apostado, así que el valor de este mapa pasó de ser un
+// solo { pct, destino } a ser un ARREGLO de ellos (puede venir vacío,
+// con 1, o con 2 entradas) — ver jugadores.porcentaje_devuelto_aval en
+// la nota grande de sql/schema.sql, que es 100% independiente y no toca
+// para nada comision_propia/porcentaje_devuelto_destino de siempre.
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
   const r = await db.query(
-    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, av.nombre AS aval_nombre
+    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, av.nombre AS aval_nombre
        FROM jugadores j
        LEFT JOIN jugadores av ON av.id = j.avalado_por_id
       WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
@@ -365,27 +375,47 @@ async function obtenerComisionesPropias(grupoId, nombres) {
   );
   const mapa = {};
   r.rows.forEach(j => {
-    const destino = (j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre) ? j.aval_nombre : j.nombre;
-    mapa[j.nombre] = { pct: Number(j.comision_propia) || 0, destino };
+    const entradas = [];
+    // Entrada 1: la de siempre — comision_propia, para el cliente o para
+    // su aval según porcentaje_devuelto_destino (sin cambios).
+    const pctPropio = Number(j.comision_propia) || 0;
+    if (pctPropio) {
+      const destino = (j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre) ? j.aval_nombre : j.nombre;
+      entradas.push({ pct: pctPropio, destino, esAvalAdicional: false });
+    }
+    // Entrada 2 (NUEVA): porcentaje_devuelto_aval, siempre y cuando este
+    // cliente tenga un aval configurado — INDEPENDIENTE y SIMULTÁNEA a
+    // la de arriba, con su propio %, siempre acreditada al aval (nunca
+    // al propio cliente — para eso ya está la entrada 1 con destino
+    // ='cliente').
+    const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
+    if (pctAval && j.aval_nombre) {
+      entradas.push({ pct: pctAval, destino: j.aval_nombre, esAvalAdicional: true });
+    }
+    mapa[j.nombre] = entradas;
   });
   return mapa;
 }
 
 // Acumula en `totales` el ítem "{destino} - PORCENTAJE" de cada entrada
 // { nombre, monto } (el monto APOSTADO de esa línea puntual, nunca el
-// resultado) cuyo cliente tenga % propio configurado (> 0) — `destino`
-// es el propio cliente, o su aval si así está configurado (ver la nota
-// grande de obtenerComisionesPropias). Muta `totales` en el lugar (mismo
-// criterio que el resto de los merges de Balance General de este
-// archivo).
+// resultado) cuyo cliente tenga % propio y/o % de aval configurado (> 0)
+// — `destino` es el propio cliente, su aval "de siempre" (destino=
+// 'aval'), o su aval por el % ADICIONAL nuevo — pueden ser 2 ítems
+// distintos a la vez para el mismo cliente (ver la nota grande de
+// obtenerComisionesPropias). Muta `totales` en el lugar (mismo criterio
+// que el resto de los merges de Balance General de este archivo).
 function agregarPorcentajeDevuelto(totales, comisionesPropias, entradas) {
   (entradas || []).forEach(({ nombre, monto }) => {
-    const info = comisionesPropias[nombre];
-    if (!info || !info.pct) return;
-    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
-    if (!devuelto) return;
-    const clave = `${info.destino} - PORCENTAJE`;
-    totales[clave] = round2((totales[clave] || 0) + devuelto);
+    const infos = comisionesPropias[nombre];
+    if (!infos || !infos.length) return;
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      const clave = `${info.destino} - PORCENTAJE`;
+      totales[clave] = round2((totales[clave] || 0) + devuelto);
+    });
   });
 }
 
@@ -1621,29 +1651,37 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
   const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
 
+  // 24-09-2026: un cliente puede tener hasta 2 entradas simultáneas (ver
+  // la nota grande de obtenerComisionesPropias) — así que ahora se agrupa
+  // por (cliente + destino + %), no solo por cliente, para que las 2 se
+  // muestren como 2 renglones separados en vez de mezclarse en uno solo.
   const porCliente = new Map();
   detalle.forEach(d => {
-    const info = comisionesPropias[d.cliente];
-    if (!info || !info.pct) return; // sin % configurado, no aparece en este reporte
-    const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
-    if (!devuelto) return;
-    // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
-    // destino — este reporte audita "quién generó cuánto %"; `destino` se
-    // agrega aparte para que el frontend pueda avisar "va acreditado a
-    // {destino}" cuando el cliente tiene un aval configurado (ver la nota
-    // grande de obtenerComisionesPropias más arriba).
-    if (!porCliente.has(d.cliente)) porCliente.set(d.cliente, { nombre: d.cliente, porcentaje: info.pct, destino: info.destino, total: 0, hipodromos: new Map() });
-    const c = porCliente.get(d.cliente);
-    c.total = round2(c.total + devuelto);
-    if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, total: 0, carreras: [] });
-    const h = c.hipodromos.get(d.hipodromoNombre);
-    h.total = round2(h.total + devuelto);
-    h.carreras.push({ carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
+    const infos = comisionesPropias[d.cliente];
+    if (!infos || !infos.length) return; // sin % configurado, no aparece en este reporte
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
+      if (!devuelto) return;
+      // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
+      // destino — este reporte audita "quién generó cuánto %"; `destino` se
+      // agrega aparte para que el frontend pueda avisar "va acreditado a
+      // {destino}" cuando el cliente tiene un aval configurado (ver la nota
+      // grande de obtenerComisionesPropias más arriba).
+      const clave = d.cliente + '::' + info.destino + '::' + info.pct;
+      if (!porCliente.has(clave)) porCliente.set(clave, { nombre: d.cliente, porcentaje: info.pct, destino: info.destino, esAvalAdicional: !!info.esAvalAdicional, total: 0, hipodromos: new Map() });
+      const c = porCliente.get(clave);
+      c.total = round2(c.total + devuelto);
+      if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, total: 0, carreras: [] });
+      const h = c.hipodromos.get(d.hipodromoNombre);
+      h.total = round2(h.total + devuelto);
+      h.carreras.push({ carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
+    });
   });
 
   const clientes = Array.from(porCliente.values())
-    .map(c => ({ nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, total: c.total, hipodromos: Array.from(c.hipodromos.values()) }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    .map(c => ({ nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, esAvalAdicional: c.esAvalAdicional, total: c.total, hipodromos: Array.from(c.hipodromos.values()) }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.esAvalAdicional - b.esAvalAdicional);
 
   const totalGeneralDevueltas = round2(clientes.reduce((s, c) => s + c.total, 0));
 
@@ -1672,10 +1710,18 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
   const porHipodromo = new Map();
   let totalGeneral = 0;
   detalle.forEach(d => {
-    const info = comisionesPropias[d.cliente];
-    if (!info || !info.pct) return;
-    const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
-    if (!devuelto) return;
+    const infos = comisionesPropias[d.cliente];
+    if (!infos || !infos.length) return;
+    // Este reporte solo suma TOTALES por hipódromo/carrera (no distingue
+    // destino) — con hasta 2 entradas por cliente (ver la nota grande de
+    // obtenerComisionesPropias), simplemente se suman las 2 acá.
+    let devueltoTotalLinea = 0;
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      devueltoTotalLinea = round2(devueltoTotalLinea + Math.abs(d.monto) * (info.pct / 100));
+    });
+    if (!devueltoTotalLinea) return;
+    const devuelto = devueltoTotalLinea;
     if (!porHipodromo.has(d.hipodromoNombre)) {
       porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, totalDevuelto: 0, carrerasMap: new Map() });
     }
@@ -1811,13 +1857,19 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
   function acumularDevuelto(nombre, monto) {
-    const info = comisionesPropias[nombre];
-    if (!info || !info.pct) return;
-    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
-    if (!devuelto) return;
-    // Ver la nota grande de obtenerComisionesPropias: se acredita al
-    // AVAL (info.destino) cuando así está configurado.
-    acumular(`${info.destino} - PORCENTAJE`, devuelto);
+    const infos = comisionesPropias[nombre];
+    if (!infos || !infos.length) return;
+    // 24-09-2026: hasta 2 entradas simultáneas por cliente (ver la nota
+    // grande de obtenerComisionesPropias) — cada una con su propio
+    // destino, así que cada una suma su propio ítem "{destino} -
+    // PORCENTAJE" aparte (pueden ser 2 ítems distintos para el mismo
+    // cliente en la misma semana).
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      acumular(`${info.destino} - PORCENTAJE`, devuelto);
+    });
   }
   rTickets.rows.forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
   rApuestasRemate.rows.forEach(a => acumularDevuelto(a.cliente_nombre, a.monto));
@@ -1903,15 +1955,23 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
 
+  // 24-09-2026: hasta 2 entradas simultáneas por cliente (ver la nota
+  // grande de obtenerComisionesPropias) — se agrupa por (nombre +
+  // destino + %) para mostrarlas como 2 renglones separados en vez de
+  // mezclarlas en uno solo.
   const porCliente = new Map();
   function acumularSaldo(nombre, monto) {
-    const info = comisionesPropias[nombre];
-    if (!info || !info.pct) return;
-    const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
-    if (!devuelto) return;
-    if (!porCliente.has(nombre)) porCliente.set(nombre, { nombre, porcentaje: info.pct, destino: info.destino, devueltoSemana: 0 });
-    const c = porCliente.get(nombre);
-    c.devueltoSemana = round2(c.devueltoSemana + devuelto);
+    const infos = comisionesPropias[nombre];
+    if (!infos || !infos.length) return;
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      const clave = nombre + '::' + info.destino + '::' + info.pct;
+      if (!porCliente.has(clave)) porCliente.set(clave, { nombre, porcentaje: info.pct, destino: info.destino, esAvalAdicional: !!info.esAvalAdicional, devueltoSemana: 0 });
+      const c = porCliente.get(clave);
+      c.devueltoSemana = round2(c.devueltoSemana + devuelto);
+    });
   }
   rTickets.rows.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
   rApuestasRemate.rows.forEach(a => acumularSaldo(a.cliente_nombre, a.monto));
