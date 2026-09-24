@@ -84,6 +84,31 @@
   .nav-child { font-size: 13px; font-weight: 500; padding: 8px 12px; }
   .sidebar-admin hr { border: none; border-top: 1px solid rgba(15,60,35,0.14); margin: 8px 4px; }
   .nav-badge { display: inline-block; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; border-radius: 20px; padding: 1px 7px; margin-left: 4px; vertical-align: middle; }
+
+  /* ---- Rail colapsable "Mesa de Operador" (24-09-2026) — a pedido del
+     usuario, que eligio este formato entre las 3 propuestas de diseno y
+     pidio aplicarlo a Hipismo y Deportes: el rail queda angosto (solo
+     iconos) por defecto para no robarle espacio a la pantalla de
+     trabajo, se expande solo con el mouse encima (mostrando el texto de
+     cada seccion), y se colapsa solo si pasan 30s sin usarlo. Solo aplica
+     en pantallas de escritorio (861px en adelante) — en el breakpoint
+     movil de mas abajo el sidebar sigue exactamente igual que siempre
+     (ancho completo, sin rail). No se toca ninguna logica de navegacion:
+     toggleGrupo() sigue exactamente igual, esto solo esconde/muestra
+     .nav-children con !important mientras el rail esta colapsado, sin
+     importar si un grupo estaba abierto o cerrado — al expandir el rail
+     vuelve a verse tal cual estaba. */
+  @media (min-width: 861px) {
+    .sidebar-admin { width: 64px; overflow: hidden; transition: width .25s cubic-bezier(.4,0,.2,1); }
+    .sidebar-admin.rail-expanded { width: 224px; overflow: visible; }
+    .sidebar-admin .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-admin:not(.rail-expanded) .nav-lbl,
+    .sidebar-admin:not(.rail-expanded) .nav-badge,
+    .sidebar-admin:not(.rail-expanded) #caretApuestas,
+    .sidebar-admin:not(.rail-expanded) #caretComisiones,
+    .sidebar-admin:not(.rail-expanded) #caretAdmin { display: none; }
+    .sidebar-admin:not(.rail-expanded) .nav-children { display: none !important; }
+  }
   @keyframes parpadeoAlerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .fila-pozo-rojo { animation: parpadeoAlerta 1.1s ease-in-out infinite; background: rgba(220,38,38,0.10) !important; }
 
@@ -380,13 +405,13 @@
 <div class="app-shell">
 
   <nav class="sidebar-admin" id="sidebar">
-    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('apuestas')">🏁 Apuestas <span id="caretApuestas">▾</span></button>
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('apuestas')">🏁<span class="nav-lbl"> Apuestas </span><span id="caretApuestas">▾</span></button>
     <div class="nav-children" id="grupoApuestas">
-      <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥 Cargar Planos</button>
-      <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅ Validar Plano</button>
-      <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆 Cargar Remate</button>
-      <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁 Traspasos de Jugadas</button>
-      <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀 Jugadas Adelantadas</button>
+      <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥<span class="nav-lbl"> Cargar Planos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅<span class="nav-lbl"> Validar Plano</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆<span class="nav-lbl"> Cargar Remate</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁<span class="nav-lbl"> Traspasos de Jugadas</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Jugadas Adelantadas</span></button>
       <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "en apuestas
            crea un boton de eliminar planos", "un boton en apuestas llamado
            montos apostados" y "un boton en apuestas llamado comisiones
@@ -394,43 +419,43 @@
            Devueltas vivía antes en el grupo "💼 Comisiones" — se mueve
            para acá tal cual pidió el usuario (la pantalla en sí sigue
            siendo la misma, solo cambia de dónde se entra). -->
-      <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️ Eliminar Planos</button>
-      <button type="button" class="nav-item nav-child" data-vista="montosApostados" onclick="mostrarVista('montosApostados', this)">💰 Montos Apostados</button>
-      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️ Comisiones Devueltas</button>
+      <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️<span class="nav-lbl"> Eliminar Planos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="montosApostados" onclick="mostrarVista('montosApostados', this)">💰<span class="nav-lbl"> Montos Apostados</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">↩️<span class="nav-lbl"> Comisiones Devueltas</span></button>
       <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "crea
            en apuesta un pestaña que diga Cargar Winners" — respondió "crea
            la pestaña despues te explico como es" cuando se le preguntó el
            formato. Solo el tab + una pantalla vacía por ahora, sin backend
            — ver claude/plan-modulo-hipismo.md. -->
-      <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆 Cargar Winners</button>
+      <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆<span class="nav-lbl"> Cargar Winners</span></button>
     </div>
 
-    <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰 Pozos</button>
-    <button type="button" class="nav-item" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒 Balance General</button>
-    <button type="button" class="nav-item" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁 Cierre Final</button>
+    <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
+    <button type="button" class="nav-item" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
+    <button type="button" class="nav-item" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
 
     <hr>
 
-    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('comisiones')">💼 Comisiones <span id="caretComisiones">▾</span></button>
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('comisiones')">💼<span class="nav-lbl"> Comisiones </span><span id="caretComisiones">▾</span></button>
     <div class="nav-children" id="grupoComisiones">
-      <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈 Comisiones por Carrera</button>
-      <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳 Saldo Comisiones</button>
+      <button type="button" class="nav-item nav-child" data-vista="comisionesPorCarrera" onclick="mostrarVista('comisionesPorCarrera', this)">📈<span class="nav-lbl"> Comisiones por Carrera</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳<span class="nav-lbl"> Saldo Comisiones</span></button>
     </div>
 
     <hr>
 
-    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('admin')">⚙️ Administración <span id="caretAdmin">▾</span></button>
+    <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('admin')">⚙️<span class="nav-lbl"> Administración </span><span id="caretAdmin">▾</span></button>
     <div class="nav-children" id="grupoAdmin">
-      <button type="button" class="nav-item nav-child" data-vista="clientes" onclick="mostrarVista('clientes', this)">👤 Clientes</button>
-      <button type="button" class="nav-item nav-child" data-vista="avales" onclick="mostrarVista('avales', this)">🛡️ Avales y Depósitos</button>
-      <button type="button" class="nav-item nav-child" data-vista="retiros" onclick="mostrarVista('retiros', this)">💸 Retiros</button>
-      <button type="button" class="nav-item nav-child" data-vista="traspasos" onclick="mostrarVista('traspasos', this)">🔄 Traspaso de Saldo</button>
-      <button type="button" class="nav-item nav-child" data-vista="gastos" onclick="mostrarVista('gastos', this)">🧾 Gastos</button>
-      <button type="button" class="nav-item nav-child" data-vista="hipodromos" onclick="mostrarVista('hipodromos', this)">🏟️ Hipódromos</button>
-      <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅 Fecha de Semana</button>
-      <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝 Cabeza y Pie de Plano</button>
-      <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥 Usuarios</button>
-      <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️ Planos Eliminados</button>
+      <button type="button" class="nav-item nav-child" data-vista="clientes" onclick="mostrarVista('clientes', this)">👤<span class="nav-lbl"> Clientes</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="avales" onclick="mostrarVista('avales', this)">🛡️<span class="nav-lbl"> Avales y Depósitos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="retiros" onclick="mostrarVista('retiros', this)">💸<span class="nav-lbl"> Retiros</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="traspasos" onclick="mostrarVista('traspasos', this)">🔄<span class="nav-lbl"> Traspaso de Saldo</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="gastos" onclick="mostrarVista('gastos', this)">🧾<span class="nav-lbl"> Gastos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="hipodromos" onclick="mostrarVista('hipodromos', this)">🏟️<span class="nav-lbl"> Hipódromos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅<span class="nav-lbl"> Fecha de Semana</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝<span class="nav-lbl"> Cabeza y Pie de Plano</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️<span class="nav-lbl"> Planos Eliminados</span></button>
       <!-- 24-09-2026, a pedido del usuario: "crea un boton que diga
            eliminar jornada.... al seleccionar un dia borra todo lo que
            este ese dia, todas las jugadas, remate, ganadores, jugadas
@@ -439,13 +464,13 @@
            plano), esto es un borrado PERMANENTE de TODO un día completo
            — pidió expresamente que se le pida su clave de acceso antes
            de borrar. -->
-      <button type="button" class="nav-item nav-child" data-vista="eliminarJornada" onclick="mostrarVista('eliminarJornada', this)">🔥 Eliminar Jornada</button>
+      <button type="button" class="nav-item nav-child" data-vista="eliminarJornada" onclick="mostrarVista('eliminarJornada', this)">🔥<span class="nav-lbl"> Eliminar Jornada</span></button>
       <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "se
            genera una alerta en una pestaña que diga alertas que este
            debajo de administracion". Lista hipismo_alertas (GET
            /api/hipismo/alertas) — quién editó/eliminó un plano o una
            jugada adelantada, y cuándo. -->
-      <button type="button" class="nav-item nav-child" data-vista="alertasHipismo" onclick="mostrarVista('alertasHipismo', this)">🔔 Alertas</button>
+      <button type="button" class="nav-item nav-child" data-vista="alertasHipismo" onclick="mostrarVista('alertasHipismo', this)">🔔<span class="nav-lbl"> Alertas</span></button>
     </div>
   </nav>
 
@@ -1261,6 +1286,30 @@ function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
   el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
 }
+
+// ------------------------------------------------------------------
+// Rail colapsable "Mesa de Operador" (24-09-2026): el rail (#sidebar)
+// se expande solo con el mouse encima y se colapsa a los 30s sin uso.
+// No toca toggleGrupo() ni el estado de cada grupo — ver el comentario
+// grande junto a ".sidebar-admin" en el <style> de mas arriba.
+// ------------------------------------------------------------------
+(function () {
+  const rail = document.getElementById('sidebar');
+  if (!rail) return;
+  let temporizadorColapso = null;
+  function expandirRail() {
+    clearTimeout(temporizadorColapso);
+    rail.classList.add('rail-expanded');
+  }
+  function programarColapso() {
+    clearTimeout(temporizadorColapso);
+    temporizadorColapso = setTimeout(function () {
+      rail.classList.remove('rail-expanded');
+    }, 30000);
+  }
+  rail.addEventListener('mouseenter', expandirRail);
+  rail.addEventListener('mouseleave', programarColapso);
+})();
 
 // ------------------------------------------------------------------
 // "Cargar Planos" — motor de cálculo real, con las reglas confirmadas
