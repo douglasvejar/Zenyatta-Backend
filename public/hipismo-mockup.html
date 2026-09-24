@@ -4273,6 +4273,12 @@ function mostrarToastComisionesPorCarrera(msg, esError) {
   setTimeout(() => t.classList.remove('visible'), 2600);
 }
 
+// 24-09-2026 (ronda 23), a pedido del usuario: "al copiar en texto me
+// sale asi uno al lado del otro... quiero uno debajo del otro bien
+// ordenado" — antes los clientes de una carrera salían todos en una
+// misma línea separados por coma; ahora cada cliente va en su PROPIA
+// línea (con "* " adelante, como pidió en su ejemplo), y el subtotal del
+// hipódromo queda separado por una línea en blanco al final del bloque.
 function textoComisionesPorCarrera(data) {
   let texto = `📈 *Comisión por Carrera de Clientes*\n*Total semana: $${data.totalGeneral.toFixed(2)}*\n`;
   if (data.rango) texto += `📅 ${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}\n`;
@@ -4282,12 +4288,14 @@ function textoComisionesPorCarrera(data) {
       texto += `🏟️ *${hip.nombre}*\n`;
       hip.carreras.forEach(carrera => {
         const clientes = agruparDetallePorCliente(carrera.detalle);
-        const listaClientes = clientes.length
-          ? clientes.map(c => `${formatNombre(c.cliente)} $${c.total.toFixed(2)}`).join(', ')
-          : 'sin comisión';
-        texto += `${ordinalCarrera(carrera.carreraNumero)}: ${listaClientes}\n`;
+        texto += `\n${ordinalCarrera(carrera.carreraNumero)}:\n`;
+        if (!clientes.length) {
+          texto += `sin comisión\n`;
+        } else {
+          clientes.forEach(c => { texto += `* ${formatNombre(c.cliente)} $${c.total.toFixed(2)}\n`; });
+        }
       });
-      texto += `*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
+      texto += `\n*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
     });
   });
   return texto;
