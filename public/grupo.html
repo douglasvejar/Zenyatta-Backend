@@ -458,36 +458,34 @@
   .sidebar-admin .nav-child { font-size: 13px; font-weight: 500; padding: 8px 12px; }
   .sidebar-admin hr { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 8px 4px; }
 
-  /* ---- Rail colapsable "Mesa de Operador" (24-09-2026) — mismo patron
-     aplicado en Hipismo (public/hipismo-mockup.html): el usuario eligio
-     este formato entre 3 propuestas de diseno y pidio aplicarlo tambien
-     en Deportes. Rail angosto (solo iconos) por defecto, se expande con
-     el mouse encima mostrando el texto, se colapsa solo a los 30s sin
-     uso. Solo en escritorio (861px+) — en el breakpoint movil de mas
-     abajo el sidebar sigue igual que siempre (ancho completo). No toca
-     toggleGrupoAdmin() de app.js: solo esconde .nav-children con
-     !important mientras esta colapsado, sin importar si el grupo estaba
-     abierto o cerrado — al expandir vuelve a verse tal cual estaba. */
+  /* ---- Rail "Mesa de Operador" (24-09-2026), ahora FIJO (24-09-2026,
+     segunda vuelta, mismo arreglo que public/hipismo-mockup.html) — a
+     pedido del usuario: el diseño original (angosto, se expandía con el
+     mouse, se colapsaba a los 30s) mostraba en Safari, a veces, el botón
+     activo pintado sin ícono ni texto ("el panel a veces no carga
+     completo, marca como un error"). Causa: animar `width` con
+     `transition` sobre un rail que recorta su texto con
+     `white-space:nowrap; overflow:hidden; text-overflow:ellipsis` deja
+     una ventana, a medio camino de la animación, donde el navegador
+     puede pintar el texto recalculado como vacío — un cuadro intermedio
+     real, no un dato faltante, pero se ve igual que un error. Pidió
+     explícitamente "dejalo fijo": se quita la animación de ancho, el
+     colapsado a solo-íconos y el temporizador de 30s — el rail queda
+     siempre expandido (mismo ancho de antes, 214px). Solo en escritorio
+     (861px+) — en el breakpoint móvil de más abajo el sidebar sigue
+     igual que siempre (ancho completo). */
   @media (min-width: 861px) {
-    /* 24-09-2026 (mismo arreglo que hipismo-mockup.html): el rail no
-       tenía su propia región de scroll, así que mover la rueda del mouse
-       encima de él scrolleaba TODA la página en vez de solo el panel.
-       Acotarlo a la altura visible y darle su propio overflow-y:auto hace
-       que el navegador lo scrollee solo a él mientras el mouse esté
-       encima (sin JS extra). */
+    /* 24-09-2026 (mismo arreglo que hipismo-mockup.html): el rail tiene
+       su propia región de scroll acotada, así el navegador lo scrollea
+       solo a él mientras el mouse esté encima (sin JS extra). Esto no
+       cambió con el rail fijo. */
     .sidebar-admin {
-      width: 64px; overflow-x: hidden; transition: width .25s cubic-bezier(.4,0,.2,1);
+      width: 214px;
       max-height: calc(100vh - 40px); overflow-y: auto;
       scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
     }
     .sidebar-admin::-webkit-scrollbar { width: 6px; }
     .sidebar-admin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 6px; }
-    .sidebar-admin.rail-expanded { width: 214px; overflow-x: visible; }
-    .sidebar-admin .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sidebar-admin:not(.rail-expanded) .nav-lbl,
-    .sidebar-admin:not(.rail-expanded) .nav-badge,
-    .sidebar-admin:not(.rail-expanded) #adminCaret { display: none; }
-    .sidebar-admin:not(.rail-expanded) .nav-children { display: none !important; }
   }
   .main-content { flex: 1; min-width: 0; }
 
@@ -2296,29 +2294,11 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
     }
   })();
 
-  // ------------------------------------------------------------------
-  // Rail colapsable "Mesa de Operador" (24-09-2026): #sidebarAdmin se
-  // expande solo con el mouse encima y se colapsa a los 30s sin uso.
-  // No toca toggleGrupoAdmin() de app.js ni el estado de cada grupo —
-  // ver el comentario grande junto a ".sidebar-admin" en el <style>.
-  // ------------------------------------------------------------------
-  (function () {
-    var rail = document.getElementById('sidebarAdmin');
-    if (!rail) return;
-    var temporizadorColapso = null;
-    function expandirRail() {
-      clearTimeout(temporizadorColapso);
-      rail.classList.add('rail-expanded');
-    }
-    function programarColapso() {
-      clearTimeout(temporizadorColapso);
-      temporizadorColapso = setTimeout(function () {
-        rail.classList.remove('rail-expanded');
-      }, 30000);
-    }
-    rail.addEventListener('mouseenter', expandirRail);
-    rail.addEventListener('mouseleave', programarColapso);
-  })();
+  // (24-09-2026, segunda vuelta) El rail "Mesa de Operador"
+  // (#sidebarAdmin) ya no se expande/colapsa con el mouse — ver el
+  // comentario grande junto a ".sidebar-admin" en el <style> (el usuario
+  // pidió dejarlo fijo tras ver el botón activo pintarse en blanco a
+  // medio camino de la animación). Ya no hace falta ningún JS acá.
 </script>
 </body>
 </html>

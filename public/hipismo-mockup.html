@@ -85,47 +85,43 @@
   .sidebar-admin hr { border: none; border-top: 1px solid rgba(15,60,35,0.14); margin: 8px 4px; }
   .nav-badge { display: inline-block; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; border-radius: 20px; padding: 1px 7px; margin-left: 4px; vertical-align: middle; }
 
-  /* ---- Rail colapsable "Mesa de Operador" (24-09-2026) — a pedido del
-     usuario, que eligio este formato entre las 3 propuestas de diseno y
-     pidio aplicarlo a Hipismo y Deportes: el rail queda angosto (solo
-     iconos) por defecto para no robarle espacio a la pantalla de
-     trabajo, se expande solo con el mouse encima (mostrando el texto de
-     cada seccion), y se colapsa solo si pasan 30s sin usarlo. Solo aplica
-     en pantallas de escritorio (861px en adelante) — en el breakpoint
-     movil de mas abajo el sidebar sigue exactamente igual que siempre
-     (ancho completo, sin rail). No se toca ninguna logica de navegacion:
-     toggleGrupo() sigue exactamente igual, esto solo esconde/muestra
-     .nav-children con !important mientras el rail esta colapsado, sin
-     importar si un grupo estaba abierto o cerrado — al expandir el rail
-     vuelve a verse tal cual estaba. */
+  /* ---- Rail "Mesa de Operador" (24-09-2026), ahora FIJO (24-09-2026,
+     segunda vuelta) — a pedido del usuario: el diseño original se
+     expandía solo con el mouse encima y se colapsaba a los 30s
+     (angosto, solo íconos) para no robarle espacio a la pantalla de
+     trabajo. En uso real (Safari) el usuario reportó que "el panel a
+     veces no carga completo, marca como un error" — capturas mostrando
+     el botón activo (Balance General) pintado sin su ícono ni su texto,
+     en blanco. Causa: animar `width` con `transition` sobre un rail que
+     además recorta su texto con `white-space:nowrap; overflow:hidden;
+     text-overflow:ellipsis` deja una ventana, mientras el ancho está a
+     medio camino entre 64px y 224px, donde el navegador puede pintar el
+     texto recién recalculado como vacío — un cuadro intermedio real de
+     la animación, no un dato faltante, pero se ve exactamente como un
+     error. Pidió explícitamente "dejalo fijo": se quita la animación de
+     ancho, el colapsado a solo-íconos y el temporizador de 30s — el
+     rail queda siempre expandido (mismo ancho de antes, 224px), sin
+     ningún estado intermedio que pueda pintarse a medias. Sigue aplicando
+     solo en pantallas de escritorio (861px en adelante); en el
+     breakpoint móvil de más abajo el sidebar sigue igual que siempre
+     (ancho completo). */
   @media (min-width: 861px) {
     /* 24-09-2026: "al mover la ruedita del mouse hacia abajo y arriba si
        estoy encima del panel y el panel esta abierto debe moverse solo el
-       panel no la informacion o ventana que tenga abierta" — antes el
-       rail no tenía su propia región de scroll (solo `position:sticky`,
-       sin alto acotado), así que si la lista de secciones no entraba
-       completa en la pantalla, mover la rueda del mouse scrolleaba TODA
-       la página (rail + contenido) en vez de solo el rail. Acotarlo a la
-       altura visible (`max-height`) y darle su propio `overflow-y:auto`
-       hace que el navegador scrollee el rail solo mientras el mouse esté
-       encima de él (comportamiento nativo del browser, sin JS extra) —
-       recién si el rail llega a su propio tope/final el scroll pasa a la
-       página, como cualquier panel con scroll interno. */
+       panel no la informacion o ventana que tenga abierta" — el rail
+       tiene su propia región de scroll acotada (`max-height` +
+       `overflow-y:auto`), así el navegador scrollea el rail solo
+       mientras el mouse esté encima de él (comportamiento nativo del
+       browser, sin JS extra) — recién si el rail llega a su propio
+       tope/final el scroll pasa a la página, como cualquier panel con
+       scroll interno. Esto no cambió con el rail fijo.*/
     .sidebar-admin {
-      width: 64px; overflow-x: hidden; transition: width .25s cubic-bezier(.4,0,.2,1);
+      width: 224px;
       max-height: calc(100vh - 36px); overflow-y: auto;
       scrollbar-width: thin; scrollbar-color: rgba(15,60,35,0.30) transparent;
     }
     .sidebar-admin::-webkit-scrollbar { width: 6px; }
     .sidebar-admin::-webkit-scrollbar-thumb { background: rgba(15,60,35,0.30); border-radius: 6px; }
-    .sidebar-admin.rail-expanded { width: 224px; overflow-x: visible; }
-    .sidebar-admin .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sidebar-admin:not(.rail-expanded) .nav-lbl,
-    .sidebar-admin:not(.rail-expanded) .nav-badge,
-    .sidebar-admin:not(.rail-expanded) #caretApuestas,
-    .sidebar-admin:not(.rail-expanded) #caretComisiones,
-    .sidebar-admin:not(.rail-expanded) #caretAdmin { display: none; }
-    .sidebar-admin:not(.rail-expanded) .nav-children { display: none !important; }
   }
   @keyframes parpadeoAlerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .fila-pozo-rojo { animation: parpadeoAlerta 1.1s ease-in-out infinite; background: rgba(220,38,38,0.10) !important; }
@@ -1520,29 +1516,11 @@ function toggleGrupo(nombre) {
   el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
 }
 
-// ------------------------------------------------------------------
-// Rail colapsable "Mesa de Operador" (24-09-2026): el rail (#sidebar)
-// se expande solo con el mouse encima y se colapsa a los 30s sin uso.
-// No toca toggleGrupo() ni el estado de cada grupo — ver el comentario
-// grande junto a ".sidebar-admin" en el <style> de mas arriba.
-// ------------------------------------------------------------------
-(function () {
-  const rail = document.getElementById('sidebar');
-  if (!rail) return;
-  let temporizadorColapso = null;
-  function expandirRail() {
-    clearTimeout(temporizadorColapso);
-    rail.classList.add('rail-expanded');
-  }
-  function programarColapso() {
-    clearTimeout(temporizadorColapso);
-    temporizadorColapso = setTimeout(function () {
-      rail.classList.remove('rail-expanded');
-    }, 30000);
-  }
-  rail.addEventListener('mouseenter', expandirRail);
-  rail.addEventListener('mouseleave', programarColapso);
-})();
+// (24-09-2026, segunda vuelta) El rail "Mesa de Operador" ya no se
+// expande/colapsa con el mouse — ver el comentario grande junto a
+// ".sidebar-admin" en el <style> de más arriba (el usuario pidió
+// dejarlo fijo tras ver el botón activo pintarse en blanco a medio
+// camino de la animación). Ya no hace falta ningún JS acá.
 
 // ------------------------------------------------------------------
 // "Cargar Planos" — motor de cálculo real, con las reglas confirmadas
