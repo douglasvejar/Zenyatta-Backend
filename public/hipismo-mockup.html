@@ -1448,9 +1448,9 @@
         <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button></div>
         <div id="tablaClientesWrap">
           <table style="margin-top:18px;">
-            <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>% Adicional Aval</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
             <tbody id="tablaClientes">
-              <tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
+              <tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -2654,21 +2654,24 @@ function copiarResultado() {
 // entorno donde corra la app, sin tener que tocar este archivo.
 // 24-09-2026, a pedido del usuario ("así como me muestras que ese
 // cliente tiene el 1% al lado, colócame si se le da también a un
-// avalador cuánto % y abajo entre paréntesis a quién le cae ese otro
-// %"): en la columna "%" de la tabla de Clientes, debajo del % propio
-// de siempre, se agrega — SOLO si este cliente tiene configurado el %
-// ADICIONAL para su aval (jugadores.porcentaje_devuelto_aval, ver la
-// nota grande de obtenerComisionesPropias en routes/hipismo.js) — una
-// segunda línea chica con ese % y, entre paréntesis, el nombre de quién
-// lo recibe. `jugadores` es la misma lista completa que ya trajo GET
-// /api/jugadores para esta pantalla, así que el nombre del aval se
-// resuelve ahí mismo sin pedir nada más al servidor.
-function etiquetaPctAvalTabla(j, jugadores) {
+// avalador cuánto % y abajo entre paréntesis a quién le cae ese otro %"
+// — primera versión, luego corregida en la misma ronda a pedido del
+// usuario: "no lo quiero abajo, colócalo al lado en otra columna con
+// el nombre del avalado abajo en paréntesis"): columna PROPIA "%
+// Adicional Aval" en la tabla de Clientes — SOLO si este cliente tiene
+// configurado el % ADICIONAL para su aval
+// (jugadores.porcentaje_devuelto_aval, ver la nota grande de
+// obtenerComisionesPropias en routes/hipismo.js), arriba el %, abajo
+// (entre paréntesis) a quién le cae. `jugadores` es la misma lista
+// completa que ya trajo GET /api/jugadores para esta pantalla, así que
+// el nombre del aval se resuelve ahí mismo sin pedir nada más al
+// servidor.
+function celdaPctAvalTabla(j, jugadores) {
   const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
-  if (!pctAval) return '';
+  if (!pctAval) return '—';
   const aval = jugadores.find(x => String(x.id) === String(j.avalado_por_id));
-  if (!aval) return '';
-  return `<br><span style="font-size:11px; color:var(--text-dim);">+${pctAval}% (${formatNombre(aval.nombre)})</span>`;
+  if (!aval) return '—';
+  return `${pctAval}%<br><span style="font-size:11px; color:var(--text-dim);">(${formatNombre(aval.nombre)})</span>`;
 }
 
 async function cargarClientesReales() {
@@ -2679,7 +2682,7 @@ async function cargarClientesReales() {
   const hayLos2Modulos = !!(GRUPO && GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado);
   const thAnclar = document.getElementById('thAnclarModulos');
   if (thAnclar) thAnclar.style.display = hayLos2Modulos ? '' : 'none';
-  const colspan = hayLos2Modulos ? 5 : 4;
+  const colspan = hayLos2Modulos ? 6 : 5;
 
   let jugadores;
   try {
@@ -2700,7 +2703,8 @@ async function cargarClientesReales() {
   tbody.innerHTML = jugadores.map(j => `
     <tr data-cliente="${j.nombre}">
       <td>${formatNombre(j.nombre)}${j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : ''}</td>
-      <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}${etiquetaPctAvalTabla(j, jugadores)}</td>
+      <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
+      <td>${celdaPctAvalTabla(j, jugadores)}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
       ${hayLos2Modulos ? `
       <td>
