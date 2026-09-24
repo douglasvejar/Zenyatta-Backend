@@ -126,7 +126,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const grupoRes = await db.query(
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -181,6 +181,10 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // Súper-admin, igual que whatsappHabilitado arriba.
     moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
     moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
+    // (24-09-2026, a pedido del usuario) "Cruzar jugadas" de Hipismo —
+    // ver la nota grande junto a esta columna en sql/schema.sql. Exclusivo
+    // del Súper-admin, igual que moduloHipismoHabilitado arriba.
+    hipismoCruzarHabilitado: grupo.hipismo_cruzar_habilitado,
     // (08-09-2026, a pedido del usuario) modelo de comisión de este
     // grupo — ver la nota grande en sql/schema.sql y comisiones.js.
     // Exclusivo del Súper-admin, igual que whatsappHabilitado arriba.
@@ -435,6 +439,22 @@ router.patch('/grupos/:id/modulo-hipismo', asyncHandler(async (req, res) => {
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ moduloHipismoHabilitado: r.rows[0].modulo_hipismo_habilitado });
+}));
+
+// "Cruzar jugadas" de Hipismo (24-09-2026, a pedido del usuario: "el
+// boton de cruzar jugadas o no debe activarse o desactivarse desde super
+// admin, ya que no todos los grupos cruzan las jugadas") — ver la nota
+// grande junto a hipismo_cruzar_habilitado en sql/schema.sql. Mismo
+// patrón EXACTO que modulo-hipismo arriba, ruta separada a propósito
+// (un Grupo puede tener Hipismo contratado pero sin cruzar jugadas).
+router.patch('/grupos/:id/hipismo-cruzar', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET hipismo_cruzar_habilitado = $1 WHERE id = $2 RETURNING id, hipismo_cruzar_habilitado',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ hipismoCruzarHabilitado: r.rows[0].hipismo_cruzar_habilitado });
 }));
 
 // (18-09-2026) Acá vivía PATCH /grupos/:id/whatsapp-modo-cuidadoso — el

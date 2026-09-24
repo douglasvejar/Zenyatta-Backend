@@ -56,6 +56,10 @@ router.post('/login', asyncHandler(async (req, res) => {
         id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null,
         moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
         moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
+        // "Cruzar jugadas" de Hipismo (24-09-2026) — viaja en el login
+        // igual que los 2 de arriba, para que hipismo-mockup.html sepa,
+        // sin otra llamada aparte, si este Grupo tiene permitido cruzar.
+        hipismoCruzarHabilitado: grupo.hipismo_cruzar_habilitado,
         logoUrl: grupo.logo_url || null
       }
     });
@@ -65,7 +69,8 @@ router.post('/login', asyncHandler(async (req, res) => {
   const r2 = await db.query(
     `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
-            g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado
+            g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
+            g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
       WHERE e.email = $1`,
     [email]
@@ -91,6 +96,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre,
       moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
       moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
+      hipismoCruzarHabilitado: empleado.grupo_hipismo_cruzar_habilitado,
       logoUrl: empleado.grupo_logo_url || null
     }
   });

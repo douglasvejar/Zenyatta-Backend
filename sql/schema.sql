@@ -212,6 +212,28 @@ alter table grupos add column if not exists comandos_whatsapp_numero text;
 alter table grupos add column if not exists modulo_deportes_habilitado boolean not null default true;
 alter table grupos add column if not exists modulo_hipismo_habilitado boolean not null default false;
 
+-- "Cruzar jugadas" de Hipismo, exclusivo del Súper-admin (24-09-2026, a
+-- pedido del usuario: "el boton de cruzar jugadas o no debe activarse o
+-- desactivarse desde super admin, ya que no todos los grupos cruzan las
+-- jugadas"). Hasta ahora el checkbox "Cruzar jugadas" de Cargar Planos
+-- (hipismo-mockup.html) era 100% libre: cualquier operador del Grupo lo
+-- prendía/apagaba en cada cálculo, sin ninguna restricción — el propio
+-- HTML ya tenía puesto un tooltip ("Se activa/desactiva por grupo desde
+-- Súper-admin") que describía esta columna, pero nunca se había
+-- construido de verdad. Mismo patrón EXACTO que modulo_hipismo_habilitado
+-- arriba: interruptor manual (PATCH /api/superadmin/grupos/:id/
+-- hipismo-cruzar, ver superadmin.js/superadmin.html pestaña "🎯 Módulos"
+-- > 🐎 Módulo Hipismo). Cuando está en false, hipismo-mockup.html oculta
+-- el checkbox y manda cruzaJugadas=false SIEMPRE al servidor, sin
+-- importar nada que quede en el DOM.
+--
+-- Default TRUE a propósito: hasta ahora el checkbox arrancaba "checked"
+-- para TODOS los grupos sin excepción — este ALTER TABLE preserva
+-- exactamente ese comportamiento para todos los grupos que ya existen
+-- (nadie pierde su "cruzar jugadas" de un día para otro); el Súper-admin
+-- apaga el interruptor a mano solo en los grupos que de verdad no cruzan.
+alter table grupos add column if not exists hipismo_cruzar_habilitado boolean not null default true;
+
 -- =================================================================
 -- HIPISMO — backend real (22-09-2026, a pedido del usuario: "conecta el
 -- modulo real al backend ya quiero trabajar y hacer pruebas"). Primera

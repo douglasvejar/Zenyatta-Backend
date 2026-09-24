@@ -756,10 +756,15 @@
             <label for="inpPizarra">Pizarra (llegada)</label>
             <input type="text" id="inpPizarra" value="6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
           </div>
-          <div class="check-fila">
+          <div class="check-fila" id="filaCruzar">
             <input type="checkbox" id="chkCruzar" checked>
             <label for="chkCruzar" title="Se activa/desactiva por grupo desde Súper-admin">Cruzar jugadas</label>
           </div>
+          <!-- Nota visible SOLO cuando Súper-admin apagó "Cruzar jugadas"
+               para este grupo (ver aplicarPermisoCruzarJugadas más abajo) —
+               reemplaza al checkbox de arriba para que quede claro que no
+               es una casilla que el operador se olvidó de tildar. -->
+          <p id="notaCruzarDesactivado" style="display:none; grid-column: 1 / -1; margin:0; font-size:12px; color:var(--text-dim);">🔀 Cruzar jugadas: <b>desactivado por Súper-admin</b> para este grupo — cada jugada de este plano se paga sola.</p>
           <div>
             <label for="inpSinComision" title="Jugadas 'a premio' (10a1...10a9, con o sin decimales) — a las que elijas acá el ganador se le paga NETO, SIN el 5% de comisión, solo para las jugadas de ESTA carrera. Elige mínimo 3 valores separados por coma, ej: 2, 3, 1.75">Valores "a premio" SIN comisión</label>
             <input type="text" id="inpSinComision" placeholder="Ej: 2, 3, 1.75 (déjalo vacío si ninguno aplica)">
@@ -1830,9 +1835,40 @@ function actualizarSelectorModulo() {
 }
 function irAModuloDeportes() { window.location.href = 'grupo.html'; }
 
+// "Cruzar jugadas" exclusivo del Súper-admin (24-09-2026, a pedido del
+// usuario: "el boton de cruzar jugadas o no debe activarse o
+// desactivarse desde super admin, ya que no todos los grupos cruzan las
+// jugadas"). GRUPO.hipismoCruzarHabilitado viaja en el login (ver
+// routes/auth.js) — si una sesión vieja (guardada ANTES de este cambio)
+// todavía no lo trae, queda `undefined`, y se trata como "sí puede"
+// (=== false es la única forma de apagarlo) para no romper a nadie hasta
+// que cierre sesión y vuelva a entrar una vez.
+function puedeCruzarJugadas() {
+  return GRUPO && GRUPO.hipismoCruzarHabilitado !== false;
+}
+
+// Oculta el checkbox y muestra la nota de "desactivado por Súper-admin"
+// cuando corresponda. Se llama una vez al cargar la página — el permiso
+// no cambia mientras el operador tiene la pantalla abierta.
+function aplicarPermisoCruzarJugadas() {
+  const fila = document.getElementById('filaCruzar');
+  const nota = document.getElementById('notaCruzarDesactivado');
+  const chk = document.getElementById('chkCruzar');
+  if (!fila || !nota || !chk) return;
+  if (puedeCruzarJugadas()) {
+    fila.style.display = '';
+    nota.style.display = 'none';
+  } else {
+    chk.checked = false;
+    fila.style.display = 'none';
+    nota.style.display = 'block';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!GRUPO) return;
   actualizarSelectorModulo();
+  aplicarPermisoCruzarJugadas();
   const nombreEl = document.getElementById('topbarNombreGrupo');
   if (nombreEl) nombreEl.textContent = GRUPO.nombre || '';
 });
@@ -2103,7 +2139,12 @@ async function calcularPlano() {
   const carreraNumero = document.getElementById('selCarrera').value;
   const fecha = document.getElementById('inpFecha').value;
   const ret = document.getElementById('inpRet').value;
-  const cruzar = document.getElementById('chkCruzar').checked;
+  // Defensa aparte (24-09-2026): si el Súper-admin apagó "cruzar
+  // jugadas" para este grupo, NUNCA se manda true, sin importar lo que
+  // quede en el checkbox (que además ya está oculto y forzado a
+  // unchecked por aplicarPermisoCruzarJugadas) — evita que quede
+  // prendido por sesión vieja en memoria, DevTools, etc.
+  const cruzar = puedeCruzarJugadas() && document.getElementById('chkCruzar').checked;
   const texto = document.getElementById('txtPlano').value;
   // Valores "a premio" sin comisión (24-09-2026, a pedido del usuario) —
   // se elige ANTES de calcular, por carrera: texto separado por comas
