@@ -5725,7 +5725,14 @@ document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
 document.getElementById('inpFechaComisionesDevueltas').value = fechaLocalHoy();
 document.getElementById('inpFechaEliminarJornada').value = fechaLocalHoy();
 cargarResumenJornada();
-document.getElementById('txtPlano').value = PLANO_EJEMPLO;
+// 25-09-2026, a pedido del usuario: "eso no debe salir eso debe estar
+// vacío" — esta línea precargaba el plano de EJEMPLO (PLANO_EJEMPLO,
+// de cuando este archivo era un mockup de revisión) en el campo real de
+// "Cargar Planos", en TODO grupo, siempre, sin ninguna relación con datos
+// reales de ningún grupo — quedó pegada por error desde que el archivo
+// pasó de mockup a producción. "Cargar Planos" ahora arranca vacío en
+// cada sesión nueva, como debe ser; PLANO_EJEMPLO se deja declarado
+// arriba por si hace falta para pruebas manuales, pero ya no se usa acá.
 pintarBalanceGeneral();
 document.getElementById('pozosFechaCaptura').textContent = new Date().toLocaleDateString('es-VE');
 pintarLogosGrupo();
