@@ -10,9 +10,6 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requiereGrupo, requiereAdministrador, monedaModoDe } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
-// "Ajustes > Seguridad" (25-09-2026, a pedido del usuario) — ver la nota
-// grande junto a password_visible_cifrada en sql/schema.sql.
-const { cifrarClave } = require('../services/cifradoClave');
 
 const router = express.Router();
 router.use(requiereGrupo);
@@ -52,22 +49,23 @@ router.put('/moneda-modo', requiereAdministrador, asyncHandler(async (req, res) 
 // vigente (mismo criterio que ya usa "💱 Moneda", arriba en este mismo
 // archivo, para otro ajuste exclusivo del Administrador).
 //
-// Guarda tanto password_hash (bcrypt, lo único que de verdad valida el
-// login) como password_visible_cifrada (cifrado reversible, para que el
-// Súper-admin la pueda ver desde su panel — ver la nota grande junto a
-// esa columna en sql/schema.sql). Cambiarla desde acá deja la clave
-// visible para el Súper-admin de ahora en adelante, igual que si la
-// hubiera restablecido él mismo.
+// Guarda solo password_hash (bcrypt) — lo único que de verdad valida el
+// login. NUNCA se guarda la clave en texto plano ni en ninguna forma
+// reversible, ni siquiera cifrada (decisión final del usuario, 25-09-2026:
+// "por seguridad es mejor no verla" — ver la nota grande en
+// routes/superadmin.js junto a "SOBRE LA CONTRASEÑA"). Si el Súper-admin
+// necesita ayudar a este grupo a recuperar el acceso, restablece una
+// clave nueva desde su panel; no puede consultar la que el grupo puso
+// acá.
 router.patch('/password', requiereAdministrador, asyncHandler(async (req, res) => {
   const { password } = req.body || {};
   if (!password || password.length < 4) {
     return res.status(400).json({ error: 'La contraseña nueva tiene que tener al menos 4 caracteres.' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  const passwordVisibleCifrada = cifrarClave(password);
   await db.query(
-    'UPDATE grupos SET password_hash = $1, password_visible_cifrada = $2 WHERE id = $3',
-    [passwordHash, passwordVisibleCifrada, req.grupoId]
+    'UPDATE grupos SET password_hash = $1 WHERE id = $2',
+    [passwordHash, req.grupoId]
   );
   res.status(204).end();
 }));

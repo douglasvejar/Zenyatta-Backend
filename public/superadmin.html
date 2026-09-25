@@ -1320,22 +1320,14 @@
           <!-- ========================= 🔑 SEGURIDAD ========================= -->
           <div class="detalle-tab-panel" data-tab-panel="seguridad">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <!-- "Ver la clave" (25-09-2026, a pedido del usuario: "esa
-                   clave la cambien cuantas veces quieran siempre desde
-                   super admin la debo poder ver") — sale de una columna
-                   APARTE, cifrada de forma reversible (nunca del hash de
-                   login, que sigue siendo irreversible) — ver la nota
-                   grande en src/routes/superadmin.js y
-                   sql/schema.sql. -->
-              <h3>👁️ Clave de acceso actual</h3>
-              <div id="claveActualConDato" style="display:none;">
-                <div class="cambiar-password-inline">
-                  <input type="text" id="claveActualInput" readonly style="font-family:monospace; letter-spacing:1px;">
-                  <button type="button" class="btn-secundario" onclick="alternarVerClaveActual()" id="btnAlternarClave">👁️ Mostrar</button>
-                </div>
-              </div>
-              <p id="claveActualSinDato" style="display:none; margin-top:-6px; color:var(--text-dim); font-size:12px;">Este grupo todavía no cambió su clave desde que se agregó esta función — no hay forma de recuperar una clave ya guardada de antes (el hash de login es irreversible a propósito). Restablécesela una vez abajo y, de ahí en adelante, va a quedar visible acá.</p>
-              <h3 style="margin-top:18px;">🔑 Cambiar contraseña</h3>
+              <!-- (25-09-2026) Por un momento hubo acá arriba un bloque
+                   "Ver la clave de acceso actual" (una versión cifrada
+                   reversible de la clave, visible solo para Súper-admin).
+                   El usuario decidió que por seguridad es mejor no tener
+                   NINGUNA clave recuperable guardada, ni cifrada — se
+                   revirtió esa misma ronda. La única forma de ayudar a un
+                   grupo con su clave es restablecerla, acá abajo. -->
+              <h3>🔑 Cambiar contraseña</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Fija una contraseña nueva para este grupo (no hace falta saber la anterior).</p>
               <div class="cambiar-password-inline">
                 <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
@@ -1946,23 +1938,6 @@ let GRUPO_DETALLE_ID = null; // el grupo que está abierto en el modal ahora mis
 let BALANCE_CLIENTES_CARGADO = false; // "Balance por Cliente" (19-09-2026): true apenas se pidió una vez para el grupo abierto ahora — evita repedir datos cada vez que se vuelve a esa pestaña sin haber cambiado el rango
 let SABANAS_FECHAS_CARGADAS = false; // "Sábanas" (19-09-2026): mismo criterio, para la lista de fechas con datos
 let SALDOS_SEMANA_SA_CARGADO = false; // "⬇️ Descargar" (21-09-2026): mismo criterio, para "📅 Saldos Semana"
-let CLAVE_ACTUAL_TEXTO = null; // "Ver la clave" (25-09-2026): la clave real de este grupo, ya descifrada — null si este grupo no tiene ninguna todavía (ver la nota grande en superadmin.js)
-let CLAVE_ACTUAL_VISIBLE = false; // arranca oculta (puntitos) cada vez que se abre el modal — "Mostrar" la revela sin pedir datos de nuevo
-
-// "Ver la clave" (25-09-2026) — pinta puntitos o la clave real según
-// CLAVE_ACTUAL_VISIBLE, sin volver a pedirle nada al servidor (ya la
-// tenemos en memoria desde que se abrió el detalle de este grupo).
-function pintarClaveActual() {
-  const input = document.getElementById('claveActualInput');
-  const boton = document.getElementById('btnAlternarClave');
-  if (!CLAVE_ACTUAL_TEXTO) return;
-  input.value = CLAVE_ACTUAL_VISIBLE ? CLAVE_ACTUAL_TEXTO : '•'.repeat(Math.max(8, CLAVE_ACTUAL_TEXTO.length));
-  boton.textContent = CLAVE_ACTUAL_VISIBLE ? '🙈 Ocultar' : '👁️ Mostrar';
-}
-function alternarVerClaveActual() {
-  CLAVE_ACTUAL_VISIBLE = !CLAVE_ACTUAL_VISIBLE;
-  pintarClaveActual();
-}
 
 // =================================================================
 // PESTAÑAS DE LA FICHA DE UN GRUPO (19-09-2026) — ver la nota grande
@@ -2715,12 +2690,6 @@ async function abrirDetalleGrupo(id, nombre) {
   document.getElementById('passwordNueva').value = '';
   document.getElementById('passwordError').textContent = '';
   document.getElementById('passwordOk').textContent = '';
-  // "Ver la clave" (25-09-2026) — cada vez que se abre el modal, arranca
-  // OCULTA (nunca queda "Mostrar" pegado de un grupo anterior).
-  CLAVE_ACTUAL_TEXTO = null;
-  CLAVE_ACTUAL_VISIBLE = false;
-  document.getElementById('claveActualConDato').style.display = 'none';
-  document.getElementById('claveActualSinDato').style.display = 'none';
   document.getElementById('logoUrlInput').value = '';
   document.getElementById('logoError').textContent = '';
   document.getElementById('logoOk').textContent = '';
@@ -2816,12 +2785,6 @@ async function abrirDetalleGrupo(id, nombre) {
     pintarEstadoComandosWhatsapp();
 
     document.getElementById('sabanaMuestraInput').value = d.sabanaMuestra || '';
-
-    // "Ver la clave" (25-09-2026) — ver la nota grande en superadmin.js.
-    CLAVE_ACTUAL_TEXTO = d.claveActual || null;
-    document.getElementById('claveActualConDato').style.display = CLAVE_ACTUAL_TEXTO ? 'block' : 'none';
-    document.getElementById('claveActualSinDato').style.display = CLAVE_ACTUAL_TEXTO ? 'none' : 'block';
-    pintarClaveActual();
 
     document.getElementById('modeloComisionSelect').value = d.modeloComision || 'plano';
     GRUPO_COMISION_TIERS = Array.isArray(d.comisionTiers) ? d.comisionTiers.map(t => ({ logros: t.logros, porcentaje: t.porcentaje })) : [];
@@ -3414,14 +3377,7 @@ async function cambiarPasswordGrupo() {
   try {
     await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/password', { method: 'PATCH', body: JSON.stringify({ password }) });
     document.getElementById('passwordNueva').value = '';
-    document.getElementById('passwordOk').textContent = '✅ Contraseña actualizada. Avisale al Grupo la nueva clave.';
-    // "Ver la clave" (25-09-2026): se actualiza de una vez en pantalla,
-    // sin tener que cerrar y volver a abrir el detalle de este grupo.
-    CLAVE_ACTUAL_TEXTO = password;
-    CLAVE_ACTUAL_VISIBLE = false;
-    document.getElementById('claveActualConDato').style.display = 'block';
-    document.getElementById('claveActualSinDato').style.display = 'none';
-    pintarClaveActual();
+    document.getElementById('passwordOk').textContent = '✅ Contraseña actualizada. Avísale al Grupo la nueva clave.';
   } catch (e) {
     document.getElementById('passwordError').textContent = e.message;
   }

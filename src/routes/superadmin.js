@@ -13,9 +13,6 @@ const alertasService = require('../services/alertas');
 const chatService = require('../services/chat');
 const mantenimientoGrupo = require('../services/mantenimientoGrupo');
 const telefonosService = require('../services/telefonos');
-// "Ver la clave de acceso de un grupo" (25-09-2026, a pedido del usuario)
-// — ver la nota grande en sql/schema.sql junto a password_visible_cifrada.
-const { cifrarClave, descifrarClave } = require('../services/cifradoClave');
 // 19-09-2026, a pedido del usuario: "quiero desde super admin pulsar el
 // grupo y poder ver, balances del grupo detallado por clientes y sus
 // saldos, tambien sus sabanas" — obtenerSabanaDeFecha() ya es 100%
@@ -49,17 +46,10 @@ router.post('/grupos', asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'Faltan nombre, email o password.' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    // "Ver la clave", 25-09-2026 — ver la nota grande junto a
-    // password_visible_cifrada en sql/schema.sql. Un grupo creado desde
-    // ahora en adelante SIEMPRE tiene su clave visible para el
-    // Súper-admin desde el primer día (a diferencia de uno ya existente
-    // de antes de esta ronda, que la tiene NULL hasta que se le
-    // restablezca una vez).
-    const passwordVisibleCifrada = cifrarClave(password);
     const r = await db.query(
-      `INSERT INTO grupos (nombre, email, password_hash, password_visible_cifrada, activo) VALUES ($1, $2, $3, $4, false)
+      `INSERT INTO grupos (nombre, email, password_hash, activo) VALUES ($1, $2, $3, false)
        RETURNING id, nombre, email, activo, creado_en`,
-      [nombre, email, passwordHash, passwordVisibleCifrada]
+      [nombre, email, passwordHash]
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -119,20 +109,20 @@ router.delete('/grupos/:id', asyncHandler(async (req, res) => {
 // La respuesta siempre devuelve el rango REALMENTE usado (`rango`) para
 // que el frontend sepa qué fechas está mostrando.
 //
-// SOBRE LA CONTRASEÑA (actualizado 25-09-2026, a pedido del usuario: "esa
-// clave la cambien cuantas veces quieran siempre desde super admin la
-// debo poder ver"): grupos.password_hash sigue siendo un hash de un solo
-// sentido (bcrypt) y sigue siendo lo único que de verdad valida el login
-// — eso no cambió. Esta ruta ahora SÍ devuelve la clave en texto plano
-// como `claveActual`, pero sale de una columna APARTE
-// (password_visible_cifrada, cifrada de forma reversible — ver la nota
-// grande junto a esa columna en sql/schema.sql y services/cifradoClave.js),
-// nunca del hash (que es irreversible por diseño). Un grupo ya existente
-// de ANTES de esta ronda, que todavía no cambió su clave ni una vez desde
-// entonces, da `claveActual: null` — no hay ninguna forma de recuperar el
-// texto plano de un hash bcrypt ya guardado; queda visible recién cuando
-// se le restablece la clave una vez (PATCH /grupos/:id/password, más
-// abajo, o el propio grupo la cambia desde su panel).
+// SOBRE LA CONTRASEÑA (25-09-2026, decisión final del usuario tras
+// evaluarlo: "por seguridad es mejor no verla... dejala que yo desde
+// super admin pueda resetear la clave"): grupos.password_hash es un hash
+// de un solo sentido (bcrypt) y es lo único que valida el login — nunca
+// se guarda la clave en texto plano ni en ninguna forma reversible, ni
+// siquiera cifrada, en ningún lado. Si el Súper-admin necesita que un
+// grupo pueda entrar de nuevo (perdió su clave, o simplemente quiere
+// dársela a alguien), la única vía es RESTABLECERLA con una clave nueva
+// (PATCH /grupos/:id/password, más abajo) — nunca "consultar" la vieja,
+// porque no existe ningún lugar donde esté guardada de forma legible.
+// (Hubo una versión intermedia de esta misma ronda que sí guardaba una
+// copia cifrada reversible para poder verla desde acá — se revirtió por
+// pedido explícito del usuario, quien prefirió no tener ese dato
+// recuperable en absoluto, aunque estuviera cifrado.)
 //
 // "Dispositivo" del último login: lo que en realidad se guarda es el
 // encabezado User-Agent que manda el propio navegador (ej. "Chrome en
@@ -144,7 +134,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const grupoRes = await db.query(
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado, password_visible_cifrada
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -203,10 +193,6 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // ver la nota grande junto a esta columna en sql/schema.sql. Exclusivo
     // del Súper-admin, igual que moduloHipismoHabilitado arriba.
     hipismoCruzarHabilitado: grupo.hipismo_cruzar_habilitado,
-    // "Ver la clave" (25-09-2026) — ver la nota grande de arriba, junto al
-    // comentario "SOBRE LA CONTRASEÑA". null si este grupo todavía no
-    // cambió su clave ni una vez desde que existe esta columna.
-    claveActual: descifrarClave(grupo.password_visible_cifrada),
     // (08-09-2026, a pedido del usuario) modelo de comisión de este
     // grupo — ver la nota grande en sql/schema.sql y comisiones.js.
     // Exclusivo del Súper-admin, igual que whatsappHabilitado arriba.
@@ -317,21 +303,19 @@ router.get('/grupos/:id/sabana-dia', asyncHandler(async (req, res) => {
 }));
 
 // Restablece la contraseña de un Grupo — el súper-admin fija una NUEVA
-// contraseña sin necesitar la anterior. Desde el 25-09-2026 (ver la nota
-// grande de arriba sobre "SOBRE LA CONTRASEÑA") esto además "activa" la
-// visibilidad de la clave para un grupo viejo que todavía no la tenía —
-// de acá en adelante, GET /grupos/:id/detalle ya devuelve esta clave
-// nueva en `claveActual`.
+// contraseña sin necesitar la anterior. Es la única forma de "recuperar"
+// el acceso de un grupo (ver la nota grande de arriba sobre "SOBRE LA
+// CONTRASEÑA") — nunca se guarda ni se muestra la clave vieja ni la
+// nueva en texto plano en ningún lado, solo su hash.
 router.patch('/grupos/:id/password', asyncHandler(async (req, res) => {
   const { password } = req.body;
   if (!password || password.length < 4) {
     return res.status(400).json({ error: 'La contraseña nueva tiene que tener al menos 4 caracteres.' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  const passwordVisibleCifrada = cifrarClave(password);
   const r = await db.query(
-    'UPDATE grupos SET password_hash = $1, password_visible_cifrada = $2 WHERE id = $3 RETURNING id',
-    [passwordHash, passwordVisibleCifrada, req.params.id]
+    'UPDATE grupos SET password_hash = $1 WHERE id = $2 RETURNING id',
+    [passwordHash, req.params.id]
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.status(204).end();

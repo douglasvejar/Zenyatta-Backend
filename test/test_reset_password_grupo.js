@@ -1,27 +1,27 @@
 // =================================================================
-// PRUEBA: "Ver la clave de acceso de un grupo, desde Súper-admin"
-// (25-09-2026, a pedido del usuario: "esa clave la cambien cuantas veces
-// quieran siempre desde super admin la debo poder ver") y el cambio de
-// clave del propio grupo desde "Ajustes > Seguridad"
-// (PATCH /api/grupo/password).
+// PRUEBA: contraseña de un Grupo — solo hash, nunca recuperable
+// (25-09-2026, decisión final del usuario: "por seguridad es mejor no
+// verla... dejala que yo desde super admin pueda resetear la clave").
+//
+// Reemplaza a test_ver_clave_grupo.js (borrado en esta misma ronda junto
+// con services/cifradoClave.js): hubo una versión intermedia de esta
+// función que guardaba una copia cifrada reversible de la clave para que
+// Súper-admin la pudiera "ver" — se revirtió antes de llegar a
+// producción, y esta prueba confirma que NO quedó ningún resto de eso.
 //
 // Cubre:
-//   1) services/cifradoClave.js — cifrarClave()/descifrarClave() dan la
-//      MISMA clave de vuelta (round-trip), null si no hay nada guardado,
-//      y null (sin reventar) si el valor guardado está corrupto.
-//   2) routes/superadmin.js:
-//      - POST /grupos guarda password_hash Y password_visible_cifrada.
-//      - GET /grupos/:id/detalle devuelve `claveActual` ya descifrada
-//        cuando el grupo tiene password_visible_cifrada guardada, y
-//        `claveActual: null` para un grupo viejo que todavía no la
-//        tiene (no se puede recuperar un password_hash ya guardado).
-//      - PATCH /grupos/:id/password actualiza LAS 2 columnas — de ahí
-//        en adelante ese grupo también queda con su clave visible.
-//   3) routes/grupo.js:
-//      - PATCH /password exige al menos 4 caracteres (mismo mínimo que
-//        ya exige el súper-admin).
-//      - Actualiza password_hash Y password_visible_cifrada del grupo
-//        de la SESIÓN (req.grupoId) — nunca de otro grupo.
+//   1) routes/superadmin.js:
+//      - POST /grupos guarda SOLO password_hash (nunca ninguna otra
+//        columna de clave).
+//      - GET /grupos/:id/detalle NUNCA devuelve `claveActual` ni ningún
+//        campo parecido — la clave no es recuperable desde ningún lado.
+//      - PATCH /grupos/:id/password (restablecer) actualiza SOLO
+//        password_hash.
+//   2) routes/grupo.js:
+//      - PATCH /password (el propio grupo cambia su clave, "Ajustes >
+//        Seguridad") exige al menos 4 caracteres y actualiza SOLO
+//        password_hash del grupo de la SESIÓN (req.grupoId) — nunca de
+//        otro grupo.
 // =================================================================
 const assert = require('assert');
 const Module = require('module');
@@ -36,29 +36,6 @@ function check(cond, msg) {
   else { fallaron++; console.error('FALLÓ:', msg); }
 }
 
-// --- 1) cifradoClave.js, sin mockear nada (usa crypto real de Node) ---
-const { cifrarClave, descifrarClave } = require(path.join(__dirname, '..', 'src', 'services', 'cifradoClave'));
-
-(function pruebasCifrado() {
-  const cifrada = cifrarClave('miClaveDePrueba123');
-  check(typeof cifrada === 'string' && cifrada.length > 0, 'cifrarClave: devuelve un string no vacío');
-  check(descifrarClave(cifrada) === 'miClaveDePrueba123', 'descifrarClave: da EXACTAMENTE la misma clave de vuelta (round-trip)');
-  check(descifrarClave(null) === null, 'descifrarClave: null si no hay nada guardado (grupo viejo, ver la nota grande en sql/schema.sql)');
-  check(descifrarClave('') === null, 'descifrarClave: null con un string vacío');
-  check(descifrarClave('esto-no-es-un-valor-cifrado-valido') === null, 'descifrarClave: null (sin reventar) con un valor corrupto/con formato inválido');
-
-  // Con un JWT_SECRET DISTINTO al que se usó para cifrar, no se puede
-  // descifrar — confirma que la llave de verdad depende de JWT_SECRET.
-  const cifradaConSecretoViejo = cifrarClave('otraClave');
-  process.env.JWT_SECRET = 'un-secreto-completamente-distinto';
-  delete require.cache[require.resolve(path.join(__dirname, '..', 'src', 'services', 'cifradoClave'))];
-  const { descifrarClave: descifrarConOtroSecreto } = require(path.join(__dirname, '..', 'src', 'services', 'cifradoClave'));
-  check(descifrarConOtroSecreto(cifradaConSecretoViejo) === null, 'descifrarClave: null si JWT_SECRET cambió desde que se cifró (no revienta, simplemente no se puede leer)');
-  process.env.JWT_SECRET = 'clave-secreta-de-prueba-no-real'; // vuelve a la de siempre para el resto de la prueba
-  delete require.cache[require.resolve(path.join(__dirname, '..', 'src', 'services', 'cifradoClave'))];
-})();
-
-// --- 2) routes/superadmin.js ---
 function fakeExpressRouter() {
   const handlers = [];
   const router = function () {};
@@ -73,10 +50,7 @@ fakeExpress.Router = fakeExpressRouter;
 
 const TABLAS = {
   grupos: [
-    // Grupo YA EXISTENTE de antes de esta función — nunca cambió su clave,
-    // así que no tiene password_visible_cifrada (NULL, como quedaría de
-    // verdad en Supabase tras el ALTER TABLE).
-    { id: 'grupo-viejo', nombre: 'Viejo', email: 'viejo@ejemplo.com', activo: true, creado_en: '2026-01-01T00:00:00Z', ultimo_login_en: null, ultimo_login_ip: null, ultimo_login_user_agent: null, logo_url: null, whatsapp_habilitado: false, whatsapp_grupo_jid: null, sabana_muestra: null, comandos_whatsapp_habilitado: false, comandos_whatsapp_numero: null, modulo_deportes_habilitado: true, modulo_hipismo_habilitado: false, hipismo_cruzar_habilitado: true, password_hash: 'hash-viejo', password_visible_cifrada: null }
+    { id: 'grupo-viejo', nombre: 'Viejo', email: 'viejo@ejemplo.com', activo: true, creado_en: '2026-01-01T00:00:00Z', ultimo_login_en: null, ultimo_login_ip: null, ultimo_login_user_agent: null, logo_url: null, whatsapp_habilitado: false, whatsapp_grupo_jid: null, sabana_muestra: null, comandos_whatsapp_habilitado: false, comandos_whatsapp_numero: null, modulo_deportes_habilitado: true, modulo_hipismo_habilitado: false, hipismo_cruzar_habilitado: true, password_hash: 'hash-viejo' }
   ],
   jugadores: []
 };
@@ -85,13 +59,13 @@ let siguienteIdGrupo = 1;
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
-  if (/^INSERT INTO grupos \(nombre, email, password_hash, password_visible_cifrada, activo\)/i.test(sql)) {
-    const [nombre, email, passwordHash, passwordVisibleCifrada] = params;
-    const fila = { id: 'grupo-nuevo-' + (siguienteIdGrupo++), nombre, email, password_hash: passwordHash, password_visible_cifrada: passwordVisibleCifrada, activo: false, creado_en: '2026-09-25T00:00:00Z' };
+  if (/^INSERT INTO grupos \(nombre, email, password_hash, activo\)/i.test(sql)) {
+    const [nombre, email, passwordHash] = params;
+    const fila = { id: 'grupo-nuevo-' + (siguienteIdGrupo++), nombre, email, password_hash: passwordHash, activo: false, creado_en: '2026-09-25T00:00:00Z' };
     TABLAS.grupos.push(fila);
     return { rows: [{ id: fila.id, nombre: fila.nombre, email: fila.email, activo: fila.activo, creado_en: fila.creado_en }] };
   }
-  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*password_visible_cifrada\s*FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*hipismo_cruzar_habilitado\s*FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
     return { rows: grupo ? [grupo] : [] };
   }
@@ -108,16 +82,15 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, fecha, cliente_nombre AS cliente, monto, nota FROM polla_historial WHERE/i.test(sql)) return { rows: [] };
   if (/^SELECT MIN\(fecha\) AS min_fecha FROM tickets_historial WHERE grupo_id = \$1/i.test(sql)) return { rows: [{ min_fecha: null }] };
 
-  if (/^UPDATE grupos SET password_hash = \$1, password_visible_cifrada = \$2 WHERE id = \$3/i.test(sql)) {
-    const [passwordHash, passwordVisibleCifrada, id] = params;
+  if (/^UPDATE grupos SET password_hash = \$1 WHERE id = \$2/i.test(sql)) {
+    const [passwordHash, id] = params;
     const grupo = TABLAS.grupos.find(g => g.id === id);
     if (!grupo) return { rows: [] };
     grupo.password_hash = passwordHash;
-    grupo.password_visible_cifrada = passwordVisibleCifrada;
     return { rows: [{ id: grupo.id }] };
   }
 
-  throw new Error('La base de datos falsa de esta prueba (ver la clave) no sabe responder: ' + sql);
+  throw new Error('La base de datos falsa de esta prueba (reset de contraseña) no sabe responder: ' + sql);
 }
 
 const fakePool = function () {
@@ -166,55 +139,55 @@ const handlerResetPassword = ultimoHandler(superadminRouter, 'patch', '/grupos/:
 const handlerPasswordPropio = ultimoHandler(grupoRouter, 'patch', '/password');
 
 (async function main() {
-  // --- POST /grupos guarda la clave visible desde el primer día -------
+  // --- POST /grupos: solo guarda password_hash -------------------------
   const reqCrear = { body: { nombre: 'Grupo Nuevo', email: 'nuevo@ejemplo.com', password: 'clavesita1' } };
   const resCrear = await invocarRuta(handlerCrearGrupo, reqCrear);
   check(resCrear._status === 201, 'POST /grupos: responde 201');
   const idGrupoNuevo = resCrear._json.id;
   const filaGrupoNuevo = TABLAS.grupos.find(g => g.id === idGrupoNuevo);
-  check(!!filaGrupoNuevo.password_visible_cifrada, 'POST /grupos: guarda password_visible_cifrada (no queda NULL)');
-  check(descifrarClave(filaGrupoNuevo.password_visible_cifrada) === 'clavesita1', 'POST /grupos: lo que se guardó cifrado, descifra EXACTO a la clave que se mandó');
+  check(filaGrupoNuevo.password_hash === 'hash-de:clavesita1', 'POST /grupos: guarda password_hash');
+  check(!('password_visible_cifrada' in filaGrupoNuevo), 'POST /grupos: NO guarda ninguna clave recuperable, ni cifrada');
 
-  // --- GET /grupos/:id/detalle: un grupo con clave visible -------------
+  // --- GET /grupos/:id/detalle: nunca devuelve la clave -----------------
   const resDetalleNuevo = await invocarRuta(handlerDetalle, { params: { id: idGrupoNuevo }, query: {} });
-  check(resDetalleNuevo._json.claveActual === 'clavesita1', 'GET /detalle: un grupo con password_visible_cifrada devuelve claveActual ya descifrada');
+  check(!('claveActual' in resDetalleNuevo._json), 'GET /detalle: la respuesta ya no trae ningún campo "claveActual"');
+  check(JSON.stringify(resDetalleNuevo._json).indexOf('clavesita1') === -1, 'GET /detalle: la clave en texto plano no aparece en ningún lado de la respuesta');
 
-  // --- GET /grupos/:id/detalle: un grupo VIEJO sin clave visible -------
-  const resDetalleViejo = await invocarRuta(handlerDetalle, { params: { id: 'grupo-viejo' }, query: {} });
-  check(resDetalleViejo._json.claveActual === null, 'GET /detalle: un grupo viejo (sin password_visible_cifrada) devuelve claveActual: null, no revienta ni inventa nada');
-
-  // --- PATCH /grupos/:id/password (súper-admin restablece) "activa" ----
-  // la visibilidad para ese grupo viejo, de ahí en adelante.
+  // --- PATCH /grupos/:id/password (súper-admin restablece) --------------
   const resReset = await invocarRuta(handlerResetPassword, { params: { id: 'grupo-viejo' }, body: { password: 'claveNuevaDelViejo' } });
   check(resReset._status === 204, 'PATCH /grupos/:id/password: responde 204');
-  const resDetalleViejoTrasReset = await invocarRuta(handlerDetalle, { params: { id: 'grupo-viejo' }, query: {} });
-  check(resDetalleViejoTrasReset._json.claveActual === 'claveNuevaDelViejo', 'Tras restablecerla desde Súper-admin, el grupo viejo YA queda con su clave visible de ahí en adelante');
+  const filaViejaTrasReset = TABLAS.grupos.find(g => g.id === 'grupo-viejo');
+  check(filaViejaTrasReset.password_hash === 'hash-de:claveNuevaDelViejo', 'PATCH /grupos/:id/password: actualiza password_hash con la clave nueva');
+  check(!('password_visible_cifrada' in filaViejaTrasReset), 'PATCH /grupos/:id/password: no guarda ninguna copia recuperable de la clave');
 
-  // --- PATCH /grupos/:id/password: valida mínimo de 4 caracteres -------
+  // --- PATCH /grupos/:id/password: valida mínimo de 4 caracteres --------
   const resResetCorta = await invocarRuta(handlerResetPassword, { params: { id: 'grupo-viejo' }, body: { password: 'ab' } });
   check(resResetCorta._status === 400, 'PATCH /grupos/:id/password: rechaza una clave de menos de 4 caracteres');
 
-  // --- routes/grupo.js: PATCH /password (el propio grupo la cambia) ----
+  // --- routes/grupo.js: PATCH /password (el propio grupo la cambia) -----
   const reqCambioPropio = { grupoId: idGrupoNuevo, body: { password: 'claveNuevaDelPropioGrupo' } };
   const resCambioPropio = await invocarRuta(handlerPasswordPropio, reqCambioPropio);
   check(resCambioPropio._status === 204, 'PATCH /api/grupo/password: responde 204');
   const filaTrasCambioPropio = TABLAS.grupos.find(g => g.id === idGrupoNuevo);
   check(filaTrasCambioPropio.password_hash === 'hash-de:claveNuevaDelPropioGrupo', 'PATCH /api/grupo/password: actualiza password_hash (lo que de verdad valida el login) con la clave nueva');
-  check(descifrarClave(filaTrasCambioPropio.password_visible_cifrada) === 'claveNuevaDelPropioGrupo', 'PATCH /api/grupo/password: también actualiza password_visible_cifrada — el Súper-admin la sigue pudiendo ver');
+  check(!('password_visible_cifrada' in filaTrasCambioPropio), 'PATCH /api/grupo/password: tampoco guarda ninguna copia recuperable de la clave');
 
-  // --- routes/grupo.js: PATCH /password valida mínimo de 4 caracteres --
+  // --- routes/grupo.js: PATCH /password valida mínimo de 4 caracteres ---
   const resCambioCorto = await invocarRuta(handlerPasswordPropio, { grupoId: idGrupoNuevo, body: { password: 'xy' } });
   check(resCambioCorto._status === 400, 'PATCH /api/grupo/password: rechaza una clave de menos de 4 caracteres');
 
-  // --- routes/grupo.js: PATCH /password nunca toca OTRO grupo ----------
+  // --- routes/grupo.js: PATCH /password nunca toca OTRO grupo -----------
   const filaGrupoViejoAntes = JSON.stringify(TABLAS.grupos.find(g => g.id === 'grupo-viejo'));
   await invocarRuta(handlerPasswordPropio, { grupoId: idGrupoNuevo, body: { password: 'otraClaveMas1' } });
   const filaGrupoViejoDespues = JSON.stringify(TABLAS.grupos.find(g => g.id === 'grupo-viejo'));
   check(filaGrupoViejoAntes === filaGrupoViejoDespues, 'PATCH /api/grupo/password: cambiar la clave de UN grupo no toca para nada la fila de otro grupo');
 
+  // --- No debe quedar ningún resto del servicio de cifrado ---------------
+  check(!require('fs').existsSync(path.join(__dirname, '..', 'src', 'services', 'cifradoClave.js')), 'src/services/cifradoClave.js ya no existe (se revirtió por completo)');
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })().catch(e => {
-  console.error('La prueba de "ver la clave del grupo" se cayó con una excepción:', e);
+  console.error('La prueba de "reset de contraseña del grupo" se cayó con una excepción:', e);
   process.exit(1);
 });

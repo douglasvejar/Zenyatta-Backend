@@ -234,28 +234,18 @@ alter table grupos add column if not exists modulo_hipismo_habilitado boolean no
 -- apaga el interruptor a mano solo en los grupos que de verdad no cruzan.
 alter table grupos add column if not exists hipismo_cruzar_habilitado boolean not null default true;
 
--- =================================================================
--- "VER LA CLAVE DE ACCESO DE UN GRUPO, DESDE SÚPER-ADMIN" (25-09-2026, a
--- pedido del usuario: "esa clave la cambien cuantas veces quieran siempre
--- desde super admin la debo poder ver"). password_hash (arriba) sigue
--- siendo un hash de un solo sentido (bcrypt) y sigue siendo lo que valida
--- el login — eso NO cambia. Esta columna nueva guarda la MISMA clave en
--- texto plano, pero CIFRADA de forma reversible (AES-256-GCM, ver
--- services/cifradoClave.js) para que el Súper-admin la pueda pedir de
--- vuelta cuando la necesite (GET /grupos/:id/detalle) sin que quede en
--- texto plano dentro de la base de datos. Se llena junto con password_hash
--- cada vez que se fija una clave (crear grupo, Súper-admin la restablece,
--- o el propio grupo la cambia desde su pestaña Ajustes > Seguridad) — ver
--- los 3 sitios que hacen bcrypt.hash() en superadmin.js/grupo.js.
---
--- LIMITACIÓN REAL, y a propósito: para un grupo que YA EXISTÍA antes de
--- esta columna y todavía no cambió su clave ni una vez desde entonces,
--- esta columna queda NULL — es matemáticamente imposible recuperar el
--- texto plano de un password_hash ya guardado (esa es justamente la
--- garantía de bcrypt). Para esos grupos, el Súper-admin ve un aviso en
--- vez de la clave, hasta que la restablezca una vez desde el propio panel
--- de Súper-admin — desde ese momento en adelante, sí queda visible.
-alter table grupos add column if not exists password_visible_cifrada text;
+-- (25-09-2026) Acá hubo por un momento una columna `password_visible_cifrada`
+-- (clave cifrada de forma reversible, para que Súper-admin pudiera "ver"
+-- la clave de cualquier grupo). El usuario, tras pensarlo, decidió que por
+-- seguridad es mejor NO tener guardada en ningún lado una clave que se
+-- pueda recuperar, ni siquiera cifrada — así que se revirtió esa misma
+-- ronda, antes de que llegara a usarse en producción. La única forma de
+-- ayudar a un grupo con su clave sigue siendo RESTABLECERLA (Súper-admin
+-- fija una nueva, sin necesitar la vieja) — ver PATCH /grupos/:id/password
+-- en superadmin.js. Si en algún momento llegaste a correr esta línea en
+-- Supabase, la columna quedó ahí sin usarse (no hace falta borrarla a
+-- mano, pero se puede con `alter table grupos drop column if exists
+-- password_visible_cifrada;` si lo prefieres).
 
 -- =================================================================
 -- HIPISMO — backend real (22-09-2026, a pedido del usuario: "conecta el
