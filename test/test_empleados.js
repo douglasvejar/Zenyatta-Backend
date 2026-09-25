@@ -117,7 +117,15 @@ function ejecutarQueryAuth(text, params) {
     return { rows: fila ? [fila] : [] };
   }
   if (/^UPDATE grupos SET ultimo_login_en/i.test(sql)) return { rows: [] };
-  if (/^SELECT e\.\*, g\.activo AS grupo_activo, g\.nombre AS grupo_nombre\s*FROM empleados e JOIN grupos g/i.test(sql)) {
+  // El regex no exige la lista EXACTA de columnas después de "g.nombre AS
+  // grupo_nombre" (moduloDeportesHabilitado/moduloHipismoHabilitado/
+  // hipismoCruzarHabilitado, agregadas en rondas posteriores a esta
+  // prueba) — solo que empiece con el SELECT esperado y llegue al JOIN,
+  // así una columna nueva en auth.js no rompe esta prueba con un "no sabe
+  // responder" (bug real encontrado el 25-09-2026 al agregar
+  // hipismo_cruzar_habilitado: el regex viejo exigía que el JOIN viniera
+  // pegado justo después de "grupo_nombre", sin nada en el medio).
+  if (/^SELECT e\.\*, g\.activo AS grupo_activo, g\.nombre AS grupo_nombre.*FROM empleados e JOIN grupos g/i.test(sql)) {
     const [email] = params;
     const empleado = [EMPLEADO_ACTIVO, EMPLEADO_INACTIVO].find(e => e.email === email);
     if (!empleado) return { rows: [] };
