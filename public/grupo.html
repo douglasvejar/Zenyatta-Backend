@@ -2139,6 +2139,22 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
        since 2026 - Soluciones Digitales"). -->
   <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
+  <!-- Mensaje de aliento al iniciar sesión (25-09-2026, a pedido del
+       usuario: "quiero que cada vez que un grupo inicie secion le salga
+       un mensaje de aliento en una venta que la cierren o le den
+       gracias... solo al loguearse por primera, solo al venir de la
+       pantalla anterior de inciiar sesion") — ver mostrarBienvenidaSiCorresponde()
+       en app.js. Se llama solo desde ahí (nunca al refrescar la página
+       con una sesión ya guardada), así que arranca oculto siempre. -->
+  <div class="modal-fondo" id="modalBienvenida" style="display:none;">
+    <div class="modal-caja" style="max-width:420px; text-align:center;">
+      <div style="font-size:40px; margin-bottom:6px;">🏇</div>
+      <h3 style="margin-top:0;">¡Bienvenido de vuelta!</h3>
+      <p id="bienvenidaFrase" style="font-size:15px; color:var(--text); margin:14px 0 20px;"></p>
+      <button type="button" class="btn btn-primario" onclick="cerrarBienvenida()">Gracias, ¡vamos a trabajar! 💪</button>
+    </div>
+  </div>
+
   <!-- ================================================================= -->
   <!-- BANDEJA DE CHAT FLOTANTE — ver comentario grande de la sección CSS. -->
   <!-- Vive DENTRO de #appShell (no en <body> directo) a propósito, para  -->

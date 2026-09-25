@@ -705,7 +705,6 @@
       <button type="button" class="nav-item nav-child" data-vista="hipodromos" onclick="mostrarVista('hipodromos', this)">🏟️<span class="nav-lbl"> Hipódromos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅<span class="nav-lbl"> Fecha de Semana</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝<span class="nav-lbl"> Cabeza y Pie de Plano</span></button>
-      <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️<span class="nav-lbl"> Planos Eliminados</span></button>
       <!-- 24-09-2026, a pedido del usuario: "crea un boton que diga
            eliminar jornada.... al seleccionar un dia borra todo lo que
@@ -722,6 +721,26 @@
            /api/hipismo/alertas) — quién editó/eliminó un plano o una
            jugada adelantada, y cuándo. -->
       <button type="button" class="nav-item nav-child" data-vista="alertasHipismo" onclick="mostrarVista('alertasHipismo', this)">🔔<span class="nav-lbl"> Alertas</span></button>
+    </div>
+
+    <hr>
+
+    <!-- 25-09-2026, a pedido del usuario: "en los grupos crea una pestaña
+         que se llame ajustes, alli vas a meter la ventana que ya existe
+         llamada usuarios, aparte crea una que se llame seguridad... al
+         entrar alli pueden cambiar la clave de acceso del grupo".
+         "Usuarios" se movió para acá desde "Administración" (mismo
+         botón, misma vista, solo cambió de dónde se entra) — "Seguridad"
+         es nueva. Todo este grupo se oculta por completo para un Empleado
+         (ver aplicarPermisosEmpleadoHipismo() más abajo): tanto gestionar
+         Usuarios como cambiar la clave de acceso del grupo son exclusivos
+         del Administrador, nunca delegables — mismo criterio que ya usa
+         el backend real (requiereAdministrador en routes/empleados.js y
+         en el PATCH nuevo de routes/grupo.js). -->
+    <button type="button" class="nav-item nav-parent" id="navParentAjustesHip" onclick="toggleGrupo('ajustes')">⚙️<span class="nav-lbl"> Ajustes </span><span id="caretAjustes">▾</span></button>
+    <div class="nav-children" id="grupoAjustes">
+      <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="seguridad" onclick="mostrarVista('seguridad', this)">🔒<span class="nav-lbl"> Seguridad</span></button>
     </div>
 
     <hr>
@@ -1684,6 +1703,32 @@ Pizarra: [se llena al calcular]
       </div>
     </section>
 
+    <!-- ============ AJUSTES: SEGURIDAD (25-09-2026) ============
+         A pedido del usuario: "aparte crea una que se llame seguridad...
+         al entrar alli pueden cambiar la clave de acceso del grupo".
+         Exclusiva del Administrador (PATCH /api/grupo/password exige
+         requiereAdministrador — ver routes/grupo.js) — un Empleado ni
+         siquiera ve esta pestaña en su barra lateral (ver
+         aplicarPermisosEmpleadoHipismo() más abajo). No pide la clave
+         ACTUAL para cambiarla: la propia sesión ya prueba que quien está
+         acá es el Administrador. -->
+    <section class="vista" id="vista-seguridad">
+      <div class="card">
+        <h2>🔒 Seguridad</h2>
+        <p class="desc">Cambia la clave de acceso con la que este grupo inicia sesión (la misma pantalla de correo/contraseña de siempre). No hace falta escribir la clave anterior.</p>
+        <div class="fila">
+          <div><label>Clave nueva</label><input type="password" id="claveNuevaGrupoHip" placeholder="Mínimo 4 caracteres"></div>
+          <div><label>Repite la clave nueva</label><input type="password" id="claveNuevaGrupoHipConfirmar" placeholder="Repite la clave nueva"></div>
+        </div>
+        <div class="btn-fila" style="margin-top:10px;">
+          <button class="btn btn-primario" type="button" onclick="cambiarClaveGrupoHip()">💾 Guardar clave nueva</button>
+        </div>
+        <div id="claveGrupoHipError" style="color:#b3261e; margin-top:8px;"></div>
+        <div id="claveGrupoHipOk" style="color:#1c7c3f; margin-top:8px;"></div>
+        <p class="desc" style="margin-top:14px;">💡 El Súper-admin siempre puede ver (y, si hace falta, restablecer) la clave de acceso de este grupo desde su propio panel — cambiarla desde acá no le quita esa visibilidad.</p>
+      </div>
+    </section>
+
     <!-- ============ ADMINISTRACIÓN: PLANOS ELIMINADOS ============
          REAL desde el 23-09-2026 (duodécima ronda) — la Papelera
          recuperable de "🗑️ Eliminar Planos" (Apuestas). Ver la nota
@@ -1761,6 +1806,19 @@ Pizarra: [se llena al calcular]
     <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
   </main>
+</div>
+
+<!-- Mensaje de aliento al iniciar sesión (25-09-2026) — copia hermana del
+     mismo modal de grupo.html (ver mostrarBienvenidaSiCorrespondeHip()
+     más abajo). Reusa la clase ".modal-fondo" que ya existe en este mismo
+     archivo (ver el <style> de arriba). -->
+<div class="modal-fondo" id="modalBienvenidaHip" style="display:none;">
+  <div class="modal-detalle-cliente" style="max-width:420px; padding:28px; text-align:center;">
+    <div style="font-size:40px; margin-bottom:6px;">🏇</div>
+    <h3 style="margin-top:0;">¡Bienvenido de vuelta!</h3>
+    <p id="bienvenidaFraseHip" style="font-size:15px; color:var(--text); margin:14px 0 20px;"></p>
+    <button type="button" class="btn btn-primario" onclick="cerrarBienvenidaHip()">Gracias, ¡vamos a trabajar! 💪</button>
+  </div>
 </div>
 
 <script>
@@ -1861,6 +1919,44 @@ function cerrarSesionHipismo() {
   localStorage.removeItem('zenyatta_token');
   localStorage.removeItem('zenyatta_grupo');
   window.location.href = 'grupo.html';
+}
+
+// Mensaje de aliento al iniciar sesión (25-09-2026) — copia hermana de la
+// misma función y del mismo arreglo de frases en public/app.js (ver la
+// nota grande junto a iniciarSesion() ahí). Hace falta una copia PROPIA
+// acá porque, si un grupo tiene SOLO Hipismo contratado, mostrarApp() de
+// app.js redirige derecho a esta página sin pintar nada en grupo.html —
+// la bandera 'zenyatta_mostrar_bienvenida' (en localStorage, puesta por
+// iniciarSesion() justo antes de ese redirect) sigue intacta cuando esta
+// página termina de cargar, y es ACÁ donde se termina de mostrar y
+// consumir. Se llama una sola vez, al final del script de arranque de más
+// abajo.
+const FRASES_BIENVENIDA_HIP = [
+  '¡Vamos con toda hoy! Que sea un día productivo.',
+  'Un día más para hacer las cosas bien. ¡Éxito en tu jornada!',
+  'Tu esfuerzo de hoy es la base de tu éxito de mañana.',
+  '¡A darle con energía! Hoy es un buen día para crecer.',
+  'Cada jornada bien llevada es una victoria. ¡Vamos!',
+  'La constancia es la clave — sigue así, vas muy bien.',
+  'Hoy es una nueva oportunidad para hacerlo mejor que ayer.',
+  'Con orden y disciplina, todo sale bien. ¡Ánimo!',
+  'Un buen trabajo hoy construye un buen negocio mañana.',
+  '¡Que este día te vaya excelente! Dale con todo.',
+  'Cree en lo que haces — el esfuerzo constante siempre da frutos.',
+  'Empieza el día con buena actitud — el resto se acomoda solo.'
+];
+function mostrarBienvenidaSiCorrespondeHip() {
+  if (localStorage.getItem('zenyatta_mostrar_bienvenida') !== '1') return;
+  localStorage.removeItem('zenyatta_mostrar_bienvenida');
+  const frase = FRASES_BIENVENIDA_HIP[Math.floor(Math.random() * FRASES_BIENVENIDA_HIP.length)];
+  const textoEl = document.getElementById('bienvenidaFraseHip');
+  const modalEl = document.getElementById('modalBienvenidaHip');
+  if (!textoEl || !modalEl) return;
+  textoEl.textContent = frase;
+  modalEl.style.display = 'flex';
+}
+function cerrarBienvenidaHip() {
+  document.getElementById('modalBienvenidaHip').style.display = 'none';
 }
 
 // "Cruzar jugadas" exclusivo del Súper-admin (24-09-2026, a pedido del
@@ -3256,6 +3352,38 @@ async function eliminarEmpleadoHip(id) {
     await cargarEmpleadosHip();
   } catch (e) {
     alert('No se pudo eliminar: ' + e.message);
+  }
+}
+
+// "Ajustes > Seguridad" (25-09-2026) — cambia la clave de acceso de este
+// grupo. PATCH /api/grupo/password (routes/grupo.js) exige
+// requiereAdministrador del lado del servidor; acá solo se valida lo
+// básico (mínimo 4 caracteres, que las 2 cajas coincidan) antes de
+// mandarla, mismo mínimo que ya exige el servidor.
+async function cambiarClaveGrupoHip() {
+  const nueva = document.getElementById('claveNuevaGrupoHip').value;
+  const repetida = document.getElementById('claveNuevaGrupoHipConfirmar').value;
+  const errorBox = document.getElementById('claveGrupoHipError');
+  const okBox = document.getElementById('claveGrupoHipOk');
+  errorBox.textContent = '';
+  okBox.textContent = '';
+
+  if (!nueva || nueva.length < 4) {
+    errorBox.textContent = 'La clave nueva tiene que tener al menos 4 caracteres.';
+    return;
+  }
+  if (nueva !== repetida) {
+    errorBox.textContent = 'Las 2 claves no coinciden.';
+    return;
+  }
+
+  try {
+    await apiHipismo('/api/grupo/password', { method: 'PATCH', body: JSON.stringify({ password: nueva }) });
+    document.getElementById('claveNuevaGrupoHip').value = '';
+    document.getElementById('claveNuevaGrupoHipConfirmar').value = '';
+    okBox.textContent = '✅ Clave actualizada — la próxima vez que inicien sesión, ya es con la nueva.';
+  } catch (e) {
+    errorBox.textContent = e.message;
   }
 }
 
@@ -5751,6 +5879,19 @@ pintarEliminarPlanos();
 pintarMontosApostados();
 pintarPlanosEliminados();
 pintarAlertasHipismo();
+// "Ajustes" (Usuarios + Seguridad) exclusivo del Administrador (25-09-2026)
+// — ver la nota grande junto a "navParentAjustesHip" más arriba. Un
+// Empleado ni siquiera ve este grupo en su barra lateral (las rutas de
+// backend que protege ya lo bloquean con 403 de todas formas, pero no
+// tiene sentido mostrarle un botón a algo que le va a fallar).
+if (GRUPO && GRUPO.rol === 'empleado') {
+  const navAjustesHip = document.getElementById('navParentAjustesHip');
+  if (navAjustesHip) navAjustesHip.style.display = 'none';
+}
+// Mensaje de aliento (25-09-2026) — ver la nota grande junto a
+// mostrarBienvenidaSiCorrespondeHip() más arriba. Va al FINAL a
+// propósito, después de que toda la pantalla ya está pintada.
+mostrarBienvenidaSiCorrespondeHip();
 </script>
 
 <!-- html2canvas / jsPDF / XLSX (SheetJS): mismo criterio EXACTO que

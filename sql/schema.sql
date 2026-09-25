@@ -235,6 +235,29 @@ alter table grupos add column if not exists modulo_hipismo_habilitado boolean no
 alter table grupos add column if not exists hipismo_cruzar_habilitado boolean not null default true;
 
 -- =================================================================
+-- "VER LA CLAVE DE ACCESO DE UN GRUPO, DESDE SÚPER-ADMIN" (25-09-2026, a
+-- pedido del usuario: "esa clave la cambien cuantas veces quieran siempre
+-- desde super admin la debo poder ver"). password_hash (arriba) sigue
+-- siendo un hash de un solo sentido (bcrypt) y sigue siendo lo que valida
+-- el login — eso NO cambia. Esta columna nueva guarda la MISMA clave en
+-- texto plano, pero CIFRADA de forma reversible (AES-256-GCM, ver
+-- services/cifradoClave.js) para que el Súper-admin la pueda pedir de
+-- vuelta cuando la necesite (GET /grupos/:id/detalle) sin que quede en
+-- texto plano dentro de la base de datos. Se llena junto con password_hash
+-- cada vez que se fija una clave (crear grupo, Súper-admin la restablece,
+-- o el propio grupo la cambia desde su pestaña Ajustes > Seguridad) — ver
+-- los 3 sitios que hacen bcrypt.hash() en superadmin.js/grupo.js.
+--
+-- LIMITACIÓN REAL, y a propósito: para un grupo que YA EXISTÍA antes de
+-- esta columna y todavía no cambió su clave ni una vez desde entonces,
+-- esta columna queda NULL — es matemáticamente imposible recuperar el
+-- texto plano de un password_hash ya guardado (esa es justamente la
+-- garantía de bcrypt). Para esos grupos, el Súper-admin ve un aviso en
+-- vez de la clave, hasta que la restablezca una vez desde el propio panel
+-- de Súper-admin — desde ese momento en adelante, sí queda visible.
+alter table grupos add column if not exists password_visible_cifrada text;
+
+-- =================================================================
 -- HIPISMO — backend real (22-09-2026, a pedido del usuario: "conecta el
 -- modulo real al backend ya quiero trabajar y hacer pruebas"). Primera
 -- rebanada real del módulo, la que todo lo demás del plan depende de que

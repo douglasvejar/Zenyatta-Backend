@@ -273,10 +273,61 @@ async function iniciarSesion() {
     GRUPO = data.grupo;
     localStorage.setItem('zenyatta_token', TOKEN);
     localStorage.setItem('zenyatta_grupo', JSON.stringify(GRUPO));
+    // Mensaje de aliento (25-09-2026, a pedido del usuario: "quiero que
+    // cada vez que un grupo inicie sesion le salga un mensaje de aliento
+    // ... solo al loguearse por primera, solo al venir de la pantalla
+    // anterior de iniciar sesion") — esta bandera es la que distingue un
+    // login recién hecho (acá) de simplemente reabrir la página con una
+    // sesión ya guardada (intentarSesionGuardada(), más abajo, NUNCA la
+    // pone). Se guarda en localStorage (no en una variable normal) porque
+    // si este grupo solo tiene Hipismo, mostrarApp() redirige de una vez
+    // a hipismo-mockup.html — esa página necesita poder leer esta misma
+    // bandera para saber que también le toca mostrar el mensaje.
+    localStorage.setItem('zenyatta_mostrar_bienvenida', '1');
     mostrarApp();
   } catch (e) {
     errorBox.textContent = e.message;
   }
+}
+
+// Frases cortas de aliento para el mensaje de bienvenida — una al azar
+// cada vez que se muestra (ver mostrarBienvenidaSiCorresponde() más abajo
+// y su copia hermana en hipismo-mockup.html).
+const FRASES_BIENVENIDA = [
+  '¡Vamos con toda hoy! Que sea un día productivo.',
+  'Un día más para hacer las cosas bien. ¡Éxito en tu jornada!',
+  'Tu esfuerzo de hoy es la base de tu éxito de mañana.',
+  '¡A darle con energía! Hoy es un buen día para crecer.',
+  'Cada jornada bien llevada es una victoria. ¡Vamos!',
+  'La constancia es la clave — sigue así, vas muy bien.',
+  'Hoy es una nueva oportunidad para hacerlo mejor que ayer.',
+  'Con orden y disciplina, todo sale bien. ¡Ánimo!',
+  'Un buen trabajo hoy construye un buen negocio mañana.',
+  '¡Que este día te vaya excelente! Dale con todo.',
+  'Cree en lo que haces — el esfuerzo constante siempre da frutos.',
+  'Empieza el día con buena actitud — el resto se acomoda solo.'
+];
+
+// Muestra el modal de bienvenida SOLO si la bandera de un login recién
+// hecho está puesta (ver iniciarSesion() arriba) — y la borra de una vez,
+// para que no vuelva a aparecer con solo refrescar la página o cambiar de
+// pestaña/módulo. Se llama al final de mostrarApp() — ahí NUNCA se llega
+// si mostrarApp() redirigió a hipismo-mockup.html (ver el "return" al
+// inicio de esa función), así que en ese caso la bandera queda intacta y
+// es hipismo-mockup.html el que la termina mostrando y consumiendo, con
+// su propia copia de esta misma función.
+function mostrarBienvenidaSiCorresponde() {
+  if (localStorage.getItem('zenyatta_mostrar_bienvenida') !== '1') return;
+  localStorage.removeItem('zenyatta_mostrar_bienvenida');
+  const frase = FRASES_BIENVENIDA[Math.floor(Math.random() * FRASES_BIENVENIDA.length)];
+  const textoEl = document.getElementById('bienvenidaFrase');
+  const modalEl = document.getElementById('modalBienvenida');
+  if (!textoEl || !modalEl) return;
+  textoEl.textContent = frase;
+  modalEl.style.display = 'flex';
+}
+function cerrarBienvenida() {
+  document.getElementById('modalBienvenida').style.display = 'none';
 }
 
 function cerrarSesion(mensaje) {
@@ -381,6 +432,13 @@ function mostrarApp() {
   revisarNotificacionesFondo();
   if (ALERTAS_INTERVALO) clearInterval(ALERTAS_INTERVALO);
   ALERTAS_INTERVALO = setInterval(revisarNotificacionesFondo, 25000);
+
+  // Mensaje de aliento (25-09-2026) — ver la nota grande junto a
+  // iniciarSesion() más arriba. Va al FINAL de mostrarApp() a propósito:
+  // si este grupo solo tiene Hipismo, esta función ya redirigió con un
+  // "return" bien arriba y nunca llega hasta acá — así nunca se pinta un
+  // modal en grupo.html justo antes de irse para otra página.
+  mostrarBienvenidaSiCorresponde();
 }
 
 // Revisa en un solo lugar las 2 cosas que pueden generar una notificación
