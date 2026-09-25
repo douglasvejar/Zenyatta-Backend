@@ -723,6 +723,18 @@
            jugada adelantada, y cuándo. -->
       <button type="button" class="nav-item nav-child" data-vista="alertasHipismo" onclick="mostrarVista('alertasHipismo', this)">🔔<span class="nav-lbl"> Alertas</span></button>
     </div>
+
+    <hr>
+
+    <!-- 25-09-2026, a pedido del usuario: "en el grupo a final del panel...
+         coloca un boton de cerrar sesion, al cerrar sesion... y se
+         enviara a la pantalla para introducir correo y contrasena" —
+         Hipismo no tiene pantalla de login propia (comparte la de
+         grupo.html, mismas claves de localStorage que ya usa app.js), así
+         que cerrar sesión acá limpia esa sesión guardada y manda para
+         grupo.html, que es la única pantalla de correo/contraseña que
+         existe en todo el sistema. -->
+    <button type="button" class="nav-item" onclick="cerrarSesionHipismo()">🚪<span class="nav-lbl"> Cerrar sesión</span></button>
   </nav>
 
   <main class="main">
@@ -1834,6 +1846,22 @@ function actualizarSelectorModulo() {
   selector.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
 }
 function irAModuloDeportes() { window.location.href = 'grupo.html'; }
+
+// "Cerrar sesión" en Hipismo (25-09-2026, a pedido del usuario). Hipismo no
+// tiene pantalla de login propia — comparte la de grupo.html (mismas 2
+// claves de localStorage que ya usa app.js). Por eso cerrar sesión acá es
+// simplemente limpiar esas 2 claves y mandar para grupo.html: sin sesión
+// guardada, esa página muestra directo la pantalla de correo/contraseña
+// (#vistaLogin), igual que le pasa a cualquiera cuya sesión ya venció (ver
+// el manejo de 401 en apiHipismo(), más abajo, que hace exactamente esto
+// mismo). Todo lo que ya se hizo (jugadas, planos, resultados, etc.) queda
+// guardado del lado del servidor desde que se hizo — no hay ningún dato
+// "sin guardar" que se pierda al cerrar sesión.
+function cerrarSesionHipismo() {
+  localStorage.removeItem('zenyatta_token');
+  localStorage.removeItem('zenyatta_grupo');
+  window.location.href = 'grupo.html';
+}
 
 // "Cruzar jugadas" exclusivo del Súper-admin (24-09-2026, a pedido del
 // usuario: "el boton de cruzar jugadas o no debe activarse o
