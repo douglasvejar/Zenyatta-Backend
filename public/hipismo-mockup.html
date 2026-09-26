@@ -204,6 +204,28 @@
   button.btn { font-family: 'Outfit', sans-serif; border: none; padding: 11px 18px; font-size: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; }
   .btn-primario { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; }
   .btn-secundario { background: var(--card-2); color: var(--text); border: 1px solid var(--border-light) !important; }
+
+  /* "Gualdrapa" (manta/chaleco numerado de cada ejemplar) — 25-09-2026, a
+     pedido del usuario ("no quiero que salga como en la imagen los
+     numeros... quiero que salga como se ven los numeros cuando los
+     caballos van a correr... la gualdrapa y abajo escrito el numero").
+     COLORES_EJEMPLAR/gualdrapaHTML() más abajo arman este mismo elemento
+     desde JS — misma definición visual EXACTA copiada en
+     public/hipismo-cliente-portal.html (mismo criterio "hermana" que ya
+     usa armarJugadaTexto/armarJugadaTextoDetallado), así el operador ve
+     siempre lo mismo que el cliente en su link. */
+  .gualdrapa { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1; }
+  .gualdrapa-tela {
+    position: relative; width: 19px; height: 15px;
+    font-size: 9.5px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 3px 3px 2px 2px; box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+  .gualdrapa-tela::before {
+    content: ''; position: absolute; top: -3px; left: 3px; right: 3px; height: 4px;
+    background: inherit; border-radius: 2px 2px 0 0; opacity: .85;
+  }
+  .gualdrapa-num { font-size: 9px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
   .btn-fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 
   .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
@@ -626,7 +648,11 @@
     <div class="nav-children" id="grupoApuestas">
       <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥<span class="nav-lbl"> Cargar Planos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅<span class="nav-lbl"> Validar Plano</span></button>
-      <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆<span class="nav-lbl"> Cargar Remate</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆<span class="nav-lbl"> Cargar Remate Automático desde Chat</span></button>
+      <!-- 25-09-2026, a pedido del usuario: mismo remate, pero armado en
+           la pantalla en vez de pegar el mensaje de WhatsApp — ver
+           vista-cargarRemateManual más abajo. -->
+      <button type="button" class="nav-item nav-child" data-vista="cargarRemateManual" onclick="mostrarVista('cargarRemateManual', this)">✍️<span class="nav-lbl"> Cargar Remate Manual</span></button>
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁<span class="nav-lbl"> Traspasos de Jugadas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Jugadas Adelantadas</span></button>
       <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "en apuestas
@@ -834,7 +860,7 @@
     <!-- ============ CARGAR REMATE (funcional, primer formato confirmado) ============ -->
     <section class="vista" id="vista-cargarRemate">
       <div class="card">
-        <h2>🏆 Cargar Remate</h2>
+        <h2>🏆 Cargar Remate Automático desde Chat</h2>
         <p class="desc">Pega el remate (cada línea: número de ejemplar, caballo, monto y cliente), metes el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular y Guardar</b>. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completa "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
 
         <div class="fila">
@@ -877,6 +903,72 @@
 
         <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.</div>
         <pre class="resultado-caja" id="resultadoCajaRemate" style="display:none;"></pre>
+      </div>
+    </section>
+
+    <!-- ============ CARGAR REMATE MANUAL (25-09-2026) ============ -->
+    <!-- A pedido del usuario: mismo remate de siempre, pero armado en la
+         pantalla (Hipódromo/Carrera/Fecha + una fila por N° de Ejemplar
+         con su Jugador y su Precio), en vez de pegar el mensaje de
+         WhatsApp completo como en "Cargar Remate Automático desde Chat".
+         calcularRemateManual() más abajo arma un "texto" de remate
+         equivalente al que se pega a mano en el otro flujo y lo manda al
+         MISMO POST /api/hipismo/remates (services/hipismoRemateCalc.js)
+         — no hizo falta tocar nada del backend. No se pide el nombre del
+         caballo (la tabla de referencia que mandó el usuario tampoco lo
+         pide) — se usa "EJEMPLAR N" como marcador en el texto guardado. -->
+    <section class="vista" id="vista-cargarRemateManual">
+      <div class="card">
+        <h2>✍️ Cargar Remate Manual</h2>
+        <p class="desc">Arma el remate directo acá: elige el Hipódromo, Carrera y Fecha, y por cada número de ejemplar que se jugó elige el cliente y el precio que le puso — no hace falta pegar ningún mensaje. El cálculo y el guardado son EXACTOS al de "Cargar Remate Automático desde Chat" (mismo % de comisión, misma llegada, misma garantía si aplica).</p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromoRemateManual">Hipódromo</label>
+            <select id="selHipodromoRemateManual">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCarreraRemateManual">Carrera</label>
+            <select id="selCarreraRemateManual"></select>
+          </div>
+          <div>
+            <label for="inpFechaRemateManual">Fecha</label>
+            <input type="date" id="inpFechaRemateManual">
+          </div>
+        </div>
+
+        <div class="fila">
+          <div>
+            <label for="inpComisionRemateManual">% Comisión de este remate</label>
+            <input type="text" id="inpComisionRemateManual" value="20" placeholder="Ej: 20">
+          </div>
+          <div>
+            <label for="inpPizarraRemateManual">Llegada (opcional si ya cargaste el plano de esta carrera)</label>
+            <input type="text" id="inpPizarraRemateManual" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar" title="Aceptado con punto, guion, coma o barra: 2.5.1 / 2-5-1 / 2,5,1 / 2/5/1">
+          </div>
+          <div>
+            <label for="inpGarantiaRemateManual">Garantía / "PAGANDO $" — opcional</label>
+            <input type="text" id="inpGarantiaRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no tiene garantía)">
+          </div>
+        </div>
+
+        <label>Ejemplares — elige jugador y precio SOLO en los que se jugaron</label>
+        <table id="tablaRemateManualWrap">
+          <thead><tr><th>N° Ejemplar</th><th>Jugador</th><th>Precio Ejemplar</th></tr></thead>
+          <tbody id="tablaRemateManual"></tbody>
+        </table>
+
+        <div class="btn-fila" style="margin-top:16px;">
+          <button class="btn btn-primario" type="button" onclick="calcularRemateManual()">🧮 Calcular y Guardar</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarRemateManual()">🧹 Limpiar</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultadoRemateManual()">📋 Copiar Resultado</button>
+          <span class="toast-copiado" id="toastCopiadoRemateManual">Copiado ✅</span>
+        </div>
+
+        <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.</div>
+        <pre class="resultado-caja" id="resultadoCajaRemateManual" style="display:none;"></pre>
       </div>
     </section>
 
@@ -4126,6 +4218,10 @@ function mostrarVista(id, btn) {
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
+  // "Cargar Remate Manual" (25-09-2026) — refresca el <select> de
+  // Jugador de cada fila cada vez que se entra a la pestaña, para que
+  // un cliente recién creado en otra pantalla ya aparezca sin recargar.
+  cargarRemateManual: () => poblarJugadoresRemateManual(),
   // Balance General (24-09-2026) entra a esta lista junto con el resto de
   // reportes reales — ver la nota grande en pintarBalanceGeneral: antes
   // no estaba acá porque no pedía nada al servidor.
@@ -4563,6 +4659,205 @@ function limpiarRemate() {
   document.getElementById('resultadoCajaRemate').style.display = 'none';
   document.getElementById('resultadoVacioRemate').style.display = 'block';
   document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.';
+}
+
+// =================================================================
+// "Gualdrapa" (manta numerada de cada ejemplar) — 25-09-2026, a pedido
+// del usuario: reemplaza el número suelto por la manta/chaleco de color
+// real que usan los caballos al correr, con el número repetido abajo en
+// texto chiquito ("que se vea uniforme al texto y se vea armónico").
+// Colores tomados de la lista de referencia que mandó el usuario (1 al
+// 20 — el máximo de ejemplares que puede tener una carrera). Misma
+// definición EXACTA copiada en public/hipismo-cliente-portal.html (ver
+// la nota grande ahí) para que el operador vea siempre lo mismo que el
+// cliente en su link — se usa acá en la tabla de "Cargar Remate Manual"
+// y en armarJugadaTextoDetallado() (pantalla "Detallado por Cliente").
+const COLORES_EJEMPLAR = {
+  1: { bg: '#e02020', fg: '#ffffff' },
+  2: { bg: '#ffffff', fg: '#111111', borde: true },
+  3: { bg: '#1560bd', fg: '#ffffff' },
+  4: { bg: '#f5c400', fg: '#111111' },
+  5: { bg: '#1d7a3d', fg: '#ffffff' },
+  6: { bg: '#111111', fg: '#f5c400' },
+  7: { bg: '#f07c1d', fg: '#111111' },
+  8: { bg: '#f48fb1', fg: '#111111' },
+  9: { bg: '#33b5e5', fg: '#111111' },
+  10: { bg: '#6a1b9a', fg: '#ffffff' },
+  11: { bg: '#9e9e9e', fg: '#d32f2f' },
+  12: { bg: '#a4d65e', fg: '#111111' },
+  13: { bg: '#6d4c2a', fg: '#ffffff' },
+  14: { bg: '#7b1024', fg: '#f5c400' },
+  15: { bg: '#e8d9b5', fg: '#111111' },
+  16: { bg: '#26c6c1', fg: '#111111' },
+  17: { bg: '#ff8a80', fg: '#111111' },
+  18: { bg: '#5b6b2a', fg: '#ffffff' },
+  19: { bg: '#14213d', fg: '#ffffff' },
+  20: { bg: '#c9a6e0', fg: '#111111' }
+};
+function gualdrapaHTML(numeroCrudo) {
+  const n = parseInt(numeroCrudo, 10);
+  if (!n || isNaN(n)) return '';
+  const c = COLORES_EJEMPLAR[n] || { bg: '#616161', fg: '#ffffff' };
+  const borde = c.borde ? 'border:1px solid #c9c9c9;' : '';
+  return `<span class="gualdrapa"><span class="gualdrapa-tela" style="background:${c.bg}; color:${c.fg}; ${borde}">${n}</span><span class="gualdrapa-num">${n}</span></span>`;
+}
+
+// ------------------------------------------------------------------
+// "Cargar Remate Manual" (25-09-2026) — ver la nota grande en el HTML
+// de vista-cargarRemateManual: arma un texto de remate equivalente al
+// que se pega a mano y lo manda al MISMO POST /api/hipismo/remates,
+// sin backend nuevo.
+// ------------------------------------------------------------------
+function construirFilasRemateManual() {
+  const tbody = document.getElementById('tablaRemateManual');
+  if (!tbody) return;
+  let html = '';
+  for (let n = 1; n <= 20; n++) {
+    html += `<tr>
+      <td>${gualdrapaHTML(n)}</td>
+      <td><select id="selJugadorRemateManual_${n}"><option value="">Seleccione</option></select></td>
+      <td><input type="text" id="inpPrecioRemateManual_${n}" placeholder="0" inputmode="decimal"></td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+// Rellena el <select> de Jugador de cada fila con la lista real de
+// clientes del grupo (misma fuente que la pestaña "Clientes" —
+// CLIENTES_HIPISMO_CACHE, ver cargarClientesReales() más abajo) —
+// conserva el valor ya elegido en cada fila si ese cliente sigue en la
+// lista, para no perder lo que el operador ya venía llenando.
+async function poblarJugadoresRemateManual() {
+  let jugadores;
+  try {
+    jugadores = CLIENTES_HIPISMO_CACHE.length ? CLIENTES_HIPISMO_CACHE : await apiHipismo('/api/jugadores');
+  } catch (e) {
+    jugadores = [];
+  }
+  const opciones = '<option value="">Seleccione</option>' + jugadores.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorRemateManual_' + n);
+    if (!sel) continue;
+    const previo = sel.value;
+    sel.innerHTML = opciones;
+    if (jugadores.some(j => j.nombre === previo)) sel.value = previo;
+  }
+}
+
+async function calcularRemateManual() {
+  const hipodromoNombre = document.getElementById('selHipodromoRemateManual').value;
+  const carreraNumero = document.getElementById('selCarreraRemateManual').value;
+  const fecha = document.getElementById('inpFechaRemateManual').value;
+  const comisionPorcentaje = document.getElementById('inpComisionRemateManual').value;
+  const pizarra = document.getElementById('inpPizarraRemateManual').value.trim();
+  const garantiaTxt = document.getElementById('inpGarantiaRemateManual').value.trim();
+
+  const vacio = document.getElementById('resultadoVacioRemateManual');
+  const caja = document.getElementById('resultadoCajaRemateManual');
+
+  if (!hipodromoNombre) {
+    vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  if (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+    vacio.textContent = 'Falta el % de comisión de este remate.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  // Arma un "texto" de remate equivalente al que se pega a mano en
+  // "Cargar Remate Automático desde Chat" — mismo motor
+  // (services/hipismoRemateCalc.js: parsearRemate() ya soporta números
+  // en formato "N-" además de los emojis 1️⃣..🔟, ver la nota grande de
+  // ahí). "EJEMPLAR N" es el marcador que se usa como nombre del
+  // caballo — esta pantalla no pide el nombre real (la tabla de
+  // referencia tampoco lo pedía).
+  const lineas = [];
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorRemateManual_' + n);
+    const inp = document.getElementById('inpPrecioRemateManual_' + n);
+    if (!sel || !inp) continue;
+    const jugador = sel.value;
+    const montoTxt = inp.value.trim();
+    if (!jugador || !montoTxt) continue;
+    const monto = parseFloat(montoTxt.replace(',', '.'));
+    if (!isFinite(monto) || monto <= 0) continue;
+    lineas.push(`${n}- EJEMPLAR ${n} ${monto}$ ${jugador}`);
+  }
+  if (!lineas.length) {
+    vacio.textContent = 'Elige jugador y precio en al menos un ejemplar.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  if (garantiaTxt) {
+    const garantia = parseFloat(garantiaTxt.replace(',', '.'));
+    if (isFinite(garantia) && garantia > 0) lineas.push(`PAGANDO ${garantia}$`);
+  }
+  const texto = lineas.join('\n');
+
+  vacio.textContent = 'Calculando y guardando en el servidor…';
+  vacio.style.display = 'block';
+  caja.style.display = 'none';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/remates', {
+      method: 'POST',
+      body: JSON.stringify({ texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra })
+    });
+  } catch (e) {
+    vacio.textContent = e.message;
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  cargarClientesReales();
+
+  let salida = data.textoResultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+  }
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida;
+}
+
+function limpiarRemateManual() {
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorRemateManual_' + n);
+    const inp = document.getElementById('inpPrecioRemateManual_' + n);
+    if (sel) sel.value = '';
+    if (inp) inp.value = '';
+  }
+  document.getElementById('inpGarantiaRemateManual').value = '';
+  document.getElementById('inpPizarraRemateManual').value = '';
+  document.getElementById('resultadoCajaRemateManual').style.display = 'none';
+  document.getElementById('resultadoVacioRemateManual').style.display = 'block';
+  document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.';
+}
+
+function copiarResultadoRemateManual() {
+  const caja = document.getElementById('resultadoCajaRemateManual');
+  if (caja.style.display === 'none') return;
+  const texto = caja.textContent;
+  const mostrarToast = () => {
+    const t = document.getElementById('toastCopiadoRemateManual');
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
+      alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
+    });
+  } else {
+    alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
+  }
 }
 
 function copiarResultadoRemate() {
@@ -5784,18 +6079,24 @@ function totalCarrerasDet(carreras) { return carreras.reduce((acc, c) => acc + c
 
 // Mismo texto EXACTO que armarJugadaTexto() en hipismo-cliente-portal.html.
 function armarJugadaTextoDetallado(c) {
+  // 25-09-2026, a pedido del usuario: el número de ejemplar se muestra
+  // con su gualdrapa (mismo criterio EXACTO que armarJugadaTexto() en
+  // hipismo-cliente-portal.html — ver la nota grande de gualdrapaHTML()
+  // más arriba) para que el Administrador vea acá lo mismo que el
+  // cliente ve en su link.
   if (c.tipo === 'remate') {
-    return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}` : `🏆 Remate — jugó ${c.caballo}`;
+    const num = c.numeroEjemplar != null ? ' ' + gualdrapaHTML(c.numeroEjemplar) : '';
+    return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}${num}` : `🏆 Remate — jugó ${c.caballo}${num}`;
   }
   if (c.tipo === 'adelantada') {
-    const detalle = c.subtipo === 'tf' ? `Tabla fija (${c.numeroEjemplar})` : `Marca (${c.numero1}x${c.numero2})`;
+    const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
     return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
   }
   const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
   if ((c.modalidad || '').toLowerCase() === 'pp') {
-    return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
+    return `${verbo} ${gualdrapaHTML(c.caballoA)}x${gualdrapaHTML(c.caballoB)} PP`;
   }
-  return `${verbo} ${c.modalidad} del ${c.caballo}`;
+  return `${verbo} ${c.modalidad} del ${gualdrapaHTML(c.caballo)}`;
 }
 
 async function abrirDetalleCliente(nombre) {
@@ -6662,6 +6963,7 @@ function poblarSelectHipodromo() {
     if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
   }
   poblarSelectHipodromoRemate();
+  poblarSelectHipodromoRemateManual();
   poblarSelectHipodromoAdelantadas();
 }
 
@@ -6684,6 +6986,21 @@ function poblarSelectHipodromoAdelantadas() {
 // del grupo — select propio para no interferir con el de "Cargar Planos".
 function poblarSelectHipodromoRemate() {
   const sel = document.getElementById('selHipodromoRemate');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+
+// "Cargar Remate Manual" (25-09-2026) usa el mismo listado real de
+// hipódromos del grupo — select propio para no interferir con los otros.
+function poblarSelectHipodromoRemateManual() {
+  const sel = document.getElementById('selHipodromoRemateManual');
   if (!sel) return;
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
@@ -7993,8 +8310,12 @@ async function pintarSaldoComisiones() {
 // ------------------------------------------------------------------
 poblarCarreras();
 poblarCarreras('selCarreraRemate');
+poblarCarreras('selCarreraRemateManual');
 document.getElementById('inpFecha').value = fechaLocalHoy();
 document.getElementById('inpFechaRemate').value = fechaLocalHoy();
+document.getElementById('inpFechaRemateManual').value = fechaLocalHoy();
+construirFilasRemateManual();
+poblarJugadoresRemateManual();
 document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
 document.getElementById('inpFechaComisionesDevueltas').value = fechaLocalHoy();
 document.getElementById('inpFechaEliminarJornada').value = fechaLocalHoy();

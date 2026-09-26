@@ -154,6 +154,24 @@
   .carrera-fila .resultado { text-align: right; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; align-self: center; }
   .carrera-fila .monto-jugado { display: block; font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-align: right; }
 
+  /* "Gualdrapa" (manta/chaleco numerado de cada ejemplar) — 25-09-2026, a
+     pedido del usuario. Misma definición visual EXACTA copiada en
+     public/hipismo-mockup.html (mismo criterio "hermana" que ya usa
+     armarJugadaTexto/armarJugadaTextoDetallado) — el cliente ve acá
+     siempre lo mismo que el Administrador ve en "Detallado por Cliente". */
+  .gualdrapa { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1; }
+  .gualdrapa-tela {
+    position: relative; width: 19px; height: 15px;
+    font-size: 9.5px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 3px 3px 2px 2px; box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+  .gualdrapa-tela::before {
+    content: ''; position: absolute; top: -3px; left: 3px; right: 3px; height: 4px;
+    background: inherit; border-radius: 2px 2px 0 0; opacity: .85;
+  }
+  .gualdrapa-num { font-size: 9px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
+
   /* Fila de un ticket de Deportes dentro del bloque "⚽ Deportes"
      (23-09-2026) — mismo espíritu que .carrera-fila pero sin carrera ni
      pizarra: en su lugar, el número de ticket, el detalle de la jugada y
@@ -285,6 +303,42 @@
   function claseMonto(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
   function conSigno(n) { return (n > 0 ? '+' : (n < 0 ? '' : '')) + formatMonto(n); }
 
+  // "Gualdrapa" (manta numerada de cada ejemplar) — 25-09-2026, a pedido
+  // del usuario: reemplaza el número suelto por la manta/chaleco de
+  // color real que usan los caballos al correr, con el número repetido
+  // abajo en texto chiquito. Colores tomados de la lista de referencia
+  // que mandó el usuario (1 al 20). Misma definición EXACTA copiada en
+  // public/hipismo-mockup.html (ver la nota grande ahí).
+  const COLORES_EJEMPLAR = {
+    1: { bg: '#e02020', fg: '#ffffff' },
+    2: { bg: '#ffffff', fg: '#111111', borde: true },
+    3: { bg: '#1560bd', fg: '#ffffff' },
+    4: { bg: '#f5c400', fg: '#111111' },
+    5: { bg: '#1d7a3d', fg: '#ffffff' },
+    6: { bg: '#111111', fg: '#f5c400' },
+    7: { bg: '#f07c1d', fg: '#111111' },
+    8: { bg: '#f48fb1', fg: '#111111' },
+    9: { bg: '#33b5e5', fg: '#111111' },
+    10: { bg: '#6a1b9a', fg: '#ffffff' },
+    11: { bg: '#9e9e9e', fg: '#d32f2f' },
+    12: { bg: '#a4d65e', fg: '#111111' },
+    13: { bg: '#6d4c2a', fg: '#ffffff' },
+    14: { bg: '#7b1024', fg: '#f5c400' },
+    15: { bg: '#e8d9b5', fg: '#111111' },
+    16: { bg: '#26c6c1', fg: '#111111' },
+    17: { bg: '#ff8a80', fg: '#111111' },
+    18: { bg: '#5b6b2a', fg: '#ffffff' },
+    19: { bg: '#14213d', fg: '#ffffff' },
+    20: { bg: '#c9a6e0', fg: '#111111' }
+  };
+  function gualdrapaHTML(numeroCrudo) {
+    const n = parseInt(numeroCrudo, 10);
+    if (!n || isNaN(n)) return '';
+    const c = COLORES_EJEMPLAR[n] || { bg: '#616161', fg: '#ffffff' };
+    const borde = c.borde ? 'border:1px solid #c9c9c9;' : '';
+    return `<span class="gualdrapa"><span class="gualdrapa-tela" style="background:${c.bg}; color:${c.fg}; ${borde}">${n}</span><span class="gualdrapa-num">${n}</span></span>`;
+  }
+
   function fechaDeIso(iso) {
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, m - 1, d);
@@ -316,8 +370,14 @@
     // que cualquier otra fila (ver más abajo) — esto solo cambia el
     // texto de la jugada para que diga "Remate" en vez de sonar a una
     // jugada más de Tercios.
+    // 25-09-2026, a pedido del usuario ("que salga en las fotos de los
+    // clientes cuando ven su saldo... todo que se vea uniforme al texto
+    // y se vea armónico"): cada número de ejemplar se muestra con su
+    // gualdrapa (ver gualdrapaHTML() más arriba) en vez de solo el
+    // número pelado.
     if (c.tipo === 'remate') {
-      return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}` : `🏆 Remate — jugó ${c.caballo}`;
+      const num = c.numeroEjemplar != null ? ' ' + gualdrapaHTML(c.numeroEjemplar) : '';
+      return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}${num}` : `🏆 Remate — jugó ${c.caballo}${num}`;
     }
     // Adelantada (24-09-2026, a pedido del usuario: "los que los clientes
     // ven en su link debe contener toda sus jugadas no puede faltar
@@ -325,15 +385,15 @@
     // para distinguirla de una jugada normal de Tercios.
     if (c.tipo === 'adelantada') {
       const detalle = c.subtipo === 'tf'
-        ? `Tabla fija (${c.numeroEjemplar})`
-        : `Marca (${c.numero1}x${c.numero2})`;
+        ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}`
+        : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
       return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
     }
     const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
     if ((c.modalidad || '').toLowerCase() === 'pp') {
-      return `${verbo} ${c.caballoA}x${c.caballoB} PP`;
+      return `${verbo} ${gualdrapaHTML(c.caballoA)}x${gualdrapaHTML(c.caballoB)} PP`;
     }
-    return `${verbo} ${c.modalidad} del ${c.caballo}`;
+    return `${verbo} ${c.modalidad} del ${gualdrapaHTML(c.caballo)}`;
   }
 
   function mostrarError(mensaje) {
