@@ -1147,7 +1147,7 @@
     <section class="vista" id="vista-pozos">
       <div class="card">
         <h2>💰 Pozos</h2>
-        <p class="desc">Cuánto pozo/saldo le queda a cada cliente. Ejemplo con los números que diste: si a Pedro se le asigna un pozo de 1000 y pierde 700 en el período, le quedan 300 de pozo. El círculo de color avisa qué tan vivo está ese pozo: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Datos de ejemplo, no reales.</p>
+        <p class="desc">Cuánto pozo le queda a cada cliente "Avalado" — se le asigna un pozo y, a medida que va jugando (Tercios, Remate, Adelantadas — Deportes también si está anclado), ese pozo sube o baja solo, sin tocar Balance ni Cierre Final (esos siguen siendo 100% de las jugadas del período, sin pozo). El círculo de color avisa qué tan vivo está: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Los clientes "Libre" no tienen pozo (⚪).</p>
 
         <div class="btn-fila" style="margin-bottom:14px;">
           <button class="btn btn-primario" type="button" onclick="copiarPozosImagen()">📸 Copiar Imagen HD</button>
@@ -1164,13 +1164,8 @@
             </div>
           </div>
           <table id="tablaPozos">
-            <thead><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Perdido en el período</th><th class="num">Pozo restante</th><th>Estado</th></tr></thead>
-            <tbody>
-              <tr data-pct="90"><td>Kristian</td><td class="num">1.000,00</td><td class="num neg">-100,00</td><td class="num pos">900,00</td><td><span class="punto punto-verde"></span> 90%</td></tr>
-              <tr data-pct="30"><td>Pedro</td><td class="num">1.000,00</td><td class="num neg">-700,00</td><td class="num pos">300,00</td><td><span class="punto punto-amarillo"></span> 30%</td></tr>
-              <tr data-pct="10" class="fila-pozo-rojo"><td>Mujica</td><td class="num">500,00</td><td class="num neg">-450,00</td><td class="num pos">50,00</td><td><span class="punto punto-rojo"></span> 10%</td></tr>
-              <tr><td>Sammy</td><td class="num">Libre (sin pozo)</td><td class="num">—</td><td class="num">—</td><td><span class="punto punto-gris"></span> Libre</td></tr>
-            </tbody>
+            <thead><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr></thead>
+            <tbody><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
           </table>
         </div>
 
@@ -5853,6 +5848,7 @@ async function cargarClientesReales() {
   // tener que pedir /api/jugadores de nuevo.
   CLIENTES_HIPISMO_CACHE = jugadores;
   poblarSelectPozoAjusteCliente();
+  pintarTablaPozos();
   if (!jugadores.length) {
     tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
     return;
@@ -6899,6 +6895,43 @@ async function guardarAjustePozoPantallaPozos() {
 // ------------------------------------------------------------------
 // Umbrales pedidos por el usuario: verde >=80% vivo, rojo <15% vivo,
 // amarillo todo lo del medio (incluye el "50%" que mencionó como ejemplo).
+// Tabla real de "💰 Pozos" (26-09-2026, a pedido del usuario: "la pestaña
+// pozos no me esta funcionando, quiero agregar pozo a clientes y no me
+// deja, la lista completa de clientes tampoco sale") — hasta esta ronda
+// esta tabla era 100% de ejemplo (Kristian/Pedro/Mujica/Sammy, fijos en
+// el HTML) y nunca se conectó a datos reales, así que nunca iba a
+// mostrar los clientes de verdad del grupo. Ahora pinta TODOS los
+// clientes reales (misma fuente que "Clientes", CLIENTES_HIPISMO_CACHE):
+// los "Avalado" con su pozo real (pozoInicial/liquidado/pozoActual,
+// calculado en services/pozo.js — ahora suma Deportes Y Hipismo, todo el
+// histórico, nunca solo la semana) y los "Libre" en gris como "Libre
+// (sin pozo)". Se repinta cada vez que se refresca Clientes
+// (cargarClientesReales()), para no depender de un pedido aparte.
+function pintarTablaPozos() {
+  const tbody = document.querySelector('#tablaPozos tbody');
+  if (!tbody) return;
+  if (!CLIENTES_HIPISMO_CACHE.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos.</td></tr>';
+    actualizarAlertaPozos();
+    return;
+  }
+  tbody.innerHTML = CLIENTES_HIPISMO_CACHE.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(j => {
+    if (j.tipo_cuenta !== 'avalado' || !j.pozo) {
+      return `<tr><td>${formatNombre(j.nombre)}</td><td class="num">Libre (sin pozo)</td><td class="num">—</td><td class="num">—</td><td><span class="punto punto-gris"></span> Libre</td></tr>`;
+    }
+    const { pozoInicial, liquidado, pozoActual } = j.pozo;
+    const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
+    const color = colorPorPorcentaje(pct);
+    const claseFila = color === 'rojo' ? ' class="fila-pozo-rojo"' : '';
+    const claseLiq = liquidado > 0 ? 'pos' : (liquidado < 0 ? 'neg' : '');
+    const signoLiq = liquidado > 0 ? '+' : (liquidado < 0 ? '-' : '');
+    const claseActual = pozoActual >= 0 ? 'pos' : 'neg';
+    const signoActual = pozoActual < 0 ? '-' : '';
+    return `<tr data-pct="${pct}"${claseFila}><td>${formatNombre(j.nombre)}</td><td class="num">${formatMontoTabla(pozoInicial)}</td><td class="num ${claseLiq}">${signoLiq}${formatMontoTabla(liquidado)}</td><td class="num ${claseActual}">${signoActual}${formatMontoTabla(pozoActual)}</td><td><span class="punto punto-${color}"></span> ${pct}%</td></tr>`;
+  }).join('');
+  actualizarAlertaPozos();
+}
+
 function colorPorPorcentaje(pct) {
   if (pct >= 80) return 'verde';
   if (pct < 15) return 'rojo';

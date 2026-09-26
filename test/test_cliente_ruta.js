@@ -127,6 +127,19 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, telefono, apodo, creado_en FROM grupo_telefonos WHERE grupo_id = \$1 ORDER BY creado_en ASC/i.test(sql)) {
     return { rows: TABLAS.grupo_telefonos.filter(t => t.grupo_id === params[0]) };
   }
+  // Pozo de Hipismo (26-09-2026, ver services/hipismoPozo.js) — este
+  // archivo prueba el portal de Deportes, sin ninguna jugada de Hipismo
+  // cargada, así que las 3 consultas nuevas siempre dan vacío (RANDY solo
+  // tiene su pozo de Deportes, calculado más arriba con tickets_historial).
+  if (/^SELECT cliente_nombre, banquero_nombre, resultado_jugador, resultado_banquero FROM hipismo_tickets WHERE/i.test(sql)) {
+    return { rows: [] };
+  }
+  if (/^SELECT resultado FROM hipismo_remate_apuestas WHERE/i.test(sql)) {
+    return { rows: [] };
+  }
+  if (/^SELECT cliente_nombre, resultado_cliente, banqueadores FROM hipismo_adelantadas_jugadas WHERE/i.test(sql)) {
+    return { rows: [] };
+  }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
