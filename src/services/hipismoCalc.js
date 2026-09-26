@@ -128,6 +128,19 @@
 //     contra cliente" (ej. "raul 4y3 x adrian 5 con 400", cada cliente
 //     con su propio grupo de caballos, incluso desparejo) — distinta de
 //     la "morocha" de arriba (que es UN cliente con varios caballos).
+//
+// AGREGADO 26-09-2026 (otro plano real más, "10a7 5 100 richard LUSHO"):
+//   - 3er formato de línea compacto — LINEA_REGEX_MODALIDAD_PRIMERO, ver
+//     su nota grande más abajo — mismos campos que LINEA_REGEX_COMPACTA
+//     pero en OTRO ORDEN: acá la modalidad va primero, no el cliente
+//     ("modalidad caballo monto jugador banquero", en vez de "cliente
+//     modalidad caballo banquero monto"). Ejemplo confirmado por el
+//     usuario: "10A7 5 50 BOMBERO TOLERANTE" se lee "Bombero juega 10a7
+//     el caballo 5 con 50 y se lo da Tolerante" — "el primer nombre
+//     siempre es el que juega y el segundo el que da". calcularPlano()
+//     prueba los 3 formatos en orden (LINEA_REGEX, LINEA_REGEX_COMPACTA,
+//     LINEA_REGEX_MODALIDAD_PRIMERO) — un mismo plano pegado puede traer
+//     líneas de cualquiera de los 3, sin que el operador avise cuál usa.
 // =================================================================
 
 // Devuelve {j, b} como FRACCIÓN del monto (antes de comisión), desde la
@@ -370,6 +383,22 @@ const LINEA_REGEX = new RegExp('^juega\\s+(\\S+)\\s+' + MODALIDAD_SRC + '(?:\\s+
 // usuario, es la lectura más segura).
 const CABALLO_SRC = '((?:\\d{1,2}(?:\\s*[,y-]\\s*\\d{1,2})*)|(?:\\d{1,2}\\s*x\\s*\\d{1,2}))';
 const LINEA_REGEX_COMPACTA = new RegExp('^(\\S+)\\s+' + MODALIDAD_SRC + '\\s+' + CABALLO_SRC + '\\s+(\\S+)\\s+([\\d.,]+)\\s*$', 'i');
+
+// LINEA_REGEX_MODALIDAD_PRIMERO (26-09-2026, a pedido del usuario, con
+// otro plano real de ejemplo: "10a7 5 100 richard LUSHO"): 3er formato
+// compacto, mismos 5 campos que LINEA_REGEX_COMPACTA de arriba pero en
+// ORDEN DISTINTO — acá la modalidad va PRIMERO: modalidad, caballo(s),
+// monto, cliente (el que juega), banquero (el que da), en ese orden
+// fijo. Reusa los MISMOS MODALIDAD_SRC/CABALLO_SRC que los otros 2
+// formatos, así admite cualquier modalidad (incluida "a premio"/décimos,
+// con o sin coma decimal: "10a7", "10a7,5"...) y cualquier morocha ya
+// soportada — solo cambia dónde va cada campo. Ejemplos confirmados por
+// el usuario ("richard" juega, "lusho"/"tony" dan):
+//   "10a7 5 100 richard LUSHO"    -> richard juega 10a7 el caballo 5 con
+//                                     100, se lo da LUSHO.
+//   "10a7,5 5 200 LUSHO place"    -> modalidad "a premio" con N decimal
+//                                     (7,5), LUSHO juega, place da.
+const LINEA_REGEX_MODALIDAD_PRIMERO = new RegExp('^' + MODALIDAD_SRC + '\\s+' + CABALLO_SRC + '\\s+([\\d.,]+)\\s+(\\S+)\\s+(\\S+)\\s*$', 'i');
 
 // PARECE_JUGADA_RE: heurística para no perder de vista una línea que de
 // verdad parece una jugada (compacta, sin la palabra "Juega") pero que
@@ -630,7 +659,12 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
       [, jugadorCrudo, modalidadCruda, caballoTxt, montoTxt, bancoCrudo] = mm;
     } else {
       mm = limpia.match(LINEA_REGEX_COMPACTA);
-      if (mm) [, jugadorCrudo, modalidadCruda, caballoTxt, bancoCrudo, montoTxt] = mm;
+      if (mm) {
+        [, jugadorCrudo, modalidadCruda, caballoTxt, bancoCrudo, montoTxt] = mm;
+      } else {
+        mm = limpia.match(LINEA_REGEX_MODALIDAD_PRIMERO);
+        if (mm) [, modalidadCruda, caballoTxt, montoTxt, jugadorCrudo, bancoCrudo] = mm;
+      }
     }
     if (!mm) {
       // Encabezados de categoría (ej. "TERCIOS") u otras líneas se dejan
@@ -943,7 +977,7 @@ module.exports = {
   ordinalCarrera, limpiarEncabezadoYPie,
   // 24-09-2026 (jugadas mixtas + formato compacto "Grupo Gorila"):
   resolverModalidadCompuesta, resolverModalidadMultiCaballo, normalizarModalidadCombo,
-  LINEA_REGEX, LINEA_REGEX_COMPACTA,
+  LINEA_REGEX, LINEA_REGEX_COMPACTA, LINEA_REGEX_MODALIDAD_PRIMERO,
   // 24-09-2026 (segunda ronda — jugadas "a premio" con notación extendida
   // y función de "sin comisión"):
   decimosN, esModalidadSinComision, parsearValoresSinComision, DECIMOS_RE
