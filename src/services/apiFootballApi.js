@@ -126,11 +126,23 @@ async function obtenerPartidosDelDia(fechaISO, apiKey) {
   return { datos, huboError: false };
 }
 
-// Caché en memoria por fecha — mismo mecanismo (y mismos TTL) que
-// footballDataApi.js, con su propio mapa independiente (son 2 fuentes
-// distintas, cada una con su propio límite de pedidos por minuto).
-const CACHE_TTL_MS = 45000;
-const CACHE_TTL_ERROR_MS = 20000;
+// Caché en memoria por fecha — mismo mecanismo que footballDataApi.js,
+// pero con su propio mapa independiente y su propio TTL (26-09-2026):
+// football-data.org limita por MINUTO (10/min), por eso allá el TTL de
+// 45s alcanza de sobra. api-football.com, en cambio, limita por DÍA en
+// su plan gratis (~100 pedidos/día) — copiarle el mismo TTL de 45s
+// hacía que, con la Pizarra abierta (auto-refresco cada 20s), se
+// gastara el cupo DIARIO completo en poco más de una hora, sin
+// importar cuántos partidos hubiera. Con 15 minutos de TTL, aunque la
+// Pizarra quede abierta las 24 horas seguidas el peor caso es ~96
+// pedidos reales por día — dentro del cupo — y el dato de "1h" de
+// todos modos solo cambia una vez por partido, así que refrescarlo
+// cada 15 minutos no pierde nada en la práctica. Si vuelve a agotarse
+// el cupo, subir CACHE_TTL_MS más (o ver los otros puntos pendientes:
+// dejar de re-pedir partidos ya con final1H, y/o espaciar el
+// auto-refresco de la Pizarra).
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutos
+const CACHE_TTL_ERROR_MS = 3 * 60 * 1000; // 3 minutos (reintenta antes si fue un error puntual, pero sin volver a golpear el cupo diario de inmediato)
 let cachePorFecha = new Map(); // fechaISO -> { creadoEn, ttl, promesa }
 
 function _resetCacheParaPruebas() {
