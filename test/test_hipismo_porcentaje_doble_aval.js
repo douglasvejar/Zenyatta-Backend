@@ -156,6 +156,12 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
+  // "Cargar Winners" (26-09-2026) — /cierre-final ahora también suma
+  // hipismo_winners; esta prueba no crea ninguno, siempre vacío.
+  if (/^SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
+    return { rows: [] };
+  }
+
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

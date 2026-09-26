@@ -46,7 +46,11 @@ const { numeroSemanaISO } = require('../services/fechaSemana');
 const {
   calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO,
   parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
-  parsearValoresSinComision
+  parsearValoresSinComision,
+  // "Cargar Winners" (26-09-2026) reusa el mismo formato de nombre/monto
+  // que el resto de Hipismo, sin necesitar nada del motor de cálculo de
+  // Tercios (acá no se calcula nada, ver la nota grande junto a POST /winners).
+  formatNombre, formatMontoTabla
 } = require('../services/hipismoCalc');
 // "Cargar Remate" (23-09-2026, a pedido del usuario, con un formato real
 // de ejemplo pegado por él — ver la nota grande en
@@ -1425,6 +1429,96 @@ router.get('/remates/:id', asyncHandler(async (req, res) => {
   res.json({ remate, apuestas: rApuestas.rows });
 }));
 
+// =================================================================
+// "CARGAR WINNERS" (26-09-2026, confirmando el formato que quedó
+// pendiente desde que se creó la pestaña: "en cargar winners se
+// selecciona el cliente... con el hipodromo y la carrera, el numero del
+// caballo... y al lado una columna que diga monto... alli se coloca
+// monto negativo o positivo en caso de que gane o pierda... al pulsar
+// cargar winners alli si se le agrega a cada cliente en su ficha, es
+// como si fuera una jugada mas, se le suma o se le resta segun sea el
+// caso eso mueve su balance y su pozo ya que es una jugada").
+//
+// A diferencia de Tercios/Remate/Adelantadas, acá NO se calcula nada del
+// lado del servidor: el operador ya trae el resultado NETO de cada
+// cliente (monto con signo) — "Calcular" en el frontend es 100% vista
+// previa en el navegador (solo agrupa lo que el operador ya escribió),
+// y esta ruta guarda tal cual una fila por cliente/caballo. Por eso no
+// hay % de comisión ni "pool total": no aplica, no existe un monto
+// apostado aparte del resultado en sí.
+//
+// A PROPÓSITO no toca "Montos Apostados"/"Comisiones Devueltas"/"Saldo
+// Comisiones" (necesitan un monto APOSTADO, que Winners no tiene) — pero
+// SÍ entra en GET /cierre-final, GET /semana-por-dias, el pozo del
+// cliente (services/hipismoPozo.js) y su detalle de jugadas propio
+// (services/hipismoLineasCliente.js), tal como pidió el usuario.
+router.post('/winners', asyncHandler(async (req, res) => {
+  const { hipodromoId, hipodromoNombre, carreraNumero, fecha, lineas } = req.body;
+  if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
+  if (!Array.isArray(lineas) || !lineas.length) {
+    return res.status(400).json({ error: 'Agrega al menos un cliente con su caballo y su monto.' });
+  }
+
+  let nombreHipodromoFinal = hipodromoNombre;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromoFinal = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  const lineasValidas = [];
+  for (const l of (lineas || [])) {
+    const cliente = ((l && l.cliente) || '').toString().trim();
+    const caballo = (l && l.caballo !== undefined && l.caballo !== null) ? String(l.caballo).trim() : '';
+    const monto = Number(l && l.monto);
+    if (!cliente || !caballo || !isFinite(monto) || monto === 0) continue;
+    lineasValidas.push({ cliente, caballo, monto });
+  }
+  if (!lineasValidas.length) {
+    return res.status(400).json({ error: 'Ninguna línea tiene cliente, caballo y monto válidos (el monto no puede quedar en 0).' });
+  }
+
+  const fechaFinal = fecha || fechaHoyVenezuela();
+
+  // Da de alta en "jugadores" a cualquier cliente que, por algún motivo,
+  // no exista todavía (misma tabla compartida, mismo criterio que el
+  // resto de Hipismo) — normalmente no hace falta porque el cliente se
+  // ELIGE de un <select> con los clientes reales, pero es la misma red
+  // de seguridad que ya usan Cargar Planos/Remate/Adelantadas.
+  const nombresDelWinner = new Set(lineasValidas.map(l => l.cliente));
+  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelWinner), {});
+
+  const filasGuardadas = await db.transaccion(async (client) => {
+    const filas = [];
+    for (const l of lineasValidas) {
+      const r = await client.query(
+        `INSERT INTO hipismo_winners (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, cliente_nombre, caballo, monto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [req.grupoId, hipodromoId || null, nombreHipodromoFinal, carreraNumero, fechaFinal, l.cliente, l.caballo, l.monto]
+      );
+      filas.push(r.rows[0]);
+    }
+    return filas;
+  });
+
+  // Totales por cliente (un cliente puede tener más de una línea en la
+  // misma carga — ganó con un caballo, perdió con otro).
+  const totalesPorCliente = {};
+  lineasValidas.forEach(l => { totalesPorCliente[l.cliente] = round2((totalesPorCliente[l.cliente] || 0) + l.monto); });
+
+  const encabezado = `*🏆 WINNERS ${(req.grupo.nombre || '').toUpperCase()}*\n${nombreHipodromoFinal}, ${carreraNumero}ta Carrera — ${fechaFinal}`;
+  const lineasTexto = lineasValidas.map(l =>
+    `🐎 ${l.caballo} — *${formatNombre(l.cliente)}*: ${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}`
+  );
+  const lineasTotales = Object.keys(totalesPorCliente).sort((a, b) => a.localeCompare(b, 'es')).map(nombre =>
+    `${formatNombre(nombre)} ${totalesPorCliente[nombre] >= 0 ? '+' : '-'}${formatMontoTabla(totalesPorCliente[nombre])}`
+  );
+  const textoResultado = [encabezado, '', ...lineasTexto, '', 'TOTALES:', ...lineasTotales].join('\n');
+
+  res.status(201).json({ lineas: filasGuardadas, totalesPorCliente, textoResultado });
+}));
+
 // GET /balance-general?fecha= : el "último plano" del día, mismo criterio
 // que hoy usa el mockup (el resultado de lo último que se calculó) pero
 // leído de la base — spec sección 12. Cierre Final (agregado semanal
@@ -1975,6 +2069,14 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
     [req.grupoId, desde, hasta]
   );
+  // "Cargar Winners" (26-09-2026, ver la nota grande junto a POST /winners):
+  // cada fila ya es el resultado NETO de ese cliente, así que se suma
+  // exactamente igual que un ticket ya resuelto — sin comisión ni "monto
+  // apostado" aparte (Winners no tiene ninguno de los 2).
+  const rWinners = await db.query(
+    `SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
 
   const porCliente = new Map();
   function acumular(nombre, resultado) {
@@ -1990,6 +2092,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     acumular(t.banquero_nombre, t.resultado_banquero);
   });
   rApuestasRemate.rows.forEach(a => acumular(a.cliente_nombre, a.resultado));
+  rWinners.rows.forEach(w => acumular(w.cliente_nombre, w.monto));
 
   let comisionAdelantadasSemana = 0;
   rAdelantadas.rows.forEach(j => {
@@ -2244,6 +2347,12 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
     [req.grupoId, desde, hasta]
   );
+  // "Cargar Winners" (26-09-2026) — misma nota que en /cierre-final:
+  // cada fila ya es el resultado neto de ese cliente ese día.
+  const rWinners = await db.query(
+    `SELECT cliente_nombre, monto, fecha FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
 
   const porCliente = new Map();
   function acumularDia(nombre, fechaFila, resultado) {
@@ -2259,6 +2368,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     acumularDia(t.banquero_nombre, t.fecha, t.resultado_banquero);
   });
   rApuestasRemate.rows.forEach(a => acumularDia(a.cliente_nombre, a.fecha, a.resultado));
+  rWinners.rows.forEach(w => acumularDia(w.cliente_nombre, w.fecha, w.monto));
   rAdelantadas.rows.forEach(j => {
     acumularDia(j.cliente_nombre, j.fecha, j.resultado_cliente);
     if (Array.isArray(j.banqueadores)) {

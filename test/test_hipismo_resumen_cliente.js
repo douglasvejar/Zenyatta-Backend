@@ -88,6 +88,11 @@ function ejecutarQuery(text, params) {
     return { rows: filas };
   }
 
+  // "Cargar Winners" (26-09-2026) — 4ta consulta de obtenerLineasHipismoCliente.
+  if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
+    return { rows: [] };
+  }
+
   throw new Error('La base de datos falsa de esta prueba (resumen-cliente) no sabe responder: ' + sql);
 }
 

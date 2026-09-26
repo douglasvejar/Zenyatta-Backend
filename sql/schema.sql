@@ -1410,3 +1410,40 @@ alter table hipismo_comisiones_ajustes enable row level security;
 alter table mensajes_chat add column if not exists adjunto_datos text;
 alter table mensajes_chat add column if not exists adjunto_tipo text;
 alter table mensajes_chat add column if not exists adjunto_nombre text;
+
+-- =================================================================
+-- CARGAR WINNERS (26-09-2026, a pedido del usuario, confirmando el
+-- formato pendiente desde la duodécima-tercera ronda: "en cargar
+-- winners se selecciona el cliente... con el hipodromo y la carrera, el
+-- numero del caballo... y al lado una columna que diga monto... alli se
+-- coloca monto negativo o positivo en caso de que gane o pierda... al
+-- pulsar cargar winners alli si se le agrega a cada cliente en su
+-- ficha, es como si fuera una jugada mas, se le suma o se le resta...
+-- eso mueve su balance y su pozo ya que es una jugada"). A diferencia de
+-- Tercios ("Cargar Planos")/Remate/Adelantadas, acá NO hay ningún
+-- cálculo del lado del servidor: el operador ya trae el resultado NETO
+-- de cada cliente (monto positivo si ganó, negativo si perdió) y esta
+-- pantalla solo lo guarda tal cual — una fila por cliente/caballo. Por
+-- eso no hace falta ni % de comisión ni "pool" — no aplica, no hay
+-- monto apostado aparte del resultado en sí.
+--
+-- A PROPÓSITO esta tabla NO entra en "Montos Apostados"/"Comisiones
+-- Devueltas"/"Saldo Comisiones" (esas necesitan un monto APOSTADO, que
+-- acá no existe) — pero SÍ entra en Cierre Final, Semana por Días, el
+-- pozo del cliente (services/hipismoPozo.js) y su detalle de jugadas
+-- propio (services/hipismoLineasCliente.js), exactamente como pidió el
+-- usuario: "es como si fuera una jugada más".
+create table if not exists hipismo_winners (
+  id                uuid primary key default gen_random_uuid(),
+  grupo_id          uuid not null references grupos(id) on delete cascade,
+  hipodromo_id      uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre  text not null,
+  carrera_numero    integer not null,
+  fecha             date not null,
+  cliente_nombre    text not null,
+  caballo           text not null, -- número de ejemplar tal cual se eligió en el formulario
+  monto             numeric not null, -- resultado neto YA con signo: positivo ganó, negativo perdió
+  creado_en         timestamptz not null default now()
+);
+create index if not exists idx_hipismo_winners_grupo_fecha on hipismo_winners(grupo_id, fecha);
+create index if not exists idx_hipismo_winners_grupo_cliente on hipismo_winners(grupo_id, cliente_nombre);

@@ -35,6 +35,8 @@ function ejecutarQuery(text, params) {
   if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.modalidad, t\.caballo, t\.monto/i.test(sql)) return { rows: [] };
   if (/^SELECT a\.caballo, a\.numero_ejemplar, a\.monto, a\.resultado/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) return { rows: [] };
+  // "Cargar Winners" (26-09-2026) — 4ta consulta de obtenerLineasHipismoCliente.
+  if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (detalle-cliente ruta) no sabe responder: ' + sql);
 }
 

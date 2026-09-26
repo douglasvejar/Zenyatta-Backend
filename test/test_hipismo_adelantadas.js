@@ -403,6 +403,10 @@ function ejecutarQuery(text, params) {
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_remates/i.test(sql)) return { rows: [{ total: 0 }] };
 
+  // "Cargar Winners" (26-09-2026) — /cierre-final ahora también suma
+  // hipismo_winners; esta prueba no crea ninguno, siempre vacío.
+  if (/^SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

@@ -70,6 +70,15 @@ async function calcularLiquidadoHipismo(grupoId, nombreCliente) {
     }
   });
 
+  // "Cargar Winners" (26-09-2026, a pedido del usuario: "eso mueve su
+  // balance y su pozo ya que es una jugada") — cada fila ya es el
+  // resultado neto de ese cliente, se suma tal cual.
+  const rWinners = await db.query(
+    'SELECT monto FROM hipismo_winners WHERE grupo_id = $1 AND cliente_nombre = $2',
+    [grupoId, nombreCliente]
+  );
+  rWinners.rows.forEach(w => { total += Number(w.monto) || 0; });
+
   return total;
 }
 

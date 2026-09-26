@@ -167,7 +167,35 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     }
   });
 
-  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas];
+  // "Cargar Winners" (26-09-2026, a pedido del usuario: "es como si
+  // fuera una jugada mas... eso mueve su balance y su pozo") — cada fila
+  // ya es el resultado NETO de este cliente (monto con signo), sin
+  // comisión ni "monto apostado" aparte (Winners no tiene ninguno de los
+  // 2, a diferencia de Tercios/Remate/Adelantadas).
+  const rWinners = await db.query(
+    `SELECT w.caballo, w.monto, w.fecha, w.hipodromo_nombre, w.carrera_numero, h.pais
+       FROM hipismo_winners w
+       LEFT JOIN hipismo_hipodromos h ON h.id = w.hipodromo_id
+      WHERE w.grupo_id = $1 AND w.cliente_nombre = $2
+        AND w.fecha BETWEEN $3 AND $4
+      ORDER BY w.fecha DESC, w.creado_en ASC`,
+    [grupoId, nombreJugador, desde, hasta]
+  );
+  const lineasWinners = rWinners.rows.map(row => {
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+    return {
+      tipo: 'winner',
+      fecha: fechaIso,
+      hipodromoNombre: row.hipodromo_nombre,
+      pais: row.pais || 'VE',
+      carreraNumero: row.carrera_numero,
+      caballo: row.caballo,
+      monto: Number(row.monto),
+      resultado: Number(row.monto)
+    };
+  });
+
+  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas, ...lineasWinners];
 }
 
 // Mismo texto en primera persona que ya usan hipismo-mockup.html y
@@ -185,6 +213,12 @@ function textoJugadaHipismo(linea) {
   // una jugada más de Tercios.
   if (linea.tipo === 'remate') {
     return linea.ganoRemate ? `🏆 Remate — ganó con ${linea.caballo}` : `🏆 Remate — jugó ${linea.caballo}`;
+  }
+  // Winner (26-09-2026, ver la nota grande arriba): no tiene modalidad ni
+  // rol jugador/banquero — es el resultado directo que cargó el operador
+  // para ese caballo.
+  if (linea.tipo === 'winner') {
+    return linea.resultado >= 0 ? `🏆 Winner — ganó con ${linea.caballo}` : `🏆 Winner — perdió con ${linea.caballo}`;
   }
   // Adelantada (24-09-2026, ver la nota grande de obtenerLineasHipismoCliente
   // arriba): mismo texto ("Tabla fija (N)" / "Marca (AxB)") que ya usa

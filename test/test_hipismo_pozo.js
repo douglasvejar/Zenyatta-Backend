@@ -37,7 +37,8 @@ const TABLAS = {
   tickets_historial: [],
   hipismo_tickets: [],
   hipismo_remate_apuestas: [],
-  hipismo_adelantadas_jugadas: []
+  hipismo_adelantadas_jugadas: [],
+  hipismo_winners: []
 };
 
 function ejecutarQuery(text, params) {
@@ -76,6 +77,12 @@ function ejecutarQuery(text, params) {
   if (/^SELECT cliente_nombre, resultado_cliente, banqueadores FROM hipismo_adelantadas_jugadas WHERE grupo_id = \$1 AND estado IN \('resuelto', 'falta_banqueo', 'sin_decidir'\)/i.test(sql)) {
     const [grupoId] = params;
     return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado)) };
+  }
+
+  // ---- calcularLiquidadoHipismo(): Winners ----
+  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2/i.test(sql)) {
+    const [grupoId, nombre] = params;
+    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre) };
   }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
@@ -127,12 +134,20 @@ async function main() {
   liq = await calcularLiquidadoHipismo(GRUPO_ID, 'PEDRO');
   check(liq === 300 + 60 + 15, 'calcularLiquidadoHipismo: suma Adelantadas propias (+60) Y como banqueador de OTRO (+15) = 375, dio ' + liq);
 
+  // ---- 3b) Winners: se suma tal cual, con su propio signo ----
+  TABLAS.hipismo_winners.push(
+    { grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', caballo: '5', monto: 40 },
+    { grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', caballo: '9', monto: -15 }
+  );
+  liq = await calcularLiquidadoHipismo(GRUPO_ID, 'PEDRO');
+  check(liq === 375 + 40 - 15, 'calcularLiquidadoHipismo: suma también "Cargar Winners" (+40-15), acumulado = 400, dio ' + liq);
+
   // ---- 4) Una Adelantada 'pendiente' no cuenta ----
   TABLAS.hipismo_adelantadas_jugadas.push(
     { grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', resultado_cliente: 9999, estado: 'pendiente', banqueadores: null }
   );
   liq = await calcularLiquidadoHipismo(GRUPO_ID, 'PEDRO');
-  check(liq === 375, 'calcularLiquidadoHipismo: una Adelantada todavía "pendiente" (9999) NO se suma — sigue en 375, dio ' + liq);
+  check(liq === 400, 'calcularLiquidadoHipismo: una Adelantada todavía "pendiente" (9999) NO se suma — sigue en 400 (incluye Winners de arriba), dio ' + liq);
 
   // ---- 5) calcularPozoJugador combina Deportes + Hipismo ----
   TABLAS.tickets_historial.push(
@@ -142,9 +157,9 @@ async function main() {
   const jugadorPedro = { nombre: 'PEDRO', pozo_inicial: 1000 };
   const pozoPedro = await calcularPozoJugador(GRUPO_ID, jugadorPedro);
   check(pozoPedro.liquidadoDeportes === 180 - 50, 'calcularPozoJugador: liquidadoDeportes sigue calculándose igual que siempre (GANADA suma "gana", PERDIDA resta "arriesga") = 130, dio ' + pozoPedro.liquidadoDeportes);
-  check(pozoPedro.liquidadoHipismo === 375, 'calcularPozoJugador: liquidadoHipismo trae el mismo total que calculamos arriba (375), dio ' + pozoPedro.liquidadoHipismo);
-  check(pozoPedro.liquidado === 130 + 375, 'calcularPozoJugador: liquidado total combina Deportes + Hipismo (130+375=505), dio ' + pozoPedro.liquidado);
-  check(pozoPedro.pozoActual === 1000 + 130 + 375, 'calcularPozoJugador: pozoActual = pozoInicial + liquidado combinado (1000+505=1505), dio ' + pozoPedro.pozoActual);
+  check(pozoPedro.liquidadoHipismo === 400, 'calcularPozoJugador: liquidadoHipismo trae el mismo total que calculamos arriba, YA con Winners incluido (400), dio ' + pozoPedro.liquidadoHipismo);
+  check(pozoPedro.liquidado === 130 + 400, 'calcularPozoJugador: liquidado total combina Deportes + Hipismo (130+400=530), dio ' + pozoPedro.liquidado);
+  check(pozoPedro.pozoActual === 1000 + 130 + 400, 'calcularPozoJugador: pozoActual = pozoInicial + liquidado combinado (1000+530=1530), dio ' + pozoPedro.pozoActual);
 
   // ---- 6) Cliente que SOLO juega Hipismo ----
   TABLAS.hipismo_tickets.push({ grupo_id: GRUPO_ID, cliente_nombre: 'SOLOHIPICO', banquero_nombre: 'CASA', resultado_jugador: 45, resultado_banquero: -45 });

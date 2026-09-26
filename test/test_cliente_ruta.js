@@ -140,6 +140,9 @@ function ejecutarQuery(text, params) {
   if (/^SELECT cliente_nombre, resultado_cliente, banqueadores FROM hipismo_adelantadas_jugadas WHERE/i.test(sql)) {
     return { rows: [] };
   }
+  if (/^SELECT monto FROM hipismo_winners WHERE/i.test(sql)) {
+    return { rows: [] };
+  }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }

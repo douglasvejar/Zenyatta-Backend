@@ -1922,16 +1922,59 @@ Pizarra: [se llena al calcular]
       </div>
     </section>
 
-    <!-- ============ CARGAR WINNERS (23-09-2026, duodécima-tercera ronda) ============
-         Placeholder — el usuario pidió la pestaña ahora y explica el
-         formato más adelante. Sin backend todavía. -->
+    <!-- ============ CARGAR WINNERS (26-09-2026, decimoquinta ronda) ============
+         A pedido del usuario: "en cargar winners se selecciona el
+         cliente... con el hipódromo y la carrera, el número del caballo
+         (que se vea igual que en los remates)... y al lado una columna
+         que diga monto... se coloca monto negativo o positivo en caso
+         de que gane o pierda... igual que en los demás, se le da
+         calcular, y después un botón que diga Cargar Winners... eso
+         mueve su balance y su pozo ya que es una jugada". A diferencia
+         de Tercios/Remate/Adelantadas, acá no hay % de comisión ni
+         "monto apostado": el operador escribe DIRECTAMENTE el resultado
+         neto (con signo) de cada cliente — por eso "Calcular" es solo
+         una VISTA PREVIA armada en el navegador (no hay nada que
+         calcular en el servidor); solo "Cargar Winners" guarda de
+         verdad, contra POST /api/hipismo/winners. -->
     <section class="vista" id="vista-cargarWinners">
       <div class="card">
         <h2>🏆 Cargar Winners</h2>
-        <p class="desc">
-          <span class="badge-pendiente">Todavía sin definir</span>
-        </p>
-        <div class="placeholder-card">Esta pantalla está reservada — falta que se defina el formato de "Winners" para construirla de verdad.</div>
+        <p class="desc">Elige el Hipódromo, la Carrera y la Fecha, y por cada caballo que tuvo winner elige el cliente y coloca el monto — positivo si ganó, negativo si perdió. Esto se agrega a la ficha del cliente como una jugada más: mueve su Balance y su Pozo.</p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromoWinners">Hipódromo</label>
+            <select id="selHipodromoWinners">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCarreraWinners">Carrera</label>
+            <select id="selCarreraWinners"></select>
+          </div>
+          <div>
+            <label for="inpFechaWinners">Fecha</label>
+            <input type="date" id="inpFechaWinners">
+          </div>
+        </div>
+
+        <label>Caballos — elige cliente y monto SOLO en los que tuvieron winner</label>
+        <table id="tablaWinnersWrap">
+          <thead><tr><th>N° Caballo</th><th>Cliente</th><th>Monto (+ si gana, − si pierde)</th></tr></thead>
+          <tbody id="tablaWinners"></tbody>
+        </table>
+
+        <div class="btn-fila" style="margin-top:16px;">
+          <button class="btn btn-primario" type="button" id="btnCalcularWinners" onclick="calcularWinners()">🧮 Calcular</button>
+          <button class="btn btn-primario" type="button" id="btnConfirmarWinners" style="display:none;" onclick="confirmarWinners()">🏆 Cargar Winners</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarWinners()">🧹 Limpiar</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultadoWinners()">📋 Copiar Resultado</button>
+          <span class="toast-copiado" id="toastCopiadoWinners">Copiado ✅</span>
+        </div>
+
+        <div id="resultadoVacioWinners" class="resultado-vacio">El resultado de los Winners va a aparecer acá cuando le des Calcular.</div>
+        <div id="avisoResultadoWinners" class="aviso-resultado" style="display:none;"></div>
+        <pre class="resultado-caja" id="resultadoCajaWinners" style="display:none;"></pre>
       </div>
     </section>
 
@@ -4535,6 +4578,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // Jugador de cada fila cada vez que se entra a la pestaña, para que
   // un cliente recién creado en otra pantalla ya aparezca sin recargar.
   cargarRemateManual: () => poblarJugadoresRemateManual(),
+  // "Cargar Winners" (26-09-2026) — mismo criterio que "Cargar Remate
+  // Manual": refresca el <select> de Cliente de cada fila al entrar.
+  cargarWinners: () => poblarJugadoresWinners(),
   // Balance General (24-09-2026) entra a esta lista junto con el resto de
   // reportes reales — ver la nota grande en pintarBalanceGeneral: antes
   // no estaba acá porque no pedía nada al servidor.
@@ -5383,6 +5429,224 @@ function copiarResultadoRemateManual() {
   const texto = caja.textContent;
   const mostrarToast = () => {
     const t = document.getElementById('toastCopiadoRemateManual');
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(mostrarToast).catch(() => {
+      alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
+    });
+  } else {
+    alert('No se pudo copiar automáticamente — selecciona el texto y copia manualmente.');
+  }
+}
+
+// ------------------------------------------------------------------
+// "Cargar Winners" (26-09-2026) — ver la nota grande en el HTML de
+// vista-cargarWinners: a diferencia de Tercios/Remate/Adelantadas, acá
+// el operador escribe DIRECTAMENTE el resultado neto (con signo) de
+// cada cliente — no hay % de comisión ni "monto apostado" que calcular,
+// así que "Calcular" es 100% una vista previa armada en el navegador
+// (no le pega nada al servidor); solo "Cargar Winners" guarda de
+// verdad contra POST /api/hipismo/winners.
+// ------------------------------------------------------------------
+function construirFilasWinners() {
+  const tbody = document.getElementById('tablaWinners');
+  if (!tbody) return;
+  let html = '';
+  for (let n = 1; n <= 20; n++) {
+    html += `<tr>
+      <td>${gualdrapaHTML(n)}</td>
+      <td><select id="selJugadorWinners_${n}"><option value="">Seleccione</option></select></td>
+      <td><input type="text" id="inpMontoWinners_${n}" placeholder="Ej: 50 o -50" inputmode="decimal"></td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+// Mismo criterio que poblarJugadoresRemateManual(): usa la lista real de
+// clientes del grupo (CLIENTES_HIPISMO_CACHE), sin ofrecer las cuentas
+// de comisión (acá tampoco tiene sentido registrarles un winner).
+async function poblarJugadoresWinners() {
+  let jugadores;
+  try {
+    jugadores = CLIENTES_HIPISMO_CACHE.length ? CLIENTES_HIPISMO_CACHE : await apiHipismo('/api/jugadores');
+  } catch (e) {
+    jugadores = [];
+  }
+  const jugadoresSeleccionables = jugadores.filter(j => !j.es_cuenta_comision);
+  const opciones = '<option value="">Seleccione</option>' + jugadoresSeleccionables.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorWinners_' + n);
+    if (!sel) continue;
+    const previo = sel.value;
+    sel.innerHTML = opciones;
+    if (jugadoresSeleccionables.some(j => j.nombre === previo)) sel.value = previo;
+  }
+}
+
+// "Cargar Remate Manual" tiene su propio <select> de hipódromo para no
+// interferir con los otros — Winners hace lo mismo.
+function poblarSelectHipodromoWinners() {
+  const sel = document.getElementById('selHipodromoWinners');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+
+let winnersPendienteDeConfirmar = null;
+let calculandoWinners = false;
+let confirmandoWinners = false;
+
+// Arma el mismo texto WhatsApp-style que después devuelve de verdad el
+// servidor al confirmar (routes/hipismo.js, POST /winners) — acá es
+// solo la VISTA PREVIA, con los mismos nombres/montos que el operador ya
+// escribió, para que pueda revisar antes de guardar de verdad.
+function textoPreviaWinners(hipodromoNombre, carreraNumero, fecha, lineasValidas) {
+  const totalesPorCliente = {};
+  lineasValidas.forEach(l => { totalesPorCliente[l.cliente] = (totalesPorCliente[l.cliente] || 0) + l.monto; });
+  const encabezado = `*🏆 WINNERS*\n${hipodromoNombre}, ${ordinalCarrera(carreraNumero)} Carrera — ${fecha}`;
+  const lineasTexto = lineasValidas.map(l =>
+    `🐎 ${l.caballo} — *${formatNombre(l.cliente)}*: ${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}`
+  );
+  const lineasTotales = Object.keys(totalesPorCliente).sort((a, b) => a.localeCompare(b, 'es')).map(nombre =>
+    `${formatNombre(nombre)} ${totalesPorCliente[nombre] >= 0 ? '+' : '-'}${formatMontoTabla(totalesPorCliente[nombre])}`
+  );
+  return [encabezado, '', ...lineasTexto, '', 'TOTALES:', ...lineasTotales].join('\n');
+}
+
+function calcularWinners() {
+  if (calculandoWinners) return;
+
+  const hipodromoNombre = document.getElementById('selHipodromoWinners').value;
+  const carreraNumero = document.getElementById('selCarreraWinners').value;
+  const fecha = document.getElementById('inpFechaWinners').value;
+
+  const vacio = document.getElementById('resultadoVacioWinners');
+  const caja = document.getElementById('resultadoCajaWinners');
+  const aviso = document.getElementById('avisoResultadoWinners');
+  const btnConfirmar = document.getElementById('btnConfirmarWinners');
+
+  winnersPendienteDeConfirmar = null;
+  aviso.style.display = 'none';
+  btnConfirmar.style.display = 'none';
+
+  if (!hipodromoNombre) {
+    vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  const lineasValidas = [];
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorWinners_' + n);
+    const inp = document.getElementById('inpMontoWinners_' + n);
+    if (!sel || !inp) continue;
+    const cliente = sel.value;
+    const montoTxt = inp.value.trim();
+    if (!cliente || !montoTxt) continue;
+    const monto = parseFloat(montoTxt.replace(',', '.'));
+    if (!isFinite(monto) || monto === 0) continue;
+    lineasValidas.push({ cliente, caballo: String(n), monto });
+  }
+  if (!lineasValidas.length) {
+    vacio.textContent = 'Elige cliente y monto en al menos un caballo (el monto no puede quedar en 0).';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+
+  const fechaFinal = fecha || fechaLocalHoy();
+  const salida = textoPreviaWinners(hipodromoNombre, carreraNumero, fechaFinal, lineasValidas);
+
+  aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Cargar Winners" para guardarlo de verdad.';
+  aviso.className = 'aviso-resultado';
+  aviso.style.display = 'block';
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida;
+
+  winnersPendienteDeConfirmar = { hipodromoNombre, carreraNumero, fecha: fechaFinal, lineas: lineasValidas };
+  btnConfirmar.style.display = '';
+}
+
+async function confirmarWinners() {
+  if (confirmandoWinners) return;
+  if (!winnersPendienteDeConfirmar) return;
+
+  const caja = document.getElementById('resultadoCajaWinners');
+  const aviso = document.getElementById('avisoResultadoWinners');
+  const btnConfirmar = document.getElementById('btnConfirmarWinners');
+
+  confirmandoWinners = true;
+  btnConfirmar.disabled = true;
+  btnConfirmar.textContent = 'Guardando…';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/winners', {
+      method: 'POST',
+      body: JSON.stringify(winnersPendienteDeConfirmar)
+    });
+  } catch (e) {
+    caja.textContent = '❌ ' + e.message + '\n\nLos Winners NO se guardaron — corrige lo que haga falta y dale "Cargar Winners" de nuevo (o "Calcular" si necesitas cambiar algo).';
+    aviso.style.display = 'none';
+    confirmandoWinners = false;
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '🏆 Cargar Winners';
+    return;
+  }
+
+  cargarClientesReales();
+
+  aviso.textContent = '✅ Winners CONFIRMADOS y guardados — ya se aplicó a los saldos y al pozo de cada cliente.';
+  aviso.className = 'aviso-resultado aviso-confirmado';
+  aviso.style.display = 'block';
+
+  caja.style.display = 'block';
+  caja.textContent = data.textoResultado;
+
+  winnersPendienteDeConfirmar = null;
+  confirmandoWinners = false;
+  btnConfirmar.style.display = 'none';
+  btnConfirmar.disabled = false;
+  btnConfirmar.textContent = '🏆 Cargar Winners';
+}
+
+function limpiarWinners() {
+  for (let n = 1; n <= 20; n++) {
+    const sel = document.getElementById('selJugadorWinners_' + n);
+    const inp = document.getElementById('inpMontoWinners_' + n);
+    if (sel) sel.value = '';
+    if (inp) inp.value = '';
+  }
+  document.getElementById('resultadoCajaWinners').style.display = 'none';
+  document.getElementById('resultadoVacioWinners').style.display = 'block';
+  document.getElementById('resultadoVacioWinners').textContent = 'El resultado de los Winners va a aparecer acá cuando le des Calcular.';
+  document.getElementById('avisoResultadoWinners').style.display = 'none';
+  winnersPendienteDeConfirmar = null;
+  const btnConfirmar = document.getElementById('btnConfirmarWinners');
+  if (btnConfirmar) {
+    btnConfirmar.style.display = 'none';
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '🏆 Cargar Winners';
+  }
+}
+
+function copiarResultadoWinners() {
+  const caja = document.getElementById('resultadoCajaWinners');
+  if (caja.style.display === 'none') return;
+  const texto = caja.textContent;
+  const mostrarToast = () => {
+    const t = document.getElementById('toastCopiadoWinners');
     t.classList.add('visible');
     setTimeout(() => t.classList.remove('visible'), 1800);
   };
@@ -7559,6 +7823,7 @@ function poblarSelectHipodromo() {
   poblarSelectHipodromoRemate();
   poblarSelectHipodromoRemateManual();
   poblarSelectHipodromoAdelantadas();
+  poblarSelectHipodromoWinners();
 }
 
 // "Jugadas Adelantadas" (23-09-2026) usa el mismo listado real de
@@ -8905,11 +9170,15 @@ async function pintarSaldoComisiones() {
 poblarCarreras();
 poblarCarreras('selCarreraRemate');
 poblarCarreras('selCarreraRemateManual');
+poblarCarreras('selCarreraWinners');
 document.getElementById('inpFecha').value = fechaLocalHoy();
 document.getElementById('inpFechaRemate').value = fechaLocalHoy();
 document.getElementById('inpFechaRemateManual').value = fechaLocalHoy();
+document.getElementById('inpFechaWinners').value = fechaLocalHoy();
 construirFilasRemateManual();
 poblarJugadoresRemateManual();
+construirFilasWinners();
+poblarJugadoresWinners();
 document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
 document.getElementById('inpFechaComisionesDevueltas').value = fechaLocalHoy();
 document.getElementById('inpFechaEliminarJornada').value = fechaLocalHoy();

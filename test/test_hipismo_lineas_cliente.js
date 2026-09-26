@@ -118,6 +118,12 @@ function ejecutarQuery(text, params) {
     };
   }
 
+  // obtenerLineasHipismoCliente(): "Cargar Winners" (26-09-2026) — esta
+  // prueba no crea ninguno todavía, siempre vacío.
+  if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
+    return { rows: [] };
+  }
+
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 
