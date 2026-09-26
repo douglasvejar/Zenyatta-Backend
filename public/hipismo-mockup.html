@@ -214,9 +214,8 @@
      public/hipismo-cliente-portal.html (mismo criterio "hermana" que ya
      usa armarJugadaTexto/armarJugadaTextoDetallado), así el operador ve
      siempre lo mismo que el cliente en su link. */
-  .gualdrapa { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1; }
+  .gualdrapa { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; margin: 0 4px; }
   .gualdrapa svg { display: block; }
-  .gualdrapa-num { font-size: 9px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
   .btn-fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 
   .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
@@ -852,7 +851,7 @@
     <section class="vista" id="vista-cargarRemate">
       <div class="card">
         <h2>🏆 Cargar Remate Automático desde Chat</h2>
-        <p class="desc">Pega el remate (cada línea: número de ejemplar, caballo, monto y cliente), metes el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular y Guardar</b>. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completa "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
+        <p class="desc">Pega el remate (cada línea: número de ejemplar, caballo, monto y cliente), metes el % de comisión de ESTE remate (no todos cobran igual) y le das <b>Calcular</b>. Si el remate está listo dale <b>Confirmar Remate</b> para guardarlo — hasta que no confirmes, no se toca ningún saldo. El ganador es el número de ejemplar que gana la carrera — si ya cargaste el plano de esa carrera en "Cargar Planos", la llegada se toma sola de ahí; si no, completa "Llegada" a mano. Si el número ganador no fue jugado por nadie en el remate, queda todo para la banca (nadie gana, no se saca ningún %). <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos de remate más adelante</span></p>
 
         <div class="fila">
           <div>
@@ -886,13 +885,18 @@
         <textarea id="txtRemate" rows="14" placeholder="Pega acá el remate, con el encabezado, cada línea numerada y el PAGANDO/GARANTIZA/PAGA $X"></textarea>
 
         <div class="btn-fila">
-          <button class="btn btn-primario" type="button" onclick="calcularRemate()">🧮 Calcular y Guardar</button>
+          <button class="btn btn-primario" type="button" id="btnCalcularRemate" onclick="calcularRemate()">🧮 Calcular</button>
+          <!-- Aparece SOLO despues de un Calcular exitoso (vista previa) —
+               ver calcularRemate()/confirmarRemate() mas abajo. Mientras no
+               se le de click acá, el remate NO se guarda ni afecta saldos
+               (26-09-2026, a pedido del usuario). -->
+          <button class="btn btn-primario" type="button" id="btnConfirmarRemate" style="display:none;" onclick="confirmarRemate()">✔️ Confirmar Remate</button>
           <button class="btn btn-secundario" type="button" onclick="limpiarRemate()">🧹 Limpiar</button>
           <button class="btn btn-secundario" type="button" onclick="copiarResultadoRemate()">📋 Copiar Resultado</button>
           <span class="toast-copiado" id="toastCopiadoRemate">Copiado ✅</span>
         </div>
 
-        <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.</div>
+        <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
         <pre class="resultado-caja" id="resultadoCajaRemate" style="display:none;"></pre>
       </div>
     </section>
@@ -952,13 +956,14 @@
         </table>
 
         <div class="btn-fila" style="margin-top:16px;">
-          <button class="btn btn-primario" type="button" onclick="calcularRemateManual()">🧮 Calcular y Guardar</button>
+          <button class="btn btn-primario" type="button" id="btnCalcularRemateManual" onclick="calcularRemateManual()">🧮 Calcular</button>
+          <button class="btn btn-primario" type="button" id="btnConfirmarRemateManual" style="display:none;" onclick="confirmarRemateManual()">✔️ Confirmar Remate</button>
           <button class="btn btn-secundario" type="button" onclick="limpiarRemateManual()">🧹 Limpiar</button>
           <button class="btn btn-secundario" type="button" onclick="copiarResultadoRemateManual()">📋 Copiar Resultado</button>
           <span class="toast-copiado" id="toastCopiadoRemateManual">Copiado ✅</span>
         </div>
 
-        <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.</div>
+        <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
         <pre class="resultado-caja" id="resultadoCajaRemateManual" style="display:none;"></pre>
       </div>
     </section>
@@ -4578,14 +4583,24 @@ function limpiarPlano() {
 }
 
 // ------------------------------------------------------------------
-// "Cargar Remate" (23-09-2026) — mismo patrón que "Cargar Planos"
-// (calcularPlano() arriba): un solo botón calcula Y guarda de verdad
-// contra el servidor (POST /api/hipismo/remates, ver la nota grande en
-// src/routes/hipismo.js y src/services/hipismoRemateCalc.js). Si todavía
-// no hay un plano cargado con la llegada de esa carrera, el servidor
-// responde con un error pidiendo que se cargue a mano en "Llegada" —acá
-// solo se muestra ese mensaje, sin inventar ninguna llegada.
+// "Cargar Remate" (23-09-2026, actualizado 26-09-2026 a pedido del
+// usuario para que funcione IGUAL que "Cargar Planos": "en los remates
+// igual el mismo procedimiento, se le da calcular y si estoy conforme,
+// confirmar remate... hasta que no le de a confirmar, los saldos no se
+// mueven, es como si no hubiera cargado nada"). "Calcular" ahora SOLO
+// llama a /api/hipismo/remates/calcular (vista previa — no guarda nada,
+// no toca saldos, ver routes/hipismo.js). El botón "Confirmar Remate"
+// (oculto hasta que haya una vista previa) es el único que llama a
+// /api/hipismo/remates (guarda de verdad), y manda EXACTAMENTE lo que
+// se acaba de previsualizar (rematePendienteDeConfirmar), no lo que
+// haya en el formulario en ese instante.
+let rematePendienteDeConfirmar = null;
+let calculandoRemate = false;
+let confirmandoRemate = false;
+
 async function calcularRemate() {
+  if (calculandoRemate) return;
+
   const hipodromoNombre = document.getElementById('selHipodromoRemate').value;
   const carreraNumero = document.getElementById('selCarreraRemate').value;
   const fecha = document.getElementById('inpFechaRemate').value;
@@ -4595,6 +4610,13 @@ async function calcularRemate() {
 
   const vacio = document.getElementById('resultadoVacioRemate');
   const caja = document.getElementById('resultadoCajaRemate');
+  const btnCalcular = document.getElementById('btnCalcularRemate');
+  const btnConfirmar = document.getElementById('btnConfirmarRemate');
+
+  // Cualquier "Calcular" nuevo invalida una vista previa pendiente de
+  // confirmar anterior — igual que en "Cargar Planos".
+  rematePendienteDeConfirmar = null;
+  btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -4615,33 +4637,104 @@ async function calcularRemate() {
     return;
   }
 
-  vacio.textContent = 'Calculando y guardando en el servidor…';
+  calculandoRemate = true;
+  btnCalcular.disabled = true;
+  vacio.textContent = 'Calculando (todavía NO se guarda nada)…';
   vacio.style.display = 'block';
   caja.style.display = 'none';
 
+  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra };
+
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/remates', {
+    data = await apiHipismo('/api/hipismo/remates/calcular', {
       method: 'POST',
-      body: JSON.stringify({ texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     vacio.textContent = e.message;
     vacio.style.display = 'block';
     caja.style.display = 'none';
+    calculandoRemate = false;
+    btnCalcular.disabled = false;
     return;
   }
 
-  cargarClientesReales();
+  if (data.necesitaLlegada) {
+    vacio.style.display = 'none';
+    caja.style.display = 'block';
+    caja.textContent = '⚠️ Todavía no hay llegada para esta carrera — completa "Llegada" a mano (o carga primero el plano de esta carrera en "Cargar Planos") y dale Calcular de nuevo. Todavía NO se guardó nada.';
+    calculandoRemate = false;
+    btnCalcular.disabled = false;
+    return;
+  }
 
   let salida = data.textoResultado;
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
+  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.\n\n' + salida;
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+
+  // Guarda exactamente lo que se acaba de previsualizar — confirmarRemate()
+  // manda ESTO, no una nueva lectura del formulario.
+  rematePendienteDeConfirmar = payload;
+  btnConfirmar.style.display = '';
+  calculandoRemate = false;
+  btnCalcular.disabled = false;
+}
+
+// Único paso que guarda de verdad (POST /api/hipismo/remates). Antes de
+// esto, calcularRemate() de arriba solo consultó la vista previa — nada
+// quedó guardado ni afectó saldos.
+async function confirmarRemate() {
+  if (confirmandoRemate) return;
+  if (!rematePendienteDeConfirmar) return;
+
+  const vacio = document.getElementById('resultadoVacioRemate');
+  const caja = document.getElementById('resultadoCajaRemate');
+  const btnConfirmar = document.getElementById('btnConfirmarRemate');
+
+  confirmandoRemate = true;
+  btnConfirmar.disabled = true;
+  btnConfirmar.textContent = 'Guardando…';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/remates', {
+      method: 'POST',
+      body: JSON.stringify(rematePendienteDeConfirmar)
+    });
+  } catch (e) {
+    caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Confirmar Remate" de nuevo (o "Calcular" si necesitas cambiar algo).';
+    confirmandoRemate = false;
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Remate';
+    return;
+  }
+
+  cargarClientesReales();
+
+  let salida2 = data.textoResultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida2 = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida2;
+  }
+  salida2 = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida2;
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida2;
+
+  // Ya se confirmó este cálculo — hace falta un "Calcular" nuevo para
+  // habilitar otro "Confirmar Remate".
+  rematePendienteDeConfirmar = null;
+  confirmandoRemate = false;
+  btnConfirmar.style.display = 'none';
+  btnConfirmar.disabled = false;
+  btnConfirmar.textContent = '✔️ Confirmar Remate';
 }
 
 function limpiarRemate() {
@@ -4649,7 +4742,15 @@ function limpiarRemate() {
   document.getElementById('inpPizarraRemate').value = '';
   document.getElementById('resultadoCajaRemate').style.display = 'none';
   document.getElementById('resultadoVacioRemate').style.display = 'block';
-  document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.';
+  document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
+  // Limpiar invalida cualquier vista previa pendiente de confirmar.
+  rematePendienteDeConfirmar = null;
+  const btnConfirmar = document.getElementById('btnConfirmarRemate');
+  if (btnConfirmar) {
+    btnConfirmar.style.display = 'none';
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Remate';
+  }
 }
 
 // =================================================================
@@ -4664,37 +4765,42 @@ function limpiarRemate() {
 // cliente en su link — se usa acá en la tabla de "Cargar Remate Manual"
 // y en armarJugadaTextoDetallado() (pantalla "Detallado por Cliente").
 const COLORES_EJEMPLAR = {
-  1: { bg: '#e02020' },
-  2: { bg: '#f2f2f2', borde: true },
-  3: { bg: '#1560bd' },
-  4: { bg: '#f5c400' },
-  5: { bg: '#1d7a3d' },
-  6: { bg: '#2b2b2b' },
-  7: { bg: '#f07c1d' },
-  8: { bg: '#f48fb1' },
-  9: { bg: '#33b5e5' },
-  10: { bg: '#6a1b9a' },
-  11: { bg: '#9e9e9e' },
-  12: { bg: '#a4d65e' },
-  13: { bg: '#6d4c2a' },
-  14: { bg: '#7b1024' },
-  15: { bg: '#e8d9b5' },
-  16: { bg: '#26c6c1' },
-  17: { bg: '#ff8a80' },
-  18: { bg: '#5b6b2a' },
-  19: { bg: '#14213d' },
-  20: { bg: '#c9a6e0' }
+  1: { bg: '#e02020', fg: '#ffffff' },
+  2: { bg: '#f2f2f2', fg: '#111111' },
+  3: { bg: '#1560bd', fg: '#ffffff' },
+  4: { bg: '#f5c400', fg: '#111111' },
+  5: { bg: '#1d7a3d', fg: '#ffffff' },
+  6: { bg: '#111111', fg: '#ffffff', borde: true },
+  7: { bg: '#f07c1d', fg: '#111111' },
+  8: { bg: '#f48fb1', fg: '#111111' },
+  9: { bg: '#33b5e5', fg: '#111111' },
+  10: { bg: '#6a1b9a', fg: '#ffffff' },
+  11: { bg: '#9e9e9e', fg: '#111111' },
+  12: { bg: '#a4d65e', fg: '#111111' },
+  13: { bg: '#6d4c2a', fg: '#ffffff' },
+  14: { bg: '#7b1024', fg: '#ffffff' },
+  15: { bg: '#e8d9b5', fg: '#111111' },
+  16: { bg: '#0d7d6e', fg: '#ffffff' },
+  17: { bg: '#e0607a', fg: '#ffffff' },
+  18: { bg: '#6a2fc9', fg: '#ffffff' },
+  19: { bg: '#e8785c', fg: '#111111' },
+  20: { bg: '#1f9fd9', fg: '#ffffff' }
 };
-// Silueta real de caballo (Font Awesome Free "horse", ícono sólido —
-// CC BY 4.0, https://fontawesome.com/license/free) — 25-09-2026, a
-// pedido del usuario: "en vez de cuadrados podrian ser caballos".
-const CABALLO_PATH = "M448 238.1V160h16l9.8 19.6c12.5 25.1 42.2 36.4 68.3 26 20.5-8.2 33.9-28 33.9-50.1V80c0-19.1-8.4-36.3-21.7-48h5.7c8.8 0 16-7.2 16-16s-7.2-16-16-16H448c-70.7 0-128 57.3-128 128H148.8c-30.7 0-57.6 16.3-72.5 40.8C33.2 174.5 0 211.4 0 256v56c0 13.3 10.7 24 24 24s24-10.7 24-24v-56c0-13.4 6.6-25.2 16.7-32.5 1.6 13 6.3 25.4 13.6 36.4l28.2 42.4c8.3 12.4 6.4 28.7-1.2 41.6-16.5 28-20.6 62.2-10 93.9l17.5 52.4c4.4 13.1 16.6 21.9 30.4 21.9h33.7c21.8 0 37.3-21.4 30.4-42.1l-20.8-62.5c-2.1-6.4-.5-13.4 4.3-18.2l12.7-12.7c13.2-13.2 20.6-31.1 20.6-49.7q0-3.45-.3-6.9l84 24c4.1 1.2 8.2 2.1 12.3 2.8L320 480c0 17.7 14.3 32 32 32h32c17.7 0 32-14.3 32-32V315.7c19.2-19.2 31.5-45.7 32-75.7zM496 64a16 16 0 1 1 0 32 16 16 0 1 1 0-32";
+// Silueta real de cabeza de caballo (Font Awesome Free "horse-head",
+// ícono sólido — CC BY 4.0, https://fontawesome.com/license/free), en
+// gris neutro, al lado de una etiqueta cuadrada con el color y el
+// número del ejemplar GRANDE — 26-09-2026, a pedido del usuario (mandó
+// una imagen de referencia: etiqueta de color + cabeza de caballo al
+// lado). Versiones anteriores (caballo entero pintado del color, con o
+// sin "camisa") no se leían bien — "no se distingue ni el numero ni el
+// caballo".
+const CABEZA_PATH = "M0 464V316.9C0 208.5 68.3 111.8 170.5 75.6l169.7-60.1c21.4-7.6 43.8 8.3 43.8 30.9 0 11-5.5 21.2-14.6 27.3L336 96c48.1 0 91.2 29.8 108.1 74.9l48.6 129.5c11.8 31.4 4.1 66.8-19.6 90.5-16 16-37.8 25.1-60.5 25.1h-3.4c-26.1 0-50.9-11.6-67.6-31.7l-32.3-38.7c-11.7 4.1-24.2 6.4-37.3 6.4h-.1q-9.45 0-18.6-1.5c-3.6-.6-7.2-1.4-10.7-2.3-28.9-7.8-53.1-26.8-67.8-52.2-4.4-7.7-14.2-10.3-21.9-5.8s-10.3 14.2-5.8 21.9c24 41.5 68.3 70 119.3 71.9l47.2 70.8c4 6.1 6.2 13.2 6.2 20.4 0 20.3-16.5 36.8-36.8 36.8H48c-26.5 0-48-21.5-48-48m328-240a24 24 0 1 0 0-48 24 24 0 1 0 0 48";
 function gualdrapaHTML(numeroCrudo) {
   const n = parseInt(numeroCrudo, 10);
   if (!n || isNaN(n)) return '';
-  const c = COLORES_EJEMPLAR[n] || { bg: '#616161' };
-  const borde = c.borde ? 'stroke:#aaaaaa; stroke-width:6;' : '';
-  return `<span class="gualdrapa"><svg width="22" height="19" viewBox="0 0 576 512"><path d="${CABALLO_PATH}" fill="${c.bg}" style="${borde}"/></svg><span class="gualdrapa-num">${n}</span></span>`;
+  const c = COLORES_EJEMPLAR[n] || { bg: '#616161', fg: '#ffffff' };
+  const borde = c.borde ? 'stroke:#666666; stroke-width:6;' : '';
+  return `<span class="gualdrapa"><svg width="22" height="22" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="${c.bg}" style="${borde}"/><text x="50" y="72" font-size="62" font-weight="800" fill="${c.fg}" text-anchor="middle" font-family="Arial, sans-serif">${n}</text></svg><svg width="20" height="20" viewBox="0 0 512 512"><path d="${CABEZA_PATH}" fill="#8d8d8d"/></svg></span>`;
 }
 
 // ------------------------------------------------------------------
@@ -4739,7 +4845,16 @@ async function poblarJugadoresRemateManual() {
   }
 }
 
+// Mismo patrón de "Calcular" (vista previa) / "Confirmar Remate" (guarda
+// de verdad) que en "Cargar Remate Automático desde Chat" — ver la nota
+// grande arriba de calcularRemate() — 26-09-2026, a pedido del usuario.
+let rematePendienteDeConfirmarManual = null;
+let calculandoRemateManual = false;
+let confirmandoRemateManual = false;
+
 async function calcularRemateManual() {
+  if (calculandoRemateManual) return;
+
   const hipodromoNombre = document.getElementById('selHipodromoRemateManual').value;
   const carreraNumero = document.getElementById('selCarreraRemateManual').value;
   const fecha = document.getElementById('inpFechaRemateManual').value;
@@ -4749,6 +4864,11 @@ async function calcularRemateManual() {
 
   const vacio = document.getElementById('resultadoVacioRemateManual');
   const caja = document.getElementById('resultadoCajaRemateManual');
+  const btnCalcular = document.getElementById('btnCalcularRemateManual');
+  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
+
+  rematePendienteDeConfirmarManual = null;
+  btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -4794,33 +4914,97 @@ async function calcularRemateManual() {
   }
   const texto = lineas.join('\n');
 
-  vacio.textContent = 'Calculando y guardando en el servidor…';
+  calculandoRemateManual = true;
+  btnCalcular.disabled = true;
+  vacio.textContent = 'Calculando (todavía NO se guarda nada)…';
   vacio.style.display = 'block';
   caja.style.display = 'none';
 
+  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra };
+
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/remates', {
+    data = await apiHipismo('/api/hipismo/remates/calcular', {
       method: 'POST',
-      body: JSON.stringify({ texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     vacio.textContent = e.message;
     vacio.style.display = 'block';
     caja.style.display = 'none';
+    calculandoRemateManual = false;
+    btnCalcular.disabled = false;
     return;
   }
 
-  cargarClientesReales();
+  if (data.necesitaLlegada) {
+    vacio.style.display = 'none';
+    caja.style.display = 'block';
+    caja.textContent = '⚠️ Todavía no hay llegada para esta carrera — completa "Llegada" a mano (o carga primero el plano de esta carrera en "Cargar Planos") y dale Calcular de nuevo. Todavía NO se guardó nada.';
+    calculandoRemateManual = false;
+    btnCalcular.disabled = false;
+    return;
+  }
 
   let salida = data.textoResultado;
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
+  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.\n\n' + salida;
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+
+  rematePendienteDeConfirmarManual = payload;
+  btnConfirmar.style.display = '';
+  calculandoRemateManual = false;
+  btnCalcular.disabled = false;
+}
+
+async function confirmarRemateManual() {
+  if (confirmandoRemateManual) return;
+  if (!rematePendienteDeConfirmarManual) return;
+
+  const vacio = document.getElementById('resultadoVacioRemateManual');
+  const caja = document.getElementById('resultadoCajaRemateManual');
+  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
+
+  confirmandoRemateManual = true;
+  btnConfirmar.disabled = true;
+  btnConfirmar.textContent = 'Guardando…';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/remates', {
+      method: 'POST',
+      body: JSON.stringify(rematePendienteDeConfirmarManual)
+    });
+  } catch (e) {
+    caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Confirmar Remate" de nuevo (o "Calcular" si necesitas cambiar algo).';
+    confirmandoRemateManual = false;
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Remate';
+    return;
+  }
+
+  cargarClientesReales();
+
+  let salida2 = data.textoResultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida2 = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida2;
+  }
+  salida2 = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida2;
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida2;
+
+  rematePendienteDeConfirmarManual = null;
+  confirmandoRemateManual = false;
+  btnConfirmar.style.display = 'none';
+  btnConfirmar.disabled = false;
+  btnConfirmar.textContent = '✔️ Confirmar Remate';
 }
 
 function limpiarRemateManual() {
@@ -4834,7 +5018,14 @@ function limpiarRemateManual() {
   document.getElementById('inpPizarraRemateManual').value = '';
   document.getElementById('resultadoCajaRemateManual').style.display = 'none';
   document.getElementById('resultadoVacioRemateManual').style.display = 'block';
-  document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular y Guardar.';
+  document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
+  rematePendienteDeConfirmarManual = null;
+  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
+  if (btnConfirmar) {
+    btnConfirmar.style.display = 'none';
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Remate';
+  }
 }
 
 function copiarResultadoRemateManual() {
