@@ -1388,3 +1388,25 @@ create table if not exists hipismo_comisiones_ajustes (
 create index if not exists idx_hipismo_comisiones_ajustes_grupo_cliente on hipismo_comisiones_ajustes(grupo_id, cliente_nombre);
 create index if not exists idx_hipismo_comisiones_ajustes_grupo_fecha on hipismo_comisiones_ajustes(grupo_id, fecha);
 alter table hipismo_comisiones_ajustes enable row level security;
+
+-- =================================================================
+-- ADJUNTOS EN EL CHAT DE SOPORTE (26-09-2026, a pedido del usuario:
+-- "desde la bandeja de mensajes puede adjuntar archivos, fotos, videos e
+-- incluso mandar notas de voz") — se guardan como base64 en la propia
+-- fila de mensajes_chat (mismo criterio que ya usa "💳 Pagos" para la
+-- captura del comprobante: este proyecto no tiene ningún servicio de
+-- almacenamiento de archivos aparte, ver la nota grande de Pagos en
+-- claude/despliegue-dominio-y-marca-ludox.md). adjunto_datos guarda el
+-- Data URL COMPLETO tal cual lo entrega el navegador (FileReader.
+-- readAsDataURL(), con el prefijo "data:image/jpeg;base64,..." incluido)
+-- — así el frontend lo usa directo como src de <img>/<video>/<audio> o
+-- href de descarga, sin tener que reconstruirlo. adjunto_tipo es el mime
+-- type real del archivo (ej. "image/jpeg", "video/mp4", "audio/webm",
+-- "application/pdf") y adjunto_nombre es el nombre de archivo original
+-- (o uno generado para notas de voz, ej. "nota-de-voz.webm") — los 3
+-- viajan juntos o ninguno. texto puede quedar vacío ('') cuando el
+-- mensaje es SOLO un adjunto, sin bajar el "not null" de la columna
+-- (una fila con adjunto y sin texto simplemente guarda texto = '').
+alter table mensajes_chat add column if not exists adjunto_datos text;
+alter table mensajes_chat add column if not exists adjunto_tipo text;
+alter table mensajes_chat add column if not exists adjunto_nombre text;

@@ -68,6 +68,14 @@
   .caja-pendiente .icono { font-size: 30px; margin-bottom: 12px; }
   .caja-pendiente h2 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0 0 8px; }
   .caja-pendiente p { color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0; }
+
+  /* ============ VIDEO EXPLICATIVO (26-09-2026) ============ */
+  .caja-video { background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 20px; margin: 0 auto 28px; box-shadow: 0 20px 55px -25px rgba(47,107,255,0.5); }
+  .video-marco { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+  .video-marco video { width: 100%; height: 100%; display: block; }
+  .video-pendiente { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(160deg, rgba(56,224,240,0.08), rgba(3,6,15,0.92)); color: var(--text-dim); font-size: 13.5px; text-align: center; padding: 20px; }
+  .video-pendiente .icono-video { font-size: 34px; }
+  .video-nota { color: var(--text-dim); font-size: 14px; margin: 16px 4px 0; text-align: left; display: flex; align-items: center; gap: 8px; }
   .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn-pagina { font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 22px; border-radius: 10px; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
   .btn-pagina-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65); }
@@ -135,10 +143,14 @@
     <h1>Sistema contable hípico para Grupos</h1>
     <p class="lead">Pensado para Grupos que manejan apuestas hípicas — el detalle completo de este producto está en camino.</p>
 
-    <div class="caja-pendiente">
-      <div class="icono">🚧</div>
-      <h2>Estamos armando esta página</h2>
-      <p>Muy pronto vas a encontrar acá el detalle completo de este producto — funciones, capturas y todo lo que incluye. Mientras tanto, pide una demo y te lo mostramos en vivo.</p>
+    <div class="caja-video">
+      <div class="video-marco">
+        <video controls preload="metadata" playsinline>
+          <source src="videos/ludox-hipismo-explicativo.mp4" type="video/mp4">
+          Tu navegador no puede reproducir este video — <a href="videos/ludox-hipismo-explicativo.mp4">descárgalo acá</a>.
+        </video>
+      </div>
+      <p class="video-nota">🎥 Mira el video explicativo para ver todos los detalles de Automatización Hípica.</p>
     </div>
 
     <div class="acciones-pagina">

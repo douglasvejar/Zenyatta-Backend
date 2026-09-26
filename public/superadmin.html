@@ -414,6 +414,16 @@
   .chat-enviar { display: flex; gap: 8px; margin-top: 10px; }
   .chat-enviar textarea { flex: 1; height: 44px; resize: none; font-family: inherit; font-size: 13px; background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid var(--border-light); border-radius: 6px; }
   .chat-enviar button { padding: 10px 18px; }
+  .chat-adjunto-preview { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-top: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-light); border-radius: 8px; font-size: 12px; }
+  .chat-adjunto-preview button { flex: none; background: none; border: none; color: #e5484d; cursor: pointer; font-size: 15px; padding: 0 4px; }
+  .chat-btn-icono { flex: none; width: 38px; height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid var(--border-light); color: var(--text); }
+  .chat-btn-icono:hover { background: rgba(255,255,255,0.14); }
+  .chat-btn-icono.grabando { background: #e5484d; color: #fff; animation: parpadeoGrabando 1s infinite; }
+  @keyframes parpadeoGrabando { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  .chat-img-msg { max-width: 200px; max-height: 200px; border-radius: 8px; display: block; margin-top: 6px; cursor: pointer; }
+  .chat-video-msg { max-width: 220px; border-radius: 8px; display: block; margin-top: 6px; }
+  .chat-audio-msg { display: block; margin-top: 6px; max-width: 220px; }
+  .chat-archivo-msg { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 10px; background: rgba(255,255,255,0.08); border-radius: 8px; font-size: 12px; text-decoration: none; color: var(--text); }
 
   /* ================================================================= */
   /* BANDEJA DE CHAT FLOTANTE (estilo Chatra, 28-08-2026) — igual que la  */
@@ -927,7 +937,11 @@
       </div>
       <div id="chatWidgetSAHiloWrap" style="display:none;">
         <div id="chatMensajesSuperadmin" class="chat-mensajes"></div>
+        <div id="chatAdjuntoPreviewSA" class="chat-adjunto-preview" style="display:none;"></div>
         <div class="chat-enviar">
+          <input type="file" id="chatArchivoInputSA" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none;" onchange="manejarArchivoChatSeleccionadoSA(this)">
+          <button type="button" class="chat-btn-icono" title="Adjuntar archivo" onclick="document.getElementById('chatArchivoInputSA').click()">📎</button>
+          <button type="button" id="chatBtnGrabarSA" class="chat-btn-icono" title="Nota de voz" onclick="alternarGrabacionNotaVozSA()">🎤</button>
           <textarea id="chatTextoSuperadmin" placeholder="Escribe tu respuesta..."></textarea>
           <button type="button" onclick="enviarMensajeChatSuperadmin()">➤</button>
         </div>
@@ -1413,6 +1427,10 @@ let CONVERSACION_ABIERTA_ID = null; // grupo_id de la conversación abierta ahor
 let ULTIMAS_CONVERSACIONES = []; // cache en memoria de la última lista pedida, para filtrarConversaciones() sin pedir nada de nuevo
 let CHAT_WIDGET_SA_ABIERTO = false; // si el panel de la bandeja de chat está abierto o minimizado
 let CHAT_ULTIMO_NO_LEIDOS_SA = 0; // 26-09-2026: último total de no leídos visto, para solo sonar cuando SUBE (ver reproducirSonidoNotificacionChat más abajo)
+let CHAT_ADJUNTO_PENDIENTE_SA = null;
+let CHAT_MEDIA_RECORDER_SA = null;
+let CHAT_RECORDER_CHUNKS_SA = [];
+const CHAT_TOPE_ADJUNTO_BYTES_SA = 8 * 1024 * 1024; // mismo tope ~8MB que valida services/chat.js
 let CHAT_WIDGET_SA_POLL_ABIERTO = null; // id del setInterval que refresca mientras el panel está ABIERTO (8s)
 let ULTIMA_ALERTA_WHATSAPP_DESDE_EN = null; // alertaDesdeEn de la alerta de WhatsApp caído que está mostrando el banner ahora mismo (o null si no hay ninguna) — ver actualizarBannerWhatsappCaido()
 let ULTIMO_ALERTA_DESDE_EN_DESCARTADO = null; // alertaDesdeEn que el súper-admin ya cerró a mano con la "✕" del banner — se guarda solo en memoria (dura lo que dure el panel abierto), no en localStorage
@@ -3894,11 +3912,96 @@ function renderChatMensajesSuperadmin(mensajes) {
     cont.innerHTML = '<p style="color:#888; font-size:13px; text-align:center;">Todavía no hay mensajes en esta conversación.</p>';
   } else {
     cont.innerHTML = mensajes.map(m =>
-      '<div class="chat-burbuja ' + (m.remitente === 'superadmin' ? 'propio' : 'otro') + '">' + escaparHtmlChatSuperadmin(m.texto) +
+      '<div class="chat-burbuja ' + (m.remitente === 'superadmin' ? 'propio' : 'otro') + '">' +
+      (m.texto ? escaparHtmlChatSuperadmin(m.texto) : '') + renderAdjuntoChatSuperadmin(m) +
       '<span class="chat-hora">' + (m.remitente === 'superadmin' ? 'Tú' : 'Grupo') + ' — ' + formatFechaHora(m.creado_en) + '</span></div>'
     ).join('');
   }
   cont.scrollTop = cont.scrollHeight;
+}
+
+function renderAdjuntoChatSuperadmin(m) {
+  if (!m.adjunto_datos) return '';
+  const tipo = m.adjunto_tipo || '';
+  const nombre = escaparHtmlChatSuperadmin(m.adjunto_nombre || 'archivo');
+  if (tipo.startsWith('image/')) {
+    return '<img src="' + m.adjunto_datos + '" class="chat-img-msg" alt="' + nombre + '" onclick="window.open(this.src, \'_blank\')">';
+  }
+  if (tipo.startsWith('video/')) {
+    return '<video src="' + m.adjunto_datos + '" class="chat-video-msg" controls></video>';
+  }
+  if (tipo.startsWith('audio/')) {
+    return '<audio src="' + m.adjunto_datos + '" class="chat-audio-msg" controls></audio>';
+  }
+  return '<a href="' + m.adjunto_datos + '" download="' + nombre + '" class="chat-archivo-msg">📄 ' + nombre + '</a>';
+}
+
+function manejarArchivoChatSeleccionadoSA(input) {
+  const archivo = input.files && input.files[0];
+  input.value = '';
+  if (!archivo) return;
+  if (archivo.size > CHAT_TOPE_ADJUNTO_BYTES_SA) {
+    alert('Ese archivo pesa más de 8MB — elige uno más liviano.');
+    return;
+  }
+  const lector = new FileReader();
+  lector.onload = () => {
+    CHAT_ADJUNTO_PENDIENTE_SA = { datos: lector.result, tipo: archivo.type || 'application/octet-stream', nombre: archivo.name };
+    mostrarPreviewAdjuntoChatSA();
+  };
+  lector.onerror = () => alert('No se pudo leer ese archivo.');
+  lector.readAsDataURL(archivo);
+}
+
+function mostrarPreviewAdjuntoChatSA() {
+  const cont = document.getElementById('chatAdjuntoPreviewSA');
+  if (!cont || !CHAT_ADJUNTO_PENDIENTE_SA) return;
+  const { tipo, nombre } = CHAT_ADJUNTO_PENDIENTE_SA;
+  let icono = '📄';
+  if (tipo.startsWith('image/')) icono = '🖼️';
+  else if (tipo.startsWith('video/')) icono = '🎬';
+  else if (tipo.startsWith('audio/')) icono = '🎤';
+  cont.innerHTML = '<span>' + icono + ' ' + escaparHtmlChatSuperadmin(nombre) + '</span><button type="button" onclick="quitarAdjuntoPendienteChatSA()">✕</button>';
+  cont.style.display = 'flex';
+}
+
+function quitarAdjuntoPendienteChatSA() {
+  CHAT_ADJUNTO_PENDIENTE_SA = null;
+  const cont = document.getElementById('chatAdjuntoPreviewSA');
+  if (cont) { cont.style.display = 'none'; cont.innerHTML = ''; }
+}
+
+async function alternarGrabacionNotaVozSA() {
+  const boton = document.getElementById('chatBtnGrabarSA');
+  if (CHAT_MEDIA_RECORDER_SA && CHAT_MEDIA_RECORDER_SA.state === 'recording') {
+    CHAT_MEDIA_RECORDER_SA.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    CHAT_RECORDER_CHUNKS_SA = [];
+    CHAT_MEDIA_RECORDER_SA = new MediaRecorder(stream);
+    CHAT_MEDIA_RECORDER_SA.ondataavailable = (e) => { if (e.data.size > 0) CHAT_RECORDER_CHUNKS_SA.push(e.data); };
+    CHAT_MEDIA_RECORDER_SA.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (boton) boton.classList.remove('grabando');
+      const blob = new Blob(CHAT_RECORDER_CHUNKS_SA, { type: 'audio/webm' });
+      if (blob.size > CHAT_TOPE_ADJUNTO_BYTES_SA) {
+        alert('La nota de voz quedó muy larga (más de 8MB) — intenta una más corta.');
+        return;
+      }
+      const lector = new FileReader();
+      lector.onload = () => {
+        CHAT_ADJUNTO_PENDIENTE_SA = { datos: lector.result, tipo: 'audio/webm', nombre: 'nota-de-voz.webm' };
+        mostrarPreviewAdjuntoChatSA();
+      };
+      lector.readAsDataURL(blob);
+    };
+    CHAT_MEDIA_RECORDER_SA.start();
+    if (boton) boton.classList.add('grabando');
+  } catch (e) {
+    alert('No se pudo acceder al micrófono: ' + e.message);
+  }
 }
 
 function escaparHtmlChatSuperadmin(texto) {
@@ -3911,10 +4014,13 @@ async function enviarMensajeChatSuperadmin() {
   if (!CONVERSACION_ABIERTA_ID) return;
   const textarea = document.getElementById('chatTextoSuperadmin');
   const texto = textarea.value.trim();
-  if (!texto) return;
+  if (!texto && !CHAT_ADJUNTO_PENDIENTE_SA) return;
   try {
-    await apiSuperadmin('/api/superadmin/chat/' + CONVERSACION_ABIERTA_ID, { method: 'POST', body: JSON.stringify({ texto }) });
+    const cuerpo = { texto };
+    if (CHAT_ADJUNTO_PENDIENTE_SA) cuerpo.adjunto = CHAT_ADJUNTO_PENDIENTE_SA;
+    await apiSuperadmin('/api/superadmin/chat/' + CONVERSACION_ABIERTA_ID, { method: 'POST', body: JSON.stringify(cuerpo) });
     textarea.value = '';
+    quitarAdjuntoPendienteChatSA();
     abrirConversacion(CONVERSACION_ABIERTA_ID, document.getElementById('chatWidgetSATitulo').textContent.replace('💬 ', ''));
   } catch (e) {
     alert('No se pudo enviar el mensaje: ' + e.message);

@@ -417,6 +417,16 @@
   .chat-enviar { display: flex; gap: 8px; margin-top: 10px; }
   .chat-enviar textarea { flex: 1; height: 44px; resize: none; font-family: inherit; font-size: 13px; }
   .chat-enviar button { padding: 10px 18px; }
+  .chat-adjunto-preview { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-top: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); border-radius: 8px; font-size: 12px; }
+  .chat-adjunto-preview button { flex: none; background: none; border: none; color: #e5484d; cursor: pointer; font-size: 15px; padding: 0 4px; }
+  .chat-btn-icono { flex: none; width: 38px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text); }
+  .chat-btn-icono:hover { background: rgba(255,255,255,0.15); }
+  .chat-btn-icono.grabando { background: #e5484d; color: #fff; animation: parpadeoGrabando 1s infinite; }
+  @keyframes parpadeoGrabando { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  .chat-img-msg { max-width: 200px; max-height: 200px; border-radius: 8px; display: block; margin-top: 6px; cursor: pointer; }
+  .chat-video-msg { max-width: 220px; border-radius: 8px; display: block; margin-top: 6px; }
+  .chat-audio-msg { display: block; margin-top: 6px; max-width: 220px; }
+  .chat-archivo-msg { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 10px; background: rgba(255,255,255,0.08); border-radius: 8px; font-size: 12px; text-decoration: none; color: var(--text); }
 
   /* ================================================================= */
   /* BANDEJA DE CHAT FLOTANTE (estilo Chatra, 28-08-2026) — burbuja fija */
@@ -2283,7 +2293,11 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
         <button type="button" class="chat-widget-min" onclick="toggleChatWidget()" aria-label="Minimizar">–</button>
       </div>
       <div id="chatMensajes" class="chat-mensajes"></div>
+      <div id="chatAdjuntoPreview" class="chat-adjunto-preview" style="display:none;"></div>
       <div class="chat-enviar">
+        <input type="file" id="chatArchivoInput" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none;" onchange="manejarArchivoChatSeleccionado(this)">
+        <button type="button" class="chat-btn-icono" title="Adjuntar archivo" onclick="document.getElementById('chatArchivoInput').click()">📎</button>
+        <button type="button" id="chatBtnGrabar" class="chat-btn-icono" title="Nota de voz" onclick="alternarGrabacionNotaVoz()">🎤</button>
         <textarea id="chatTexto" placeholder="Escribe tu mensaje..."></textarea>
         <button type="button" onclick="enviarMensajeChatGrupo()">➤</button>
       </div>

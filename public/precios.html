@@ -7,7 +7,7 @@
 <link rel="icon" href="img/logo-ludox.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #03060f;
@@ -22,6 +22,7 @@
     --accent-deep: #241fb8;
     --danger: #ff6b6b;
     --ok: #34d399;
+    --gold: #ffc94d;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, Segoe UI, Roboto, sans-serif; min-height: 100%; }
@@ -32,7 +33,7 @@
 
   /* ============ BARRA DE NAVEGACIÓN (misma que index.html) ============ */
   .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; background: rgba(3, 6, 15, 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-border); }
-  .navbar-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .navbar-inner { max-width: 1080px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .navbar-marca { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.02em; flex-shrink: 0; }
   .navbar-marca img { width: 26px; height: 26px; object-fit: contain; }
   .navbar-links { display: flex; align-items: center; gap: 4px; }
@@ -59,40 +60,94 @@
     .navbar-links.movil-abierto .navbar-cta { text-align: center; margin-top: 6px; }
   }
 
-  /* ============ CONTENIDO ============ */
-  .pagina { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 148px 20px 0; text-align: center; }
-  .eyebrow-pagina { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-cyan); margin: 0 0 14px; }
-  h1 { font-family: 'Outfit', sans-serif; font-size: clamp(28px, 5vw, 40px); font-weight: 700; margin: 0 0 16px; text-wrap: balance; }
-  .lead { color: var(--text-dim); font-size: 16px; line-height: 1.6; margin: 0 auto 36px; max-width: 540px; }
-  .caja-pendiente { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 32px 28px; margin: 0 auto 28px; }
-  .caja-pendiente .icono { font-size: 30px; margin-bottom: 12px; }
-  .caja-pendiente h2 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0 0 8px; }
-  .caja-pendiente p { color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0; }
-  .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .btn-pagina { font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 22px; border-radius: 10px; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
-  .btn-pagina-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65); }
-  .btn-pagina-principal:hover { transform: translateY(-1px); }
-  .btn-pagina-secundario { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--card-border); }
-  .btn-pagina-secundario:hover { border-color: rgba(56, 224, 240, 0.5); background: rgba(56, 224, 240, 0.06); }
+  /* ============ HERO ============ */
+  .pagina { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 148px 20px 0; }
+  .hero { text-align: center; max-width: 680px; margin: 0 auto 56px; }
+  .eyebrow-pagina { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-cyan); margin: 0 0 14px; opacity: 0; animation: entrarArriba 0.7s ease forwards; }
+  h1 { font-family: 'Outfit', sans-serif; font-size: clamp(30px, 5.2vw, 46px); font-weight: 800; margin: 0 0 18px; text-wrap: balance; line-height: 1.12; opacity: 0; animation: entrarArriba 0.7s ease 0.08s forwards; }
+  h1 .subrayado { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { color: var(--text-dim); font-size: 16.5px; line-height: 1.65; margin: 0 auto; max-width: 540px; opacity: 0; animation: entrarArriba 0.7s ease 0.16s forwards; }
+  @keyframes entrarArriba { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  .tiras-confianza { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 26px 0 0; opacity: 0; animation: entrarArriba 0.7s ease 0.24s forwards; }
+  .tira { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-dim); background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); padding: 7px 13px; border-radius: 100px; }
+  .tira .punto-ok { color: var(--ok); font-size: 13px; }
+
+  /* ============ TARJETAS DE PRECIO ============ */
+  .grid-precios { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; margin: 0 0 30px; }
+  @media (max-width: 900px) { .grid-precios { grid-template-columns: 1fr; max-width: 420px; margin-left: auto; margin-right: auto; } }
+
+  .tarjeta-precio { position: relative; background: var(--card); border: 1px solid var(--card-border); border-radius: 20px; padding: 30px 26px 28px; display: flex; flex-direction: column; opacity: 0; transform: translateY(18px); transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease; }
+  .tarjeta-precio.visible { animation: aparecerTarjeta 0.6s ease forwards; }
+  .tarjeta-precio:nth-child(1).visible { animation-delay: 0.05s; }
+  .tarjeta-precio:nth-child(2).visible { animation-delay: 0.16s; }
+  .tarjeta-precio:nth-child(3).visible { animation-delay: 0.27s; }
+  @keyframes aparecerTarjeta { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+  .tarjeta-precio:hover { transform: translateY(-6px); border-color: rgba(56, 224, 240, 0.35); box-shadow: 0 22px 50px -22px rgba(47, 107, 255, 0.55); }
+
+  .tarjeta-precio.destacada { border-color: rgba(56, 224, 240, 0.55); background: linear-gradient(180deg, rgba(56,224,240,0.07), var(--card) 40%); box-shadow: 0 0 0 1px rgba(56,224,240,0.18), 0 20px 60px -24px rgba(47,107,255,0.7); }
+  .tarjeta-precio.destacada:hover { transform: translateY(-8px) scale(1.015); }
+
+  .badge-mejor { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: linear-gradient(100deg, var(--gold), #ff9d4d); color: #2b1900; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 11.5px; letter-spacing: 0.04em; padding: 6px 16px; border-radius: 100px; box-shadow: 0 6px 18px -6px rgba(255,157,77,0.6); animation: pulsarBadge 2.4s ease-in-out infinite; white-space: nowrap; }
+  @keyframes pulsarBadge { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.055); } }
+
+  .tp-icono { font-size: 30px; margin-bottom: 14px; }
+  .tp-titulo { font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 700; margin: 0 0 6px; letter-spacing: 0.01em; }
+  .tp-sub { color: var(--text-dim); font-size: 13px; margin: 0 0 20px; line-height: 1.5; min-height: 39px; }
+  .tp-precio { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+  .tp-precio .moneda { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 600; color: var(--text-dim); }
+  .tp-precio .monto { font-family: 'Outfit', sans-serif; font-size: 44px; font-weight: 800; line-height: 1; }
+  .tp-precio .periodo { font-size: 14px; color: var(--text-dim); }
+  .tp-ahorro { font-size: 12.5px; color: var(--ok); font-weight: 600; margin-bottom: 22px; display: flex; align-items: center; gap: 5px; }
+  .tp-ahorro-vacio { margin-bottom: 22px; height: 17px; }
+
+  .tp-lista { list-style: none; padding: 0; margin: 0 0 26px; display: flex; flex-direction: column; gap: 11px; flex: 1; }
+  .tp-lista li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+  .tp-lista li .check { color: var(--accent-cyan); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .tarjeta-precio.destacada .tp-lista li .check { color: var(--gold); }
+
+  .tp-pie { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; text-align: center; padding: 11px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); color: var(--text-dim); }
+  .tarjeta-precio.destacada .tp-pie { background: rgba(255,201,77,0.08); border-color: rgba(255,201,77,0.3); color: var(--gold); }
+
+  /* ============ FRANJA DE DESCUENTO + ADAPTABILIDAD ============ */
+  .franja-notas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 6px 0 46px; }
+  @media (max-width: 720px) { .franja-notas { grid-template-columns: 1fr; } }
+  .nota-caja { background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px 20px; display: flex; gap: 13px; align-items: flex-start; }
+  .nota-caja .nota-icono { font-size: 21px; flex-shrink: 0; }
+  .nota-caja .nota-titulo { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 14px; margin: 0 0 3px; }
+  .nota-caja .nota-texto { color: var(--text-dim); font-size: 13px; line-height: 1.55; margin: 0; }
+
+  /* ============ CTA FINAL ============ */
+  .cta-final { text-align: center; padding: 46px 24px 8px; }
+  .cta-final h2 { font-family: 'Outfit', sans-serif; font-size: clamp(22px, 3.6vw, 30px); font-weight: 700; margin: 0 0 12px; }
+  .cta-final p { color: var(--text-dim); font-size: 15px; margin: 0 0 26px; max-width: 460px; margin-left: auto; margin-right: auto; }
+  .btn-solicita { position: relative; font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; color: #04070f; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); border: none; padding: 18px 44px; border-radius: 14px; cursor: pointer; box-shadow: 0 14px 40px -12px rgba(47, 107, 255, 0.75); transition: transform 0.15s ease, box-shadow 0.15s ease; overflow: hidden; }
+  .btn-solicita::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent); transform: skewX(-20deg); animation: brilloBoton 3.2s ease-in-out infinite; }
+  @keyframes brilloBoton { 0% { left: -60%; } 45%, 100% { left: 140%; } }
+  .btn-solicita:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 18px 46px -10px rgba(47, 107, 255, 0.9); }
+  .btn-volver { display: inline-block; margin-top: 20px; color: var(--text-dim); font-size: 13.5px; text-decoration: none; }
+  .btn-volver:hover { color: var(--text); }
+
   footer { position: relative; z-index: 1; margin-top: 56px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; text-align: center; }
 
-  /* ============ MODAL DE SOLICITAR DEMO (mismo mecanismo que index.html) ============ */
+  @media (prefers-reduced-motion: reduce) {
+    .eyebrow-pagina, h1, .lead, .tiras-confianza, .tarjeta-precio { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .badge-mejor, .btn-solicita::after { animation: none !important; }
+  }
+
+  /* ============ MODAL "SOLICITA YA!" ============ */
   .overlay { position: fixed; inset: 0; background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
   .overlay.abierto { display: flex; }
-  .modal { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px 26px 24px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7); max-height: 88vh; overflow-y: auto; text-align: left; }
-  .modal h2 { font-family: 'Outfit', sans-serif; font-size: 20px; margin: 0 0 4px; }
+  .modal { width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px 26px 24px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7); max-height: 88vh; overflow-y: auto; text-align: left; }
+  .modal h2 { font-family: 'Outfit', sans-serif; font-size: 21px; margin: 0 0 4px; }
   .modal .sub { color: var(--text-dim); font-size: 13.5px; margin: 0 0 20px; line-height: 1.5; }
-  .canal-contacto { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); margin-bottom: 10px; font-size: 14px; text-decoration: none; color: var(--text); }
-  .canal-contacto:hover { border-color: rgba(56, 224, 240, 0.4); }
-  .canal-contacto .icono { font-size: 16px; }
-  .canal-contacto .valor { color: var(--text-dim); margin-left: auto; font-size: 13px; }
-  .separador-o { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin: 18px 0 14px; }
-  .separador-o::before, .separador-o::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
   .campo { margin-bottom: 12px; text-align: left; }
   .campo label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
   .campo input, .campo textarea { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 11px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; resize: vertical; }
   .campo input:focus, .campo textarea:focus { outline: none; border-color: var(--accent-cyan); }
   .campo textarea { min-height: 84px; }
+  .fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 420px) { .fila-2 { grid-template-columns: 1fr; } }
   .btn-enviar { width: 100%; margin-top: 4px; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); color: #04070f; border: none; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; padding: 13px; border-radius: 10px; cursor: pointer; }
   .btn-enviar:disabled { opacity: 0.6; cursor: default; }
   .msg-form { font-size: 13px; margin-top: 10px; text-align: center; }
@@ -131,20 +186,96 @@
   </nav>
 
   <div class="pagina">
-    <p class="eyebrow-pagina">Precios</p>
-    <h1>Precios</h1>
-    <p class="lead">Nuestros planes están en camino.</p>
 
-    <div class="caja-pendiente">
-      <div class="icono">🚧</div>
-      <h2>Estamos armando esta página</h2>
-      <p>Muy pronto vas a encontrar acá nuestros planes y precios. Mientras tanto, pide una demo y te armamos una propuesta a medida.</p>
+    <div class="hero">
+      <p class="eyebrow-pagina">Precios</p>
+      <h1>Deja de calcular a mano. <span class="subrayado">Automatiza tu grupo</span> esta misma semana.</h1>
+      <p class="lead">Planes simples, por grupo, sin contratos largos. Empieza con el módulo que necesitas hoy y suma el otro cuando quieras.</p>
+      <div class="tiras-confianza">
+        <span class="tira"><span class="punto-ok">●</span> Sin contrato de permanencia</span>
+        <span class="tira"><span class="punto-ok">●</span> Activación esta misma semana</span>
+        <span class="tira"><span class="punto-ok">●</span> Soporte directo por chat</span>
+      </div>
     </div>
 
-    <div class="acciones-pagina">
-      <button type="button" class="btn-pagina btn-pagina-principal" id="navbarBtnDemo2">Solicitar Demo</button>
-      <a class="btn-pagina btn-pagina-secundario" href="index.html">← Volver al inicio</a>
+    <div class="grid-precios" id="gridPrecios">
+      <div class="tarjeta-precio">
+        <div class="tp-icono">⚽</div>
+        <h3 class="tp-titulo">Automatización Deportes</h3>
+        <p class="tp-sub">Para Grupos que venden parleys y jugadas deportivas por WhatsApp.</p>
+        <div class="tp-precio"><span class="moneda">$</span><span class="monto">70</span><span class="periodo">USD / semana</span></div>
+        <div class="tp-ahorro-vacio"></div>
+        <ul class="tp-lista">
+          <li><span class="check">✓</span> Lee la sábana pegada de WhatsApp y calcula todo sola</li>
+          <li><span class="check">✓</span> Tickets ganados/perdidos y saldo de cada cliente en vivo</li>
+          <li><span class="check">✓</span> Balance General y Cierre Final cuadrando automático</li>
+          <li><span class="check">✓</span> Comisiones y % devuelto por cliente y por aval</li>
+          <li><span class="check">✓</span> Pizarra en vivo con marcador en tiempo real</li>
+          <li><span class="check">✓</span> Multi-grupo con aislamiento total de datos</li>
+        </ul>
+        <div class="tp-pie">Ideal si solo vendes deportes</div>
+      </div>
+
+      <div class="tarjeta-precio destacada">
+        <span class="badge-mejor">★ Mejor valor</span>
+        <div class="tp-icono">🚀</div>
+        <h3 class="tp-titulo">Promoción — Ambas automatizaciones</h3>
+        <p class="tp-sub">Deportes + Hípico juntos, en un solo panel con un solo login.</p>
+        <div class="tp-precio"><span class="moneda">$</span><span class="monto">120</span><span class="periodo">USD / semana</span></div>
+        <div class="tp-ahorro">✓ Ahorras $20,00 semanales vs. contratar los 2 por separado</div>
+        <ul class="tp-lista">
+          <li><span class="check">✓</span> Todo lo de Automatización Deportes</li>
+          <li><span class="check">✓</span> Todo lo de Automatización Hípica</li>
+          <li><span class="check">✓</span> Un solo panel, cambia de módulo sin cerrar sesión</li>
+          <li><span class="check">✓</span> Una sola bandeja de mensajes con soporte para los 2</li>
+          <li><span class="check">✓</span> Empleados con permisos independientes por módulo</li>
+        </ul>
+        <div class="tp-pie">La opción que más eligen los Grupos que crecen</div>
+      </div>
+
+      <div class="tarjeta-precio">
+        <div class="tp-icono">🐎</div>
+        <h3 class="tp-titulo">Automatización Hípica</h3>
+        <p class="tp-sub">Para Grupos que manejan apuestas hípicas: planos, remates y adelantadas.</p>
+        <div class="tp-precio"><span class="moneda">$</span><span class="monto">70</span><span class="periodo">USD / semana</span></div>
+        <div class="tp-ahorro-vacio"></div>
+        <ul class="tp-lista">
+          <li><span class="check">✓</span> Cargar Planos y Remates con cálculo automático</li>
+          <li><span class="check">✓</span> Jugadas Adelantadas que se resuelven solas</li>
+          <li><span class="check">✓</span> Comisiones devueltas y saldo por cliente</li>
+          <li><span class="check">✓</span> Balance General y Cierre Final por semana</li>
+          <li><span class="check">✓</span> Traspasos de jugadas y de comisión entre clientes</li>
+          <li><span class="check">✓</span> Portal público de consulta para tus clientes</li>
+        </ul>
+        <div class="tp-pie">Ideal si solo manejas hípica</div>
+      </div>
     </div>
+
+    <div class="franja-notas">
+      <div class="nota-caja">
+        <span class="nota-icono">💳</span>
+        <div>
+          <p class="nota-titulo">10% de descuento pagando mensual</p>
+          <p class="nota-texto">Si cancelas el servicio de forma mensual en vez de semanal, obtienes 10% de descuento sobre el total del mes. Lo coordinamos directo por chat.</p>
+        </div>
+      </div>
+      <div class="nota-caja">
+        <span class="nota-icono">🧩</span>
+        <div>
+          <p class="nota-titulo">Los módulos se adaptan a tu grupo</p>
+          <p class="nota-texto">Cada Grupo trabaja distinto — comisiones, avales, modalidades, permisos por empleado. Ajustamos la configuración a como ya trabajas, sin que cambies tu forma de operar.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-final">
+      <h2>¿Listo para automatizar tu grupo?</h2>
+      <p>Déjanos tus datos y te contactamos en el día para coordinar la activación.</p>
+      <button type="button" class="btn-solicita" id="btnSolicitaYa">SOLICITA YA!</button>
+      <br>
+      <a class="btn-volver" href="index.html">← Volver al inicio</a>
+    </div>
+
   </div>
 
   <footer>LUDOX © <span id="anioActual"></span> — Soluciones digitales</footer>
@@ -153,32 +284,29 @@
     <div class="modal">
       <div class="modal-header">
         <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
-        <h2>Solicita tu demo</h2>
-        <p class="sub">Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.</p>
+        <h2>¡Solicita ya!</h2>
+        <p class="sub">Cuéntanos qué necesitas y te contactamos para coordinar la activación de tu grupo.</p>
       </div>
-      <a class="canal-contacto" id="canalEmail" href="mailto:">
-        <span class="icono">✉</span> Email
-        <span class="valor" id="valorEmail">—</span>
-      </a>
-      <a class="canal-contacto" id="canalTelefono" href="#" style="display:none;">
-        <span class="icono">☎</span> Teléfono
-        <span class="valor" id="valorTelefono">—</span>
-      </a>
-      <div class="separador-o">o mandanos un mensaje</div>
       <form id="formContacto">
         <div class="campo">
-          <label for="ctNombre">Tu nombre (opcional)</label>
-          <input type="text" id="ctNombre" maxlength="200" autocomplete="name">
+          <label for="ctNombre">Nombre y apellido *</label>
+          <input type="text" id="ctNombre" maxlength="200" required autocomplete="name">
+        </div>
+        <div class="fila-2">
+          <div class="campo">
+            <label for="ctTelefono">Número de contacto *</label>
+            <input type="tel" id="ctTelefono" maxlength="100" required autocomplete="tel" placeholder="+58 412 1234567">
+          </div>
+          <div class="campo">
+            <label for="ctCorreo">Correo *</label>
+            <input type="email" id="ctCorreo" maxlength="150" required autocomplete="email" placeholder="tu@correo.com">
+          </div>
         </div>
         <div class="campo">
-          <label for="ctContacto">Email o teléfono para responderte</label>
-          <input type="text" id="ctContacto" maxlength="200" required autocomplete="email">
+          <label for="ctMensaje">¿Qué necesitas? *</label>
+          <textarea id="ctMensaje" maxlength="2000" required placeholder="Ej: quiero automatizar mi grupo de deportes, somos unos 40 clientes..."></textarea>
         </div>
-        <div class="campo">
-          <label for="ctMensaje">Mensaje</label>
-          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitas..."></textarea>
-        </div>
-        <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
+        <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar solicitud</button>
         <div class="msg-form" id="msgFormContacto"></div>
       </form>
     </div>
@@ -189,13 +317,6 @@ document.getElementById('anioActual').textContent = new Date().getFullYear();
 
 const EMAIL_CONTACTO = 'contacto@ludoxapp.com';
 const TELEFONO_CONTACTO = ''; // ej: '+58 412 1234567' — vacío = se oculta el canal
-document.getElementById('valorEmail').textContent = EMAIL_CONTACTO;
-document.getElementById('canalEmail').href = 'mailto:' + EMAIL_CONTACTO;
-if (TELEFONO_CONTACTO) {
-  document.getElementById('valorTelefono').textContent = TELEFONO_CONTACTO;
-  document.getElementById('canalTelefono').href = 'https://wa.me/' + TELEFONO_CONTACTO.replace(/[^0-9]/g, '');
-  document.getElementById('canalTelefono').style.display = 'flex';
-}
 
 const overlay = document.getElementById('overlayContacto');
 function abrirContacto() {
@@ -205,26 +326,32 @@ function abrirContacto() {
 }
 function cerrarContacto() { overlay.classList.remove('abierto'); }
 document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto(); });
-document.getElementById('navbarBtnDemo2').addEventListener('click', abrirContacto);
+document.getElementById('btnSolicitaYa').addEventListener('click', abrirContacto);
 document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
 overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
 
+// El formulario de esta página pide teléfono Y correo por separado (a
+// diferencia del modal de "Solicitar Demo" de las otras páginas de
+// marketing, que solo pide un dato de contacto cualquiera) — el backend
+// (POST /api/contacto) sigue esperando un solo campo "contacto" de texto
+// libre, así que acá se combinan los 2 en una sola línea antes de mandar,
+// sin agregar ninguna columna/tabla nueva.
 document.getElementById('formContacto').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btnEnviarContacto');
   const msgEl = document.getElementById('msgFormContacto');
   const nombre = document.getElementById('ctNombre').value.trim();
-  const contacto = document.getElementById('ctContacto').value.trim();
-  // (18-09-2026) Mismo mecanismo que "Contacto": esta página SOLO abre el
-  // modal en su variante "Demo", así que el mensaje siempre va etiquetado.
+  const telefono = document.getElementById('ctTelefono').value.trim();
+  const correo = document.getElementById('ctCorreo').value.trim();
   const textoMensaje = document.getElementById('ctMensaje').value.trim();
 
-  if (!contacto || !textoMensaje) {
-    msgEl.textContent = 'Completa al menos el contacto y el mensaje.';
+  if (!nombre || !telefono || !correo || !textoMensaje) {
+    msgEl.textContent = 'Completa todos los campos.';
     msgEl.className = 'msg-form error';
     return;
   }
-  const mensaje = '🎬 SOLICITUD DE DEMO (página Precios)\n' + textoMensaje;
+  const contacto = 'Tel: ' + telefono + ' · Correo: ' + correo;
+  const mensaje = '💰 SOLICITUD YA! (página Precios)\n' + textoMensaje;
 
   btn.disabled = true;
   msgEl.textContent = '';
@@ -236,12 +363,12 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
       body: JSON.stringify({ nombre, contacto, mensaje })
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error((data && data.error) || 'No se pudo enviar el mensaje.');
-    msgEl.textContent = '¡Gracias! Te vamos a contactar pronto.';
+    if (!res.ok) throw new Error((data && data.error) || 'No se pudo enviar la solicitud.');
+    msgEl.textContent = '¡Gracias! Te vamos a contactar muy pronto.';
     msgEl.className = 'msg-form ok';
     document.getElementById('formContacto').reset();
   } catch (err) {
-    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intenta de nuevo.';
+    msgEl.textContent = err.message || 'No se pudo enviar la solicitud. Intenta de nuevo.';
     msgEl.className = 'msg-form error';
   } finally {
     btn.disabled = false;
@@ -262,6 +389,13 @@ function cerrarMenuMovil() { navbarLinks.classList.remove('movil-abierto'); }
 document.getElementById('navbarToggle').addEventListener('click', () => {
   navbarLinks.classList.toggle('movil-abierto');
 });
+
+// Las tarjetas de precio entran con una animación sutil apenas se ven en
+// pantalla (respeta prefers-reduced-motion vía la media query de arriba).
+const observador = new IntersectionObserver((entradas) => {
+  entradas.forEach(entrada => { if (entrada.isIntersecting) entrada.target.classList.add('visible'); });
+}, { threshold: 0.15 });
+document.querySelectorAll('.tarjeta-precio').forEach(t => observador.observe(t));
 </script>
 </body>
 </html>

@@ -28,16 +28,16 @@ function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
-  if (/^INSERT INTO mensajes_chat \(grupo_id, remitente, texto\)\s+VALUES \(\$1, \$2, \$3\) RETURNING id, grupo_id, remitente, texto, creado_en/i.test(sql)) {
-    const [grupoId, remitente, texto] = params;
-    const fila = { id: nuevoId(), grupo_id: grupoId, remitente, texto, creado_en: new Date().toISOString(), leido_grupo: remitente === 'grupo', leido_superadmin: remitente === 'superadmin' };
+  if (/^INSERT INTO mensajes_chat \(grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)\s+RETURNING id, grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en/i.test(sql)) {
+    const [grupoId, remitente, texto, adjuntoDatos, adjuntoTipo, adjuntoNombre] = params;
+    const fila = { id: nuevoId(), grupo_id: grupoId, remitente, texto, adjunto_datos: adjuntoDatos, adjunto_tipo: adjuntoTipo, adjunto_nombre: adjuntoNombre, creado_en: new Date().toISOString(), leido_grupo: remitente === 'grupo', leido_superadmin: remitente === 'superadmin' };
     TABLAS.mensajes_chat.push(fila);
-    return { rows: [{ id: fila.id, grupo_id: fila.grupo_id, remitente: fila.remitente, texto: fila.texto, creado_en: fila.creado_en }] };
+    return { rows: [{ id: fila.id, grupo_id: fila.grupo_id, remitente: fila.remitente, texto: fila.texto, adjunto_datos: fila.adjunto_datos, adjunto_tipo: fila.adjunto_tipo, adjunto_nombre: fila.adjunto_nombre, creado_en: fila.creado_en }] };
   }
-  if (/^SELECT id, remitente, texto, creado_en FROM mensajes_chat WHERE grupo_id = \$1 ORDER BY creado_en ASC LIMIT 500/i.test(sql)) {
+  if (/^SELECT id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = \$1 ORDER BY creado_en ASC LIMIT 500/i.test(sql)) {
     const [grupoId] = params;
     const filas = TABLAS.mensajes_chat.filter(m => m.grupo_id === grupoId).sort((a, b) => a.creado_en < b.creado_en ? -1 : 1);
-    return { rows: filas.map(m => ({ id: m.id, remitente: m.remitente, texto: m.texto, creado_en: m.creado_en })) };
+    return { rows: filas.map(m => ({ id: m.id, remitente: m.remitente, texto: m.texto, adjunto_datos: m.adjunto_datos, adjunto_tipo: m.adjunto_tipo, adjunto_nombre: m.adjunto_nombre, creado_en: m.creado_en })) };
   }
   if (/^SELECT COUNT\(\*\)::int AS total FROM mensajes_chat WHERE grupo_id = \$1 AND remitente = 'superadmin' AND leido_grupo = false/i.test(sql)) {
     const [grupoId] = params;
@@ -144,6 +144,39 @@ function check(cond, msg) {
   // --- 5) Otro grupo no ve estos mensajes (bandeja por grupo_id, nunca global) ---
   const resOtroGrupo = await invocarRuta(handlerListar, reqBase('otro-grupo-cualquiera'));
   check(resOtroGrupo._json.length === 0, '5) Un grupo distinto no ve los mensajes de este — cada grupo tiene su propia conversación');
+
+  // --- 6) ADJUNTOS (26-09-2026, "puede adjuntar archivos, fotos, videos
+  // e incluso mandar notas de voz") ---
+  const fotoBase64 = Buffer.from('foto-de-mentira').toString('base64');
+  const resFoto = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '', adjunto: { datos: fotoBase64, tipo: 'image/jpeg', nombre: 'ticket.jpg' } } }));
+  check(resFoto._status === 201, '6) Se puede mandar SOLO una foto, sin texto (201)');
+  check(resFoto._json.adjunto_tipo === 'image/jpeg' && resFoto._json.adjunto_nombre === 'ticket.jpg', 'La foto queda guardada con su mime type y nombre de archivo');
+  check(resFoto._json.texto === '', 'El texto queda vacío (\'\'), nunca null, cuando el mensaje es solo la foto');
+
+  const notaVozBase64 = Buffer.from('audio-de-mentira').toString('base64');
+  const resNotaVoz = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '', adjunto: { datos: notaVozBase64, tipo: 'audio/webm', nombre: 'nota-de-voz.webm' } } }));
+  check(resNotaVoz._status === 201 && resNotaVoz._json.adjunto_tipo === 'audio/webm', '6b) También se puede mandar una nota de voz (audio/webm)');
+
+  const videoBase64 = Buffer.from('video-de-mentira').toString('base64');
+  const resVideoConTexto = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: 'Mira esto', adjunto: { datos: videoBase64, tipo: 'video/mp4', nombre: 'jugada.mp4' } } }));
+  check(resVideoConTexto._status === 201 && resVideoConTexto._json.texto === 'Mira esto' && resVideoConTexto._json.adjunto_tipo === 'video/mp4', '6c) Un video puede ir ACOMPAÑADO de texto en el mismo mensaje');
+
+  const pdfBase64 = Buffer.from('pdf-de-mentira').toString('base64');
+  const resPdf = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '', adjunto: { datos: pdfBase64, tipo: 'application/pdf', nombre: 'comprobante.pdf' } } }));
+  check(resPdf._status === 201 && resPdf._json.adjunto_tipo === 'application/pdf', '6d) También se aceptan "archivos" comunes (ej. PDF)');
+
+  const resTipoInvalido = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '', adjunto: { datos: fotoBase64, tipo: 'application/x-msdownload', nombre: 'raro.exe' } } }));
+  check(resTipoInvalido._status === 400, '6e) Un tipo de archivo no permitido (ej. un .exe) responde 400, no se guarda');
+
+  const resVacio = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '' } }));
+  check(resVacio._status === 400, '6f) Sin texto Y sin adjunto sigue respondiendo 400, como antes');
+
+  const adjuntoMuyPesado = { datos: 'A'.repeat(12 * 1024 * 1024), tipo: 'image/png', nombre: 'gigante.png' };
+  const resPesado = await invocarRuta(handlerEnviar, Object.assign(reqBase(GRUPO_ID), { body: { texto: '', adjunto: adjuntoMuyPesado } }));
+  check(resPesado._status === 400, '6g) Un adjunto más pesado que el tope (~8MB reales) responde 400');
+
+  const resListarConAdjuntos = await invocarRuta(handlerListar, reqBase(GRUPO_ID));
+  check(resListarConAdjuntos._json.filter(m => m.adjunto_tipo).length === 4, '6h) GET /api/hipismo/chat trae los 4 mensajes con adjunto guardados (foto, nota de voz, video+texto, pdf) — ninguno de los rechazados');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

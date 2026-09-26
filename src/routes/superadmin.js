@@ -930,7 +930,7 @@ router.get('/chat/:grupoId', asyncHandler(async (req, res) => {
 
 router.post('/chat/:grupoId', asyncHandler(async (req, res) => {
   try {
-    const mensaje = await chatService.enviarMensaje(req.params.grupoId, 'superadmin', req.body.texto);
+    const mensaje = await chatService.enviarMensaje(req.params.grupoId, 'superadmin', req.body.texto, req.body.adjunto);
     res.status(201).json(mensaje);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message || 'No se pudo enviar el mensaje.' });

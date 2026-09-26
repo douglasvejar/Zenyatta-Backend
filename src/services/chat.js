@@ -5,23 +5,72 @@
 // =================================================================
 const db = require('../db');
 
-async function enviarMensaje(grupoId, remitente, texto) {
-  if (!texto || !texto.trim()) {
-    const err = new Error('Escribe un mensaje antes de enviarlo.');
+// Tipos de adjunto aceptados (26-09-2026, "puede adjuntar archivos,
+// fotos, videos e incluso mandar notas de voz") — cualquier imagen/video/
+// audio (fotos, videos, notas de voz grabadas en el navegador) más los
+// formatos de documento más comunes para "archivos". Cualquier otro mime
+// type se rechaza para no terminar guardando algo inesperado como base64
+// en la base de datos.
+const TIPOS_ADJUNTO_PERMITIDOS = /^(image|video|audio)\//;
+const TIPOS_DOCUMENTO_PERMITIDOS = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain'
+]);
+// Tope por adjunto (26-09-2026): este proyecto no tiene un servicio de
+// almacenamiento de archivos aparte — el adjunto viaja como base64 dentro
+// de la misma fila de mensajes_chat (mismo criterio que la captura de
+// "💳 Pagos"). Base64 pesa ~33% más que el archivo real, así que 8MB de
+// archivo original ya son ~10.9MB de texto — de sobra para fotos y notas
+// de voz, ajustado para que un video tenga que ser cortito.
+const TOPE_ADJUNTO_BASE64_CHARS = 11 * 1024 * 1024; // ~8MB de archivo real
+
+function validarAdjunto(adjunto) {
+  if (!adjunto) return null;
+  const { datos, tipo, nombre } = adjunto;
+  if (!datos || !tipo) {
+    const err = new Error('El adjunto llegó incompleto — intenta adjuntarlo de nuevo.');
+    err.status = 400;
+    throw err;
+  }
+  const esMultimedia = TIPOS_ADJUNTO_PERMITIDOS.test(tipo);
+  const esDocumento = TIPOS_DOCUMENTO_PERMITIDOS.has(tipo);
+  if (!esMultimedia && !esDocumento) {
+    const err = new Error('Ese tipo de archivo no se puede adjuntar (solo fotos, videos, audio y documentos comunes).');
+    err.status = 400;
+    throw err;
+  }
+  if (datos.length > TOPE_ADJUNTO_BASE64_CHARS) {
+    const err = new Error('El archivo es muy pesado (máximo ~8MB) — probá con uno más liviano o un video más corto.');
+    err.status = 400;
+    throw err;
+  }
+  return { datos, tipo, nombre: nombre ? String(nombre).slice(0, 200) : 'archivo' };
+}
+
+async function enviarMensaje(grupoId, remitente, texto, adjunto) {
+  const textoFinal = (texto || '').trim();
+  const adjuntoFinal = validarAdjunto(adjunto);
+  if (!textoFinal && !adjuntoFinal) {
+    const err = new Error('Escribe un mensaje o adjunta algo antes de enviarlo.');
     err.status = 400;
     throw err;
   }
   const r = await db.query(
-    `INSERT INTO mensajes_chat (grupo_id, remitente, texto)
-     VALUES ($1, $2, $3) RETURNING id, grupo_id, remitente, texto, creado_en`,
-    [grupoId, remitente, texto.trim()]
+    `INSERT INTO mensajes_chat (grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en`,
+    [grupoId, remitente, textoFinal, adjuntoFinal ? adjuntoFinal.datos : null, adjuntoFinal ? adjuntoFinal.tipo : null, adjuntoFinal ? adjuntoFinal.nombre : null]
   );
   return r.rows[0];
 }
 
 async function listarMensajes(grupoId) {
   const r = await db.query(
-    'SELECT id, remitente, texto, creado_en FROM mensajes_chat WHERE grupo_id = $1 ORDER BY creado_en ASC LIMIT 500',
+    'SELECT id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = $1 ORDER BY creado_en ASC LIMIT 500',
     [grupoId]
   );
   return r.rows;

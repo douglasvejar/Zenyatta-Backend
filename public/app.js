@@ -43,6 +43,15 @@ let ALERTAS_INTERVALO = null; // id del setInterval que revisa alertas + chat si
 let CHAT_WIDGET_ABIERTO = false; // si el panel de la bandeja de chat flotante está abierto o minimizado (ver sección "CHAT DE SOPORTE" más abajo)
 let CHAT_WIDGET_POLL_ABIERTO = null; // id del setInterval que refresca los mensajes mientras el panel está ABIERTO (para que se vea "en vivo" sin tener que cerrar y abrir)
 let CHAT_ULTIMO_NO_LEIDOS = 0; // 26-09-2026: último conteo de no leídos visto, para solo sonar cuando SUBE (ver reproducirSonidoNotificacionChat más abajo), nunca en cada chequeo de 25s
+// Adjuntos del chat (26-09-2026, "puede adjuntar archivos, fotos, videos e
+// incluso mandar notas de voz") — CHAT_ADJUNTO_PENDIENTE guarda el
+// adjunto ya leído en base64, listo para viajar junto al próximo mensaje
+// que se envíe; los demás son el estado de la grabación de nota de voz
+// con MediaRecorder.
+let CHAT_ADJUNTO_PENDIENTE = null;
+let CHAT_MEDIA_RECORDER = null;
+let CHAT_RECORDER_CHUNKS = [];
+const CHAT_TOPE_ADJUNTO_BYTES = 8 * 1024 * 1024; // mismo tope ~8MB que valida services/chat.js
 // Qué pestaña está viendo el Grupo ahora mismo (04-09-2026, a pedido del
 // usuario: "la pagina se queda un poco pegada... se tarda un poco en
 // cargar los valores") — ver mostrarVista()/intentarCargarResumenWhatsappAutomatico()
@@ -7333,11 +7342,105 @@ function renderChatMensajesGrupo(mensajes) {
     cont.innerHTML = '<p style="color:#888; font-size:13px; text-align:center;">Todavía no hay mensajes. Escríbele al Súper-admin abajo.</p>';
   } else {
     cont.innerHTML = mensajes.map(m =>
-      '<div class="chat-burbuja ' + (m.remitente === 'grupo' ? 'propio' : 'otro') + '">' + escaparHtmlChat(m.texto) +
+      '<div class="chat-burbuja ' + (m.remitente === 'grupo' ? 'propio' : 'otro') + '">' +
+      (m.texto ? escaparHtmlChat(m.texto) : '') + renderAdjuntoChat(m) +
       '<span class="chat-hora">' + (m.remitente === 'grupo' ? 'Tú' : 'Súper-admin') + ' — ' + formatFechaHoraAlerta(m.creado_en) + '</span></div>'
     ).join('');
   }
   cont.scrollTop = cont.scrollHeight;
+}
+
+// Convierte el adjunto de un mensaje (guardado como base64 en
+// adjunto_datos/adjunto_tipo/adjunto_nombre, ver services/chat.js) en el
+// elemento visual que corresponda dentro de la burbuja.
+function renderAdjuntoChat(m) {
+  if (!m.adjunto_datos) return '';
+  const tipo = m.adjunto_tipo || '';
+  const nombre = escaparHtmlChat(m.adjunto_nombre || 'archivo');
+  if (tipo.startsWith('image/')) {
+    return '<img src="' + m.adjunto_datos + '" class="chat-img-msg" alt="' + nombre + '" onclick="window.open(this.src, \'_blank\')">';
+  }
+  if (tipo.startsWith('video/')) {
+    return '<video src="' + m.adjunto_datos + '" class="chat-video-msg" controls></video>';
+  }
+  if (tipo.startsWith('audio/')) {
+    return '<audio src="' + m.adjunto_datos + '" class="chat-audio-msg" controls></audio>';
+  }
+  return '<a href="' + m.adjunto_datos + '" download="' + nombre + '" class="chat-archivo-msg">📄 ' + nombre + '</a>';
+}
+
+// Adjuntar archivo desde el input de tipo "file" (📎) — lo lee como
+// base64 en el navegador y lo deja en CHAT_ADJUNTO_PENDIENTE hasta que se
+// mande el próximo mensaje (o se quite con el ✕ del preview).
+function manejarArchivoChatSeleccionado(input) {
+  const archivo = input.files && input.files[0];
+  input.value = '';
+  if (!archivo) return;
+  if (archivo.size > CHAT_TOPE_ADJUNTO_BYTES) {
+    alert('Ese archivo pesa más de 8MB — elige uno más liviano.');
+    return;
+  }
+  const lector = new FileReader();
+  lector.onload = () => {
+    CHAT_ADJUNTO_PENDIENTE = { datos: lector.result, tipo: archivo.type || 'application/octet-stream', nombre: archivo.name };
+    mostrarPreviewAdjuntoChat();
+  };
+  lector.onerror = () => alert('No se pudo leer ese archivo.');
+  lector.readAsDataURL(archivo);
+}
+
+function mostrarPreviewAdjuntoChat() {
+  const cont = document.getElementById('chatAdjuntoPreview');
+  if (!cont || !CHAT_ADJUNTO_PENDIENTE) return;
+  const { tipo, nombre } = CHAT_ADJUNTO_PENDIENTE;
+  let icono = '📄';
+  if (tipo.startsWith('image/')) icono = '🖼️';
+  else if (tipo.startsWith('video/')) icono = '🎬';
+  else if (tipo.startsWith('audio/')) icono = '🎤';
+  cont.innerHTML = '<span>' + icono + ' ' + escaparHtmlChat(nombre) + '</span><button type="button" onclick="quitarAdjuntoPendienteChat()">✕</button>';
+  cont.style.display = 'flex';
+}
+
+function quitarAdjuntoPendienteChat() {
+  CHAT_ADJUNTO_PENDIENTE = null;
+  const cont = document.getElementById('chatAdjuntoPreview');
+  if (cont) { cont.style.display = 'none'; cont.innerHTML = ''; }
+}
+
+// Nota de voz (🎤) grabada en el navegador con MediaRecorder — un clic
+// arranca a grabar (el botón titila en rojo), otro clic la corta y la dej
+// lista como adjunto pendiente igual que un archivo elegido a mano.
+async function alternarGrabacionNotaVoz() {
+  const boton = document.getElementById('chatBtnGrabar');
+  if (CHAT_MEDIA_RECORDER && CHAT_MEDIA_RECORDER.state === 'recording') {
+    CHAT_MEDIA_RECORDER.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    CHAT_RECORDER_CHUNKS = [];
+    CHAT_MEDIA_RECORDER = new MediaRecorder(stream);
+    CHAT_MEDIA_RECORDER.ondataavailable = (e) => { if (e.data.size > 0) CHAT_RECORDER_CHUNKS.push(e.data); };
+    CHAT_MEDIA_RECORDER.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (boton) boton.classList.remove('grabando');
+      const blob = new Blob(CHAT_RECORDER_CHUNKS, { type: 'audio/webm' });
+      if (blob.size > CHAT_TOPE_ADJUNTO_BYTES) {
+        alert('La nota de voz quedó muy larga (más de 8MB) — intenta una más corta.');
+        return;
+      }
+      const lector = new FileReader();
+      lector.onload = () => {
+        CHAT_ADJUNTO_PENDIENTE = { datos: lector.result, tipo: 'audio/webm', nombre: 'nota-de-voz.webm' };
+        mostrarPreviewAdjuntoChat();
+      };
+      lector.readAsDataURL(blob);
+    };
+    CHAT_MEDIA_RECORDER.start();
+    if (boton) boton.classList.add('grabando');
+  } catch (e) {
+    alert('No se pudo acceder al micrófono: ' + e.message);
+  }
 }
 
 function escaparHtmlChat(texto) {
@@ -7349,10 +7452,13 @@ function escaparHtmlChat(texto) {
 async function enviarMensajeChatGrupo() {
   const textarea = document.getElementById('chatTexto');
   const texto = textarea.value.trim();
-  if (!texto) return;
+  if (!texto && !CHAT_ADJUNTO_PENDIENTE) return;
   try {
-    await api('/api/sabana/chat', { method: 'POST', body: JSON.stringify({ texto }) });
+    const cuerpo = { texto };
+    if (CHAT_ADJUNTO_PENDIENTE) cuerpo.adjunto = CHAT_ADJUNTO_PENDIENTE;
+    await api('/api/sabana/chat', { method: 'POST', body: JSON.stringify(cuerpo) });
     textarea.value = '';
+    quitarAdjuntoPendienteChat();
     cargarChatGrupo();
   } catch (e) {
     alert('No se pudo enviar el mensaje: ' + e.message);

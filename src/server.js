@@ -40,7 +40,7 @@ app.use(cors());
 // captura de hasta 4MB (el tope que valida pagos.js) codifica a ~5.4MB
 // de texto, así que 2mb la rechazaba de entrada (413) antes de que la
 // ruta llegara siquiera a validar su propio tope de tamaño.
-app.use(express.json({ limit: '8mb' })); // la sábana pegada puede ser un texto largo; la captura de pago en base64 (hasta 4MB reales) puede pesar ~5.4MB codificada
+app.use(express.json({ limit: '14mb' })); // la sábana pegada puede ser un texto largo; la captura de pago en base64 (hasta 4MB reales) puede pesar ~5.4MB codificada; los adjuntos del chat (26-09-2026, hasta ~8MB reales) pueden pesar ~10.9MB codificados — 14mb deja margen de sobra para el resto del JSON
 
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
 
