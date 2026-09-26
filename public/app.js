@@ -2553,7 +2553,7 @@ function mostrarVista(nombre) {
   if (nombre === 'transferencias') { cargarJugadores().then(() => cargarTransferencias()); }
   if (nombre === 'polla') { if (!document.getElementById('pollaFecha').value) document.getElementById('pollaFecha').value = hoyISO(); cargarPolla(); }
   if (nombre === 'sabanas') { cargarColumnasSabanaDiaGuardadas(); if (!document.getElementById('sabanasFecha').value) document.getElementById('sabanasFecha').value = hoyISO(); cargarSabanaDia(); }
-  if (nombre === 'descargar') { cargarColumnasSaldosSemanaGuardadas(); cargarSaldosSemana(); }
+  if (nombre === 'descargar') { cargarColumnasSaldosSemanaGuardadas(); cargarSaldosSemana(); cambiarVistaSaldosSemana(VISTA_SALDOS_SEMANA); }
   if (nombre === 'alertas') { cargarAlertas(); marcarAlertasLeidas(); }
   // "Moneda del Grupo" / "Cuentas por Empleado" (18-09-2026, ambas
   // exclusivas del Administrador — ver aplicarPermisosEmpleado()).
@@ -6000,6 +6000,8 @@ function copiarExtraerSabanaTexto() {
 // =================================================================
 let SALDOS_SEMANA_ACTUAL = null; // último JSON que devolvió el backend
 let SALDOS_SEMANA_FECHA_REF = null; // 'YYYY-MM-DD' cualquier día DENTRO de la semana que se está mostrando; null = semana actual (la decide el backend)
+let VISTA_SALDOS_SEMANA = 'cliente'; // 'cliente' | 'socio' — ver cambiarVistaSaldosSemana()
+let SOCIOS_CACHE = []; // último GET /api/socios (cada uno con su lista de clientes) — ver cargarSociosParaReporte()
 
 const COLUMNAS_SALDOS_SEMANA = [
   ['ssColArriesgado', 'arriesgadoSemana', 'arriesgado', 'Arriesgado'],
@@ -6033,10 +6035,29 @@ async function cargarSaldosSemana() {
     const qs = SALDOS_SEMANA_FECHA_REF ? ('?fecha=' + encodeURIComponent(SALDOS_SEMANA_FECHA_REF)) : '';
     SALDOS_SEMANA_ACTUAL = await api('/api/descargas/saldos-semana' + qs);
     renderSaldosSemana();
+    // "🤝 Vista por Socio" (26-09-2026) — SALDOS_SEMANA_ACTUAL ya trae
+    // "socios" (ver services/saldosSemana.js), así que no hace falta
+    // pedirle nada aparte al backend para refrescar esta vista también.
+    renderSaldosPorSocio();
   } catch (e) {
     titulo.textContent = '⚠️ No se pudo cargar';
     alert('No se pudieron cargar los Saldos de la Semana: ' + e.message);
   }
+}
+
+// "👤 Vista por Cliente" / "🤝 Vista por Socio" (26-09-2026, a pedido del
+// usuario: "crea una pestaña en saldos que se llame saldos de socios y
+// sus avalados... podré crear grupos de clientes... eso da un total y
+// todos esos datos") — mismo rango de semana y mismos totales que ya
+// calcula "📅 Saldos Semana", solo agrupados por Socio en vez de verlos
+// todos sueltos. Ver renderSaldosPorSocio() y abrirAdministrarSocios()
+// más abajo.
+function cambiarVistaSaldosSemana(vista) {
+  VISTA_SALDOS_SEMANA = (vista === 'socio') ? 'socio' : 'cliente';
+  document.getElementById('btnVistaSaldosCliente').classList.toggle('btn-primario', VISTA_SALDOS_SEMANA === 'cliente');
+  document.getElementById('btnVistaSaldosSocio').classList.toggle('btn-primario', VISTA_SALDOS_SEMANA === 'socio');
+  document.getElementById('ssVistaCliente').style.display = (VISTA_SALDOS_SEMANA === 'cliente') ? 'block' : 'none';
+  document.getElementById('ssVistaSocio').style.display = (VISTA_SALDOS_SEMANA === 'socio') ? 'block' : 'none';
 }
 
 // "◀ Semana anterior"/"Semana siguiente ▶": se mueve 7 días desde el
@@ -6510,6 +6531,430 @@ function generarExcelSaldosSemana() {
   XLSX.writeFile(libro, 'saldos_semana_' + datos.semana.anio + '_s' + datos.semana.numero + '.xlsx');
 
   cerrarExportarExcelSaldosSemana();
+}
+
+// =================================================================
+// "🤝 Saldos de Socios y sus Avalados" (26-09-2026, a pedido del
+// usuario, verbatim: "crea una pestaña en saldos que se llame saldos de
+// socios y sus avalados... podre crear grupos de clientes donde
+// seleccionare a nombre de quien el grupo y todos los codigos que
+// pertenecen a ese grupo... igual eso data un total y todo esos datos").
+// Reusa EXACTAMENTE los mismos números de "📅 Saldos Semana"
+// (SALDOS_SEMANA_ACTUAL, que ya trae "socioId" por cliente y la lista
+// de "socios" del grupo — ver services/saldosSemana.js) — acá solo se
+// AGRUPA por Socio y se suma el subtotal; no se le pide nada nuevo al
+// backend para pintar el reporte, solo para administrar los Socios
+// (crear/renombrar/borrar/asignar clientes, ver más abajo).
+// =================================================================
+
+function celdaMontoPorSocio(monto) {
+  const n = Number(monto) || 0;
+  const clase = n > 0.004 ? 'sps-pos' : (n < -0.004 ? 'sps-neg' : 'sps-cero');
+  const texto = n > 0.004 ? ('+' + formatMoney(n)) : formatMoney(n);
+  return '<span class="' + clase + '">' + texto + '</span>';
+}
+
+// Arma #spsCaptura ENTERO (header + una tarjeta por Socio + resumen
+// general) a partir de SALDOS_SEMANA_ACTUAL — se vuelve a llamar cada
+// vez que se recarga la semana (ver cargarSaldosSemana()) y también
+// justo después de guardar cambios en "⚙️ Administrar Socios", así lo
+// que se ve acá siempre está al día con la última semana Y los últimos
+// grupos armados.
+function renderSaldosPorSocio() {
+  const datos = SALDOS_SEMANA_ACTUAL;
+  const cont = document.getElementById('spsCaptura');
+  const vacio = document.getElementById('spsVacio');
+  if (!cont || !datos) return;
+
+  // Solo Socios que SÍ tienen algún cliente con actividad esta semana
+  // pintado acá — un Socio recién creado sin clientes (o cuyos clientes
+  // no tuvieron ningún registro esta semana en particular) no ensucia el
+  // reporte con una tarjeta vacía.
+  const socios = (datos.socios || [])
+    .map(s => ({
+      id: s.id,
+      nombre: s.nombre,
+      clientes: (datos.clientes || []).filter(c => c.socioId === s.id)
+    }))
+    .filter(s => s.clientes.length > 0);
+
+  if (socios.length === 0) {
+    cont.innerHTML = '';
+    vacio.style.display = 'block';
+    return;
+  }
+  vacio.style.display = 'none';
+
+  const nombreGrupo = escaparHtmlSaldosSemana(datos.grupo.nombre || '');
+  const logoHTML = datos.grupo.logoUrl
+    ? '<img class="ss-logo logo-grupo-captura" src="' + urlLogoGrupoProxy() + '" alt="" onerror="this.style.display=\'none\'">'
+    : '';
+  const rangoTexto = rangoSemanaLegible(datos.semana.desde, datos.semana.hasta);
+  const generadoTexto = 'Generado el ' + fechaHoraVenezuelaTextoCorto();
+
+  let html = '';
+  html += '<div class="ss-header">';
+  html += logoHTML;
+  html += '<div class="ss-header-textos">';
+  html += '<div class="ss-nombre-grupo">' + nombreGrupo + '</div>';
+  html += '<div class="ss-subtitulo">🤝 Saldos de Socios y sus Avalados</div>';
+  html += '</div>';
+  html += '<div class="ss-semana-badge">';
+  html += '<div class="ss-semana-numero">SEMANA ' + datos.semana.numero + ' · ' + datos.semana.anio + '</div>';
+  html += '<div class="ss-semana-rango">' + rangoTexto + '</div>';
+  html += '<div class="ss-fecha-generado">' + generadoTexto + '</div>';
+  html += '</div>';
+  html += '</div>';
+  html += '<div class="ss-divider"></div>';
+
+  let aCobrar = 0, aPagar = 0;
+
+  socios.forEach(s => {
+    const subtotal = s.clientes.reduce((acc, c) => acc + c.saldoSemana, 0);
+    if (subtotal > 0.004) aCobrar += subtotal; else if (subtotal < -0.004) aPagar += Math.abs(subtotal);
+    const claseTotal = subtotal > 0.004 ? 'sps-pos' : (subtotal < -0.004 ? 'sps-neg' : 'sps-cero');
+    const textoTotal = (subtotal > 0.004 ? '+' : '') + formatMoney(subtotal);
+
+    html += '<div class="sps-socio-card">';
+    html += '<div class="sps-socio-header"><div class="sps-socio-nombre">🤝 ' + escaparHtmlSaldosSemana(s.nombre) + '</div><div class="sps-socio-total ' + claseTotal + '">' + textoTotal + ' USD</div></div>';
+    html += '<table class="sps-tabla"><thead><tr><th>Nombre</th><th>Total Final</th></tr></thead><tbody>';
+    s.clientes.slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(c => {
+      html += '<tr><td class="sps-nombre-cliente">' + escaparHtmlSaldosSemana(c.nombre) + '</td><td>' + celdaMontoPorSocio(c.saldoSemana) + '</td></tr>';
+    });
+    html += '<tr class="sps-fila-subtotal"><td>SUBTOTAL ' + escaparHtmlSaldosSemana(s.nombre.toUpperCase()) + '</td><td>' + textoTotal + '</td></tr>';
+    html += '</tbody></table></div>';
+  });
+
+  const totalFinal = aCobrar - aPagar;
+  const claseFinal = totalFinal < -0.004 ? 'sps-resumen-final-neg' : '';
+  html += '<div class="sps-resumen">';
+  html += '<div class="sps-resumen-titulo">⚖️ RESUMEN GENERAL</div>';
+  html += '<div class="sps-resumen-grid">';
+  html += '<div class="sps-resumen-item"><div class="sps-resumen-label">💰 A Cobrar</div><div class="sps-resumen-valor sps-pos">+' + formatMoney(aCobrar) + '</div></div>';
+  html += '<div class="sps-resumen-item"><div class="sps-resumen-label">💸 A Pagar</div><div class="sps-resumen-valor' + (aPagar > 0.004 ? ' sps-neg' : '') + '">' + formatMoney(aPagar) + '</div></div>';
+  html += '<div class="sps-resumen-item sps-resumen-final ' + claseFinal + '"><div class="sps-resumen-label">⚖️ Total Final</div><div class="sps-resumen-valor">' + (totalFinal >= 0 ? '+' : '') + formatMoney(totalFinal) + '</div></div>';
+  html += '</div></div>';
+
+  html += '<div class="ss-footer"><strong>' + (GRUPO && GRUPO.nombre ? escaparHtmlSaldosSemana(GRUPO.nombre) : 'Ludox') + '</strong> · Reporte generado automáticamente por Ludox</div>';
+
+  cont.innerHTML = html;
+}
+
+// =================================================================
+// "⚙️ Administrar Socios" (26-09-2026) — modal para crear/renombrar/
+// borrar Socios y elegir, con checkboxes, qué clientes pertenecen a
+// cada uno. Reusa JUGADORES_CACHE (ya cargado por cargarJugadores() al
+// iniciar sesión, ver mostrarApp()) para la lista de clientes — no pide
+// nada nuevo al backend para eso, solo GET/POST/PUT/DELETE /api/socios.
+// =================================================================
+async function abrirAdministrarSocios() {
+  document.getElementById('modalAdministrarSocios').classList.add('activo');
+  document.getElementById('inpNuevoSocio').value = '';
+  await refrescarListaAdministrarSocios();
+}
+
+function cerrarAdministrarSocios() {
+  document.getElementById('modalAdministrarSocios').classList.remove('activo');
+}
+
+async function refrescarListaAdministrarSocios() {
+  const cont = document.getElementById('listaAdministrarSocios');
+  const vacio = document.getElementById('administrarSociosVacio');
+  cont.innerHTML = '<p style="text-align:center; color:var(--text-dim); padding:10px;">Cargando...</p>';
+  try {
+    SOCIOS_CACHE = await api('/api/socios');
+  } catch (e) {
+    cont.innerHTML = '';
+    alert('No se pudieron cargar los Socios: ' + e.message);
+    return;
+  }
+  if (SOCIOS_CACHE.length === 0) {
+    cont.innerHTML = '';
+    vacio.style.display = 'block';
+  } else {
+    vacio.style.display = 'none';
+    renderListaAdministrarSocios();
+  }
+  sincronizarSociosEnSaldosSemana();
+  renderSaldosPorSocio();
+}
+
+// Después de crear/renombrar/borrar un Socio o reasignar sus clientes,
+// SALDOS_SEMANA_ACTUAL (la última respuesta de GET /api/descargas/saldos-
+// semana) queda con "socios"/"socioId" VIEJOS — en vez de volver a
+// pedirle TODO el reporte de la semana al backend solo para esto, se
+// actualiza en memoria con el SOCIOS_CACHE que se acaba de traer (que ya
+// incluye, por cada Socio, la lista fresca de sus clientes), así
+// renderSaldosPorSocio() pinta el resultado correcto sin otro viaje al
+// servidor.
+function sincronizarSociosEnSaldosSemana() {
+  if (!SALDOS_SEMANA_ACTUAL) return;
+  SALDOS_SEMANA_ACTUAL.socios = SOCIOS_CACHE.map(s => ({ id: s.id, nombre: s.nombre }));
+  const socioIdPorJugadorId = {};
+  SOCIOS_CACHE.forEach(s => { s.clientes.forEach(c => { socioIdPorJugadorId[c.id] = s.id; }); });
+  (SALDOS_SEMANA_ACTUAL.clientes || []).forEach(c => {
+    c.socioId = c.id ? (socioIdPorJugadorId[c.id] || null) : null;
+  });
+}
+
+function renderListaAdministrarSocios() {
+  const cont = document.getElementById('listaAdministrarSocios');
+  const clientesActivos = (JUGADORES_CACHE || []).filter(j => j.activo).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  let html = '';
+  SOCIOS_CACHE.forEach(s => {
+    const idsDeEsteSocio = new Set(s.clientes.map(c => c.id));
+    html += '<details class="box-nuevo-equipo" style="background:var(--card-2); border-color:var(--card-border); padding:10px 14px;">';
+    html += '<summary style="cursor:pointer; display:flex; align-items:center; gap:8px; font-weight:bold;">🤝 ' + escaparHtmlSaldosSemana(s.nombre) + ' <span style="font-weight:normal; color:var(--text-dim); font-size:12px;">(' + s.clientes.length + ' cliente' + (s.clientes.length === 1 ? '' : 's') + ')</span></summary>';
+    html += '<div style="display:flex; gap:8px; margin:10px 0;">';
+    html += '<input type="text" value="' + escaparHtmlSaldosSemana(s.nombre) + '" id="inpRenombrarSocio_' + s.id + '" style="flex:1;">';
+    html += '<button type="button" class="btn-secundario" onclick="renombrarSocio(\'' + s.id + '\')" style="white-space:nowrap;">✏️ Renombrar</button>';
+    html += '<button type="button" class="btn-secundario" onclick="eliminarSocio(\'' + s.id + '\', \'' + escaparHtmlSaldosSemana(s.nombre).replace(/'/g, "\\'") + '\')" style="white-space:nowrap;">🗑️ Eliminar</button>';
+    html += '</div>';
+    html += '<div style="display:flex; flex-wrap:wrap; gap:10px; max-height:180px; overflow-y:auto; padding:4px 0;">';
+    if (clientesActivos.length === 0) {
+      html += '<span style="color:var(--text-dim); font-size:13px;">No tienes clientes activos todavía.</span>';
+    }
+    clientesActivos.forEach(j => {
+      const marcado = idsDeEsteSocio.has(j.id);
+      html += '<label style="font-weight:normal; display:flex; align-items:center; gap:5px; font-size:13px;"><input type="checkbox" class="chk-socio-cliente_' + s.id + '" value="' + j.id + '" ' + (marcado ? 'checked' : '') + ' style="width:auto;"> ' + escaparHtmlSaldosSemana(j.nombre) + '</label>';
+    });
+    html += '</div>';
+    html += '<button type="button" onclick="guardarClientesSocio(\'' + s.id + '\')" style="margin-top:10px;">💾 Guardar clientes de este Socio</button>';
+    html += '</details>';
+  });
+  cont.innerHTML = html;
+}
+
+async function crearSocio() {
+  const inp = document.getElementById('inpNuevoSocio');
+  const nombre = inp.value.trim();
+  if (!nombre) { alert('Escribe el nombre del Socio.'); return; }
+  try {
+    await api('/api/socios', { method: 'POST', body: JSON.stringify({ nombre }) });
+    inp.value = '';
+    await refrescarListaAdministrarSocios();
+  } catch (e) {
+    alert('No se pudo crear el Socio: ' + e.message);
+  }
+}
+
+async function renombrarSocio(id) {
+  const inp = document.getElementById('inpRenombrarSocio_' + id);
+  const nombre = inp ? inp.value.trim() : '';
+  if (!nombre) { alert('Escribe el nuevo nombre del Socio.'); return; }
+  try {
+    await api('/api/socios/' + id, { method: 'PUT', body: JSON.stringify({ nombre }) });
+    await refrescarListaAdministrarSocios();
+  } catch (e) {
+    alert('No se pudo renombrar el Socio: ' + e.message);
+  }
+}
+
+async function eliminarSocio(id, nombre) {
+  if (!confirm('¿Borrar el Socio "' + nombre + '"? Sus clientes NO se borran, solo dejan de pertenecer a este Socio.')) return;
+  try {
+    await api('/api/socios/' + id, { method: 'DELETE' });
+    await refrescarListaAdministrarSocios();
+  } catch (e) {
+    alert('No se pudo borrar el Socio: ' + e.message);
+  }
+}
+
+async function guardarClientesSocio(id) {
+  const checks = document.querySelectorAll('.chk-socio-cliente_' + id + ':checked');
+  const jugadorIds = Array.from(checks).map(c => c.value);
+  try {
+    await api('/api/socios/' + id + '/clientes', { method: 'PUT', body: JSON.stringify({ jugadorIds }) });
+    await refrescarListaAdministrarSocios();
+    alert('Clientes guardados.');
+  } catch (e) {
+    alert('No se pudieron guardar los clientes: ' + e.message);
+  }
+}
+
+// =================================================================
+// "🤝 Saldos por Socio" — imagen HD / PDF / Excel, MISMO patrón EXACTO
+// que ya usan capturarSaldosSemanaComoImagen()/descargarSaldosSemanaComoPDF()/
+// generarExcelSaldosSemana() más arriba, pero apuntando a #spsCaptura y
+// a los grupos por Socio en vez de la grilla plana por cliente.
+// =================================================================
+let ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB = null;
+let ULTIMA_CAPTURA_SALDOS_POR_SOCIO_URL = null;
+
+async function capturarSaldosPorSocioComoImagen() {
+  const modal = document.getElementById('modalCapturaSaldosPorSocio');
+  const estado = document.getElementById('capturaSaldosPorSocioEstado');
+  const img = document.getElementById('capturaSaldosPorSocioImg');
+  const btnCopiar = document.getElementById('btnCopiarCapturaSaldosPorSocio');
+  const btnDescargar = document.getElementById('btnDescargarCapturaSaldosPorSocio');
+
+  const contenido = document.getElementById('spsCaptura');
+  if (!contenido || !contenido.innerHTML.trim()) {
+    alert('Todavía no tienes ningún Socio con clientes esta semana — usa "⚙️ Administrar Socios" primero.');
+    return;
+  }
+
+  modal.classList.add('activo');
+  estado.textContent = 'Generando imagen...';
+  img.style.display = 'none';
+  btnCopiar.disabled = true;
+  btnDescargar.disabled = true;
+  ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB = null;
+
+  if (typeof html2canvas !== 'function') {
+    estado.textContent = '⚠️ No se pudo cargar la herramienta para generar la imagen (revisa tu conexión a internet y vuelve a intentar).';
+    return;
+  }
+
+  try {
+    await prepararLogosParaCaptura(contenido);
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(blob => {
+      if (!blob) {
+        estado.textContent = '⚠️ No se pudo generar la imagen. Intenta de nuevo.';
+        return;
+      }
+      ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB = blob;
+      if (ULTIMA_CAPTURA_SALDOS_POR_SOCIO_URL) URL.revokeObjectURL(ULTIMA_CAPTURA_SALDOS_POR_SOCIO_URL);
+      ULTIMA_CAPTURA_SALDOS_POR_SOCIO_URL = URL.createObjectURL(blob);
+      img.src = ULTIMA_CAPTURA_SALDOS_POR_SOCIO_URL;
+      img.style.display = 'inline-block';
+      estado.textContent = '✅ Imagen lista — cópiala o descárgala.';
+      btnCopiar.disabled = false;
+      btnDescargar.disabled = false;
+    }, 'image/png');
+  } catch (e) {
+    estado.textContent = '⚠️ No se pudo generar la imagen: ' + e.message;
+  }
+}
+
+async function copiarCapturaSaldosPorSocio() {
+  if (!ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB) return;
+  try {
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      throw new Error('Este navegador no soporta copiar imágenes al portapapeles.');
+    }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB })]);
+    alert('¡Imagen copiada! Ya la puedes pegar (Ctrl+V) en WhatsApp Web o Desktop.');
+  } catch (e) {
+    alert('No se pudo copiar automáticamente (' + e.message + '). Usa "⬇️ Descargar imagen" y adjúntala a mano.');
+  }
+}
+
+function descargarCapturaSaldosPorSocio() {
+  if (!ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB) return;
+  const semana = SALDOS_SEMANA_ACTUAL ? SALDOS_SEMANA_ACTUAL.semana : null;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(ULTIMA_CAPTURA_SALDOS_POR_SOCIO_BLOB);
+  a.download = 'saldos_por_socio' + (semana ? '_' + semana.anio + '_s' + semana.numero : '') + '.png';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function cerrarCapturaSaldosPorSocio() {
+  document.getElementById('modalCapturaSaldosPorSocio').classList.remove('activo');
+}
+
+async function descargarSaldosPorSocioComoPDF() {
+  const contenido = document.getElementById('spsCaptura');
+  if (!contenido || !contenido.innerHTML.trim()) {
+    alert('Todavía no tienes ningún Socio con clientes esta semana — usa "⚙️ Administrar Socios" primero.');
+    return;
+  }
+  if (typeof html2canvas !== 'function' || typeof window.jspdf === 'undefined') {
+    alert('No se pudo cargar la herramienta para generar el PDF (revisa tu conexión a internet y vuelve a intentar).');
+    return;
+  }
+
+  const semana = SALDOS_SEMANA_ACTUAL.semana;
+
+  try {
+    await prepararLogosParaCaptura(contenido);
+    const canvas = await html2canvas(contenido, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const altoPagina = pdf.internal.pageSize.getHeight();
+
+    const escala = anchoPagina / canvas.width;
+    const altoPaginaEnCanvas = Math.floor(altoPagina / escala);
+
+    let y = 0;
+    let primeraPagina = true;
+    while (y < canvas.height) {
+      const altoPedazo = Math.min(altoPaginaEnCanvas, canvas.height - y);
+
+      const pedazo = document.createElement('canvas');
+      pedazo.width = canvas.width;
+      pedazo.height = altoPedazo;
+      const ctx = pedazo.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pedazo.width, pedazo.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, altoPedazo, 0, 0, canvas.width, altoPedazo);
+
+      const dataUrl = pedazo.toDataURL('image/jpeg', 0.95);
+      if (!primeraPagina) pdf.addPage();
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, anchoPagina, altoPedazo * escala);
+
+      primeraPagina = false;
+      y += altoPedazo;
+    }
+
+    pdf.save('saldos_por_socio' + (semana ? '_' + semana.anio + '_s' + semana.numero : '') + '.pdf');
+  } catch (e) {
+    alert('No se pudo generar el PDF: ' + e.message);
+  }
+}
+
+// Excel de "Saldos por Socio" — a diferencia del de "Saldos Semana" (que
+// deja elegir columnas), acá se descarga directo: una fila por cliente
+// bajo su Socio, la fila SUBTOTAL de cada Socio, y el resumen general al
+// final — mismo criterio de números que ya pinta renderSaldosPorSocio().
+function generarExcelSaldosPorSocio() {
+  if (typeof XLSX === 'undefined') {
+    alert('No se pudo cargar la herramienta para generar el Excel (revisa tu conexión a internet y vuelve a intentar).');
+    return;
+  }
+  const datos = SALDOS_SEMANA_ACTUAL;
+  if (!datos) return;
+
+  const socios = (datos.socios || [])
+    .map(s => ({ id: s.id, nombre: s.nombre, clientes: (datos.clientes || []).filter(c => c.socioId === s.id) }))
+    .filter(s => s.clientes.length > 0);
+
+  if (socios.length === 0) {
+    alert('Todavía no tienes ningún Socio con clientes esta semana — usa "⚙️ Administrar Socios" primero.');
+    return;
+  }
+
+  const filas = [['Socio', 'Cliente', 'Total Final']];
+  let aCobrar = 0, aPagar = 0;
+  socios.forEach(s => {
+    const subtotal = s.clientes.reduce((acc, c) => acc + c.saldoSemana, 0);
+    if (subtotal > 0.004) aCobrar += subtotal; else if (subtotal < -0.004) aPagar += Math.abs(subtotal);
+    s.clientes.slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(c => {
+      filas.push([s.nombre, c.nombre, Number(c.saldoSemana.toFixed(2))]);
+    });
+    filas.push(['', 'SUBTOTAL ' + s.nombre.toUpperCase(), Number(subtotal.toFixed(2))]);
+    filas.push(['', '', '']);
+  });
+
+  const totalFinal = aCobrar - aPagar;
+  filas.push(['RESUMEN GENERAL', 'A Cobrar', Number(aCobrar.toFixed(2))]);
+  filas.push(['', 'A Pagar', Number(aPagar.toFixed(2))]);
+  filas.push(['', 'Total Final', Number(totalFinal.toFixed(2))]);
+
+  const tituloGrupo = (datos.grupo.nombre || 'Grupo') + ' — Saldos de Socios y sus Avalados';
+  const tituloSemana = 'Semana ' + datos.semana.numero + ' de ' + datos.semana.anio + ' (' + formatFechaDDMMYYYY(datos.semana.desde) + ' – ' + formatFechaDDMMYYYY(datos.semana.hasta) + ')';
+
+  const hoja = XLSX.utils.aoa_to_sheet([[tituloGrupo], [tituloSemana], [], ...filas]);
+  hoja['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 14 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Saldos por Socio');
+  XLSX.writeFile(libro, 'saldos_por_socio_' + datos.semana.anio + '_s' + datos.semana.numero + '.xlsx');
 }
 
 // =================================================================

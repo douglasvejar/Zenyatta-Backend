@@ -27,6 +27,7 @@
 // relleno con ceros para el cliente/columna que no tuvo nada ESE día en
 // particular (para que la grilla de 7 días siempre salga completa).
 // =================================================================
+const db = require('../db');
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
 const { calcularSemana } = require('./fechaSemana');
@@ -82,7 +83,10 @@ async function construirSaldosSemana(grupoId, grupoNombre, grupoLogoUrl, fechaRe
     };
     const porDia = {};
     dias.forEach(d => { porDia[d.fecha] = c.porFecha[d.fecha] || diaVacio(); });
+    const jugador = config.jugadoresPorNombre[nombre] || null;
     return {
+      id: jugador ? jugador.id : null,
+      socioId: jugador ? jugador.socio_id : null,
       nombre,
       porcentaje: Number(config.porcentajesPropios[nombre] || 0),
       saldoSemana: c.totalSaldoCliente,
@@ -111,11 +115,14 @@ async function construirSaldosSemana(grupoId, grupoNombre, grupoLogoUrl, fechaRe
   }, { saldoSemana: 0, comisionSemana: 0, arriesgadoSemana: 0, ganadoSemana: 0, perdidoSemana: 0, transferenciasSemana: 0, pollaSemana: 0 });
   totales.porDia = totalPorDia;
 
+  const rSocios = await db.query('SELECT id, nombre FROM socios WHERE grupo_id = $1 ORDER BY nombre', [grupoId]);
+
   return {
     grupo: { nombre: grupoNombre, logoUrl: grupoLogoUrl || null },
     semana: { desde: semana.desde, hasta: semana.hasta, anio: semana.anio, numero: semana.semana, dias },
     clientes,
-    totales
+    totales,
+    socios: rSocios.rows
   };
 }
 

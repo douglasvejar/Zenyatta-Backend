@@ -1302,3 +1302,26 @@ alter table pozo_ajustes enable row level security;
 -- Sin políticas = acceso denegado por defecto para las claves anon/
 -- authenticated. Solo la clave service_role (la que usa el backend)
 -- puede leer/escribir. Ver nota al inicio del archivo.
+-- =================================================================
+-- SOCIOS (26-09-2026, a pedido del usuario): "Saldos de Socios y sus
+-- Avalados" — pestaña nueva DENTRO de "📅 Saldos Semana" (Administración
+-- > Descargar) que agrupa el saldo semanal de varios clientes bajo el
+-- nombre de un Socio (ej. el saldo de varios códigos juntos bajo
+-- "AVILA"). Un cliente pertenece A LO SUMO a un socio (jugadores.
+-- socio_id) — el que no está en ningún socio simplemente NO aparece en
+-- este reporte agrupado (sigue viéndose normal en la vista por
+-- cliente de siempre). Ver services/saldosSemana.js y routes/socios.js.
+create table if not exists socios (
+  id        uuid primary key default gen_random_uuid(),
+  grupo_id  uuid not null references grupos(id) on delete cascade,
+  nombre    text not null,
+  creado_en timestamptz not null default now(),
+  unique (grupo_id, nombre)
+);
+
+create index if not exists idx_socios_grupo on socios(grupo_id);
+
+alter table jugadores add column if not exists socio_id uuid references socios(id) on delete set null;
+create index if not exists idx_jugadores_socio on jugadores(socio_id);
+
+alter table socios enable row level security;

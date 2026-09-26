@@ -257,17 +257,17 @@
      pantalla, se manda a html2canvas para "imagen HD" y se corta en
      páginas para el PDF — lo que el usuario ve es exactamente lo que
      descarga. */
-  #ssCaptura { display: inline-block; background: #fff; padding: 26px 30px 20px; border-radius: 10px; font-family: 'Inter', sans-serif; color: #1a2233; }
-  #ssCaptura .ss-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  #ssCaptura .ss-logo { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #eef1f6; }
-  #ssCaptura .ss-header-textos { display: flex; flex-direction: column; gap: 2px; }
-  #ssCaptura .ss-nombre-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: 0.2px; color: #0d1326; }
-  #ssCaptura .ss-subtitulo { font-size: 12.5px; color: #6b7688; font-weight: 500; }
-  #ssCaptura .ss-semana-badge { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
-  #ssCaptura .ss-semana-numero { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; color: #04070f; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); padding: 5px 12px; border-radius: 20px; }
-  #ssCaptura .ss-semana-rango { font-size: 12.5px; color: #4a5468; font-weight: 600; }
-  #ssCaptura .ss-fecha-generado { font-size: 10.5px; color: #9aa3b5; }
-  #ssCaptura .ss-divider { height: 3px; margin: 16px 0 14px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue) 55%, rgba(47,107,255,0.15)); }
+  #ssCaptura, #spsCaptura { display: inline-block; background: #fff; padding: 26px 30px 20px; border-radius: 10px; font-family: 'Inter', sans-serif; color: #1a2233; }
+  #ssCaptura .ss-header, #spsCaptura .ss-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  #ssCaptura .ss-logo, #spsCaptura .ss-logo { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #eef1f6; }
+  #ssCaptura .ss-header-textos, #spsCaptura .ss-header-textos { display: flex; flex-direction: column; gap: 2px; }
+  #ssCaptura .ss-nombre-grupo, #spsCaptura .ss-nombre-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: 0.2px; color: #0d1326; }
+  #ssCaptura .ss-subtitulo, #spsCaptura .ss-subtitulo { font-size: 12.5px; color: #6b7688; font-weight: 500; }
+  #ssCaptura .ss-semana-badge, #spsCaptura .ss-semana-badge { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+  #ssCaptura .ss-semana-numero, #spsCaptura .ss-semana-numero { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; color: #04070f; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); padding: 5px 12px; border-radius: 20px; }
+  #ssCaptura .ss-semana-rango, #spsCaptura .ss-semana-rango { font-size: 12.5px; color: #4a5468; font-weight: 600; }
+  #ssCaptura .ss-fecha-generado, #spsCaptura .ss-fecha-generado { font-size: 10.5px; color: #9aa3b5; }
+  #ssCaptura .ss-divider, #spsCaptura .ss-divider { height: 3px; margin: 16px 0 14px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue) 55%, rgba(47,107,255,0.15)); }
   /* Reset explícito (21-09-2026): el resto de la app pone "th { background:
      var(--primary); color: var(--text) }" y "th, td { border: 1px solid
      var(--border) }" pensado para el tema OSCURO de toda la app — sin
@@ -310,8 +310,50 @@
      de la banca suma todo, comisión incluida, en un solo monto) — se
      sacó la regla .ss-fila-total-comision de este <tfoot>, que quedó sin
      ningún uso. */
-  #ssCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
-  #ssCaptura .ss-footer strong { color: #6b7688; }
+  #ssCaptura .ss-footer, #spsCaptura .ss-footer { margin-top: 16px; text-align: center; font-size: 10.5px; color: #a7aec0; font-weight: 500; }
+  #ssCaptura .ss-footer strong, #spsCaptura .ss-footer strong { color: #6b7688; }
+
+  /* ===============================================================
+     "🤝 Saldos de Socios y sus Avalados" (26-09-2026, a pedido del
+     usuario) — sub-vista DENTRO de "📅 Saldos Semana": en vez de la
+     grilla plana cliente×día, agrupa el Saldo Semana de cada cliente
+     bajo el Socio al que pertenece (ver Administrar Socios / socio_id
+     en jugadores) — una tarjeta por Socio con su subtotal, y al final
+     un resumen general (A Cobrar / A Pagar / Total Final). Mismo
+     contenedor blanco que #ssCaptura (ver arriba) para que la imagen
+     HD/PDF salgan con el mismo estilo — se arma por JS en
+     renderSaldosPorSocio() (app.js) a partir de los MISMOS datos que ya
+     trajo GET /api/descargas/saldos-semana (SALDOS_SEMANA_ACTUAL), sin
+     pedirle nada nuevo al servidor aparte de la lista de Socios. */
+  #spsCaptura .sps-socio-card { margin-top: 18px; border-radius: 12px; overflow: hidden; border: 1px solid #e3e7ee; box-shadow: 0 2px 10px rgba(13,19,38,0.06); }
+  #spsCaptura .sps-socio-card:first-of-type { margin-top: 20px; }
+  #spsCaptura .sps-socio-header { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #spsCaptura .sps-socio-nombre { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; color: #04070f; display: flex; align-items: center; gap: 8px; }
+  #spsCaptura .sps-socio-total { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #fff; padding: 6px 14px; border-radius: 20px; white-space: nowrap; }
+  #spsCaptura .sps-socio-total.sps-pos { background: #0f8a52; }
+  #spsCaptura .sps-socio-total.sps-neg { background: #c0392b; }
+  #spsCaptura .sps-socio-total.sps-cero { background: #6b7688; }
+  #spsCaptura table.sps-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #spsCaptura table.sps-tabla th { background: #0d1326; color: #fff; text-transform: uppercase; letter-spacing: 0.4px; font-size: 11px; font-weight: 700; padding: 10px 18px; text-align: center; border: none; }
+  #spsCaptura table.sps-tabla th:first-child, #spsCaptura table.sps-tabla td:first-child { text-align: left; }
+  #spsCaptura table.sps-tabla td { padding: 10px 18px; text-align: center; border: none; border-bottom: 1px solid #eef1f6; background: #fff; color: #1a2233; }
+  #spsCaptura table.sps-tabla tbody tr:nth-child(even) td { background: #fafbfd; }
+  #spsCaptura table.sps-tabla td.sps-nombre-cliente { font-family: 'Outfit', sans-serif; font-weight: 700; color: #0d1326; }
+  #spsCaptura table.sps-tabla tr.sps-fila-subtotal td { border-top: 2px solid #0d1326; border-bottom: none; background: #0d1326; color: #fff; font-weight: 800; font-family: 'Outfit', sans-serif; padding-top: 12px; padding-bottom: 12px; }
+  #spsCaptura .sps-pos { color: #0f8a52; }
+  #spsCaptura .sps-neg { color: #c0392b; }
+  #spsCaptura .sps-cero { color: #b3bac9; font-weight: 500; }
+  #spsCaptura .sps-sin-grupos { text-align: center; color: #6b7688; padding: 30px 10px; font-size: 13.5px; }
+  #spsCaptura .sps-resumen { margin-top: 22px; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan) 75%); padding: 18px 22px; }
+  #spsCaptura .sps-resumen-titulo { text-align: center; font-weight: 800; font-size: 14px; color: #04070f; margin-bottom: 14px; letter-spacing: 0.3px; }
+  #spsCaptura .sps-resumen-grid { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px; }
+  #spsCaptura .sps-resumen-item { text-align: center; min-width: 130px; }
+  #spsCaptura .sps-resumen-label { font-size: 11px; color: rgba(4,7,15,0.65); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; }
+  #spsCaptura .sps-resumen-valor { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; margin-top: 4px; color: #04070f; }
+  #spsCaptura .sps-resumen-valor.sps-pos { color: #0f8a52; }
+  #spsCaptura .sps-resumen-valor.sps-neg { color: #c0392b; }
+  #spsCaptura .sps-resumen-item.sps-resumen-final .sps-resumen-valor { background: #0f8a52; color: #fff; padding: 5px 14px; border-radius: 8px; display: inline-block; margin-top: 6px; }
+  #spsCaptura .sps-resumen-item.sps-resumen-final.sps-resumen-final-neg .sps-resumen-valor { background: #c0392b; }
 
   /* ALERTAS: badge titilante en la pestaña + tarjetas del registro */
   .nav-badge { display: inline-block; background-color: #e74c3c; color: #fff; border-radius: 10px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; font-size: 11px; font-weight: bold; padding: 0 5px; margin-left: 6px; }
@@ -1909,30 +1951,61 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
     <button type="button" class="btn-secundario" onclick="irASemanaActualSaldos()" style="padding:9px 14px; font-size:13px;">📍 Semana actual</button>
   </div>
 
-  <details class="box-nuevo-equipo caja-columnas" style="background:var(--card-2); border-color:var(--card-border); margin-top:12px; padding:12px 15px;">
-    <summary style="font-size:13px; color:var(--text); font-weight:bold; cursor:pointer;">👁️ Agregar más columnas (opcional)</summary>
-    <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px;">
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColArriesgado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto arriesgó</label>
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColGanado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto ganó</label>
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPerdido" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto perdió</label>
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColComision" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> % Devuelto ($)</label>
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColTransferencias" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Transferencias</label>
-      <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPolla" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Polla</label>
+  <!-- "🤝 Saldos de Socios y sus Avalados" (26-09-2026, a pedido del
+       usuario): interruptor entre la vista de siempre (cliente por
+       cliente) y la nueva agrupada por Socio — ver
+       cambiarVistaSaldosSemana()/renderSaldosPorSocio() en app.js. -->
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px;">
+    <div class="btn-fila" style="gap:6px;">
+      <button type="button" class="btn-secundario" id="btnVistaSaldosCliente" onclick="cambiarVistaSaldosSemana('cliente')" style="padding:8px 14px; font-size:13px;">👤 Vista por Cliente</button>
+      <button type="button" class="btn-secundario" id="btnVistaSaldosSocio" onclick="cambiarVistaSaldosSemana('socio')" style="padding:8px 14px; font-size:13px;">🤝 Vista por Socio</button>
     </div>
-    <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Estas columnas se agregan a la derecha, después de los 7 días — "Saldo Semana" (que ya incluye todo: jugadas + polla + transferencias) siempre se muestra.</small>
-  </details>
-
-  <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">
-    <button type="button" onclick="capturarSaldosSemanaComoImagen()" style="padding:9px 16px; font-size:13px;">📅 Saldos Semana (imagen HD)</button>
-    <button type="button" class="btn-secundario" onclick="descargarSaldosSemanaComoPDF()" style="padding:9px 16px; font-size:13px;">📄 Descargar PDF</button>
-    <button type="button" class="btn-secundario" onclick="abrirExportarExcelSaldosSemana()" style="padding:9px 16px; font-size:13px;">📊 Exportar Excel</button>
+    <button type="button" class="btn-secundario" onclick="abrirAdministrarSocios()" style="padding:8px 14px; font-size:13px; margin-left:auto;">⚙️ Administrar Socios</button>
   </div>
-  <small style="display:block; margin:-6px 0 10px; color:var(--text-dim);">💡 La vista de abajo es EXACTAMENTE lo que sale en la imagen/PDF — revisa las columnas antes de generarla. El Excel te deja elegir aparte qué columnas incluir.</small>
 
-  <p id="ssVacio" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Este grupo todavía no tiene ningún cliente registrado.</p>
+  <div id="ssVistaCliente">
+    <details class="box-nuevo-equipo caja-columnas" style="background:var(--card-2); border-color:var(--card-border); margin-top:12px; padding:12px 15px;">
+      <summary style="font-size:13px; color:var(--text); font-weight:bold; cursor:pointer;">👁️ Agregar más columnas (opcional)</summary>
+      <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:10px;">
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColArriesgado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto arriesgó</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColGanado" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto ganó</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPerdido" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Cuánto perdió</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColComision" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> % Devuelto ($)</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColTransferencias" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Transferencias</label>
+        <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="ssColPolla" onchange="actualizarColumnasSaldosSemana()" style="width:auto;"> Polla</label>
+      </div>
+      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Estas columnas se agregan a la derecha, después de los 7 días — "Saldo Semana" (que ya incluye todo: jugadas + polla + transferencias) siempre se muestra.</small>
+    </details>
 
-  <div id="ssCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
-    <div id="ssCaptura"></div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">
+      <button type="button" onclick="capturarSaldosSemanaComoImagen()" style="padding:9px 16px; font-size:13px;">📅 Saldos Semana (imagen HD)</button>
+      <button type="button" class="btn-secundario" onclick="descargarSaldosSemanaComoPDF()" style="padding:9px 16px; font-size:13px;">📄 Descargar PDF</button>
+      <button type="button" class="btn-secundario" onclick="abrirExportarExcelSaldosSemana()" style="padding:9px 16px; font-size:13px;">📊 Exportar Excel</button>
+    </div>
+    <small style="display:block; margin:-6px 0 10px; color:var(--text-dim);">💡 La vista de abajo es EXACTAMENTE lo que sale en la imagen/PDF — revisa las columnas antes de generarla. El Excel te deja elegir aparte qué columnas incluir.</small>
+
+    <p id="ssVacio" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Este grupo todavía no tiene ningún cliente registrado.</p>
+
+    <div id="ssCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
+      <div id="ssCaptura"></div>
+    </div>
+  </div>
+
+  <!-- "🤝 Vista por Socio" (26-09-2026) — oculta por default, se muestra
+       al elegir el botón de arriba (ver cambiarVistaSaldosSemana()). -->
+  <div id="ssVistaSocio" style="display:none;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">
+      <button type="button" onclick="capturarSaldosPorSocioComoImagen()" style="padding:9px 16px; font-size:13px;">🤝 Saldos por Socio (imagen HD)</button>
+      <button type="button" class="btn-secundario" onclick="descargarSaldosPorSocioComoPDF()" style="padding:9px 16px; font-size:13px;">📄 Descargar PDF</button>
+      <button type="button" class="btn-secundario" onclick="generarExcelSaldosPorSocio()" style="padding:9px 16px; font-size:13px;">📊 Exportar Excel</button>
+    </div>
+    <small style="display:block; margin:-6px 0 10px; color:var(--text-dim);">💡 Agrupa el Saldo Semana de cada cliente bajo su Socio (usa "⚙️ Administrar Socios" arriba para crear los grupos) — el cliente que no esté en ningún Socio no sale acá, pero sigue viéndose normal en "👤 Vista por Cliente".</small>
+
+    <p id="spsVacio" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Todavía no creaste ningún Socio — usa "⚙️ Administrar Socios" arriba para armar los grupos.</p>
+
+    <div id="spsCapturaArea" style="overflow-x:auto; padding-bottom:6px;">
+      <div id="spsCaptura"></div>
+    </div>
   </div>
 </div>
 
@@ -2044,6 +2117,49 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
       </div>
       <button type="button" onclick="generarExcelSaldosSemana()" style="margin-top:16px;">⬇️ Descargar Excel</button>
       <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Se descarga un archivo .xlsx con una fila por cliente y la fila de TOTAL al final, de la semana que tengas abierta ahora mismo.</small>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: "⚙️ Administrar Socios" (26-09-2026, a pedido del usuario)   -->
+  <!-- — crear/renombrar/borrar Socios y elegir, con checkboxes, qué       -->
+  <!-- clientes pertenecen a cada uno (un cliente pertenece A LO SUMO a    -->
+  <!-- un Socio a la vez). Ver abrirAdministrarSocios()/guardarClientes-   -->
+  <!-- Socio() en app.js — usa GET/POST/PUT/DELETE /api/socios.            -->
+  <!-- ================================================================= -->
+  <div class="modal-fondo" id="modalAdministrarSocios">
+    <div class="modal-caja" style="max-width:620px;">
+      <button type="button" class="modal-cerrar" onclick="cerrarAdministrarSocios()">✕</button>
+      <h3>⚙️ Administrar Socios</h3>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:-6px;">Un Socio agrupa varios clientes bajo un mismo nombre para "🤝 Vista por Socio" — cada cliente puede estar en un solo Socio a la vez. El que no marques en ninguno no sale en ese reporte, pero sigue viéndose normal en "👤 Vista por Cliente".</p>
+
+      <div style="display:flex; gap:8px; margin:14px 0;">
+        <input type="text" id="inpNuevoSocio" placeholder="Nombre del nuevo Socio (ej: Avila)" style="flex:1;">
+        <button type="button" onclick="crearSocio()" style="white-space:nowrap;">➕ Crear Socio</button>
+      </div>
+
+      <div id="listaAdministrarSocios" style="display:flex; flex-direction:column; gap:10px; max-height:50vh; overflow-y:auto;"></div>
+      <p id="administrarSociosVacio" style="display:none; text-align:center; color:var(--text-dim); padding:16px;">Todavía no has creado ningún Socio.</p>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: vista previa de la imagen capturada de "🤝 Saldos por Socio"  -->
+  <!-- (26-09-2026). Ver capturarSaldosPorSocioComoImagen() en app.js.      -->
+  <!-- ================================================================= -->
+  <div class="modal-fondo" id="modalCapturaSaldosPorSocio">
+    <div class="modal-caja" style="max-width:1100px;">
+      <button type="button" class="modal-cerrar" onclick="cerrarCapturaSaldosPorSocio()">✕</button>
+      <h3>🤝 Imagen de Saldos por Socio</h3>
+      <p id="capturaSaldosPorSocioEstado" style="color:var(--text-dim); font-size:13px;">Generando imagen...</p>
+      <div style="overflow:auto; max-height:60vh; border:1px solid var(--card-border); border-radius:8px; background:var(--card-2); text-align:center;">
+        <img id="capturaSaldosPorSocioImg" style="max-width:100%; display:none;" alt="Saldos por Socio">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button type="button" id="btnCopiarCapturaSaldosPorSocio" onclick="copiarCapturaSaldosPorSocio()" disabled>📋 Copiar imagen (para pegar en WhatsApp)</button>
+        <button type="button" class="btn-secundario" id="btnDescargarCapturaSaldosPorSocio" onclick="descargarCapturaSaldosPorSocio()" disabled>⬇️ Descargar imagen</button>
+      </div>
+      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Con "Copiar imagen" puedes pegarla directo (Ctrl+V / Cmd+V) en el chat de WhatsApp Web o Desktop. Si tu navegador no lo permite, usa "Descargar imagen" y adjúntala a mano.</small>
     </div>
   </div>
 
