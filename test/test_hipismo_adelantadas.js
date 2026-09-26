@@ -204,7 +204,7 @@ function ejecutarQuery(text, params) {
   // routes/hipismo.js). Ningún jugador de esta prueba tiene
   // avalado_por_id/porcentaje_devuelto_destino configurado, así que
   // aval_nombre siempre da null y el comportamiento queda igual que antes.
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre,\s+cc_propio\.nombre AS cc_propio_nombre, cc_aval\.nombre AS cc_aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id\s+LEFT JOIN jugadores cc_aval ON cc_aval\.id = av\.cuenta_comision_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
     const [grupoId, nombres] = params;
     const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
     return {
@@ -212,9 +212,58 @@ function ejecutarQuery(text, params) {
         nombre: j.nombre, comision_propia: j.comision_propia || 0,
         porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
         porcentaje_devuelto_aval: j.porcentaje_devuelto_aval || 0,
-        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null
+        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null,
+        cc_propio_nombre: null,
+        cc_aval_nombre: null
       }))
     };
+  }
+  // "Cuenta de comisión como cliente real" (26-09-2026) —
+  // asegurarCuentasComisionParaNombres() en routes/hipismo.js decide, por
+  // cada nombre que jugó, si hace falta crear/enlazar su cuenta de
+  // comisión real ANTES de guardar. Casi ningún jugador de esta prueba
+  // tiene % propio configurado, así que casi siempre no hace falta crear
+  // nada.
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, j\.cuenta_comision_id,\s+av\.id AS aval_id, av\.nombre AS aval_nombre, av\.cuenta_comision_id AS aval_cuenta_comision_id\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    return {
+      rows: filas.map(j => {
+        const aval = j.avalado_por_id ? TABLAS.jugadores.find(x => x.id === j.avalado_por_id) : null;
+        return {
+          id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
+          porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
+          porcentaje_devuelto_aval: j.porcentaje_devuelto_aval || 0,
+          cuenta_comision_id: j.cuenta_comision_id || null,
+          aval_id: aval ? aval.id : null,
+          aval_nombre: aval ? aval.nombre : null,
+          aval_cuenta_comision_id: aval ? (aval.cuenta_comision_id || null) : null
+        };
+      })
+    };
+  }
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial, es_cuenta_comision\)/i.test(sql)) {
+    const [grupoId, nombre] = params;
+    let cuenta = TABLAS.jugadores.find(j => j.grupo_id === grupoId && j.nombre === nombre);
+    if (!cuenta) {
+      cuenta = { id: nuevoId('j'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0, comision_propia: 0, es_cuenta_comision: true };
+      TABLAS.jugadores.push(cuenta);
+    } else {
+      cuenta.es_cuenta_comision = true;
+    }
+    return { rows: [{ id: cuenta.id }] };
+  }
+  if (/^UPDATE jugadores SET cuenta_comision_id = \$1 WHERE id = \$2 AND grupo_id = \$3 AND cuenta_comision_id IS NULL/i.test(sql)) {
+    const [cuentaId, jugadorId, grupoId] = params;
+    const j = TABLAS.jugadores.find(x => x.id === jugadorId && x.grupo_id === grupoId && !x.cuenta_comision_id);
+    if (j) j.cuenta_comision_id = cuentaId;
+    return { rows: [] };
+  }
+  // "Traspaso de comisión" (26-09-2026) — /cierre-final ahora suma los
+  // ajustes de hipismo_comisiones_ajustes sobre el saldo en vivo. Esta
+  // prueba no hace ningún traspaso, así que siempre queda vacío.
+  if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total\s+FROM hipismo_comisiones_ajustes\s+WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3\s+GROUP BY cliente_nombre/i.test(sql)) {
+    return { rows: [] };
   }
 
   if (/^SELECT pais FROM hipismo_hipodromos/i.test(sql)) {

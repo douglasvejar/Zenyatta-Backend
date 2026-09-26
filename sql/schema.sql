@@ -1325,3 +1325,66 @@ alter table jugadores add column if not exists socio_id uuid references socios(i
 create index if not exists idx_jugadores_socio on jugadores(socio_id);
 
 alter table socios enable row level security;
+
+-- =================================================================
+-- CUENTA DE COMISIÓN "PORCENTAJE" COMO CLIENTE REAL (26-09-2026, a
+-- pedido del usuario, que mandó una captura de "Balance General" con
+-- ítems anidados "Mujica - porcentaje"/"North - porcentaje"/"Agg ferro
+-- - porcentaje": "quiero que me lo coloques como si fuera un codigo
+-- mas... un cliente mas... cambiarle el nombre... hacerle traspaso...
+-- quitarle... todo como si fuera otro cliente, solo que se alimenta de
+-- los porcentajes"). Hasta ahora ese ítem era 100% virtual: el nombre
+-- se armaba de nuevo en cada reporte concatenando texto
+-- (`${destino} - PORCENTAJE`, ver obtenerComisionesPropias en
+-- routes/hipismo.js), sin ningún jugador propio detrás.
+--
+-- jugadores.cuenta_comision_id: en un jugador NORMAL (ej. "North"),
+-- apunta al jugador REAL que le cobra su "% devuelto" — se crea solo
+-- la PRIMERA VEZ que ese % genera comisión de verdad (al confirmar un
+-- Plano o un Remate, ver asegurarCuentaComision() en routes/hipismo.js)
+-- y desde ahí en adelante TODOS los reportes (Balance General/Cierre
+-- Final, Comisiones Devueltas, Comisiones por Hipódromo, Saldo
+-- Comisiones, y las vistas previas de Plano/Remate) resuelven el
+-- nombre a mostrar leyendo el NOMBRE ACTUAL de esa cuenta — así que
+-- renombrarla desde Administración > Clientes (mismo PUT de siempre)
+-- se queda pegado en todos lados para siempre. Eliminarla usa el
+-- DELETE de jugadores de siempre; el ON DELETE SET NULL de acá abajo
+-- deslinka al jugador de origen automáticamente, así que la próxima
+-- vez que ese % genere comisión se crea una cuenta nueva.
+--
+-- jugadores.es_cuenta_comision: marca esta fila COMO la cuenta de
+-- comisión de otro jugador (en vez de un cliente que apuesta) — se usa
+-- para excluirla de los selectores de "quién apostó" en Cargar Planos/
+-- Remates (no tendría sentido registrarle una jugada propia), aunque sí
+-- aparece normal en Administración > Clientes para poder renombrarla/
+-- eliminarla, y en Balance General como un cliente más (ya no anidada).
+--
+-- Empieza a funcionar así desde HOY para adelante — a pedido explícito
+-- del usuario (AskUserQuestion: "Desde hoy en adelante") las semanas ya
+-- cerradas (anterior, hace 2) se siguen viendo exactamente igual que
+-- antes, sin tocar ni traducir ningún dato viejo.
+alter table jugadores add column if not exists cuenta_comision_id uuid references jugadores(id) on delete set null;
+alter table jugadores add column if not exists es_cuenta_comision boolean not null default false;
+create index if not exists idx_jugadores_cuenta_comision on jugadores(cuenta_comision_id) where cuenta_comision_id is not null;
+
+-- "TRASPASO DE COMISIÓN" (26-09-2026): el traspaso de jugadas de
+-- siempre mueve una fila puntual (UPDATE cliente_nombre WHERE id = X),
+-- pero una cuenta de comisión no tiene "jugadas" propias — su saldo se
+-- calcula en vivo sumando el % de lo que apostó el jugador de origen.
+-- Este traspaso es un AJUSTE aparte (puede ser negativo o positivo),
+-- que cada reporte suma encima de ese cálculo en vivo de siempre (ver
+-- acumularAjustesComision() en routes/hipismo.js) — nunca reemplaza ni
+-- recalcula el % en sí. Empieza vacía: no afecta ninguna semana ya
+-- cerrada, solo aplica desde el primer traspaso que se haga.
+create table if not exists hipismo_comisiones_ajustes (
+  id             uuid primary key default gen_random_uuid(),
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  cliente_nombre text not null,
+  monto          numeric(12,2) not null,
+  fecha          date not null,
+  nota           text,
+  creado_en      timestamptz not null default now()
+);
+create index if not exists idx_hipismo_comisiones_ajustes_grupo_cliente on hipismo_comisiones_ajustes(grupo_id, cliente_nombre);
+create index if not exists idx_hipismo_comisiones_ajustes_grupo_fecha on hipismo_comisiones_ajustes(grupo_id, fecha);
+alter table hipismo_comisiones_ajustes enable row level security;

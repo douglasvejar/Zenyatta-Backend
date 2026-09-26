@@ -367,10 +367,19 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
+  // cc_propio/cc_aval (26-09-2026): la cuenta de comisión REAL de cada
+  // posible destino (jugadores.cuenta_comision_id, ver la nota grande en
+  // sql/schema.sql) — si ya existe (se crea sola al confirmar un Plano/
+  // Remate, ver asegurarCuentasComisionParaNombres más abajo), su NOMBRE
+  // ACTUAL manda sobre el texto armado a mano, así que renombrarla desde
+  // Administración > Clientes se refleja acá para siempre.
   const r = await db.query(
-    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, av.nombre AS aval_nombre
+    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, av.nombre AS aval_nombre,
+            cc_propio.nombre AS cc_propio_nombre, cc_aval.nombre AS cc_aval_nombre
        FROM jugadores j
        LEFT JOIN jugadores av ON av.id = j.avalado_por_id
+       LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id
+       LEFT JOIN jugadores cc_aval ON cc_aval.id = av.cuenta_comision_id
       WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
@@ -381,8 +390,10 @@ async function obtenerComisionesPropias(grupoId, nombres) {
     // su aval según porcentaje_devuelto_destino (sin cambios).
     const pctPropio = Number(j.comision_propia) || 0;
     if (pctPropio) {
-      const destino = (j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre) ? j.aval_nombre : j.nombre;
-      entradas.push({ pct: pctPropio, destino, esAvalAdicional: false });
+      const usaAval = j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre;
+      const destino = usaAval ? j.aval_nombre : j.nombre;
+      const cuentaNombre = (usaAval ? j.cc_aval_nombre : j.cc_propio_nombre) || `${destino} - PORCENTAJE`;
+      entradas.push({ pct: pctPropio, destino, cuentaNombre, esAvalAdicional: false });
     }
     // Entrada 2 (NUEVA): porcentaje_devuelto_aval, siempre y cuando este
     // cliente tenga un aval configurado — INDEPENDIENTE y SIMULTÁNEA a
@@ -391,11 +402,68 @@ async function obtenerComisionesPropias(grupoId, nombres) {
     // ='cliente').
     const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
     if (pctAval && j.aval_nombre) {
-      entradas.push({ pct: pctAval, destino: j.aval_nombre, esAvalAdicional: true });
+      const destino = j.aval_nombre;
+      const cuentaNombre = j.cc_aval_nombre || `${destino} - PORCENTAJE`;
+      entradas.push({ pct: pctAval, destino, cuentaNombre, esAvalAdicional: true });
     }
     mapa[j.nombre] = entradas;
   });
   return mapa;
+}
+
+// Crea (si hace falta) la cuenta de comisión REAL de `jugadorId` y la
+// enlaza en jugadores.cuenta_comision_id — nombrada igual que el texto
+// de siempre ("{nombreBase} - PORCENTAJE"), marcada es_cuenta_comision
+// para que Cargar Planos/Remates no la ofrezcan como "quién apostó". El
+// ON CONFLICT cubre 2 confirmaciones casi simultáneas para el mismo
+// cliente sin crear 2 cuentas.
+async function crearYLinkearCuentaComision(grupoId, jugadorId, nombreBase) {
+  const nombreCuenta = `${nombreBase} - PORCENTAJE`;
+  const rCuenta = await db.query(
+    `INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial, es_cuenta_comision)
+     VALUES ($1, $2, true, true, 'libre', 0, true)
+     ON CONFLICT (grupo_id, nombre) DO UPDATE SET es_cuenta_comision = true
+     RETURNING id`,
+    [grupoId, nombreCuenta]
+  );
+  const cuentaId = rCuenta.rows[0].id;
+  await db.query(
+    `UPDATE jugadores SET cuenta_comision_id = $1 WHERE id = $2 AND grupo_id = $3 AND cuenta_comision_id IS NULL`,
+    [cuentaId, jugadorId, grupoId]
+  );
+}
+
+// Se llama SOLO al GUARDAR de verdad un Plano o un Remate (nunca en la
+// vista previa de "Calcular", para no crear cuentas de cálculos que el
+// operador después no confirma) — antes de leer obtenerComisionesPropias
+// para el guardado real, se asegura de que cada jugador (o su aval) que
+// vaya a generar comisión YA tenga su cuenta de comisión real enlazada.
+async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
+  const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
+  if (!unicos.length) return;
+  const r = await db.query(
+    `SELECT j.id, j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, j.cuenta_comision_id,
+            av.id AS aval_id, av.nombre AS aval_nombre, av.cuenta_comision_id AS aval_cuenta_comision_id
+       FROM jugadores j
+       LEFT JOIN jugadores av ON av.id = j.avalado_por_id
+      WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
+    [grupoId, unicos]
+  );
+  for (const j of r.rows) {
+    const pctPropio = Number(j.comision_propia) || 0;
+    const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
+    if (pctPropio) {
+      const usaAval = j.porcentaje_devuelto_destino === 'aval' && j.aval_id;
+      if (usaAval) {
+        if (!j.aval_cuenta_comision_id) await crearYLinkearCuentaComision(grupoId, j.aval_id, j.aval_nombre);
+      } else if (!j.cuenta_comision_id) {
+        await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
+      }
+    }
+    if (pctAval && j.aval_id && !j.aval_cuenta_comision_id) {
+      await crearYLinkearCuentaComision(grupoId, j.aval_id, j.aval_nombre);
+    }
+  }
 }
 
 // Acumula en `totales` el ítem "{destino} - PORCENTAJE" de cada entrada
@@ -414,7 +482,13 @@ function agregarPorcentajeDevuelto(totales, comisionesPropias, entradas) {
       if (!info || !info.pct) return;
       const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
       if (!devuelto) return;
-      const clave = `${info.destino} - PORCENTAJE`;
+      // 26-09-2026: info.cuentaNombre YA es el nombre final a mostrar
+      // (el de la cuenta de comisión real si ya existe, o el texto de
+      // siempre como vista previa — ver la nota grande de
+      // obtenerComisionesPropias más arriba); info.destino en cambio es
+      // el nombre "pelado" del cliente/aval, usado solo para AUDITAR
+      // quién generó el % en los otros reportes.
+      const clave = info.cuentaNombre;
       totales[clave] = round2((totales[clave] || 0) + devuelto);
     });
   });
@@ -587,10 +661,17 @@ router.post('/planos', asyncHandler(async (req, res) => {
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
 
   // Ver la nota grande en POST /planos/calcular — mismo cálculo de "%
-  // devuelto" acá, sobre lo que de verdad se guardó en este plano.
+  // devuelto" acá, sobre lo que de verdad se guardó en este plano. A
+  // diferencia de la vista previa, ACÁ SÍ se asegura la cuenta de
+  // comisión real de cada destino ANTES de leer obtenerComisionesPropias
+  // (26-09-2026, ver la nota grande de esa función) — recién cuando el
+  // plano se guarda de verdad, nunca en un "Calcular" que el operador
+  // después no confirma.
   const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
     .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
-  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
+  const nombresApostados = entradasApostadas.map(e => e.nombre);
+  await asegurarCuentasComisionParaNombres(req.grupoId, nombresApostados);
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, nombresApostados);
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
   res.status(201).json({
@@ -1274,6 +1355,13 @@ router.post('/remates', asyncHandler(async (req, res) => {
   // misma tabla compartida, mismo criterio que ya usa "Cargar Planos".
   const nombresDelRemate = new Set(apuestas.map(a => a.cliente));
   await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
+  // Mismo criterio que POST /planos (26-09-2026, ver la nota grande de
+  // obtenerComisionesPropias): un remate confirmado también puede
+  // generar "% devuelto" (entra igual que Tercios en Cierre Final/
+  // Comisiones Devueltas, ver obtenerApuestasDelDia) — se asegura la
+  // cuenta de comisión real acá, al guardar de verdad, nunca en la vista
+  // previa de "Calcular".
+  await asegurarCuentasComisionParaNombres(req.grupoId, Array.from(nombresDelRemate));
 
   const remate = await db.transaccion(async (client) => {
     const rRemate = await client.query(
@@ -1627,6 +1715,59 @@ router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
   res.json({ ok: true, jugada: r.rows[0] });
 }));
 
+// =================================================================
+// TRASPASO DE COMISIÓN (26-09-2026, ver la nota grande de
+// jugadores.cuenta_comision_id en sql/schema.sql) — una cuenta de
+// comisión ("{nombre} - PORCENTAJE") no tiene jugadas propias que
+// traspasar con el endpoint de arriba (su saldo se calcula en vivo
+// sumando el % de lo que apostó el jugador de origen, nunca de una fila
+// suya) — esto es un AJUSTE aparte: resta `monto` de `clienteOrigen` y
+// lo suma a `clienteDestino`, los 2 en la misma `fecha` (para que caiga
+// en la semana correcta de Balance General). No recalcula ni reemplaza
+// el % en sí — cada reporte que lo necesita lo suma encima (ver
+// obtenerAjustesComision más abajo). El destino puede ser CUALQUIER
+// cliente (otra cuenta de comisión, o un cliente normal) — se
+// auto-registra si todavía no existe, igual que el resto del sistema.
+router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
+  const { clienteOrigen, clienteDestino, monto, fecha, nota } = req.body;
+  const origenFinal = ((clienteOrigen || '') + '').trim().toUpperCase();
+  const destinoFinal = ((clienteDestino || '') + '').trim().toUpperCase();
+  const montoFinal = Number(monto);
+  const fechaFinal = fecha || fechaHoyVenezuela();
+  if (!origenFinal || !destinoFinal) return res.status(400).json({ error: 'Falta el cliente de origen y/o el destino.' });
+  if (origenFinal === destinoFinal) return res.status(400).json({ error: 'El origen y el destino no pueden ser el mismo cliente.' });
+  if (!montoFinal || montoFinal <= 0 || isNaN(montoFinal)) return res.status(400).json({ error: 'Falta un monto válido a traspasar.' });
+
+  await autoRegistrarJugadores(req.grupoId, [destinoFinal], {});
+
+  await db.transaccion(async (client) => {
+    await client.query(
+      'INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, origenFinal, -montoFinal, fechaFinal, nota || null]
+    );
+    await client.query(
+      'INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, destinoFinal, montoFinal, fechaFinal, nota || null]
+    );
+  });
+
+  res.json({ ok: true });
+}));
+
+// Suma neta de ajustes de traspaso de comisión por cliente, en un rango
+// de fechas — ver la nota grande de POST /comisiones/traspaso. Devuelve
+// {} si nunca se hizo ningún traspaso (tabla vacía = sin efecto, no
+// afecta ninguna semana de antes de que existiera esta función).
+async function obtenerAjustesComision(grupoId, desde, hasta) {
+  const r = await db.query(
+    'SELECT cliente_nombre, COALESCE(SUM(monto), 0) AS total FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY cliente_nombre',
+    [grupoId, desde, hasta]
+  );
+  const mapa = {};
+  r.rows.forEach(row => { mapa[row.cliente_nombre] = Number(row.total); });
+  return mapa;
+}
+
 // GET /montos-apostados?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
 router.get('/montos-apostados', asyncHandler(async (req, res) => {
   const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
@@ -1878,7 +2019,10 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
       if (!info || !info.pct) return;
       const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
       if (!devuelto) return;
-      acumular(`${info.destino} - PORCENTAJE`, devuelto);
+      // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
+      // info.cuentaNombre ya es el nombre final, no hace falta pegarle
+      // el sufijo de nuevo.
+      acumular(info.cuentaNombre, devuelto);
     });
   }
   rTickets.rows.forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
@@ -1886,8 +2030,21 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   rAdelantadas.rows.forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
 
   const clientes = Array.from(porCliente.values())
-    .map(c => ({ ...c, saldo: c.gano - c.perdio }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    .map(c => ({ ...c, saldo: c.gano - c.perdio }));
+
+  // TRASPASO DE COMISIÓN (26-09-2026, ver POST /comisiones/traspaso más
+  // arriba) — se suma/resta encima del saldo ya calculado; si el cliente
+  // del ajuste no tenía ninguna jugada esta semana (ej. recién recibió
+  // un traspaso sin haber jugado nada), se agrega como una fila nueva.
+  const ajustesComision = await obtenerAjustesComision(req.grupoId, desde, hasta);
+  Object.keys(ajustesComision).forEach(nombre => {
+    const monto = ajustesComision[nombre];
+    if (!monto) return;
+    let c = clientes.find(x => x.nombre === nombre);
+    if (!c) { c = { nombre, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(c); }
+    c.saldo = round2(c.saldo + monto);
+  });
+  clientes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   // Comisión de la semana: mismo total ya guardado por plano (ver
   // /comisiones-por-carrera arriba) — no depende de los tickets sueltos.

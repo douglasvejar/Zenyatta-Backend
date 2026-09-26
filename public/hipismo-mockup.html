@@ -220,6 +220,8 @@
 
   .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
   .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; }
+  .aviso-resultado { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: #eaf4ff; border: 1px solid #bdddfd; color: #0b3d66; }
+  .aviso-resultado.aviso-confirmado { background: #e9f8ee; border-color: #b9e6c7; color: #0f5a2c; }
   .toast-copiado { display: inline-block; margin-left: 10px; font-size: 12.5px; color: var(--ok); font-weight: 600; opacity: 0; transition: opacity .25s; }
   .toast-copiado.visible { opacity: 1; }
 
@@ -834,6 +836,7 @@
         </div>
 
         <div id="resultadoVacio" class="resultado-vacio">El plano resuelto va a aparecer acá cuando le des Calcular.</div>
+        <div id="avisoResultado" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
       </div>
     </section>
@@ -897,6 +900,7 @@
         </div>
 
         <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
+        <div id="avisoResultadoRemate" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaRemate" style="display:none;"></pre>
       </div>
     </section>
@@ -964,6 +968,7 @@
         </div>
 
         <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
+        <div id="avisoResultadoRemateManual" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaRemateManual" style="display:none;"></pre>
       </div>
     </section>
@@ -1911,6 +1916,29 @@ Pizarra: [se llena al calcular]
     <h3 style="margin-top:0;">¡Bienvenido de vuelta!</h3>
     <p id="bienvenidaFraseHip" style="font-size:15px; color:var(--text); margin:14px 0 20px;"></p>
     <button type="button" class="btn btn-primario" onclick="cerrarBienvenidaHip()">Gracias, ¡vamos a trabajar! 💪</button>
+  </div>
+</div>
+
+<!-- 26-09-2026: "Traspasar Comisión" (ver la nota grande de POST
+     /comisiones/traspaso en routes/hipismo.js) — una cuenta de comisión
+     no tiene jugadas propias para usar el traspaso de siempre, así que
+     esto es un ajuste aparte: mueve un monto de su saldo hacia otro
+     cliente cualquiera. -->
+<div class="modal-fondo" id="modalTraspasoComision" style="display:none;" onclick="if (event.target === this) cerrarTraspasoComision();">
+  <div class="modal-detalle-cliente" style="max-width:420px; padding:28px;">
+    <button type="button" class="modal-cerrar" onclick="cerrarTraspasoComision()" aria-label="Cerrar">✕</button>
+    <h3 style="margin-top:0;">🔄 Traspasar Comisión</h3>
+    <p class="desc" style="margin-top:-4px;">Mueve parte del saldo de <strong id="traspasoComisionOrigenTxt">—</strong> hacia otro cliente. Es un ajuste aparte — no borra ni recalcula el % en sí, solo mueve el saldo ya generado.</p>
+    <div style="display:flex; flex-direction:column; gap:12px; margin-top:14px;">
+      <div><label>Cliente destino *</label><input type="text" id="traspasoComisionDestino" placeholder="Nombre del cliente"></div>
+      <div><label>Monto a traspasar *</label><input type="number" id="traspasoComisionMonto" step="0.01" min="0" placeholder="0.00"></div>
+      <div><label>Fecha</label><input type="date" id="traspasoComisionFecha"></div>
+      <div><label>Nota (opcional)</label><input type="text" id="traspasoComisionNota" placeholder="Ej: acuerdo con el cliente"></div>
+    </div>
+    <div class="btn-fila" style="margin-top:18px;">
+      <button class="btn btn-primario" type="button" onclick="confirmarTraspasoComision()">Traspasar</button>
+      <button class="btn btn-secundario" type="button" onclick="cerrarTraspasoComision()">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -4447,6 +4475,7 @@ async function calcularPlano() {
 
   const vacio = document.getElementById('resultadoVacio');
   const caja = document.getElementById('resultadoCaja');
+  const aviso = document.getElementById('avisoResultado');
   const btnCalcular = document.getElementById('btnCalcularPlano');
   const btnConfirmar = document.getElementById('btnConfirmarPlano');
 
@@ -4454,6 +4483,7 @@ async function calcularPlano() {
   // confirmar anterior — el operador siempre confirma el ÚLTIMO cálculo
   // que ve en pantalla, nunca uno viejo que ya no coincide con el plano.
   planoPendienteDeConfirmar = null;
+  aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
@@ -4496,7 +4526,9 @@ async function calcularPlano() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
-  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Plano" para guardarlo de verdad.\n\n' + salida;
+  aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Plano" para guardarlo de verdad.';
+  aviso.className = 'aviso-resultado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -4520,6 +4552,7 @@ async function confirmarPlano() {
 
   const vacio = document.getElementById('resultadoVacio');
   const caja = document.getElementById('resultadoCaja');
+  const aviso = document.getElementById('avisoResultado');
   const btnConfirmar = document.getElementById('btnConfirmarPlano');
 
   confirmandoPlano = true;
@@ -4534,6 +4567,7 @@ async function confirmarPlano() {
     });
   } catch (e) {
     caja.textContent = '❌ ' + e.message + '\n\nEl plano NO se guardó — corrige lo que haga falta y dale "Confirmar Plano" de nuevo (o "Calcular" si necesitas cambiar algo del plano).';
+    aviso.style.display = 'none';
     confirmandoPlano = false;
     btnConfirmar.disabled = false;
     btnConfirmar.textContent = '✔️ Confirmar Plano';
@@ -4550,7 +4584,9 @@ async function confirmarPlano() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
-  salida = '✅ Plano CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida;
+  aviso.textContent = '✅ Plano CONFIRMADO y guardado — ya se aplicó a los saldos.';
+  aviso.className = 'aviso-resultado aviso-confirmado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -4572,6 +4608,7 @@ function limpiarPlano() {
   document.getElementById('resultadoCaja').style.display = 'none';
   document.getElementById('resultadoVacio').style.display = 'block';
   document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';
+  document.getElementById('avisoResultado').style.display = 'none';
   // Limpiar invalida cualquier vista previa pendiente de confirmar.
   planoPendienteDeConfirmar = null;
   const btnConfirmar = document.getElementById('btnConfirmarPlano');
@@ -4610,12 +4647,14 @@ async function calcularRemate() {
 
   const vacio = document.getElementById('resultadoVacioRemate');
   const caja = document.getElementById('resultadoCajaRemate');
+  const aviso = document.getElementById('avisoResultadoRemate');
   const btnCalcular = document.getElementById('btnCalcularRemate');
   const btnConfirmar = document.getElementById('btnConfirmarRemate');
 
   // Cualquier "Calcular" nuevo invalida una vista previa pendiente de
   // confirmar anterior — igual que en "Cargar Planos".
   rematePendienteDeConfirmar = null;
+  aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
@@ -4673,7 +4712,9 @@ async function calcularRemate() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
-  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.\n\n' + salida;
+  aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.';
+  aviso.className = 'aviso-resultado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -4696,6 +4737,7 @@ async function confirmarRemate() {
 
   const vacio = document.getElementById('resultadoVacioRemate');
   const caja = document.getElementById('resultadoCajaRemate');
+  const aviso = document.getElementById('avisoResultadoRemate');
   const btnConfirmar = document.getElementById('btnConfirmarRemate');
 
   confirmandoRemate = true;
@@ -4710,6 +4752,7 @@ async function confirmarRemate() {
     });
   } catch (e) {
     caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Confirmar Remate" de nuevo (o "Calcular" si necesitas cambiar algo).';
+    aviso.style.display = 'none';
     confirmandoRemate = false;
     btnConfirmar.disabled = false;
     btnConfirmar.textContent = '✔️ Confirmar Remate';
@@ -4722,7 +4765,9 @@ async function confirmarRemate() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida2 = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida2;
   }
-  salida2 = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida2;
+  aviso.textContent = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.';
+  aviso.className = 'aviso-resultado aviso-confirmado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -4743,6 +4788,7 @@ function limpiarRemate() {
   document.getElementById('resultadoCajaRemate').style.display = 'none';
   document.getElementById('resultadoVacioRemate').style.display = 'block';
   document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
+  document.getElementById('avisoResultadoRemate').style.display = 'none';
   // Limpiar invalida cualquier vista previa pendiente de confirmar.
   rematePendienteDeConfirmar = null;
   const btnConfirmar = document.getElementById('btnConfirmarRemate');
@@ -4835,13 +4881,18 @@ async function poblarJugadoresRemateManual() {
   } catch (e) {
     jugadores = [];
   }
-  const opciones = '<option value="">Seleccione</option>' + jugadores.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
+  // 26-09-2026: las cuentas de comisión ("{cliente} - PORCENTAJE", ver
+  // la nota grande de obtenerComisionesPropias en routes/hipismo.js) no
+  // tiene sentido ofrecerlas acá — nadie les registra una jugada propia,
+  // su saldo se alimenta solo del % configurado.
+  const jugadoresSeleccionables = jugadores.filter(j => !j.es_cuenta_comision);
+  const opciones = '<option value="">Seleccione</option>' + jugadoresSeleccionables.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
   for (let n = 1; n <= 20; n++) {
     const sel = document.getElementById('selJugadorRemateManual_' + n);
     if (!sel) continue;
     const previo = sel.value;
     sel.innerHTML = opciones;
-    if (jugadores.some(j => j.nombre === previo)) sel.value = previo;
+    if (jugadoresSeleccionables.some(j => j.nombre === previo)) sel.value = previo;
   }
 }
 
@@ -4864,10 +4915,12 @@ async function calcularRemateManual() {
 
   const vacio = document.getElementById('resultadoVacioRemateManual');
   const caja = document.getElementById('resultadoCajaRemateManual');
+  const aviso = document.getElementById('avisoResultadoRemateManual');
   const btnCalcular = document.getElementById('btnCalcularRemateManual');
   const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
 
   rematePendienteDeConfirmarManual = null;
+  aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
@@ -4950,7 +5003,9 @@ async function calcularRemateManual() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
-  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.\n\n' + salida;
+  aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.';
+  aviso.className = 'aviso-resultado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -4968,6 +5023,7 @@ async function confirmarRemateManual() {
 
   const vacio = document.getElementById('resultadoVacioRemateManual');
   const caja = document.getElementById('resultadoCajaRemateManual');
+  const aviso = document.getElementById('avisoResultadoRemateManual');
   const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
 
   confirmandoRemateManual = true;
@@ -4982,6 +5038,7 @@ async function confirmarRemateManual() {
     });
   } catch (e) {
     caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Confirmar Remate" de nuevo (o "Calcular" si necesitas cambiar algo).';
+    aviso.style.display = 'none';
     confirmandoRemateManual = false;
     btnConfirmar.disabled = false;
     btnConfirmar.textContent = '✔️ Confirmar Remate';
@@ -4994,7 +5051,9 @@ async function confirmarRemateManual() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida2 = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida2;
   }
-  salida2 = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida2;
+  aviso.textContent = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.';
+  aviso.className = 'aviso-resultado aviso-confirmado';
+  aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
@@ -5019,6 +5078,7 @@ function limpiarRemateManual() {
   document.getElementById('resultadoCajaRemateManual').style.display = 'none';
   document.getElementById('resultadoVacioRemateManual').style.display = 'block';
   document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
+  document.getElementById('avisoResultadoRemateManual').style.display = 'none';
   rematePendienteDeConfirmarManual = null;
   const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
   if (btnConfirmar) {
@@ -5505,7 +5565,7 @@ async function cargarClientesReales() {
   }
   tbody.innerHTML = jugadores.map(j => `
     <tr data-cliente="${j.nombre}">
-      <td>${formatNombre(j.nombre)}${j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : ''}</td>
+      <td>${formatNombre(j.nombre)}${j.es_cuenta_comision ? ' <span class="badge-pendiente" style="font-size:10.5px;">cuenta de comisión</span>' : (j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : '')}</td>
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
       <td>${celdaPctAvalTabla(j, jugadores)}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
@@ -5519,6 +5579,7 @@ async function cargarClientesReales() {
       <td style="display:flex; gap:6px; flex-wrap:wrap;">
         <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirFichaCliente('${j.id}')">👁️ Ver / Editar</button>
         <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
+        ${j.es_cuenta_comision ? `<button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirTraspasoComision('${j.nombre}')">🔄 Traspasar</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -5660,6 +5721,54 @@ async function guardarNuevoCliente() {
 function abrirFichaCliente(id) {
   CLIENTE_DETALLE_ID = id;
   pintarFichaCliente();
+}
+
+// "Traspasar Comisión" (26-09-2026, ver la nota grande de POST
+// /comisiones/traspaso en routes/hipismo.js) — solo aparece en el botón
+// de una cuenta de comisión (es_cuenta_comision). Es un AJUSTE aparte,
+// no un traspaso de jugada de siempre (esta cuenta no tiene jugadas
+// propias).
+let TRASPASO_COMISION_ORIGEN = null;
+
+function abrirTraspasoComision(nombreOrigen) {
+  TRASPASO_COMISION_ORIGEN = nombreOrigen;
+  document.getElementById('traspasoComisionOrigenTxt').textContent = formatNombre(nombreOrigen);
+  document.getElementById('traspasoComisionDestino').value = '';
+  document.getElementById('traspasoComisionMonto').value = '';
+  document.getElementById('traspasoComisionFecha').value = fechaLocalHoy();
+  document.getElementById('traspasoComisionNota').value = '';
+  document.getElementById('modalTraspasoComision').style.display = 'flex';
+}
+
+function cerrarTraspasoComision() {
+  document.getElementById('modalTraspasoComision').style.display = 'none';
+  TRASPASO_COMISION_ORIGEN = null;
+}
+
+async function confirmarTraspasoComision() {
+  const destino = document.getElementById('traspasoComisionDestino').value.trim();
+  const monto = Number(document.getElementById('traspasoComisionMonto').value);
+  const fecha = document.getElementById('traspasoComisionFecha').value;
+  const nota = document.getElementById('traspasoComisionNota').value.trim();
+  if (!destino) return alert('Falta el cliente destino.');
+  if (!monto || monto <= 0 || isNaN(monto)) return alert('Falta un monto válido a traspasar.');
+  try {
+    await apiHipismo('/api/hipismo/comisiones/traspaso', {
+      method: 'POST',
+      body: JSON.stringify({ clienteOrigen: TRASPASO_COMISION_ORIGEN, clienteDestino: destino, monto, fecha, nota })
+    });
+  } catch (e) {
+    alert('No se pudo traspasar: ' + e.message);
+    return;
+  }
+  cerrarTraspasoComision();
+  await cargarClientesReales();
+  // Balance General (mismo criterio que el resto de reportes, ver
+  // REFRESCAR_AL_ENTRAR_VISTA) — refresca de una vez si ya está pintado,
+  // para que el operador vea el traspaso reflejado sin tener que salir
+  // y volver a entrar a la pestaña.
+  if (typeof pintarBalanceGeneral === 'function') pintarBalanceGeneral();
+  alert('✅ Traspaso hecho.');
 }
 
 function cerrarFichaCliente() {
@@ -6124,16 +6233,14 @@ async function pintarBalanceGeneral() {
   // de la fila de su cliente base (en la misma columna Pierden/Ganan en
   // la que haya caído ese cliente, sin importar que el "% Porcentaje" en
   // sí sea siempre positivo).
-  const SUFIJO_PORCENTAJE = ' - PORCENTAJE';
-  const normales = data.clientes.filter(c => !c.nombre.endsWith(SUFIJO_PORCENTAJE));
-  const porcentajePorBase = new Map();
-  data.clientes.filter(c => c.nombre.endsWith(SUFIJO_PORCENTAJE)).forEach(p => {
-    porcentajePorBase.set(p.nombre.slice(0, -SUFIJO_PORCENTAJE.length), p);
-  });
-
-  const pierden = normales.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
-  const ganan = normales.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
-  const basesConPorcentajePintado = new Set();
+  // 26-09-2026, a pedido del usuario ("quiero que me lo coloques como
+  // si fuera un codigo mas... un cliente mas"): el ítem "{cliente} -
+  // PORCENTAJE" ya es un jugador real (ver la nota grande de
+  // obtenerComisionesPropias en routes/hipismo.js) — se pinta como CUALQUIER
+  // otro cliente, ordenado por monto junto a los demás, sin anidarlo ni
+  // marcarlo con "↳".
+  const pierden = data.clientes.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
+  const ganan = data.clientes.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
 
   function filaBalance(nombre, monto, clase) {
     const fila = document.createElement('div');
@@ -6142,35 +6249,9 @@ async function pintarBalanceGeneral() {
     fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">${signo}${formatMonto(monto)}</span>`;
     return fila;
   }
-  function filaPorcentaje(p) {
-    const fila = document.createElement('div');
-    fila.className = 'balance-fila balance-fila-porcentaje';
-    fila.innerHTML = `<span class="nombre">↳ ${formatNombre(p.nombre)}</span><span class="monto">+${formatMonto(p.saldo)}</span>`;
-    return fila;
-  }
 
-  pierden.forEach(c => {
-    listaPierden.appendChild(filaBalance(c.nombre, c.saldo, 'perdedor'));
-    const p = porcentajePorBase.get(c.nombre);
-    if (p) { listaPierden.appendChild(filaPorcentaje(p)); basesConPorcentajePintado.add(p.nombre); }
-  });
-  ganan.forEach(c => {
-    listaGanan.appendChild(filaBalance(c.nombre, c.saldo, 'ganador'));
-    const p = porcentajePorBase.get(c.nombre);
-    if (p) { listaGanan.appendChild(filaPorcentaje(p)); basesConPorcentajePintado.add(p.nombre); }
-  });
-  // Un "% Porcentaje" cuyo cliente base NO tuvo jugadas propias esta
-  // semana (ej. un aval que solo recibe % de otro, sin jugar él mismo)
-  // no tiene dónde anidarse — se muestra suelto en Ganan, como siempre
-  // (el % devuelto nunca es negativo).
-  Array.from(porcentajePorBase.values())
-    .filter(p => !basesConPorcentajePintado.has(p.nombre))
-    .sort((a, b) => b.saldo - a.saldo)
-    .forEach(p => listaGanan.appendChild(filaPorcentaje(p)));
-  // Ojo: se chequea .children.length del contenedor (no pierden.length/
-  // ganan.length) porque un "% Porcentaje" suelto (sin cliente base en
-  // esta lista) puede haber quedado pintado en listaGanan aunque `ganan`
-  // en sí esté vacío — no hay que pisar esa fila con el placeholder.
+  pierden.forEach(c => listaPierden.appendChild(filaBalance(c.nombre, c.saldo, 'perdedor')));
+  ganan.forEach(c => listaGanan.appendChild(filaBalance(c.nombre, c.saldo, 'ganador')));
   if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
   if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
 

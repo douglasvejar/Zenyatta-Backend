@@ -84,6 +84,13 @@ function ejecutarQuery(text, params) {
     const filas = TABLAS.transferencias.filter(t => t.grupo_id === grupoId && enRango(t, desde, hasta));
     return { rows: filas.map(t => ({ cliente_origen: t.cliente_origen, cliente_destino: t.cliente_destino, monto: t.monto })) };
   }
+  // "Saldos de Socios y sus Avalados" (feature ya en producción, commit
+  // 1b062d0) — construirSaldosSemana() ahora también trae la lista de
+  // socios del grupo. Ninguna prueba de este archivo configura socios,
+  // así que siempre queda vacío.
+  if (/^SELECT id, nombre FROM socios WHERE grupo_id = \$1 ORDER BY nombre$/i.test(sql)) {
+    return { rows: [] };
+  }
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 
