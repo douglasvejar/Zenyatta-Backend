@@ -1939,7 +1939,7 @@ Pizarra: [se llena al calcular]
     <section class="vista" id="vista-cargarWinners">
       <div class="card">
         <h2>🏆 Cargar Winners</h2>
-        <p class="desc">Elige el Hipódromo, la Carrera y la Fecha, y por cada caballo que tuvo winner elige el cliente y coloca el monto — positivo si ganó, negativo si perdió. Esto se agrega a la ficha del cliente como una jugada más: mueve su Balance y su Pozo.</p>
+        <p class="desc">Elige el Hipódromo, la Carrera y la Fecha. Por cada cliente: elige su nombre, después el caballo que jugó y el monto — positivo si ganó, negativo si perdió. Al elegir un cliente se abre sola una fila nueva para agregar otro — repite tantas veces como haga falta (un mismo caballo puede tenerlo varios clientes distintos). Esto se agrega a la ficha de cada cliente como una jugada más: mueve su Balance y su Pozo.</p>
 
         <div class="fila">
           <div>
@@ -1958,9 +1958,9 @@ Pizarra: [se llena al calcular]
           </div>
         </div>
 
-        <label>Caballos — elige cliente y monto SOLO en los que tuvieron winner</label>
+        <label>Clientes — elige cliente, caballo y monto; se agrega una fila nueva sola por cada cliente que elijas</label>
         <table id="tablaWinnersWrap">
-          <thead><tr><th>N° Caballo</th><th>Cliente</th><th>Monto (+ si gana, − si pierde)</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>N° Caballo</th><th>Monto (+ si gana, − si pierde)</th><th></th></tr></thead>
           <tbody id="tablaWinners"></tbody>
         </table>
 
@@ -5450,23 +5450,81 @@ function copiarResultadoRemateManual() {
 // (no le pega nada al servidor); solo "Cargar Winners" guarda de
 // verdad contra POST /api/hipismo/winners.
 // ------------------------------------------------------------------
+// Filas dinámicas (26-09-2026, a pedido del usuario: "quiero
+// seleccionar el cliente y después en lista despegable el caballo que
+// jugó, cada vez que escoja un cliente me va a aparecer nueva columna
+// para escoger nuevo cliente y otro caballo con el monto, así x
+// cantidad de veces que necesite... en una misma carrera varios
+// clientes pueden jugar el mismo caballo") — a diferencia de "Cargar
+// Remate Manual" (una fila FIJA por número de caballo, 1 solo cliente
+// por caballo), acá la fila es por CLIENTE: el mismo caballo puede
+// repetirse en varias filas con clientes distintos. No se guarda ningún
+// índice fijo por fila — cada <tr> se lee directo del DOM (por clase,
+// no por id numerado) para poder agregar/quitar filas sin reordenar
+// nada.
+function opcionesClientesWinners() {
+  const jugadoresSeleccionables = (CLIENTES_HIPISMO_CACHE || []).filter(j => !j.es_cuenta_comision);
+  return '<option value="">Seleccione</option>' + jugadoresSeleccionables.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
+}
+function opcionesCaballoWinners() {
+  let html = '<option value="">N°</option>';
+  for (let n = 1; n <= 20; n++) html += `<option value="${n}">${n}</option>`;
+  return html;
+}
+function filaWinnersHtml() {
+  return `<tr>
+    <td><select class="wSelCliente" onchange="onCambioClienteWinners(this)">${opcionesClientesWinners()}</select></td>
+    <td style="display:flex; align-items:center; gap:8px;">
+      <span class="wGualdrapa"></span>
+      <select class="wSelCaballo" onchange="actualizarGualdrapaFilaWinners(this)">${opcionesCaballoWinners()}</select>
+    </td>
+    <td><input type="text" class="wInpMonto" placeholder="Ej: 50 o -50" inputmode="decimal"></td>
+    <td><button type="button" class="btn btn-secundario" style="padding:4px 10px;" onclick="eliminarFilaWinners(this)" title="Quitar esta fila">✕</button></td>
+  </tr>`;
+}
+// Arranca (o "Limpiar") siempre con UNA sola fila vacía.
 function construirFilasWinners() {
   const tbody = document.getElementById('tablaWinners');
   if (!tbody) return;
-  let html = '';
-  for (let n = 1; n <= 20; n++) {
-    html += `<tr>
-      <td>${gualdrapaHTML(n)}</td>
-      <td><select id="selJugadorWinners_${n}"><option value="">Seleccione</option></select></td>
-      <td><input type="text" id="inpMontoWinners_${n}" placeholder="Ej: 50 o -50" inputmode="decimal"></td>
-    </tr>`;
+  tbody.innerHTML = filaWinnersHtml();
+}
+// Al elegir un caballo, la gualdrapa de esa fila (mismo estilo de
+// "Cargar Remate") se pinta al lado del <select> — no puede ir DENTRO
+// del <select> (un <option> no puede llevar el SVG de la gualdrapa).
+function actualizarGualdrapaFilaWinners(sel) {
+  const tr = sel.closest('tr');
+  const span = tr ? tr.querySelector('.wGualdrapa') : null;
+  if (span) span.innerHTML = sel.value ? gualdrapaHTML(sel.value) : '';
+}
+// Cada vez que se elige un cliente en la ÚLTIMA fila, se abre sola una
+// fila nueva vacía para seguir cargando — así el operador nunca tiene
+// que darle a un botón "+ Agregar" aparte.
+function onCambioClienteWinners(sel) {
+  const tbody = document.getElementById('tablaWinners');
+  const tr = sel.closest('tr');
+  if (sel.value && tr === tbody.lastElementChild) {
+    agregarFilaWinners();
   }
-  tbody.innerHTML = html;
+}
+function agregarFilaWinners() {
+  const tbody = document.getElementById('tablaWinners');
+  if (!tbody) return;
+  tbody.insertAdjacentHTML('beforeend', filaWinnersHtml());
+}
+// Siempre deja al menos 1 fila — no tiene sentido dejar la tabla en 0.
+function eliminarFilaWinners(btn) {
+  const tbody = document.getElementById('tablaWinners');
+  if (!tbody || tbody.children.length <= 1) return;
+  const tr = btn.closest('tr');
+  if (tr) tr.remove();
 }
 
 // Mismo criterio que poblarJugadoresRemateManual(): usa la lista real de
 // clientes del grupo (CLIENTES_HIPISMO_CACHE), sin ofrecer las cuentas
-// de comisión (acá tampoco tiene sentido registrarles un winner).
+// de comisión (acá tampoco tiene sentido registrarles un winner) —
+// refresca el <select> de Cliente de CADA fila que ya exista (por
+// clase, no por id — puede haber cualquier cantidad de filas), sin
+// perder lo que el operador ya venía eligiendo en cada una.
 async function poblarJugadoresWinners() {
   let jugadores;
   try {
@@ -5476,13 +5534,11 @@ async function poblarJugadoresWinners() {
   }
   const jugadoresSeleccionables = jugadores.filter(j => !j.es_cuenta_comision);
   const opciones = '<option value="">Seleccione</option>' + jugadoresSeleccionables.map(j => `<option value="${j.nombre}">${formatNombre(j.nombre)}</option>`).join('');
-  for (let n = 1; n <= 20; n++) {
-    const sel = document.getElementById('selJugadorWinners_' + n);
-    if (!sel) continue;
+  document.querySelectorAll('#tablaWinners .wSelCliente').forEach(sel => {
     const previo = sel.value;
     sel.innerHTML = opciones;
     if (jugadoresSeleccionables.some(j => j.nombre === previo)) sel.value = previo;
-  }
+  });
 }
 
 // "Cargar Remate Manual" tiene su propio <select> de hipódromo para no
@@ -5545,19 +5601,21 @@ function calcularWinners() {
   }
 
   const lineasValidas = [];
-  for (let n = 1; n <= 20; n++) {
-    const sel = document.getElementById('selJugadorWinners_' + n);
-    const inp = document.getElementById('inpMontoWinners_' + n);
-    if (!sel || !inp) continue;
-    const cliente = sel.value;
-    const montoTxt = inp.value.trim();
-    if (!cliente || !montoTxt) continue;
+  document.querySelectorAll('#tablaWinners tr').forEach(tr => {
+    const selCliente = tr.querySelector('.wSelCliente');
+    const selCaballo = tr.querySelector('.wSelCaballo');
+    const inpMonto = tr.querySelector('.wInpMonto');
+    if (!selCliente || !selCaballo || !inpMonto) return;
+    const cliente = selCliente.value;
+    const caballo = selCaballo.value;
+    const montoTxt = inpMonto.value.trim();
+    if (!cliente || !caballo || !montoTxt) return;
     const monto = parseFloat(montoTxt.replace(',', '.'));
-    if (!isFinite(monto) || monto === 0) continue;
-    lineasValidas.push({ cliente, caballo: String(n), monto });
-  }
+    if (!isFinite(monto) || monto === 0) return;
+    lineasValidas.push({ cliente, caballo, monto });
+  });
   if (!lineasValidas.length) {
-    vacio.textContent = 'Elige cliente y monto en al menos un caballo (el monto no puede quedar en 0).';
+    vacio.textContent = 'Elige cliente, caballo y monto en al menos una fila (el monto no puede quedar en 0).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
@@ -5622,12 +5680,8 @@ async function confirmarWinners() {
 }
 
 function limpiarWinners() {
-  for (let n = 1; n <= 20; n++) {
-    const sel = document.getElementById('selJugadorWinners_' + n);
-    const inp = document.getElementById('inpMontoWinners_' + n);
-    if (sel) sel.value = '';
-    if (inp) inp.value = '';
-  }
+  construirFilasWinners();
+  poblarJugadoresWinners();
   document.getElementById('resultadoCajaWinners').style.display = 'none';
   document.getElementById('resultadoVacioWinners').style.display = 'block';
   document.getElementById('resultadoVacioWinners').textContent = 'El resultado de los Winners va a aparecer acá cuando le des Calcular.';
