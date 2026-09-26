@@ -806,7 +806,12 @@
         <textarea id="txtPlano" rows="14"></textarea>
 
         <div class="btn-fila">
-          <button class="btn btn-primario" type="button" onclick="calcularPlano()">🧮 Calcular</button>
+          <button class="btn btn-primario" type="button" id="btnCalcularPlano" onclick="calcularPlano()">🧮 Calcular</button>
+          <!-- Aparece SOLO despues de un Calcular exitoso (vista previa) —
+               ver calcularPlano()/confirmarPlano() mas abajo. Mientras no
+               se le de click acá, el plano NO se guarda ni afecta saldos
+               (25-09-2026, a pedido del usuario). -->
+          <button class="btn btn-primario" type="button" id="btnConfirmarPlano" style="display:none;" onclick="confirmarPlano()">✔️ Confirmar Plano</button>
           <button class="btn btn-secundario" type="button" onclick="limpiarPlano()">🧹 Limpiar</button>
           <button class="btn btn-secundario" type="button" onclick="copiarResultado()">📋 Copiar Resultado</button>
           <span class="toast-copiado" id="toastCopiado">Copiado ✅</span>
@@ -4304,7 +4309,31 @@ function resolverModalidad(modalidad, pos, posB) {
 // no se borraron: el resto de las pantallas de este mockup (Pozos,
 // Cierre Final, Comisiones...) siguen siendo maqueta con datos de
 // ejemplo y todavía no dependen de este cambio.
+// Vista previa / confirmar (25-09-2026, a pedido del usuario: "vamos a
+// añadirle un filtro para que si pulso 2 veces ese boton de calcular no
+// se me doble los saldos... al darle click en calcular va a parecer un
+// boton que dice confirmar plano, despues de que yo le de alli es que
+// el plano se va a cargar a los balances y a la base de datos"):
+// "Calcular" ahora SOLO llama a /api/hipismo/planos/calcular (vista
+// previa — no guarda nada, no toca saldos, no da de alta clientes, ver
+// routes/hipismo.js). El botón "Confirmar Plano" (oculto hasta que haya
+// una vista previa) es el único que llama a /api/hipismo/planos (guarda
+// de verdad), y manda EXACTAMENTE lo que se acaba de previsualizar
+// (planoPendienteDeConfirmar), no lo que haya en el formulario en ese
+// instante — si el operador sigue editando el plano después de
+// calcular, tiene que darle Calcular de nuevo para refrescar la vista
+// previa antes de poder confirmar.
+let planoPendienteDeConfirmar = null;
+// Filtros contra doble click: uno para "Calcular" (evita pedir la misma
+// vista previa dos veces en simultáneo) y otro para "Confirmar Plano"
+// (el que de verdad importa — evita el doble POST /planos que doblaba
+// los saldos).
+let calculandoPlano = false;
+let confirmandoPlano = false;
+
 async function calcularPlano() {
+  if (calculandoPlano) return;
+
   const pizarraTxt = document.getElementById('inpPizarra').value.trim();
   const hipodromoNombre = document.getElementById('selHipodromo').value;
   const carreraNumero = document.getElementById('selCarrera').value;
@@ -4326,6 +4355,14 @@ async function calcularPlano() {
 
   const vacio = document.getElementById('resultadoVacio');
   const caja = document.getElementById('resultadoCaja');
+  const btnCalcular = document.getElementById('btnCalcularPlano');
+  const btnConfirmar = document.getElementById('btnConfirmarPlano');
+
+  // Cualquier "Calcular" nuevo invalida una vista previa pendiente de
+  // confirmar anterior — el operador siempre confirma el ÚLTIMO cálculo
+  // que ve en pantalla, nunca uno viejo que ya no coincide con el plano.
+  planoPendienteDeConfirmar = null;
+  btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -4340,47 +4377,101 @@ async function calcularPlano() {
     return;
   }
 
-  vacio.textContent = 'Calculando y guardando en el servidor…';
+  calculandoPlano = true;
+  btnCalcular.disabled = true;
+  vacio.textContent = 'Calculando (todavía NO se guarda nada)…';
   vacio.style.display = 'block';
   caja.style.display = 'none';
 
+  const payload = { texto, pizarra: pizarraTxt, cruzaJugadas: cruzar, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision };
+
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/planos', {
+    data = await apiHipismo('/api/hipismo/planos/calcular', {
       method: 'POST',
-      body: JSON.stringify({ texto, pizarra: pizarraTxt, cruzaJugadas: cruzar, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     vacio.textContent = e.message;
     vacio.style.display = 'block';
     caja.style.display = 'none';
+    calculandoPlano = false;
+    btnCalcular.disabled = false;
     return;
   }
 
-  // Balance General (24-09-2026) ya no depende de lo que se acaba de
-  // calcular acá — se refresca pidiendo al servidor el saldo real y
-  // completo de la semana (ver pintarBalanceGeneral más abajo), así
-  // siempre coincide con Cierre Final y con el link de cada cliente.
+  let salida = data.textoResultado;
+  if (data.sinReconocer && data.sinReconocer.length) {
+    salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+  }
+  salida = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Plano" para guardarlo de verdad.\n\n' + salida;
+
+  vacio.style.display = 'none';
+  caja.style.display = 'block';
+  caja.textContent = salida;
+
+  // Guarda exactamente lo que se acaba de previsualizar — confirmarPlano()
+  // manda ESTO, no una nueva lectura del formulario.
+  planoPendienteDeConfirmar = payload;
+  btnConfirmar.style.display = '';
+  calculandoPlano = false;
+  btnCalcular.disabled = false;
+}
+
+// Único paso que guarda de verdad (POST /api/hipismo/planos: hipismo_planos
+// + hipismo_tickets, balances, alta de clientes nuevos, resolución de
+// Jugadas Adelantadas de esta carrera). Antes de esto, calcularPlano()
+// de arriba solo consultó la vista previa — nada quedó guardado.
+async function confirmarPlano() {
+  if (confirmandoPlano) return;
+  if (!planoPendienteDeConfirmar) return;
+
+  const vacio = document.getElementById('resultadoVacio');
+  const caja = document.getElementById('resultadoCaja');
+  const btnConfirmar = document.getElementById('btnConfirmarPlano');
+
+  confirmandoPlano = true;
+  btnConfirmar.disabled = true;
+  btnConfirmar.textContent = 'Guardando…';
+
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/planos', {
+      method: 'POST',
+      body: JSON.stringify(planoPendienteDeConfirmar)
+    });
+  } catch (e) {
+    caja.textContent = '❌ ' + e.message + '\n\nEl plano NO se guardó — corrige lo que haga falta y dale "Confirmar Plano" de nuevo (o "Calcular" si necesitas cambiar algo del plano).';
+    confirmandoPlano = false;
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Plano';
+    return;
+  }
+
+  // Ya se guardó de verdad — ahora sí se refrescan balances/clientes,
+  // igual que antes hacía calcularPlano() de una sola vez.
   pintarBalanceGeneral();
-  // Cualquier cliente/banquero nuevo de este plano ya quedó dado de alta
-  // en el servidor (ver POST /api/hipismo/planos) — refresca acá la
-  // pestaña "Clientes" para que se vea de inmediato, sin tener que
-  // cambiar de pestaña e ir a buscarlo.
   cargarClientesReales();
-  // Si esta pizarra resolvió alguna Jugada Adelantada de esta misma
-  // carrera (ver la nota grande en routes/hipismo.js), refresca la
-  // pantalla de "Jugadas Adelantadas" y su alerta — data.plano.texto_resultado
-  // ya trae el bloque "PARADA ADELANTADAS" abajo, listo para copiar.
   if (data.adelantadasResueltas && data.adelantadasResueltas.length) cargarPendientesAdelantadas();
 
   let salida = data.plano.texto_resultado;
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
+  salida = '✅ Plano CONFIRMADO y guardado — ya se aplicó a los saldos.\n\n' + salida;
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+
+  // Ya se confirmó este cálculo — hace falta un "Calcular" nuevo para
+  // habilitar otro "Confirmar Plano" (evita reconfirmar/doblar el mismo
+  // guardado con un segundo click).
+  planoPendienteDeConfirmar = null;
+  confirmandoPlano = false;
+  btnConfirmar.style.display = 'none';
+  btnConfirmar.disabled = false;
+  btnConfirmar.textContent = '✔️ Confirmar Plano';
 }
 
 function limpiarPlano() {
@@ -4389,6 +4480,14 @@ function limpiarPlano() {
   document.getElementById('resultadoCaja').style.display = 'none';
   document.getElementById('resultadoVacio').style.display = 'block';
   document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';
+  // Limpiar invalida cualquier vista previa pendiente de confirmar.
+  planoPendienteDeConfirmar = null;
+  const btnConfirmar = document.getElementById('btnConfirmarPlano');
+  if (btnConfirmar) {
+    btnConfirmar.style.display = 'none';
+    btnConfirmar.disabled = false;
+    btnConfirmar.textContent = '✔️ Confirmar Plano';
+  }
 }
 
 // ------------------------------------------------------------------
