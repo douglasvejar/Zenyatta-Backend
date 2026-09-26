@@ -140,7 +140,14 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         // Winners nunca genera % devuelto — no tiene "monto apostado"
         // (ver la nota grande de agregarPorcentajeDevuelto). Solo el rol
         // JUGADOR genera % — nunca lo que este cliente banqueó para otro.
+        // Remate (26-09-2026, a pedido del usuario: "LOS REMATES NO LE
+        // PRODUCEN % DE DEVOLUCION A LOS CLIENTES") tampoco genera %,
+        // sin importar el rol. "cruce_ajuste" (ver hipismoLineasCliente.js)
+        // no es una jugada con monto propio, es un ajuste de saldo — no
+        // aporta base para calcular ningún %.
         if (linea.tipo === 'winner') return;
+        if (linea.tipo === 'remate') return;
+        if (linea.tipo === 'cruce_ajuste') return;
         if (linea.rol === 'banquero') return;
 
         entradas.forEach(info => {
@@ -345,4 +352,94 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam) {
   };
 }
 
-module.exports = { construirResumenClienteHipismo };
+// =================================================================
+// RESUMEN DEL ÍTEM "REMATE" (26-09-2026, a pedido del usuario, ver la
+// nota grande de GET /cierre-final en routes/hipismo.js y de
+// calcularRemate en services/hipismoRemateCalc.js: "esos 2000 negativos
+// deben salir en un ítem en balance como si fuera OTRO CLIENTE llamado
+// REMATE, igual detallado en que carrera fue y en que hipódromo"). No es
+// un cliente real — NUNCA tiene fila en "jugadores", así que GET
+// /clientes/:nombre/detalle-semana lo especial-casa (ver ese archivo)
+// en vez de buscarlo ahí, y llama a esta función en su lugar. SOLO se
+// usa desde la parte administrativa (Detallado por Cliente en
+// hipismo-mockup.html) — nunca hay un link público para esto, así que
+// el resultado/ganancia-o-pérdida de cada remate nunca llega al cliente.
+async function construirResumenRemateHipismo(grupoId, grupo, semanaParam) {
+  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
+  const offset = semana === 'anterior' ? -1 : 0;
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const hoyIso = isoDeFechaUTC(hoyVe);
+
+  const rRemates = await db.query(
+    `SELECT hipodromo_nombre, carrera_numero, fecha, pizarra, pool_total, pago_ganador,
+            comision_total, comision_porcentaje, garantia, pago_fijo, hubo_ganador
+       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3
+       ORDER BY fecha DESC, creado_en ASC`,
+    [grupoId, desde, hasta]
+  );
+
+  const porDia = new Map();
+  let totalSemana = 0;
+  let totalHoy = 0;
+  let cantidadJugadas = 0;
+
+  rRemates.rows.forEach(r => {
+    // comision_total (nombre de columna sin cambios, ver la nota grande
+    // en sql/schema.sql) ya ES el resultado de este remate — un remate
+    // con resultado 0 (rarísimo, pero posible) no aporta ninguna línea
+    // visible.
+    const resultado = round2(Number(r.comision_total));
+    if (!resultado) return;
+    const fechaIso = r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : r.fecha;
+
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    const hipNombre = r.hipodromo_nombre;
+    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, carreras: [] });
+
+    hipMap.get(hipNombre).carreras.push({
+      tipo: 'remate_resultado',
+      carrera: r.carrera_numero,
+      pizarra: r.pizarra,
+      // "paga" = REMATE PAGA (monto fijo, sin %); "garantiza" = REMATE
+      // GARANTIZA (piso + %); "porcentaje" = ni una ni otra, solo el %
+      // de siempre — ver la nota grande de calcularRemate.
+      modo: r.pago_fijo != null ? 'paga' : (r.garantia != null ? 'garantiza' : 'porcentaje'),
+      poolTotal: Number(r.pool_total),
+      pagoGanador: Number(r.pago_ganador),
+      huboGanador: r.hubo_ganador,
+      resultado
+    });
+
+    totalSemana += resultado;
+    cantidadJugadas += 1;
+    if (fechaIso === hoyIso) totalHoy += resultado;
+  });
+
+  const dias = Array.from(porDia.entries())
+    .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  return {
+    grupo: { nombre: grupo.nombre, logoUrl: grupo.logo_url },
+    jugador: { nombre: 'REMATE' },
+    semana,
+    rango: { desde, hasta },
+    hoy: hoyIso,
+    esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
+    modulos: { hipismo: true, deportes: false },
+    resumen: {
+      totalSemana: round2(totalSemana),
+      totalHoy: round2(totalHoy),
+      cantidadJugadas,
+      totalHipismo: round2(totalSemana),
+      totalDeportes: 0,
+      cantidadJugadasHipismo: cantidadJugadas,
+      cantidadJugadasDeportes: 0
+    },
+    dias
+  };
+}
+
+module.exports = { construirResumenClienteHipismo, construirResumenRemateHipismo };

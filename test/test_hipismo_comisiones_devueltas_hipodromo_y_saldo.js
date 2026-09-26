@@ -212,18 +212,19 @@ function check(cond, msg) {
   const res1 = await invocarRuta(handlerComisionesDevueltasHipodromo, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(res1._status === 200, '1) GET /comisiones-devueltas-por-hipodromo responde 200');
   check(res1._json.fecha === FECHA, 'Trae la fecha pedida');
-  check(res1._json.hipodromos.length === 2, 'Trae 2 hipódromos (Churchill Downs, La Rinconada)');
-  check(res1._json.hipodromos[0].nombre === 'Churchill Downs', 'Orden alfabético: Churchill Downs primero');
-  check(res1._json.hipodromos[1].nombre === 'La Rinconada', 'La Rinconada segundo');
-  const churchill = res1._json.hipodromos[0];
-  check(churchill.carreras.length === 1 && churchill.carreras[0].carreraNumero === 5 && churchill.carreras[0].devuelto === 1, 'Churchill Downs: carrera 5 con 1,00 devuelto (1% de 100 de Remate)');
-  check(churchill.totalDevuelto === 1, 'Subtotal de Churchill Downs: 1,00');
-  const rinconada = res1._json.hipodromos[1];
+  // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
+  // DEVOLUCION A LOS CLIENTES"): el Remate de Churchill Downs (100 de
+  // PEDRO) ya NO genera % devuelto -- ese hipódromo, que solo tenía esa
+  // línea de Remate, desaparece por completo del reporte; queda solo
+  // La Rinconada (Tercios).
+  check(res1._json.hipodromos.length === 1, 'Trae 1 solo hipódromo (La Rinconada) -- Churchill Downs solo tenía Remate, que ya no genera % devuelto');
+  check(res1._json.hipodromos[0].nombre === 'La Rinconada', 'La Rinconada es el único hipódromo del reporte');
+  const rinconada = res1._json.hipodromos[0];
   check(rinconada.carreras.length === 2, 'La Rinconada trae sus 2 carreras');
   check(rinconada.carreras.find(c => c.carreraNumero === 1).devuelto === 1, 'Carrera 1: 1,00 devuelto (1% de 100 de PEDRO)');
   check(rinconada.carreras.find(c => c.carreraNumero === 2).devuelto === 2, 'Carrera 2: 2,00 devuelto (1% de 200 de PEDRO; MARIA no aporta, sin % configurado)');
   check(rinconada.totalDevuelto === 3, 'Subtotal de La Rinconada: 3,00 (1,00 + 2,00)');
-  check(res1._json.totalGeneral === 4, 'Total general del día: 4,00 (1,00 Churchill Downs + 3,00 La Rinconada) — no se cuela ni el otro grupo (999) ni la otra fecha (500)');
+  check(res1._json.totalGeneral === 3, 'Total general del día: 3,00 (solo La Rinconada -- el Remate de Churchill Downs ya no cuenta, ni el otro grupo (999) ni la otra fecha (500))');
 
   // --- 2) Un día sin ninguna devolución: vacío, no error ---
   const res2 = await invocarRuta(handlerComisionesDevueltasHipodromo, Object.assign(reqBase(GRUPO_ID), { query: { fecha: '2026-01-01' } }));
@@ -234,7 +235,7 @@ function check(cond, msg) {
   // --- 3) GET /comisiones-devueltas ya trae totalGeneral ---
   const res3 = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(res3._status === 200, '3) GET /comisiones-devueltas responde 200');
-  check(res3._json.totalGeneral === 4, 'totalGeneral (nuevo campo de esta ronda) suma los totales de todos los clientes: 4,00 (PEDRO: 1,00 + 2,00 + 1,00 de Remate)');
+  check(res3._json.totalGeneral === 3, 'totalGeneral (nuevo campo de esta ronda) suma los totales de todos los clientes: 3,00 (PEDRO: 1,00 + 2,00 de Tercios -- el Remate ya no aporta)');
 
   // --- 4) y 5) GET /saldo-comisiones — pisa Date.now() para que "hoy" caiga
   // en la semana lunes 21 a domingo 27 de sept de 2026 (mismo truco que
@@ -257,9 +258,9 @@ function check(cond, msg) {
   check(res4._json.clientes.length === 1, 'Solo aparece PEDRO (MARIA no tiene % propio configurado)');
   const pedroSaldo = res4._json.clientes[0];
   check(pedroSaldo.nombre === 'PEDRO' && pedroSaldo.porcentaje === 1, 'Trae a PEDRO con su 1% configurado');
-  check(pedroSaldo.devueltoSemana === 4, 'PEDRO lleva 4,00 devueltos en la semana (1,00 + 2,00 de Tercios + 1,00 de Remate — la otra fecha y el otro grupo no se cuelan)');
+  check(pedroSaldo.devueltoSemana === 3, 'PEDRO lleva 3,00 devueltos en la semana (1,00 + 2,00 de Tercios -- el Remate ya no cuenta, y la otra fecha y el otro grupo tampoco se cuelan)');
   check(pedroSaldo.destino === 'PEDRO', 'Sin aval configurado, destino es el propio cliente');
-  check(res4._json.totalGeneral === 4, 'totalGeneral de la semana: 4,00');
+  check(res4._json.totalGeneral === 3, 'totalGeneral de la semana: 3,00 (sin el Remate)');
   check(res5._status === 200, '5) Sin ?semana=, usa "actual" por defecto sin explotar');
   check(res5._json.semana === 'actual', 'El default de semana es "actual"');
 })().then(() => {

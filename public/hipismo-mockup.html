@@ -222,6 +222,14 @@
   .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; }
   .aviso-resultado { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: #eaf4ff; border: 1px solid #bdddfd; color: #0b3d66; }
   .aviso-resultado.aviso-confirmado { background: #e9f8ee; border-color: #b9e6c7; color: #0f5a2c; }
+  /* Info admin del Remate (26-09-2026, ver la nota grande junto a
+     #infoAdminRemate en el HTML): resultado (ganancia/pérdida) del
+     remate y su advertencia de garantía, SOLO visibles acá, nunca en
+     el textoResultado que se copia a WhatsApp. */
+  .info-admin-remate { margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; background: #fff8ea; border: 1px solid #f0dfae; color: #6b4a06; }
+  .info-admin-remate .resultado-remate-pos { color: #0f5a2c; font-weight: 700; }
+  .info-admin-remate .resultado-remate-neg { color: #a3241d; font-weight: 700; }
+  .info-admin-remate .aviso-garantia { display: block; margin-top: 6px; color: #a3241d; font-weight: 600; }
   .toast-copiado { display: inline-block; margin-left: 10px; font-size: 12.5px; color: var(--ok); font-weight: 600; opacity: 0; transition: opacity .25s; }
   .toast-copiado.visible { opacity: 1; }
 
@@ -923,6 +931,28 @@
           </div>
         </div>
 
+        <!-- "Remate Paga" / "Remate Garantiza" (26-09-2026, a pedido del
+             usuario: "colocale como donde coloco actualmente garantia
+             pagando... cambiale el nombre a esa celda y colocale ahora
+             (REMATE PAGA)... aparte crea otra celda al lado de remate
+             paga y coloca remate garantiza") — 2 modos que nunca van
+             juntos: REMATE PAGA es el monto EXACTO que paga el remate
+             (sin tocar ningún %); REMATE GARANTIZA es un piso mínimo que
+             se combina con el % de comisión de arriba. Se rellenan solos
+             al Calcular si el texto pegado trae PAGANDO/PAGA/GARANTIZA
+             $X (ver calcularRemate() más abajo), pero quedan editables —
+             lo que el operador deje escrito manda siempre. -->
+        <div class="fila">
+          <div>
+            <label for="inpPagoFijoRemate">Remate Paga (monto EXACTO, sin %) — opcional</label>
+            <input type="text" id="inpPagoFijoRemate" placeholder="Ej: 500 (se rellena solo si el texto trae PAGANDO/PAGA)">
+          </div>
+          <div>
+            <label for="inpGarantizaRemate">Remate Garantiza (piso + el % de arriba) — opcional</label>
+            <input type="text" id="inpGarantizaRemate" placeholder="Ej: 500 (se rellena solo si el texto trae GARANTIZA)">
+          </div>
+        </div>
+
         <label for="txtRemate">Remate (pega aquí el mensaje completo)</label>
         <textarea id="txtRemate" rows="14" placeholder="Pega acá el remate, con el encabezado, cada línea numerada y el PAGANDO/GARANTIZA/PAGA $X"></textarea>
 
@@ -941,6 +971,14 @@
         <div id="resultadoVacioRemate" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
         <div id="avisoResultadoRemate" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaRemate" style="display:none;"></pre>
+        <!-- SOLO administrativo (26-09-2026, a pedido del usuario: "eso
+             de si el remate pierde o gana... no me lo des en el plano...
+             damelo al lado del plano que yo lo vea pero no en el plano
+             para que los clientes no vean") — el textoResultado de arriba
+             (lo que se copia a WhatsApp) NUNCA incluye esto; acá al lado
+             se ve cuánto ganó/perdió la casa con este remate puntual,
+             que además entra a los balances como su propio ítem "REMATE". -->
+        <div id="infoAdminRemate" class="info-admin-remate" style="display:none;"></div>
       </div>
     </section>
 
@@ -986,9 +1024,19 @@
             <label for="inpPizarraRemateManual">Llegada (opcional si ya cargaste el plano de esta carrera)</label>
             <input type="text" id="inpPizarraRemateManual" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar" title="Aceptado con punto, guion, coma o barra: 2.5.1 / 2-5-1 / 2,5,1 / 2/5/1">
           </div>
+        </div>
+
+        <!-- "Remate Paga" / "Remate Garantiza" (26-09-2026) — mismos 2
+             modos EXACTOS que "Cargar Remate Automático desde Chat" (ver
+             la nota grande de allá), nunca los 2 juntos. -->
+        <div class="fila">
           <div>
-            <label for="inpGarantiaRemateManual">Garantía / "PAGANDO $" — opcional</label>
-            <input type="text" id="inpGarantiaRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no tiene garantía)">
+            <label for="inpPagoFijoRemateManual">Remate Paga (monto EXACTO, sin %) — opcional</label>
+            <input type="text" id="inpPagoFijoRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no paga un monto fijo)">
+          </div>
+          <div>
+            <label for="inpGarantizaRemateManual">Remate Garantiza (piso + el % de arriba) — opcional</label>
+            <input type="text" id="inpGarantizaRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no tiene garantía)">
           </div>
         </div>
 
@@ -1009,6 +1057,9 @@
         <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
         <div id="avisoResultadoRemateManual" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaRemateManual" style="display:none;"></pre>
+        <!-- SOLO administrativo — ver la nota grande junto a #infoAdminRemate
+             en "Cargar Remate Automático desde Chat". -->
+        <div id="infoAdminRemateManual" class="info-admin-remate" style="display:none;"></div>
       </div>
     </section>
 
@@ -4970,6 +5021,26 @@ let rematePendienteDeConfirmar = null;
 let calculandoRemate = false;
 let confirmandoRemate = false;
 
+// Arma el bloque admin-only de "REMATE" (26-09-2026, ver la nota grande
+// junto a #infoAdminRemate en el HTML) — resultado (ganancia/pérdida) de
+// ESTE remate puntual y, si aplica, el aviso de garantía imposible de
+// cubrir. Nunca se mezcla con textoResultado (lo que se copia a
+// WhatsApp): eso lo arma el backend aparte y nunca incluye esto.
+function pintarInfoAdminRemate(elId, resultado) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (resultado == null || resultado.resultadoRemate == null) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const r = Number(resultado.resultadoRemate);
+  const clase = r >= 0 ? 'resultado-remate-pos' : 'resultado-remate-neg';
+  const signo = r >= 0 ? '+' : '-';
+  let html = `📊 <b>Solo para ti — esto NO aparece en el plano que ven los clientes:</b> pool ${formatMontoTabla(resultado.poolTotal)}$, pagó ${formatMontoTabla(resultado.pagoGanador)}$ → resultado de este remate: <span class="${clase}">${signo}${formatMontoTabla(Math.abs(r))}$</span>. Ya entra al balance como su propio ítem "REMATE".`;
+  if (resultado.advertenciaGarantiaNoAlcanza) {
+    html += '<span class="aviso-garantia">⚠️ Ni vendiendo todo el pool alcanza para cubrir la garantía — igual se pagará completa (queda negativo en el ítem REMATE).</span>';
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
 async function calcularRemate() {
   if (calculandoRemate) return;
 
@@ -4979,6 +5050,11 @@ async function calcularRemate() {
   const comisionPorcentaje = document.getElementById('inpComisionRemate').value;
   const pizarra = document.getElementById('inpPizarraRemate').value.trim();
   const texto = document.getElementById('txtRemate').value;
+  // "Remate Paga" / "Remate Garantiza" (26-09-2026) — nunca los 2 juntos.
+  const pagoFijoTxt = document.getElementById('inpPagoFijoRemate').value.trim();
+  const garantizaTxt = document.getElementById('inpGarantizaRemate').value.trim();
+  const pagoFijoValido = pagoFijoTxt !== '' && !isNaN(Number(pagoFijoTxt));
+  const garantizaValida = garantizaTxt !== '' && !isNaN(Number(garantizaTxt));
 
   const vacio = document.getElementById('resultadoVacioRemate');
   const caja = document.getElementById('resultadoCajaRemate');
@@ -4991,6 +5067,7 @@ async function calcularRemate() {
   rematePendienteDeConfirmar = null;
   aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
+  pintarInfoAdminRemate('infoAdminRemate', null);
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -5004,7 +5081,15 @@ async function calcularRemate() {
     caja.style.display = 'none';
     return;
   }
-  if (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+  if (pagoFijoValido && garantizaValida) {
+    vacio.textContent = 'No puedes usar "Remate Paga" y "Remate Garantiza" al mismo tiempo — deja uno de los dos vacío.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  // El % de comisión solo hace falta cuando NO es "Remate Paga" (monto
+  // fijo, sin %).
+  if (!pagoFijoValido && (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje)))) {
     vacio.textContent = 'Falta el % de comisión de este remate.';
     vacio.style.display = 'block';
     caja.style.display = 'none';
@@ -5017,7 +5102,7 @@ async function calcularRemate() {
   vacio.style.display = 'block';
   caja.style.display = 'none';
 
-  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra };
+  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra, pagoFijo: pagoFijoTxt, garantia: garantizaTxt };
 
   let data;
   try {
@@ -5033,6 +5118,13 @@ async function calcularRemate() {
     btnCalcular.disabled = false;
     return;
   }
+
+  // "Se rellena solo, pero editable" (26-09-2026, a pedido del usuario):
+  // si el texto pegado trae PAGANDO/PAGA/GARANTIZA $X, se precarga el
+  // campo correspondiente — pero SOLO si el operador lo había dejado
+  // vacío (nunca pisa lo que ya escribió a mano).
+  if (!pagoFijoTxt && data.pagoFijoDetectado != null) document.getElementById('inpPagoFijoRemate').value = data.pagoFijoDetectado;
+  if (!garantizaTxt && data.garantiaDetectado != null) document.getElementById('inpGarantizaRemate').value = data.garantiaDetectado;
 
   if (data.necesitaLlegada) {
     vacio.style.display = 'none';
@@ -5054,6 +5146,7 @@ async function calcularRemate() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+  pintarInfoAdminRemate('infoAdminRemate', data);
 
   // Guarda exactamente lo que se acaba de previsualizar — confirmarRemate()
   // manda ESTO, no una nueva lectura del formulario.
@@ -5107,6 +5200,13 @@ async function confirmarRemate() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida2;
+  // El remate ya guardado trae su resultado en remate.comision_total
+  // (nombre de columna sin cambios, ver la nota grande en sql/schema.sql)
+  // — se sigue mostrando acá, admin-only, después de confirmar.
+  pintarInfoAdminRemate('infoAdminRemate', {
+    poolTotal: data.remate.pool_total, pagoGanador: data.remate.pago_ganador,
+    resultadoRemate: data.remate.comision_total, advertenciaGarantiaNoAlcanza: data.advertenciaGarantiaNoAlcanza
+  });
 
   // Ya se confirmó este cálculo — hace falta un "Calcular" nuevo para
   // habilitar otro "Confirmar Remate".
@@ -5120,10 +5220,13 @@ async function confirmarRemate() {
 function limpiarRemate() {
   document.getElementById('txtRemate').value = '';
   document.getElementById('inpPizarraRemate').value = '';
+  document.getElementById('inpPagoFijoRemate').value = '';
+  document.getElementById('inpGarantizaRemate').value = '';
   document.getElementById('resultadoCajaRemate').style.display = 'none';
   document.getElementById('resultadoVacioRemate').style.display = 'block';
   document.getElementById('resultadoVacioRemate').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
   document.getElementById('avisoResultadoRemate').style.display = 'none';
+  pintarInfoAdminRemate('infoAdminRemate', null);
   // Limpiar invalida cualquier vista previa pendiente de confirmar.
   rematePendienteDeConfirmar = null;
   const btnConfirmar = document.getElementById('btnConfirmarRemate');
@@ -5246,7 +5349,14 @@ async function calcularRemateManual() {
   const fecha = document.getElementById('inpFechaRemateManual').value;
   const comisionPorcentaje = document.getElementById('inpComisionRemateManual').value;
   const pizarra = document.getElementById('inpPizarraRemateManual').value.trim();
-  const garantiaTxt = document.getElementById('inpGarantiaRemateManual').value.trim();
+  // "Remate Paga" / "Remate Garantiza" (26-09-2026) — mismos 2 modos
+  // EXACTOS que "Cargar Remate Automático desde Chat" (ver la nota
+  // grande de calcularRemate() más arriba), enviados como parámetros
+  // reales del POST en vez de incrustados en el texto.
+  const pagoFijoTxt = document.getElementById('inpPagoFijoRemateManual').value.trim();
+  const garantizaTxt = document.getElementById('inpGarantizaRemateManual').value.trim();
+  const pagoFijoValido = pagoFijoTxt !== '' && !isNaN(Number(pagoFijoTxt));
+  const garantizaValida = garantizaTxt !== '' && !isNaN(Number(garantizaTxt));
 
   const vacio = document.getElementById('resultadoVacioRemateManual');
   const caja = document.getElementById('resultadoCajaRemateManual');
@@ -5257,6 +5367,7 @@ async function calcularRemateManual() {
   rematePendienteDeConfirmarManual = null;
   aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
+  pintarInfoAdminRemate('infoAdminRemateManual', null);
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -5264,7 +5375,13 @@ async function calcularRemateManual() {
     caja.style.display = 'none';
     return;
   }
-  if (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje))) {
+  if (pagoFijoValido && garantizaValida) {
+    vacio.textContent = 'No puedes usar "Remate Paga" y "Remate Garantiza" al mismo tiempo — deja uno de los dos vacío.';
+    vacio.style.display = 'block';
+    caja.style.display = 'none';
+    return;
+  }
+  if (!pagoFijoValido && (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje)))) {
     vacio.textContent = 'Falta el % de comisión de este remate.';
     vacio.style.display = 'block';
     caja.style.display = 'none';
@@ -5296,10 +5413,6 @@ async function calcularRemateManual() {
     caja.style.display = 'none';
     return;
   }
-  if (garantiaTxt) {
-    const garantia = parseFloat(garantiaTxt.replace(',', '.'));
-    if (isFinite(garantia) && garantia > 0) lineas.push(`PAGANDO ${garantia}$`);
-  }
   const texto = lineas.join('\n');
 
   calculandoRemateManual = true;
@@ -5308,7 +5421,11 @@ async function calcularRemateManual() {
   vacio.style.display = 'block';
   caja.style.display = 'none';
 
-  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra };
+  // 26-09-2026: "Remate Paga"/"Remate Garantiza" van como parámetros
+  // reales del POST (pagoFijo/garantia) — ya NO se incrustan como texto
+  // "PAGANDO $X" (ese truco quedaba obsoleto ahora que son 2 modos
+  // distintos, no un solo sinónimo).
+  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra, pagoFijo: pagoFijoTxt, garantia: garantizaTxt };
 
   let data;
   try {
@@ -5345,6 +5462,7 @@ async function calcularRemateManual() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+  pintarInfoAdminRemate('infoAdminRemateManual', data);
 
   rematePendienteDeConfirmarManual = payload;
   btnConfirmar.style.display = '';
@@ -5393,6 +5511,10 @@ async function confirmarRemateManual() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida2;
+  pintarInfoAdminRemate('infoAdminRemateManual', {
+    poolTotal: data.remate.pool_total, pagoGanador: data.remate.pago_ganador,
+    resultadoRemate: data.remate.comision_total, advertenciaGarantiaNoAlcanza: data.advertenciaGarantiaNoAlcanza
+  });
 
   rematePendienteDeConfirmarManual = null;
   confirmandoRemateManual = false;
@@ -5408,12 +5530,14 @@ function limpiarRemateManual() {
     if (sel) sel.value = '';
     if (inp) inp.value = '';
   }
-  document.getElementById('inpGarantiaRemateManual').value = '';
+  document.getElementById('inpPagoFijoRemateManual').value = '';
+  document.getElementById('inpGarantizaRemateManual').value = '';
   document.getElementById('inpPizarraRemateManual').value = '';
   document.getElementById('resultadoCajaRemateManual').style.display = 'none';
   document.getElementById('resultadoVacioRemateManual').style.display = 'block';
   document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
   document.getElementById('avisoResultadoRemateManual').style.display = 'none';
+  pintarInfoAdminRemate('infoAdminRemateManual', null);
   rematePendienteDeConfirmarManual = null;
   const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
   if (btnConfirmar) {
@@ -6863,10 +6987,16 @@ async function pintarBalanceGeneral() {
   if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
   if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
 
-  // Misma comisión total que Cierre Final (Tercios + Remate + Adelantadas
-  // — ver el arreglo en pintarCierreFinal más abajo), para que los 2
-  // reportes cuadren también en este número, no solo en los saldos.
-  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  // Misma comisión total que Cierre Final (Tercios + Adelantadas — ver
+  // el arreglo en pintarCierreFinal más abajo), para que los 2 reportes
+  // cuadren también en este número, no solo en los saldos. 26-09-2026, a
+  // pedido del usuario ("esos 2000 negativos deben salir en un ítem en
+  // balance como si fuera otro cliente llamado REMATE... no lo estás
+  // colocando en su ítem, sino que lo estás sumando en la comisión"):
+  // comisionRemateSemana YA NO se suma acá — el resultado de Remate
+  // ahora es su propio ítem "REMATE" dentro de data.clientes (se pinta
+  // solo, como cualquier otro cliente, arriba en este mismo render).
+  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionAdelantadasSemana);
   document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
 }
 
@@ -6976,6 +7106,15 @@ function armarJugadaTextoDetallado(c) {
   // propio link).
   if (c.tipo === 'cruce_ajuste') {
     return '🔀 Ajuste por cruce';
+  }
+  // Ítem "REMATE" (26-09-2026, ver la nota grande de
+  // construirResumenRemateHipismo en services/hipismoResumenCliente.js)
+  // — SOLO aparece en el detalle administrativo del ítem "REMATE", nunca
+  // en el link de un cliente real (ver la nota grande de POST /remates:
+  // esto es justo lo que el usuario pidió que NO saliera en el plano).
+  if (c.tipo === 'remate_resultado') {
+    const modoTxt = c.modo === 'paga' ? 'REMATE PAGA' : (c.modo === 'garantiza' ? 'REMATE GARANTIZA' : 'REMATE (%)');
+    return c.huboGanador ? `🏆 ${modoTxt} — pagó ${formatMontoDet(c.pagoGanador)}` : `🏆 ${modoTxt} — quedó todo para la banca`;
   }
   if (c.tipo === 'adelantada') {
     const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
@@ -7099,10 +7238,15 @@ function renderDetalleClienteModal(data) {
         hip.carreras.forEach(c => {
           const fila = document.createElement('div');
           fila.className = 'detmodal-carrera-fila';
+          // Ítem "REMATE" (26-09-2026): no tiene "monto apostado" propio
+          // como una jugada normal -- se muestra el pool total del
+          // remate en su lugar ("pool $X").
+          const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
+          const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : 'con');
           fila.innerHTML = `
             <span class="num-carrera">${c.carrera}ª</span>
             <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMontoDet(c.monto)}</span>`}</span>
+            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}</span>
             <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
             <span></span>`;
           bodyHip.appendChild(fila);
@@ -7466,7 +7610,8 @@ function descargarBalanceExcel() {
     return;
   }
   const entradas = BALANCE_GENERAL_ACTUAL.clientes.map(c => [c.nombre, c.saldo]).sort((a, b) => a[1] - b[1]);
-  const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana) + Number(BALANCE_GENERAL_ACTUAL.comisionRemateSemana) + Number(BALANCE_GENERAL_ACTUAL.comisionAdelantadasSemana);
+  // 26-09-2026: ya sin comisionRemateSemana (ver la nota grande de pintarBalanceGeneral) -- el ítem "REMATE" ya va incluido en "entradas" arriba, como cualquier otro cliente.
+  const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana) + Number(BALANCE_GENERAL_ACTUAL.comisionAdelantadasSemana);
   const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(comisionTotal.toFixed(2))]];
   const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
@@ -7540,16 +7685,17 @@ async function pintarCierreFinal(semana) {
   }
 
   // 24-09-2026: el backend siempre devolvió comisionSemana (solo
-  // Tercios), comisionRemateSemana y comisionAdelantadasSemana por
-  // separado — pero acá solo se pintaba comisionSemana, así que la
-  // "Comisión de la semana" de Cierre Final quedaba incompleta cada vez
-  // que hubo Remate o Jugadas Adelantadas esa semana (encontrado
-  // revisando por qué los saldos no cuadraban entre pantallas, a pedido
-  // del usuario: "no puedo tener un saldo y ellos otros"). Ahora suma
-  // las 3, igual que ya hace la fila "Comisión Grupo" de Semana por
-  // Días y Balance General (ver pintarBalanceGeneral), así el mismo
-  // número sale igual en los 3 reportes.
-  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  // Tercios) y comisionAdelantadasSemana por separado — pero acá solo se
+  // pintaba comisionSemana, así que la "Comisión de la semana" de Cierre
+  // Final quedaba incompleta cada vez que hubo Jugadas Adelantadas esa
+  // semana (encontrado revisando por qué los saldos no cuadraban entre
+  // pantallas, a pedido del usuario: "no puedo tener un saldo y ellos
+  // otros"). Ahora suma las 2, igual que ya hace la fila "Comisión
+  // Grupo" de Semana por Días y Balance General (ver
+  // pintarBalanceGeneral), así el mismo número sale igual en los
+  // reportes. 26-09-2026: comisionRemateSemana YA NO entra acá -- el
+  // resultado de Remate es su propio ítem "REMATE" en data.clientes.
+  const comisionTotal = Number(data.comisionSemana) + Number(data.comisionAdelantadasSemana);
   document.getElementById('montoComisionCierre').textContent = formatMonto(comisionTotal);
 }
 
@@ -7822,7 +7968,8 @@ function descargarCierreExcel() {
   });
   const filaComision = ['Comisión de la semana'];
   for (let i = 1; i < encabezados.length - 1; i++) filaComision.push('');
-  const comisionTotalExport = Number(data.comisionSemana) + Number(data.comisionRemateSemana) + Number(data.comisionAdelantadasSemana);
+  // 26-09-2026: sin comisionRemateSemana -- el ítem "REMATE" ya va como una fila más de data.clientes, arriba en "filas".
+  const comisionTotalExport = Number(data.comisionSemana) + Number(data.comisionAdelantadasSemana);
   filaComision.push(Number(comisionTotalExport.toFixed(2)));
 
   const rangoTexto = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}`;

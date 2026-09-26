@@ -365,12 +365,16 @@ function check(cond, msg) {
   check(resDevueltas._json.clientes.length === 1, 'Solo aparece PEDRO (MARIA no tiene % propio configurado)');
   const pedroDevuelto = resDevueltas._json.clientes[0];
   check(pedroDevuelto.nombre === 'PEDRO' && pedroDevuelto.porcentaje === 1, 'Trae a PEDRO con su 1% configurado');
-  check(pedroDevuelto.total === 1.8, 'PEDRO se devuelve 1,8 en total (1% de 180 apostado, sumado línea a línea)');
+  // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
+  // DEVOLUCION A LOS CLIENTES"): Remate ya NO suma acá -- el total baja
+  // de 1,8 (1 Tercios + 0,3 Remate + 0,5 Tabla Fija) a 1,5 (1 + 0,5,
+  // solo Tercios y Tabla Fija), y su carrera (2) desaparece del detalle.
+  check(pedroDevuelto.total === 1.5, 'PEDRO se devuelve 1,5 en total (1% de 150 -- Tercios + Tabla Fija, Remate ya NO cuenta)');
   check(pedroDevuelto.hipodromos.length === 1 && pedroDevuelto.hipodromos[0].nombre === 'La Rinconada', 'Agrupado por hipódromo: solo "La Rinconada"');
-  check(pedroDevuelto.hipodromos[0].total === 1.8, 'El total de "La Rinconada" es 1,8 (las 3 líneas son de ese mismo hipódromo)');
-  check(pedroDevuelto.hipodromos[0].carreras.length === 3, 'Trae las 3 carreras (1, 2 y 3), carrera a carrera');
+  check(pedroDevuelto.hipodromos[0].total === 1.5, 'El total de "La Rinconada" es 1,5 (Tercios + Tabla Fija, sin Remate)');
+  check(pedroDevuelto.hipodromos[0].carreras.length === 2, 'Trae solo 2 carreras (1 y 3) -- la carrera 2 (Remate) ya no genera % devuelto');
   check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 1 && c.devuelto === 1), 'Carrera 1 (Tercios, 100 apostado): devuelto 1');
-  check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 2 && c.devuelto === 0.3), 'Carrera 2 (Remate, 30 apostado): devuelto 0,3');
+  check(!pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 2), 'Carrera 2 (Remate) NO aparece -- el Remate no produce % devuelto a los clientes');
   check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 3 && c.devuelto === 0.5), 'Carrera 3 (Tabla Fija, 50 apostado): devuelto 0,5');
   check(pedroDevuelto.destino === 'PEDRO', 'Sin aval configurado, "destino" es el propio cliente');
 
@@ -383,7 +387,7 @@ function check(cond, msg) {
   const resDevueltasConAval = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   const pedroConAval = resDevueltasConAval._json.clientes[0];
   check(pedroConAval.nombre === 'PEDRO', '2b) El reporte SIGUE agrupado por quién apostó (PEDRO), no por el aval — para poder auditar "quién generó cuánto"');
-  check(pedroConAval.total === 1.8 && pedroConAval.porcentaje === 1, 'El monto y el % no cambian (misma fórmula de siempre)');
+  check(pedroConAval.total === 1.5 && pedroConAval.porcentaje === 1, 'El monto y el % no cambian (misma fórmula de siempre, ya sin Remate)');
   check(pedroConAval.destino === 'AVAL DE PEDRO', 'Pero ahora "destino" apunta al aval configurado');
 
   // --- GET /planos/dias (23-09-2026, duodécima-tercera ronda, rediseño

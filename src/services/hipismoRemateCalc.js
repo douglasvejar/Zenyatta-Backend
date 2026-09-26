@@ -54,15 +54,25 @@ function extraerNumeroEjemplar(lineaCruda) {
   return null;
 }
 
-// PAGANDO/GARANTIZA/PAGA $X — el usuario aclaró que son sinónimos según
-// el remate ("FIJATE QUE DICE PAGANDO, O GARANTIZA O PAGA"). Se busca
-// PAGANDO/GARANTIZA primero para no confundir "PAGA" con el prefijo de
-// "PAGANDO" (que también empieza con esas letras).
-function extraerGarantia(textoLimpio) {
-  let m = textoLimpio.match(/(PAGANDO|GARANTIZA)\b[^\d]*?(\d+(?:[.,]\d+)?)\s*\$/i);
-  if (m) return parseFloat(m[2].replace(',', '.'));
+// PAGANDO/PAGA $X vs GARANTIZA $X (26-09-2026, a pedido del usuario:
+// "REMATE PAGA" y "REMATE GARANTIZA" — ver la nota grande de
+// calcularRemate más abajo). Hasta la ronda anterior, el usuario había
+// aclarado que las 3 palabras eran sinónimos de una misma "garantía"
+// (piso + %) — ahora pide separar 2 modos con significados distintos:
+// PAGANDO/PAGA describe un monto YA DECIDIDO que el remate paga tal cual
+// (sin ningún % de por medio) -> "REMATE PAGA"; GARANTIZA describe un
+// piso mínimo que se combina con el % de comisión de siempre -> "REMATE
+// GARANTIZA". Nunca vienen los 2 a la vez en el mismo texto.
+function extraerPagoOGarantia(textoLimpio) {
+  let m = textoLimpio.match(/GARANTIZA\b[^\d]*?(\d+(?:[.,]\d+)?)\s*\$/i);
+  if (m) return { pagoFijo: null, garantia: parseFloat(m[1].replace(',', '.')) };
+  // Se busca "PAGANDO" antes de "PAGA" a secas para no cortar la palabra
+  // a la mitad (PAGANDO también empieza con esas letras).
+  m = textoLimpio.match(/PAGANDO\b[^\d]*?(\d+(?:[.,]\d+)?)\s*\$/i);
+  if (m) return { pagoFijo: parseFloat(m[1].replace(',', '.')), garantia: null };
   m = textoLimpio.match(/\bPAGA\b[^\d]*?(\d+(?:[.,]\d+)?)\s*\$/i);
-  return m ? parseFloat(m[1].replace(',', '.')) : null;
+  if (m) return { pagoFijo: parseFloat(m[1].replace(',', '.')), garantia: null };
+  return { pagoFijo: null, garantia: null };
 }
 
 // parsearRemate(texto) -> { apuestas: [{numeroEjemplar, caballo, cliente,
@@ -92,7 +102,8 @@ function parsearRemate(textoOriginal) {
     apuestas.push({ numeroEjemplar: extraido.numero, caballo, cliente, monto });
   });
 
-  return { apuestas, garantia: extraerGarantia(textoLimpio), sinReconocer };
+  const { pagoFijo, garantia } = extraerPagoOGarantia(textoLimpio);
+  return { apuestas, pagoFijo, garantia, sinReconocer };
 }
 
 // Primer número de la pizarra (posición 1 = quién ganó la carrera) —
@@ -104,27 +115,63 @@ function primerNumeroPizarra(pizarraTxt) {
   return tokens.length ? parseInt(tokens[0], 10) : null;
 }
 
-// calcularRemate({ apuestas, garantia, comisionPorcentaje, numeroGanador })
-// -> { poolTotal, hayGanador, pagoGanador, comisionTotal, apuestaGanadora,
-//      totalesPorCliente: [{cliente, neto}] ordenados alfabéticamente }
-function calcularRemate({ apuestas, garantia, comisionPorcentaje, numeroGanador }) {
+// calcularRemate({ apuestas, garantia, pagoFijo, comisionPorcentaje,
+// numeroGanador }) -> { poolTotal, hayGanador, pagoGanador, resultadoRemate,
+// advertenciaGarantiaNoAlcanza, apuestaGanadora, totalesPorCliente:
+// [{cliente, neto}] ordenados alfabéticamente }
+//
+// 3 modos posibles, nunca combinados (26-09-2026, a pedido del usuario —
+// ver la nota grande de extraerPagoOGarantia arriba):
+//   1) "REMATE PAGA" (pagoFijo puesto): el remate paga EXACTAMENTE
+//      pagoFijo al ganador, sin tocar ningún % — toda la diferencia
+//      contra el pool (a favor o en contra) es resultadoRemate.
+//   2) "REMATE GARANTIZA" (garantia puesta, con comisionPorcentaje): se
+//      cobra el % de siempre sobre el pool, pero nunca se paga MENOS que
+//      la garantía — si el % calculado no alcanza la garantía, se paga
+//      la garantía completa igual (el usuario: "si no se llega a lo que
+//      se garantizó, paga lo que se garantizó... y el negativo restante
+//      para llegar a lo que se garantizó [va] en el ítem remate").
+//   3) Ni pagoFijo ni garantia: el % de comisionPorcentaje se aplica
+//      siempre, sin ningún piso (comportamiento de siempre cuando no hay
+//      garantía).
+//
+// IMPORTANTE (26-09-2026, a pedido del usuario: "esos 2000 negativos
+// deben salir en un ítem en balance como si fuera otro cliente llamado
+// REMATE... ese 20% que es la ganancia de la casa ESO TAMBIEN VA EN EL
+// ITEM DE REMATE"): resultadoRemate YA NO es "comisión" en ningún modo —
+// es el resultado (ganancia o pérdida) de este remate puntual. Quien lo
+// usa (GET /cierre-final) lo muestra como su propio ítem "REMATE" en los
+// balances, nunca sumado a la comisión de Tercios/Adelantadas.
+function calcularRemate({ apuestas, garantia, pagoFijo, comisionPorcentaje, numeroGanador }) {
   const poolTotal = apuestas.reduce((acc, a) => acc + a.monto, 0);
   const hayGanador = apuestas.some(a => a.numeroEjemplar === numeroGanador);
 
   let pagoGanador = 0;
-  let comisionTotal;
+  let resultadoRemate;
+  let advertenciaGarantiaNoAlcanza = false;
   if (hayGanador) {
-    const potencial = poolTotal * (1 - (Number(comisionPorcentaje) || 0) / 100);
-    const garantiaNum = garantia != null ? Number(garantia) : 0;
-    pagoGanador = Math.max(potencial, garantiaNum);
-    comisionTotal = poolTotal - pagoGanador;
+    if (pagoFijo != null) {
+      // "REMATE PAGA": monto fijo y manual, sin ningún % de por medio.
+      pagoGanador = Number(pagoFijo);
+    } else {
+      const potencial = poolTotal * (1 - (Number(comisionPorcentaje) || 0) / 100);
+      const garantiaNum = garantia != null ? Number(garantia) : 0;
+      pagoGanador = Math.max(potencial, garantiaNum);
+      // Ni vendiendo el pool COMPLETO (0% de comisión) alcanza para
+      // cubrir la garantía — a pedido del usuario, avisar de esto en vez
+      // de solo restarlo en silencio ("si le quito X cantidad de % no da
+      // para pagar el premio garantizado, indicame en un mensaje").
+      if (garantiaNum > poolTotal) advertenciaGarantiaNoAlcanza = true;
+    }
+    resultadoRemate = poolTotal - pagoGanador;
   } else {
     // "Quedó para la banca" (23-09-2026, confirmado con el usuario): el
     // caballo ganador de la carrera no fue jugado por nadie en este
-    // remate -> todos pierden lo apostado, no se saca ningún % (ya es el
-    // 100% del pool para la casa).
+    // remate -> todos pierden lo apostado, no se paga nada (ni pagoFijo
+    // ni garantia aplican si no hubo ganador) — el pool completo queda
+    // como resultado a favor.
     pagoGanador = 0;
-    comisionTotal = poolTotal;
+    resultadoRemate = poolTotal;
   }
 
   const porCliente = new Map();
@@ -139,7 +186,7 @@ function calcularRemate({ apuestas, garantia, comisionPorcentaje, numeroGanador 
 
   const apuestaGanadora = hayGanador ? apuestas.find(a => a.numeroEjemplar === numeroGanador) : null;
 
-  return { poolTotal, hayGanador, pagoGanador, comisionTotal, apuestaGanadora, totalesPorCliente };
+  return { poolTotal, hayGanador, pagoGanador, resultadoRemate, advertenciaGarantiaNoAlcanza, apuestaGanadora, totalesPorCliente };
 }
 
 function keycapEmoji(n) {
@@ -152,7 +199,7 @@ function keycapEmoji(n) {
 // ✅💰 en la línea ganadora, el aviso de felicitación (o de "quedó para
 // la banca" si nadie jugó el número ganador) y la lista de TOTALES por
 // cliente — formato exacto pedido por el usuario, 23-09-2026.
-function armarTextoResultadoRemate({ nombreGrupo, hipodromoNombre, carreraNumero, pizarra, apuestas, garantia, numeroGanador, resultado }) {
+function armarTextoResultadoRemate({ nombreGrupo, hipodromoNombre, carreraNumero, pizarra, apuestas, garantia, pagoFijo, numeroGanador, resultado }) {
   const { hayGanador, pagoGanador, apuestaGanadora, totalesPorCliente } = resultado;
 
   const encabezado = `*🇻🇪🐴REMATE ${(nombreGrupo || '').toUpperCase()}🐴🇻🇪*\n${hipodromoNombre}, ${carreraNumero}ta Carrera\nLlegada: ${pizarra}`;
@@ -163,7 +210,14 @@ function armarTextoResultadoRemate({ nombreGrupo, hipodromoNombre, carreraNumero
     return `${keycapEmoji(a.numeroEjemplar)}- *${a.caballo}* ${formatMontoTabla(a.monto)}$ *${formatNombre(a.cliente)}*${marca}`;
   });
 
-  const lineaGarantia = garantia != null ? `*PAGANDO ${formatMontoTabla(garantia)}$*` : '';
+  // 26-09-2026: el texto que ve el cliente solo dice CUÁNTO se paga —
+  // nunca revela si es "REMATE PAGA" (monto fijo) o "REMATE GARANTIZA"
+  // (piso + %), ni el % de comisión, ni el resultado del remate (a
+  // pedido del usuario: "eso de si el remate pierde o gana... no me lo
+  // des en el plano... me lo llevas a la parte administrativa").
+  const lineaGarantia = pagoFijo != null
+    ? `*PAGANDO ${formatMontoTabla(pagoFijo)}$*`
+    : (garantia != null ? `*GARANTIZA ${formatMontoTabla(garantia)}$*` : '');
 
   let bloqueFelicitacion;
   if (hayGanador) {

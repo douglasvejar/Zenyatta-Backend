@@ -229,9 +229,12 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const cuentaPedro = { id: 'cta-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
   const resumenPedro = await construirResumenClienteHipismo(cuentaPedro, grupo, 'actual');
 
-  const esperadoPedro = round2(1.00 + 0.80 + 0.60 - 0.50);
+  // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
+  // DEVOLUCION A LOS CLIENTES"): el 0.60 de Remate YA NO entra acá -- la
+  // cuenta de comisión de PEDRO solo suma sus 2 líneas de Tercios.
+  const esperadoPedro = round2(1.00 + 0.80 - 0.50);
   check(resumenPedro.resumen.totalSemana === esperadoPedro,
-    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — suma 1%% de lo que PEDRO jugó (Tercios + Remate, nunca lo que banqueó ni Winners) más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
+    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — suma 1%% de lo que PEDRO jugó por Tercios (nunca Remate, lo que banqueó ni Winners) más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
   check(resumenPedro.modulos.hipismo === true && resumenPedro.modulos.deportes === false,
     'Una cuenta de comisión nunca trae Deportes anclado');
   check(resumenPedro.jugador.nombre === 'PEDRO - PORCENTAJE', 'El resumen trae el nombre de la cuenta, no el del cliente real');
@@ -239,8 +242,8 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const diaPedro = resumenPedro.dias.find(d => d.fecha === FECHA);
   check(!!diaPedro, 'Trae el día agrupado');
   const hipPedro = diaPedro.hipodromos.find(h => h.nombre === 'La Rinconada');
-  check(!!hipPedro && hipPedro.carreras.filter(c => c.tipo === 'comision').length === 3,
-    'Las 3 jugadas de PEDRO que SÍ generan % (2 Tercios + 1 Remate) quedan como 3 líneas tipo "comision" bajo La Rinconada');
+  check(!!hipPedro && hipPedro.carreras.filter(c => c.tipo === 'comision').length === 2,
+    'Solo las 2 jugadas de Tercios de PEDRO generan % -- el Remate (60 apostado) ya NO cuenta para la cuenta de comisión');
   check(hipPedro.carreras.every(c => c.tipo !== 'comision' || c.clienteOrigen === 'PEDRO'),
     'Cada línea de comisión trae quién la generó (clienteOrigen)');
   const bloqueTraspasos = diaPedro.hipodromos.find(h => h.tipo === 'traspaso');

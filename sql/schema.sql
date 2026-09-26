@@ -381,8 +381,8 @@ create table if not exists hipismo_remates (
   carrera_numero        integer not null,
   fecha                 date not null,
   texto_original        text not null, -- el remate tal como lo pegó el administrador
-  comision_porcentaje   numeric not null default 0, -- ej. 20 = 20%
-  garantia              numeric, -- el monto de "PAGANDO/GARANTIZA/PAGA $X" del texto, null si no vino
+  comision_porcentaje   numeric not null default 0, -- ej. 20 = 20% (solo aplica en modo "REMATE GARANTIZA" o sin garantía/pago fijo; en "REMATE PAGA" no se usa)
+  garantia              numeric, -- "REMATE GARANTIZA $X" del texto o escrito a mano — piso mínimo que se paga, combinado con comision_porcentaje (26-09-2026, ver la nota grande en services/hipismoRemateCalc.js)
   pool_total            numeric not null default 0, -- suma de todos los montos jugados
   pizarra               text not null, -- llegada usada para saber quién ganó (de un plano ya cargado, o cargada a mano acá)
   numero_ganador        integer not null, -- número de ejemplar que ganó la carrera (1er lugar de la pizarra)
@@ -390,7 +390,7 @@ create table if not exists hipismo_remates (
   caballo_ganador       text,
   cliente_ganador       text,
   pago_ganador          numeric not null default 0,
-  comision_total        numeric not null default 0, -- pool_total - pago_ganador (= pool_total completo si no hubo ganador)
+  comision_total        numeric not null default 0, -- pool_total - pago_ganador (= pool_total completo si no hubo ganador). 26-09-2026, a pedido del usuario ("SOLUCIONA ESO... no lo estás colocando en su ítem llamado remate, sino que lo estás sumando en la comisión"): a pesar del nombre de esta columna (que no se renombra para no romper datos ya guardados), esto YA NO es "comisión" — es el resultado (ganancia o pérdida) de este remate puntual, que en los balances se muestra como su propio ítem "REMATE" (ver GET /cierre-final y construirResumenRemateHipismo en services/hipismoResumenCliente.js), nunca sumado a la comisión de Tercios/Adelantadas ni al % devuelto de los clientes.
   texto_resultado       text not null, -- mensaje ya armado, listo para copiar a WhatsApp
   creado_en             timestamptz not null default now()
 );
@@ -1410,6 +1410,18 @@ alter table hipismo_comisiones_ajustes enable row level security;
 alter table mensajes_chat add column if not exists adjunto_datos text;
 alter table mensajes_chat add column if not exists adjunto_tipo text;
 alter table mensajes_chat add column if not exists adjunto_nombre text;
+
+-- "REMATE PAGA" (26-09-2026, a pedido del usuario: "colca un [campo]
+-- donde coloco actualmente garantia pagando... cambiale el nombre a esa
+-- celda y colocale ahora (REMATE PAGA)... aparte crea otra celda al lado
+-- de remate paga y coloca remate garantiza"). Antes de esta ronda solo
+-- existía "garantia" (un piso mínimo combinado con comision_porcentaje,
+-- ahora "REMATE GARANTIZA"). pago_fijo es el monto EXACTO y manual que
+-- paga el remate, sin ningún % de por medio — si se llena esta columna,
+-- garantia/comision_porcentaje no se usan para calcular pago_ganador (ver
+-- calcularRemate en services/hipismoRemateCalc.js). Un remate usa
+-- pago_fijo O garantia, nunca los 2 a la vez.
+alter table hipismo_remates add column if not exists pago_fijo numeric;
 
 -- =================================================================
 -- CARGAR WINNERS (26-09-2026, a pedido del usuario, confirmando el
