@@ -140,6 +140,21 @@
   .hip-body { padding: 4px 10px 10px; }
   .hip-bloque.colapsado .hip-body { display: none; }
 
+  /* Agrupado por carrera (26-09-2026, a pedido del usuario: "los totales
+     de los clientes deben verse ordenado por hipódromo por carrera... se
+     debe ver, después de expandir el hipódromo, la carrera y abajo total
+     carrera") — mismo patrón EXACTO de bloque colapsable que .hip-bloque,
+     un nivel más adentro. Copiado a propósito de public/hipismo-mockup.html
+     (ver la nota grande de allá — 2 archivos estáticos, no un módulo común). */
+  .carrera-bloque { margin-top: 8px; border: 1px dashed var(--card-border); border-radius: 8px; overflow: hidden; }
+  .carrera-bloque:first-child { margin-top: 0; }
+  .carrera-header { display: flex; align-items: center; gap: 9px; padding: 8px 10px; cursor: pointer; user-select: none; background: rgba(127,127,127,0.06); }
+  .carrera-header .nombre-carrera { font-weight: 700; font-size: 12.5px; flex: 1; color: var(--text-dim); }
+  .carrera-header .total-carrera { font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .carrera-body { padding: 0 6px; }
+  .carrera-bloque.colapsado .carrera-body { display: none; }
+  .carrera-bloque.colapsado .flecha-toggle { transform: rotate(-90deg); }
+
   .carrera-fila {
     display: grid; grid-template-columns: 32px 1fr auto; gap: 3px 10px;
     padding: 9px 4px; border-top: 1px dashed var(--card-border);
@@ -591,16 +606,40 @@
             bodyHip.appendChild(filaTraspaso);
           });
         } else {
-          hip.carreras.forEach(c => {
-            const filaCarrera = document.createElement('div');
-            filaCarrera.className = 'carrera-fila';
-            filaCarrera.innerHTML = `
-              <span class="num-carrera">${c.carrera}ª</span>
-              <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
-              <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
-              <span></span>`;
-            bodyHip.appendChild(filaCarrera);
+          // Agrupado por carrera (26-09-2026) — ver la nota grande junto
+          // a .carrera-bloque más arriba, y la MISMA lógica EXACTA en
+          // public/hipismo-mockup.html.
+          const carrerasOrdenadas = Array.from(new Set(hip.carreras.map(c => c.carrera))).sort((a, b) => a - b);
+          carrerasOrdenadas.forEach(numCarrera => {
+            const lineasCarrera = hip.carreras.filter(c => c.carrera === numCarrera);
+            const totalCarrera = totalCarreras(lineasCarrera);
+
+            const bloqueCarrera = document.createElement('div');
+            bloqueCarrera.className = 'carrera-bloque';
+            const headerCarrera = document.createElement('div');
+            headerCarrera.className = 'carrera-header';
+            headerCarrera.onclick = (ev) => { ev.stopPropagation(); bloqueCarrera.classList.toggle('colapsado'); };
+            headerCarrera.innerHTML = `
+              <span class="flecha-toggle">▾</span>
+              <span class="nombre-carrera">${numCarrera}ª Carrera</span>
+              <span class="total-carrera ${claseMonto(totalCarrera)}">Total carrera: ${conSigno(totalCarrera)}</span>`;
+            bloqueCarrera.appendChild(headerCarrera);
+
+            const bodyCarrera = document.createElement('div');
+            bodyCarrera.className = 'carrera-body';
+            lineasCarrera.forEach(c => {
+              const filaCarrera = document.createElement('div');
+              filaCarrera.className = 'carrera-fila';
+              filaCarrera.innerHTML = `
+                <span class="num-carrera">${c.carrera}ª</span>
+                <span class="jugada-txt">${armarJugadaTexto(c)}</span>
+                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
+                <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
+                <span></span>`;
+              bodyCarrera.appendChild(filaCarrera);
+            });
+            bloqueCarrera.appendChild(bodyCarrera);
+            bodyHip.appendChild(bloqueCarrera);
           });
         }
 

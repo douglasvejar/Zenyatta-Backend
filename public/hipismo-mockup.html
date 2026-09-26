@@ -324,6 +324,15 @@
   .balance-fila .nombre { font-weight: 600; }
   .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
   .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
+  /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
+     más abajo) — mientras más clientes, más chico cada renglón, para que
+     la imagen de WhatsApp nunca se haga gigante ni pierda nitidez. */
+  #balanceCaptura.densidad-1 .balance-lista { gap: 4px; }
+  #balanceCaptura.densidad-1 .balance-fila { padding: 6px 10px; font-size: 12.5px; }
+  #balanceCaptura.densidad-2 .balance-lista { gap: 3px; }
+  #balanceCaptura.densidad-2 .balance-fila { padding: 5px 9px; font-size: 11.5px; }
+  #balanceCaptura.densidad-3 .balance-lista { gap: 2px; }
+  #balanceCaptura.densidad-3 .balance-fila { padding: 4px 8px; font-size: 10.5px; }
   /* 24-09-2026: renglón "{cliente} - PORCENTAJE" (% devuelto), anidado
      siempre justo debajo de su cliente base — ver la nota grande en
      pintarBalanceGeneral. Mismo fondo/borde que .balance-fila, pero más
@@ -404,6 +413,16 @@
      es un ítem aparte, sin cambiar el layout de la tabla. */
   #cierreFinalCaptura tr.fila-porcentaje td:first-child { font-style: italic; color: var(--text-dim); }
   #cierreFinalCaptura tr.fila-porcentaje { opacity: 0.85; }
+
+  /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
+     más abajo) — mientras más clientes, más chico cada renglón, para que
+     la imagen de WhatsApp nunca se haga gigante ni pierda nitidez. */
+  #cierreFinalCaptura.densidad-1 th, #cierreFinalCaptura.densidad-1 td { padding: 6px 8px; font-size: 12.5px; }
+  #cierreFinalCaptura.densidad-1 th { font-size: 11px; }
+  #cierreFinalCaptura.densidad-2 th, #cierreFinalCaptura.densidad-2 td { padding: 5px 7px; font-size: 11.5px; }
+  #cierreFinalCaptura.densidad-2 th { font-size: 10px; }
+  #cierreFinalCaptura.densidad-3 th, #cierreFinalCaptura.densidad-3 td { padding: 4px 6px; font-size: 10.5px; }
+  #cierreFinalCaptura.densidad-3 th { font-size: 9.5px; }
 
   /* "Semana por Días" (24-09-2026) — mismo tratamiento visual que Cierre
      Final: grilla con borde en cada celda, números centrados bajo su
@@ -522,6 +541,20 @@
   .detmodal-hip-header .saldo-hip { font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .detmodal-hip-body { padding: 2px 10px 8px; }
   .detmodal-hip.colapsado .detmodal-hip-body { display: none; }
+
+  /* Agrupado por carrera (26-09-2026, a pedido del usuario: "los totales
+     de los clientes deben verse ordenado por hipódromo por carrera... se
+     debe ver, después de expandir el hipódromo, la carrera y abajo total
+     carrera, cierras y abres nueva carrera con su total") — mismo patrón
+     EXACTO de colapsable que .detmodal-hip, un nivel más adentro. */
+  .detmodal-carrera-bloque { margin-top: 6px; border: 1px dashed var(--card-border); border-radius: 6px; overflow: hidden; }
+  .detmodal-carrera-bloque:first-child { margin-top: 0; }
+  .detmodal-carrera-header { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; user-select: none; background: rgba(127,127,127,0.06); }
+  .detmodal-carrera-header .nombre-carrera { font-weight: 700; font-size: 11.5px; flex: 1; color: var(--text-dim); }
+  .detmodal-carrera-header .total-carrera { font-weight: 800; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .detmodal-carrera-body { padding: 0 6px; }
+  .detmodal-carrera-bloque.colapsado .detmodal-carrera-body { display: none; }
+  .detmodal-carrera-bloque.colapsado .detmodal-flecha { transform: rotate(-90deg); }
 
   .detmodal-carrera-fila { display: grid; grid-template-columns: 28px 1fr auto; gap: 2px 8px; padding: 7px 2px; border-top: 1px dashed var(--card-border); }
   .detmodal-carrera-fila:first-child { border-top: none; }
@@ -6928,6 +6961,28 @@ function copiarLinkClienteHipismo(token, nombre) {
 // tener que volver a pedirlos.
 let BALANCE_GENERAL_ACTUAL = null;
 
+// Densidad dinámica de Balance General/Cierre Final (26-09-2026, a
+// pedido del usuario: "en balance general y en cierre, a medida que
+// vayan saliendo mas clientes, ve haciendo la lista mas pequeña para
+// que cuando vayas a enviarle por whatsapp en imagen se vea lo mas hd
+// siempre posible... mientras no se tengan tantas jugadas puede ser ese
+// tamaño, debe irse reduciendo a medida que salen mas clientes") — 3
+// escalones de densidad (ver las clases .densidad-1/2/3 en el CSS,
+// scopeadas a #balanceCaptura/#cierreFinalCaptura) aplicados cada vez
+// que se pinta cada pantalla, según la cantidad de clientes de esa
+// semana. Así la imagen que arma html2canvas (copiarBalanceImagen()/
+// copiarCierreImagen() más abajo) nunca crece demasiado ni pierde
+// nitidez aunque haya muchos clientes -- mientras hay pocos, se ve al
+// tamaño normal de siempre.
+function aplicarDensidadCaptura(elId, cantidadClientes) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.classList.remove('densidad-1', 'densidad-2', 'densidad-3');
+  if (cantidadClientes > 45) el.classList.add('densidad-3');
+  else if (cantidadClientes > 28) el.classList.add('densidad-2');
+  else if (cantidadClientes > 15) el.classList.add('densidad-1');
+}
+
 async function pintarBalanceGeneral() {
   const listaPierden = document.getElementById('listaPierden');
   const listaGanan = document.getElementById('listaGanan');
@@ -6944,6 +6999,7 @@ async function pintarBalanceGeneral() {
     return;
   }
   BALANCE_GENERAL_ACTUAL = data;
+  aplicarDensidadCaptura('balanceCaptura', data.clientes.length);
 
   if (elFecha) {
     const hoyTxt = new Date().toLocaleDateString('es-VE');
@@ -7235,21 +7291,52 @@ function renderDetalleClienteModal(data) {
           bodyHip.appendChild(fila);
         });
       } else {
-        hip.carreras.forEach(c => {
-          const fila = document.createElement('div');
-          fila.className = 'detmodal-carrera-fila';
-          // Ítem "REMATE" (26-09-2026): no tiene "monto apostado" propio
-          // como una jugada normal -- se muestra el pool total del
-          // remate en su lugar ("pool $X").
-          const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
-          const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : 'con');
-          fila.innerHTML = `
-            <span class="num-carrera">${c.carrera}ª</span>
-            <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}</span>
-            <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
-            <span></span>`;
-          bodyHip.appendChild(fila);
+        // Agrupado por carrera (26-09-2026, a pedido del usuario: "los
+        // totales de los clientes deben verse ordenado por hipódromo por
+        // carrera... se debe ver, después de expandir el hipódromo, la
+        // carrera y abajo total carrera, cierras y abres nueva carrera
+        // con su total detallado por carrera ordenado") — cada carrera
+        // de este hipódromo es su propio bloque colapsable (mismo patrón
+        // EXACTO que el bloque de hipódromo, un nivel más adentro), con
+        // sus líneas y un "TOTAL CARRERA" al pie. El backend no ordena
+        // por carrera (ver la nota grande de obtenerLineasHipismoCliente)
+        // así que se agrupa y ordena acá.
+        const carrerasOrdenadas = Array.from(new Set(hip.carreras.map(c => c.carrera))).sort((a, b) => a - b);
+        carrerasOrdenadas.forEach(numCarrera => {
+          const lineasCarrera = hip.carreras.filter(c => c.carrera === numCarrera);
+          const totalCarrera = totalCarrerasDet(lineasCarrera);
+
+          const bloqueCarrera = document.createElement('div');
+          bloqueCarrera.className = 'detmodal-carrera-bloque';
+          const headerCarrera = document.createElement('div');
+          headerCarrera.className = 'detmodal-carrera-header';
+          headerCarrera.onclick = (ev) => { ev.stopPropagation(); bloqueCarrera.classList.toggle('colapsado'); };
+          headerCarrera.innerHTML = `
+            <span class="detmodal-flecha">▾</span>
+            <span class="nombre-carrera">${numCarrera}ª Carrera</span>
+            <span class="total-carrera ${claseMontoDet(totalCarrera)}">Total carrera: ${conSignoDet(totalCarrera)}</span>`;
+          bloqueCarrera.appendChild(headerCarrera);
+
+          const bodyCarrera = document.createElement('div');
+          bodyCarrera.className = 'detmodal-carrera-body';
+          lineasCarrera.forEach(c => {
+            const fila = document.createElement('div');
+            fila.className = 'detmodal-carrera-fila';
+            // Ítem "REMATE" (26-09-2026): no tiene "monto apostado" propio
+            // como una jugada normal -- se muestra el pool total del
+            // remate en su lugar ("pool $X").
+            const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
+            const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : 'con');
+            fila.innerHTML = `
+              <span class="num-carrera">${c.carrera}ª</span>
+              <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
+              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}</span>
+              <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
+              <span></span>`;
+            bodyCarrera.appendChild(fila);
+          });
+          bloqueCarrera.appendChild(bodyCarrera);
+          bodyHip.appendChild(bloqueCarrera);
         });
       }
       bloqueHip.appendChild(bodyHip);
@@ -7649,6 +7736,7 @@ async function pintarCierreFinal(semana) {
     return;
   }
   CIERRE_FINAL_ACTUAL = data;
+  aplicarDensidadCaptura('cierreFinalCaptura', data.clientes.length);
 
   // 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "en...
   // cierre final colocame arriba la fecha que este comprendida la
