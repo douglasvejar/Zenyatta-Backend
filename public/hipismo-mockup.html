@@ -215,16 +215,7 @@
      usa armarJugadaTexto/armarJugadaTextoDetallado), así el operador ve
      siempre lo mismo que el cliente en su link. */
   .gualdrapa { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1; }
-  .gualdrapa-tela {
-    position: relative; width: 19px; height: 15px;
-    font-size: 9.5px; font-weight: 800;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 3px 3px 2px 2px; box-shadow: 0 1px 2px rgba(0,0,0,.3);
-  }
-  .gualdrapa-tela::before {
-    content: ''; position: absolute; top: -3px; left: 3px; right: 3px; height: 4px;
-    background: inherit; border-radius: 2px 2px 0 0; opacity: .85;
-  }
+  .gualdrapa svg { display: block; }
   .gualdrapa-num { font-size: 9px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
   .btn-fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 
@@ -4673,33 +4664,37 @@ function limpiarRemate() {
 // cliente en su link — se usa acá en la tabla de "Cargar Remate Manual"
 // y en armarJugadaTextoDetallado() (pantalla "Detallado por Cliente").
 const COLORES_EJEMPLAR = {
-  1: { bg: '#e02020', fg: '#ffffff' },
-  2: { bg: '#ffffff', fg: '#111111', borde: true },
-  3: { bg: '#1560bd', fg: '#ffffff' },
-  4: { bg: '#f5c400', fg: '#111111' },
-  5: { bg: '#1d7a3d', fg: '#ffffff' },
-  6: { bg: '#111111', fg: '#f5c400' },
-  7: { bg: '#f07c1d', fg: '#111111' },
-  8: { bg: '#f48fb1', fg: '#111111' },
-  9: { bg: '#33b5e5', fg: '#111111' },
-  10: { bg: '#6a1b9a', fg: '#ffffff' },
-  11: { bg: '#9e9e9e', fg: '#d32f2f' },
-  12: { bg: '#a4d65e', fg: '#111111' },
-  13: { bg: '#6d4c2a', fg: '#ffffff' },
-  14: { bg: '#7b1024', fg: '#f5c400' },
-  15: { bg: '#e8d9b5', fg: '#111111' },
-  16: { bg: '#26c6c1', fg: '#111111' },
-  17: { bg: '#ff8a80', fg: '#111111' },
-  18: { bg: '#5b6b2a', fg: '#ffffff' },
-  19: { bg: '#14213d', fg: '#ffffff' },
-  20: { bg: '#c9a6e0', fg: '#111111' }
+  1: { bg: '#e02020' },
+  2: { bg: '#f2f2f2', borde: true },
+  3: { bg: '#1560bd' },
+  4: { bg: '#f5c400' },
+  5: { bg: '#1d7a3d' },
+  6: { bg: '#2b2b2b' },
+  7: { bg: '#f07c1d' },
+  8: { bg: '#f48fb1' },
+  9: { bg: '#33b5e5' },
+  10: { bg: '#6a1b9a' },
+  11: { bg: '#9e9e9e' },
+  12: { bg: '#a4d65e' },
+  13: { bg: '#6d4c2a' },
+  14: { bg: '#7b1024' },
+  15: { bg: '#e8d9b5' },
+  16: { bg: '#26c6c1' },
+  17: { bg: '#ff8a80' },
+  18: { bg: '#5b6b2a' },
+  19: { bg: '#14213d' },
+  20: { bg: '#c9a6e0' }
 };
+// Silueta real de caballo (Font Awesome Free "horse", ícono sólido —
+// CC BY 4.0, https://fontawesome.com/license/free) — 25-09-2026, a
+// pedido del usuario: "en vez de cuadrados podrian ser caballos".
+const CABALLO_PATH = "M448 238.1V160h16l9.8 19.6c12.5 25.1 42.2 36.4 68.3 26 20.5-8.2 33.9-28 33.9-50.1V80c0-19.1-8.4-36.3-21.7-48h5.7c8.8 0 16-7.2 16-16s-7.2-16-16-16H448c-70.7 0-128 57.3-128 128H148.8c-30.7 0-57.6 16.3-72.5 40.8C33.2 174.5 0 211.4 0 256v56c0 13.3 10.7 24 24 24s24-10.7 24-24v-56c0-13.4 6.6-25.2 16.7-32.5 1.6 13 6.3 25.4 13.6 36.4l28.2 42.4c8.3 12.4 6.4 28.7-1.2 41.6-16.5 28-20.6 62.2-10 93.9l17.5 52.4c4.4 13.1 16.6 21.9 30.4 21.9h33.7c21.8 0 37.3-21.4 30.4-42.1l-20.8-62.5c-2.1-6.4-.5-13.4 4.3-18.2l12.7-12.7c13.2-13.2 20.6-31.1 20.6-49.7q0-3.45-.3-6.9l84 24c4.1 1.2 8.2 2.1 12.3 2.8L320 480c0 17.7 14.3 32 32 32h32c17.7 0 32-14.3 32-32V315.7c19.2-19.2 31.5-45.7 32-75.7zM496 64a16 16 0 1 1 0 32 16 16 0 1 1 0-32";
 function gualdrapaHTML(numeroCrudo) {
   const n = parseInt(numeroCrudo, 10);
   if (!n || isNaN(n)) return '';
-  const c = COLORES_EJEMPLAR[n] || { bg: '#616161', fg: '#ffffff' };
-  const borde = c.borde ? 'border:1px solid #c9c9c9;' : '';
-  return `<span class="gualdrapa"><span class="gualdrapa-tela" style="background:${c.bg}; color:${c.fg}; ${borde}">${n}</span><span class="gualdrapa-num">${n}</span></span>`;
+  const c = COLORES_EJEMPLAR[n] || { bg: '#616161' };
+  const borde = c.borde ? 'stroke:#aaaaaa; stroke-width:6;' : '';
+  return `<span class="gualdrapa"><svg width="22" height="19" viewBox="0 0 576 512"><path d="${CABALLO_PATH}" fill="${c.bg}" style="${borde}"/></svg><span class="gualdrapa-num">${n}</span></span>`;
 }
 
 // ------------------------------------------------------------------
