@@ -104,16 +104,20 @@ function fakeExpressRouter() {
 const fakeExpress = () => fakeExpressRouter();
 fakeExpress.Router = fakeExpressRouter;
 
-const GRUPO_ACTIVO = { id: 'g1', nombre: 'Grupo Uno', email: 'duenio@correo.com', password_hash: 'hash-correcto', activo: true };
-const GRUPO_INACTIVO = { id: 'g2', nombre: 'Grupo Dos', email: 'duenio2@correo.com', password_hash: 'hash-correcto', activo: false };
+const GRUPO_ACTIVO = { id: 'g1', nombre: 'Grupo Uno', email: 'duenio@correo.com', password_hash: 'hash-correcto', activo: true, modulo_deportes_habilitado: true, modulo_hipismo_habilitado: false };
+const GRUPO_INACTIVO = { id: 'g2', nombre: 'Grupo Dos', email: 'duenio2@correo.com', password_hash: 'hash-correcto', activo: false, modulo_deportes_habilitado: true, modulo_hipismo_habilitado: false };
+// "Ningún módulo activo" (26-09-2026) — un grupo real así solo puede
+// darse con los 2 interruptores del Súper-admin apagados a la vez.
+const GRUPO_SIN_MODULOS = { id: 'g3', nombre: 'Grupo Tres', email: 'duenio3@correo.com', password_hash: 'hash-correcto', activo: true, modulo_deportes_habilitado: false, modulo_hipismo_habilitado: false };
 const EMPLEADO_ACTIVO = { id: 'e1', grupo_id: 'g1', nombre: 'Empleado Uno', email: 'empleado@correo.com', password_hash: 'hash-correcto', activo: true, permisos: ['sabana'] };
 const EMPLEADO_INACTIVO = { id: 'e2', grupo_id: 'g1', nombre: 'Empleado Dos', email: 'empleado2@correo.com', password_hash: 'hash-correcto', activo: false, permisos: [] };
+const EMPLEADO_SIN_MODULOS = { id: 'e3', grupo_id: 'g3', nombre: 'Empleado Tres', email: 'empleado3@correo.com', password_hash: 'hash-correcto', activo: true, permisos: ['sabana'] };
 
 function ejecutarQueryAuth(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (/^SELECT \* FROM grupos WHERE email = \$1/i.test(sql)) {
     const [email] = params;
-    const fila = [GRUPO_ACTIVO, GRUPO_INACTIVO].find(g => g.email === email);
+    const fila = [GRUPO_ACTIVO, GRUPO_INACTIVO, GRUPO_SIN_MODULOS].find(g => g.email === email);
     return { rows: fila ? [fila] : [] };
   }
   if (/^UPDATE grupos SET ultimo_login_en/i.test(sql)) return { rows: [] };
@@ -127,9 +131,18 @@ function ejecutarQueryAuth(text, params) {
   // pegado justo después de "grupo_nombre", sin nada en el medio).
   if (/^SELECT e\.\*, g\.activo AS grupo_activo, g\.nombre AS grupo_nombre.*FROM empleados e JOIN grupos g/i.test(sql)) {
     const [email] = params;
-    const empleado = [EMPLEADO_ACTIVO, EMPLEADO_INACTIVO].find(e => e.email === email);
+    const empleado = [EMPLEADO_ACTIVO, EMPLEADO_INACTIVO, EMPLEADO_SIN_MODULOS].find(e => e.email === email);
     if (!empleado) return { rows: [] };
-    return { rows: [{ ...empleado, grupo_activo: GRUPO_ACTIVO.activo, grupo_nombre: GRUPO_ACTIVO.nombre }] };
+    const grupoDelEmpleado = [GRUPO_ACTIVO, GRUPO_INACTIVO, GRUPO_SIN_MODULOS].find(g => g.id === empleado.grupo_id);
+    return {
+      rows: [{
+        ...empleado,
+        grupo_activo: grupoDelEmpleado.activo,
+        grupo_nombre: grupoDelEmpleado.nombre,
+        grupo_modulo_deportes_habilitado: grupoDelEmpleado.modulo_deportes_habilitado,
+        grupo_modulo_hipismo_habilitado: grupoDelEmpleado.modulo_hipismo_habilitado
+      }]
+    };
   }
   if (/^UPDATE empleados SET ultimo_login_en/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (auth) no sabe responder: ' + sql);
@@ -187,6 +200,19 @@ function invocarRuta(handler, req) {
 
   const rEmpleadoInactivo = await invocarRuta(handlerLogin, { body: { email: 'empleado2@correo.com', password: 'correcta' }, headers: {} });
   check(rEmpleadoInactivo._status === 403, 'login de un Empleado desactivado por su Administrador: 403');
+
+  // "Ningún módulo activo" (26-09-2026, a pedido del usuario) — el
+  // Administrador de un grupo con Deportes Y Hipismo apagados no puede
+  // entrar, aunque su cuenta esté activa y la contraseña sea correcta.
+  const rAdminSinModulos = await invocarRuta(handlerLogin, { body: { email: 'duenio3@correo.com', password: 'correcta' }, headers: {} });
+  check(rAdminSinModulos._status === 403, 'login del Administrador de un grupo con los 2 módulos apagados: 403');
+  check(/ningún módulo activo/i.test(rAdminSinModulos._json.error), 'login sin módulos (Administrador): el mensaje avisa que no hay ningún módulo activo');
+
+  // Mismo chequeo para un Empleado de ESE grupo — el bloqueo es por el
+  // grupo al que pertenece, no por su propia cuenta.
+  const rEmpleadoSinModulos = await invocarRuta(handlerLogin, { body: { email: 'empleado3@correo.com', password: 'correcta' }, headers: {} });
+  check(rEmpleadoSinModulos._status === 403, 'login de un Empleado de un grupo con los 2 módulos apagados: 403');
+  check(/ningún módulo activo/i.test(rEmpleadoSinModulos._json.error), 'login sin módulos (Empleado): mismo mensaje que para el Administrador');
 
   const rNadie = await invocarRuta(handlerLogin, { body: { email: 'no-existe@correo.com', password: 'correcta' }, headers: {} });
   check(rNadie._status === 401, 'login con un email que no es ni Grupo ni Empleado: 401 (mismo mensaje genérico, no revela cuál de las dos tablas se probó)');

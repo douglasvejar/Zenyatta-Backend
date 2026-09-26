@@ -25,6 +25,18 @@ router.post('/login', asyncHandler(async (req, res) => {
     const ok = await bcrypt.compare(password, grupo.password_hash);
     if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
     if (!grupo.activo) return res.status(403).json({ error: 'Esta cuenta todavía no está activada. Contacta al administrador de la plataforma.' });
+    // "Ningún módulo activo" (26-09-2026, a pedido del usuario) — un
+    // grupo con Deportes Y Hipismo desactivados a la vez (los 2
+    // interruptores los mueve el Súper-admin, ver routes/superadmin.js:
+    // PUT .../modulo-deportes y PUT .../modulo-hipismo) no tiene NADA que
+    // mostrarle: sin este chequeo, el login pasaba igual y grupo.html
+    // terminaba mostrando el panel de Deportes vacío/roto (mostrarApp()
+    // solo redirige a Hipismo si Hipismo está prendido, nunca bloquea
+    // cuando los 2 están apagados). Se corta acá, ANTES de entrar a
+    // ningún panel.
+    if (!grupo.modulo_deportes_habilitado && !grupo.modulo_hipismo_habilitado) {
+      return res.status(403).json({ error: 'Este grupo no tiene ningún módulo activo (ni Deportes ni Hipismo). Contacta al administrador de la plataforma.' });
+    }
 
     // Registra el último inicio de sesión (fecha/hora, IP, y el navegador/SO
     // que reportó el propio navegador vía User-Agent) — lo usa la pantalla
@@ -82,6 +94,12 @@ router.post('/login', asyncHandler(async (req, res) => {
   if (!okEmpleado) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
   if (!empleado.grupo_activo) return res.status(403).json({ error: 'Esta cuenta todavía no está activada. Contacta al administrador de la plataforma.' });
   if (!empleado.activo) return res.status(403).json({ error: 'Esta cuenta de empleado fue desactivada. Contacta al administrador de tu grupo.' });
+  // "Ningún módulo activo" (26-09-2026) — mismo chequeo que el login del
+  // Administrador de arriba: si el grupo al que pertenece este Empleado
+  // tiene Deportes Y Hipismo desactivados, tampoco lo deja entrar.
+  if (!empleado.grupo_modulo_deportes_habilitado && !empleado.grupo_modulo_hipismo_habilitado) {
+    return res.status(403).json({ error: 'Este grupo no tiene ningún módulo activo (ni Deportes ni Hipismo). Contacta al administrador de la plataforma.' });
+  }
 
   db.query(
     'UPDATE empleados SET ultimo_login_en = now(), ultimo_login_ip = $1, ultimo_login_user_agent = $2 WHERE id = $3',
