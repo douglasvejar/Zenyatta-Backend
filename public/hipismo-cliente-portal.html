@@ -378,6 +378,26 @@
       const num = c.numeroEjemplar != null ? ' ' + gualdrapaHTML(c.numeroEjemplar) : '';
       return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}${num}` : `🏆 Remate — jugó ${c.caballo}${num}`;
     }
+    // Cuenta de comisión (26-09-2026, al arreglar "LOS LINK DE % NO DAN
+    // SALDO DICEN 0") — cada línea es un % de lo que un cliente REAL
+    // apostó (ver la nota grande de construirResumenCuentaComisionHipismo
+    // en services/hipismoResumenCliente.js), así que en vez de "Jugó/Dio"
+    // dice de quién y de qué % viene, marcando además si esa jugada
+    // puntual fue un Remate o una Adelantada.
+    if (c.tipo === 'comision') {
+      const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : '';
+      return `💰 ${c.porcentaje}% de ${c.clienteOrigen}${origen}`;
+    }
+    // Ajuste por cruce (26-09-2026, a pedido del usuario: "LOS PLANOS SI
+    // ME ESTAN CRUZANDO LAS JUGADAS... PERO EN LOS BALANCES NO ME LA ESTA
+    // CRUZANDO" — ver la nota grande de obtenerLineasHipismoCliente en
+    // services/hipismoLineasCliente.js). Cada línea de Tercios de este
+    // plano mantiene su valor de siempre; esta línea aparte es la
+    // diferencia que deja el cruce (positiva o negativa) para que el
+    // total de la semana cuadre con lo que el plano realmente cobra.
+    if (c.tipo === 'cruce_ajuste') {
+      return '🔀 Ajuste por cruce';
+    }
     // Adelantada (24-09-2026, a pedido del usuario: "los que los clientes
     // ven en su link debe contener toda sus jugadas no puede faltar
     // nada") — mismo texto y el mismo prefijo 🕐 que ya usa el sistema
@@ -480,7 +500,7 @@
       const chip = document.createElement('div');
       chip.className = 'chip-hip';
       chip.innerHTML = `
-        <span class="bandera">${info.tipo === 'deportes' ? '⚽' : (BANDERAS[info.pais] || '🏁')}</span>
+        <span class="bandera">${info.tipo === 'deportes' ? '⚽' : (info.tipo === 'traspaso' ? '🔄' : (BANDERAS[info.pais] || '🏁'))}</span>
         <span class="nombre">${nombre}</span>
         <span class="monto ${claseMonto(info.monto)}">${conSigno(info.monto)}</span>`;
       chipsWrap.appendChild(chip);
@@ -522,12 +542,17 @@
         bloqueHip.className = 'hip-bloque';
 
         const esDeportes = hip.tipo === 'deportes';
+        // "Traspasos de Comisión" (26-09-2026, ver la nota grande de
+        // construirResumenCuentaComisionHipismo) — SOLO puede aparecer en
+        // el link de una cuenta de comisión, nunca en el de un cliente
+        // normal: mismo criterio de pseudo-hipódromo que ya usa "⚽ Deportes".
+        const esTraspaso = hip.tipo === 'traspaso';
         const headerHip = document.createElement('div');
         headerHip.className = 'hip-header';
         headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
         headerHip.innerHTML = `
           <span class="flecha-toggle">▾</span>
-          <span class="bandera">${esDeportes ? '⚽' : (BANDERAS[hip.pais] || '🏁')}</span>
+          <span class="bandera">${esDeportes ? '⚽' : (esTraspaso ? '🔄' : (BANDERAS[hip.pais] || '🏁'))}</span>
           <span class="nombre-hip">${hip.nombre}</span>
           <span class="saldo-hip ${claseMonto(subtotalHip)}">${conSigno(subtotalHip)}</span>`;
         bloqueHip.appendChild(headerHip);
@@ -551,6 +576,20 @@
               <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">arriesga ${formatMonto(c.monto)}</span></span>`;
             bodyHip.appendChild(filaTicket);
           });
+        } else if (esTraspaso) {
+          // Un ajuste manual (POST /comisiones/traspaso) no tiene carrera
+          // ni "monto apostado" — solo una nota y el monto que entró o
+          // salió de esta cuenta.
+          hip.carreras.forEach(c => {
+            const filaTraspaso = document.createElement('div');
+            filaTraspaso.className = 'ticket-fila';
+            filaTraspaso.innerHTML = `
+              <span class="ticket-detalle">
+                <span class="jugada-txt">${c.nota ? c.nota : 'Traspaso de comisión'}</span>
+              </span>
+              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}</span>`;
+            bodyHip.appendChild(filaTraspaso);
+          });
         } else {
           hip.carreras.forEach(c => {
             const filaCarrera = document.createElement('div');
@@ -558,7 +597,7 @@
             filaCarrera.innerHTML = `
               <span class="num-carrera">${c.carrera}ª</span>
               <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}<span class="monto-jugado">con ${formatMonto(c.monto)}</span></span>
+              <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
               <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyHip.appendChild(filaCarrera);

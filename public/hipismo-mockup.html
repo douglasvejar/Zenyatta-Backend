@@ -6963,6 +6963,20 @@ function armarJugadaTextoDetallado(c) {
     const num = c.numeroEjemplar != null ? ' ' + gualdrapaHTML(c.numeroEjemplar) : '';
     return c.ganoRemate ? `🏆 Remate — ganó con ${c.caballo}${num}` : `🏆 Remate — jugó ${c.caballo}${num}`;
   }
+  // Cuenta de comisión (26-09-2026, al arreglar "LOS LINK DE % NO DAN
+  // SALDO DICEN 0") — MISMO texto EXACTO que armarJugadaTexto() en
+  // hipismo-cliente-portal.html (ver la nota grande de allá).
+  if (c.tipo === 'comision') {
+    const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : '';
+    return `💰 ${c.porcentaje}% de ${c.clienteOrigen}${origen}`;
+  }
+  // Ajuste por cruce (26-09-2026, ver la nota grande EXACTA de
+  // armarJugadaTexto() en hipismo-cliente-portal.html — MISMO texto,
+  // para que el Administrador vea acá lo mismo que el cliente ve en su
+  // propio link).
+  if (c.tipo === 'cruce_ajuste') {
+    return '🔀 Ajuste por cruce';
+  }
   if (c.tipo === 'adelantada') {
     const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
     return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
@@ -7041,12 +7055,16 @@ function renderDetalleClienteModal(data) {
       const bloqueHip = document.createElement('div');
       bloqueHip.className = 'detmodal-hip';
       const esDeportes = hip.tipo === 'deportes';
+      // "Traspasos de Comisión" (26-09-2026) — MISMO criterio EXACTO que
+      // ya usa hipismo-cliente-portal.html (ver la nota grande de allá):
+      // solo puede aparecer en el detalle de una cuenta de comisión.
+      const esTraspaso = hip.tipo === 'traspaso';
       const headerHip = document.createElement('div');
       headerHip.className = 'detmodal-hip-header';
       headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
       headerHip.innerHTML = `
         <span class="detmodal-flecha">▾</span>
-        <span>${esDeportes ? '⚽' : (BANDERAS_DET[hip.pais] || '🏁')}</span>
+        <span>${esDeportes ? '⚽' : (esTraspaso ? '🔄' : (BANDERAS_DET[hip.pais] || '🏁'))}</span>
         <span class="nombre-hip">${hip.nombre}</span>
         <span class="saldo-hip ${claseMontoDet(subtotalHip)}">${conSignoDet(subtotalHip)}</span>`;
       bloqueHip.appendChild(headerHip);
@@ -7066,6 +7084,17 @@ function renderDetalleClienteModal(data) {
             <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}<span class="monto-jugado">arriesga ${formatMontoDet(c.monto)}</span></span>`;
           bodyHip.appendChild(fila);
         });
+      } else if (esTraspaso) {
+        hip.carreras.forEach(c => {
+          const fila = document.createElement('div');
+          fila.className = 'detmodal-ticket-fila';
+          fila.innerHTML = `
+            <span class="detalle">
+              <span class="jugada-txt">${c.nota ? c.nota : 'Traspaso de comisión'}</span>
+            </span>
+            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}</span>`;
+          bodyHip.appendChild(fila);
+        });
       } else {
         hip.carreras.forEach(c => {
           const fila = document.createElement('div');
@@ -7073,7 +7102,7 @@ function renderDetalleClienteModal(data) {
           fila.innerHTML = `
             <span class="num-carrera">${c.carrera}ª</span>
             <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}<span class="monto-jugado">con ${formatMontoDet(c.monto)}</span></span>
+            <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMontoDet(c.monto)}</span>`}</span>
             <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
             <span></span>`;
           bodyHip.appendChild(fila);

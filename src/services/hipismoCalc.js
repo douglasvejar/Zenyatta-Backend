@@ -886,6 +886,53 @@ function recalcularTotalesPlano(tickets, cruzar) {
   return { totalesFinales, comisionTotal };
 }
 
+// =================================================================
+// "AJUSTE POR CRUCE" (26-09-2026, a pedido del usuario, con un ejemplo
+// real: "LOS PLANOS SI ME ESTAN CRUZANDO LAS JUGADAS FIJATE LUSHO-100...
+// PERO EN LOS BALANCES NO ME LA ESTA CRUZANDO... CORRIGE.... ESO
+// TAMBIEN MUEVE EL SALDO DE COMSION YA QUE AL CRUZAR LAS JUGADAS
+// OBVIAMENTE QUEDA MENOS COMISION").
+//
+// El bug: "cruzar jugadas" (ver recalcularTotalesPlano arriba) SOLO
+// neteaba el total de un cliente en la respuesta efímera de POST/PUT
+// /planos — cada ticket individual en hipismo_tickets sigue guardando su
+// resultado LÍNEA POR LÍNEA, sin cruzar (con su propio 5% si esa línea
+// sola ganó). Como Balance General, Cierre Final, "Detallado por
+// Cliente" y el link del cliente leen esos tickets directo (nunca
+// vuelven a llamar recalcularTotalesPlano), el cruce que el operador
+// activó a propósito se perdía en todas partes menos en esa vista
+// momentánea.
+//
+// calcularAjustesCruce(tickets): dado el array de tickets YA guardados
+// de UN plano con cruza_jugadas=true (mismo shape {clienteNombre,
+// banqueroNombre, resultadoJugador, resultadoBanquero, sinComision} que
+// ya usa recalcularTotalesPlano — puede ser el plano COMPLETO, o solo
+// las líneas de un cliente puntual, da igual: el neto de un nombre solo
+// depende de SUS PROPIAS líneas, nunca de las de otro), devuelve
+// { nombre: ajuste } — la diferencia entre lo que le toca a ese nombre
+// bajo el cruce (recalcularTotalesPlano) y la simple suma de sus líneas
+// SIN cruzar (lo que ya se le muestra línea por línea) — el ajuste que
+// hay que sumarle aparte para que el total le cuadre con el cruce real,
+// SIN tocar el valor ya mostrado de cada línea individual (a pedido del
+// usuario: "línea aparte, para que la suma de todo lo que ve el cliente
+// cuadre exacto con el total"). Un nombre sin diferencia (por ejemplo,
+// si solo tuvo UNA línea en ese plano) no entra en el resultado.
+function calcularAjustesCruce(tickets) {
+  if (!tickets || !tickets.length) return {};
+  const { totalesFinales } = recalcularTotalesPlano(tickets, true);
+  const sinCruzar = {};
+  tickets.forEach(t => {
+    sinCruzar[t.clienteNombre] = (sinCruzar[t.clienteNombre] || 0) + t.resultadoJugador;
+    sinCruzar[t.banqueroNombre] = (sinCruzar[t.banqueroNombre] || 0) + t.resultadoBanquero;
+  });
+  const ajustes = {};
+  Object.keys(totalesFinales).forEach(nombre => {
+    const delta = Math.round(((totalesFinales[nombre] - (sinCruzar[nombre] || 0)) + Number.EPSILON) * 100) / 100;
+    if (delta) ajustes[nombre] = delta;
+  });
+  return ajustes;
+}
+
 // Arma las mismas 3 líneas + línea en blanco que calcularPlano() imprime
 // por cada ticket reconocido (ver más arriba) — para poder regenerar
 // texto_resultado después de editar un ticket, sin reparsear el texto
@@ -974,6 +1021,7 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
 module.exports = {
   calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
+  calcularAjustesCruce,
   ordinalCarrera, limpiarEncabezadoYPie,
   // 24-09-2026 (jugadas mixtas + formato compacto "Grupo Gorila"):
   resolverModalidadCompuesta, resolverModalidadMultiCaballo, normalizarModalidadCombo,

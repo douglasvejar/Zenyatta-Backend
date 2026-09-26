@@ -10,6 +10,11 @@
 // de "quién es el ganador de la línea" en 2 rutas distintas.
 // =================================================================
 const db = require('../db');
+// calcularAjustesCruce (26-09-2026, a pedido del usuario: "LOS PLANOS SI
+// ME ESTAN CRUZANDO LAS JUGADAS... PERO EN LOS BALANCES NO ME LA ESTA
+// CRUZANDO" — ver la nota grande junto a donde se usa más abajo, y la
+// nota grande de esta función en services/hipismoCalc.js).
+const { calcularAjustesCruce } = require('./hipismoCalc');
 
 // AMPLIADO (23-09-2026, a pedido del usuario, tras confirmar que el
 // cálculo de "Cargar Remate" ya daba bien: "esos totales se deben
@@ -33,6 +38,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
   const r = await db.query(
     `SELECT t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto,
             t.resultado_jugador, t.resultado_banquero,
+            t.plano_id, t.sin_comision, p.cruza_jugadas,
             p.fecha, p.hipodromo_nombre, p.carrera_numero, p.pizarra,
             h.pais
        FROM hipismo_tickets t
@@ -68,6 +74,56 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
       linea.caballoB = partes[1];
     }
     return linea;
+  });
+
+  // AJUSTE POR CRUCE (26-09-2026, a pedido del usuario: "LOS PLANOS SI ME
+  // ESTAN CRUZANDO LAS JUGADAS SI ME LAS ESTA CRUZANDO FIJATE LUSHO-100
+  // PERO EN LOS BALANCES NO ME LA ESTA CRUZANDO... CORRIGE" — un plano
+  // con cruza_jugadas=true calcula, EN "Cargar Planos", el neto de cada
+  // cliente y le cobra comisión UNA SOLA VEZ sobre ese neto — pero
+  // hipismo_tickets siempre guarda cada línea "sin cruzar" (ver la nota
+  // grande de calcularAjustesCruce en services/hipismoCalc.js), así que
+  // lineasTercios de arriba, tal cual, NUNCA refleja el cruce. En vez de
+  // alterar cada línea individual (el usuario pidió explícitamente
+  // mantener cada línea como está y agregar el ajuste aparte, para poder
+  // seguir viendo "Jugó/Dio X del Y" con su valor de siempre), se agrega
+  // UNA línea extra por plano cruzado con la diferencia entre el neto
+  // cruzado de ESTE cliente y la suma "sin cruzar" de sus propias líneas
+  // en ese plano — así el total de la semana (suma de TODAS las líneas
+  // visibles, incluida esta) coincide con lo que el plano realmente
+  // cobra, igual en Balance General, Cierre Final y este mismo link.
+  //
+  // Nota: r.rows ya viene filtrado a SOLO las filas de ESTE cliente
+  // (cliente_nombre = $2 OR banquero_nombre = $2) — alcanza para calcular
+  // su propio ajuste, porque el neto cruzado de un nombre en un plano
+  // depende ÚNICAMENTE de sus propias líneas en ese plano (nunca de las
+  // de otro cliente), así que no hace falta traer el plano completo.
+  const porPlanoCruzado = new Map();
+  r.rows.forEach(row => {
+    if (!row.cruza_jugadas) return;
+    if (!porPlanoCruzado.has(row.plano_id)) porPlanoCruzado.set(row.plano_id, { tickets: [], meta: row });
+    porPlanoCruzado.get(row.plano_id).tickets.push({
+      clienteNombre: row.cliente_nombre,
+      banqueroNombre: row.banquero_nombre,
+      resultadoJugador: Number(row.resultado_jugador),
+      resultadoBanquero: Number(row.resultado_banquero),
+      sinComision: row.sin_comision
+    });
+  });
+  const lineasCruce = [];
+  porPlanoCruzado.forEach(({ tickets, meta }) => {
+    const ajuste = calcularAjustesCruce(tickets)[nombreJugador];
+    if (!ajuste) return;
+    const fechaIso = meta.fecha instanceof Date ? meta.fecha.toISOString().slice(0, 10) : meta.fecha;
+    lineasCruce.push({
+      tipo: 'cruce_ajuste',
+      fecha: fechaIso,
+      hipodromoNombre: meta.hipodromo_nombre,
+      pais: meta.pais || 'VE',
+      carreraNumero: meta.carrera_numero,
+      pizarra: meta.pizarra,
+      resultado: ajuste
+    });
   });
 
   // Remate (ver la nota grande arriba): una línea por apuesta de este
@@ -195,7 +251,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     };
   });
 
-  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas, ...lineasWinners];
+  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas, ...lineasWinners, ...lineasCruce];
 }
 
 // Mismo texto en primera persona que ya usan hipismo-mockup.html y
@@ -219,6 +275,12 @@ function textoJugadaHipismo(linea) {
   // para ese caballo.
   if (linea.tipo === 'winner') {
     return linea.resultado >= 0 ? `🏆 Winner — ganó con ${linea.caballo}` : `🏆 Winner — perdió con ${linea.caballo}`;
+  }
+  // Ajuste por cruce (26-09-2026, ver la nota grande de arriba): no tiene
+  // modalidad ni rol jugador/banquero — es la diferencia que deja el
+  // cruce de jugadas de ese plano.
+  if (linea.tipo === 'cruce_ajuste') {
+    return '🔀 Ajuste por cruce';
   }
   // Adelantada (24-09-2026, ver la nota grande de obtenerLineasHipismoCliente
   // arriba): mismo texto ("Tabla fija (N)" / "Marca (AxB)") que ya usa
