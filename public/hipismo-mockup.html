@@ -562,6 +562,35 @@
     .sidebar-admin { width: 100%; position: static; }
     .balance-cols { grid-template-columns: 1fr; }
   }
+
+  /* ===============================================================
+     CHAT DE SOPORTE (26-09-2026) — bandeja de chat flotante con el
+     Súper-admin, MISMO lenguaje visual y MISMAS clases que ya usa
+     Deportes (grupo.html) y el panel de Súper-admin (superadmin.html),
+     adaptado a la paleta verde de este panel. Es la MISMA bandeja de
+     mensajes_chat (por grupo_id) — ver la nota grande de
+     GET/POST /api/hipismo/chat en routes/hipismo.js. */
+  .chat-widget { position: fixed; right: 22px; bottom: 22px; z-index: 9999; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; font-family: inherit; }
+  .chat-widget-burbuja { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; font-size: 26px; box-shadow: 0 4px 16px rgba(15,60,35,0.28); position: relative; display: flex; align-items: center; justify-content: center; padding: 0; border: none; cursor: pointer; }
+  .chat-widget-burbuja.parpadea { animation: parpadeoChatWidgetHip 1s ease-in-out infinite; }
+  @keyframes parpadeoChatWidgetHip { 0%, 100% { transform: scale(1); box-shadow: 0 4px 16px rgba(15,60,35,0.28); } 50% { transform: scale(1.14); box-shadow: 0 4px 26px rgba(220,38,38,0.65); } }
+  .chat-widget-badge { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #ffffff; border-radius: 10px; min-width: 20px; height: 20px; line-height: 20px; font-size: 11px; font-weight: bold; box-shadow: 0 0 0 2px var(--bg); }
+  .chat-widget-panel { width: 320px; max-width: calc(100vw - 44px); background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(15,60,35,0.25); overflow: hidden; display: flex; flex-direction: column; }
+  .chat-widget-header { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; padding: 13px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; gap: 8px; }
+  .chat-widget-header .chat-widget-min { background: none; border: none; color: #ffffff; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }
+  .chat-mensajes { max-height: 340px; min-height: 180px; padding: 12px; background: var(--card-2); margin: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .chat-enviar { display: flex; gap: 8px; margin-top: 0; padding: 10px; border-top: 1px solid var(--border); }
+  .chat-enviar textarea { flex: 1; height: 44px; resize: none; font-family: inherit; font-size: 13px; }
+  .chat-enviar button { padding: 10px 18px; }
+  .chat-burbuja { max-width: 75%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; }
+  .chat-burbuja.propio { align-self: flex-end; background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; border-bottom-right-radius: 3px; }
+  .chat-burbuja.otro { align-self: flex-start; background: #ffffff; border: 1px solid var(--card-border); color: var(--text); border-bottom-left-radius: 3px; }
+  .chat-burbuja .chat-hora { display: block; font-size: 10px; opacity: .75; margin-top: 4px; }
+
+  @media (max-width: 640px) {
+    .chat-widget { right: 12px; bottom: 12px; }
+    .chat-widget-burbuja { width: 52px; height: 52px; font-size: 22px; }
+  }
 </style>
 </head>
 <body>
@@ -1942,6 +1971,34 @@ Pizarra: [se llena al calcular]
   </div>
 </div>
 
+<!-- =================================================================
+     BANDEJA DE CHAT FLOTANTE (26-09-2026) — copia hermana de la misma
+     bandeja de grupo.html (Deportes): MISMOS ids/clases (chatWidgetPanel,
+     chatMensajes, chatTexto, chatWidgetBurbuja, chatWidgetBadge), solo
+     que apuntando a /api/hipismo/chat en vez de /api/sabana/chat — los 2
+     escriben en la MISMA tabla mensajes_chat, así que es la MISMA
+     conversación con el Súper-admin la mires desde donde la mires. Vive
+     fuera de #appShell a propósito en este archivo (no hay problema de
+     "se ve sin sesión": todo hipismo-mockup.html ya exige sesión antes de
+     pintarse, ver mostrarApp()/redirect de arriba). ==================== -->
+<div class="chat-widget">
+  <div id="chatWidgetPanel" class="chat-widget-panel" style="display:none;">
+    <div class="chat-widget-header">
+      <span>💬 Soporte — Súper-admin</span>
+      <button type="button" class="chat-widget-min" onclick="toggleChatWidget()" aria-label="Minimizar">–</button>
+    </div>
+    <div id="chatMensajes" class="chat-mensajes"></div>
+    <div class="chat-enviar">
+      <textarea id="chatTexto" placeholder="Escribe tu mensaje..."></textarea>
+      <button type="button" onclick="enviarMensajeChatGrupo()">➤</button>
+    </div>
+  </div>
+  <button type="button" id="chatWidgetBurbuja" class="chat-widget-burbuja" onclick="toggleChatWidget()" aria-label="Abrir chat de soporte">
+    💬
+    <span id="chatWidgetBadge" class="chat-widget-badge" style="display:none;">0</span>
+  </button>
+</div>
+
 <script>
 // ------------------------------------------------------------------
 // SESIÓN (22-09-2026, a pedido del usuario: "conecta el modulo real al
@@ -2040,6 +2097,137 @@ function cerrarSesionHipismo() {
   localStorage.removeItem('zenyatta_token');
   localStorage.removeItem('zenyatta_grupo');
   window.location.href = 'grupo.html';
+}
+
+// =================================================================
+// CHAT DE SOPORTE (con el Súper-admin) — 26-09-2026, a pedido del
+// usuario: "activa el modulo de mensajes, asi como lo tiene el modulo de
+// deportes para el modulo de hipismo". Copia hermana EXACTA de la misma
+// bandeja de chat flotante de grupo.html/app.js (mismos ids/clases,
+// mismo comportamiento) — la única diferencia real es la URL
+// (/api/hipismo/chat en vez de /api/sabana/chat), pero ambas rutas leen
+// y escriben la MISMA tabla mensajes_chat por grupo_id (ver la nota
+// grande en routes/hipismo.js) — por eso un grupo con los 2 módulos
+// activos ve la MISMA conversación esté en Deportes o en Hipismo, sin
+// import ni duplicar nada del lado del servidor.
+let CHAT_WIDGET_ABIERTO = false;
+let CHAT_WIDGET_POLL_ABIERTO = null;
+let CHAT_ULTIMO_NO_LEIDOS = 0; // para solo sonar cuando el conteo SUBE, nunca en cada chequeo de 25s
+
+function toggleChatWidget() {
+  CHAT_WIDGET_ABIERTO = !CHAT_WIDGET_ABIERTO;
+  document.getElementById('chatWidgetPanel').style.display = CHAT_WIDGET_ABIERTO ? 'flex' : 'none';
+  if (CHAT_WIDGET_ABIERTO) {
+    cargarChatGrupo();
+    if (CHAT_WIDGET_POLL_ABIERTO) clearInterval(CHAT_WIDGET_POLL_ABIERTO);
+    CHAT_WIDGET_POLL_ABIERTO = setInterval(cargarChatGrupo, 8000);
+  } else {
+    if (CHAT_WIDGET_POLL_ABIERTO) { clearInterval(CHAT_WIDGET_POLL_ABIERTO); CHAT_WIDGET_POLL_ABIERTO = null; }
+  }
+}
+
+async function actualizarBadgeChatWidget() {
+  try {
+    const { total } = await apiHipismo('/api/hipismo/chat/conteo-no-leidos');
+    const badge = document.getElementById('chatWidgetBadge');
+    const burbuja = document.getElementById('chatWidgetBurbuja');
+    if (!badge || !burbuja) return;
+    if (total > CHAT_ULTIMO_NO_LEIDOS) reproducirSonidoNotificacionChat();
+    CHAT_ULTIMO_NO_LEIDOS = total;
+    if (total > 0 && !CHAT_WIDGET_ABIERTO) {
+      badge.textContent = total > 99 ? '99+' : total;
+      badge.style.display = 'inline-block';
+      burbuja.classList.add('parpadea');
+    } else {
+      badge.style.display = 'none';
+      burbuja.classList.remove('parpadea');
+    }
+  } catch (e) { /* chequeo de fondo — si falla, no interrumpe nada más de la app */ }
+}
+
+async function cargarChatGrupo() {
+  try {
+    const mensajes = await apiHipismo('/api/hipismo/chat');
+    renderChatMensajesGrupo(mensajes);
+    await apiHipismo('/api/hipismo/chat/marcar-leidos', { method: 'POST' });
+    actualizarBadgeChatWidget();
+  } catch (e) {
+    // no crítico — el chat simplemente queda vacío si algo falla
+  }
+}
+
+function renderChatMensajesGrupo(mensajes) {
+  const cont = document.getElementById('chatMensajes');
+  if (mensajes.length === 0) {
+    cont.innerHTML = '<p style="color:var(--text-dim); font-size:13px; text-align:center;">Todavía no hay mensajes. Escríbele al Súper-admin abajo.</p>';
+  } else {
+    cont.innerHTML = mensajes.map(m =>
+      '<div class="chat-burbuja ' + (m.remitente === 'grupo' ? 'propio' : 'otro') + '">' + escaparHtmlChat(m.texto) +
+      '<span class="chat-hora">' + (m.remitente === 'grupo' ? 'Tú' : 'Súper-admin') + ' — ' + formatFechaHoraChat(m.creado_en) + '</span></div>'
+    ).join('');
+  }
+  cont.scrollTop = cont.scrollHeight;
+}
+
+function escaparHtmlChat(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto;
+  return div.innerHTML;
+}
+
+function formatFechaHoraChat(iso) {
+  try { return new Date(iso).toLocaleString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return iso; }
+}
+
+async function enviarMensajeChatGrupo() {
+  const textarea = document.getElementById('chatTexto');
+  const texto = textarea.value.trim();
+  if (!texto) return;
+  try {
+    await apiHipismo('/api/hipismo/chat', { method: 'POST', body: JSON.stringify({ texto }) });
+    textarea.value = '';
+    cargarChatGrupo();
+  } catch (e) {
+    alert('No se pudo enviar el mensaje: ' + e.message);
+  }
+}
+
+// Sonido de alerta (26-09-2026, a pedido del usuario: "igual cuando
+// llegue un mensaje un sonido") — un "ding" de 2 notas con Web Audio API,
+// sin ningún archivo de audio que alojar. Si el navegador todavía no
+// dejó sonar nada (bloquea audio hasta la primera interacción del
+// usuario en la página), simplemente no suena esta vez — no es crítico,
+// el badge y el parpadeo ya avisan igual.
+let CHAT_AUDIO_CTX_HIP = null;
+function reproducirSonidoNotificacionChat() {
+  try {
+    if (!CHAT_AUDIO_CTX_HIP) CHAT_AUDIO_CTX_HIP = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = CHAT_AUDIO_CTX_HIP;
+    if (ctx.state === 'suspended') ctx.resume();
+    const ahora = ctx.currentTime;
+    [880, 1174.66].forEach((frecuencia, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = frecuencia;
+      const inicio = ahora + i * 0.14;
+      gain.gain.setValueAtTime(0, inicio);
+      gain.gain.linearRampToValueAtTime(0.22, inicio + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.32);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(inicio);
+      osc.stop(inicio + 0.34);
+    });
+  } catch (e) { /* el navegador puede bloquear audio sin interacción previa — no es crítico */ }
+}
+
+// Chequeo de fondo cada 25s (mismo intervalo que ya usa Deportes en
+// app.js) — corre SIEMPRE mientras haya sesión, sin importar en qué
+// pestaña de Hipismo se esté, para que un mensaje nuevo del Súper-admin
+// avise aunque el operador esté viendo otra pantalla.
+function revisarNotificacionesFondoHip() {
+  actualizarBadgeChatWidget();
 }
 
 // Mensaje de aliento al iniciar sesión (25-09-2026) — copia hermana de la
@@ -8622,6 +8810,14 @@ if (GRUPO && GRUPO.rol === 'empleado') {
   const navAjustesHip = document.getElementById('navParentAjustesHip');
   if (navAjustesHip) navAjustesHip.style.display = 'none';
 }
+// CHAT DE SOPORTE (26-09-2026) — arranca el chequeo de fondo cada 25s
+// (badge + parpadeo + sonido de la bandeja flotante), igual que Deportes
+// en app.js. Va acá, en el arranque real de la pantalla, para que corra
+// desde que se abre Hipismo sin importar en qué pestaña se quede el
+// operador después.
+revisarNotificacionesFondoHip();
+setInterval(revisarNotificacionesFondoHip, 25000);
+
 // Mensaje de aliento (25-09-2026) — ver la nota grande junto a
 // mostrarBienvenidaSiCorrespondeHip() más arriba. Va al FINAL a
 // propósito, después de que toda la pantalla ya está pintada.

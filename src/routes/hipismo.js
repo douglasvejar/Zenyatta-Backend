@@ -28,6 +28,13 @@ const db = require('../db');
 const bcrypt = require('bcryptjs');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
+// CHAT DE SOPORTE (26-09-2026, "activa el modulo de mensajes... para el
+// modulo de hipismo") — MISMO servicio y MISMA tabla (mensajes_chat, por
+// grupo_id) que ya usa Deportes (ver services/chat.js y la sección "CHAT
+// DE SOPORTE" al final de este archivo) — no es un chat aparte para
+// Hipismo, es la MISMA bandeja: un grupo con los 2 módulos activos ve la
+// misma conversación entre routes/sabana.js y acá.
+const chatService = require('../services/chat');
 // numeroSemanaISO (23-09-2026, duodécima-tercera ronda, a pedido del
 // usuario: "en balance general al ver los saldos y en cierre final
 // colocame arriba la fecha que este comprendida la semana es decir del
@@ -2398,6 +2405,39 @@ router.post('/jornada/eliminar', asyncHandler(async (req, res) => {
   });
 
   res.json({ ok: true, fecha, ...resultado });
+}));
+
+// =================================================================
+// CHAT DE SOPORTE (con el Súper-admin) — ver chat.js y la nota grande
+// junto al require de chatService más arriba. Esta ruta NO agrega su
+// propio chequeo de permiso: el router.use(requierePermiso('hipismo')) de
+// arriba ya exige, para CUALQUIER ruta de este archivo, que la sesión sea
+// el Administrador o un Empleado con el permiso 'hipismo' — exactamente
+// el mismo criterio que ya protege /api/sabana/chat con 'alertas' del
+// lado de Deportes, solo que con el permiso de este módulo.
+// =================================================================
+router.get('/chat', asyncHandler(async (req, res) => {
+  const mensajes = await chatService.listarMensajes(req.grupoId);
+  res.json(mensajes);
+}));
+
+router.post('/chat', asyncHandler(async (req, res) => {
+  try {
+    const mensaje = await chatService.enviarMensaje(req.grupoId, 'grupo', req.body.texto);
+    res.status(201).json(mensaje);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'No se pudo enviar el mensaje.' });
+  }
+}));
+
+router.get('/chat/conteo-no-leidos', asyncHandler(async (req, res) => {
+  const total = await chatService.contarNoLeidosGrupo(req.grupoId);
+  res.json({ total });
+}));
+
+router.post('/chat/marcar-leidos', asyncHandler(async (req, res) => {
+  await chatService.marcarLeidosGrupo(req.grupoId);
+  res.status(204).end();
 }));
 
 module.exports = router;

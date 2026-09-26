@@ -42,6 +42,7 @@ let ULTIMO_ERROR_ENVIO_WHATSAPP = null; // objeto completo { en, jid, mensaje, d
 let ALERTAS_INTERVALO = null; // id del setInterval que revisa alertas + chat sin leer (25s) — corre SIEMPRE mientras haya sesión, sin importar en qué pestaña se esté (a diferencia de la Pizarra, que solo corre en Sábana)
 let CHAT_WIDGET_ABIERTO = false; // si el panel de la bandeja de chat flotante está abierto o minimizado (ver sección "CHAT DE SOPORTE" más abajo)
 let CHAT_WIDGET_POLL_ABIERTO = null; // id del setInterval que refresca los mensajes mientras el panel está ABIERTO (para que se vea "en vivo" sin tener que cerrar y abrir)
+let CHAT_ULTIMO_NO_LEIDOS = 0; // 26-09-2026: último conteo de no leídos visto, para solo sonar cuando SUBE (ver reproducirSonidoNotificacionChat más abajo), nunca en cada chequeo de 25s
 // Qué pestaña está viendo el Grupo ahora mismo (04-09-2026, a pedido del
 // usuario: "la pagina se queda un poco pegada... se tarda un poco en
 // cargar los valores") — ver mostrarVista()/intentarCargarResumenWhatsappAutomatico()
@@ -7297,6 +7298,11 @@ async function actualizarBadgeChatWidget() {
     const badge = document.getElementById('chatWidgetBadge');
     const burbuja = document.getElementById('chatWidgetBurbuja');
     if (!badge || !burbuja) return;
+    // 26-09-2026, a pedido del usuario ("igual cuando llegue un mensaje
+    // un sonido"): solo suena cuando el conteo SUBE respecto del último
+    // chequeo, nunca en cada poll de 25s mientras se mantenga igual.
+    if (total > CHAT_ULTIMO_NO_LEIDOS) reproducirSonidoNotificacionChat();
+    CHAT_ULTIMO_NO_LEIDOS = total;
     // Si el panel ya está abierto, no hace falta ni el badge ni el
     // parpadeo — el Grupo ya está viendo la conversación.
     if (total > 0 && !CHAT_WIDGET_ABIERTO) {
@@ -7351,6 +7357,36 @@ async function enviarMensajeChatGrupo() {
   } catch (e) {
     alert('No se pudo enviar el mensaje: ' + e.message);
   }
+}
+
+// Sonido de alerta (26-09-2026) — un "ding" de 2 notas con Web Audio API,
+// sin ningún archivo de audio que alojar (misma implementación en
+// hipismo-mockup.html y superadmin.html, para que suene igual en los 3
+// paneles). Si el navegador todavía bloquea audio (hace falta una
+// interacción del usuario en la página antes de dejar sonar nada), esta
+// vez simplemente no suena — no es crítico, el badge y el parpadeo ya
+// avisan igual.
+let CHAT_AUDIO_CTX = null;
+function reproducirSonidoNotificacionChat() {
+  try {
+    if (!CHAT_AUDIO_CTX) CHAT_AUDIO_CTX = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = CHAT_AUDIO_CTX;
+    if (ctx.state === 'suspended') ctx.resume();
+    const ahora = ctx.currentTime;
+    [880, 1174.66].forEach((frecuencia, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = frecuencia;
+      const inicio = ahora + i * 0.14;
+      gain.gain.setValueAtTime(0, inicio);
+      gain.gain.linearRampToValueAtTime(0.22, inicio + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.32);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(inicio);
+      osc.stop(inicio + 0.34);
+    });
+  } catch (e) { /* el navegador puede bloquear audio sin interacción previa — no es crítico */ }
 }
 
 // =================================================================
