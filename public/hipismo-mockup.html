@@ -1233,6 +1233,19 @@
         <h2>💰 Pozos</h2>
         <p class="desc">Cuánto pozo le queda a cada cliente "Avalado" — se le asigna un pozo y, a medida que va jugando (Tercios, Remate, Adelantadas — Deportes también si está anclado), ese pozo sube o baja solo, sin tocar Balance ni Cierre Final (esos siguen siendo 100% de las jugadas del período, sin pozo). El círculo de color avisa qué tan vivo está: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Los clientes "Libre" no tienen pozo (⚪).</p>
 
+        <!-- Filtro de vista (27-09-2026), a pedido del usuario: 3 formas
+             de ver la lista — "Saldos + Pozos" (saldo de la semana +
+             pozo actual, TODOS los clientes del grupo), "Solo Pozos"
+             (solo los "Avalado" con pozo, cuánto les queda) y "Solo
+             Saldos" (mismo saldo de la semana que Balance General, sin
+             sumarle ningún pozo). Ver mostrarFiltroPozos()/
+             pintarTablaPozos() más abajo. -->
+        <div class="subnav" id="selectorFiltroPozos">
+          <button type="button" class="activo" data-filtro="saldosMasPozos" onclick="mostrarFiltroPozos('saldosMasPozos', this)">💰 Saldos + Pozos</button>
+          <button type="button" data-filtro="soloPozos" onclick="mostrarFiltroPozos('soloPozos', this)">🏦 Solo Pozos</button>
+          <button type="button" data-filtro="saldos" onclick="mostrarFiltroPozos('saldos', this)">📊 Solo Saldos</button>
+        </div>
+
         <div class="btn-fila" style="margin-bottom:14px;">
           <button class="btn btn-primario" type="button" onclick="copiarPozosImagen()">📸 Copiar Imagen HD</button>
           <button class="btn btn-secundario" type="button" onclick="copiarPozosTexto()">📋 Copiar Texto (para el grupo)</button>
@@ -1248,7 +1261,7 @@
             </div>
           </div>
           <table id="tablaPozos">
-            <thead><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr></thead>
+            <thead id="theadPozos"><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr></thead>
             <tbody><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
           </table>
         </div>
@@ -4688,7 +4701,13 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   saldoComisiones: () => pintarSaldoComisiones(),
   montosApostados: () => pintarMontosApostados(),
-  usuarios: () => cargarEmpleadosHip()
+  usuarios: () => cargarEmpleadosHip(),
+  // Filtro de Pozos (27-09-2026): los filtros "Saldos + Pozos" y "Solo
+  // Saldos" necesitan el saldo de la semana (GET /cierre-final) — se
+  // limpia la caché acá para que cada vez que se entra a la pestaña
+  // traiga el dato más fresco (los ajustes de pozo, en cambio, siguen
+  // viviendo en CLIENTES_HIPISMO_CACHE, que ya se refresca solo).
+  pozos: () => { SALDOS_SEMANA_POZOS_CACHE = null; pintarTablaPozos(); }
 };
 function semanaActivaDeSelector(idSelector) {
   const btn = document.querySelector('#' + idSelector + ' button.activo');
@@ -7485,28 +7504,134 @@ async function guardarAjustePozoPantallaPozos() {
 // histórico, nunca solo la semana) y los "Libre" en gris como "Libre
 // (sin pozo)". Se repinta cada vez que se refresca Clientes
 // (cargarClientesReales()), para no depender de un pedido aparte.
-function pintarTablaPozos() {
+// Filtro de Pozos (27-09-2026), a pedido del usuario ("creame un filtro
+// donde pueda seleccionar como quiero ver la lista"): 3 modos —
+// "saldosMasPozos" (default), "soloPozos" y "saldos". FILTRO_POZOS_ACTUAL
+// guarda cuál está activo; SALDOS_SEMANA_POZOS_CACHE guarda el mismo
+// data.clientes de GET /cierre-final?semana=actual que usa Balance
+// General (se pide una sola vez por entrada a la pantalla — ver
+// REFRESCAR_AL_ENTRAR_VISTA.pozos más arriba, que la limpia).
+let FILTRO_POZOS_ACTUAL = 'saldosMasPozos';
+let SALDOS_SEMANA_POZOS_CACHE = null;
+
+async function obtenerSaldosSemanaPozos() {
+  if (SALDOS_SEMANA_POZOS_CACHE) return SALDOS_SEMANA_POZOS_CACHE;
+  const data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
+  SALDOS_SEMANA_POZOS_CACHE = data.clientes || [];
+  return SALDOS_SEMANA_POZOS_CACHE;
+}
+
+function mostrarFiltroPozos(filtro, btn) {
+  document.querySelectorAll('#selectorFiltroPozos button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  FILTRO_POZOS_ACTUAL = filtro;
+  pintarTablaPozos();
+}
+
+function encabezadoPozos(filtro) {
+  if (filtro === 'soloPozos') {
+    return '<tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr>';
+  }
+  if (filtro === 'saldos') {
+    return '<tr><th>Cliente</th><th class="num">Saldo</th></tr>';
+  }
+  return '<tr><th>Cliente</th><th class="num">Saldo + Pozo</th></tr>';
+}
+
+// Misma fila de siempre para un cliente "Avalado" con pozo (filtro "Solo
+// Pozos") — se saca a una función aparte para poder reusarla sin
+// reescribirla.
+function filaPozoCompleta(j) {
+  const { pozoInicial, liquidado, pozoActual } = j.pozo;
+  const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
+  const color = colorPorPorcentaje(pct);
+  const claseFila = color === 'rojo' ? ' class="fila-pozo-rojo"' : '';
+  const claseLiq = liquidado > 0 ? 'pos' : (liquidado < 0 ? 'neg' : '');
+  const signoLiq = liquidado > 0 ? '+' : (liquidado < 0 ? '-' : '');
+  const claseActual = pozoActual >= 0 ? 'pos' : 'neg';
+  const signoActual = pozoActual < 0 ? '-' : '';
+  return `<tr data-pct="${pct}"${claseFila}><td>${formatNombre(j.nombre)}</td><td class="num">${formatMontoTabla(pozoInicial)}</td><td class="num ${claseLiq}">${signoLiq}${formatMontoTabla(liquidado)}</td><td class="num ${claseActual}">${signoActual}${formatMontoTabla(pozoActual)}</td><td><span class="punto punto-${color}"></span> ${pct}%</td></tr>`;
+}
+
+// Fila simple de 2 columnas (Cliente / Monto) para "Saldos + Pozos" y
+// "Solo Saldos" — mismo estilo pos/neg que usan Balance General y Cierre
+// Final.
+function filaPozoSoloSaldo(nombre, monto) {
+  const clase = monto > 0 ? 'pos' : (monto < 0 ? 'neg' : '');
+  const signo = monto > 0 ? '+' : (monto < 0 ? '-' : '');
+  return `<tr><td>${formatNombre(nombre)}</td><td class="num ${clase}">${signo}${formatMontoTabla(monto)}</td></tr>`;
+}
+
+async function pintarTablaPozos() {
+  const thead = document.getElementById('theadPozos');
   const tbody = document.querySelector('#tablaPozos tbody');
   if (!tbody) return;
+  const filtro = FILTRO_POZOS_ACTUAL;
+  if (thead) thead.innerHTML = encabezadoPozos(filtro);
+  const colspanVacio = filtro === 'soloPozos' ? 5 : 2;
+
   if (!CLIENTES_HIPISMO_CACHE.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${colspanVacio}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos.</td></tr>`;
     actualizarAlertaPozos();
     return;
   }
-  tbody.innerHTML = CLIENTES_HIPISMO_CACHE.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(j => {
-    if (j.tipo_cuenta !== 'avalado' || !j.pozo) {
-      return `<tr><td>${formatNombre(j.nombre)}</td><td class="num">Libre (sin pozo)</td><td class="num">—</td><td class="num">—</td><td><span class="punto punto-gris"></span> Libre</td></tr>`;
-    }
-    const { pozoInicial, liquidado, pozoActual } = j.pozo;
-    const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
-    const color = colorPorPorcentaje(pct);
-    const claseFila = color === 'rojo' ? ' class="fila-pozo-rojo"' : '';
-    const claseLiq = liquidado > 0 ? 'pos' : (liquidado < 0 ? 'neg' : '');
-    const signoLiq = liquidado > 0 ? '+' : (liquidado < 0 ? '-' : '');
-    const claseActual = pozoActual >= 0 ? 'pos' : 'neg';
-    const signoActual = pozoActual < 0 ? '-' : '';
-    return `<tr data-pct="${pct}"${claseFila}><td>${formatNombre(j.nombre)}</td><td class="num">${formatMontoTabla(pozoInicial)}</td><td class="num ${claseLiq}">${signoLiq}${formatMontoTabla(liquidado)}</td><td class="num ${claseActual}">${signoActual}${formatMontoTabla(pozoActual)}</td><td><span class="punto punto-${color}"></span> ${pct}%</td></tr>`;
-  }).join('');
+
+  // "SOLO POZOS" (27-09-2026, a pedido del usuario: "aqui se veran solo
+  // los clientes con pozos y cuanto les queda de pozo") — igual que la
+  // tabla de siempre, pero ya NO se listan los "Libre (sin pozo)".
+  if (filtro === 'soloPozos') {
+    const filas = CLIENTES_HIPISMO_CACHE.filter(j => j.tipo_cuenta === 'avalado' && j.pozo)
+      .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    tbody.innerHTML = filas.length
+      ? filas.map(j => filaPozoCompleta(j)).join('')
+      : `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes "Avalado" con pozo asignado.</td></tr>`;
+    actualizarAlertaPozos();
+    return;
+  }
+
+  // "SALDOS MAS POZOS" y "SALDOS" necesitan el saldo de la semana —
+  // mismo origen que Balance General (GET /cierre-final?semana=actual).
+  let saldosSemana;
+  try {
+    saldosSemana = await obtenerSaldosSemanaPozos();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="${colspanVacio}" style="text-align:center; color:var(--text-dim);">No se pudo cargar el saldo de la semana: ${e.message}</td></tr>`;
+    return;
+  }
+
+  // "SOLO SALDOS" (27-09-2026, a pedido del usuario: "practicamente igual
+  // que en balance general... una lista con todos los saldos de los
+  // clientes pero sin sumarle los pozos") — misma lista de
+  // data.clientes de /cierre-final que Balance General, sin tocar nada.
+  if (filtro === 'saldos') {
+    const filas = saldosSemana.slice().sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+    tbody.innerHTML = filas.length
+      ? filas.map(c => filaPozoSoloSaldo(c.nombre, c.saldo)).join('')
+      : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Nadie tiene jugadas en esta semana.</td></tr>`;
+    actualizarAlertaPozos();
+    return;
+  }
+
+  // "SALDOS MAS POZOS" (default, a pedido del usuario: "si raul se esta
+  // ganando +500 y en pozo tiene 300 diria raul +800, aqui me traes
+  // todos los clientes del grupo") — TODOS los clientes: los que están
+  // en CLIENTES_HIPISMO_CACHE (jugadores reales, con o sin pozo) unidos
+  // con los que solo aparecen en el saldo de la semana (ej. el ítem
+  // "REMATE" o "{cliente} - PORCENTAJE", que no son un jugador con pozo
+  // propio pero sí deben verse acá, igual que en Balance General).
+  const porNombre = new Map();
+  CLIENTES_HIPISMO_CACHE.forEach(j => {
+    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozoActual: j.pozo ? j.pozo.pozoActual : 0 });
+  });
+  saldosSemana.forEach(c => {
+    const existente = porNombre.get(c.nombre);
+    if (existente) existente.saldo = c.saldo;
+    else porNombre.set(c.nombre, { nombre: c.nombre, saldo: c.saldo, pozoActual: 0 });
+  });
+  const filas = Array.from(porNombre.values()).sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  tbody.innerHTML = filas.length
+    ? filas.map(c => filaPozoSoloSaldo(c.nombre, Math.round((c.saldo + c.pozoActual) * 100) / 100)).join('')
+    : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
   actualizarAlertaPozos();
 }
 
@@ -7525,9 +7650,19 @@ function colorPorPorcentaje(pct) {
 // mientras siga siendo una pantalla de ejemplo sin backend real.
 let pozosRojoReconocidos = new Set();
 
+// 27-09-2026 (filtro de Pozos): antes escaneaba las filas .fila-pozo-rojo
+// de #tablaPozos, pero esas filas solo existen en el filtro "Solo Pozos"
+// — con "Saldos + Pozos"/"Solo Saldos" activos la tabla no las pinta, y
+// la alerta se hubiera apagado sola sin que el pozo rojo dejara de
+// existir. Ahora se calcula directo de CLIENTES_HIPISMO_CACHE, igual
+// fórmula que filaPozoCompleta(), sin depender de qué filtro esté
+// pintado en pantalla.
 function nombresPozoRojoActuales() {
-  return Array.from(document.querySelectorAll('#tablaPozos tbody tr.fila-pozo-rojo'))
-    .map(tr => tr.children[0].textContent.trim());
+  return CLIENTES_HIPISMO_CACHE.filter(j => j.tipo_cuenta === 'avalado' && j.pozo).filter(j => {
+    const { pozoInicial, pozoActual } = j.pozo;
+    const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
+    return colorPorPorcentaje(pct) === 'rojo';
+  }).map(j => formatNombre(j.nombre));
 }
 
 function actualizarAlertaPozos() {
@@ -7602,21 +7737,27 @@ async function copiarPozosImagen() {
   }
 }
 
+// 27-09-2026 (filtro de Pozos): ya no asume la estructura fija de
+// columnas de "Solo Pozos" — cada filtro arma su propio texto.
 function copiarPozosTexto() {
   const emojiPorColor = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
+  const titulos = { saldosMasPozos: 'SALDOS + POZOS', soloPozos: 'POZOS', saldos: 'SALDOS' };
   const filas = document.querySelectorAll('#tablaPozos tbody tr');
-  let texto = '💰 *POZOS* — Zenyatta 🇻🇪\n📅 ' + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
+  let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — Zenyatta 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
   filas.forEach(fila => {
     const celdas = fila.querySelectorAll('td');
+    if (celdas.length < 2) return; // fila de "Cargando…"/vacío (colspan)
     const nombre = celdas[0].textContent.trim();
-    if (fila.dataset.pct === undefined) {
-      texto += `${emojiPorColor.gris} ${nombre}: libre (sin pozo)\n`;
-    } else {
+    if (FILTRO_POZOS_ACTUAL === 'soloPozos') {
+      if (fila.dataset.pct === undefined) return;
       const pct = fila.dataset.pct;
       const color = colorPorPorcentaje(parseInt(pct, 10));
       const asignado = celdas[1].textContent.trim();
       const restante = celdas[3].textContent.trim();
       texto += `${emojiPorColor[color]} ${nombre}: ${restante} de ${asignado} (${pct}% vivo)\n`;
+    } else {
+      const monto = celdas[1].textContent.trim();
+      texto += `• ${nombre}: ${monto}\n`;
     }
   });
   if (navigator.clipboard && navigator.clipboard.writeText) {
