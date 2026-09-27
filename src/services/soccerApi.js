@@ -176,13 +176,62 @@ function periodoATexto(periodo, estadoAbstracto) {
 // incorrecto a medias.
 const SUFIJOS_CLUB = /\b(fc|cf|ac|ssc|afc|cd|ud|sv|vfl|tsg|ss|as|rc|sc|ec|club|calcio)\b/g;
 
+// Alias de SELECCIONES NACIONALES (27-09-2026, caso real: ticket con
+// "Suiza rl 1h" quedó en PENDIENTE — el partido era Suiza vs. Macedonia
+// del Norte, Nations League 26-09-2026, confirmado con ESPN, que sí usa
+// "North Macedonia" tal cual). El problema no fue Suiza (cruzó bien de
+// los 2 lados) sino el rival: distintas fuentes de datos deportivos
+// todavía escriben a Macedonia del Norte de formas distintas (el cambio
+// de nombre oficial es de 2019 y no todas las bases de datos lo
+// actualizaron) — "Macedonia" queda en 1 sola palabra significativa y
+// "North Macedonia" en 2, y la regla de abajo (nombresDeEquipoCoinciden)
+// bloquea A PROPÓSITO cualquier cruce cuando uno de los 2 lados queda en
+// 1 sola palabra, para no confundir clubes que comparten ciudad (ej. "AC
+// Milan"/"Inter Milan" por "milan"). Esa regla NO tiene sentido para
+// selecciones — no hay 2 países distintos que compartan una palabra del
+// nombre por casualidad — así que estos alias conocidos se normalizan
+// ACÁ, ANTES de esa regla, a una sola forma común: así el "a === b" de
+// nombresDeEquipoCoinciden los agarra directo, sin pasar por la
+// comparación palabra por palabra. Selecciones con más de un nombre
+// usado por distintas fuentes en este momento (lista corta, se puede
+// seguir ampliando si aparece otro caso real):
+const ALIAS_SELECCIONES = {
+  'north macedonia': 'macedonia',
+  'macedonia': 'macedonia',
+  'fyr macedonia': 'macedonia',
+  'macedonia fyr': 'macedonia',
+  'ivory coast': 'costa de marfil',
+  'cote d ivoire': 'costa de marfil',
+  'costa de marfil': 'costa de marfil',
+  'cape verde': 'cabo verde',
+  'cabo verde': 'cabo verde',
+  'dr congo': 'congo rd',
+  'congo dr': 'congo rd',
+  'democratic republic of the congo': 'congo rd',
+  'congo republica democratica': 'congo rd',
+  'south korea': 'corea del sur',
+  'korea republic': 'corea del sur',
+  'republic of korea': 'corea del sur',
+  'corea del sur': 'corea del sur',
+  'usa': 'estados unidos',
+  'united states': 'estados unidos',
+  'united states of america': 'estados unidos',
+  'estados unidos': 'estados unidos',
+  'bosnia and herzegovina': 'bosnia',
+  'bosnia herzegovina': 'bosnia',
+  'bosnia y herzegovina': 'bosnia',
+  'trinidad and tobago': 'trinidad y tobago',
+  'trinidad tobago': 'trinidad y tobago'
+};
+
 function normalizarNombreEquipoFutbol(nombre) {
-  return (nombre || '')
+  const base = (nombre || '')
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos (misma técnica que ya usa normalizarTexto())
     .replace(SUFIJOS_CLUB, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+  return ALIAS_SELECCIONES[base] || base;
 }
 
 // Compara palabra por palabra (no letra por letra) para casos como
@@ -212,11 +261,14 @@ function palabraCoincide(palabra, listaDePalabras) {
 //
 // Riesgo conocido, sin resolver del todo: nombres muy distintos entre
 // las 2 APIs que no comparten NINGUNA palabra (ej. un acrónimo como
-// "PSG" contra "Paris Saint-Germain FC") no se van a cruzar — no se
-// intentó resolver esto con un mapa de alias a mano porque no se pudo
-// verificar contra una respuesta real de football-data.org en este
-// sandbox (ver comentario arriba de este archivo). Pendiente de probar
-// con tickets reales una vez que el usuario tenga su clave.
+// "PSG" contra "Paris Saint-Germain FC") no se van a cruzar. Para
+// CLUBES no se intentó resolver esto con un mapa de alias a mano porque
+// no se pudo verificar contra una respuesta real de football-data.org en
+// este sandbox (ver comentario arriba de este archivo) — pendiente de
+// probar con tickets reales. Para SELECCIONES NACIONALES sí se agregó un
+// mapa de alias puntual (ver ALIAS_SELECCIONES, dentro de
+// normalizarNombreEquipoFutbol más arriba) para los casos ya confirmados
+// con un ticket real (ej. Macedonia del Norte).
 function nombresDeEquipoCoinciden(nombreA, nombreB) {
   const a = normalizarNombreEquipoFutbol(nombreA);
   const b = normalizarNombreEquipoFutbol(nombreB);

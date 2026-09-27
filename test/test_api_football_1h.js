@@ -272,6 +272,36 @@ function limpiarClaves() {
   pedidosCasoG = 0;
   await obtenerResultadosSoccer('2026-09-25');
   check(pedidosCasoG === 1, 'Caso I — tras vencer el caché, se vuelve a pedir a api-football.com en vez de quedarse con un dato viejo para siempre');
+
+  // -----------------------------------------------------------------
+  // Caso J (27-09-2026, ticket real del usuario: "Suiza rl 1h" quedó
+  // PENDIENTE): North Macedonia vs. Switzerland, UEFA Nations League,
+  // 26-09-2026 — confirmado con ESPN que usa "North Macedonia" tal cual.
+  // Se simula el caso real más probable: api-football.com todavía trae a
+  // esa selección con el nombre viejo, "Macedonia" a secas (cambio de
+  // nombre oficial de 2019 que no todas las fuentes actualizaron). Antes
+  // del alias (ver ALIAS_SELECCIONES en soccerApi.js) esto se quedaba en
+  // 'sin-cruce' porque "macedonia" es 1 sola palabra significativa y
+  // "north macedonia" son 2 — ahora debe cruzar bien.
+  // -----------------------------------------------------------------
+  resetFootballData(); resetApiFootball(); limpiarClaves();
+  process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/uefa.nations/')) {
+      return { ok: true, json: async () => fixtureESPN('North Macedonia', 'Switzerland', 0, 2) };
+    }
+    if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+    if (u.includes('v3.football.api-sports.io')) {
+      return { ok: true, json: async () => ({ errors: [], response: [partidoApiFootball(5, 'Macedonia', 'Switzerland', 0, 1)] }) };
+    }
+    throw new Error('URL inesperada en la prueba: ' + url);
+  };
+  const resJ = await obtenerResultadosSoccer('2026-09-26');
+  check(resJ['north macedonia'] && resJ['north macedonia'].final1H === true && resJ['north macedonia'].homeScore1H === 0 && resJ['north macedonia'].awayScore1H === 1,
+    'Caso J — "North Macedonia" (ESPN) cruza bien contra "Macedonia" (api-football.com) gracias al alias de selecciones, en vez de quedar en "sin-cruce"');
+  check(resJ['switzerland'] && resJ['switzerland'].motivoSinPrimeraMitad === undefined,
+    'Caso J — del lado de Switzerland tampoco queda ningún motivoSinPrimeraMitad (el cruce se completó del todo)');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);
