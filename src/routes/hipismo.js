@@ -923,6 +923,31 @@ router.get('/adelantadas/pendientes', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /adelantadas/banqueadores (28-09-2026, a pedido del usuario: "en
+// marcas adelantadas despliegame una lista con los banqueros que ya
+// agregue en marcas anteriores para no tener que escribir todas las
+// veces lo mismo") — nombres distintos ya usados como banquero de
+// alguna Marca de este grupo, para autocompletar el campo "Nombre del
+// banquero" al resolver un "falta_banqueo" (ver filaBanqueadorHtml en
+// el mockup). A propósito NO se reusa /api/jugadores (la lista de
+// clientes): un banquero se auto-registra ahí como cualquier otro
+// cliente (ver autoRegistrarJugadores en services/procesarSabana.js),
+// sin ninguna marca que lo distinga — esa lista mezclaría clientes que
+// nunca banquearon nada con los que sí. jsonb_array_elements desarma
+// el array `banqueadores` de cada Marca ya resuelta y saca los nombres
+// únicos, sin importar en qué jugada/carrera/semana haya sido. OJO: va
+// ANTES de "/adelantadas/:id" (mismo motivo que "pendientes" arriba).
+router.get('/adelantadas/banqueadores', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT DISTINCT b->>'nombre' AS nombre
+       FROM hipismo_adelantadas_jugadas j, jsonb_array_elements(j.banqueadores) b
+      WHERE j.grupo_id = $1 AND j.banqueadores IS NOT NULL
+      ORDER BY nombre`,
+    [req.grupoId]
+  );
+  res.json({ banqueadores: r.rows.map(row => row.nombre).filter(Boolean) });
+}));
+
 // GET /adelantadas/:id : detalle completo (cabecera + jugadas).
 router.get('/adelantadas/:id', asyncHandler(async (req, res) => {
   const rPlano = await db.query('SELECT * FROM hipismo_adelantadas_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);

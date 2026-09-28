@@ -1181,6 +1181,14 @@
         <h3 style="margin-top:26px;">🚀 Pendientes de resolver</h3>
         <p class="desc">Todo lo que todavía está esperando la pizarra de su carrera, o esperando que le asignes quién banquea una Marca ya decidida.</p>
         <div id="listaPendientesAdelantadas"><div class="placeholder-card">Sin jugadas pendientes por ahora.</div></div>
+
+        <!-- Sugerencias de "Nombre del banquero" (28-09-2026, a pedido del
+             usuario: "despliegame una lista con los banqueros que ya
+             agregue en marcas anteriores para no tener que escribir todas
+             las veces lo mismo") — mismo patrón ya usado para
+             listaHipodromosConocidos: <input list="..."> + <datalist>
+             vacío que se llena solo (ver cargarBanqueadoresConocidos). -->
+        <datalist id="listaBanqueadoresConocidos"></datalist>
       </div>
     </section>
 
@@ -6118,12 +6126,32 @@ let BANQUEADORES_POR_JUGADA = {}; // { jugadaId: [{nombre, porcentaje, pagaComis
 
 function filaBanqueadorHtml(jugadaId, idx, b) {
   return `<div class="fila" style="margin-bottom:6px;" data-banquero-fila="${idx}">
-    <input type="text" placeholder="Nombre del banquero" value="${(b && b.nombre) || ''}" onchange="actualizarBanquero('${jugadaId}',${idx},'nombre',this.value)">
+    <input type="text" placeholder="Nombre del banquero" value="${(b && b.nombre) || ''}" list="listaBanqueadoresConocidos" autocomplete="off" onchange="actualizarBanquero('${jugadaId}',${idx},'nombre',this.value)">
     <input type="text" placeholder="% que banquea" value="${(b && b.porcentaje) || ''}" onchange="actualizarBanquero('${jugadaId}',${idx},'porcentaje',this.value)">
     <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
       <input type="checkbox" ${b && b.pagaComision ? 'checked' : ''} onchange="actualizarBanquero('${jugadaId}',${idx},'pagaComision',this.checked)"> Paga %
     </label>
   </div>`;
+}
+
+// Lista de banqueros ya usados antes (28-09-2026, a pedido del usuario)
+// — GET /adelantadas/banqueadores trae los nombres distintos ya usados
+// como banquero de alguna Marca de este grupo, para no tener que
+// escribírselos de nuevo cada vez. Se pide UNA vez al cargar la página
+// (ver el bloque de init al final del archivo) y se vuelve a pedir
+// justo después de un banqueo exitoso (ver enviarBanqueo), por si el
+// nombre que se acaba de escribir era nuevo — así ya queda disponible
+// para el próximo banqueo sin recargar la página.
+async function cargarBanqueadoresConocidos() {
+  const datalist = document.getElementById('listaBanqueadoresConocidos');
+  if (!datalist) return;
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/adelantadas/banqueadores');
+  } catch (e) {
+    return; // no es crítico — el operador simplemente sigue escribiendo a mano
+  }
+  datalist.innerHTML = (data.banqueadores || []).map(n => `<option value="${n}">`).join('');
 }
 
 function actualizarBanquero(jugadaId, idx, campo, valor) {
@@ -6171,6 +6199,10 @@ async function enviarBanqueo(jugadaId, clienteNombre) {
   delete BANQUEADORES_POR_JUGADA[jugadaId];
   cargarPendientesAdelantadas();
   cargarClientesReales();
+  // Si alguno de los nombres que se acaban de escribir era nuevo, ya
+  // queda disponible en las sugerencias del próximo banqueo (ver
+  // cargarBanqueadoresConocidos arriba).
+  cargarBanqueadoresConocidos();
 
   // 23-09-2026, a pedido del usuario ("en jugadas adelantadas tambien
   // colocame para agregar hasta 4 marqueros... para saber cuanto pierde o
@@ -9824,6 +9856,26 @@ async function pintarSaldoComisiones() {
   });
 }
 
+// Cierre automático del calendario nativo (28-09-2026, a pedido del
+// usuario: "las fecha del calendario al seleccionar la fecha en
+// balances no se oculta, quiero que al seleccionar el dia 29, se
+// seleccione el dia y se oculte automatico el calendario... alli y en
+// todos los calendarios que tenga la pagina") — en algunos navegadores
+// (Safari en Mac, sobre todo) el desplegable de un <input type="date">
+// se queda abierto después de elegir el día, aunque el valor del campo
+// ya haya quedado bien puesto. No hay ninguna API para cerrar ESE
+// desplegable a mano, pero quitarle el foco al campo (blur()) apenas
+// dispara su "change" sí lo cierra en la práctica. Un solo listener acá
+// (delegado en document, no uno por campo) cubre TODOS los <input
+// type="date"> de la página de una sola vez — los de hoy y cualquiera
+// que se agregue después (ej. los de Cierre Final/Balance General que
+// se acaban de sumar) — sin tener que tocar cada uno por separado.
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'date') {
+    e.target.blur();
+  }
+});
+
 // ------------------------------------------------------------------
 // Init
 // ------------------------------------------------------------------
@@ -9858,6 +9910,7 @@ pintarLogosGrupo();
 actualizarAlertaPozos();
 cargarHipodromos();
 cargarPendientesAdelantadas();
+cargarBanqueadoresConocidos();
 cargarClientesReales();
 actualizarPreviewSemana();
 pintarCierreFinal('actual');
