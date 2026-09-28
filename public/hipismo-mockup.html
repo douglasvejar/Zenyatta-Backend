@@ -201,6 +201,11 @@
   #selectorPlanoCompacto .check-fila { margin-bottom: 0; flex: 0 1 auto; }
   #selectorPlanoCompacto .check-fila label { font-size: 11px; white-space: normal; }
 
+  /* Fecha grande arriba de Cargar Planos (28-09-2026, a pedido del
+     usuario) — muestra el día y la semana de la fecha elegida bien
+     visible, para que no se equivoquen de día al cargar un plano. */
+  .fecha-grande-plano { display: inline-block; font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700; color: var(--accent-deep); background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 14px; margin-bottom: 12px; }
+
   button.btn { font-family: 'Outfit', sans-serif; border: none; padding: 11px 18px; font-size: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; }
   .btn-primario { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; }
   .btn-secundario { background: var(--card-2); color: var(--text); border: 1px solid var(--border-light) !important; }
@@ -860,6 +865,7 @@
     <section class="vista activa" id="vista-cargarPlanos">
       <div class="card">
         <h2>📥 Cargar Planos</h2>
+        <div id="fechaGrandePlano" class="fecha-grande-plano"></div>
 
         <div id="selectorPlanoCompacto">
           <div>
@@ -874,7 +880,7 @@
           </div>
           <div>
             <label for="inpFecha">Fecha</label>
-            <input type="date" id="inpFecha">
+            <input type="date" id="inpFecha" onchange="pintarFechaGrandePlano()">
           </div>
           <div>
             <label for="inpRet">Ret — opcional</label>
@@ -1346,7 +1352,27 @@
     <section class="vista" id="vista-balanceGeneral">
       <div class="card">
         <h2>📒 Balance General</h2>
-        <p class="desc">Dos listas: a la izquierda los que van perdiendo, del mayor perdedor al menor; a la derecha los que van ganando, del mayor ganador al menor. En rojo/negativo los que pierden, en verde/positivo los que ganan. Es el saldo real de la semana actual, sacado directo del servidor — exactamente el mismo número que vas a ver en "Cierre Final" y en el link de cada cliente.</p>
+        <p class="desc">Dos listas: a la izquierda los que van perdiendo, del mayor perdedor al menor; a la derecha los que van ganando, del mayor ganador al menor. En rojo/negativo los que pierden, en verde/positivo los que ganan. Por defecto es el saldo real de la semana actual, sacado directo del servidor — exactamente el mismo número que vas a ver en "Cierre Final" y en el link de cada cliente. Usa "Rango personalizado" si necesitas ver otro tramo de fechas.</p>
+
+        <div class="subnav" id="selectorRangoBalance">
+          <button type="button" class="activo" data-rango="actual" onclick="mostrarRangoBalance('actual', this)">Semana actual</button>
+          <button type="button" data-rango="personalizado" onclick="mostrarRangoBalance('personalizado', this)">📆 Rango personalizado</button>
+        </div>
+
+        <!-- Panel de Desde/Hasta (28-09-2026, a pedido del usuario) — mismo
+             patrón que el de Cierre Final: solo visible con "Rango
+             personalizado" activo, no consulta nada hasta "Aplicar". -->
+        <div class="fila" id="panelRangoBalance" style="display:none; align-items:flex-end;">
+          <div>
+            <label for="inpBalanceDesde">Desde</label>
+            <input type="date" id="inpBalanceDesde">
+          </div>
+          <div>
+            <label for="inpBalanceHasta">Hasta</label>
+            <input type="date" id="inpBalanceHasta">
+          </div>
+          <button class="btn btn-primario" type="button" onclick="aplicarRangoBalance()">Aplicar</button>
+        </div>
 
         <div class="btn-fila" style="margin-bottom:16px;">
           <button class="btn btn-primario" type="button" onclick="copiarBalanceImagen()">📸 Copiar Imagen HD</button>
@@ -1391,6 +1417,23 @@
           <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaCierre('actual', this)">Semana actual</button>
           <button type="button" data-semana="anterior" onclick="mostrarSemanaCierre('anterior', this)">🗓️ Semana anterior</button>
           <button type="button" data-semana="hace2" onclick="mostrarSemanaCierre('hace2', this)">🗓️ Hace 2 semanas</button>
+          <button type="button" data-semana="personalizado" onclick="mostrarSemanaCierre('personalizado', this)">📆 Rango personalizado</button>
+        </div>
+
+        <!-- Panel de Desde/Hasta (28-09-2026, a pedido del usuario) — solo
+             visible cuando el botón "Rango personalizado" de arriba está
+             activo (ver mostrarSemanaCierre). No dispara la consulta solo
+             al elegir la fecha: hace falta darle "Aplicar". -->
+        <div class="fila" id="panelRangoCierre" style="display:none; align-items:flex-end;">
+          <div>
+            <label for="inpCierreDesde">Desde</label>
+            <input type="date" id="inpCierreDesde">
+          </div>
+          <div>
+            <label for="inpCierreHasta">Hasta</label>
+            <input type="date" id="inpCierreHasta">
+          </div>
+          <button class="btn btn-primario" type="button" onclick="aplicarRangoCierre()">Aplicar</button>
         </div>
 
         <label style="margin-top:2px;">Columnas a mostrar</label>
@@ -2189,6 +2232,50 @@ function fechaLocalHoy() {
   const ahora = new Date();
   const desplazadoATz = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
   return desplazadoATz.toISOString().slice(0, 10);
+}
+
+// Fecha grande de Cargar Planos (28-09-2026, a pedido del usuario) —
+// muestra bien visible arriba del formulario qué día y qué semana es la
+// fecha elegida, para que el operador no se equivoque de día al cargar
+// un plano. Usa la MISMA fecha que ya está en el campo "Fecha" del
+// formulario (no siempre es "hoy": el operador puede cargar planos de
+// un día anterior).
+const DIAS_SEMANA_NOMBRE = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+function parsearFechaLocal(fechaStr) {
+  // fechaStr = "YYYY-MM-DD" (valor de un <input type="date">) — se arma
+  // como fecha LOCAL (no UTC), mismo cuidado que fechaLocalHoy() de
+  // arriba, para que no se corra de día.
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// OJO: nombre distinto a formatFechaCortaDMY (más abajo en este mismo
+// archivo, recibe un string ISO "YYYY-MM-DD") a propósito — ésta recibe
+// un objeto Date. Chocar los 2 nombres pisaría una función con la otra
+// (la última declaración gana) y rompería silenciosamente a quien sea
+// que se ejecute primero.
+function formatDiaMesCorto(d) {
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function pintarFechaGrandePlano() {
+  const el = document.getElementById('fechaGrandePlano');
+  const inp = document.getElementById('inpFecha');
+  if (!el || !inp) return;
+  const fechaStr = inp.value || fechaLocalHoy();
+  const fecha = parsearFechaLocal(fechaStr);
+  const nombreDia = DIAS_SEMANA_NOMBRE[fecha.getDay()];
+
+  // Semana de lunes a domingo que contiene la fecha elegida (el default
+  // de siempre — ver "Fecha de Semana" en Administración para el caso
+  // de grupos que la corren).
+  let diffDesdeLunes = fecha.getDay() - 1;
+  if (diffDesdeLunes < 0) diffDesdeLunes += 7;
+  const inicioSemana = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - diffDesdeLunes);
+  const finSemana = new Date(inicioSemana.getFullYear(), inicioSemana.getMonth(), inicioSemana.getDate() + 6);
+
+  el.textContent = `📅 ${nombreDia} ${formatDiaMesCorto(fecha)} — Semana del ${formatDiaMesCorto(inicioSemana)} al ${formatDiaMesCorto(finSemana)}`;
 }
 
 async function apiHipismo(path, options = {}) {
@@ -4777,6 +4864,19 @@ function poblarCarreras(selId) {
   }
 }
 
+// Al confirmar un plano (28-09-2026, a pedido del usuario: "si ya
+// confirme el plano de la 3ra carrera pasa automatico todo listo para
+// la 4ta") — avanza el <select> de Carrera de Cargar Planos a la
+// siguiente carrera, sin tocar Hipódromo ni Fecha (misma jornada).
+// Si ya está en la última carrera de la lista, la deja igual.
+function avanzarASiguienteCarrera() {
+  const sel = document.getElementById('selCarrera');
+  if (!sel) return;
+  if (sel.selectedIndex >= 0 && sel.selectedIndex < sel.options.length - 1) {
+    sel.selectedIndex += 1;
+  }
+}
+
 function formatMonto(n) {
   const signo = n < 0 ? '-' : '';
   const abs = Math.abs(n).toFixed(2).replace('.', ',');
@@ -5029,8 +5129,16 @@ async function confirmarPlano() {
   caja.style.display = 'block';
   caja.textContent = salida;
 
-  // Deja la pizarra en blanco lista para meter el siguiente plano.
+  // Deja todo listo para la SIGUIENTE carrera de la misma jornada
+  // (28-09-2026, a pedido del usuario): pizarra en blanco, plano vacío,
+  // Ret y "valores a premio sin comisión" en blanco (son por carrera),
+  // y el select de Carrera avanza solo una posición. Hipódromo y Fecha
+  // no se tocan — siguen siendo la misma jornada.
   document.getElementById('inpPizarra').value = '';
+  document.getElementById('txtPlano').value = '';
+  document.getElementById('inpRet').value = '';
+  document.getElementById('inpSinComision').value = '';
+  avanzarASiguienteCarrera();
 
   // Ya se confirmó este cálculo — hace falta un "Calcular" nuevo para
   // habilitar otro "Confirmar Plano" (evita reconfirmar/doblar el mismo
@@ -6982,6 +7090,17 @@ function copiarLinkClienteHipismo(token, nombre) {
 // tener que volver a pedirlos.
 let BALANCE_GENERAL_ACTUAL = null;
 
+// Rango personalizado de Balance General (28-09-2026, a pedido del
+// usuario: "debes mostrar por defecto siempre la semana actual, sin
+// embargo agrega un panel donde pueda elegir el rango de fechas") —
+// null = semana actual (default de siempre); si el operador aplica un
+// rango a mano queda acá, para que pintarBalanceGeneral() lo use tanto
+// la primera vez como en cualquier refresco automático posterior
+// (después de confirmar un plano, un banqueo, etc. — ver los muchos
+// pintarBalanceGeneral() sueltos por el archivo, ninguno tuvo que
+// tocarse: todos siguen mostrando lo que el operador tenga elegido acá).
+let BALANCE_GENERAL_RANGO_ACTIVO = null;
+
 // Densidad dinámica de Balance General/Cierre Final (26-09-2026, a
 // pedido del usuario: "en balance general y en cierre, a medida que
 // vayan saliendo mas clientes, ve haciendo la lista mas pequeña para
@@ -7011,9 +7130,13 @@ async function pintarBalanceGeneral() {
   listaPierden.innerHTML = '<div class="placeholder-card">Cargando…</div>';
   listaGanan.innerHTML = '';
 
+  const query = BALANCE_GENERAL_RANGO_ACTIVO
+    ? `desde=${BALANCE_GENERAL_RANGO_ACTIVO.desde}&hasta=${BALANCE_GENERAL_RANGO_ACTIVO.hasta}`
+    : 'semana=actual';
+
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
+    data = await apiHipismo(`/api/hipismo/cierre-final?${query}`);
   } catch (e) {
     listaPierden.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
     listaGanan.innerHTML = '';
@@ -7023,8 +7146,15 @@ async function pintarBalanceGeneral() {
   aplicarDensidadCaptura('balanceCaptura', data.clientes.length);
 
   if (elFecha) {
-    const hoyTxt = new Date().toLocaleDateString('es-VE');
-    elFecha.textContent = `${hoyTxt} · Semana del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}`;
+    // 28-09-2026: con rango personalizado no tiene sentido mostrar
+    // "hoy" ni "Semana N" (puede abarcar varias semanas) — mismo
+    // criterio que Cierre Final (ver pintarCierreFinal).
+    if (data.rangoPersonalizado) {
+      elFecha.textContent = `Del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · rango personalizado`;
+    } else {
+      const hoyTxt = new Date().toLocaleDateString('es-VE');
+      elFecha.textContent = `${hoyTxt} · Semana del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}`;
+    }
   }
 
   listaPierden.innerHTML = '';
@@ -7081,6 +7211,29 @@ async function pintarBalanceGeneral() {
   // sobrando sin contraparte en el balance).
   const comisionTotal = Number(data.comisionSemana);
   document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
+}
+
+function mostrarRangoBalance(rango, btn) {
+  document.querySelectorAll('#selectorRangoBalance button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  const panel = document.getElementById('panelRangoBalance');
+  if (rango === 'personalizado') {
+    // Solo muestra el panel de Desde/Hasta — todavía no consulta nada,
+    // hace falta "Aplicar" (ver aplicarRangoBalance()).
+    panel.style.display = 'flex';
+  } else {
+    panel.style.display = 'none';
+    BALANCE_GENERAL_RANGO_ACTIVO = null;
+    pintarBalanceGeneral();
+  }
+}
+
+function aplicarRangoBalance() {
+  const desde = document.getElementById('inpBalanceDesde').value;
+  const hasta = document.getElementById('inpBalanceHasta').value;
+  if (!desde || !hasta) { alert('Elige "Desde" y "Hasta" primero.'); return; }
+  BALANCE_GENERAL_RANGO_ACTIVO = { desde, hasta };
+  pintarBalanceGeneral();
 }
 
 // ------------------------------------------------------------------
@@ -7878,9 +8031,28 @@ let CIERRE_FINAL_ACTUAL = null; // último JSON que devolvió el servidor, para 
 async function pintarCierreFinal(semana) {
   const tbody = document.getElementById('tablaCierreFinal');
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
+
+  // Rango personalizado (28-09-2026, a pedido del usuario) — en vez de
+  // "semana=actual|anterior|hace2", manda las 2 fechas que eligió el
+  // operador en el panel de arriba (ver mostrarSemanaCierre/
+  // aplicarRangoCierre). Si todavía no eligió las 2, no consulta nada —
+  // se queda esperando a que le dé "Aplicar".
+  let query;
+  if (semana === 'personalizado') {
+    const desde = document.getElementById('inpCierreDesde').value;
+    const hasta = document.getElementById('inpCierreHasta').value;
+    if (!desde || !hasta) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Elige "Desde" y "Hasta" arriba y dale Aplicar.</td></tr>';
+      return;
+    }
+    query = `desde=${desde}&hasta=${hasta}`;
+  } else {
+    query = `semana=${semana}`;
+  }
+
   let data;
   try {
-    data = await apiHipismo(`/api/hipismo/cierre-final?semana=${semana}`);
+    data = await apiHipismo(`/api/hipismo/cierre-final?${query}`);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No se pudo cargar el Cierre Final: ${e.message}</td></tr>`;
     return;
@@ -7893,10 +8065,14 @@ async function pintarCierreFinal(semana) {
   // semana es decir del 15-08 al 22-08 por ejemplo, y semana xxx... que
   // seria la semana del año en la que estamos" — data.numeroSemana ya
   // viene calculado del backend (ver GET /cierre-final, numeroSemanaISO).
-  document.getElementById('cierreRangoCaptura').textContent =
-    `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
-    (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '') +
-    (data.esSemanaActual ? ' · semana actual, todavía en curso' : ' · cerrada');
+  // 28-09-2026: con rango personalizado (data.rangoPersonalizado) no
+  // tiene sentido mostrar "Semana N" ni "actual/cerrada" — puede abarcar
+  // varias semanas o un tramo suelto, así que solo se muestra el rango.
+  document.getElementById('cierreRangoCaptura').textContent = data.rangoPersonalizado
+    ? `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)} · rango personalizado`
+    : `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` +
+      (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '') +
+      (data.esSemanaActual ? ' · semana actual, todavía en curso' : ' · cerrada');
 
   tbody.innerHTML = '';
   if (!data.clientes.length) {
@@ -7939,7 +8115,23 @@ async function pintarCierreFinal(semana) {
 function mostrarSemanaCierre(semana, btn) {
   document.querySelectorAll('#selectorSemanaCierre button').forEach(b => b.classList.remove('activo'));
   btn.classList.add('activo');
-  pintarCierreFinal(semana);
+  const panel = document.getElementById('panelRangoCierre');
+  if (semana === 'personalizado') {
+    // Solo muestra el panel de Desde/Hasta — todavía no consulta nada,
+    // hace falta que el operador elija las 2 fechas y le dé "Aplicar"
+    // (ver aplicarRangoCierre()).
+    panel.style.display = 'flex';
+  } else {
+    panel.style.display = 'none';
+    pintarCierreFinal(semana);
+  }
+}
+
+function aplicarRangoCierre() {
+  const desde = document.getElementById('inpCierreDesde').value;
+  const hasta = document.getElementById('inpCierreHasta').value;
+  if (!desde || !hasta) { alert('Elige "Desde" y "Hasta" primero.'); return; }
+  pintarCierreFinal('personalizado');
 }
 
 // ------------------------------------------------------------------
@@ -9640,6 +9832,7 @@ poblarCarreras('selCarreraRemate');
 poblarCarreras('selCarreraRemateManual');
 poblarCarreras('selCarreraWinners');
 document.getElementById('inpFecha').value = fechaLocalHoy();
+pintarFechaGrandePlano();
 document.getElementById('inpFechaRemate').value = fechaLocalHoy();
 document.getElementById('inpFechaRemateManual').value = fechaLocalHoy();
 document.getElementById('inpFechaWinners').value = fechaLocalHoy();

@@ -1479,6 +1479,20 @@ function rangoSemana(fecha, offsetSemanas) {
   return { desde: isoDeFechaUTC(lunes), hasta: isoDeFechaUTC(domingo) };
 }
 
+// Rango de fechas a mano (28-09-2026, a pedido del usuario: "en balance
+// general... agrega un panel donde pueda elegir el rango de fechas que
+// quiero que me muestres... igual en cierre final") — ?desde=&hasta=
+// como alternativa a ?semana=actual|anterior|hace2. Si vienen los 2
+// parámetros con formato de fecha válido, GANAN sobre "semana" (ver
+// /cierre-final más abajo); si vienen invertidos (desde > hasta) se
+// ordenan solos en vez de rechazar la consulta.
+function rangoPersonalizadoDeQuery(req) {
+  const { desde, hasta } = req.query;
+  if (!desde || !hasta) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null;
+  return desde <= hasta ? { desde, hasta } : { desde: hasta, hasta: desde };
+}
+
 // La comisión de UNA línea (ticket) es la diferencia entre el bruto (sin
 // comisión) y lo que efectivamente cobró el lado que ganó esa línea —
 // mismo criterio que montoMostrado()/resultadoJugador-Banquero en
@@ -1949,11 +1963,16 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
 // GET /cierre-final?semana=actual|anterior|hace2 — mismo selector de 3
 // semanas que ya usan comisiones-por-carrera y el link del cliente.
 router.get('/cierre-final', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
-  const esSemanaActual = isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  // Con rango personalizado no tiene sentido "semana actual" ni "semana
+  // ISO N" (puede abarcar varias semanas o ni empezar en lunes) — el
+  // frontend usa el flag rangoPersonalizado de la respuesta para mostrar
+  // el rango en vez de esos 2 datos.
+  const esSemanaActual = !rangoPersonalizado && isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
   const numeroSemana = numeroSemanaISO(desde);
 
   const rTickets = await db.query(
@@ -2176,6 +2195,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   res.json({
     rango: { desde, hasta },
     semana,
+    rangoPersonalizado: !!rangoPersonalizado,
     numeroSemana,
     esSemanaActual,
     clientes,
