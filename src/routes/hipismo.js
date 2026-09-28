@@ -2351,11 +2351,20 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
 // por su nombre (ya en MAYÚSCULA, mismo criterio de todo el módulo) más
 // el grupo de la sesión, en vez de por su token público.
 router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => {
+  // "Seleccionar rango de fecha" (28-09-2026, a pedido del usuario:
+  // "detallado por cliente crea 3 botones... semana actual, semana
+  // anterior, y seleccionar rango de fecha") — mismo helper y mismo
+  // criterio EXACTO que ya usan Balance General/Cierre Final (ver
+  // rangoPersonalizadoDeQuery más arriba): si viene ?desde=&hasta=
+  // válidos, manda sobre "semana" (que sigue funcionando igual que
+  // siempre para "Semana actual"/"Semana anterior").
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+
   // ÍTEM "REMATE" (26-09-2026, ver la nota grande de construirResumenRemateHipismo
   // en services/hipismoResumenCliente.js) — nunca es una fila real de
   // "jugadores", así que se especial-casa ANTES de buscarlo ahí.
   if (req.params.nombre === NOMBRE_ITEM_REMATE) {
-    const resultado = await construirResumenRemateHipismo(req.grupoId, req.grupo, req.query.semana);
+    const resultado = await construirResumenRemateHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
     return res.json(resultado);
   }
 
@@ -2366,7 +2375,7 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
   const jugador = rJugador.rows[0];
   if (!jugador) return res.status(404).json({ error: 'No se encontró ese cliente.' });
 
-  const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana);
+  const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana, rangoPersonalizado);
   res.json(resultado);
 }));
 
@@ -2411,22 +2420,31 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   const numeroSemana = numeroSemanaISO(desde);
   const dias = diasDeLaSemanaHipismo(desde);
 
+  // 28-09-2026, a pedido del usuario ("semana por dias no coincide con
+  // el balance general"): se agregan las columnas monto/plano_id/
+  // sin_comision/cruza_jugadas (t.*, a.monto, j.monto) que antes NO se
+  // seleccionaban acá — son las mismas 3 que usa /cierre-final para "%
+  // DEVUELTO", "AJUSTE POR CRUCE" y "TRASPASO DE COMISIÓN" (ver esos 3
+  // bloques más abajo). Sin ellas, esta vista día-por-día se quedaba
+  // corta contra Cierre Final/Balance General para cualquier cliente con
+  // % propio, un plano cruzado, o un traspaso manual de comisión.
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, p.fecha
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto,
+            t.plano_id, t.sin_comision, p.cruza_jugadas, p.fecha
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
   const rApuestasRemate = await db.query(
-    `SELECT a.cliente_nombre, a.resultado, r.fecha
+    `SELECT a.cliente_nombre, a.resultado, a.monto, r.fecha
        FROM hipismo_remate_apuestas a
        JOIN hipismo_remates r ON r.id = a.remate_id
       WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, p.fecha
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, p.fecha
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -2460,6 +2478,71 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
       j.banqueadores.forEach(b => acumularDia(b.nombre, j.fecha, b.monto));
     }
   });
+
+  // "% DEVUELTO" por día (28-09-2026, mismo cálculo que /cierre-final —
+  // ver la nota grande de esa ruta): cada cliente con % propio
+  // configurado (jugadores.comision_propia) se gana ese % de TODO lo que
+  // apostó como JUGADOR (Tercios + Adelantadas — nunca Remate, ver la
+  // nota de /cierre-final: "LOS REMATES NO LE PRODUCEN % DE DEVOLUCION A
+  // LOS CLIENTES"), atribuido al DÍA de esa jugada puntual.
+  const nombresJugadores = new Set();
+  rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
+  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
+  function acumularDevueltoDia(nombre, fechaFila, monto) {
+    const infos = comisionesPropias[nombre];
+    if (!infos || !infos.length) return;
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      acumularDia(info.cuentaNombre, fechaFila, devuelto);
+    });
+  }
+  rTickets.rows.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
+  rAdelantadas.rows.forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
+
+  // "AJUSTE POR CRUCE" por día (28-09-2026, mismo bug/arreglo que
+  // /cierre-final — ver la nota grande de esa ruta): en un plano con
+  // cruza_jugadas=true, cada ticket queda guardado "sin cruzar" línea
+  // por línea; se reconstruye el neto cruzado real por plano
+  // (calcularAjustesCruce) y se suma la diferencia, atribuida entera al
+  // día de ESE plano (todos sus tickets comparten la misma fecha).
+  const ticketsPorPlanoCruzadoDia = new Map();
+  rTickets.rows.forEach(t => {
+    if (!t.cruza_jugadas) return;
+    if (!ticketsPorPlanoCruzadoDia.has(t.plano_id)) ticketsPorPlanoCruzadoDia.set(t.plano_id, []);
+    ticketsPorPlanoCruzadoDia.get(t.plano_id).push({
+      clienteNombre: t.cliente_nombre,
+      banqueroNombre: t.banquero_nombre,
+      resultadoJugador: Number(t.resultado_jugador),
+      resultadoBanquero: Number(t.resultado_banquero),
+      sinComision: t.sin_comision,
+      fecha: t.fecha
+    });
+  });
+  ticketsPorPlanoCruzadoDia.forEach(ticketsDelPlano => {
+    const ajustesCruce = calcularAjustesCruce(ticketsDelPlano);
+    const fechaPlano = ticketsDelPlano[0].fecha;
+    Object.keys(ajustesCruce).forEach(nombre => {
+      const monto = ajustesCruce[nombre];
+      if (!monto) return;
+      acumularDia(nombre, fechaPlano, monto);
+    });
+  });
+
+  // "TRASPASO DE COMISIÓN" por día (28-09-2026, ver POST
+  // /comisiones/traspaso): a diferencia de /cierre-final, acá NO se
+  // reusa obtenerAjustesComision porque esa función agrupa por
+  // cliente_nombre del lado del servidor y pierde la fecha de cada fila
+  // — se necesita el detalle día-por-día, así que se consulta
+  // hipismo_comisiones_ajustes directo, sin GROUP BY.
+  const rAjustesComisionDia = await db.query(
+    `SELECT cliente_nombre, monto, fecha FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [req.grupoId, desde, hasta]
+  );
+  rAjustesComisionDia.rows.forEach(r => acumularDia(r.cliente_nombre, r.fecha, r.monto));
 
   // "la tabla va mostrando los dias a medida que vayan cargando y
   // teniendo informacion... si estamos a jueves, no muestres viernes

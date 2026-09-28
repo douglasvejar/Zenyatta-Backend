@@ -1338,6 +1338,24 @@
           <div class="subnav" id="selectorSemanaDetalleCliente">
             <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaDetalleCliente('actual', this)">Semana actual</button>
             <button type="button" data-semana="anterior" onclick="cambiarSemanaDetalleCliente('anterior', this)">🗓️ Semana anterior</button>
+            <button type="button" data-semana="personalizado" onclick="mostrarRangoDetalleCliente('personalizado', this)">📆 Rango personalizado</button>
+          </div>
+          <!-- Panel de Desde/Hasta (28-09-2026, a pedido del usuario:
+               "detallado por cliente crea 3 botones... semana actual,
+               semana anterior, y seleccionar rango de fecha") — mismo
+               patrón que el de Balance General/Cierre Final: solo visible
+               con "Rango personalizado" activo, no consulta nada hasta
+               "Aplicar". -->
+          <div class="fila" id="panelRangoDetalleCliente" style="display:none; align-items:flex-end;">
+            <div>
+              <label for="inpDetalleClienteDesde">Desde</label>
+              <input type="date" id="inpDetalleClienteDesde">
+            </div>
+            <div>
+              <label for="inpDetalleClienteHasta">Hasta</label>
+              <input type="date" id="inpDetalleClienteHasta">
+            </div>
+            <button class="btn btn-primario" type="button" onclick="aplicarRangoDetalleCliente()">Aplicar</button>
           </div>
         </div>
         <div class="modal-detalle-body">
@@ -7332,6 +7350,12 @@ const DIAS_SEMANA_DET = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viern
 const MESES_DET = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const BANDERAS_DET = { VE: '🇻🇪', US: '🇺🇸' };
 let DETALLE_CLIENTE_NOMBRE = null;
+// "Seleccionar rango de fecha" (28-09-2026) — mismo patrón que
+// BALANCE_GENERAL_RANGO_ACTIVO: null = usa DETALLE_CLIENTE_SEMANA_ACTIVA
+// ('actual'/'anterior'); un objeto {desde,hasta} = usa ese rango en vez
+// de "semana" (ver cargarDetalleCliente más abajo).
+let DETALLE_CLIENTE_RANGO_ACTIVO = null;
+let DETALLE_CLIENTE_SEMANA_ACTIVA = 'actual';
 
 function formatMontoDet(n) {
   const neg = n < 0;
@@ -7397,12 +7421,15 @@ function armarJugadaTextoDetallado(c) {
 
 async function abrirDetalleCliente(nombre) {
   DETALLE_CLIENTE_NOMBRE = nombre;
+  DETALLE_CLIENTE_SEMANA_ACTIVA = 'actual';
+  DETALLE_CLIENTE_RANGO_ACTIVO = null;
   document.getElementById('modalDetalleCliente').style.display = 'flex';
   document.getElementById('detalleClienteNombre').textContent = formatNombre(nombre);
   document.getElementById('detalleClienteRango').textContent = '';
   document.getElementById('detalleClienteDias').innerHTML = '<div class="placeholder-card">Cargando…</div>';
   document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.toggle('activo', b.dataset.semana === 'actual'));
-  await cargarDetalleCliente('actual');
+  document.getElementById('panelRangoDetalleCliente').style.display = 'none';
+  await cargarDetalleCliente();
 }
 function cerrarDetalleCliente() {
   document.getElementById('modalDetalleCliente').style.display = 'none';
@@ -7411,14 +7438,36 @@ function cerrarDetalleCliente() {
 function cambiarSemanaDetalleCliente(semana, btn) {
   document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.remove('activo'));
   btn.classList.add('activo');
-  cargarDetalleCliente(semana);
+  document.getElementById('panelRangoDetalleCliente').style.display = 'none';
+  DETALLE_CLIENTE_SEMANA_ACTIVA = semana;
+  DETALLE_CLIENTE_RANGO_ACTIVO = null;
+  cargarDetalleCliente();
 }
-async function cargarDetalleCliente(semana) {
+// "Rango personalizado" (28-09-2026) — mismo patrón EXACTO que
+// mostrarRangoBalance()/aplicarRangoBalance() de Balance General: el
+// botón solo muestra el panel de Desde/Hasta, todavía no consulta nada
+// (hace falta "Aplicar").
+function mostrarRangoDetalleCliente(rango, btn) {
+  document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  document.getElementById('panelRangoDetalleCliente').style.display = 'flex';
+}
+function aplicarRangoDetalleCliente() {
+  const desde = document.getElementById('inpDetalleClienteDesde').value;
+  const hasta = document.getElementById('inpDetalleClienteHasta').value;
+  if (!desde || !hasta) { alert('Elige "Desde" y "Hasta" primero.'); return; }
+  DETALLE_CLIENTE_RANGO_ACTIVO = { desde, hasta };
+  cargarDetalleCliente();
+}
+async function cargarDetalleCliente() {
   const cont = document.getElementById('detalleClienteDias');
   cont.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  const query = DETALLE_CLIENTE_RANGO_ACTIVO
+    ? `desde=${DETALLE_CLIENTE_RANGO_ACTIVO.desde}&hasta=${DETALLE_CLIENTE_RANGO_ACTIVO.hasta}`
+    : `semana=${DETALLE_CLIENTE_SEMANA_ACTIVA}`;
   let data;
   try {
-    data = await apiHipismo(`/api/hipismo/clientes/${encodeURIComponent(DETALLE_CLIENTE_NOMBRE)}/detalle-semana?semana=${semana}`);
+    data = await apiHipismo(`/api/hipismo/clientes/${encodeURIComponent(DETALLE_CLIENTE_NOMBRE)}/detalle-semana?${query}`);
   } catch (e) {
     cont.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
     return;
@@ -7427,8 +7476,12 @@ async function cargarDetalleCliente(semana) {
 }
 function renderDetalleClienteModal(data) {
   document.getElementById('detalleClienteNombre').textContent = formatNombre(data.jugador.nombre);
-  document.getElementById('detalleClienteRango').textContent =
-    `${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)}${data.esSemanaActual ? ' · Semana actual' : ' · Semana cerrada'}`;
+  // 28-09-2026: con rango personalizado (data.rangoPersonalizado) no
+  // tiene sentido "Semana actual"/"Semana cerrada" — mismo criterio que
+  // ya usa Cierre Final (ver cierreRangoCaptura).
+  document.getElementById('detalleClienteRango').textContent = data.rangoPersonalizado
+    ? `${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)} · rango personalizado`
+    : `${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)}${data.esSemanaActual ? ' · Semana actual' : ' · Semana cerrada'}`;
   const elTotal = document.getElementById('detalleClienteTotal');
   elTotal.textContent = conSignoDet(data.resumen.totalSemana);
   elTotal.className = 'monto-grande ' + claseMontoDet(data.resumen.totalSemana);

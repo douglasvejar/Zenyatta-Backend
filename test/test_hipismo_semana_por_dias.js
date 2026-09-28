@@ -44,14 +44,14 @@ const TABLAS = {
     { id: 'plano-miercoles', grupo_id: GRUPO_ID, fecha: MIERCOLES, comision_total: 1.5 }
   ],
   hipismo_tickets: [
-    { plano_id: 'plano-lunes', grupo_id: GRUPO_ID, cliente_nombre: 'CARLOS', banquero_nombre: 'BANCO', resultado_jugador: 50, resultado_banquero: -52.5, fecha: LUNES },
-    { plano_id: 'plano-miercoles', grupo_id: GRUPO_ID, cliente_nombre: 'ANA', banquero_nombre: 'BANCO2', resultado_jugador: -30, resultado_banquero: 28.5, fecha: MIERCOLES }
+    { plano_id: 'plano-lunes', grupo_id: GRUPO_ID, cliente_nombre: 'CARLOS', banquero_nombre: 'BANCO', resultado_jugador: 50, resultado_banquero: -52.5, monto: 50, sin_comision: false, cruza_jugadas: false, fecha: LUNES },
+    { plano_id: 'plano-miercoles', grupo_id: GRUPO_ID, cliente_nombre: 'ANA', banquero_nombre: 'BANCO2', resultado_jugador: -30, resultado_banquero: 28.5, monto: 30, sin_comision: false, cruza_jugadas: false, fecha: MIERCOLES }
   ],
   hipismo_remates: [
     { id: 'remate-domingo', grupo_id: GRUPO_ID, fecha: DOMINGO, comision_total: 20 }
   ],
   hipismo_remate_apuestas: [
-    { remate_id: 'remate-domingo', grupo_id: GRUPO_ID, cliente_nombre: 'CARLOS', resultado: 100, fecha: DOMINGO }
+    { remate_id: 'remate-domingo', grupo_id: GRUPO_ID, cliente_nombre: 'CARLOS', resultado: 100, monto: 100, fecha: DOMINGO }
   ],
   hipismo_adelantadas_planos: [],
   hipismo_adelantadas_jugadas: []
@@ -60,17 +60,27 @@ const TABLAS = {
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero, p\.fecha\s+FROM hipismo_tickets t\s+JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3/i.test(sql)) {
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero, t\.monto,\s+t\.plano_id, t\.sin_comision, p\.cruza_jugadas, p\.fecha\s+FROM hipismo_tickets t\s+JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_tickets.filter(t => t.grupo_id === grupoId && t.fecha >= desde && t.fecha <= hasta);
-    return { rows: filas.map(t => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, fecha: t.fecha })) };
+    return { rows: filas.map(t => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, monto: t.monto, plano_id: t.plano_id, sin_comision: t.sin_comision, cruza_jugadas: t.cruza_jugadas, fecha: t.fecha })) };
   }
-  if (/^SELECT a\.cliente_nombre, a\.resultado, r\.fecha\s+FROM hipismo_remate_apuestas a\s+JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha BETWEEN \$2 AND \$3/i.test(sql)) {
+  if (/^SELECT a\.cliente_nombre, a\.resultado, a\.monto, r\.fecha\s+FROM hipismo_remate_apuestas a\s+JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha BETWEEN \$2 AND \$3/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_remate_apuestas.filter(a => a.grupo_id === grupoId && a.fecha >= desde && a.fecha <= hasta);
-    return { rows: filas.map(a => ({ cliente_nombre: a.cliente_nombre, resultado: a.resultado, fecha: a.fecha })) };
+    return { rows: filas.map(a => ({ cliente_nombre: a.cliente_nombre, resultado: a.resultado, monto: a.monto, fecha: a.fecha })) };
   }
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, j\.monto, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
+    return { rows: [] };
+  }
+  // "% DEVUELTO" (28-09-2026): esta prueba no configura ningún jugador
+  // con % propio — obtenerComisionesPropias siempre vacío.
+  if (/^SELECT j\.nombre, j\.comision_propia,/i.test(sql)) {
+    return { rows: [] };
+  }
+  // "TRASPASO DE COMISIÓN" (28-09-2026): esta prueba no crea ningún
+  // traspaso — siempre vacío.
+  if (/^SELECT cliente_nombre, monto, fecha FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
     return { rows: [] };
   }
   if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_planos WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3 GROUP BY fecha/i.test(sql)) {

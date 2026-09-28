@@ -110,6 +110,17 @@ function check(cond, msg) {
   const resOtroGrupo = await invocarRuta(handlerDetalle, Object.assign(reqBase('otro-grupo-id'), { params: { nombre: 'HANRY' }, query: {} }));
   check(resOtroGrupo._status === 404, 'HANRY de OTRO grupo no es visible — la búsqueda está scoped por grupo_id, no solo por nombre');
 
+  // "Seleccionar rango de fecha" (28-09-2026, a pedido del usuario:
+  // "detallado por cliente crea 3 botones... semana actual, semana
+  // anterior, y seleccionar rango de fecha") — mismo criterio EXACTO ya
+  // probado para /cierre-final en test_hipismo_cierre_final_rango_personalizado.js.
+  check(resOk._json.rangoPersonalizado === false, 'Con ?semana=actual (sin desde/hasta), rangoPersonalizado da false');
+  const resRango = await invocarRuta(handlerDetalle, Object.assign(reqBase(GRUPO_ID), { params: { nombre: 'HANRY' }, query: { desde: '2026-09-01', hasta: '2026-09-07' } }));
+  check(resRango._status === 200, 'Con ?desde=&hasta= responde 200');
+  check(resRango._json.rangoPersonalizado === true, 'Con ?desde=&hasta=, rangoPersonalizado da true');
+  check(resRango._json.rango.desde === '2026-09-01' && resRango._json.rango.hasta === '2026-09-07', 'El rango devuelto es EXACTAMENTE el pedido, no la semana actual');
+  check(resRango._json.esSemanaActual === false, 'Con rango personalizado, esSemanaActual siempre da false (no depende de "hoy")');
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })().catch(e => {

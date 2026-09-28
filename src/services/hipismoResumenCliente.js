@@ -90,11 +90,11 @@ function rangoSemana(fecha, offsetSemanas) {
 // nombre de la cuenta como cliente_nombre directo, así que esos se leen
 // aparte y se muestran como su propio pseudo-hipódromo "🔄 Traspasos de
 // Comisión" (mismo criterio que ya usa el bloque "⚽ Deportes" anclado).
-async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam) {
+async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   // Candidatos: clientes reales (nunca otra cuenta de comisión) cuyo %
@@ -220,8 +220,9 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
+    rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
-    esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
+    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
     // Una cuenta de comisión nunca tiene Deportes anclado propio — su
     // saldo es 100% derivado de otros clientes de Hipismo.
     modulos: { hipismo: true, deportes: false },
@@ -241,19 +242,19 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
 // jugador: fila de "jugadores" (necesita .grupo_id, .nombre, .modulos_anclados).
 // grupo: fila de "grupos" (necesita .nombre, .logo_url, .modulo_deportes_habilitado).
 // semanaParam: 'actual' (default) | 'anterior'.
-async function construirResumenClienteHipismo(jugador, grupo, semanaParam) {
+async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
   // Cuenta de comisión ("{nombre} - PORCENTAJE", ver la nota grande de
   // construirResumenCuentaComisionHipismo arriba) — nunca tiene jugadas
   // propias, así que su saldo se arma con una lógica completamente
   // aparte (26-09-2026, al arreglar "LOS LINK DE % NO DAN SALDO DICEN 0").
   if (jugador.es_cuenta_comision) {
-    return construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam);
+    return construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado);
   }
 
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const lineasHipismo = await obtenerLineasHipismoCliente(jugador.grupo_id, jugador.nombre, desde, hasta);
@@ -336,8 +337,9 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam) {
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
+    rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
-    esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
+    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
     modulos: { hipismo: true, deportes: deportesAnclado },
     resumen: {
       totalSemana,
@@ -364,11 +366,11 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam) {
 // usa desde la parte administrativa (Detallado por Cliente en
 // hipismo-mockup.html) — nunca hay un link público para esto, así que
 // el resultado/ganancia-o-pérdida de cada remate nunca llega al cliente.
-async function construirResumenRemateHipismo(grupoId, grupo, semanaParam) {
+async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoPersonalizado) {
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const rRemates = await db.query(
@@ -426,8 +428,9 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam) {
     jugador: { nombre: 'REMATE' },
     semana,
     rango: { desde, hasta },
+    rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
-    esSemanaActual: hoyIso >= desde && hoyIso <= hasta,
+    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
     modulos: { hipismo: true, deportes: false },
     resumen: {
       totalSemana: round2(totalSemana),
