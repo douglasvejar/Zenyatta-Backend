@@ -39,14 +39,29 @@
 //   comisión, ej. confirmado: monto 80 con 2.5% → Manolo -80, Tablas
 //   Fijas +78, Comisión Tablas Fijas +2.
 //
-// MARCAS ("<num1>x<num2> <monto>$", ej. "4x7 120$"): una combinada al
-// 1er y 2do lugar exactos de la carrera (num1 = 1er lugar, num2 = 2do).
+// MARCAS ("<num1>x<num2> <monto>$", ej. "4x7 120$"): NO es una combinada
+// al 1er y 2do lugar exactos (así se había entendido/programado al
+// principio — CORREGIDO 28-09-2026 con un ticket real del usuario: "las
+// marcas no [las estás calculando bien]... la marca no es una combinación
+// de dos caballos, es una apuesta de un caballo CONTRA otro"). En "4x7",
+// el cliente juega el caballo num1 (4) CONTRA el caballo num2 (7), cabeza
+// a cabeza — gana el que haya llegado más cerca del 1er lugar, sea cual
+// sea su puesto exacto (no hace falta que sea 1ro-2do), con 2 casos
+// especiales (ver resolverClienteMarca más abajo para la fórmula exacta,
+// confirmada con 2 ejemplos reales del usuario):
+//   - Si NINGUNO de los 2 caballos figuró en la pizarra -> la apuesta
+//     queda NULA (nadie gana ni pierde, resultadoCliente 0) — no es lo
+//     mismo que "pierde": si ninguno de los 2 corrió/colocó, no hay forma
+//     de decidir cuál iba mejor.
+//   - Si SOLO UNO de los 2 figuró -> gana automático el que sí figuró
+//     (el otro ni corrió/no colocó, así que quedó "más lejos" del 1er
+//     lugar por definición).
 // A diferencia de Tablas Fijas, el pago no es fijo por unidad: si
 // acierta, se paga monto/1.2 (confirmado con el usuario: 120$ → paga
 // 100$ si acierta) — ese 100 es la ganancia COMPLETA del cliente, sin
-// netear el monto jugado. Si NO acierta, el cliente pierde el monto
-// completo (confirmado explícitamente: "si no acierta houston pierde
-// completo").
+// netear el monto jugado. Si NO acierta (y no quedó nula), el cliente
+// pierde el monto completo (confirmado explícitamente: "si no acierta
+// houston pierde completo").
 //   El pago (si acertó) o el monto cobrado (si no acertó) lo banquean
 //   1 o más personas, cada una cubriendo un % (confirmado con el
 //   usuario: "porcentaje por banquero") y decidiendo aparte si cobra
@@ -66,8 +81,12 @@
 // DECIDIBILIDAD DE UNA MARCA (confirmado con el usuario: "pizarra de 5
 // puestos" — el sistema pide siempre los primeros 5 puestos de la
 // llegada en hipódromos NACIONALES, y decide la marca solo si esos 5
-// alcanzan): con una pizarra completa de 5 puestos, el 1er y 2do lugar
-// siempre se conocen con certeza, así que una marca SIEMPRE es
+// alcanzan) — esto es DISTINTO del caso "NULA" de arriba: acá el problema
+// es que la PIZARRA MISMA todavía no trae suficientes puestos (no se sabe
+// ni quién ganó la carrera), mientras que "NULA" es con una pizarra YA
+// completa, donde simplemente ninguno de los 2 caballos de ESA marca
+// puntual apareció. Con una pizarra completa de 5 puestos, el 1er y 2do
+// lugar siempre se conocen con certeza, así que una marca SIEMPRE es
 // decidible en cuanto el plano de esa carrera trae una pizarra de 5
 // posiciones o más. Si trae MENOS de 5 (hipódromo nacional), la marca
 // no se puede decidir con confianza todavía y, tal como pidió el
@@ -195,16 +214,42 @@ function resolverTablaFija({ numeroEjemplar, monto, gananciaPotencial }, rank, c
   return { gano, resultadoCliente, tablasFijas, comision };
 }
 
-// resolverClienteMarca(jugada, rank) -> { acierta, resultadoCliente,
-// base } — solo el lado del cliente (no depende de quién banquea). El
-// "acierta" exige 1er Y 2do lugar exactos, en ese orden.
+// Mismo centinela que ya usa parsearPizarraRank() (routes/hipismo.js)
+// para "este número no apareció en la pizarra" — declarado acá también
+// para que resolverClienteMarca() pueda detectar el caso "ninguno de los
+// 2 figuró" sin importar qué tan grande el caller haga su propio `rank`
+// (los 2 rank() reales del sistema, y los de las pruebas, ya usan 99).
+const NO_FIGURA_EN_PIZARRA = 99;
+
+// resolverClienteMarca(jugada, rank) -> { nula, acierta, resultadoCliente,
+// base } — solo el lado del cliente (no depende de quién banquea).
+//
+// CORREGIDO (28-09-2026, caso real del usuario — ver la nota grande de
+// "MARCAS" arriba): NO es "1er y 2do lugar exactos". En "num1 x num2", el
+// cliente juega num1 CONTRA num2, cabeza a cabeza:
+//   - Si NINGUNO de los 2 apareció en la pizarra -> nula = true, nadie
+//     gana ni pierde (resultadoCliente 0).
+//   - Si SOLO UNO apareció -> gana automático el que sí apareció (rank()
+//     le da NO_FIGURA_EN_PIZARRA al que no corrió/no colocó, así que la
+//     comparación de abajo ya lo resuelve solo).
+//   - Si los 2 aparecieron -> gana el de MEJOR posición (rank más chico,
+//     más cerca del 1er lugar), sea cual sea su puesto exacto.
+// Confirmado con 2 ejemplos reales del usuario: "4x2" con pizarra
+// 2,4,5,6,7 (1ro el 2, 2do el 4) -> pierde (el 2, num2, quedó mejor
+// puesto); "4x2" con pizarra 6,7,8,4,1 (4to el 4, el 2 ni aparece) ->
+// gana (el 4, num1, sí colocó).
 function resolverClienteMarca({ numero1, numero2, monto }, rank) {
-  const acierta = rank(numero1) === 1 && rank(numero2) === 2;
+  const rank1 = rank(numero1);
+  const rank2 = rank(numero2);
+  if (rank1 === NO_FIGURA_EN_PIZARRA && rank2 === NO_FIGURA_EN_PIZARRA) {
+    return { nula: true, acierta: null, base: 0, resultadoCliente: 0 };
+  }
+  const acierta = rank1 < rank2;
   if (acierta) {
     const base = round2(monto / 1.2);
-    return { acierta, base, resultadoCliente: base };
+    return { nula: false, acierta, base, resultadoCliente: base };
   }
-  return { acierta, base: monto, resultadoCliente: -monto };
+  return { nula: false, acierta, base: monto, resultadoCliente: -monto };
 }
 
 // resolverBanqueoMarca({ acierta, base }, banqueadores) -> {

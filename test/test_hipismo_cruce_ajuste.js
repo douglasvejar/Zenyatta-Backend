@@ -230,7 +230,7 @@ function ejecutarQueryCierreFinal(TABLAS, text, params) {
     return { rows: filas };
   }
   if (/^SELECT a\.cliente_nombre, a\.resultado, a\.monto/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.comision, j\.banqueadores, j\.monto/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores, j\.monto/i.test(sql)) return { rows: [] };
   if (/^SELECT cliente_nombre, monto FROM hipismo_winners/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.nombre, j\.comision_propia/i.test(sql)) return { rows: [] };
   if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total\s+FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };

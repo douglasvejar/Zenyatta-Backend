@@ -134,10 +134,13 @@ check(banqueoHouston.comisionMarcas === 1.25, 'Comisión Marcas (un solo ítem g
 const sumaHouston = clienteHouston.resultadoCliente + zenyattaLinea.monto + sammyLinea.monto + banqueoHouston.comisionMarcas;
 check(Math.round(sumaHouston * 100) === 0, 'Houston + Zenyatta + Sammy + Comisión Marcas suman 0 exacto');
 
-// Houston pierde (no acierta) — el cliente pierde el monto completo, tal
-// como confirmó el usuario ("si no acierta houston pierde completo").
-const clienteHoustonPierde = calc.resolverClienteMarca(houston3, () => 99);
-check(clienteHoustonPierde.acierta === false && clienteHoustonPierde.resultadoCliente === -120, 'Si Houston no acierta, pierde el monto completo (-120)');
+// Houston pierde (su caballo, el 4, figura en la pizarra pero MÁS LEJOS
+// del 1er lugar que el 7 del rival) — el cliente pierde el monto
+// completo, tal como confirmó el usuario ("si no acierta houston pierde
+// completo").
+const rankHoustonPierde = h => (h === 7 ? 1 : h === 4 ? 3 : 99);
+const clienteHoustonPierde = calc.resolverClienteMarca(houston3, rankHoustonPierde);
+check(clienteHoustonPierde.nula === false && clienteHoustonPierde.acierta === false && clienteHoustonPierde.resultadoCliente === -120, 'Si el 4 de Houston queda más lejos del 1er lugar que el 7 (rival), pierde el monto completo (-120)');
 const banqueoHoustonPierde = calc.resolverBanqueoMarca(clienteHoustonPierde, [
   { nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false },
   { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }
@@ -146,6 +149,43 @@ const sumaHoustonPierde = clienteHoustonPierde.resultadoCliente
   + banqueoHoustonPierde.banqueadores.reduce((a, b) => a + b.monto, 0)
   + banqueoHoustonPierde.comisionMarcas;
 check(Math.round(sumaHoustonPierde * 100) === 0, 'Si Houston pierde, cliente + banqueadores + comisión también suman 0 exacto');
+
+// (28-09-2026, a pedido del usuario, corrigiendo la regla de Marcas: NO es
+// una combinación de 1er+2do lugar exactos, es un caballo contra otro,
+// gana el que llegue más cerca del 1er lugar entre los 2 — ver la nota
+// grande en hipismoAdelantadasCalc.js) Houston (4x7) gana SIN que su
+// caballo (4) haya llegado 1ro ni 2do — solo hace falta que quede MÁS
+// CERCA del 1er lugar que el 7 del rival.
+const rankHoustonGanaSinExacto = h => (h === 4 ? 3 : h === 7 ? 5 : 99);
+const clienteHoustonGanaSinExacto = calc.resolverClienteMarca(houston3, rankHoustonGanaSinExacto);
+check(clienteHoustonGanaSinExacto.nula === false && clienteHoustonGanaSinExacto.acierta === true && clienteHoustonGanaSinExacto.resultadoCliente === 100,
+  'Houston gana su marca 4x7 con el 4 en 3er lugar y el 7 en 5to (ninguno llegó 1ro/2do) — antes esto hubiera dado "pierde", ahora gana +100 porque el 4 quedó más cerca del 1er lugar');
+
+// NULA: si NINGUNO de los 2 caballos de la marca figura en la pizarra (5
+// puestos completos, hipódromo nacional o no — la regla de "nula" no
+// depende de esa otra regla de decidibilidad), la apuesta queda en 0, sin
+// ganador ni perdedor y sin banqueo que asignar.
+const clienteHoustonNula = calc.resolverClienteMarca(houston3, () => 99);
+check(clienteHoustonNula.nula === true && clienteHoustonNula.acierta === null && clienteHoustonNula.resultadoCliente === 0,
+  'Si ni el 4 ni el 7 figuran en la pizarra, la marca de Houston queda NULA (0, sin ganador ni perdedor)');
+
+// Auto-gana: si figura SOLO uno de los 2 caballos de la marca, ese gana
+// automáticamente (no hace falta compararlo contra nada).
+const rankSoloFiguraElDeHouston = h => (h === 4 ? 4 : 99);
+const clienteHoustonAutoGana = calc.resolverClienteMarca(houston3, rankSoloFiguraElDeHouston);
+check(clienteHoustonAutoGana.nula === false && clienteHoustonAutoGana.acierta === true && clienteHoustonAutoGana.resultadoCliente === 100,
+  'Si solo el 4 (el de Houston) figura en la pizarra y el 7 no figuró, Houston gana automático (+100)');
+const rankSoloFiguraElDelRival = h => (h === 7 ? 2 : 99);
+const clienteHoustonAutoPierde = calc.resolverClienteMarca(houston3, rankSoloFiguraElDelRival);
+check(clienteHoustonAutoPierde.nula === false && clienteHoustonAutoPierde.acierta === false && clienteHoustonAutoPierde.resultadoCliente === -120,
+  'Si solo el 7 (el rival) figura en la pizarra y el 4 de Houston no figuró, Houston pierde automático (-120)');
+
+// El ejemplo real de Halland (9x2, carrera resuelta -156,00 con la regla
+// VIEJA) recalculado con la regla corregida: pizarra real donde ni el 9 ni
+// el 2 figuraron -> queda NULA (0), no -156.
+const clienteHallandNula = calc.resolverClienteMarca({ numero1: 9, numero2: 2, monto: 120 }, () => 99);
+check(clienteHallandNula.nula === true && clienteHallandNula.resultadoCliente === 0,
+  'El caso real de Halland (9x2, ninguno de los 2 figuró) queda NULA en 0 — ya no se cobran los -156,00 calculados con la regla vieja');
 
 // Decidibilidad de una marca — "pizarra de 5 puestos" en hipódromos nacionales.
 check(calc.esMarcaDecidible('6.7.8', true) === false, 'Marca de hipódromo NACIONAL con solo 3 puestos en la pizarra -> no decidible todavía');
@@ -367,7 +407,9 @@ function ejecutarQuery(text, params) {
     return { rows: j ? [j] : [] };
   }
   // GET /cierre-final: saldo de Jugadas Adelantadas de la semana.
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.comision, j\.banqueadores/i.test(sql)) {
+  // (28-09-2026: la consulta real ahora también trae j.tipo, para poder
+  // armar el ítem "PORCENTAJE MARCAS" separado de las Tablas Fijas.)
+  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_adelantadas_jugadas
       .filter(j => j.grupo_id === grupoId && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado))
@@ -375,7 +417,7 @@ function ejecutarQuery(text, params) {
         const p = TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id);
         return p && p.fecha >= desde && p.fecha <= hasta;
       });
-    return { rows: filas.map(j => ({ cliente_nombre: j.cliente_nombre, resultado_cliente: j.resultado_cliente, comision: j.comision, banqueadores: j.banqueadores, monto: j.monto })) };
+    return { rows: filas.map(j => ({ cliente_nombre: j.cliente_nombre, tipo: j.tipo, resultado_cliente: j.resultado_cliente, comision: j.comision, banqueadores: j.banqueadores, monto: j.monto })) };
   }
 
   // ---- Cargar Planos ----
@@ -660,6 +702,17 @@ function reqBase(grupoId) {
   const linaresFila = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.cliente_nombre === 'LINARES' && j.estado !== 'pendiente');
   check(linaresFila.length === 1 && Number(linaresFila[0].resultado_cliente) === 225, 'Confirmado en la base: Linares tiene su +225 de Tablas Fijas guardado, listo para que Cierre Final lo sume en la semana que corresponda');
   check(typeof resCierre._json.comisionAdelantadasSemana === 'number', 'GET /cierre-final devuelve comisionAdelantadasSemana como un campo separado (aunque sea 0 si la fecha de prueba no cae en la semana actual)');
+
+  // (28-09-2026, a pedido del usuario: "ese 2.5% que deja Sammy en marcas,
+  // debe verse reflejado en un código llamado PORCENTAJE MARCAS ... me vas
+  // a ir sumando siempre ese 2.5%") — como FECHA_PRUEBA se calcula como
+  // "hoy" (ver más arriba), la marca ya banqueada de Halland (comisión
+  // 1,2, ver el punto 7) SÍ cae dentro de la semana "actual" que usa este
+  // reporte, así que esta parte sí se puede verificar contra la respuesta
+  // HTTP real (no hace falta recalcular aparte, como con Linares arriba).
+  const itemPorcentajeMarcas = resCierre._json.clientes.find(c => c.nombre === 'PORCENTAJE MARCAS');
+  check(!!itemPorcentajeMarcas && itemPorcentajeMarcas.saldo === 1.2, 'GET /cierre-final trae el ítem "PORCENTAJE MARCAS" con +1,2 (la comisión de Marcas Sammy en la marca ya banqueada de Halland)');
+  check(!resCierre._json.clientes.some(c => c.nombre === 'PORCENTAJE MARCAS' && c.perdio > 0), '"PORCENTAJE MARCAS" solo acumula del lado "gano" (siempre es comisión a favor, nunca en contra)');
 
   // =================================================================
   // 10) PUT/DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, a

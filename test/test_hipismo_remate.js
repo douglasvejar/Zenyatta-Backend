@@ -217,7 +217,7 @@ function ejecutarQuery(text, params) {
 
   // GET /cierre-final: Jugadas Adelantadas de la semana (23-09-2026, ver
   // test_hipismo_adelantadas.js) — esta prueba no crea ninguna, siempre vacío.
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.comision, j\.banqueadores/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores/i.test(sql)) {
     return { rows: [] };
   }
 

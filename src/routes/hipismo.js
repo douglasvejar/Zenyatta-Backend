@@ -272,6 +272,14 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
     }
     const c = resolverClienteMarca({ numero1: j.numero1, numero2: j.numero2, monto: Number(j.monto) }, rank);
+    // NULA (28-09-2026, ver la nota grande de resolverClienteMarca): con
+    // pizarra completa, si NINGUNO de los 2 caballos de esta marca
+    // puntual figuró, no hay banqueo que asignar ni ganador que pagar —
+    // se resuelve de una con 0 para todos, mismo tratamiento que
+    // 'sin_decidir' (no entra a "Pendientes", entra a Balance con 0).
+    if (c.nula) {
+      return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
+    }
     return {
       id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo', monto: Number(j.monto),
       gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null,
@@ -1054,7 +1062,12 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
       recalculo = { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision, banqueadores: jugada.banqueadores };
     } else {
       const c = resolverClienteMarca({ numero1: numero1Final, numero2: numero2Final, monto: montoFinal }, rank);
-      if (jugada.banqueadores) {
+      if (c.nula) {
+        // NULA (28-09-2026): si la edición hace que ahora ninguno de los
+        // 2 caballos figure, se limpia cualquier banqueo que ya tuviera
+        // asignado (con nula no hay nada que banquear) y queda en 0.
+        recalculo = { estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: null, banqueadores: null };
+      } else if (jugada.banqueadores) {
         const banqueadoresPrevios = typeof jugada.banqueadores === 'string' ? JSON.parse(jugada.banqueadores) : jugada.banqueadores;
         const base = c.acierta ? c.resultadoCliente : montoFinal;
         const { banqueadores, comisionMarcas } = resolverBanqueoMarca({ acierta: c.acierta, base }, banqueadoresPrevios, Number(jugada.comision_porcentaje));
@@ -1958,7 +1971,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
   // un cliente más (ej. "MARCAS ZENYATTA").
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.resultado_cliente, j.comision, j.banqueadores, j.monto
+    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -1993,6 +2006,17 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   rAdelantadas.rows.forEach(j => {
     acumular(j.cliente_nombre, j.resultado_cliente);
     if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
+    // "PORCENTAJE MARCAS" (28-09-2026, a pedido del usuario: "ese item
+    // que también es como un cliente, me vas a ir sumando siempre ese
+    // 2.5% que deja [el banquero] en marcas") — la comisión de cada
+    // Marca ya banqueada (j.comision, armada por resolverBanqueoMarca)
+    // se suma acá como un "cliente" más, igual que "{cliente} -
+    // PORCENTAJE" para el % devuelto — mismo criterio de
+    // "TABLAS FIJAS"/"% DE TABLAS FIJAS" pero del lado de Marcas. Solo
+    // 'marca' (las TF no pasan por acá — su comisión sigue solo dentro
+    // de comisionAdelantadasSemana, sin ítem propio en este reporte,
+    // tal como estaba).
+    if (j.tipo === 'marca' && j.comision) acumular('PORCENTAJE MARCAS', Number(j.comision));
     if (Array.isArray(j.banqueadores)) {
       j.banqueadores.forEach(b => acumular(b.nombre, b.monto));
     }
