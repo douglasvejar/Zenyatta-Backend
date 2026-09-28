@@ -2006,16 +2006,26 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   rAdelantadas.rows.forEach(j => {
     acumular(j.cliente_nombre, j.resultado_cliente);
     if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
+    // "TABLAS FIJAS" / "% DE TABLAS FIJAS" (28-09-2026, a pedido del
+    // usuario: "el item tabla fijas no me sale en los balances... todos
+    // los item deben verse reflejado con su saldo en balances") — este
+    // reporte (Balance General semanal) ya traía estos 2 ítems para la
+    // vista INMEDIATA de "Cargar Planos" (ver mezclarAdelantadasEnBalance
+    // más arriba), pero nunca se armaban acá para la semana completa —
+    // mismo cálculo exacto (espejo del cliente sin comisión adentro, más
+    // la comisión aparte), reconstruido con lo que ya trae esta consulta
+    // (resultado_cliente/comision), sin tocar el schema.
+    if (j.tipo === 'tf') {
+      acumular('TABLAS FIJAS', -Number(j.resultado_cliente));
+      if (j.comision) acumular('% DE TABLAS FIJAS', Number(j.comision));
+    }
     // "PORCENTAJE MARCAS" (28-09-2026, a pedido del usuario: "ese item
     // que también es como un cliente, me vas a ir sumando siempre ese
     // 2.5% que deja [el banquero] en marcas") — la comisión de cada
     // Marca ya banqueada (j.comision, armada por resolverBanqueoMarca)
     // se suma acá como un "cliente" más, igual que "{cliente} -
     // PORCENTAJE" para el % devuelto — mismo criterio de
-    // "TABLAS FIJAS"/"% DE TABLAS FIJAS" pero del lado de Marcas. Solo
-    // 'marca' (las TF no pasan por acá — su comisión sigue solo dentro
-    // de comisionAdelantadasSemana, sin ítem propio en este reporte,
-    // tal como estaba).
+    // "TABLAS FIJAS"/"% DE TABLAS FIJAS" pero del lado de Marcas.
     if (j.tipo === 'marca' && j.comision) acumular('PORCENTAJE MARCAS', Number(j.comision));
     if (Array.isArray(j.banqueadores)) {
       j.banqueadores.forEach(b => acumular(b.nombre, b.monto));

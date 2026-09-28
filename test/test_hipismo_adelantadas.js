@@ -714,6 +714,23 @@ function reqBase(grupoId) {
   check(!!itemPorcentajeMarcas && itemPorcentajeMarcas.saldo === 1.2, 'GET /cierre-final trae el ítem "PORCENTAJE MARCAS" con +1,2 (la comisión de Marcas Sammy en la marca ya banqueada de Halland)');
   check(!resCierre._json.clientes.some(c => c.nombre === 'PORCENTAJE MARCAS' && c.perdio > 0), '"PORCENTAJE MARCAS" solo acumula del lado "gano" (siempre es comisión a favor, nunca en contra)');
 
+  // (28-09-2026, a pedido del usuario: "el item tabla fijas no me sale en
+  // los balances... todos los item deben verse reflejado con su saldo en
+  // balances") — "TABLAS FIJAS" y "% DE TABLAS FIJAS" ya salían en el
+  // Balance INMEDIATO de "Cargar Planos" (punto 9 más arriba), pero nunca
+  // se armaban para la semana completa en /cierre-final. Se recalcula el
+  // total esperado directo contra la tabla falsa (mismo criterio que
+  // Linares arriba) en vez de hardcodear un número, porque son varias TF
+  // (carrera 12 y carrera 2) sumadas.
+  const tfResueltas = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.tipo === 'tf' && j.estado !== 'pendiente');
+  check(tfResueltas.length >= 3, 'Confirmado en la base: hay varias Tablas Fijas ya resueltas esta semana (carrera 12 y carrera 2), listas para que Cierre Final las sume');
+  const totalTablasFijasEsperado = Math.round(tfResueltas.reduce((acc, j) => acc - Number(j.resultado_cliente), 0) * 100) / 100;
+  const totalPorcentajeTfEsperado = Math.round(tfResueltas.reduce((acc, j) => acc + (j.comision ? Number(j.comision) : 0), 0) * 100) / 100;
+  const itemTablasFijas = resCierre._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
+  const itemPorcentajeTf = resCierre._json.clientes.find(c => c.nombre === '% DE TABLAS FIJAS');
+  check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo de TODAS las Tablas Fijas resueltas esta semana, sin comisión adentro) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
+  check(!!itemPorcentajeTf && itemPorcentajeTf.saldo === totalPorcentajeTfEsperado, `GET /cierre-final trae el ítem "% DE TABLAS FIJAS" (la comisión de TODAS las Tablas Fijas resueltas esta semana, aparte) — esperado ${totalPorcentajeTfEsperado}, salió ${itemPorcentajeTf && itemPorcentajeTf.saldo}`);
+
   // =================================================================
   // 10) PUT/DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, a
   // pedido del usuario: "en jugadas adelantadas quiero poder seleccionar
