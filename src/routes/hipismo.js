@@ -2008,16 +2008,22 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
     // "TABLAS FIJAS" / "% DE TABLAS FIJAS" (28-09-2026, a pedido del
     // usuario: "el item tabla fijas no me sale en los balances... todos
-    // los item deben verse reflejado con su saldo en balances") — este
-    // reporte (Balance General semanal) ya traía estos 2 ítems para la
-    // vista INMEDIATA de "Cargar Planos" (ver mezclarAdelantadasEnBalance
-    // más arriba), pero nunca se armaban acá para la semana completa —
-    // mismo cálculo exacto (espejo del cliente sin comisión adentro, más
-    // la comisión aparte), reconstruido con lo que ya trae esta consulta
-    // (resultado_cliente/comision), sin tocar el schema.
+    // los item deben verse reflejado con su saldo en balances", y
+    // corregido el mismo día tras ver Halland -36 convertirse en "Tablas
+    // fijas +36" en vez de "+35,10 / % de tablas fijas +0,90") — el
+    // espejo de Tablas Fijas tiene que salir NETO de su propia comisión
+    // (mismo invariante que resolverTablaFija: cliente + tablasFijas +
+    // comisión = 0 exacto). Restar solo resultado_cliente (bruto) y
+    // ADEMÁS mostrar "% DE TABLAS FIJAS" aparte deja ese monto "de más"
+    // en el balance, sin ningún renglón que lo compense — por eso
+    // comisionAdelantadasSemana (abajo) YA NO se suma al total de
+    // "Comisión" del pie (ver la nota de comisionRemateSemana más abajo,
+    // mismo criterio: un ítem que ya se ve solo en el balance no se
+    // vuelve a sumar aparte).
     if (j.tipo === 'tf') {
-      acumular('TABLAS FIJAS', -Number(j.resultado_cliente));
-      if (j.comision) acumular('% DE TABLAS FIJAS', Number(j.comision));
+      const comisionTf = j.comision != null ? Number(j.comision) : 0;
+      acumular('TABLAS FIJAS', -(Number(j.resultado_cliente) + comisionTf));
+      if (comisionTf) acumular('% DE TABLAS FIJAS', comisionTf);
     }
     // "PORCENTAJE MARCAS" (28-09-2026, a pedido del usuario: "ese item
     // que también es como un cliente, me vas a ir sumando siempre ese
@@ -2171,6 +2177,14 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     // "REMATE" arriba, dentro de "clientes", que es donde se muestra de
     // verdad ahora).
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
+    // comisionAdelantadasSemana (23-09-2026, ya no sumado al total de
+    // "Comisión" del pie desde el 28-09-2026): mismo criterio que
+    // comisionRemateSemana arriba — desde que "% DE TABLAS FIJAS" y
+    // "PORCENTAJE MARCAS" son ítems propios dentro de "clientes" (ver la
+    // nota grande más arriba), este número ya está 100% representado ahí
+    // adentro (con su contraparte exacta, no como un residuo suelto) —
+    // volver a sumarlo acá sería pagar la misma comisión dos veces. Se
+    // sigue devolviendo el dato crudo por compatibilidad.
     comisionAdelantadasSemana
   });
 }));

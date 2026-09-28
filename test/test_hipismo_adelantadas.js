@@ -722,14 +722,35 @@ function reqBase(grupoId) {
   // total esperado directo contra la tabla falsa (mismo criterio que
   // Linares arriba) en vez de hardcodear un número, porque son varias TF
   // (carrera 12 y carrera 2) sumadas.
+  //
+  // 28-09-2026 (corregido el mismo día): la primera versión de este
+  // arreglo calculaba "TABLAS FIJAS" BRUTO (-resultado_cliente, igual que
+  // el Balance INMEDIATO de "Cargar Planos"), lo que dejaba la comisión
+  // "de más" sin contraparte en la semana (el usuario lo agarró viendo a
+  // Halland -36 convertirse en "Tablas fijas +36" en vez de "+35,10 / %
+  // de tablas fijas +0,90"). Acá, a diferencia del Balance inmediato,
+  // "TABLAS FIJAS" tiene que salir NETO (mismo invariante de
+  // resolverTablaFija: cliente + tablasFijas + comisión = 0 exacto), para
+  // que cliente + "TABLAS FIJAS" + "% DE TABLAS FIJAS" sí sumen 0 exacto
+  // y la comisión no haya que sumarla una segunda vez en el pie.
   const tfResueltas = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.tipo === 'tf' && j.estado !== 'pendiente');
   check(tfResueltas.length >= 3, 'Confirmado en la base: hay varias Tablas Fijas ya resueltas esta semana (carrera 12 y carrera 2), listas para que Cierre Final las sume');
-  const totalTablasFijasEsperado = Math.round(tfResueltas.reduce((acc, j) => acc - Number(j.resultado_cliente), 0) * 100) / 100;
+  const totalTablasFijasEsperado = Math.round(tfResueltas.reduce((acc, j) => acc - (Number(j.resultado_cliente) + (j.comision ? Number(j.comision) : 0)), 0) * 100) / 100;
   const totalPorcentajeTfEsperado = Math.round(tfResueltas.reduce((acc, j) => acc + (j.comision ? Number(j.comision) : 0), 0) * 100) / 100;
   const itemTablasFijas = resCierre._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
   const itemPorcentajeTf = resCierre._json.clientes.find(c => c.nombre === '% DE TABLAS FIJAS');
-  check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo de TODAS las Tablas Fijas resueltas esta semana, sin comisión adentro) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
+  check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo NETO de su propia comisión, de TODAS las Tablas Fijas resueltas esta semana) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
   check(!!itemPorcentajeTf && itemPorcentajeTf.saldo === totalPorcentajeTfEsperado, `GET /cierre-final trae el ítem "% DE TABLAS FIJAS" (la comisión de TODAS las Tablas Fijas resueltas esta semana, aparte) — esperado ${totalPorcentajeTfEsperado}, salió ${itemPorcentajeTf && itemPorcentajeTf.saldo}`);
+
+  // El punto concreto que reportó el usuario: sumando el resultado_cliente
+  // real de CADA Tabla Fija más "TABLAS FIJAS" más "% DE TABLAS FIJAS",
+  // no debe quedar NADA sin contraparte (antes del arreglo, esta suma
+  // daba +10,77 de más — exactamente el total de comisión "fantasma" que
+  // aparecía sumada 2 veces: una dentro de "TABLAS FIJAS" bruto, otra en
+  // "% DE TABLAS FIJAS").
+  const sumaResultadoClienteTf = Math.round(tfResueltas.reduce((acc, j) => acc + Number(j.resultado_cliente), 0) * 100) / 100;
+  const sumaTotalCuadrada = Math.round((sumaResultadoClienteTf + itemTablasFijas.saldo + itemPorcentajeTf.saldo) * 100) / 100;
+  check(sumaTotalCuadrada === 0, `Cliente(s) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto, sin comisión "de más" sin contraparte — dio ${sumaTotalCuadrada}`);
 
   // =================================================================
   // 10) PUT/DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, a
