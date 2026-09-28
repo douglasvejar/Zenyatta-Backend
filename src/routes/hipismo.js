@@ -2034,6 +2034,20 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // cada fila ya es el resultado NETO de ese cliente, así que se suma
   // exactamente igual que un ticket ya resuelto — sin comisión ni "monto
   // apostado" aparte (Winners no tiene ninguno de los 2).
+  //
+  // ÍTEM "WINNERS" (28-09-2026, a pedido del usuario: "ya le sale
+  // reflejada al cliente su jugada y su positivo y negativo eso esta
+  // excelente, pero eso debe ir contra el codigo llamado winners....
+  // si lusho tiene +400 en winners, winners debe decir -400... todo
+  // negativo debe tener su contra parte reflejado en la contabilidad")
+  // — mismo principio ya aplicado a TABLAS FIJAS/PORCENTAJE MARCAS/
+  // REMATE: cada monto que gana o pierde un cliente en Winners tiene
+  // que tener su contraparte exacta en otro renglón, o el balance no
+  // cuadra (la suma de TODOS los saldos positivos y negativos deja de
+  // dar 0). Acá "WINNERS" es literalmente el otro lado de la apuesta —
+  // si LUSHO ganó +400, alguien (el ítem "WINNERS") tiene que perder
+  // esos mismos 400. Ver el forEach más abajo, que acumula el espejo
+  // exacto (-monto) de cada fila junto con el lado del cliente.
   const rWinners = await db.query(
     `SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
@@ -2053,7 +2067,10 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     acumular(t.banquero_nombre, t.resultado_banquero);
   });
   rApuestasRemate.rows.forEach(a => acumular(a.cliente_nombre, a.resultado));
-  rWinners.rows.forEach(w => acumular(w.cliente_nombre, w.monto));
+  rWinners.rows.forEach(w => {
+    acumular(w.cliente_nombre, w.monto);
+    acumular('WINNERS', -Number(w.monto));
+  });
 
   let comisionAdelantadasSemana = 0;
   rAdelantadas.rows.forEach(j => {
