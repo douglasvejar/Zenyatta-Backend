@@ -748,6 +748,13 @@
            formato. Solo el tab + una pantalla vacía por ahora, sin backend
            — ver claude/plan-modulo-hipismo.md. -->
       <button type="button" class="nav-item nav-child" data-vista="cargarWinners" onclick="mostrarVista('cargarWinners', this)">🏆<span class="nav-lbl"> Cargar Winners</span></button>
+      <!-- "Eliminar Winners" (28-09-2026, a pedido del usuario: "crea un
+           boton debajo de cargar winners... que se llame eliminar
+           winners... alli podre ver editar y eliminar todas las jugadas
+           de winners, ordenadas por fecha, por hipodromo, por carrera")
+           — mismo patrón de drill-down día > hipódromo > carrera que ya
+           usa "Eliminar Planos", ver vista-eliminarWinners más abajo. -->
+      <button type="button" class="nav-item nav-child" data-vista="eliminarWinners" onclick="mostrarVista('eliminarWinners', this)">🗑️<span class="nav-lbl"> Eliminar Winners</span></button>
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
@@ -2152,6 +2159,21 @@ Pizarra: [se llena al calcular]
         <div id="resultadoVacioWinners" class="resultado-vacio">El resultado de los Winners va a aparecer acá cuando le des Calcular.</div>
         <div id="avisoResultadoWinners" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaWinners" style="display:none;"></pre>
+      </div>
+    </section>
+
+    <!-- ============ ELIMINAR WINNERS (28-09-2026) ============
+         A pedido del usuario: "crea un boton debajo de cargar winners...
+         que se llame eliminar winners... alli podre ver editar y
+         eliminar todas las jugadas de winners, ordenadas por fecha, por
+         hipodromo, por carrera" — mismo drill-down día > hipódromo >
+         carrera que "Eliminar Planos", ver pintarEliminarWinners() más
+         abajo. -->
+    <section class="vista" id="vista-eliminarWinners">
+      <div class="card">
+        <h2>🗑️ Eliminar Winners</h2>
+        <p class="desc">Elige el día, después el hipódromo y la carrera. Cada línea (cliente, caballo y monto) se puede editar o eliminar por separado — cada cambio queda anotado en 🔔 Alertas. A diferencia de "Eliminar Planos", acá el borrado es permanente (no hay papelera).</p>
+        <div id="listaEliminarWinners"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
 
@@ -9800,6 +9822,159 @@ async function eliminarPlanoDesdeDetalle(planoId) {
 }
 
 // ------------------------------------------------------------------
+// "ELIMINAR WINNERS" (28-09-2026, a pedido del usuario: "crea un boton
+// debajo de cargar winners... que se llame eliminar winners... alli
+// podre ver editar y eliminar todas las jugadas de winners, ordenadas
+// por fecha, por hipodromo, por carrera") — mismo patrón de drill-down
+// día > hipódromo > carrera que "Eliminar Planos" arriba, pero SIN un
+// tercer nivel de "detalle del plano": cada fila de hipismo_winners YA
+// es la unidad más chica que existe (no hay una cabecera que agrupe
+// varias líneas), así que agrupar por (fecha, hipódromo, carrera) del
+// lado del cliente alcanza para mostrar "las líneas que se cargaron
+// juntas", con Editar/Eliminar por línea directo ahí mismo — sin
+// papelera (a diferencia de "Eliminar Planos"), mismo criterio que
+// Jugadas Adelantadas (PUT/DELETE /adelantadas/jugadas/:id).
+let ELIMINAR_WINNERS_DIA = null;
+let ELIMINAR_WINNERS_EN_EDICION = null;
+
+function pintarEliminarWinners() {
+  if (ELIMINAR_WINNERS_DIA) return pintarEliminarWinnersDia();
+  return pintarEliminarWinnersDias();
+}
+
+async function pintarEliminarWinnersDias() {
+  const cont = document.getElementById('listaEliminarWinners');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let dias;
+  try {
+    dias = await apiHipismo('/api/hipismo/winners/dias');
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar los días: ${e.message}</div>`;
+    return;
+  }
+  if (!dias.length) {
+    cont.innerHTML = '<div class="placeholder-card">Todavía no hay Winners cargados.</div>';
+    return;
+  }
+  cont.innerHTML = dias.map(d => `
+    <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarDiaEliminarWinners('${d.fecha}')">
+      <span class="nombre">📅 ${formatFechaCortaDMY(d.fecha)} <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— ${d.cantidad} línea${d.cantidad === 1 ? '' : 's'}</span></span>
+      <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
+    </div>`).join('');
+}
+
+function seleccionarDiaEliminarWinners(fecha) {
+  ELIMINAR_WINNERS_DIA = fecha;
+  ELIMINAR_WINNERS_EN_EDICION = null;
+  pintarEliminarWinners();
+}
+
+function volverADiasEliminarWinners() {
+  ELIMINAR_WINNERS_DIA = null;
+  ELIMINAR_WINNERS_EN_EDICION = null;
+  pintarEliminarWinners();
+}
+
+function abrirEdicionWinner(id) {
+  ELIMINAR_WINNERS_EN_EDICION = id;
+  pintarEliminarWinnersDia();
+}
+function cerrarEdicionWinner() {
+  ELIMINAR_WINNERS_EN_EDICION = null;
+  pintarEliminarWinnersDia();
+}
+
+function filaEdicionWinnerHtml(w) {
+  const clienteVal = (w.cliente_nombre || '').replace(/"/g, '&quot;');
+  const caballoVal = (w.caballo || '').replace(/"/g, '&quot;');
+  return `
+    <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editWinnerCliente_${w.id}" placeholder="Cliente" value="${clienteVal}">
+        <input type="text" id="editWinnerCaballo_${w.id}" placeholder="N° Caballo" value="${caballoVal}">
+        <input type="number" id="editWinnerMonto_${w.id}" placeholder="Monto" step="0.01" value="${w.monto}">
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarEdicionWinner('${w.id}')">💾 Guardar</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionWinner()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarEdicionWinner(id) {
+  const body = {
+    cliente: document.getElementById(`editWinnerCliente_${id}`).value.trim(),
+    caballo: document.getElementById(`editWinnerCaballo_${id}`).value.trim(),
+    monto: document.getElementById(`editWinnerMonto_${id}`).value
+  };
+  try {
+    await apiHipismo(`/api/hipismo/winners/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  ELIMINAR_WINNERS_EN_EDICION = null;
+  pintarEliminarWinnersDia();
+}
+
+async function eliminarWinner(id) {
+  if (!confirm('¿Eliminar esta línea de Winners? No se puede deshacer.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/winners/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  pintarEliminarWinnersDia();
+}
+
+async function pintarEliminarWinnersDia() {
+  const cont = document.getElementById('listaEliminarWinners');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let winners;
+  try {
+    winners = await apiHipismo(`/api/hipismo/winners?fecha=${ELIMINAR_WINNERS_DIA}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar los Winners: ${e.message}</div>`;
+    return;
+  }
+  const volver = `<div class="btn-fila" style="margin-bottom:10px;"><button class="btn btn-secundario" type="button" onclick="volverADiasEliminarWinners()">&lsaquo; Volver a los días</button></div>`;
+  if (!winners.length) {
+    cont.innerHTML = volver + '<div class="placeholder-card">Sin Winners cargados ese día.</div>';
+    return;
+  }
+  const porHipodromo = new Map();
+  winners.forEach(w => {
+    if (!porHipodromo.has(w.hipodromo_nombre)) porHipodromo.set(w.hipodromo_nombre, []);
+    porHipodromo.get(w.hipodromo_nombre).push(w);
+  });
+  let html = volver + `<div style="font-weight:700; margin-bottom:8px;">📅 ${formatFechaCortaDMY(ELIMINAR_WINNERS_DIA)}</div>`;
+  Array.from(porHipodromo.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(hipodromoNombre => {
+    const porCarrera = new Map();
+    porHipodromo.get(hipodromoNombre).forEach(w => {
+      if (!porCarrera.has(w.carrera_numero)) porCarrera.set(w.carrera_numero, []);
+      porCarrera.get(w.carrera_numero).push(w);
+    });
+    const carrerasHtml = Array.from(porCarrera.keys()).sort((a, b) => a - b).map(numCarrera => {
+      const lineasHtml = porCarrera.get(numCarrera).map(w => {
+        if (ELIMINAR_WINNERS_EN_EDICION === w.id) return filaEdicionWinnerHtml(w);
+        return `
+          <div class="balance-fila" style="margin-bottom:4px;">
+            <span class="nombre">🐎 ${w.caballo} — ${formatNombre(w.cliente_nombre)} <span class="${w.monto >= 0 ? 'pos' : 'neg'}">${w.monto >= 0 ? '+' : '-'}${formatMontoTabla(w.monto)}</span></span>
+            <span class="btn-fila" style="gap:6px;">
+              <button class="btn btn-secundario" type="button" onclick="abrirEdicionWinner('${w.id}')">✏️ Editar</button>
+              <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarWinner('${w.id}')">🗑️ Eliminar</button>
+            </span>
+          </div>`;
+      }).join('');
+      return `<div style="margin-bottom:10px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">${ordinalCarrera(numCarrera)} Carrera</div>${lineasHtml}</div>`;
+    }).join('');
+    html += `<div style="margin-bottom:14px;"><h3 style="margin:0 0 8px; font-size:14px;">🏟️ ${hipodromoNombre}</h3>${carrerasHtml}</div>`;
+  });
+  cont.innerHTML = html;
+}
+
+// ------------------------------------------------------------------
 // Papelera de Planos (Administración > 🗑️ Planos Eliminados) — restaura
 // lo que se borró desde "Eliminar Planos", arriba.
 async function pintarPlanosEliminados() {
@@ -10032,6 +10207,7 @@ pintarComisionesPorCarrera();
 pintarComisionesDevueltas();
 pintarSaldoComisiones();
 pintarEliminarPlanos();
+pintarEliminarWinners();
 pintarMontosApostados();
 pintarPlanosEliminados();
 pintarAlertasHipismo();

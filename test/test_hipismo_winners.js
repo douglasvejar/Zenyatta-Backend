@@ -36,7 +36,8 @@ const originalLoad = Module._load;
 const GRUPO_ID = 'grupo-winners-1';
 const TABLAS = {
   jugadores: [],
-  hipismo_winners: []
+  hipismo_winners: [],
+  hipismo_alertas: []
 };
 let seq = 1;
 const nuevoId = (prefijo) => prefijo + (seq++);
@@ -74,6 +75,53 @@ function ejecutarQuery(text, params) {
     };
     TABLAS.hipismo_winners.push(fila);
     return { rows: [fila] };
+  }
+
+  // "Eliminar Winners" (28-09-2026) — GET /winners/dias.
+  if (/^SELECT fecha, COUNT\(\*\)::int AS cantidad\s+FROM hipismo_winners\s+WHERE grupo_id = \$1\s+GROUP BY fecha\s+ORDER BY fecha DESC\s+LIMIT 120/i.test(sql)) {
+    const [grupoId] = params;
+    const porFecha = new Map();
+    TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId).forEach(w => {
+      porFecha.set(w.fecha, (porFecha.get(w.fecha) || 0) + 1);
+    });
+    return { rows: Array.from(porFecha.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([fecha, cantidad]) => ({ fecha, cantidad })) };
+  }
+  // GET /winners?fecha= (con o sin filtro de fecha).
+  if (/^SELECT \* FROM hipismo_winners WHERE grupo_id = \$1\s*(AND fecha = \$2)?\s+ORDER BY fecha DESC, hipodromo_nombre ASC, carrera_numero ASC, creado_en ASC\s+LIMIT 200/i.test(sql)) {
+    const [grupoId, fecha] = params;
+    let filas = TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId);
+    if (fecha) filas = filas.filter(w => w.fecha === fecha);
+    filas = filas.slice().sort((a, b) =>
+      b.fecha.localeCompare(a.fecha) ||
+      a.hipodromo_nombre.localeCompare(b.hipodromo_nombre) ||
+      a.carrera_numero - b.carrera_numero ||
+      a.creado_en - b.creado_en
+    );
+    return { rows: filas };
+  }
+  // PUT/DELETE /winners/:id: buscar la fila por id.
+  if (/^SELECT \* FROM hipismo_winners WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
+    const [id, grupoId] = params;
+    return { rows: TABLAS.hipismo_winners.filter(w => w.id === id && w.grupo_id === grupoId) };
+  }
+  // PUT /winners/:id: UPDATE.
+  if (/^UPDATE hipismo_winners SET cliente_nombre = \$1, caballo = \$2, monto = \$3\s+WHERE id = \$4 AND grupo_id = \$5 RETURNING \*/i.test(sql)) {
+    const [clienteNombre, caballo, monto, id, grupoId] = params;
+    const fila = TABLAS.hipismo_winners.find(w => w.id === id && w.grupo_id === grupoId);
+    if (fila) { fila.cliente_nombre = clienteNombre; fila.caballo = caballo; fila.monto = monto; }
+    return { rows: fila ? [fila] : [] };
+  }
+  // DELETE /winners/:id.
+  if (/^DELETE FROM hipismo_winners WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
+    const [id, grupoId] = params;
+    TABLAS.hipismo_winners = TABLAS.hipismo_winners.filter(w => !(w.id === id && w.grupo_id === grupoId));
+    return { rows: [] };
+  }
+  // registrarAlerta() -- PUT/DELETE de Winners generan alerta (WINNER_EDITADO/WINNER_ELIMINADO).
+  if (/^INSERT INTO hipismo_alertas \(grupo_id, tipo, usuario, hipodromo_nombre, carrera_numero, fecha, mensaje\)/i.test(sql)) {
+    const [grupoId, tipo, usuario, hipodromoNombre, carreraNumero, fecha, mensaje] = params;
+    TABLAS.hipismo_alertas.push({ grupo_id: grupoId, tipo, usuario, hipodromo_nombre: hipodromoNombre, carrera_numero: carreraNumero, fecha, mensaje });
+    return { rows: [] };
   }
 
   throw new Error('La base de datos falsa de esta prueba (winners) no sabe responder: ' + sql);
@@ -116,6 +164,10 @@ function handlerDe(metodo, rutaPath) {
   return entrada[1][entrada[1].length - 1];
 }
 const handlerWinners = handlerDe('post', '/winners');
+const handlerWinnersDias = handlerDe('get', '/winners/dias');
+const handlerWinnersLista = handlerDe('get', '/winners');
+const handlerWinnersPut = handlerDe('put', '/winners/:id');
+const handlerWinnersDelete = handlerDe('delete', '/winners/:id');
 
 function invocarRuta(handler, req) {
   return new Promise((resolve, reject) => {
@@ -130,6 +182,12 @@ function invocarRuta(handler, req) {
 
 function reqBase(grupoId, body) {
   return { grupoId, grupo: { nombre: 'Zenyatta' }, body: body || {} };
+}
+function reqGet(grupoId, query) {
+  return { grupoId, grupo: { nombre: 'Zenyatta' }, nombreActor: 'Zenyatta', params: {}, query: query || {} };
+}
+function reqConId(grupoId, id, body) {
+  return { grupoId, grupo: { nombre: 'Zenyatta' }, nombreActor: 'Zenyatta', params: { id }, query: {}, body: body || {} };
 }
 
 let pasaron = 0, fallaron = 0;
@@ -229,6 +287,64 @@ async function main() {
     }));
     check(res._status === 400, '7a) Todas las líneas en 0 -> 400');
     check(TABLAS.hipismo_winners.length === antes, '7b) No se insertó ninguna fila nueva');
+  }
+
+  // =================================================================
+  // "ELIMINAR WINNERS" (28-09-2026, a pedido del usuario: "crea un boton
+  // debajo de cargar winners... que se llame eliminar winners... alli
+  // podre ver editar y eliminar todas las jugadas de winners, ordenadas
+  // por fecha, por hipodromo, por carrera"). A esta altura ya hay 5 filas
+  // guardadas en '2026-09-26' (La Rinconada): PEDRO/5 +40, JUNKO/9 -15,
+  // PEDRO/6 +25, MUJICA/1 +30, MUJICA/4 -10.
+
+  // 8) GET /winners/dias
+  {
+    const res = await invocarRuta(handlerWinnersDias, reqGet(GRUPO_ID));
+    check(res._status === 200, '8a) GET /winners/dias responde 200');
+    const dia = res._json.find(d => d.fecha === '2026-09-26');
+    check(!!dia && dia.cantidad === 5, `8b) El día 2026-09-26 trae cantidad=5, dio ${dia && dia.cantidad}`);
+  }
+
+  // 9) GET /winners?fecha=2026-09-26 -- ordenado por hipódromo/carrera/creado_en.
+  let idParaEditar, idParaEliminar;
+  {
+    const res = await invocarRuta(handlerWinnersLista, reqGet(GRUPO_ID, { fecha: '2026-09-26' }));
+    check(res._status === 200, '9a) GET /winners?fecha= responde 200');
+    check(res._json.length === 5, `9b) Trae las 5 líneas de ese día, dio ${res._json.length}`);
+    check(res._json[0].carrera_numero === 3 && res._json[1].carrera_numero === 3, '9c) Ordenado por carrera: las 2 de la carrera 3 (PEDRO/JUNKO) primero');
+    idParaEditar = res._json.find(w => w.cliente_nombre === 'PEDRO' && w.caballo === '5').id;
+    idParaEliminar = res._json.find(w => w.cliente_nombre === 'JUNKO').id;
+  }
+
+  // 10) PUT /winners/:id -- edita cliente/caballo/monto de una línea puntual.
+  {
+    const res = await invocarRuta(handlerWinnersPut, reqConId(GRUPO_ID, idParaEditar, { monto: 999 }));
+    check(res._status === 200, '10a) PUT /winners/:id responde 200');
+    check(Number(res._json.monto) === 999, `10b) El monto quedó en 999, dio ${res._json.monto}`);
+    check(res._json.cliente_nombre === 'PEDRO' && res._json.caballo === '5', '10c) cliente/caballo no cambiaron (no vinieron en el body)');
+    check(TABLAS.hipismo_alertas.some(a => a.tipo === 'WINNER_EDITADO'), '10d) Se registró una alerta WINNER_EDITADO');
+  }
+
+  // 11) DELETE /winners/:id -- borra una línea puntual, sin papelera.
+  {
+    const antes = TABLAS.hipismo_winners.length;
+    const res = await invocarRuta(handlerWinnersDelete, reqConId(GRUPO_ID, idParaEliminar));
+    check(res._status === 200 && res._json.ok === true, '11a) DELETE /winners/:id responde { ok: true }');
+    check(TABLAS.hipismo_winners.length === antes - 1, '11b) Se borró la fila de verdad (una menos en la tabla)');
+    check(!TABLAS.hipismo_winners.some(w => w.id === idParaEliminar), '11c) La fila de JUNKO ya no existe');
+    check(TABLAS.hipismo_alertas.some(a => a.tipo === 'WINNER_ELIMINADO'), '11d) Se registró una alerta WINNER_ELIMINADO');
+
+    const resLista = await invocarRuta(handlerWinnersLista, reqGet(GRUPO_ID, { fecha: '2026-09-26' }));
+    check(resLista._json.length === 4, `11e) GET /winners?fecha= ahora trae 4 líneas, dio ${resLista._json.length}`);
+  }
+
+  // 12) Un id que no existe (o de otro grupo) da 404, nunca revienta.
+  {
+    const resPut = await invocarRuta(handlerWinnersPut, reqConId(GRUPO_ID, 'no-existe', { monto: 5 }));
+    check(resPut._status === 404, '12a) PUT a un id inexistente -> 404');
+    const resDelete = await invocarRuta(handlerWinnersDelete, reqConId('otro-grupo-id', idParaEditar));
+    check(resDelete._status === 404, '12b) DELETE de una línea de OTRO grupo -> 404 (nunca la borra)');
+    check(TABLAS.hipismo_winners.some(w => w.id === idParaEditar), '12c) La línea de PEDRO sigue existiendo (el intento de otro grupo no la tocó)');
   }
 
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron.`);

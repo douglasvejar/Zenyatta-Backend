@@ -1465,6 +1465,109 @@ router.post('/winners', asyncHandler(async (req, res) => {
   res.status(201).json({ lineas: filasGuardadas, totalesPorCliente, textoResultado });
 }));
 
+// =================================================================
+// "ELIMINAR WINNERS" (28-09-2026, a pedido del usuario: "crea un boton
+// debajo de cargar winners... que se llame eliminar winners... alli
+// podre ver editar y eliminar todas las jugadas de winners, ordenadas
+// por fecha, por hipodromo, por carrera") — mismo patrón EXACTO de
+// drill-down que ya usa "Eliminar Planos" (GET /planos/dias, después
+// GET /planos?fecha=), pero SIN papelera recuperable: a diferencia de un
+// plano (que es una cabecera con sus tickets), cada fila de
+// hipismo_winners YA es la unidad más chica que existe — no hay un
+// "plano de Winners" aparte que agrupe varias líneas, así que agrupar
+// por (fecha, hipódromo, carrera) alcanza para reconstruir "las líneas
+// que se cargaron juntas" sin necesitar una tabla cabecera nueva.
+//
+// GET /winners/dias va ANTES que cualquier otra ruta /winners/:algo para
+// que Express no intente matchear "dias" como si fuera un :id (mismo
+// criterio ya usado para /planos/dias).
+router.get('/winners/dias', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT fecha, COUNT(*)::int AS cantidad
+       FROM hipismo_winners
+      WHERE grupo_id = $1
+      GROUP BY fecha
+      ORDER BY fecha DESC
+      LIMIT 120`,
+    [req.grupoId]
+  );
+  res.json(r.rows.map(row => ({
+    fecha: row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha,
+    cantidad: row.cantidad
+  })));
+}));
+
+// GET /winners?fecha= : todas las líneas cargadas ese día, ordenadas por
+// hipódromo y carrera (el frontend las agrupa así para "Eliminar
+// Winners") — sin "fecha" devuelve las últimas 200 sin filtrar, mismo
+// respaldo que ya usa GET /remates.
+router.get('/winners', asyncHandler(async (req, res) => {
+  const { fecha } = req.query;
+  const params = [req.grupoId];
+  let condicionFecha = '';
+  if (fecha) { params.push(fecha); condicionFecha = `AND fecha = $${params.length}`; }
+  const r = await db.query(
+    `SELECT * FROM hipismo_winners WHERE grupo_id = $1 ${condicionFecha}
+      ORDER BY fecha DESC, hipodromo_nombre ASC, carrera_numero ASC, creado_en ASC
+      LIMIT 200`,
+    params
+  );
+  res.json(r.rows);
+}));
+
+// PUT /winners/:id : edita UNA línea puntual (cliente, caballo y/o
+// monto) — mismo alcance de edición que ya tiene PUT
+// /adelantadas/jugadas/:id (nunca mueve la línea de fecha/hipódromo/
+// carrera, eso sería borrarla y cargarla de nuevo en el sitio correcto).
+router.put('/winners/:id', asyncHandler(async (req, res) => {
+  const rWinner = await db.query('SELECT * FROM hipismo_winners WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const winner = rWinner.rows[0];
+  if (!winner) return res.status(404).json({ error: 'Winner no encontrado.' });
+
+  const { cliente, caballo, monto } = req.body;
+  const clienteFinal = ((cliente !== undefined && cliente !== null && cliente !== '') ? String(cliente) : winner.cliente_nombre).trim();
+  const caballoFinal = ((caballo !== undefined && caballo !== null && caballo !== '') ? String(caballo) : winner.caballo).trim();
+  const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(winner.monto);
+  if (!clienteFinal) return res.status(400).json({ error: 'Falta el cliente.' });
+  if (!caballoFinal) return res.status(400).json({ error: 'Falta el caballo.' });
+  if (!isFinite(montoFinal) || montoFinal === 0) return res.status(400).json({ error: 'El monto no puede quedar en 0.' });
+
+  if (clienteFinal !== winner.cliente_nombre) await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+
+  const r = await db.query(
+    `UPDATE hipismo_winners SET cliente_nombre = $1, caballo = $2, monto = $3
+      WHERE id = $4 AND grupo_id = $5 RETURNING *`,
+    [clienteFinal, caballoFinal, montoFinal, winner.id, req.grupoId]
+  );
+
+  const fechaTexto = winner.fecha instanceof Date ? winner.fecha.toISOString().slice(0, 10) : winner.fecha;
+  await registrarAlerta(req, {
+    tipo: 'WINNER_EDITADO', hipodromoNombre: winner.hipodromo_nombre, carreraNumero: winner.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se editó el Winner de ${clienteFinal} (carrera ${winner.carrera_numero}, ${winner.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json(r.rows[0]);
+}));
+
+// DELETE /winners/:id : elimina UNA línea puntual — sin papelera (a
+// diferencia de "Eliminar Planos"), mismo criterio que DELETE
+// /adelantadas/jugadas/:id.
+router.delete('/winners/:id', asyncHandler(async (req, res) => {
+  const rWinner = await db.query('SELECT * FROM hipismo_winners WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const winner = rWinner.rows[0];
+  if (!winner) return res.status(404).json({ error: 'Winner no encontrado.' });
+
+  await db.query('DELETE FROM hipismo_winners WHERE id = $1 AND grupo_id = $2', [winner.id, req.grupoId]);
+
+  const fechaTexto = winner.fecha instanceof Date ? winner.fecha.toISOString().slice(0, 10) : winner.fecha;
+  await registrarAlerta(req, {
+    tipo: 'WINNER_ELIMINADO', hipodromoNombre: winner.hipodromo_nombre, carreraNumero: winner.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se eliminó el Winner de ${winner.cliente_nombre} (carrera ${winner.carrera_numero}, ${winner.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json({ ok: true });
+}));
+
 // GET /balance-general?fecha= : el "último plano" del día, mismo criterio
 // que hoy usa el mockup (el resultado de lo último que se calculó) pero
 // leído de la base — spec sección 12. Cierre Final (agregado semanal
