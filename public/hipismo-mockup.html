@@ -1317,6 +1317,18 @@
       <div class="card">
         <h2>🧾 Detallado por Cliente</h2>
         <p class="desc">Lo mismo que Balance General, pero por cuadros: haz click en un cliente para ver todas sus jugadas de la semana, exactamente como las ve él mismo en su link personalizado. Sirve, entre otras cosas, para mandarle el reporte a mano (con "Copiar Imagen HD") a un cliente que no pueda abrir su link.</p>
+
+        <!-- Selector de semana (28-09-2026, a pedido del usuario: "detallado
+             por cliente necesito elegir entre semana anterior y semana
+             actual ya que solo me muestra semana actual") — mismo patrón
+             que "Semana por Días": los cuadros de la grilla completa
+             cambian de semana, y el modal de cada cliente (al hacer click)
+             hereda esa misma semana como punto de partida. -->
+        <div class="subnav" id="selectorSemanaDetalladoCliente">
+          <button type="button" class="activo" data-semana="actual" onclick="mostrarSemanaDetalladoCliente('actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="mostrarSemanaDetalladoCliente('anterior', this)">🗓️ Semana anterior</button>
+        </div>
+
         <div class="grid-clientes-detallado" id="gridClientesDetallado">
           <div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>
         </div>
@@ -4796,7 +4808,7 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   balanceGeneral: () => pintarBalanceGeneral(),
   // Detallado por Cliente (24-09-2026) — mismos cuadros de nombre/saldo
   // que Balance General; ver pintarDetalladoCliente() más abajo.
-  detalladoCliente: () => pintarDetalladoCliente(),
+  detalladoCliente: () => pintarDetalladoCliente(semanaActivaDeSelector('selectorSemanaDetalladoCliente')),
   cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
   semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
   comisionesPorCarrera: () => pintarComisionesPorCarrera(),
@@ -7305,12 +7317,19 @@ function aplicarRangoBalance() {
 // esta es la lección directa del bug de "Balance General" reportado
 // antes, donde 2 pantallas mostraban 2 saldos distintos).
 // ------------------------------------------------------------------
-async function pintarDetalladoCliente() {
+async function pintarDetalladoCliente(semana) {
+  semana = semana === 'anterior' ? 'anterior' : 'actual';
+  // 28-09-2026: se guarda la semana con la que se pintó la grilla para
+  // que, al hacer click en un cliente, el modal (abrirDetalleCliente)
+  // arranque en ESA MISMA semana en vez de siempre "actual" — si el
+  // operador ya está viendo "Semana anterior" acá, quiere el detalle de
+  // ese cliente en esa misma semana, no en la actual.
+  DETALLADO_CLIENTE_SEMANA_ACTIVA = semana;
   const grid = document.getElementById('gridClientesDetallado');
   grid.innerHTML = '<div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>';
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
+    data = await apiHipismo(`/api/hipismo/cierre-final?semana=${semana}`);
   } catch (e) {
     grid.innerHTML = `<div class="placeholder-card" style="grid-column:1/-1;">No se pudo cargar: ${e.message}</div>`;
     return;
@@ -7350,6 +7369,11 @@ const DIAS_SEMANA_DET = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viern
 const MESES_DET = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const BANDERAS_DET = { VE: '🇻🇪', US: '🇺🇸' };
 let DETALLE_CLIENTE_NOMBRE = null;
+// Semana activa de la GRILLA de "Detallado por Cliente" (28-09-2026, ver
+// pintarDetalladoCliente/mostrarSemanaDetalladoCliente más abajo) — el
+// modal de un cliente puntual (abrirDetalleCliente) arranca en esta
+// misma semana, no siempre en "actual".
+let DETALLADO_CLIENTE_SEMANA_ACTIVA = 'actual';
 // "Seleccionar rango de fecha" (28-09-2026) — mismo patrón que
 // BALANCE_GENERAL_RANGO_ACTIVO: null = usa DETALLE_CLIENTE_SEMANA_ACTIVA
 // ('actual'/'anterior'); un objeto {desde,hasta} = usa ese rango en vez
@@ -7421,15 +7445,29 @@ function armarJugadaTextoDetallado(c) {
 
 async function abrirDetalleCliente(nombre) {
   DETALLE_CLIENTE_NOMBRE = nombre;
-  DETALLE_CLIENTE_SEMANA_ACTIVA = 'actual';
+  // 28-09-2026: arranca en la MISMA semana que ya tenía elegida la
+  // grilla de "Detallado por Cliente" (ver pintarDetalladoCliente), no
+  // siempre "actual" — si el operador ya estaba viendo "Semana anterior"
+  // afuera, el modal de este cliente abre directo en esa semana.
+  const semanaInicial = DETALLADO_CLIENTE_SEMANA_ACTIVA === 'anterior' ? 'anterior' : 'actual';
+  DETALLE_CLIENTE_SEMANA_ACTIVA = semanaInicial;
   DETALLE_CLIENTE_RANGO_ACTIVO = null;
   document.getElementById('modalDetalleCliente').style.display = 'flex';
   document.getElementById('detalleClienteNombre').textContent = formatNombre(nombre);
   document.getElementById('detalleClienteRango').textContent = '';
   document.getElementById('detalleClienteDias').innerHTML = '<div class="placeholder-card">Cargando…</div>';
-  document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.toggle('activo', b.dataset.semana === 'actual'));
+  document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.toggle('activo', b.dataset.semana === semanaInicial));
   document.getElementById('panelRangoDetalleCliente').style.display = 'none';
   await cargarDetalleCliente();
+}
+// Selector de semana de la GRILLA (28-09-2026, a pedido del usuario:
+// "detallado por cliente necesito elegir entre semana anterior y semana
+// actual ya que solo me muestra semana actual") — mismo patrón EXACTO
+// que mostrarSemanaPorDias() de "Semana por Días".
+function mostrarSemanaDetalladoCliente(semana, btn) {
+  document.querySelectorAll('#selectorSemanaDetalladoCliente button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  pintarDetalladoCliente(semana);
 }
 function cerrarDetalleCliente() {
   document.getElementById('modalDetalleCliente').style.display = 'none';
