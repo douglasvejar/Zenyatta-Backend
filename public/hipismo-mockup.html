@@ -725,6 +725,12 @@
     <div class="nav-children" id="grupoApuestas">
       <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥<span class="nav-lbl"> Cargar Planos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="validarPlano" onclick="mostrarVista('validarPlano', this)">✅<span class="nav-lbl"> Validar Plano</span></button>
+      <!-- "Eliminar Planos" (28-09-2026, a pedido del usuario: "el boton de
+           eliminar plano colocalo debajo de validar plano") — movido acá
+           desde su posición anterior (después de Jugadas Adelantadas, ver
+           más abajo); la pantalla en sí (vista-eliminarPlanos) no se tocó,
+           solo el orden del botón en el menú. -->
+      <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️<span class="nav-lbl"> Eliminar Planos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cargarRemate" onclick="mostrarVista('cargarRemate', this)">🏆<span class="nav-lbl"> Cargar Remate Automático desde Chat</span></button>
       <!-- 25-09-2026, a pedido del usuario: mismo remate, pero armado en
            la pantalla en vez de pegar el mensaje de WhatsApp — ver
@@ -732,15 +738,15 @@
       <button type="button" class="nav-item nav-child" data-vista="cargarRemateManual" onclick="mostrarVista('cargarRemateManual', this)">✍️<span class="nav-lbl"> Cargar Remate Manual</span></button>
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁<span class="nav-lbl"> Traspasos de Jugadas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Jugadas Adelantadas</span></button>
-      <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "en apuestas
-           crea un boton de eliminar planos" y "un boton en apuestas llamado
-           montos apostados" — van juntas acá, en ese mismo orden.
-           "Comisiones Devueltas" vivía acá desde esa misma ronda; el
-           24-09-2026 (vigesimocuarta ronda) el usuario pidió devolverla al
-           grupo "💼 Comisiones" y partirla en 2 pantallas — ver
+      <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "un boton en
+           apuestas llamado montos apostados". "Eliminar Planos" vivía acá
+           mismo desde esa ronda; el 28-09-2026 se movió justo debajo de
+           "Validar Plano" (ver más arriba), a pedido del usuario.
+           "Comisiones Devueltas" también vivía acá desde esa misma ronda;
+           el 24-09-2026 (vigesimocuarta ronda) el usuario pidió devolverla
+           al grupo "💼 Comisiones" y partirla en 2 pantallas — ver
            vista-comisionesDevueltas (renombrada "por Cliente") y
            vista-comisionesDevueltasPorHipodromo, ambas más abajo. -->
-      <button type="button" class="nav-item nav-child" data-vista="eliminarPlanos" onclick="mostrarVista('eliminarPlanos', this)">🗑️<span class="nav-lbl"> Eliminar Planos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="montosApostados" onclick="mostrarVista('montosApostados', this)">💰<span class="nav-lbl"> Montos Apostados</span></button>
       <!-- 23-09-2026 (duodécima-tercera ronda), a pedido del usuario: "crea
            en apuesta un pestaña que diga Cargar Winners" — respondió "crea
@@ -4929,8 +4935,12 @@ function poblarCarreras(selId) {
 // la 4ta") — avanza el <select> de Carrera de Cargar Planos a la
 // siguiente carrera, sin tocar Hipódromo ni Fecha (misma jornada).
 // Si ya está en la última carrera de la lista, la deja igual.
-function avanzarASiguienteCarrera() {
-  const sel = document.getElementById('selCarrera');
+// Recibe el id del <select> a avanzar (28-09-2026, misma tarde: se
+// generalizó para reusarla también en "Cargar Winners" — ver
+// confirmarWinners() más abajo — sin romper el único llamado que ya
+// existía, que sigue funcionando igual al no pasarle nada).
+function avanzarASiguienteCarrera(selId) {
+  const sel = document.getElementById(selId || 'selCarrera');
   if (!sel) return;
   if (sel.selectedIndex >= 0 && sel.selectedIndex < sel.options.length - 1) {
     sel.selectedIndex += 1;
@@ -6017,6 +6027,19 @@ async function confirmarWinners() {
 
   caja.style.display = 'block';
   caja.textContent = data.textoResultado;
+
+  // Deja todo listo para la SIGUIENTE carrera de la misma jornada
+  // (28-09-2026, a pedido del usuario: "despues de confirmar los winners
+  // y guardarlos, el formato debe quedar en 0 para cargar nuevos winners
+  // y pasa a la proxima carrera automaticamente") — mismo criterio que ya
+  // se usa en Cargar Planos (ver avanzarASiguienteCarrera() y su
+  // llamado en confirmarPlano()): la tabla de Cliente/Caballo/Monto
+  // vuelve a una sola fila vacía y el select de Carrera avanza solo una
+  // posición. Hipódromo y Fecha NO se tocan — sigue siendo la misma
+  // jornada.
+  construirFilasWinners();
+  poblarJugadoresWinners();
+  avanzarASiguienteCarrera('selCarreraWinners');
 
   winnersPendienteDeConfirmar = null;
   confirmandoWinners = false;

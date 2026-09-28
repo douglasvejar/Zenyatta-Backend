@@ -572,6 +572,25 @@ alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check
 alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
   check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA'));
 
+-- WINNER_EDITADO / WINNER_ELIMINADO (28-09-2026) — se agregan 2 tipos más
+-- al check de arriba, para "Eliminar Winners" (ver routes/hipismo.js,
+-- PUT/DELETE /winners/:id), a pedido del usuario ("crea un boton debajo
+-- de cargar winners... que se llame eliminar winners... alli podre ver
+-- editar y eliminar todas las jugadas de winners"). BUG encontrado el
+-- mismo día: el código de PUT/DELETE /winners/:id (ronda anterior) ya
+-- llamaba a registrarAlerta() con estos 2 tipos nuevos, pero esta línea
+-- del check NUNCA se actualizó para admitirlos — como las pruebas usan
+-- una base de datos falsa que no valida checks, todo pasaba en verde acá,
+-- pero contra el Postgres real de Supabase el INSERT en hipismo_alertas
+-- fallaba por violar el check DESPUÉS de que el DELETE/UPDATE de
+-- hipismo_winners ya se hubiera ejecutado y confirmado — por eso el
+-- usuario veía "error interno del servidor" al eliminar un Winner, pero
+-- al refrescar la página el Winner ya SÍ estaba eliminado. Mismo patrón
+-- que ADELANTADA_EDITADA/ADELANTADA_ELIMINADA/JORNADA_ELIMINADA arriba.
+alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
+alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO'));
+
 -- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
 -- "modo cuidadoso" (whatsapp_modo_cuidadoso) — la idea original, tras el
