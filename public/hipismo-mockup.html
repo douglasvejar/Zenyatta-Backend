@@ -7432,6 +7432,17 @@ function armarJugadaTextoDetallado(c) {
     const modoTxt = c.modo === 'paga' ? 'REMATE PAGA' : (c.modo === 'garantiza' ? 'REMATE GARANTIZA' : 'REMATE (%)');
     return c.huboGanador ? `🏆 ${modoTxt} — pagó ${formatMontoDet(c.pagoGanador)}` : `🏆 ${modoTxt} — quedó todo para la banca`;
   }
+  // Ítem "WINNERS" (28-09-2026, ver la nota grande de
+  // construirResumenWinnersHipismo en services/hipismoResumenCliente.js)
+  // — SOLO aparece en el detalle administrativo del ítem "WINNERS",
+  // nunca en el link de un cliente real. c.resultado ya es el ESPEJO del
+  // cliente (si el cliente ganó, acá sale negativo) — el texto se arma
+  // desde el punto de vista del cliente para que se lea natural.
+  if (c.tipo === 'winner_contraparte') {
+    return c.resultado < 0
+      ? `🏆 Winners — ${formatNombre(c.clienteNombre)} ganó con ${gualdrapaHTML(c.caballo)}`
+      : `🏆 Winners — ${formatNombre(c.clienteNombre)} perdió con ${gualdrapaHTML(c.caballo)}`;
+  }
   if (c.tipo === 'adelantada') {
     const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
     return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
@@ -7500,6 +7511,16 @@ function aplicarRangoDetalleCliente() {
 async function cargarDetalleCliente() {
   const cont = document.getElementById('detalleClienteDias');
   cont.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  // 28-09-2026, a pedido del usuario (reportó ver "+80,00" de OTRO
+  // cliente junto al error "No se encontró ese cliente" al abrir
+  // WINNERS): "Total de la semana" solo se actualizaba al terminar de
+  // cargar bien (ver renderDetalleClienteModal) — si la carga fallaba,
+  // se quedaba pegado el monto del último cliente que sí cargó. Se
+  // resetea acá, ANTES de pedir los datos, en los 3 casos que llaman a
+  // esta función (abrir un cliente, cambiar de semana, aplicar un rango).
+  const elTotal = document.getElementById('detalleClienteTotal');
+  elTotal.textContent = '—';
+  elTotal.className = 'monto-grande';
   const query = DETALLE_CLIENTE_RANGO_ACTIVO
     ? `desde=${DETALLE_CLIENTE_RANGO_ACTIVO.desde}&hasta=${DETALLE_CLIENTE_RANGO_ACTIVO.hasta}`
     : `semana=${DETALLE_CLIENTE_SEMANA_ACTIVA}`;
@@ -7629,7 +7650,7 @@ function renderDetalleClienteModal(data) {
             // como una jugada normal -- se muestra el pool total del
             // remate en su lugar ("pool $X").
             const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
-            const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : 'con');
+            const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : (c.tipo === 'winner_contraparte' ? 'de' : 'con'));
             fila.innerHTML = `
               <span class="num-carrera">${c.carrera}ª</span>
               <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>

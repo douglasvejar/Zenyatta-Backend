@@ -445,4 +445,91 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
   };
 }
 
-module.exports = { construirResumenClienteHipismo, construirResumenRemateHipismo };
+// =================================================================
+// RESUMEN DEL ÍTEM "WINNERS" (28-09-2026, a pedido del usuario: "al
+// meterme en detallado por cliente [WINNERS] ... no se encontró ese
+// cliente") — mismo caso EXACTO que construirResumenRemateHipismo de
+// arriba: "WINNERS" es un ítem sintético del balance (ver la nota
+// grande del ítem "WINNERS" en GET /cierre-final, routes/hipismo.js),
+// NUNCA una fila real de "jugadores", así que GET
+// /clientes/:nombre/detalle-semana lo especial-casa en vez de buscarlo
+// ahí. Antes de esta función, hacer click en el cuadro "WINNERS" de
+// "Detallado por Cliente" siempre daba 404 ("No se encontró ese
+// cliente"), aunque su saldo SÍ apareciera bien en Balance General/
+// Cierre Final (que arman ese saldo aparte, sin pasar por esta ruta).
+//
+// El detalle, fila por fila, es el ESPEJO exacto de cada registro de
+// "Cargar Winners": si el cliente ganó +400 con un caballo, "WINNERS"
+// "perdió" esos mismos 400 — nunca el monto tal cual del cliente (mismo
+// invariante de "todo negativo tiene su contraparte" que ya aplica
+// acumular('WINNERS', -monto) en /cierre-final).
+async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rangoPersonalizado) {
+  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
+  const offset = semana === 'anterior' ? -1 : 0;
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const hoyIso = isoDeFechaUTC(hoyVe);
+
+  const rWinners = await db.query(
+    `SELECT hipodromo_nombre, carrera_numero, fecha, cliente_nombre, caballo, monto
+       FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3
+       ORDER BY fecha DESC, creado_en ASC`,
+    [grupoId, desde, hasta]
+  );
+
+  const porDia = new Map();
+  let totalSemana = 0;
+  let totalHoy = 0;
+  let cantidadJugadas = 0;
+
+  rWinners.rows.forEach(w => {
+    const resultado = round2(-Number(w.monto));
+    if (!resultado) return;
+    const fechaIso = w.fecha instanceof Date ? w.fecha.toISOString().slice(0, 10) : w.fecha;
+
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    const hipNombre = w.hipodromo_nombre;
+    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, carreras: [] });
+
+    hipMap.get(hipNombre).carreras.push({
+      tipo: 'winner_contraparte',
+      carrera: w.carrera_numero,
+      caballo: w.caballo,
+      clienteNombre: w.cliente_nombre,
+      monto: Math.abs(Number(w.monto)),
+      resultado
+    });
+
+    totalSemana += resultado;
+    cantidadJugadas += 1;
+    if (fechaIso === hoyIso) totalHoy += resultado;
+  });
+
+  const dias = Array.from(porDia.entries())
+    .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  return {
+    grupo: { nombre: grupo.nombre, logoUrl: grupo.logo_url },
+    jugador: { nombre: 'WINNERS' },
+    semana,
+    rango: { desde, hasta },
+    rangoPersonalizado: !!rangoPersonalizado,
+    hoy: hoyIso,
+    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
+    modulos: { hipismo: true, deportes: false },
+    resumen: {
+      totalSemana: round2(totalSemana),
+      totalHoy: round2(totalHoy),
+      cantidadJugadas,
+      totalHipismo: round2(totalSemana),
+      totalDeportes: 0,
+      cantidadJugadasHipismo: cantidadJugadas,
+      cantidadJugadasDeportes: 0
+    },
+    dias
+  };
+}
+
+module.exports = { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo };

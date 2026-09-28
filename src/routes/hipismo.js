@@ -110,7 +110,7 @@ const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 // puntual, buscado por nombre en vez de por token — ver
 // GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
 // services/hipismoResumenCliente.js.
-const { construirResumenClienteHipismo, construirResumenRemateHipismo } = require('../services/hipismoResumenCliente');
+const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo } = require('../services/hipismoResumenCliente');
 
 // fechaHoyVenezuela() (24-09-2026) — BUG encontrado a partir de "al
 // cargar plano no me esta jalando las jugadas adelantadas": el respaldo
@@ -1198,6 +1198,13 @@ function numeroOpcionalConRespaldo(bodyVal, detectadoVal) {
 // verdad, así que GET /clientes/:nombre/detalle-semana lo especial-casa
 // en vez de buscarlo en "jugadores".
 const NOMBRE_ITEM_REMATE = 'REMATE';
+// Nombre del ítem "WINNERS" (28-09-2026, a pedido del usuario: "al
+// meterme en detallado por cliente [el ítem WINNERS] ... no se encontró
+// ese cliente") — mismo caso EXACTO que "REMATE" arriba: es la
+// contraparte sintética de "Cargar Winners" (ver la nota grande del
+// ítem "WINNERS" en GET /cierre-final), nunca una fila real de
+// "jugadores", así que también se especial-casa acá en vez de 404ear.
+const NOMBRE_ITEM_WINNERS = 'WINNERS';
 
 // POST /remates/calcular: calcula SIN guardar — para revisar el remate
 // (y, si hace falta, cargar la llegada a mano) antes de decidir guardarlo.
@@ -2365,6 +2372,14 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
   // "jugadores", así que se especial-casa ANTES de buscarlo ahí.
   if (req.params.nombre === NOMBRE_ITEM_REMATE) {
     const resultado = await construirResumenRemateHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
+    return res.json(resultado);
+  }
+  // ÍTEM "WINNERS" (28-09-2026, ver la nota grande de
+  // construirResumenWinnersHipismo en services/hipismoResumenCliente.js)
+  // — mismo caso que "REMATE" arriba: tampoco es una fila real de
+  // "jugadores".
+  if (req.params.nombre === NOMBRE_ITEM_WINNERS) {
+    const resultado = await construirResumenWinnersHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
     return res.json(resultado);
   }
 
