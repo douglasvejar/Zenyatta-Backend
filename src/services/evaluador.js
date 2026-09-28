@@ -314,6 +314,21 @@ function limpiarMarcadoresSegmento(lineaJugada) {
     .replace(/\bjuego\s*[12]\b/gi, ' '); // "juego1"/"juego 2" (mismo caso, la otra forma de escribirlo)
 }
 
+// Saca del texto SOLO los números "sueltos" (línea de hándicap/over-under,
+// o cuota americana) — NUNCA un número que forme parte de una palabra,
+// como el "49" de "49ers" o el "76" de "76ers" (28-09-2026, caso real: un
+// ticket de "49ers rl -7.5 -107" tomaba el "49" del NOMBRE del equipo como
+// si fuera el hándicap, en vez del "-7.5" real, porque cabía dentro del
+// techo de NFL — 49ers GANÓ 36-30, una diferencia de apenas 6, que NO
+// cubre un hándicap de -7.5, pero con hándicap "+49" el ticket daba
+// GANADA igual). Antes, el regex de línea/hándicap (\d+ suelto) no le
+// importaba si el número estaba pegado a letras a los lados; ahora se
+// exige que el número esté "solo" (sin letra ni dígito pegado ANTES o
+// DESPUÉS) para contar como línea/cuota real.
+function extraerNumerosSueltos(texto) {
+  return texto.match(/(?<![A-Za-zÀ-ÿ0-9])[+-]?\d+(?:\.\d+)?(?![A-Za-zÀ-ÿ0-9])/g);
+}
+
 // Núcleo compartido: recibe el equipo YA resuelto (infoEquipo/apodo) y la
 // config de SU deporte, y decide GANADA/PERDIDA/ANULADA/PENDIENTE/etc.
 // contra los datos de ese juego. No sabe nada de "de dónde salió" el
@@ -521,7 +536,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
 
   if (esOver || esUnder) {
     const limpiaSinSegmento = limpiarMarcadoresSegmento(lineaJugada);
-    const numeros = limpiaSinSegmento.match(/\d+(?:\.\d+)?/g);
+    const numeros = extraerNumerosSueltos(limpiaSinSegmento);
     let linea = null;
 
     if (numeros) {
@@ -606,7 +621,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
   const lineaSinInning = limpiarMarcadoresSegmento(lineaJugada);
 
   let handicap = 0;
-  const matchesNumeros = lineaSinInning.match(/([+-]?\d+(?:\.\d+)?)/g);
+  const matchesNumeros = extraerNumerosSueltos(lineaSinInning);
 
   if (!matchesNumeros || matchesNumeros.length === 0) {
     // Ni línea de hándicap ni cuota de moneyline — nada de nada (ej. la
@@ -683,7 +698,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
 function deportesQueCoincidenPorNumero(lineaJugada, deportesCandidatos) {
   const esOverUnder = /(over|alta|altas|under|baja|bajas)/i.test(lineaJugada);
   const limpia = limpiarMarcadoresSegmento(lineaJugada);
-  const numeros = (limpia.match(/[+-]?\d+(?:\.\d+)?/g) || [])
+  const numeros = (extraerNumerosSueltos(limpia) || [])
     .map(parseFloat)
     // <100 para descartar cuotas americanas, que siempre son ≥100 de
     // magnitud (ej. -110, +150) en cualquier deporte.

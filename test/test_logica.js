@@ -215,6 +215,46 @@ function check(cond, msg) {
 })();
 
 // -----------------------------------------------------------------
+// Caso 7b (NFL, 28-09-2026, caso real reportado por el usuario): un
+// nombre de equipo con números pegados (ej. "49ers", "76ers") NO se debe
+// confundir con el hándicap de la jugada. Antes, "49ers rl -7.5 -107"
+// tomaba el "49" del NOMBRE del equipo como si fuera el hándicap (cabía
+// dentro del techo de NFL), ignorando el -7.5 real -- con eso, un margen
+// real de apenas 6 puntos (36-30) daba GANADA (36+49-30 > 0) en vez de
+// PERDIDA (36-7.5-30 < 0, el margen real no cubre el -7.5).
+// -----------------------------------------------------------------
+(function testNFLHandicapNoConfundeNumeroDelNombreDelEquipo() {
+  const datosNFL = {
+    'san francisco 49ers': {
+      deporte: 'nfl', homeTeam: 'San Francisco 49ers', awayTeam: 'Seattle Seahawks',
+      homeScore: 36, awayScore: 30, totalScore: 66, finalizado: true, suspendido: false
+    },
+    'seattle seahawks': {
+      deporte: 'nfl', homeTeam: 'San Francisco 49ers', awayTeam: 'Seattle Seahawks',
+      homeScore: 36, awayScore: 30, totalScore: 66, finalizado: true, suspendido: false
+    }
+  };
+  const res = evaluarJugadaNFL(normalizarTexto('49ers rl -7.5 -107'), datosNFL, DICCIONARIO_EQUIPOS_BASE);
+  check(res.debug.lineaUsada === -7.5, 'NFL: el hándicap usado es -7.5 (el real), no 49 (el número pegado al nombre "49ers")');
+  check(res.estado === 'PERDIDA', 'NFL: 49ers ganó por apenas 6 puntos (36-30), que NO cubre un hándicap de -7.5 -> PERDIDA (antes daba GANADA por el bug del "49")');
+
+  // Mismo caso pero con un margen que SÍ cubre el -7.5 real, para
+  // confirmar que no quedó "roto al revés" (que ahora nunca gane nada).
+  const datosNFL2 = {
+    'san francisco 49ers': {
+      deporte: 'nfl', homeTeam: 'San Francisco 49ers', awayTeam: 'Seattle Seahawks',
+      homeScore: 40, awayScore: 20, totalScore: 60, finalizado: true, suspendido: false
+    },
+    'seattle seahawks': {
+      deporte: 'nfl', homeTeam: 'San Francisco 49ers', awayTeam: 'Seattle Seahawks',
+      homeScore: 40, awayScore: 20, totalScore: 60, finalizado: true, suspendido: false
+    }
+  };
+  const res2 = evaluarJugadaNFL(normalizarTexto('49ers rl -7.5 -107'), datosNFL2, DICCIONARIO_EQUIPOS_BASE);
+  check(res2.estado === 'GANADA', 'NFL: con un margen real de 20 puntos (40-20), 49ers -7.5 SÍ cubre -> GANADA');
+})();
+
+// -----------------------------------------------------------------
 // Caso 8 (multi-deporte, el pedido explícito del usuario 28-08-2026): UNA
 // sola sábana con el Ticket 1 de MLB y el Ticket 2 de NFL, resuelta con
 // evaluarJugada() (el nuevo punto de entrada) SIN indicar el deporte en
