@@ -598,14 +598,20 @@ function reqBase(grupoId) {
   check(resPlanos12._json.totalesFinales.MATURIN === -45, 'Balance General trae a Maturin -45 (su Tabla Fija, perdió)');
   // 23-09-2026 (undécima ronda), a pedido del usuario ("necesito me
   // coloques el resultado de las tablas SIN el 2.5% y ese 2.5% aparte en
-  // un item llamado % de tablas fijas"): "TABLAS FIJAS" ya no absorbe la
-  // comisión (antes daba -144,01) — ahora es el espejo exacto de los 3
-  // clientes (-225 de Linares que ganó, +40 y +45 de Halland/Maturin que
-  // perdieron = -140) y la comisión de las 3 Tablas Fijas (1,88+1,00+1,13
-  // = 4,01) vive en su propio ítem aparte.
-  check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -140, 'Balance General trae a "TABLAS FIJAS" (la banca) -140, el espejo exacto de los 3 clientes, SIN la comisión adentro');
+  // un item llamado % de tablas fijas"): "% DE TABLAS FIJAS" vive en su
+  // propio ítem aparte, separado de "TABLAS FIJAS" — pero "TABLAS FIJAS"
+  // en sí SIGUE siendo neto de esa comisión (-144,01, no el bruto -140),
+  // porque cliente + TABLAS FIJAS + % DE TABLAS FIJAS tienen que sumar 0
+  // exacto (mismo invariante que resolverTablaFija). 28-09-2026, corregido
+  // tras el reporte del usuario en Balance General/Cierre Final (mismo
+  // bug acá): usar el bruto (-140) y ADEMÁS sumar la comisión (4,01) al
+  // footer dejaba esos 4,01 pagados 2 veces, sin ninguna contraparte en
+  // el balance.
+  check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -144.01, 'Balance General trae a "TABLAS FIJAS" (la banca) -144,01, NETO de su propia comisión (-140 de espejo bruto - 4,01 de comisión)');
   check(resPlanos12._json.totalesFinales['% DE TABLAS FIJAS'] === 4.01, 'Balance General trae un ítem aparte "% DE TABLAS FIJAS" +4,01 (la comisión de las 3 tablas fijas de esta carrera, separada de "TABLAS FIJAS")');
-  check(resPlanos12._json.comisionTotal === 6.51, 'La Comisión (footer) del Balance General SIGUE sumando la de Tercios (2,5) más la de las 3 Tablas Fijas (4,01) = 6,51 — sin cambios, el ítem nuevo es una vista adicional');
+  check(resPlanos12._json.comisionTotal === 2.5, 'La Comisión (footer) del Balance General SOLO trae la de Tercios (2,5) — la de las 3 Tablas Fijas (4,01) ya NO se suma aparte, porque ya se ve en "% DE TABLAS FIJAS"');
+  check(Math.round((resPlanos12._json.totalesFinales.LINARES + resPlanos12._json.totalesFinales.MATURIN + (resPlanos12._json.totalesFinales.HALLAND - (-120)) + resPlanos12._json.totalesFinales['TABLAS FIJAS'] + resPlanos12._json.totalesFinales['% DE TABLAS FIJAS']) * 100) === 0,
+    'Los 3 clientes de Tablas Fijas (aislando a Halland de su Marca, que se banquea aparte) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto — nada queda "de más" sin contraparte');
   // 23-09-2026 (undécima ronda), "% devuelto" — LINARES tiene 1% de
   // comisión propia (cargado arriba): se gana 1% de lo que jugó en su
   // Tabla Fija (75) = 0,75, SIN que su resultado normal (+225) se toque.

@@ -337,16 +337,25 @@ async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
 // no un reemplazo.
 function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
   const totales = Object.assign({}, totalesFinales);
-  let comision = comisionTotal;
+  const comision = comisionTotal;
 
   resueltas.forEach(r => {
     totales[r.cliente] = round2((totales[r.cliente] || 0) + r.resultadoCliente);
 
     if (r.tipo === 'tf') {
-      totales['TABLAS FIJAS'] = round2((totales['TABLAS FIJAS'] || 0) - r.resultadoCliente);
+      // NETO de su propia comisión (28-09-2026, mismo arreglo que
+      // /cierre-final más abajo, encontrado por el usuario ahí primero):
+      // antes esto restaba solo r.resultadoCliente (bruto) y además
+      // sumaba r.comision aparte al footer "comisión" — eso dejaba la
+      // comisión "de más" sin contraparte en este mismo Balance (cliente
+      // + "TABLAS FIJAS" + "% DE TABLAS FIJAS" NO sumaban 0) y la pagaba
+      // 2 veces (una en "% DE TABLAS FIJAS", otra en el footer). Mismo
+      // invariante que resolverTablaFija: cliente + tablasFijas + comisión
+      // = 0 exacto — la comisión NO se vuelve a sumar al footer `comision`
+      // acá, porque ya queda representada en el ítem "% DE TABLAS FIJAS".
+      totales['TABLAS FIJAS'] = round2((totales['TABLAS FIJAS'] || 0) - (r.resultadoCliente + (r.comision || 0)));
       if (r.comision) {
         totales['% DE TABLAS FIJAS'] = round2((totales['% DE TABLAS FIJAS'] || 0) + r.comision);
-        comision = round2(comision + r.comision);
       }
     }
   });
