@@ -860,7 +860,6 @@
     <section class="vista activa" id="vista-cargarPlanos">
       <div class="card">
         <h2>📥 Cargar Planos</h2>
-        <p class="desc">Pega el plano de una carrera, metes la pizarra (orden de llegada) y le das <b>Calcular</b>. Ya tiene programadas las modalidades de Tercios (1p...10p, 1/2, 2n, 3n, 2y2, 2y3, pp) más el sistema de cuotas 10/N, con el 5% de comisión y la opción de "cruzar jugadas" que confirmaste. <span class="badge-pendiente">Formato exacto de 10/N todavía en revisión</span></p>
 
         <div id="selectorPlanoCompacto">
           <div>
@@ -883,7 +882,7 @@
           </div>
           <div>
             <label for="inpPizarra">Pizarra (llegada)</label>
-            <input type="text" id="inpPizarra" value="6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
+            <input type="text" id="inpPizarra" value="" placeholder="Ej: 6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
           </div>
           <div class="check-fila" id="filaCruzar">
             <input type="checkbox" id="chkCruzar" checked>
@@ -5029,6 +5028,9 @@ async function confirmarPlano() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+
+  // Deja la pizarra en blanco lista para meter el siguiente plano.
+  document.getElementById('inpPizarra').value = '';
 
   // Ya se confirmó este cálculo — hace falta un "Calcular" nuevo para
   // habilitar otro "Confirmar Plano" (evita reconfirmar/doblar el mismo
