@@ -5208,7 +5208,15 @@ async function confirmarPlano() {
   if (data.sinReconocer && data.sinReconocer.length) {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
-  aviso.textContent = '✅ Plano CONFIRMADO y guardado — ya se aplicó a los saldos.';
+  // "sustituir en vez de duplicar" (29-09-2026, a pedido del usuario: "si
+  // se vuelve a meter un plano en una carrera que ya existia, el nuevo
+  // siempre sustituya al anterior, no duplique las carreras") — el
+  // backend ya movió el plano viejo de esta misma carrera a la Papelera
+  // (recuperable) antes de guardar este; acá solo se avisa para que el
+  // operador sepa que no quedaron 2 planos vivos de la misma carrera.
+  aviso.textContent = data.sustituyoAnterior
+    ? '✅ Plano CONFIRMADO y guardado — sustituyó al plano anterior de esta misma carrera (el viejo quedó en la Papelera, recuperable).'
+    : '✅ Plano CONFIRMADO y guardado — ya se aplicó a los saldos.';
   aviso.className = 'aviso-resultado aviso-confirmado';
   aviso.style.display = 'block';
 

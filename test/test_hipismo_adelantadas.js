@@ -412,6 +412,18 @@ function ejecutarQuery(text, params) {
     return { rows: filas.map(j => ({ cliente_nombre: j.cliente_nombre, tipo: j.tipo, resultado_cliente: j.resultado_cliente, comision: j.comision, banqueadores: j.banqueadores, monto: j.monto })) };
   }
 
+  // ---- "Sustituir en vez de duplicar" (29-09-2026) — esta prueba nunca
+  // carga 2 planos de la MISMA carrera a propósito, así que siempre da
+  // vacío (retrocompatible: cada POST /planos de este archivo sigue
+  // guardando normal, sin ninguna sustitución).
+  if (/^SELECT id FROM hipismo_planos WHERE grupo_id = \$1 AND hipodromo_nombre = \$2 AND carrera_numero = \$3 AND fecha = \$4/i.test(sql)) {
+    const [grupoId, hipodromoNombre, carreraNumero, fecha] = params;
+    const filas = TABLAS.hipismo_planos.filter(p =>
+      p.grupo_id === grupoId && p.hipodromo_nombre === hipodromoNombre &&
+      Number(p.carrera_numero) === Number(carreraNumero) && p.fecha === fecha);
+    return { rows: filas.map(p => ({ id: p.id })) };
+  }
+
   // ---- Cargar Planos ----
   if (/^INSERT INTO hipismo_planos/i.test(sql)) {
     const [grupoId, hipodromoId, hipodromoNombre, carreraNumero, fecha, ret, pizarra, cruzaJugadas, textoOriginal, textoResultado, comisionTotal] = params;

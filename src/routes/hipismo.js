@@ -466,6 +466,27 @@ router.post('/planos', asyncHandler(async (req, res) => {
 
   const fechaFinal = fecha || fechaHoyVenezuela();
 
+  // "SUSTITUIR EN VEZ DE DUPLICAR" (29-09-2026, a pedido del usuario: "si
+  // se vuelve a meter un plano en una carrera que ya existía, el nuevo
+  // siempre sustituya al anterior, no duplique las carreras") — antes de
+  // esta ronda, cargar 2 veces la misma carrera (mismo hipódromo +
+  // carrera + fecha) dejaba 2 planos vivos a la vez, y Balance General/
+  // Cierre Final sumaban los 2 (duplicando esa carrera). Si YA existe un
+  // plano para este mismo hipódromo/carrera/fecha, se manda a la Papelera
+  // (hipismoPlanosPapelera.eliminarPlano — MISMO criterio que "Eliminar
+  // Planos": recuperable 30 días, nunca un borrado definitivo, ver la
+  // nota grande de ese archivo) ANTES de guardar el plano nuevo, para que
+  // solo quede UNO vivo — el más reciente. Puede haber más de un plano
+  // viejo coincidiendo (no debería, pero por las dudas se sustituyen
+  // TODOS los que calcen).
+  const rPlanosExistentes = await db.query(
+    `SELECT id FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4`,
+    [req.grupoId, nombreHipodromoFinal, carreraNumero, fechaFinal]
+  );
+  for (const fila of rPlanosExistentes.rows) {
+    await hipismoPlanosPapelera.eliminarPlano(req.grupoId, fila.id);
+  }
+
   // Jugadas Adelantadas pendientes de ESTA MISMA carrera (ver la nota
   // grande arriba) — se resuelven con la pizarra que se está por guardar
   // acá, existan o no líneas normales de Tercios en este plano.
@@ -566,6 +587,12 @@ router.post('/planos', asyncHandler(async (req, res) => {
     hipodromoNombre: nombreHipodromoFinal,
     carreraNumero: Number(carreraNumero),
     fecha: fechaFinal,
+    // sustituyoAnterior (29-09-2026): true cuando ya existía un plano
+    // para este mismo hipódromo/carrera/fecha y se mandó a la Papelera
+    // para dejar solo el nuevo vivo (ver la nota grande de arriba) — el
+    // frontend lo puede usar para avisar "se sustituyó el plano anterior
+    // de esta carrera" en vez de un simple "plano guardado".
+    sustituyoAnterior: rPlanosExistentes.rows.length > 0,
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
   });
 }));
