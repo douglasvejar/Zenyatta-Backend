@@ -1,28 +1,28 @@
 // =================================================================
-// PRUEBA: "% propio/de aval también cuando se BANQUEA una MARCA"
-// (29-09-2026, a pedido explícito del usuario tras el arreglo de Tercios:
-// "las marcas en todas sus presentaciones sean adelantadas o en jugadas
-// contra tercios del plano, o como sea deben cumplir todas la misma
-// regla..." -- ver test_hipismo_comision_banquero_tercios.js para el caso
-// real "Mrincreible" que disparó el arreglo original, ahí sí solo de
-// Tercios).
+// PRUEBA: "toda jugada que no se decida no genera % ni comisión"
+// (29-09-2026, a pedido explícito del usuario, tras arreglar el cálculo
+// de Marcas "pp"/"a premio" que no figuran en la pizarra -- ver
+// test_hipismo_pp_no_coloco.js y test_hipismo_marca_a_premio.js).
 //
-// Esta prueba reproduce el mismo tipo de caso pero para una Marca de
-// Jugadas Adelantadas: MRINCREIBLE banquea el 50% de una Marca de $600 --
-// o sea, banqueó $300 de esa jugada puntualmente -- y tiene 1% de
-// comisión propia + 2 avales (Ferrocarril 0.5%, Purga 0.5%), igual que en
-// el caso real de Tercios. Como una Marca banqueada NO guarda el monto
-// que banqueó cada quien (solo el resultado NETO ganado/perdido, ver
-// resolverBanqueoMarca en services/hipismoAdelantadasCalc.js), el % debe
-// calcularse sobre `j.monto * b.porcentaje/100` (300), NO sobre el
-// monto total de la jugada (600) ni sobre el resultado neto del
-// banqueador -- por eso se usa porcentaje=50% de $600 (=$300) en vez de
-// repetir el mismo $300 "por casualidad" del caso de Tercios, para
-// confirmar que el escalado realmente se está aplicando y no que el
-// cálculo solo "pasa" el monto de la jugada sin tocarlo.
+// La comisión base del -5%% de la plataforma YA estaba bien: una jugada
+// anulada da resultado 0 de ambos lados, así que montoMostrado(0,...) ya
+// daba 0 (Tercios) y una Marca "nula" ya guardaba comision:0
+// (Adelantadas). Lo que faltaba era el % PROPIO/DE AVAL
+// (jugadores.comision_propia / jugadores_avales_porcentaje), que se
+// calcula sobre el `monto` (apuesta) CRUDO sin fijarse si la jugada se
+// decidió o no -- por eso una jugada anulada seguía generando ese % como
+// si se hubiera jugado normal.
 //
-// Se prueba contra GET /cierre-final ("Balance General") y GET
-// /saldo-comisiones, igual que la prueba hermana de Tercios.
+// Esta prueba confirma, en /cierre-final y /saldo-comisiones, que:
+//   1. PEDRO (2%% de comisión propia) tiene un ticket de Tercios DECIDIDO
+//      de 100 (gana) -- genera "PEDRO - PORCENTAJE" = 2,00 -- y otro
+//      ticket ANULADO ("pp" sin que ninguno de los 2 caballos figure,
+//      resultado_jugador=0 y resultado_banquero=0) de 50 -- ese NO debe
+//      sumar nada al %% (si sumara, darían 3,00 en vez de 2,00).
+//   2. ANA (3%% de comisión propia) tiene una Marca de Jugadas Adelantadas
+//      DECIDIDA de 200 -- genera "ANA - PORCENTAJE" = 6,00 -- y otra Marca
+//      ANULADA (estado 'sin_decidir', gano=null) de 80 -- esa tampoco debe
+//      sumar nada (si sumara, darían 8,40 en vez de 6,00).
 // =================================================================
 const Module = require('module');
 const path = require('path');
@@ -34,33 +34,34 @@ function check(cond, msg) {
   else { fallaron++; console.error('FALLÓ:', msg); }
 }
 
-const GRUPO_ID = 'g-banquero-marca-1';
+const GRUPO_ID = 'g-no-decide-1';
 const FECHA = '2026-09-29';
 
-const JUGADOR_MR = { id: 'j-mr', grupo_id: GRUPO_ID, nombre: 'MRINCREIBLE', comision_propia: 1, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
-const JUGADOR_FERROCARRIL = { id: 'j-ferro', grupo_id: GRUPO_ID, nombre: 'FERROCARRIL', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
-const JUGADOR_PURGA = { id: 'j-purga', grupo_id: GRUPO_ID, nombre: 'PURGA', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
-const JUGADOR_JOSUE = { id: 'j-josue', grupo_id: GRUPO_ID, nombre: 'JOSUE', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
+const JUGADOR_PEDRO = { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 2, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
+const JUGADOR_ANA = { id: 'j-ana', grupo_id: GRUPO_ID, nombre: 'ANA', comision_propia: 3, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
+const JUGADOR_BANCO = { id: 'j-banco', grupo_id: GRUPO_ID, nombre: 'BANCO', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null };
 
 const TABLAS = {
-  jugadores: [{ ...JUGADOR_MR }, { ...JUGADOR_FERROCARRIL }, { ...JUGADOR_PURGA }, { ...JUGADOR_JOSUE }],
-  jugadores_avales_porcentaje: [
-    { grupo_id: GRUPO_ID, jugador_id: 'j-mr', avalador_id: 'j-ferro', porcentaje: 0.5 },
-    { grupo_id: GRUPO_ID, jugador_id: 'j-mr', avalador_id: 'j-purga', porcentaje: 0.5 }
+  jugadores: [{ ...JUGADOR_PEDRO }, { ...JUGADOR_ANA }, { ...JUGADOR_BANCO }],
+  jugadores_avales_porcentaje: [],
+  hipismo_planos: [{ id: 'p1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 1, fecha: FECHA, cruza_jugadas: false }],
+  hipismo_tickets: [
+    // DECIDIDO: PEDRO le gana 100 a BANCO -- SÍ debe generar 2% = 2,00.
+    { id: 't-decidido', plano_id: 'p1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1P', caballo: '5', monto: 100, resultado_jugador: 100, resultado_banquero: -100, sin_comision: false },
+    // ANULADO ("pp" sin que ninguno figure en la pizarra): 0 y 0 -- NO
+    // debe generar el 2% de 50 (=1,00); si el bug existiera, PEDRO daría
+    // 3,00 en vez de 2,00.
+    { id: 't-anulado', plano_id: 'p1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: 'pp', caballo: '4x3', monto: 50, resultado_jugador: 0, resultado_banquero: 0, sin_comision: false }
   ],
-  hipismo_tickets: [], hipismo_planos: [],
   hipismo_remates: [], hipismo_remate_apuestas: [],
   hipismo_adelantadas_planos: [{ id: 'ap1', grupo_id: GRUPO_ID, fecha: FECHA }],
-  // La Marca: $600 en total, JOSUE (cliente) ganó su parte, y MRINCREIBLE
-  // banqueó el 50% de esa jugada ($300 puntuales) -- `monto` acá en
-  // banqueadores[] es el RESULTADO NETO de MRINCREIBLE (perdió, banqueó
-  // contra JOSUE que acertó), no lo que banqueó.
   hipismo_adelantadas_jugadas: [
-    {
-      id: 'ad1', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true,
-      cliente_nombre: 'JOSUE', monto: 600, resultado_cliente: 300, comision: 0,
-      banqueadores: [{ nombre: 'MRINCREIBLE', porcentaje: 50, monto: -300, pagaComision: false, comisionPorcentaje: 0 }]
-    }
+    // DECIDIDA: ANA ganó su Marca de 200 -- SÍ debe generar 3% = 6,00.
+    { id: 'ad-decidida', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true, cliente_nombre: 'ANA', monto: 200, resultado_cliente: 190, comision: 10, banqueadores: [] },
+    // ANULADA (ninguno de los 2 caballos figuró -- estado 'sin_decidir',
+    // gano=null): NO debe generar el 3% de 80 (=2,40); si el bug
+    // existiera, ANA daría 8,40 en vez de 6,00.
+    { id: 'ad-anulada', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'sin_decidir', gano: null, cliente_nombre: 'ANA', monto: 80, resultado_cliente: 0, comision: 0, banqueadores: [] }
   ],
   hipismo_winners: [], hipismo_comisiones_ajustes: []
 };
@@ -75,23 +76,21 @@ function ejecutarQuery(text, params) {
     return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre)).map(j => ({ id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: null, incluir_porcentaje_en_jugadas: j.incluir_porcentaje_en_jugadas })) };
   }
   if (sql === 'SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])') {
-    const [grupoId, idsJugadores] = params;
-    return {
-      rows: TABLAS.jugadores_avales_porcentaje
-        .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
-        .map(a => {
-          const av = TABLAS.jugadores.find(j => j.id === a.avalador_id);
-          return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: av ? av.nombre : null, cc_avalador_nombre: null };
-        })
-    };
+    return { rows: [] };
   }
 
   // ---- /cierre-final ----
   if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero, t\.monto,\s*t\.plano_id, t\.sin_comision, p\.cruza_jugadas/i.test(sql)) {
-    return { rows: [] };
+    const [grupoId] = params;
+    return {
+      rows: TABLAS.hipismo_tickets.filter(t => t.grupo_id === grupoId).map(t => {
+        const p = TABLAS.hipismo_planos.find(x => x.id === t.plano_id);
+        return { cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, monto: t.monto, plano_id: t.plano_id, sin_comision: t.sin_comision, cruza_jugadas: p.cruza_jugadas };
+      })
+    };
   }
   if (/^SELECT a\.cliente_nombre, a\.resultado, a\.monto/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores, j\.monto/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores, j\.monto(, j\.gano)?/i.test(sql)) {
     const [grupoId] = params;
     return {
       rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId).map(j => ({
@@ -106,8 +105,15 @@ function ejecutarQuery(text, params) {
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
 
   // ---- /saldo-comisiones ----
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.monto(, t\.resultado_jugador, t\.resultado_banquero)?\s*FROM hipismo_tickets/i.test(sql)) {
-    return { rows: [] };
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.monto(, t\.resultado_jugador, t\.resultado_banquero)?/i.test(sql)) {
+    const [grupoId, desde, hasta] = params;
+    return {
+      rows: TABLAS.hipismo_tickets
+        .filter(t => t.grupo_id === grupoId)
+        .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
+        .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
+        .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero }))
+    };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.cliente_nombre, j\.monto(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
@@ -121,7 +127,7 @@ function ejecutarQuery(text, params) {
     };
   }
 
-  throw new Error('La base de datos falsa de esta prueba (comision-banquero-marca) no sabe responder: ' + sql);
+  throw new Error('La base de datos falsa de esta prueba (no-decide-sin-comision) no sabe responder: ' + sql);
 }
 
 const fakePool = function () {
@@ -169,39 +175,31 @@ async function invocarRuta(handler, req) {
   const fake = new OriginalDate(FECHA + 'T12:00:00Z').getTime();
   global.Date = class extends OriginalDate { constructor(...a) { if (a.length === 0) super(fake); else super(...a); } static now() { return fake; } };
 
-  // ---- 1) GET /cierre-final ("Balance General" para el usuario) ----
+  // ---- 1) GET /cierre-final ("Balance General") ----
   const reqCierre = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };
   const salidaCierre = await invocarRuta(handlerDe('get', '/cierre-final'), reqCierre);
 
   check(!!salidaCierre, '1a) GET /cierre-final respondió algo');
   const clientes = (salidaCierre && salidaCierre.clientes) || [];
-  const filaMrPct = clientes.find(c => c.nombre === 'MRINCREIBLE - PORCENTAJE');
-  const filaFerro = clientes.find(c => c.nombre === 'FERROCARRIL - PORCENTAJE');
-  const filaPurga = clientes.find(c => c.nombre === 'PURGA - PORCENTAJE');
+  const filaPedroPct = clientes.find(c => c.nombre === 'PEDRO - PORCENTAJE');
+  const filaAnaPct = clientes.find(c => c.nombre === 'ANA - PORCENTAJE');
 
-  // MRINCREIBLE banqueó el 50% de una Marca de $600 = $300 puntuales.
-  // 1% de $300 = $3,00; cada aval al 0,5% de $300 = $1,50.
-  check(!!filaMrPct && Math.abs(filaMrPct.saldo - 3.00) < 0.001,
-    `1b) ARREGLO: "MRINCREIBLE - PORCENTAJE" aparece con +3,00 (1% de los $300 que banqueó de la Marca, escalados de su 50% sobre $600) -- dio ${filaMrPct ? filaMrPct.saldo : 'nada (bug reproducido)'}`);
-  check(!!filaFerro && Math.abs(filaFerro.saldo - 1.50) < 0.001,
-    `1c) "FERROCARRIL - PORCENTAJE" (aval de MRINCREIBLE al 0,5%) aparece con +1,50 -- dio ${filaFerro ? filaFerro.saldo : 'nada (bug reproducido)'}`);
-  check(!!filaPurga && Math.abs(filaPurga.saldo - 1.50) < 0.001,
-    `1d) "PURGA - PORCENTAJE" (el otro aval de MRINCREIBLE al 0,5%) aparece con +1,50 -- dio ${filaPurga ? filaPurga.saldo : 'nada (bug reproducido)'}`);
+  check(!!filaPedroPct && Math.abs(filaPedroPct.saldo - 2.00) < 0.001,
+    `1b) ARREGLO: "PEDRO - PORCENTAJE" da 2,00 (SOLO el 2%% del ticket DECIDIDO de 100; el ticket ANULADO de 50 no suma nada) -- dio ${filaPedroPct ? filaPedroPct.saldo : 'nada'}`);
+  check(!!filaAnaPct && Math.abs(filaAnaPct.saldo - 6.00) < 0.001,
+    `1c) ARREGLO: "ANA - PORCENTAJE" da 6,00 (SOLO el 3%% de la Marca DECIDIDA de 200; la Marca ANULADA de 80 no suma nada) -- dio ${filaAnaPct ? filaAnaPct.saldo : 'nada'}`);
 
   // ---- 2) GET /saldo-comisiones (mismo cálculo, vista de saldo semanal) ----
   const reqSaldo = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };
   const salidaSaldo = await invocarRuta(handlerDe('get', '/saldo-comisiones'), reqSaldo);
   check(!!salidaSaldo, '2a) GET /saldo-comisiones respondió algo');
   const filasSaldo = (salidaSaldo && salidaSaldo.clientes) || [];
-  const saldoMrPropio = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'MRINCREIBLE');
-  const saldoFerro = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'FERROCARRIL');
-  const saldoPurga = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'PURGA');
-  check(!!saldoMrPropio && Math.abs(saldoMrPropio.devueltoSemana - 3.00) < 0.001,
-    `2b) /saldo-comisiones también trae a MRINCREIBLE devolviendo 3,00 por banquear la Marca -- dio ${saldoMrPropio ? saldoMrPropio.devueltoSemana : 'nada'}`);
-  check(!!saldoFerro && Math.abs(saldoFerro.devueltoSemana - 1.50) < 0.001,
-    `2c) /saldo-comisiones trae a FERROCARRIL (avalador, generado por MRINCREIBLE) con 1,50 -- dio ${saldoFerro ? saldoFerro.devueltoSemana : 'nada'}`);
-  check(!!saldoPurga && Math.abs(saldoPurga.devueltoSemana - 1.50) < 0.001,
-    `2d) /saldo-comisiones trae a PURGA (avaladora, generado por MRINCREIBLE) con 1,50 -- dio ${saldoPurga ? saldoPurga.devueltoSemana : 'nada'}`);
+  const saldoPedro = filasSaldo.find(c => c.nombre === 'PEDRO' && c.destino === 'PEDRO');
+  const saldoAna = filasSaldo.find(c => c.nombre === 'ANA' && c.destino === 'ANA');
+  check(!!saldoPedro && Math.abs(saldoPedro.devueltoSemana - 2.00) < 0.001,
+    `2b) /saldo-comisiones también trae a PEDRO con 2,00 (sin el ticket anulado) -- dio ${saldoPedro ? saldoPedro.devueltoSemana : 'nada'}`);
+  check(!!saldoAna && Math.abs(saldoAna.devueltoSemana - 6.00) < 0.001,
+    `2c) /saldo-comisiones también trae a ANA con 6,00 (sin la Marca anulada) -- dio ${saldoAna ? saldoAna.devueltoSemana : 'nada'}`);
 
   global.Date = OriginalDate;
 

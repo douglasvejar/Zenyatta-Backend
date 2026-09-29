@@ -443,13 +443,27 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   // entradasApostadas solo miraba clienteNombre, así que su % propio y el
   // de sus avales nunca se calculaban para lo que banqueó, a propósito
   // desde el 23-09-2026 — el usuario confirmó que ahora SÍ quiere que
-  // cuente). Mismo criterio ya aplicado acá abajo en POST /planos (el
-  // guardado real) y en /cierre-final, /saldo-comisiones y
-  // /semana-por-dias — el banqueo de Marcas (Jugadas Adelantadas) queda
-  // A PROPÓSITO fuera de este cambio por ahora (alcance no confirmado).
-  const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
-    .concat(resultado.tickets.map(t => ({ nombre: t.banqueroNombre, monto: t.monto })))
-    .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
+  // cuente, y después que también cuente banqueando una Marca de Jugadas
+  // Adelantadas — mismo criterio ya aplicado acá abajo en POST /planos
+  // (el guardado real) y en /cierre-final, /saldo-comisiones y
+  // /semana-por-dias).
+  //
+  // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido explícito
+  // del usuario: "toda jugada que no se decida no genera % ni
+  // comisión"): un ticket de Tercios con una Marca "pp"/"a premio" donde
+  // ningún caballo figuró (ver resolverCruzado() en hipismoCalc.js) queda
+  // con resultadoJugador Y resultadoBanquero en 0 -- se descarta de
+  // entradasApostadas por completo, para que su monto apostado NO genere
+  // % propio/de aval para nadie (ni cliente ni banquero). Lo mismo para
+  // una Marca de Jugadas Adelantadas resuelta 'sin_decidir' (nula, ver
+  // resolverClienteMarca en hipismoAdelantadasCalc.js): r.gano queda en
+  // null SOLO en ese caso (Tabla Fija siempre decide true/false), así que
+  // filtrar por "r.gano !== null" descarta justo esas sin afectar Tabla
+  // Fija ni una Marca sí decidida.
+  const entradasApostadas = resultado.tickets
+    .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
+    .flatMap(t => [{ nombre: t.clienteNombre, monto: t.monto }, { nombre: t.banqueroNombre, monto: t.monto }])
+    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: r.monto })));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
@@ -575,15 +589,17 @@ router.post('/planos', asyncHandler(async (req, res) => {
 
   // Ver la nota grande en POST /planos/calcular — mismo cálculo de "%
   // devuelto" acá, sobre lo que de verdad se guardó en este plano
-  // (incluido el lado BANQUERO, ver la nota grande 29-09-2026 en
-  // /planos/calcular). A diferencia de la vista previa, ACÁ SÍ se
-  // asegura la cuenta de comisión real de cada destino ANTES de leer
-  // obtenerComisionesPropias (26-09-2026, ver la nota grande de esa
-  // función) — recién cuando el plano se guarda de verdad, nunca en un
-  // "Calcular" que el operador después no confirma.
-  const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
-    .concat(resultado.tickets.map(t => ({ nombre: t.banqueroNombre, monto: t.monto })))
-    .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
+  // (incluido el lado BANQUERO, y excluyendo cualquier jugada que no se
+  // decidió, ver la nota grande 29-09-2026 en /planos/calcular). A
+  // diferencia de la vista previa, ACÁ SÍ se asegura la cuenta de
+  // comisión real de cada destino ANTES de leer obtenerComisionesPropias
+  // (26-09-2026, ver la nota grande de esa función) — recién cuando el
+  // plano se guarda de verdad, nunca en un "Calcular" que el operador
+  // después no confirma.
+  const entradasApostadas = resultado.tickets
+    .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
+    .flatMap(t => [{ nombre: t.clienteNombre, monto: t.monto }, { nombre: t.banqueroNombre, monto: t.monto }])
+    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: r.monto })));
   const nombresApostados = entradasApostadas.map(e => e.nombre);
   await asegurarCuentasComisionParaNombres(req.grupoId, nombresApostados);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, nombresApostados);
@@ -2209,7 +2225,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
   // un cliente más (ej. "MARCAS ZENYATTA").
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto
+    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -2341,16 +2357,33 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // DEVOLUCION A LOS CLIENTES"): Remate SÍ suma al saldo normal (arriba,
   // acumular()) pero NUNCA genera % devuelto — a propósito no se llama
   // acumularDevuelto() con rApuestasRemate acá.
-  rTickets.rows.forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
+  //
+  // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido explícito
+  // del usuario: "toda jugada que no se decida no genera % ni
+  // comisión"): un ticket de Tercios queda con resultado_jugador Y
+  // resultado_banquero en 0 cuando una Marca "pp"/"a premio" no tuvo
+  // ningún caballo que figurara (ver resolverCruzado() en
+  // hipismoCalc.js) — se excluye de acumularDevuelto() por completo. Una
+  // Marca de Jugadas Adelantadas queda con j.gano en null SOLO cuando
+  // quedó 'sin_decidir' (nula, ver resolverClienteMarca en
+  // hipismoAdelantadasCalc.js) — Tabla Fija siempre decide true/false, así
+  // que filtrar por "j.gano !== null" descarta justo esas.
+  rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0))
+    .forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
   // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
   // lado BANQUERO de Tercios ahora también genera % devuelto.
-  rTickets.rows.forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
-  rAdelantadas.rows.forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
+  rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0))
+    .forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
   // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
   // % devuelto — j.monto es el monto TOTAL de la jugada, cada banqueador
   // solo banqueó su `porcentaje` de esa jugada (ver resolverBanqueoMarca
   // en services/hipismoAdelantadasCalc.js), así que la base de su % es
-  // j.monto * b.porcentaje/100, no j.monto completo.
+  // j.monto * b.porcentaje/100, no j.monto completo. (Una Marca nula
+  // nunca llega a tener banqueadores -- solo se banquea una Marca ya
+  // decidida -- así que este bloque no necesita el mismo filtro de
+  // j.gano, pero se deja fuera del .filter() de arriba a propósito para
+  // no confundir al próximo lector con un filtro que acá nunca hace nada.)
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
     j.banqueadores.forEach(b => {
@@ -2493,7 +2526,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   const numeroSemana = numeroSemanaISO(desde);
 
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto, t.resultado_jugador, t.resultado_banquero
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -2507,7 +2540,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.monto, j.banqueadores
+    `SELECT j.cliente_nombre, j.monto, j.banqueadores, j.gano
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -2550,10 +2583,16 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   }
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
   // DEVOLUCION A LOS CLIENTES") — Remate a propósito NO suma acá.
-  rTickets.rows.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
+  //
+  // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
+  // EXACTA de /cierre-final) — se filtra por resultado_jugador/
+  // resultado_banquero en 0 para Tercios, y por gano !== null para
+  // Adelantadas.
+  const ticketsDecididos = rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0));
+  ticketsDecididos.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
   // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
-  rTickets.rows.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
-  rAdelantadas.rows.forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
+  ticketsDecididos.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
   // 29-09-2026 — lado BANQUERO de una Marca: j.monto es el monto TOTAL de
   // la jugada, cada banqueador solo banqueó su `porcentaje` de esa jugada
   // (ver resolverBanqueoMarca en services/hipismoAdelantadasCalc.js).
@@ -2686,7 +2725,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, p.fecha
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, p.fecha
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -2748,9 +2787,13 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
       acumularDia(info.cuentaNombre, fechaFila, devuelto);
     });
   }
-  rTickets.rows.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
-  rTickets.rows.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
-  rAdelantadas.rows.forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
+  // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
+  // EXACTA de /cierre-final) — mismo filtro que /cierre-final y
+  // /saldo-comisiones.
+  const ticketsDecididosDia = rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0));
+  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
+  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
   // 29-09-2026 — lado BANQUERO de una Marca (ver la nota grande de
   // /cierre-final): j.monto es el monto TOTAL de la jugada, cada
   // banqueador solo banqueó su `porcentaje` de esa jugada.

@@ -107,18 +107,18 @@ function ejecutarQuery(text, params) {
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
 
   // ---- /saldo-comisiones ----
-  if (sql === 'SELECT t.cliente_nombre, t.banquero_nombre, t.monto FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3') {
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.monto(, t\.resultado_jugador, t\.resultado_banquero)?\s*FROM hipismo_tickets/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     return {
       rows: TABLAS.hipismo_tickets
         .filter(t => t.grupo_id === grupoId)
         .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
         .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-        .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto }))
+        .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero }))
     };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.banqueadores)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
   throw new Error('La base de datos falsa de esta prueba (comision-banquero-tercios) no sabe responder: ' + sql);
 }

@@ -161,6 +161,17 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         if (linea.tipo === 'winner') return;
         if (linea.tipo === 'remate') return;
         if (linea.tipo === 'cruce_ajuste') return;
+        // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido
+        // explícito del usuario: "toda jugada que no se decida no genera
+        // % ni comisión"). linea.resultado queda en 0 exactamente cuando
+        // la jugada no se decidió -- un Tercios "pp"/"a premio" donde
+        // ningún caballo figuró (ver resolverCruzado() en
+        // hipismoCalc.js), una familia "Nn" empatada en la posición N, o
+        // una Marca de Jugadas Adelantadas resuelta nula (ver
+        // resolverClienteMarca en hipismoAdelantadasCalc.js) -- nunca de
+        // una jugada genuinamente decidida (que siempre gana o pierde
+        // una fracción distinta de cero de un monto real).
+        if (Number(linea.resultado) === 0) return;
         // TAMBIÉN EL LADO BANQUERO, EN CUALQUIER PRESENTACIÓN (29-09-2026,
         // caso real "Mrincreible" banqueando en Tercios, y luego a pedido
         // explícito del usuario: "las marcas en todas sus presentaciones
@@ -333,8 +344,13 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // para una Marca banqueada `linea.monto` es el monto TOTAL de la
     // jugada, no lo que banqueó puntualmente este banquero — se escala
     // por `linea.porcentajeBanqueado` (ver hipismoLineasCliente.js).
+    // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido
+    // explícito del usuario: "toda jugada que no se decida no genera %
+    // ni comisión") — mismo chequeo que construirResumenCuentaComisionHipismo
+    // más arriba, ver esa nota grande para el detalle de qué casos caen
+    // acá (linea.resultado en 0).
     let comisionIncluida = 0;
-    if (pctPropioIncluido && linea.rol) {
+    if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
       const montoParaPct = (linea.tipo === 'adelantada' && linea.rol === 'banquero')
         ? round2(Math.abs(Number(linea.monto) || 0) * (Number(linea.porcentajeBanqueado) || 0) / 100)
         : linea.monto;
