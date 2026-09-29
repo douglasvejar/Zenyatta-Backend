@@ -229,8 +229,10 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '3', monto: 100, resultado_jugador: -100, resultado_banquero: 95 });
   // Tercios: PEDRO gana 80 → 1% de 80 = 0.80 (también positivo, gane o pierda).
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '9x2', caballo: '9', monto: 80, resultado_jugador: 76, resultado_banquero: -76 });
-  // Tercios: PEDRO como BANQUERO de OTRO — NUNCA genera % (ver la nota
-  // grande de construirResumenCuentaComisionHipismo: "nunca lo que banqueó").
+  // Tercios: PEDRO como BANQUERO de OTRO — 29-09-2026 (caso real
+  // "Mrincreible", ver la nota grande en construirResumenCuentaComisionHipismo):
+  // esto AHORA SÍ genera % (1% de 30 = 0.30), a diferencia de antes de esta
+  // ronda ("nunca lo que banqueó").
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '5', monto: 30, resultado_jugador: -30, resultado_banquero: 28.5 });
 
   // Remate: PEDRO apuesta 60 → 1% de 60 = 0.60.
@@ -248,11 +250,12 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const resumenPedro = await construirResumenClienteHipismo(cuentaPedro, grupo, 'actual');
 
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
-  // DEVOLUCION A LOS CLIENTES"): el 0.60 de Remate YA NO entra acá -- la
-  // cuenta de comisión de PEDRO solo suma sus 2 líneas de Tercios.
-  const esperadoPedro = round2(1.00 + 0.80 - 0.50);
+  // DEVOLUCION A LOS CLIENTES"): el 0.60 de Remate YA NO entra acá. Winners
+  // tampoco (no tiene "monto apostado"). 29-09-2026: el banqueo de Tercios
+  // (0.30, 1% de los 30 que PEDRO le banqueó a OTRO) AHORA SÍ entra.
+  const esperadoPedro = round2(1.00 + 0.80 + 0.30 - 0.50);
   check(resumenPedro.resumen.totalSemana === esperadoPedro,
-    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — suma 1%% de lo que PEDRO jugó por Tercios (nunca Remate, lo que banqueó ni Winners) más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
+    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — suma 1%% de lo que PEDRO jugó Y banqueó por Tercios (nunca Remate ni Winners) más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
   check(resumenPedro.modulos.hipismo === true && resumenPedro.modulos.deportes === false,
     'Una cuenta de comisión nunca trae Deportes anclado');
   check(resumenPedro.jugador.nombre === 'PEDRO - PORCENTAJE', 'El resumen trae el nombre de la cuenta, no el del cliente real');
@@ -260,8 +263,8 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const diaPedro = resumenPedro.dias.find(d => d.fecha === FECHA);
   check(!!diaPedro, 'Trae el día agrupado');
   const hipPedro = diaPedro.hipodromos.find(h => h.nombre === 'La Rinconada');
-  check(!!hipPedro && hipPedro.carreras.filter(c => c.tipo === 'comision').length === 2,
-    'Solo las 2 jugadas de Tercios de PEDRO generan % -- el Remate (60 apostado) ya NO cuenta para la cuenta de comisión');
+  check(!!hipPedro && hipPedro.carreras.filter(c => c.tipo === 'comision').length === 3,
+    'Las 2 jugadas de Tercios de PEDRO Y su banqueo generan % (3 líneas) -- el Remate (60 apostado) sigue sin contar para la cuenta de comisión');
   check(hipPedro.carreras.every(c => c.tipo !== 'comision' || c.clienteOrigen === 'PEDRO'),
     'Cada línea de comisión trae quién la generó (clienteOrigen)');
   const bloqueTraspasos = diaPedro.hipodromos.find(h => h.tipo === 'traspaso');

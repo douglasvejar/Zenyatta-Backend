@@ -435,7 +435,20 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   // adelantadas que se resolvieron acá) para cualquier cliente con % propio
   // configurado (jugadores.comision_propia) — nunca toca el resultado
   // normal del cliente, solo agrega su propio ítem aparte.
+  //
+  // TAMBIÉN EL LADO BANQUERO (29-09-2026, caso real: "ya hay un
+  // Mrincreible en Clientes con los % correspondientes y el Mrincreible
+  // de Balances no muestra %" — Mrincreible resultó ser el BANQUERO de
+  // esa jugada de Tercios, no el cliente; hasta esta ronda
+  // entradasApostadas solo miraba clienteNombre, así que su % propio y el
+  // de sus avales nunca se calculaban para lo que banqueó, a propósito
+  // desde el 23-09-2026 — el usuario confirmó que ahora SÍ quiere que
+  // cuente). Mismo criterio ya aplicado acá abajo en POST /planos (el
+  // guardado real) y en /cierre-final, /saldo-comisiones y
+  // /semana-por-dias — el banqueo de Marcas (Jugadas Adelantadas) queda
+  // A PROPÓSITO fuera de este cambio por ahora (alcance no confirmado).
   const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
+    .concat(resultado.tickets.map(t => ({ nombre: t.banqueroNombre, monto: t.monto })))
     .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
@@ -561,13 +574,15 @@ router.post('/planos', asyncHandler(async (req, res) => {
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
 
   // Ver la nota grande en POST /planos/calcular — mismo cálculo de "%
-  // devuelto" acá, sobre lo que de verdad se guardó en este plano. A
-  // diferencia de la vista previa, ACÁ SÍ se asegura la cuenta de
-  // comisión real de cada destino ANTES de leer obtenerComisionesPropias
-  // (26-09-2026, ver la nota grande de esa función) — recién cuando el
-  // plano se guarda de verdad, nunca en un "Calcular" que el operador
-  // después no confirma.
+  // devuelto" acá, sobre lo que de verdad se guardó en este plano
+  // (incluido el lado BANQUERO, ver la nota grande 29-09-2026 en
+  // /planos/calcular). A diferencia de la vista previa, ACÁ SÍ se
+  // asegura la cuenta de comisión real de cada destino ANTES de leer
+  // obtenerComisionesPropias (26-09-2026, ver la nota grande de esa
+  // función) — recién cuando el plano se guarda de verdad, nunca en un
+  // "Calcular" que el operador después no confirma.
   const entradasApostadas = resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto }))
+    .concat(resultado.tickets.map(t => ({ nombre: t.banqueroNombre, monto: t.monto })))
     .concat(resueltas.map(r => ({ nombre: r.cliente, monto: r.monto })));
   const nombresApostados = entradasApostadas.map(e => e.nombre);
   await asegurarCuentasComisionParaNombres(req.grupoId, nombresApostados);
@@ -2283,12 +2298,20 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // en balances") — mismo cálculo que Balance General de "Cargar Planos"
   // (ver agregarPorcentajeDevuelto más arriba), pero agregado para TODA
   // la semana: cada cliente con % propio configurado
-  // (jugadores.comision_propia) se gana ese % de TODO lo que apostó como
-  // JUGADOR (Tercios + Remate + Adelantadas — nunca lo que banqueó), gane
-  // o pierda cada jugada puntual, sumado como su propio "cliente" aparte
-  // ("{NOMBRE} - PORCENTAJE") en esta misma lista.
+  // (jugadores.comision_propia) se gana ese % de TODO lo que apostó,
+  // gane o pierda cada jugada puntual, sumado como su propio "cliente"
+  // aparte ("{NOMBRE} - PORCENTAJE") en esta misma lista.
+  //
+  // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, caso real
+  // "Mrincreible": tiene 1% propio configurado y avales, pero en la
+  // jugada real él era el BANQUERO — antes esto se excluía a propósito
+  // ("nunca lo que banqueó"); el usuario confirmó que ahora SÍ quiere que
+  // el % se gane también banqueando). El banqueo de Marcas (Jugadas
+  // Adelantadas, j.banqueadores arriba) queda A PROPÓSITO fuera de este
+  // cambio por ahora — su alcance no se confirmó con el usuario.
   const nombresJugadores = new Set();
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
   rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
@@ -2315,6 +2338,9 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // acumular()) pero NUNCA genera % devuelto — a propósito no se llama
   // acumularDevuelto() con rApuestasRemate acá.
   rTickets.rows.forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
+  // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
+  // lado BANQUERO de Tercios ahora también genera % devuelto.
+  rTickets.rows.forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
   rAdelantadas.rows.forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
 
   const clientes = Array.from(porCliente.values())
@@ -2451,7 +2477,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   const numeroSemana = numeroSemanaISO(desde);
 
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.monto
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -2472,8 +2498,11 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
 
+  // 29-09-2026 (ver la nota grande de /cierre-final): el lado BANQUERO de
+  // Tercios ahora también cuenta para el % propio/de aval.
   const nombresJugadores = new Set();
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
   rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
@@ -2502,6 +2531,8 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
   // DEVOLUCION A LOS CLIENTES") — Remate a propósito NO suma acá.
   rTickets.rows.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
+  // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
+  rTickets.rows.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
   rAdelantadas.rows.forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
 
   const clientes = Array.from(porCliente.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -2666,8 +2697,11 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // apostó como JUGADOR (Tercios + Adelantadas — nunca Remate, ver la
   // nota de /cierre-final: "LOS REMATES NO LE PRODUCEN % DE DEVOLUCION A
   // LOS CLIENTES"), atribuido al DÍA de esa jugada puntual.
+  // 29-09-2026 (ver la nota grande de /cierre-final): el lado BANQUERO de
+  // Tercios ahora también cuenta para el % propio/de aval.
   const nombresJugadores = new Set();
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
   rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
@@ -2682,6 +2716,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     });
   }
   rTickets.rows.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
+  rTickets.rows.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
   rAdelantadas.rows.forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
 
   // "AJUSTE POR CRUCE" por día (28-09-2026, mismo bug/arreglo que

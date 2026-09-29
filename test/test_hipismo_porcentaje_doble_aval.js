@@ -105,13 +105,13 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- /saldo-comisiones (semana, BETWEEN, solo monto) ----
-  if (/^SELECT t\.cliente_nombre, t\.monto\s+FROM hipismo_tickets t\s+JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.monto\s+FROM hipismo_tickets t\s+JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_tickets
       .filter(t => t.grupo_id === grupoId)
       .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
       .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-      .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, monto: t.monto }));
+      .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto }));
     return { rows: filas };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s+FROM hipismo_remate_apuestas a\s+JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
@@ -151,7 +151,13 @@ function ejecutarQuery(text, params) {
   // cliente y la de sus avaladores en jugadores_avales_porcentaje) ----
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
-    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    // 29-09-2026: esta misma consulta también se dispara SIN el filtro de
+    // nombres (solo grupoId) cuando obtenerComisionesPropias necesita el
+    // "rescate por nombre parecido" (ver la nota grande de esa función,
+    // caso real "cliente doble") — acá eso pasa con "BANCA" (banquero fijo
+    // de esta prueba, nunca configurado con %), así que sin este chequeo
+    // `nombres.includes` truena por undefined.
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && (!nombres || nombres.includes(j.nombre)));
     return {
       rows: filas.map(j => ({
         id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0, cc_propio_nombre: null

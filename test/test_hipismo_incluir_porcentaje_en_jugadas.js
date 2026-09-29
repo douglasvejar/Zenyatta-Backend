@@ -25,8 +25,15 @@
 //      el cliente en ON.
 //   3) construirResumenClienteHipismo() (rama normal, ficha propia del
 //      cliente) — el netting DIRECTO en el resultado de cada jugada
-//      (rol=jugador únicamente) y el nuevo campo
+//      (rol=jugador Y rol=banquero de Tercios, ver la actualización
+//      29-09-2026 más abajo) y el nuevo campo
 //      resumen.comisionPropiaIncluidaSemana.
+//
+// ACTUALIZACIÓN 29-09-2026 (caso real "Mrincreible" — tenía % propio
+// configurado pero actuaba de BANQUERO en la jugada real, y su % nunca se
+// aplicaba): el % propio/de aval ahora también se gana banqueando en
+// Tercios, no solo jugando — PEDRO banqueando la jugada de OTRO (más
+// abajo) es la prueba de esto.
 // =================================================================
 const assert = require('assert');
 const Module = require('module');
@@ -255,8 +262,10 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   // PEDRO juega 300 y pierde -> con el toggle ON, su propia ficha debe
   // mostrar -300 + 1% de 300 (3.00) = -297.00 directo en el resultado.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '4', monto: 300, resultado_jugador: -300, resultado_banquero: 285 });
-  // PEDRO también banquea una jugada de OTRO por 50 — nunca debe generarle
-  // comisión incluida (rol=banquero, nunca rol=jugador).
+  // PEDRO también banquea una jugada de OTRO por 50 — 29-09-2026 (caso
+  // real "Mrincreible", ver la nota grande en hipismoResumenCliente.js):
+  // el % propio AHORA SÍ se incluye también en lo que PEDRO banqueó en
+  // Tercios (1% de 50 = 0.50), a diferencia de antes de esta ronda.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '6', monto: 50, resultado_jugador: -50, resultado_banquero: 47.5 });
   // MARIA juega exactamente lo mismo (300, pierde) pero con el toggle OFF
   // -> su ficha debe seguir mostrando el -300 crudo, sin tocar.
@@ -264,23 +273,22 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
   const fichaPedro = await construirResumenClienteHipismo(pedroActualizado, grupo, 'actual');
   const esperadoPedroNeto = round2(-300 + 3.00);
-  // La ficha de PEDRO trae TODAS sus jugadas (como jugador Y como
-  // banquero de OTRO) — el total suma ambas líneas; el neteado por el
-  // toggle solo aplica a su línea como jugador (ver los checks de las
-  // líneas individuales más abajo).
-  const esperadoPedroTotal = round2(esperadoPedroNeto + 47.5);
+  // 29-09-2026: la línea de PEDRO como BANQUERO de OTRO ahora también
+  // lleva su 1% incluido (1% de 50 = 0,50) — ver la nota grande de arriba.
+  const esperadoBanqueoPedro = round2(47.5 + 0.5);
+  const esperadoPedroTotal = round2(esperadoPedroNeto + esperadoBanqueoPedro);
   check(fichaPedro.resumen.totalSemana === esperadoPedroTotal,
-    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó de comisión bancando a OTRO (47,50): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
-  check(fichaPedro.resumen.comisionPropiaIncluidaSemana === 3,
-    `PEDRO: resumen.comisionPropiaIncluidaSemana expone cuánto de eso es comisión ya incluida (3,00): obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
+    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó bancando a OTRO ya con su 1% incluido (48,00): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
+  check(fichaPedro.resumen.comisionPropiaIncluidaSemana === 3.5,
+    `PEDRO: resumen.comisionPropiaIncluidaSemana suma la de su jugada (3,00) más la de su banqueo (0,50) = 3,50: obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
   const diaPedroFicha = fichaPedro.dias.find(d => d.fecha === FECHA);
   const hipPedroFicha = diaPedroFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
   const lineaJugadorPedro = hipPedroFicha.carreras.find(c => c.rol === 'jugador');
   const lineaBanqueroPedro = hipPedroFicha.carreras.find(c => c.rol === 'banquero');
   check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoPedroNeto && lineaJugadorPedro.comisionPropiaIncluida === 3,
     'La línea de PEDRO como JUGADOR trae el resultado ya neteado (-297,00) y el campo comisionPropiaIncluida=3,00 para que el frontend lo pueda mostrar como referencia');
-  check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === 47.5 && !lineaBanqueroPedro.comisionPropiaIncluida,
-    'La línea de PEDRO como BANQUERO de OTRO NO recibe ningún % incluido (nunca lo que banqueó)');
+  check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && lineaBanqueroPedro.comisionPropiaIncluida === 0.5,
+    'La línea de PEDRO como BANQUERO de OTRO (29-09-2026) SÍ recibe su 1% incluido (48,00 = 47,50 + 0,50), igual que su línea de jugador');
 
   const fichaMaria = await construirResumenClienteHipismo(mariaActualizada, grupo, 'actual');
   check(fichaMaria.resumen.totalSemana === -300,

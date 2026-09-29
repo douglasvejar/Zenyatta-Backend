@@ -152,17 +152,24 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
       const lineas = await obtenerLineasHipismoCliente(jugador.grupo_id, nombreFuente, desde, hasta);
       lineas.forEach(linea => {
         // Winners nunca genera % devuelto — no tiene "monto apostado"
-        // (ver la nota grande de agregarPorcentajeDevuelto). Solo el rol
-        // JUGADOR genera % — nunca lo que este cliente banqueó para otro.
-        // Remate (26-09-2026, a pedido del usuario: "LOS REMATES NO LE
-        // PRODUCEN % DE DEVOLUCION A LOS CLIENTES") tampoco genera %,
-        // sin importar el rol. "cruce_ajuste" (ver hipismoLineasCliente.js)
-        // no es una jugada con monto propio, es un ajuste de saldo — no
-        // aporta base para calcular ningún %.
+        // (ver la nota grande de agregarPorcentajeDevuelto). Remate
+        // (26-09-2026, a pedido del usuario: "LOS REMATES NO LE PRODUCEN
+        // % DE DEVOLUCION A LOS CLIENTES") tampoco genera %, sin importar
+        // el rol. "cruce_ajuste" (ver hipismoLineasCliente.js) no es una
+        // jugada con monto propio, es un ajuste de saldo — no aporta base
+        // para calcular ningún %.
         if (linea.tipo === 'winner') return;
         if (linea.tipo === 'remate') return;
         if (linea.tipo === 'cruce_ajuste') return;
-        if (linea.rol === 'banquero') return;
+        // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, caso real
+        // "Mrincreible": tenía 1% propio y avales configurados, pero en
+        // la jugada real era el BANQUERO, no el cliente — antes esto se
+        // excluía a propósito ("solo el rol JUGADOR genera %"); el
+        // usuario confirmó que ahora SÍ quiere que el % se gane también
+        // banqueando). El banqueo de Marcas (Jugadas Adelantadas) queda A
+        // PROPÓSITO fuera de este cambio por ahora — su alcance no se
+        // confirmó con el usuario, así que se sigue excluyendo.
+        if (linea.tipo === 'adelantada' && linea.rol === 'banquero') return;
 
         entradas.forEach(info => {
           const devuelto = round2(Math.abs(Number(linea.monto) || 0) * (info.pct / 100));
@@ -295,12 +302,19 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     const hipNombre = linea.hipodromoNombre;
     if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: linea.pais, carreras: [] });
 
-    // Solo cuenta como JUGADOR (nunca lo que este cliente banqueó para
-    // otro) — Remate/Winner/cruce_ajuste nunca traen `.rol` en absoluto
-    // (ver obtenerLineasHipismoCliente en services/hipismoLineasCliente.js),
-    // así que quedan excluidos solos con esta única condición.
+    // Remate/Winner/cruce_ajuste nunca traen `.rol` en absoluto (ver
+    // obtenerLineasHipismoCliente en services/hipismoLineasCliente.js),
+    // así que quedan excluidos solos con el chequeo de `linea.rol`.
+    //
+    // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, mismo caso
+    // "Mrincreible" — ver la nota grande en
+    // construirResumenCuentaComisionHipismo más arriba): antes esto solo
+    // contaba `linea.rol === 'jugador'`, a propósito ("nunca lo que
+    // banqueó"); el usuario confirmó que ahora el % también se gana
+    // banqueando en Tercios. El banqueo de Marcas (Jugadas Adelantadas)
+    // sigue A PROPÓSITO excluido — su alcance no se confirmó.
     let comisionIncluida = 0;
-    if (pctPropioIncluido && linea.rol === 'jugador') {
+    if (pctPropioIncluido && linea.rol && !(linea.tipo === 'adelantada' && linea.rol === 'banquero')) {
       comisionIncluida = round2(Math.abs(Number(linea.monto) || 0) * (pctPropioIncluido / 100));
     }
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
