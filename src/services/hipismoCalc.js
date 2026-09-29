@@ -154,6 +154,36 @@
 // significa "no colocó".
 const RANK_NO_COLOCO = 99;
 
+// CABALLO_CRUZADO_RE (29-09-2026): reconoce el formato "AxB" del caballo
+// en CUALQUIER jugada cruzada (2 caballos, uno contra el otro) — hasta
+// ahora solo se usaba para "pp", pero el usuario explicó que la MISMA
+// Marca "4x3" también se puede jugar "a premio" (ej. "4x3 10a8": Juan
+// juega el 4 contra el 3, pero si gana solo cobra 8/10 del monto en vez
+// de completo — ver resolverCruzado()/resolverResultadoLinea() más
+// abajo). Centralizada acá para que ambos lugares reconozcan el mismo
+// formato exacto.
+const CABALLO_CRUZADO_RE = /^\d{1,2}\s*x\s*\d{1,2}$/i;
+
+// resolverCruzado(pos, posB, fraccionGanador) -> {j, b} — el corazón de
+// toda Marca cruzada (2 caballos, uno contra el otro): gana quien tenga
+// el rank MENOR (mejor colocado), llevándose `fraccionGanador` del monto
+// (1 = completo, para "pp"; N/10 para una Marca "a premio", ver más
+// abajo); quien pierde SIEMPRE pierde el monto COMPLETO (confirmado por
+// el usuario con el ejemplo de "4x3 10a8": "si la pierde pierde el monto
+// completo... y [el banquero] cobra 100-5%" — la reducción de "a premio"
+// SOLO aplica al lado que gana, nunca al que pierde).
+//
+// 29-09-2026 (caso real de "Sebastian", ver la nota grande donde antes
+// vivía esto, ahora reusada acá): si NINGUNO de los 2 caballos figura en
+// la pizarra (ambos con rank RANK_NO_COLOCO), la Marca NO SE DECIDE (0 y
+// 0) — sin importar si se jugó "pp" (fraccionGanador=1) o "a premio"
+// (fraccionGanador=N/10), la falta de información para decidir quién
+// quedó mejor colocado entre los 2 es la MISMA en ambos casos.
+function resolverCruzado(pos, posB, fraccionGanador) {
+  if (pos === RANK_NO_COLOCO && posB === RANK_NO_COLOCO) return { j: 0, b: 0 };
+  return (pos < posB) ? { j: fraccionGanador, b: -fraccionGanador } : { j: -1, b: 1 };
+}
+
 // Devuelve {j, b} como FRACCIÓN del monto (antes de comisión), desde la
 // perspectiva del jugador (j) y del banquero (b) — siempre espejados
 // (j === -b) salvo en un "no se decide" (0, 0). El lado del banquero es
@@ -222,7 +252,10 @@ function resolverModalidad(modalidadCruda, pos, posB) {
 
   if (modalidad === 'pp') {
     // pos = ranking del caballo A, posB = ranking del caballo B — gana
-    // quien tenga el número MENOR (mejor colocado).
+    // quien tenga el número MENOR (mejor colocado), llevándose el monto
+    // COMPLETO (fraccionGanador=1 -- ver resolverCruzado() más arriba;
+    // una Marca "a premio", ej. "4x3 10a8", usa la MISMA función con una
+    // fracción menor, ver resolverResultadoLinea() más abajo).
     //
     // 29-09-2026, a pedido del usuario (caso real de "Sebastian": jugó
     // "1x7 pp" con Pizarra "8.2.3.4" -- ni el 1 ni el 7 figuran ahí, y
@@ -243,8 +276,7 @@ function resolverModalidad(modalidadCruda, pos, posB) {
     // decidiéndose normal: gana quien tenga el rank más chico (mejor
     // colocado) -- que un caballo NO figure (rank 99) siempre pierde
     // contra uno que SÍ figuró, sin importar en qué puesto.
-    if (pos === RANK_NO_COLOCO && posB === RANK_NO_COLOCO) return { j: 0, b: 0 };
-    return (pos < posB) ? { j: 1, b: -1 } : { j: -1, b: 1 };
+    return resolverCruzado(pos, posB, 1);
   }
   return null; // modalidad no reconocida
 }
@@ -598,28 +630,61 @@ function limpiarEncabezadoYPie(texto) {
 
 // resolverResultadoLinea() (24-09-2026): junta en un solo lugar los 3
 // casos posibles de UNA línea de jugada ya con sus campos separados —
-// "pp" (cruzado, caballoTxt viene como "AxB"), varios caballos con la
-// misma modalidad (caballoTxt trae comas, ver
-// resolverModalidadMultiCaballo — "o uno o el otro") o un caballo solo
-// (con o sin modalidad mixta, ver resolverModalidadCompuesta) — para
-// que calcularPlano() y no tenga que repetir esta lógica y
-// recalcularTicket() (edición de un ticket ya guardado, más abajo)
-// puedan compartirla tal cual. Devuelve null si no se pudo resolver (la
-// línea cae en "sinReconocer" en vez de arriesgar un cálculo mal
-// hecho). caballoGuardado es lo que se guarda en hipismo_tickets.caballo
-// (formato "de archivo") y caballoDisplay es lo que se imprime en el
-// texto de vuelta al operador — para el caso de un caballo solo estos 2
-// pueden diferir un poco (ej. "08" guardado vs "8" mostrado) porque así
-// se comportaba ya el código antes de este cambio, y no había motivo
-// para tocar ese detalle.
+// cruzado (2 caballos, caballoTxt viene como "AxB" -- "pp" o una Marca
+// "a premio", ver más abajo), varios caballos con la misma modalidad
+// (caballoTxt trae comas, ver resolverModalidadMultiCaballo — "o uno o
+// el otro") o un caballo solo (con o sin modalidad mixta, ver
+// resolverModalidadCompuesta) — para que calcularPlano() y no tenga que
+// repetir esta lógica y recalcularTicket() (edición de un ticket ya
+// guardado, más abajo) puedan compartirla tal cual. Devuelve null si no
+// se pudo resolver (la línea cae en "sinReconocer" en vez de arriesgar
+// un cálculo mal hecho). caballoGuardado es lo que se guarda en
+// hipismo_tickets.caballo (formato "de archivo") y caballoDisplay es lo
+// que se imprime en el texto de vuelta al operador — para el caso de un
+// caballo solo estos 2 pueden diferir un poco (ej. "08" guardado vs "8"
+// mostrado) porque así se comportaba ya el código antes de este cambio,
+// y no había motivo para tocar ese detalle.
+//
+// 29-09-2026 (a pedido del usuario, con un ejemplo real: "Juan juega 4x3
+// 10a8 lo da Jaime con 100... si Juan la gana cobra 80 -5% y Jaime
+// pierde 80... si la pierde pierde el monto completo, 100, y Jaime cobra
+// 100-5%"): una Marca cruzada ("AxB") no es solo "pp" -- también se
+// puede jugar "a premio" (10aN), con la MISMA comparación cabeza a
+// cabeza entre los 2 caballos, pero el que gana solo se lleva N/10 del
+// monto (nunca completo) mientras que el que pierde SIEMPRE pierde el
+// monto completo (la reducción de "a premio" solo beneficia al que
+// gana). ANTES de este arreglo, una modalidad "a premio" con un caballo
+// "AxB" no entraba por acá (solo lo hacía "pp" literal) y caía en el
+// caso de "caballo solo" de más abajo, que le hacía parseInt() a "4x3"
+// -> 4, ignorando el "x3" por completo -- un bug silencioso (nunca caía
+// en sinReconocer, pero el cálculo real ignoraba al segundo caballo,
+// dando un resultado incorrecto cada vez que el caballo ignorado
+// terminaba siendo el que de verdad importaba). decimosN() (más abajo)
+// ya exige que la modalidad sea "a premio" SOLA (nunca combinada con
+// guion), así que esto nunca se cruza con las jugadas mixtas de
+// resolverModalidadCompuesta().
 function resolverResultadoLinea({ modalidadNorm, caballoTxt, rank }) {
-  if (modalidadNorm.toLowerCase() === 'pp') {
+  const modalidadLower = modalidadNorm.toLowerCase().trim();
+  const esPPLiteral = modalidadLower === 'pp';
+  const nDecimosSolo = decimosN(modalidadLower);
+  const caballoTxtLimpio = caballoTxt.trim();
+  const pareceCruzado = CABALLO_CRUZADO_RE.test(caballoTxtLimpio);
+
+  if (esPPLiteral || (nDecimosSolo !== null && pareceCruzado)) {
     const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(h.trim(), 10));
     if (!Number.isFinite(hA) || !Number.isFinite(hB)) return null;
-    const resultado = resolverModalidad('pp', rank(hA), rank(hB));
+    const fraccionGanador = esPPLiteral ? 1 : (nDecimosSolo / 10);
+    const resultado = resolverCruzado(rank(hA), rank(hB), fraccionGanador);
     if (!resultado) return null;
-    return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${hA}x${hB}`, esPP: true, hA, hB };
+    return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${hA}x${hB}`, esCruzado: true, esPPLiteral, hA, hB };
   }
+  // Un caballo en formato "AxB" con cualquier OTRA modalidad (ej. "1p
+  // (4x3)") no tiene una regla de cruce confirmada con el usuario — se
+  // devuelve null a propósito (sinReconocer) en vez de arriesgar el
+  // mismo bug silencioso descrito arriba (parseInt truncando a un solo
+  // caballo).
+  if (pareceCruzado) return null;
+
   // "morocha" (24-09-2026, término del usuario para esto): varios
   // caballos con la MISMA modalidad y un solo monto, separados por coma,
   // "y" o guion ("6,10", "6y10", "6-10" son la misma jugada — ver
@@ -634,13 +699,13 @@ function resolverResultadoLinea({ modalidadNorm, caballoTxt, rank }) {
     const resultado = resolverModalidadMultiCaballo(modalidadNorm, caballos, rank);
     if (!resultado) return null;
     const texto = caballos.join(',');
-    return { resultado, caballoGuardado: texto, caballoDisplay: texto, esPP: false };
+    return { resultado, caballoGuardado: texto, caballoDisplay: texto, esCruzado: false };
   }
   const caballo = parseInt(caballoTxt.trim(), 10);
   if (!Number.isFinite(caballo)) return null;
   const resultado = resolverModalidadCompuesta(modalidadNorm, rank(caballo));
   if (!resultado) return null;
-  return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${caballo}`, esPP: false };
+  return { resultado, caballoGuardado: caballoTxt.trim(), caballoDisplay: `${caballo}`, esCruzado: false };
 }
 
 // calcularPlano({ texto, pizarra, cruzar, valoresSinComision }) -> {
@@ -739,18 +804,26 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
     if (!resuelto) { sinReconocer.push(limpia); salidaLineas.push(limpia); return; }
 
     const monto = parseFloat(montoTxt.replace(/\./g, '').replace(',', '.'));
-    const { resultado, caballoGuardado, caballoDisplay, esPP, hA, hB } = resuelto;
+    const { resultado, caballoGuardado, caballoDisplay, esCruzado, esPPLiteral, hA, hB } = resuelto;
     // sinComision (24-09-2026): solo aplica a una jugada a premio SOLA
     // (nunca a "pp" ni a una modalidad combinada — decimosN() ya lo
     // filtra). Si esta línea está exenta, su bruto NO entra al pozo
     // "rawPorNombre" (que sirve para el neteo de "cruza jugadas" con 5%
     // al final) — se liquida aparte, ver la sección de totales más abajo.
+    // 29-09-2026: esto también decide bien una Marca "a premio" cruzada
+    // (ej. "4x3 10a8") -- decimosN(modalidadNorm) no le presta atención
+    // al caballo, así que "sin comisión" en el lado que gana sigue
+    // aplicando igual que en un "a premio" de un solo caballo.
     const sinComision = esModalidadSinComision(modalidadNorm, valoresSinComision);
     const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
     if (!sinComision) { add(jugador, jRaw); add(banco, bRaw); }
     const jMostrado = montoMostrado(jRaw, sinComision), bMostrado = montoMostrado(bRaw, sinComision);
-    if (esPP) {
-      salidaLineas.push(`pp (${hA}x${hB}) con ${montoTxt}`);
+    if (esCruzado) {
+      // 29-09-2026: el texto de vuelta al operador ya no asume "pp" a
+      // secas -- una Marca "a premio" cruzada (ej. "10a8 (4x3)") muestra
+      // su propia modalidad tal cual, con el mismo formato de 2 líneas
+      // "(caballo) nombre $monto" que ya usaba "pp".
+      salidaLineas.push(`${esPPLiteral ? 'pp' : modalidadNorm} (${hA}x${hB}) con ${montoTxt}`);
       salidaLineas.push(`(${hA}) ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
       salidaLineas.push(`(${hB}) ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
     } else {
@@ -759,7 +832,7 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
       salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
     }
     salidaLineas.push('');
-    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: esPP ? 'pp' : modalidadNorm, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado, sinComision });
+    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: esPPLiteral ? 'pp' : modalidadNorm, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado, sinComision });
   });
 
   const totalesFinales = {};
@@ -835,10 +908,22 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
 // pregunta del usuario: "solo antes de calcular").
 function recalcularTicket({ modalidad, caballo, monto, sinComision }, rank) {
   let resultado;
-  if (modalidad.toLowerCase() === 'pp') {
-    const [hA, hB] = String(caballo).split(/x/i).map(h => parseInt(String(h).trim(), 10));
-    resultado = resolverModalidad('pp', rank(hA), rank(hB));
-  } else if (String(caballo).includes(',')) {
+  const modalidadLower = String(modalidad).toLowerCase().trim();
+  const caballoTxt = String(caballo);
+  // 29-09-2026: una Marca "a premio" cruzada ya guardada (ej. modalidad
+  // "10a8", caballo "4x3") se edita con la MISMA fórmula que
+  // calcularPlano()/resolverResultadoLinea() -- ver la nota grande ahí
+  // (el que gana se lleva solo N/10 del monto, el que pierde siempre
+  // pierde completo, y si ningún caballo figura en la pizarra no se
+  // decide).
+  const nDecimosSolo = decimosN(modalidadLower);
+  if (modalidadLower === 'pp') {
+    const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(String(h).trim(), 10));
+    resultado = resolverCruzado(rank(hA), rank(hB), 1);
+  } else if (nDecimosSolo !== null && CABALLO_CRUZADO_RE.test(caballoTxt.trim())) {
+    const [hA, hB] = caballoTxt.split(/x/i).map(h => parseInt(String(h).trim(), 10));
+    resultado = resolverCruzado(rank(hA), rank(hB), nDecimosSolo / 10);
+  } else if (caballoTxt.includes(',')) {
     // 24-09-2026: ticket de "varios caballos, o uno o el otro" (morocha,
     // ver resolverModalidadMultiCaballo más arriba) — se reconoce por la
     // coma guardada en hipismo_tickets.caballo (siempre coma: los
