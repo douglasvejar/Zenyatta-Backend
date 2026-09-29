@@ -192,6 +192,18 @@
   .aviso-clientes-duplicados { display: none; background: rgba(220,38,38,0.10); border: 1px solid rgba(220,38,38,0.4); border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 13.5px; color: var(--text); line-height: 1.5; }
   .aviso-clientes-duplicados strong { color: var(--danger); }
 
+  /* Burbuja flotante "ya la habías puesto antes" (29-09-2026, Pizarra en
+     Cargar Planos) -- position:absolute a propósito: no suma altura a su
+     celda del grid de #selectorPlanoCompacto, así el cuadro de arriba no
+     se corre/salta cuando aparece (a pedido del usuario, tras probarla
+     como <p> normal: "para que el cuadro no se vaya para arriba"). Flota
+     PEGADA debajo del input (top:100%) y se cierra con la "×" o sola al
+     cambiar de carrera/hipódromo/fecha -- ver revisarPizarraAnterior(). */
+  .burbuja-pizarra-anterior { display: none; position: absolute; top: 100%; left: 0; margin-top: 5px; z-index: 6; max-width: 240px; background: var(--card-2); border: 1px solid var(--border-light); border-radius: 8px; padding: 6px 8px 6px 10px; font-size: 11.5px; color: var(--text-dim); line-height: 1.3; box-shadow: 0 6px 14px rgba(0,0,0,0.25); align-items: center; gap: 6px; }
+  .burbuja-pizarra-anterior.burbuja-visible { display: flex; }
+  .burbuja-pizarra-anterior-cerrar { flex: none; width: auto; background: transparent; border: none; color: var(--text-dim); font-size: 15px; line-height: 1; padding: 0 2px; cursor: pointer; }
+  .burbuja-pizarra-anterior-cerrar:hover { color: var(--text); }
+
   label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 5px; }
   input, select, textarea { width: 100%; background: var(--card-2); border: 1px solid var(--border-light); border-radius: 8px; color: var(--text); padding: 9px 11px; font-size: 14px; font-family: 'Inter', sans-serif; }
   textarea { resize: vertical; font-family: 'ui-monospace', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
@@ -914,10 +926,19 @@
             <label for="inpRet">Ret — opcional</label>
             <input type="text" id="inpRet" placeholder="Ej: 3, 7">
           </div>
-          <div>
+          <div style="position:relative;">
             <label for="inpPizarra">Pizarra (llegada)</label>
             <input type="text" id="inpPizarra" value="" placeholder="Ej: 6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
-            <p id="avisoPizarraAnterior" style="display:none; margin:6px 0 0; font-size:12px; color:var(--text-dim);">ℹ️ Ya habías colocado una llegada para esta carrera antes — la precargué acá. Puedes modificarla si hace falta.</p>
+            <!-- 29-09-2026: burbuja flotante (position:absolute, no suma
+                 altura a la fila del grid -- a pedido del usuario: "pon un
+                 texto mas corto, o colocalo en una burbuja que se cierre
+                 con x... para que el cuadro no se vaya para arriba"). Se
+                 cierra sola al cambiar de carrera/hipódromo/fecha
+                 (revisarPizarraAnterior) o con la "×" (cerrarAvisoPizarraAnterior). -->
+            <div id="avisoPizarraAnterior" class="burbuja-pizarra-anterior">
+              <span>ℹ️ Ya la habías puesto antes</span>
+              <button type="button" class="burbuja-pizarra-anterior-cerrar" onclick="cerrarAvisoPizarraAnterior()" title="Cerrar" aria-label="Cerrar aviso">×</button>
+            </div>
           </div>
           <div class="check-fila" id="filaCruzar">
             <input type="checkbox" id="chkCruzar" checked>
@@ -5003,13 +5024,20 @@ function avanzarASiguienteCarrera(selId) {
 // llegara la respuesta) pise por accidente lo que corresponde a la
 // combinación actual — se descarta cualquier respuesta que no sea la de
 // la ÚLTIMA petición disparada.
+//
+// El aviso es una burbuja flotante (.burbuja-pizarra-anterior, ver su
+// nota grande en el <style> de arriba) en vez de un texto fijo debajo del
+// campo — a pedido del usuario, tras verla la primera vez como un <p>
+// normal: "pon un texto mas corto, o colocalo en una burbuja que se
+// cierre con x... para que el cuadro no se vaya para arriba" (el <p> le
+// sumaba altura a esa celda del grid y corría el resto de los campos).
 let idPeticionPizarra = 0;
 async function revisarPizarraAnterior() {
   const aviso = document.getElementById('avisoPizarraAnterior');
   const hipodromoNombre = document.getElementById('selHipodromo').value;
   const carreraNumero = document.getElementById('selCarrera').value;
   const fecha = document.getElementById('inpFecha').value;
-  if (aviso) aviso.style.display = 'none';
+  cerrarAvisoPizarraAnterior();
   if (!hipodromoNombre || !carreraNumero || !fecha) return;
 
   const miId = ++idPeticionPizarra;
@@ -5024,7 +5052,14 @@ async function revisarPizarraAnterior() {
   if (!data || !data.pizarra) return;
 
   document.getElementById('inpPizarra').value = data.pizarra;
-  if (aviso) aviso.style.display = 'block';
+  if (aviso) aviso.classList.add('burbuja-visible');
+}
+// Cierra la burbuja a mano (botón "×") -- también se llama sola al
+// arrancar cada revisarPizarraAnterior() nueva, para que nunca queden 2
+// burbujas encimadas de una carrera vieja y una nueva.
+function cerrarAvisoPizarraAnterior() {
+  const aviso = document.getElementById('avisoPizarraAnterior');
+  if (aviso) aviso.classList.remove('burbuja-visible');
 }
 
 function formatMonto(n) {
