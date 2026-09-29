@@ -133,17 +133,17 @@ async function reemplazarAvalesPorcentaje(client, grupoId, jugadorId, avales) {
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, null);
     const jugador = await db.transaccion(async (client) => {
       const r = await client.query(
-        `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
         [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados]
+          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, !!incluirPorcentajeEnJugadas]
       );
       const nuevo = r.rows[0];
       await reemplazarAvalesPorcentaje(client, req.grupoId, nuevo.id, avalesFinal);
@@ -160,17 +160,18 @@ router.post('/', asyncHandler(async (req, res) => {
 
 router.put('/:id', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas } = req.body;
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, req.params.id);
     const jugador = await db.transaccion(async (client) => {
       const r = await client.query(
         `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
-           pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10
-         WHERE id = $11 AND grupo_id = $12 RETURNING *`,
+           pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10,
+           incluir_porcentaje_en_jugadas = $11
+         WHERE id = $12 AND grupo_id = $13 RETURNING *`,
         [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, req.params.id, req.grupoId]
+          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, !!incluirPorcentajeEnJugadas, req.params.id, req.grupoId]
       );
       if (r.rows.length === 0) { const err = new Error('Jugador no encontrado.'); err.status = 404; throw err; }
       const actualizado = r.rows[0];

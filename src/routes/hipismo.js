@@ -1975,6 +1975,11 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
     if (!infos || !infos.length) return; // sin % configurado, no aparece en este reporte
     infos.forEach(info => {
       if (!info || !info.pct) return;
+      // "incluir % en sus jugadas" (29-09-2026): esta plata ya está
+      // sumada/restada DENTRO de la jugada de este cliente (ver
+      // construirResumenClienteHipismo en services/hipismoResumenCliente.js)
+      // — mostrarla acá de nuevo la duplicaría.
+      if (info.incluidaEnJugada) return;
       const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
       if (!devuelto) return;
       // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
@@ -2035,6 +2040,9 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
     let devueltoTotalLinea = 0;
     infos.forEach(info => {
       if (!info || !info.pct) return;
+      // "incluir % en sus jugadas" (29-09-2026) — ver la nota grande
+      // EXACTA de /comisiones-devueltas arriba.
+      if (info.incluidaEnJugada) return;
       devueltoTotalLinea = round2(devueltoTotalLinea + Math.abs(d.monto) * (info.pct / 100));
     });
     if (!devueltoTotalLinea) return;
@@ -2428,6 +2436,9 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     if (!infos || !infos.length) return;
     infos.forEach(info => {
       if (!info || !info.pct) return;
+      // "incluir % en sus jugadas" (29-09-2026) — ver la nota grande
+      // EXACTA de /comisiones-devueltas arriba.
+      if (info.incluidaEnJugada) return;
       const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
       if (!devuelto) return;
       const clave = nombre + '::' + info.destino + '::' + info.pct;

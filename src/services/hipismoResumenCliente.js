@@ -109,13 +109,20 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   // solo avalado_por_id/porcentaje_devuelto_aval a la tabla
   // jugadores_avales_porcentaje (varios avaladores por cliente) — ver la
   // nota grande de obtenerComisionesPropias en services/hipismoComisionPropia.js.
+  //
+  // 29-09-2026: "incluir % en sus jugadas" — si el propio cliente tiene
+  // el toggle en ON, su comision_propia YA NO alimenta ninguna cuenta
+  // aparte (se acumula directo en sus propias jugadas, ver
+  // construirResumenClienteHipismo más abajo) — el primer cond1 lo
+  // excluye a propósito. El % que gane por ser AVALADOR de otros
+  // (cond2) nunca se ve afectado por su propio toggle.
   const rFuentes = await db.query(
     `SELECT j.nombre
        FROM jugadores j
       WHERE j.grupo_id = $1
         AND NOT COALESCE(j.es_cuenta_comision, false)
         AND (
-          (j.cuenta_comision_id = $2 AND j.comision_propia > 0)
+          (j.cuenta_comision_id = $2 AND j.comision_propia > 0 AND NOT COALESCE(j.incluir_porcentaje_en_jugadas, false))
           OR EXISTS (
             SELECT 1 FROM jugadores_avales_porcentaje jap
               JOIN jugadores av ON av.id = jap.avalador_id
@@ -270,6 +277,16 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   let totalSemana = 0;
   let totalHoy = 0;
 
+  // "incluir % en sus jugadas" (29-09-2026, ver la nota grande en
+  // sql/schema.sql, columna jugadores.incluir_porcentaje_en_jugadas) —
+  // con el toggle en ON, la propia comisión de este cliente
+  // (jugadores.comision_propia) se sube DIRECTO al resultado de cada una
+  // de sus jugadas, en vez de ir a una cuenta "{nombre} - PORCENTAJE"
+  // aparte (ver obtenerComisionesPropias en services/hipismoComisionPropia.js,
+  // que es donde se corta esa cuenta aparte para este mismo cliente).
+  const pctPropioIncluido = jugador.incluir_porcentaje_en_jugadas ? (Number(jugador.comision_propia) || 0) : 0;
+  let comisionPropiaIncluidaSemana = 0;
+
   lineasHipismo.forEach(linea => {
     const fechaIso = linea.fecha;
 
@@ -278,13 +295,23 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     const hipNombre = linea.hipodromoNombre;
     if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: linea.pais, carreras: [] });
 
+    // Solo cuenta como JUGADOR (nunca lo que este cliente banqueó para
+    // otro) — Remate/Winner/cruce_ajuste nunca traen `.rol` en absoluto
+    // (ver obtenerLineasHipismoCliente en services/hipismoLineasCliente.js),
+    // así que quedan excluidos solos con esta única condición.
+    let comisionIncluida = 0;
+    if (pctPropioIncluido && linea.rol === 'jugador') {
+      comisionIncluida = round2(Math.abs(Number(linea.monto) || 0) * (pctPropioIncluido / 100));
+    }
+    const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
+
     const carrera = {
       carrera: linea.carreraNumero,
       pizarra: linea.pizarra,
       modalidad: linea.modalidad,
       monto: linea.monto,
       rol: linea.rol,
-      resultado: linea.resultado,
+      resultado: resultadoFinal,
       tipo: linea.tipo,
       ganoRemate: linea.ganoRemate,
       subtipo: linea.subtipo,
@@ -292,6 +319,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       numero1: linea.numero1,
       numero2: linea.numero2
     };
+    if (comisionIncluida) carrera.comisionPropiaIncluida = comisionIncluida;
     if (linea.modalidad === 'pp') {
       carrera.caballoA = linea.caballoA;
       carrera.caballoB = linea.caballoB;
@@ -300,8 +328,9 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     }
     hipMap.get(hipNombre).carreras.push(carrera);
 
-    totalSemana += linea.resultado;
-    if (fechaIso === hoyIso) totalHoy += linea.resultado;
+    totalSemana += resultadoFinal;
+    comisionPropiaIncluidaSemana += comisionIncluida;
+    if (fechaIso === hoyIso) totalHoy += resultadoFinal;
   });
 
   const totalHipismo = totalSemana;
@@ -355,7 +384,13 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       totalHipismo,
       totalDeportes,
       cantidadJugadasHipismo: lineasHipismo.length,
-      cantidadJugadasDeportes
+      cantidadJugadasDeportes,
+      // "incluir % en sus jugadas" (29-09-2026) — cuánto de totalSemana/
+      // totalHipismo de arriba es comisión propia YA incluida en las
+      // jugadas de este cliente (0 si el toggle está OFF o no tiene %) —
+      // el frontend lo puede mostrar como referencia, sin que afecte el
+      // total (que ya la trae sumada).
+      comisionPropiaIncluidaSemana: round2(comisionPropiaIncluidaSemana)
     },
     dias
   };

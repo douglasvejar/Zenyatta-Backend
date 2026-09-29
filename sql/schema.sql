@@ -1525,3 +1525,43 @@ create table if not exists hipismo_winners (
 );
 create index if not exists idx_hipismo_winners_grupo_fecha on hipismo_winners(grupo_id, fecha);
 create index if not exists idx_hipismo_winners_grupo_cliente on hipismo_winners(grupo_id, cliente_nombre);
+
+-- =================================================================
+-- "INCLUIR % EN SUS JUGADAS" (29-09-2026, a pedido del usuario: "los
+-- clientes cuando tienen comision propia... si pierde, pierde 300 -1%,
+-- le debe salir en su ficha entonces en su balance -297... en los planos
+-- va a salir todo normal... recuerda que todo esto de los % son interno
+-- en los balances" / "creame un boton que diga incluir porcentaje con
+-- especie de on off... si esta en on el tercio queda con su % incluido
+-- en sus jugadas y no necesitara un item aparte para su %, lo unico que
+-- le saldra aparte en un item con su nombre y % seria los % que se gane
+-- por sus avalados... y si lo coloco en off en su ficha de cliente de
+-- sus jugadas le saldra la jugada normal, es decir si pierde pierde
+-- completo y si gana ganaria -5% y en la ficha NOMBRE - PORCENTAJE le
+-- saldra el % de todas sus jugadas mas el % que se gane por sus
+-- avalados").
+--
+-- Este toggle es SOLO de presentación/agregación — jamás toca las filas
+-- crudas de hipismo_tickets/hipismo_planos ni el texto del plano que se
+-- comparte en el grupo de WhatsApp (eso siempre sale "normal", sin
+-- ningún % restado/sumado, tal como pide el usuario).
+--
+-- - OFF (default, retrocompatible con TODO lo que ya existía antes de
+--   esta columna): sin cambios. La jugada del cliente en su ficha
+--   aparece cruda (si pierde, pierde completo; si gana, gana lo que la
+--   modalidad calcule). Su comisión propia (jugadores.comision_propia)
+--   sigue acreditándose en una cuenta aparte "{NOMBRE} - PORCENTAJE",
+--   junto con lo que gane por ser avalador de otros clientes (tabla
+--   jugadores_avales_porcentaje) — ambas cosas sumadas en esa misma
+--   cuenta, exactamente como ya funcionaba.
+-- - ON: la comisión propia de este cliente se resta/suma DIRECTO en el
+--   resultado de cada una de sus propias jugadas (rol = jugador, nunca
+--   banquero) al armar su ficha/balance — ya no genera ningún monto en
+--   una cuenta "{NOMBRE} - PORCENTAJE" aparte para SU PROPIA comisión.
+--   Lo único que sigue apareciendo en esa cuenta aparte es lo que este
+--   cliente gane por ser avalador DE OTROS clientes (relación
+--   completamente independiente de este toggle, sigue funcionando
+--   igual). Ver services/hipismoComisionPropia.js (obtenerComisionesPropias,
+--   asegurarCuentasComisionParaNombres) y services/hipismoResumenCliente.js
+--   (construirResumenClienteHipismo, construirResumenCuentaComisionHipismo).
+alter table jugadores add column if not exists incluir_porcentaje_en_jugadas boolean not null default false;

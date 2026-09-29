@@ -154,7 +154,7 @@ function ejecutarQuery(text, params) {
 
   // ---- compartida: obtenerComisionesPropias (28-09-2026, 2 consultas:
   // jugadores + jugadores_avales_porcentaje) ----
-  if (sql === "SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])") {
+  if (sql === "SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre, j.incluir_porcentaje_en_jugadas FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])") {
     const nombres = params[1];
     return { rows: TABLAS.jugadores.filter(j => nombres.includes(j.nombre)) };
   }

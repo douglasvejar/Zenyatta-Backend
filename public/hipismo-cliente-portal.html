@@ -630,10 +630,15 @@
             lineasCarrera.forEach(c => {
               const filaCarrera = document.createElement('div');
               filaCarrera.className = 'carrera-fila';
+              // "incluir % en sus jugadas" (29-09-2026) — ver la nota
+              // grande EXACTA en public/hipismo-mockup.html.
+              const notaComisionIncluida = c.comisionPropiaIncluida
+                ? `<span class="monto-jugado">incluye % = ${conSigno(c.comisionPropiaIncluida)}</span>`
+                : '';
               filaCarrera.innerHTML = `
                 <span class="num-carrera">${c.carrera}ª</span>
                 <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
+                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}${notaComisionIncluida}</span>
                 <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
                 <span></span>`;
               bodyCarrera.appendChild(filaCarrera);

@@ -66,6 +66,22 @@ const { round2 } = require('./hipismoAdelantadasCalc');
 //     entre sí y de comision_propia — cada fila es un ítem "{avalador} -
 //     PORCENTAJE" propio. Ver la nota grande de esta tabla en
 //     sql/schema.sql (incluye la migración de los datos viejos).
+// "INCLUIR % EN SUS JUGADAS" (29-09-2026, ver la nota grande en
+// sql/schema.sql, columna jugadores.incluir_porcentaje_en_jugadas, y el
+// pedido del usuario al inicio de este archivo). Cuando un jugador tiene
+// este toggle en ON, su comisión propia (entrada 1, `esAvalAdicional:
+// false`) YA NO se acredita en una cuenta aparte "{nombre} -
+// PORCENTAJE" — en cambio se marca `incluidaEnJugada: true` y
+// `cuentaNombre` pasa a ser su PROPIO nombre, para que se acumule DIRECTO
+// en su propia fila de balance (ver /cierre-final y /semana-por-dias en
+// routes/hipismo.js, que agrupan por `cuentaNombre` sin saber nada de
+// este toggle — el "merge" ocurre solo). Los reportes de auditoría
+// puramente informativos (/comisiones-devueltas,
+// /comisiones-devueltas-por-hipodromo, /saldo-comisiones) usan
+// `incluidaEnJugada` para NO repetir esa plata aparte (ya está adentro
+// de la jugada). Lo que este cliente gane por avalar a OTROS (entradas
+// 2..N, `esAvalAdicional: true`) NUNCA se ve afectado por este toggle —
+// sigue siempre yendo a su cuenta "{nombre} - PORCENTAJE" tal cual.
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
@@ -76,7 +92,7 @@ async function obtenerComisionesPropias(grupoId, nombres) {
   // sobre el texto armado a mano, así que renombrarla desde
   // Administración > Clientes se refleja acá para siempre.
   const rJugadores = await db.query(
-    `SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre
+    `SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre, j.incluir_porcentaje_en_jugadas
        FROM jugadores j
        LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id
       WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
@@ -101,11 +117,18 @@ async function obtenerComisionesPropias(grupoId, nombres) {
   const mapa = {};
   rJugadores.rows.forEach(j => {
     const entradas = [];
-    // Entrada 1: comision_propia — SIEMPRE para el propio cliente.
+    // Entrada 1: comision_propia — SIEMPRE para el propio cliente. Si el
+    // toggle "incluir % en sus jugadas" está en ON, en vez de una cuenta
+    // aparte se marca `incluidaEnJugada` y `cuentaNombre` es su propio
+    // nombre (ver la nota grande arriba).
     const pctPropio = Number(j.comision_propia) || 0;
     if (pctPropio) {
-      const cuentaNombre = j.cc_propio_nombre || `${j.nombre} - PORCENTAJE`;
-      entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre, esAvalAdicional: false });
+      if (j.incluir_porcentaje_en_jugadas) {
+        entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre: j.nombre, esAvalAdicional: false, incluidaEnJugada: true });
+      } else {
+        const cuentaNombre = j.cc_propio_nombre || `${j.nombre} - PORCENTAJE`;
+        entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre, esAvalAdicional: false });
+      }
     }
     // Entradas 2..N: una por cada avalador configurado en
     // jugadores_avales_porcentaje, cada una con su propio %.
@@ -152,12 +175,15 @@ async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return;
   const rJugadores = await db.query(
-    `SELECT id, nombre, comision_propia, cuenta_comision_id FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])`,
+    `SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
   for (const j of rJugadores.rows) {
     const pctPropio = Number(j.comision_propia) || 0;
-    if (pctPropio && !j.cuenta_comision_id) {
+    // Con el toggle en ON no hace falta ninguna cuenta aparte para su
+    // propia comisión (se acumula directo en su propia fila) — ver la
+    // nota grande de obtenerComisionesPropias más arriba.
+    if (pctPropio && !j.cuenta_comision_id && !j.incluir_porcentaje_en_jugadas) {
       await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
     }
   }

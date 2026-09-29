@@ -4137,6 +4137,12 @@ async function guardarJugador() {
     tipoCuenta: document.getElementById('jugadorTipoCuenta').value,
     pozoInicial: document.getElementById('jugadorPozoInicial').value || 0,
     comisionPropia: existente ? existente.comision_propia : 0,
+    // "Incluir % en sus jugadas" (29-09-2026, ver la nota grande en
+    // sql/schema.sql) — este formulario general tampoco lo toca (vive en
+    // la pestaña Clientes de Hipismo), así que se conserva igual que
+    // comisionPropia, para no resetearlo en OFF sin querer al guardar
+    // otro campo desde acá.
+    incluirPorcentajeEnJugadas: existente ? !!existente.incluir_porcentaje_en_jugadas : false,
     // "Anclar módulos" (23-09-2026) — este formulario SÍ lo edita
     // directamente (a diferencia de comisionPropia/modeloComision, que
     // viven en Administración > Comisión). Si el checkbox está oculto
@@ -4671,6 +4677,10 @@ async function guardarComisionPropia() {
         // jugadorModulosAnclados en app.js/grupo.html). Mismo criterio para
         // los avaladores con % (23-09-2026, 28-09-2026 pasó a admitir varios).
         modulosAnclados: j.modulos_anclados,
+        // "Incluir % en sus jugadas" (29-09-2026) — este formulario de
+        // Deportes tampoco lo toca (vive en la pestaña Clientes de
+        // Hipismo), se conserva igual que avalesPorcentaje.
+        incluirPorcentajeEnJugadas: !!j.incluir_porcentaje_en_jugadas,
         avalesPorcentaje: j.avalesPorcentaje || []
       })
     });
@@ -4714,6 +4724,7 @@ async function quitarComisionPropia(id) {
         nombre: j.nombre, telefono: j.telefono, notas: j.notas, activo: j.activo,
         tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial, comisionPropia: 0, modeloComision: null,
         modulosAnclados: j.modulos_anclados,
+        incluirPorcentajeEnJugadas: !!j.incluir_porcentaje_en_jugadas,
         avalesPorcentaje: j.avalesPorcentaje || []
       })
     });

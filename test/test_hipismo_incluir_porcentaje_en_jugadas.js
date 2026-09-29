@@ -1,0 +1,301 @@
+// =================================================================
+// PRUEBA: "INCLUIR % EN SUS JUGADAS" (29-09-2026, ver la nota grande en
+// sql/schema.sql, columna jugadores.incluir_porcentaje_en_jugadas, y el
+// pedido del usuario: "si esta en on el tercio queda con su % incluido
+// en sus jugadas y no necesitara un item aparte para su %, lo unico que
+// le saldra aparte en un item con su nombre y % seria los % que se gane
+// por sus avalados... y si lo coloco en off... en la ficha NOMBRE -
+// PORCENTAJE le saldra el % de todas sus jugadas mas el % que se gane
+// por sus avalados").
+//
+// Escenario, 2 clientes que juegan EXACTAMENTE lo mismo (apuestan 300 y
+// pierden esa jugada, ambos con comision_propia = 1%), para poder
+// comparar ON vs OFF con el mismo número:
+//   - PEDRO: incluir_porcentaje_en_jugadas = true (ON). Además es
+//     avalador de OTRO cliente al 2% — esa relación es independiente del
+//     toggle y tiene que seguir funcionando igual.
+//   - MARIA: incluir_porcentaje_en_jugadas = false (OFF, default) —
+//     tiene que comportarse EXACTAMENTE igual que antes de esta función
+//     existir (retrocompatible).
+//
+// Cubre las 3 capas que toca esta función:
+//   1) obtenerComisionesPropias() — el "cuentaNombre"/"incluidaEnJugada"
+//      que devuelve para cada entrada.
+//   2) asegurarCuentasComisionParaNombres() — no crea cuenta aparte para
+//      el cliente en ON.
+//   3) construirResumenClienteHipismo() (rama normal, ficha propia del
+//      cliente) — el netting DIRECTO en el resultado de cada jugada
+//      (rol=jugador únicamente) y el nuevo campo
+//      resumen.comisionPropiaIncluidaSemana.
+// =================================================================
+const assert = require('assert');
+const Module = require('module');
+const path = require('path');
+const originalLoad = Module._load;
+
+function formatearFechaISOLocal(d) {
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mes + '-' + dia;
+}
+
+const TABLAS = {
+  jugadores: [],
+  jugadores_avales_porcentaje: [],
+  hipismo_tickets: [],
+  hipismo_planos: [],
+  hipismo_hipodromos: [],
+  hipismo_remate_apuestas: [],
+  hipismo_remates: [],
+  hipismo_adelantadas_jugadas: [],
+  hipismo_adelantadas_planos: [],
+  hipismo_winners: [],
+  hipismo_comisiones_ajustes: [],
+  tickets_historial: []
+};
+
+function ejecutarQuery(text, params) {
+  const sql = text.replace(/\s+/g, ' ').trim();
+
+  if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+
+  // --- obtenerComisionesPropias (services/hipismoComisionPropia.js) ---
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre, j\.incluir_porcentaje_en_jugadas/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const delGrupo = TABLAS.jugadores.filter(j => j.grupo_id === grupoId);
+    const porId = new Map(delGrupo.map(j => [j.id, j]));
+    const rows = delGrupo.filter(j => nombres.includes(j.nombre)).map(j => {
+      const ccPropio = j.cuenta_comision_id ? porId.get(j.cuenta_comision_id) : null;
+      return {
+        id: j.id, nombre: j.nombre, comision_propia: j.comision_propia,
+        cc_propio_nombre: ccPropio ? ccPropio.nombre : null,
+        incluir_porcentaje_en_jugadas: !!j.incluir_porcentaje_en_jugadas
+      };
+    });
+    return { rows };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const rows = TABLAS.jugadores_avales_porcentaje
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
+      .map(a => {
+        const avalador = porId.get(a.avalador_id);
+        const ccAval = avalador && avalador.cuenta_comision_id ? porId.get(avalador.cuenta_comision_id) : null;
+        return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: avalador ? avalador.nombre : null, cc_avalador_nombre: ccAval ? ccAval.nombre : null };
+      });
+    return { rows };
+  }
+
+  // --- asegurarCuentasComisionParaNombres (services/hipismoComisionPropia.js) ---
+  if (/^SELECT id, nombre, comision_propia, cuenta_comision_id.*incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    return {
+      rows: filas.map(j => ({
+        id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
+        cuenta_comision_id: j.cuenta_comision_id || null,
+        incluir_porcentaje_en_jugadas: !!j.incluir_porcentaje_en_jugadas
+      }))
+    };
+  }
+  if (/^SELECT DISTINCT jap\.avalador_id, av\.nombre AS avalador_nombre, av\.cuenta_comision_id AS avalador_cuenta_comision_id/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const vistos = new Set();
+    const rows = [];
+    TABLAS.jugadores_avales_porcentaje
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id) && a.porcentaje > 0)
+      .forEach(a => {
+        if (vistos.has(a.avalador_id)) return;
+        vistos.add(a.avalador_id);
+        const av = porId.get(a.avalador_id);
+        rows.push({ avalador_id: a.avalador_id, avalador_nombre: av ? av.nombre : null, avalador_cuenta_comision_id: av ? av.cuenta_comision_id || null : null });
+      });
+    return { rows };
+  }
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial, es_cuenta_comision\)/i.test(sql)) {
+    const [grupoId, nombre] = params;
+    let cuenta = TABLAS.jugadores.find(j => j.grupo_id === grupoId && j.nombre === nombre);
+    if (!cuenta) {
+      cuenta = { id: 'cta-auto-' + (TABLAS.jugadores.length + 1), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0, comision_propia: 0, es_cuenta_comision: true };
+      TABLAS.jugadores.push(cuenta);
+    } else {
+      cuenta.es_cuenta_comision = true;
+    }
+    return { rows: [{ id: cuenta.id }] };
+  }
+  if (/^UPDATE jugadores SET cuenta_comision_id = \$1 WHERE id = \$2 AND grupo_id = \$3 AND cuenta_comision_id IS NULL/i.test(sql)) {
+    const [cuentaId, jugadorId, grupoId] = params;
+    const j = TABLAS.jugadores.find(x => x.id === jugadorId && x.grupo_id === grupoId);
+    if (j && !j.cuenta_comision_id) j.cuenta_comision_id = cuentaId;
+    return { rows: [] };
+  }
+
+  // --- Tercios (obtenerLineasHipismoCliente) ---
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.modalidad, t\.caballo, t\.monto/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_tickets
+      .filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre))
+      .map(t => ({ t, plano: TABLAS.hipismo_planos.find(p => p.id === t.plano_id) }))
+      .filter(({ plano }) => plano && plano.fecha >= desde && plano.fecha <= hasta);
+    return {
+      rows: filas.map(({ t, plano }) => {
+        const hip = TABLAS.hipismo_hipodromos.find(h => h.id === plano.hipodromo_id);
+        return {
+          cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, modalidad: t.modalidad,
+          caballo: t.caballo, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero,
+          fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre, carrera_numero: plano.carrera_numero,
+          pizarra: plano.pizarra, pais: hip ? hip.pais : null
+        };
+      })
+    };
+  }
+  // --- Remate (vacío en esta prueba) ---
+  if (/^SELECT a\.caballo, a\.numero_ejemplar, a\.monto, a\.resultado/i.test(sql)) {
+    return { rows: [] };
+  }
+  // --- Adelantadas (vacío en esta prueba) ---
+  if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) {
+    return { rows: [] };
+  }
+  // --- Winners (vacío en esta prueba) ---
+  if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
+    return { rows: [] };
+  }
+  // --- Deportes anclado (no aplica en esta prueba) ---
+  if (/^SELECT id, fecha, cliente_nombre AS cliente, ticket_label AS ticket, detalle, arriesga, gana, estado, logros\s+FROM tickets_historial/i.test(sql)) {
+    return { rows: [] };
+  }
+
+  throw new Error('La base de datos falsa de esta prueba (incluir-porcentaje-en-jugadas) no sabe responder: ' + sql);
+}
+
+const fakePool = function () {
+  this.query = async (text, params) => ejecutarQuery(text, params);
+  this.connect = async () => ({ query: async (text, params) => ejecutarQuery(text, params), release() {} });
+  this.on = () => {};
+};
+
+Module._load = function (request, parent, isMain) {
+  if (request === 'pg') return { Pool: fakePool };
+  return originalLoad.apply(this, arguments);
+};
+process.env.DATABASE_URL = 'postgresql://fake/fake';
+
+const { obtenerComisionesPropias, asegurarCuentasComisionParaNombres } = require(path.join(__dirname, '..', 'src', 'services', 'hipismoComisionPropia'));
+const { construirResumenClienteHipismo } = require(path.join(__dirname, '..', 'src', 'services', 'hipismoResumenCliente'));
+
+Module._load = originalLoad;
+
+let pasaron = 0, fallaron = 0;
+function check(cond, msg) {
+  if (cond) { pasaron++; console.log('OK:', msg); }
+  else { fallaron++; console.error('FALLÓ:', msg); }
+}
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+(async function main() {
+  const GRUPO_ID = 'grupo-incluir-pct-1';
+  const grupo = { nombre: 'Zenyatta', logo_url: null, modulo_deportes_habilitado: false };
+  const FECHA = formatearFechaISOLocal(new Date());
+
+  TABLAS.hipismo_hipodromos.push({ id: 'hip-1', pais: 'VE' });
+  TABLAS.hipismo_planos.push({ id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 4, fecha: FECHA, pizarra: '1.2.3' });
+
+  // PEDRO: 1% propio, toggle ON, además avalador de OTRO al 2%.
+  TABLAS.jugadores.push({ id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1, incluir_porcentaje_en_jugadas: true, cuenta_comision_id: null, es_cuenta_comision: false });
+  // MARIA: 1% propio, toggle OFF (default) — se comporta como siempre.
+  TABLAS.jugadores.push({ id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 1, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false });
+  // OTRO: sin % propio, pero PEDRO es su avalador al 2%.
+  TABLAS.jugadores.push({ id: 'j-otro', grupo_id: GRUPO_ID, nombre: 'OTRO', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false });
+  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'j-otro', avalador_id: 'j-pedro', porcentaje: 2 });
+
+  // =========== 1) obtenerComisionesPropias ===========
+  const comisiones = await obtenerComisionesPropias(GRUPO_ID, ['PEDRO', 'MARIA', 'OTRO']);
+
+  const entradasPedro = comisiones['PEDRO'] || [];
+  check(entradasPedro.length === 1, 'PEDRO (toggle ON): una sola entrada (su % propio) — el reporte de "avalado por" pertenece a OTRO, no a él');
+  check(entradasPedro[0] && entradasPedro[0].cuentaNombre === 'PEDRO' && entradasPedro[0].incluidaEnJugada === true,
+    'PEDRO (toggle ON): cuentaNombre pasa a ser su PROPIO nombre e incluidaEnJugada=true (ya no genera cuenta aparte)');
+
+  const entradasMaria = comisiones['MARIA'] || [];
+  check(entradasMaria.length === 1, 'MARIA (toggle OFF): una sola entrada (su % propio)');
+  check(entradasMaria[0] && entradasMaria[0].cuentaNombre === 'MARIA - PORCENTAJE' && !entradasMaria[0].incluidaEnJugada,
+    'MARIA (toggle OFF): sigue yendo a su cuenta aparte "MARIA - PORCENTAJE", sin incluidaEnJugada (retrocompatible)');
+
+  const entradasOtro = comisiones['OTRO'] || [];
+  check(entradasOtro.length === 1 && entradasOtro[0].destino === 'PEDRO' && entradasOtro[0].esAvalAdicional === true,
+    'OTRO genera 1 entrada hacia su avalador PEDRO (2%)');
+  check(entradasOtro[0].cuentaNombre === 'PEDRO - PORCENTAJE' && !entradasOtro[0].incluidaEnJugada,
+    'Lo que PEDRO gana por avalar a OTRO sigue yendo a "PEDRO - PORCENTAJE" (cuenta aparte), sin importar que el propio toggle de PEDRO esté en ON — son 2 relaciones totalmente independientes');
+
+  // =========== 2) asegurarCuentasComisionParaNombres ===========
+  await asegurarCuentasComisionParaNombres(GRUPO_ID, ['PEDRO', 'MARIA', 'OTRO']);
+  const pedroActualizado = TABLAS.jugadores.find(j => j.id === 'j-pedro');
+  const mariaActualizada = TABLAS.jugadores.find(j => j.id === 'j-maria');
+  check(!!mariaActualizada.cuenta_comision_id, 'MARIA (toggle OFF): SÍ se le crea/enlaza su cuenta "MARIA - PORCENTAJE", como siempre');
+  const cuentaMariaCreada = TABLAS.jugadores.find(j => j.id === mariaActualizada.cuenta_comision_id);
+  check(!!cuentaMariaCreada && cuentaMariaCreada.nombre === 'MARIA - PORCENTAJE', 'La cuenta creada para MARIA se llama "MARIA - PORCENTAJE"');
+  // PEDRO (toggle ON) SÍ termina con jugadores.cuenta_comision_id enlazado
+  // — pero NO por su propia comisión (el primer loop de
+  // asegurarCuentasComisionParaNombres la salta, ver el "false" de arriba)
+  // sino porque el SEGUNDO loop (independiente) le crea/enlaza la cuenta
+  // "PEDRO - PORCENTAJE" para recibir lo que gana por avalar a OTRO — el
+  // mismo campo cuenta_comision_id sirve para las 2 cosas, y
+  // obtenerComisionesPropias/construirResumenCuentaComisionHipismo ya
+  // filtran por el toggle para no mezclar su propia comisión ahí (ver los
+  // checks de arriba y abajo).
+  const cuentaPedroPorcentaje = TABLAS.jugadores.find(j => j.nombre === 'PEDRO - PORCENTAJE');
+  check(!!cuentaPedroPorcentaje, 'Se crea la cuenta "PEDRO - PORCENTAJE" para recibir lo que PEDRO gana por avalar a OTRO (independiente de su propio toggle)');
+  check(pedroActualizado.cuenta_comision_id === cuentaPedroPorcentaje.id,
+    'Esa cuenta de avalador queda enlazada en jugadores.cuenta_comision_id de PEDRO (mismo campo que usaría su comisión propia si el toggle estuviera OFF) — no crea una SEGUNDA cuenta aparte solo por tener el toggle en ON');
+
+  // =========== 3) construirResumenClienteHipismo (ficha propia) ===========
+  // PEDRO juega 300 y pierde -> con el toggle ON, su propia ficha debe
+  // mostrar -300 + 1% de 300 (3.00) = -297.00 directo en el resultado.
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '4', monto: 300, resultado_jugador: -300, resultado_banquero: 285 });
+  // PEDRO también banquea una jugada de OTRO por 50 — nunca debe generarle
+  // comisión incluida (rol=banquero, nunca rol=jugador).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '6', monto: 50, resultado_jugador: -50, resultado_banquero: 47.5 });
+  // MARIA juega exactamente lo mismo (300, pierde) pero con el toggle OFF
+  // -> su ficha debe seguir mostrando el -300 crudo, sin tocar.
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'MARIA', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '5', monto: 300, resultado_jugador: -300, resultado_banquero: 285 });
+
+  const fichaPedro = await construirResumenClienteHipismo(pedroActualizado, grupo, 'actual');
+  const esperadoPedroNeto = round2(-300 + 3.00);
+  // La ficha de PEDRO trae TODAS sus jugadas (como jugador Y como
+  // banquero de OTRO) — el total suma ambas líneas; el neteado por el
+  // toggle solo aplica a su línea como jugador (ver los checks de las
+  // líneas individuales más abajo).
+  const esperadoPedroTotal = round2(esperadoPedroNeto + 47.5);
+  check(fichaPedro.resumen.totalSemana === esperadoPedroTotal,
+    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó de comisión bancando a OTRO (47,50): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
+  check(fichaPedro.resumen.comisionPropiaIncluidaSemana === 3,
+    `PEDRO: resumen.comisionPropiaIncluidaSemana expone cuánto de eso es comisión ya incluida (3,00): obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
+  const diaPedroFicha = fichaPedro.dias.find(d => d.fecha === FECHA);
+  const hipPedroFicha = diaPedroFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const lineaJugadorPedro = hipPedroFicha.carreras.find(c => c.rol === 'jugador');
+  const lineaBanqueroPedro = hipPedroFicha.carreras.find(c => c.rol === 'banquero');
+  check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoPedroNeto && lineaJugadorPedro.comisionPropiaIncluida === 3,
+    'La línea de PEDRO como JUGADOR trae el resultado ya neteado (-297,00) y el campo comisionPropiaIncluida=3,00 para que el frontend lo pueda mostrar como referencia');
+  check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === 47.5 && !lineaBanqueroPedro.comisionPropiaIncluida,
+    'La línea de PEDRO como BANQUERO de OTRO NO recibe ningún % incluido (nunca lo que banqueó)');
+
+  const fichaMaria = await construirResumenClienteHipismo(mariaActualizada, grupo, 'actual');
+  check(fichaMaria.resumen.totalSemana === -300,
+    `MARIA (toggle OFF): su ficha sigue mostrando la jugada CRUDA, sin tocar (-300,00): obtenido ${fichaMaria.resumen.totalSemana}`);
+  check(fichaMaria.resumen.comisionPropiaIncluidaSemana === 0,
+    'MARIA (toggle OFF): comisionPropiaIncluidaSemana da 0 (nada se incluyó, retrocompatible)');
+  const diaMariaFicha = fichaMaria.dias.find(d => d.fecha === FECHA);
+  const hipMariaFicha = diaMariaFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const lineaMaria = hipMariaFicha.carreras.find(c => c.rol === 'jugador');
+  check(!!lineaMaria && lineaMaria.resultado === -300 && !lineaMaria.comisionPropiaIncluida,
+    'La línea de MARIA no trae el campo comisionPropiaIncluida (no aplica con el toggle OFF)');
+
+  console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
+  process.exit(fallaron > 0 ? 1 : 0);
+})().catch(e => {
+  console.error('La prueba de "incluir % en sus jugadas" se cayó con una excepción:', e);
+  process.exit(1);
+});

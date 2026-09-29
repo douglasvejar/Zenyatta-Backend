@@ -261,7 +261,7 @@ function ejecutarQuery(text, params) {
   // si hace falta crear/enlazar su cuenta de comisión real ANTES de
   // guardar. Casi ningún jugador de esta prueba tiene % propio configurado,
   // así que casi siempre no hace falta crear nada.
-  if (/^SELECT id, nombre, comision_propia, cuenta_comision_id FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+  if (/^SELECT id, nombre, comision_propia, cuenta_comision_id.*FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
     const [grupoId, nombres] = params;
     const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
     return {

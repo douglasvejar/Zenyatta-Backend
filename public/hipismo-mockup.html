@@ -6833,6 +6833,11 @@ function abrirCrearCliente() {
       <div class="fila">
         <div><label>% de devolución para el mismo cliente</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0"></div>
       </div>
+      <div class="check-fila" style="margin-top:6px;">
+        <input type="checkbox" id="nvoCteIncluirPorcentaje">
+        <label for="nvoCteIncluirPorcentaje" style="margin:0;">Incluir % en sus jugadas</label>
+      </div>
+      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado (por defecto): sus jugadas salen normales y su % se acumula aparte en "{NOMBRE} - PORCENTAJE" — como siempre. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
            avala, y si el avalador tambien gana % de ese tercio, en caso
@@ -6867,6 +6872,7 @@ async function guardarNuevoCliente() {
     tipoCuenta: document.getElementById('nvoCteTipoCuenta').value,
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia: document.getElementById('nvoCteComisionPropia').value || 0,
+    incluirPorcentajeEnJugadas: document.getElementById('nvoCteIncluirPorcentaje').checked,
     avalesPorcentaje
   };
   try {
@@ -6997,6 +7003,11 @@ async function pintarFichaCliente() {
       <div class="fila">
         <div><label>% de devolución para el mismo cliente</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}"></div>
       </div>
+      <div class="check-fila" style="margin-top:6px;">
+        <input type="checkbox" id="detCteIncluirPorcentaje" ${j.incluir_porcentaje_en_jugadas ? 'checked' : ''}>
+        <label for="detCteIncluirPorcentaje" style="margin:0;">Incluir % en sus jugadas</label>
+      </div>
+      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado: sus jugadas salen normales y su % se acumula aparte en "{NOMBRE} - PORCENTAJE" — como siempre. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
            avala, y si el avalador tambien gana % de ese tercio, en caso
@@ -7047,6 +7058,7 @@ async function guardarDetalleCliente(id) {
     // (se edita aparte, con el ajuste +/- de abajo).
     pozoInicial: j ? j.pozo_inicial : 0,
     comisionPropia: document.getElementById('detCteComisionPropia').value || 0,
+    incluirPorcentajeEnJugadas: document.getElementById('detCteIncluirPorcentaje').checked,
     modeloComision: j ? j.modelo_comision : null,
     moneda: j ? j.moneda : 'USD',
     modulosAnclados: j ? !!j.modulos_anclados : false,
@@ -7843,10 +7855,18 @@ function renderDetalleClienteModal(data) {
             // remate en su lugar ("pool $X").
             const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
             const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : (c.tipo === 'winner_contraparte' ? 'de' : 'con'));
+            // "incluir % en sus jugadas" (29-09-2026) — cuando esta jugada
+            // ya trae la comisión propia del cliente sumada/restada
+            // adentro del resultado (ver comisionPropiaIncluida en
+            // services/hipismoResumenCliente.js), se avisa con una notita
+            // aparte, sin tocar el número del resultado en sí.
+            const notaComisionIncluida = c.comisionPropiaIncluida
+              ? `<span class="monto-jugado">incluye % = ${conSignoDet(c.comisionPropiaIncluida)}</span>`
+              : '';
             fila.innerHTML = `
               <span class="num-carrera">${c.carrera}ª</span>
               <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}</span>
+              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
               <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyCarrera.appendChild(fila);
