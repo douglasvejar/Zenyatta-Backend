@@ -2302,18 +2302,22 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // gane o pierda cada jugada puntual, sumado como su propio "cliente"
   // aparte ("{NOMBRE} - PORCENTAJE") en esta misma lista.
   //
-  // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, caso real
-  // "Mrincreible": tiene 1% propio configurado y avales, pero en la
+  // TAMBIÉN EL LADO BANQUERO, EN CUALQUIER PRESENTACIÓN (29-09-2026, caso
+  // real "Mrincreible": tiene 1% propio configurado y avales, pero en la
   // jugada real él era el BANQUERO — antes esto se excluía a propósito
-  // ("nunca lo que banqueó"); el usuario confirmó que ahora SÍ quiere que
-  // el % se gane también banqueando). El banqueo de Marcas (Jugadas
-  // Adelantadas, j.banqueadores arriba) queda A PROPÓSITO fuera de este
-  // cambio por ahora — su alcance no se confirmó con el usuario.
+  // ("nunca lo que banqueó"); el usuario confirmó primero que quería el %
+  // también banqueando Tercios, y luego, a pedido explícito ("las marcas
+  // en todas sus presentaciones... deben cumplir todas la misma regla"),
+  // que el banqueo de una Marca (Jugadas Adelantadas, j.banqueadores
+  // arriba) también cuenta.
   const nombresJugadores = new Set();
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
   rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
-  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  rAdelantadas.rows.forEach(j => {
+    nombresJugadores.add(j.cliente_nombre);
+    if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
+  });
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
   function acumularDevuelto(nombre, monto) {
     const infos = comisionesPropias[nombre];
@@ -2342,6 +2346,18 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // lado BANQUERO de Tercios ahora también genera % devuelto.
   rTickets.rows.forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
   rAdelantadas.rows.forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
+  // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
+  // % devuelto — j.monto es el monto TOTAL de la jugada, cada banqueador
+  // solo banqueó su `porcentaje` de esa jugada (ver resolverBanqueoMarca
+  // en services/hipismoAdelantadasCalc.js), así que la base de su % es
+  // j.monto * b.porcentaje/100, no j.monto completo.
+  rAdelantadas.rows.forEach(j => {
+    if (!Array.isArray(j.banqueadores)) return;
+    j.banqueadores.forEach(b => {
+      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      acumularDevuelto(b.nombre, parte);
+    });
+  });
 
   const clientes = Array.from(porCliente.values())
     .map(c => ({ ...c, saldo: c.gano - c.perdio }));
@@ -2491,20 +2507,24 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.monto
+    `SELECT j.cliente_nombre, j.monto, j.banqueadores
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
     [req.grupoId, desde, hasta]
   );
 
-  // 29-09-2026 (ver la nota grande de /cierre-final): el lado BANQUERO de
-  // Tercios ahora también cuenta para el % propio/de aval.
+  // 29-09-2026 (ver la nota grande de /cierre-final): el lado BANQUERO, en
+  // cualquier presentación (Tercios o Marca de Jugadas Adelantadas),
+  // ahora también cuenta para el % propio/de aval.
   const nombresJugadores = new Set();
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
   rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
-  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  rAdelantadas.rows.forEach(j => {
+    nombresJugadores.add(j.cliente_nombre);
+    if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
+  });
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
 
   // 24-09-2026: hasta 2 entradas simultáneas por cliente (ver la nota
@@ -2534,6 +2554,16 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
   rTickets.rows.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
   rAdelantadas.rows.forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
+  // 29-09-2026 — lado BANQUERO de una Marca: j.monto es el monto TOTAL de
+  // la jugada, cada banqueador solo banqueó su `porcentaje` de esa jugada
+  // (ver resolverBanqueoMarca en services/hipismoAdelantadasCalc.js).
+  rAdelantadas.rows.forEach(j => {
+    if (!Array.isArray(j.banqueadores)) return;
+    j.banqueadores.forEach(b => {
+      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      acumularSaldo(b.nombre, parte);
+    });
+  });
 
   const clientes = Array.from(porCliente.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const totalGeneral = round2(clientes.reduce((s, c) => s + c.devueltoSemana, 0));
@@ -2703,7 +2733,10 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
   rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
   rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
-  rAdelantadas.rows.forEach(j => nombresJugadores.add(j.cliente_nombre));
+  rAdelantadas.rows.forEach(j => {
+    nombresJugadores.add(j.cliente_nombre);
+    if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
+  });
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
   function acumularDevueltoDia(nombre, fechaFila, monto) {
     const infos = comisionesPropias[nombre];
@@ -2718,6 +2751,16 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   rTickets.rows.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
   rTickets.rows.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
   rAdelantadas.rows.forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
+  // 29-09-2026 — lado BANQUERO de una Marca (ver la nota grande de
+  // /cierre-final): j.monto es el monto TOTAL de la jugada, cada
+  // banqueador solo banqueó su `porcentaje` de esa jugada.
+  rAdelantadas.rows.forEach(j => {
+    if (!Array.isArray(j.banqueadores)) return;
+    j.banqueadores.forEach(b => {
+      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      acumularDevueltoDia(b.nombre, j.fecha, parte);
+    });
+  });
 
   // "AJUSTE POR CRUCE" por día (28-09-2026, mismo bug/arreglo que
   // /cierre-final — ver la nota grande de esa ruta): en un plano con

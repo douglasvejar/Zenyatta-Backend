@@ -161,18 +161,27 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         if (linea.tipo === 'winner') return;
         if (linea.tipo === 'remate') return;
         if (linea.tipo === 'cruce_ajuste') return;
-        // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, caso real
-        // "Mrincreible": tenía 1% propio y avales configurados, pero en
-        // la jugada real era el BANQUERO, no el cliente — antes esto se
-        // excluía a propósito ("solo el rol JUGADOR genera %"); el
-        // usuario confirmó que ahora SÍ quiere que el % se gane también
-        // banqueando). El banqueo de Marcas (Jugadas Adelantadas) queda A
-        // PROPÓSITO fuera de este cambio por ahora — su alcance no se
-        // confirmó con el usuario, así que se sigue excluyendo.
-        if (linea.tipo === 'adelantada' && linea.rol === 'banquero') return;
+        // TAMBIÉN EL LADO BANQUERO, EN CUALQUIER PRESENTACIÓN (29-09-2026,
+        // caso real "Mrincreible" banqueando en Tercios, y luego a pedido
+        // explícito del usuario: "las marcas en todas sus presentaciones
+        // sean adelantadas o en jugadas contra tercios del plano... deben
+        // cumplir todas la misma regla"). Antes esto se excluía a
+        // propósito ("solo el rol JUGADOR genera %") — ahora banquear
+        // también genera % propio/de aval, sea Tercios o una Marca de
+        // Jugadas Adelantadas.
+        //
+        // montoParaPct: para una Marca banqueada, `linea.monto` es el
+        // monto TOTAL de la jugada, no lo que banqueó puntualmente ESTE
+        // banquero — hay que escalarlo por su `porcentajeBanqueado` (ver
+        // la nota grande en hipismoLineasCliente.js). Para Tercios (o el
+        // rol jugador de una adelantada) el monto ya es el correcto tal
+        // cual.
+        const montoParaPct = (linea.tipo === 'adelantada' && linea.rol === 'banquero')
+          ? round2(Math.abs(Number(linea.monto) || 0) * (Number(linea.porcentajeBanqueado) || 0) / 100)
+          : linea.monto;
 
         entradas.forEach(info => {
-          const devuelto = round2(Math.abs(Number(linea.monto) || 0) * (info.pct / 100));
+          const devuelto = round2(Math.abs(Number(montoParaPct) || 0) * (info.pct / 100));
           if (!devuelto) return;
 
           const fechaIso = linea.fecha;
@@ -190,7 +199,12 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
             caballo: linea.caballo,
             clienteOrigen: nombreFuente,
             porcentaje: info.pct,
-            monto: Math.abs(Number(linea.monto) || 0),
+            // El monto mostrado en esta línea de comisión es la BASE real
+            // sobre la que se calculó el %, no el monto completo de la
+            // jugada — para que el detalle ("X% de $monto = $resultado")
+            // cuadre también cuando montoParaPct viene escalado (banqueo
+            // de una Marca).
+            monto: Math.abs(Number(montoParaPct) || 0),
             resultado: devuelto
           });
 
@@ -306,16 +320,25 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // obtenerLineasHipismoCliente en services/hipismoLineasCliente.js),
     // así que quedan excluidos solos con el chequeo de `linea.rol`.
     //
-    // TAMBIÉN EL LADO BANQUERO DE TERCIOS (29-09-2026, mismo caso
-    // "Mrincreible" — ver la nota grande en
+    // TAMBIÉN EL LADO BANQUERO, EN CUALQUIER PRESENTACIÓN (29-09-2026,
+    // mismo caso "Mrincreible" — ver la nota grande en
     // construirResumenCuentaComisionHipismo más arriba): antes esto solo
     // contaba `linea.rol === 'jugador'`, a propósito ("nunca lo que
-    // banqueó"); el usuario confirmó que ahora el % también se gana
-    // banqueando en Tercios. El banqueo de Marcas (Jugadas Adelantadas)
-    // sigue A PROPÓSITO excluido — su alcance no se confirmó.
+    // banqueó"); el usuario confirmó primero que el % también se gana
+    // banqueando en Tercios, y luego, a pedido explícito ("las marcas en
+    // todas sus presentaciones... deben cumplir todas la misma regla"),
+    // que el banqueo de una Marca (Jugadas Adelantadas) también cuenta.
+    //
+    // montoParaPct: igual que en construirResumenCuentaComisionHipismo,
+    // para una Marca banqueada `linea.monto` es el monto TOTAL de la
+    // jugada, no lo que banqueó puntualmente este banquero — se escala
+    // por `linea.porcentajeBanqueado` (ver hipismoLineasCliente.js).
     let comisionIncluida = 0;
-    if (pctPropioIncluido && linea.rol && !(linea.tipo === 'adelantada' && linea.rol === 'banquero')) {
-      comisionIncluida = round2(Math.abs(Number(linea.monto) || 0) * (pctPropioIncluido / 100));
+    if (pctPropioIncluido && linea.rol) {
+      const montoParaPct = (linea.tipo === 'adelantada' && linea.rol === 'banquero')
+        ? round2(Math.abs(Number(linea.monto) || 0) * (Number(linea.porcentajeBanqueado) || 0) / 100)
+        : linea.monto;
+      comisionIncluida = round2(Math.abs(Number(montoParaPct) || 0) * (pctPropioIncluido / 100));
     }
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
 

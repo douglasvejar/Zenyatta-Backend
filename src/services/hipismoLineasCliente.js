@@ -217,7 +217,19 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     if (Array.isArray(row.banqueadores)) {
       row.banqueadores.forEach(b => {
         if (b.nombre === nombreJugador) {
-          lineasAdelantadas.push({ ...base, rol: 'banquero', resultado: Number(b.monto) });
+          // porcentajeBanqueado (29-09-2026, a pedido del usuario: "las
+          // marcas en todas sus presentaciones... deben cumplir todas la
+          // misma regla" — el % propio/de aval ya se gana banqueando en
+          // Tercios, ver hipismoComisionPropia.js/hipismo.js, y ahora
+          // también al banquear una Marca). `base.monto` es el monto TOTAL
+          // de la jugada (no lo que banqueó puntualmente ESTE banquero) —
+          // se expone `b.porcentaje` aparte para que quien calcule el %
+          // propio pueda escalarlo a la PARTE real de este banquero
+          // (mismo `base` que arma resolverBanqueoMarca en
+          // hipismoAdelantadasCalc.js: parte = monto * porcentaje/100),
+          // sin tocar el campo `monto` de siempre (se sigue mostrando
+          // igual en la UI).
+          lineasAdelantadas.push({ ...base, rol: 'banquero', resultado: Number(b.monto), porcentajeBanqueado: Number(b.porcentaje) || 0 });
         }
       });
     }
