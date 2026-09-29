@@ -53,8 +53,21 @@
 
   .envoltorio { max-width: 560px; margin: 0 auto; padding: 18px 16px 60px; }
 
+  /* Logo real del grupo, arriba de TODO (29-09-2026, a pedido del
+     usuario: "arriba en los links de los clientes debe verse el logo...
+     como encabezado del ancho que corresponda"). Antes salía como un
+     círculo chico de 46px pegado al saludo, recortando la imagen
+     (object-fit: cover) — ahora, si el grupo tiene un logo real cargado,
+     se muestra completo arriba de todo, sin recortar (max-height fijo,
+     el ancho lo pone solo el navegador según la proporción real de la
+     imagen). Si el grupo no tiene logo, esta franja no se muestra y el
+     saludo (.encabezado) queda igual que siempre, con el avatar de
+     iniciales. */
+  .logo-banner-real { display: none; text-align: center; margin-bottom: 16px; }
+  .logo-banner-real.con-logo { display: block; }
+  .logo-banner-real img { max-width: 100%; max-height: 90px; }
+
   .encabezado { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-  .encabezado .logo-grupo { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
   .encabezado .avatar {
     width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
     background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime));
@@ -237,8 +250,9 @@
 
   <div class="envoltorio" id="contenido" style="display:none;">
 
+    <div class="logo-banner-real" id="logoBannerReal"><img alt="Logo del grupo"></div>
+
     <div class="encabezado">
-      <img class="logo-grupo" id="logoGrupo" style="display:none;" alt="Logo del grupo">
       <div class="avatar" id="avatarIniciales">–</div>
       <div>
         <h1 id="saludoNombre">Hola 👋</h1>
@@ -453,16 +467,21 @@
     // grupo (pedido del usuario: "gerencia (nombre del grupo)").
     document.getElementById('avisoConfirmacion').innerHTML =
       `⏰ <b>Importante:</b> dispones de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<span class="firma">— Gerencia, ${data.grupo.nombre}</span>`;
-    const logo = document.getElementById('logoGrupo');
+    // 29-09-2026: el logo del grupo pasó de ser un círculo chico pegado
+    // al saludo (recortando la imagen) a su propia franja completa arriba
+    // de todo (#logoBannerReal, ver el CSS) — el avatar de iniciales ya
+    // no depende de si hay logo o no, siempre muestra la inicial del
+    // cliente (es SU avatar, no el del grupo).
+    const bannerLogo = document.getElementById('logoBannerReal');
     const avatar = document.getElementById('avatarIniciales');
+    avatar.textContent = data.jugador.nombre.trim().charAt(0).toUpperCase();
     if (data.grupo.logoUrl) {
-      logo.src = data.grupo.logoUrl;
-      logo.style.display = '';
-      avatar.style.display = 'none';
+      const img = bannerLogo.querySelector('img');
+      img.onerror = () => { bannerLogo.classList.remove('con-logo'); };
+      img.src = data.grupo.logoUrl;
+      bannerLogo.classList.add('con-logo');
     } else {
-      logo.style.display = 'none';
-      avatar.style.display = '';
-      avatar.textContent = data.jugador.nombre.trim().charAt(0).toUpperCase();
+      bannerLogo.classList.remove('con-logo');
     }
 
     // --- Tarjeta resumen ---

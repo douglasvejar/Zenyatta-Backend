@@ -509,6 +509,24 @@
   .js-logo-grupo { overflow: hidden; }
   .js-logo-grupo img.logo-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 
+  /* Logo real como ENCABEZADO propio, sin recortar (29-09-2026, a pedido
+     del usuario: "en cierre final, balance general... debe verse el logo
+     arriba como encabezado del ancho que corresponda"). El círculo chico
+     de arriba (.js-logo-grupo) SIEMPRE recorta la imagen a un aro parejo
+     — bien para un ícono genérico, pero no para el logo real de cada
+     grupo, que puede venir en cualquier proporción (ancho, cuadrado,
+     etc.). Solo en Balance General y Cierre Final, cuando el grupo SÍ
+     tiene un logo real cargado, se muestra esta franja aparte arriba de
+     todo con la imagen COMPLETA (nunca recortada ni estirada — max-height
+     fijo y el ancho lo pone solo el navegador según la proporción real de
+     la imagen) y se oculta el círculo chico de esa pantalla puntual (ver
+     pintarLogosGrupo), para no mostrar el mismo logo dos veces. Si el
+     grupo no tiene ningún logo cargado, esta franja no se muestra y todo
+     se queda exactamente igual que antes (círculo con 🏇). */
+  .logo-banner-real { display: none; width: 100%; box-sizing: border-box; background: #ffffff; padding: 16px 20px 2px; text-align: center; }
+  .logo-banner-real.con-logo { display: block; }
+  .logo-banner-real img { max-width: 100%; max-height: 96px; }
+
   .placeholder-card { border: 1px dashed var(--card-border); border-radius: 10px; padding: 18px; text-align: center; color: var(--text-dim); font-size: 13.5px; }
 
   /* ------------------------------------------------------------------
@@ -1470,8 +1488,9 @@
         </div>
 
         <div id="balanceCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="logo-banner-real" id="logoBannerRealBalance"><img alt="Logo del grupo"></div>
           <div class="encabezado-captura">
-            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div class="logo-grupo js-logo-grupo" id="logoChicoBalance">🏇</div>
             <div>
               <div class="titulo" id="balanceNombreGrupoCaptura">📒 Balance General</div>
               <div class="fecha" id="balanceFechaCaptura"></div>
@@ -1549,8 +1568,9 @@
         </div>
 
         <div id="cierreFinalCaptura" class="ocultar-jugadas ocultar-gano ocultar-perdio" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
+          <div class="logo-banner-real" id="logoBannerRealCierre"><img alt="Logo del grupo"></div>
           <div class="logo-grupo-grande">
-            <div class="logo-grande-icono js-logo-grupo">🏇</div>
+            <div class="logo-grande-icono js-logo-grupo" id="logoChicoCierre">🏇</div>
             <div>
               <div class="titulo" id="cierreNombreGrupoCaptura">🏁 Cierre Final</div>
               <div class="fecha" id="cierreRangoCaptura"></div>
@@ -4825,6 +4845,34 @@ function pintarLogosGrupo() {
       el.textContent = '🏇';
     }
   });
+
+  // 29-09-2026, a pedido del usuario: "en cierre final, balance general...
+  // debe verse el logo arriba como encabezado del ancho que corresponda"
+  // — en estas 2 pantallas puntuales, si el grupo tiene un logo real, se
+  // muestra completo (sin recortar) en su propia franja arriba de todo
+  // (ver .logo-banner-real en el CSS) y se oculta el círculo chico de esa
+  // pantalla (ya pintado arriba) para no duplicar el mismo logo. Si el
+  // grupo no tiene logo, la franja se queda oculta y el círculo chico
+  // sigue mostrando el 🏇 de siempre, sin ningún cambio.
+  [
+    ['logoBannerRealBalance', 'logoChicoBalance'],
+    ['logoBannerRealCierre', 'logoChicoCierre']
+  ].forEach(([idBanner, idChico]) => {
+    const banner = document.getElementById(idBanner);
+    const chico = document.getElementById(idChico);
+    if (!banner) return;
+    if (logoUrl) {
+      const img = banner.querySelector('img');
+      img.onerror = () => { banner.classList.remove('con-logo'); if (chico) chico.style.display = ''; };
+      img.src = logoUrl;
+      banner.classList.add('con-logo');
+      if (chico) chico.style.display = 'none';
+    } else {
+      banner.classList.remove('con-logo');
+      if (chico) chico.style.display = '';
+    }
+  });
+
   const titulos = {
     balanceNombreGrupoCaptura: `📒 Balance General — ${nombreGrupo} 🇻🇪`,
     cierreNombreGrupoCaptura: `🏁 Cierre Final — ${nombreGrupo} 🇻🇪`,
