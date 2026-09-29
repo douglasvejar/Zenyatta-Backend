@@ -143,6 +143,17 @@
 //     líneas de cualquiera de los 3, sin que el operador avise cuál usa.
 // =================================================================
 
+// RANK_NO_COLOCO (29-09-2026): valor "sentinela" que parsearPizarra() más
+// abajo le da a un caballo que NO aparece en la pizarra de esa carrera —
+// o sea, no colocó entre las posiciones que el operador registró (top 4
+// en hipódromos de EEUU, top 5 en Venezuela, según explicó el usuario;
+// la pizarra que arma el operador ya viene con esa cantidad de
+// posiciones, este código no necesita saber el país). Centralizado en
+// una sola constante para que resolverModalidad() (el "pp"/Marca de
+// abajo) y parsearPizarra() nunca se desincronicen sobre qué número
+// significa "no colocó".
+const RANK_NO_COLOCO = 99;
+
 // Devuelve {j, b} como FRACCIÓN del monto (antes de comisión), desde la
 // perspectiva del jugador (j) y del banquero (b) — siempre espejados
 // (j === -b) salvo en un "no se decide" (0, 0). El lado del banquero es
@@ -211,10 +222,28 @@ function resolverModalidad(modalidadCruda, pos, posB) {
 
   if (modalidad === 'pp') {
     // pos = ranking del caballo A, posB = ranking del caballo B — gana
-    // quien tenga el número MENOR (mejor colocado). Empate/ninguno
-    // colocó (ambos en 99) -> gana el banquero, mismo criterio que ya
-    // tenía el mockup (caso no confirmado explícitamente con el
-    // usuario, documentado como tal en claude/spec-modulo-hipismo.md).
+    // quien tenga el número MENOR (mejor colocado).
+    //
+    // 29-09-2026, a pedido del usuario (caso real de "Sebastian": jugó
+    // "1x7 pp" con Pizarra "8.2.3.4" -- ni el 1 ni el 7 figuran ahí, y
+    // el sistema se lo estaba cobrando completo como perdido, -100,00
+    // cada línea): "para que [una Marca/pp] se decidan... deben llegar
+    // [colocar] entre los primeros 4 lugares [hipódromos de EEUU] / los
+    // primeros 5 [hipódromos de Venezuela]... si ninguno de los dos
+    // figura no se decide". O sea: cuando NINGUNO de los 2 caballos
+    // aparece en la pizarra (ambos con rank=99, ver parsearPizarra más
+    // abajo -- la pizarra ya trae solamente las posiciones que cuentan
+    // para esa carrera/hipódromo, las arma el operador antes de
+    // calcular), la jugada NO SE DECIDE: no gana ni pierde nadie (0 y
+    // 0), en vez de dársela completa al banquero como pasaba ANTES de
+    // este arreglo (eso era un criterio heredado del mockup viejo, sin
+    // confirmar con el usuario -- ver la nota vieja que reemplaza este
+    // comentario en el historial de git). Si alguno de los 2 SÍ figura
+    // (así sea con peor rank que 99 y el otro no figura), sigue
+    // decidiéndose normal: gana quien tenga el rank más chico (mejor
+    // colocado) -- que un caballo NO figure (rank 99) siempre pierde
+    // contra uno que SÍ figuró, sin importar en qué puesto.
+    if (pos === RANK_NO_COLOCO && posB === RANK_NO_COLOCO) return { j: 0, b: 0 };
     return (pos < posB) ? { j: 1, b: -1 } : { j: -1, b: 1 };
   }
   return null; // modalidad no reconocida
@@ -469,7 +498,7 @@ function formatMontoTabla(n) {
 function parsearPizarra(pizarraTxt) {
   const posiciones = {};
   (pizarraTxt || '').split(/[^0-9]+/).filter(Boolean).forEach((h, i) => { posiciones[parseInt(h, 10)] = i + 1; });
-  return h => (posiciones[h] !== undefined ? posiciones[h] : 99);
+  return h => (posiciones[h] !== undefined ? posiciones[h] : RANK_NO_COLOCO);
 }
 
 // ordinalCarrera(n) -> "1ra", "2da", "3ra", "4ta"..."7ma", "8va", "9na",
