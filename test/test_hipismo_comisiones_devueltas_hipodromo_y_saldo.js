@@ -82,13 +82,19 @@ function ejecutarQuery(text, params) {
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
   // ---- obtenerApuestasDelDia (usada por /comisiones-devueltas-por-hipodromo) ----
-  if (/^SELECT t\.id, t\.cliente_nombre, t\.modalidad, t\.caballo, t\.monto, p\.hipodromo_nombre, p\.carrera_numero\s+FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  // 29-09-2026: la consulta ahora también trae resultado_jugador/
+  // resultado_banquero (para el filtro "no se decidió" -- ver la nota
+  // grande de obtenerApuestasDelDia en routes/hipismo.js); ningún ticket de
+  // esta prueba las necesita (todas sus jugadas están decididas), así que
+  // simplemente se pasan tal cual vengan (undefined acá, que da
+  // `decidida: true` igual que antes de este fix).
+  if (/^SELECT t\.id, t\.cliente_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, p\.hipodromo_nombre, p\.carrera_numero\s+FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     const [grupoId, fecha] = params;
     const filas = TABLAS.hipismo_tickets
       .filter(t => t.grupo_id === grupoId)
       .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
       .filter(({ p }) => p && p.fecha === fecha)
-      .map(({ t, p }) => ({ id: t.id, cliente_nombre: t.cliente_nombre, modalidad: t.modalidad, caballo: t.caballo, monto: t.monto, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
+      .map(({ t, p }) => ({ id: t.id, cliente_nombre: t.cliente_nombre, modalidad: t.modalidad, caballo: t.caballo, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
     return { rows: filas };
   }
   if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.monto, r\.hipodromo_nombre, r\.carrera_numero\s+FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha = \$2/i.test(sql)) {
@@ -100,7 +106,7 @@ function ejecutarQuery(text, params) {
       .map(({ a, r }) => ({ id: a.id, cliente_nombre: a.cliente_nombre, caballo: a.caballo, monto: a.monto, hipodromo_nombre: r.hipodromo_nombre, carrera_numero: r.carrera_numero }));
     return { rows: filas };
   }
-  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, p\.hipodromo_nombre\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, p\.hipodromo_nombre\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     return { rows: [] };
   }
 

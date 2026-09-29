@@ -1855,11 +1855,33 @@ router.get('/comisiones-por-hipodromo', asyncHandler(async (req, res) => {
 // la fecha en que se CORRE la carrera, igual que el resto del sistema
 // las agrupa). Esta misma función se reusa para "Comisiones Devueltas"
 // (más abajo), que necesita exactamente la misma base.
+//
+// `decidida` (29-09-2026, a pedido explícito del usuario: "YA TE DIJE QUE
+// JUGADA QUE NO SE DECIDA SEA LO QUE SEA EL TIPO DE JUGADA NI GENERA % NI
+// SE LE DEVUELVE % A NADIE... NO PUEDES PAGAR O DELVOLVER % DE UNA JUGADA
+// QUE QUEDO NULA... ELLOS GANAN % DE LO QUE GENERE EL GRUPO") -- hasta esta
+// ronda esta función NUNCA traía el resultado de la jugada (ni
+// resultado_jugador/resultado_banquero de Tercios, ni gano de Adelantadas),
+// así que "Comisiones Devueltas por Cliente"/"por Hipódromo" (más abajo)
+// pagaban % sobre CUALQUIER monto apostado, decidida o no -- por eso
+// Sebastian seguía cobrando % de una Marca "pp" que quedó nula. Mismo
+// criterio EXACTO que ya usan /cierre-final, /saldo-comisiones y
+// /semana-por-dias (ver esas notas grandes): un ticket de Tercios "no se
+// decidió" cuando resultado_jugador Y resultado_banquero quedan en 0 (una
+// Marca "pp"/"a premio" sin ningún caballo que figurara, o una familia "Nn"
+// empatada); una Marca de Jugadas Adelantadas "no se decidió" cuando
+// j.gano queda en null ('sin_decidir') -- Tabla Fija siempre decide
+// true/false, así que nunca cae acá. Remate no tiene resultado propio por
+// apuesta (ya se excluye aparte en cada reporte porque "LOS REMATES NO LE
+// PRODUCEN % DE DEVOLUCION"), así que queda `decidida: true` sin que
+// importe. A PROPÓSITO "Montos Apostados" (más abajo) NO filtra por
+// `decidida` -- lo apostado es lo apostado, se haya decidido o no la
+// jugada; solo los reportes de COMISIÓN/% devuelto deben filtrar por esto.
 async function obtenerApuestasDelDia(grupoId, fecha) {
   const detalle = [];
 
   const rTickets = await db.query(
-    `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, p.hipodromo_nombre, p.carrera_numero
+    `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero
        FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha = $2`,
     [grupoId, fecha]
@@ -1867,7 +1889,8 @@ async function obtenerApuestasDelDia(grupoId, fecha) {
   rTickets.rows.forEach(t => detalle.push({
     id: t.id, tabla: 'hipismo_tickets',
     cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
-    tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto)
+    tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
+    decidida: !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0)
   }));
 
   const rRemate = await db.query(
@@ -1879,11 +1902,12 @@ async function obtenerApuestasDelDia(grupoId, fecha) {
   rRemate.rows.forEach(a => detalle.push({
     id: a.id, tabla: 'hipismo_remate_apuestas',
     cliente: a.cliente_nombre, hipodromoNombre: a.hipodromo_nombre, carreraNumero: a.carrera_numero,
-    tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto)
+    tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto),
+    decidida: true
   }));
 
   const rAdelantadas = await db.query(
-    `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, p.hipodromo_nombre
+    `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
        FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha = $2`,
     [grupoId, fecha]
@@ -1893,7 +1917,8 @@ async function obtenerApuestasDelDia(grupoId, fecha) {
     cliente: j.cliente_nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
     tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
     detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
-    monto: Number(j.monto)
+    monto: Number(j.monto),
+    decidida: j.gano !== null
   }));
 
   return detalle;
@@ -2054,6 +2079,14 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
     // (lo apostado, sin importar %), pero a propósito NUNCA en este
     // reporte de % devuelto.
     if (d.tipo === 'remate') return;
+    // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido explícito
+    // del usuario -- ver la nota grande EXACTA de obtenerApuestasDelDia
+    // más arriba: "NO PUEDES PAGAR O DELVOLVER % DE UNA JUGADA QUE QUEDO
+    // NULA... ELLOS GANAN % DE LO QUE GENERE EL GRUPO"). Antes de este
+    // fix, este reporte no traía el resultado de la jugada y devolvía %
+    // sobre CUALQUIER monto, decidida o no (caso real: Sebastian cobrando
+    // % de una Marca "pp" que quedó nula).
+    if (!d.decidida) return;
     const infos = comisionesPropias[d.cliente];
     if (!infos || !infos.length) return; // sin % configurado, no aparece en este reporte
     infos.forEach(info => {
@@ -2115,6 +2148,9 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
     // 26-09-2026, ver la nota grande EXACTA de /comisiones-devueltas
     // arriba: Remate a propósito no genera % devuelto.
     if (d.tipo === 'remate') return;
+    // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
+    // EXACTA de /comisiones-devueltas arriba).
+    if (!d.decidida) return;
     const infos = comisionesPropias[d.cliente];
     if (!infos || !infos.length) return;
     // Este reporte solo suma TOTALES por hipódromo/carrera (no distingue
