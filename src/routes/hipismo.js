@@ -687,6 +687,35 @@ router.get('/planos/dias', asyncHandler(async (req, res) => {
   })));
 }));
 
+// GET /planos/buscar-pizarra?hipodromoNombre=&carreraNumero=&fecha= : busca
+// si YA existe un plano guardado para esa combinación exacta de
+// hipódromo+carrera+fecha (29-09-2026, a pedido del usuario: "en la
+// pizarras si ya coloque alguna pizarra en esa carrera, al seleccionar la
+// carrera colocame la pizarra anterior y colocame un mensaje abajo de la
+// pizarra indicando que ya habia colocado llegada anteriormente... igual
+// la puedo modificar"). Usa EXACTAMENTE el mismo criterio de búsqueda
+// (grupo_id + hipodromo_nombre + carrera_numero + fecha) que ya usa
+// POST /planos para decidir "sustituir en vez de duplicar" (ver más
+// arriba) — si ese match encuentra un plano viejo para sustituirlo, este
+// endpoint tiene que encontrar el mismo para poder mostrar su pizarra de
+// antemano. Antes de "GET /planos/:id" (mismo criterio de orden que
+// "papelera"/"dias" arriba: si no, Express intentaría matchear
+// "buscar-pizarra" como si fuera un :id). Solo lectura, no toca nada.
+router.get('/planos/buscar-pizarra', asyncHandler(async (req, res) => {
+  const { hipodromoNombre, carreraNumero, fecha } = req.query;
+  if (!hipodromoNombre || !carreraNumero || !fecha) {
+    return res.json({ pizarra: null });
+  }
+  const r = await db.query(
+    `SELECT id, pizarra FROM hipismo_planos
+      WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4
+      ORDER BY creado_en DESC LIMIT 1`,
+    [req.grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  if (r.rows.length === 0) return res.json({ pizarra: null });
+  res.json({ pizarra: r.rows[0].pizarra, planoId: r.rows[0].id });
+}));
+
 // GET /planos/:id : detalle completo (cabecera + tickets), para revisar un plano ya guardado.
 router.get('/planos/:id', asyncHandler(async (req, res) => {
   const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
