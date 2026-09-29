@@ -79,15 +79,19 @@
      de toda la página; el usuario prefirió aprovechar el espacio vacío
      que quedaba al lado de "Total de la semana" — así que ahora esos 2
      van en una misma fila (.tarjeta-top-fila) y el logo llena esa caja
-     fija (190x137, 148x107 en pantallas angostas) con object-fit:contain,
+     fija (220x159, 165x119 en pantallas angostas) con object-fit:contain,
      sin recortar ni deformar, sea cual sea la proporción real del logo
      de CADA grupo. Sin fondo blanco
      detrás a propósito: el usuario ya subió su logo sin fondo (PNG
      transparente) para que se funda con el degradado verde de la
      tarjeta. Si el grupo no tiene logo cargado, esta caja no se muestra y
-     "Total de la semana" se queda solo, como antes de este cambio. */
+     "Total de la semana" se queda solo, como antes de este cambio.
+     Margen negativo (29-09-2026, a pedido del usuario: "pega el logo mas
+     a la esquina y hazlo mas grande") para que la caja se acerque a la
+     esquina superior derecha de la tarjeta, comiéndose parte del padding
+     de la tarjeta en vez de quedar centrada con aire de sobra alrededor. */
   .tarjeta-top-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .logo-esquina-grande { display: none; flex-shrink: 0; width: 190px; height: 137px; align-items: center; justify-content: center; }
+  .logo-esquina-grande { display: none; flex-shrink: 0; width: 220px; height: 159px; align-items: center; justify-content: center; margin: -14px -16px -8px 0; }
   .logo-esquina-grande.con-logo { display: flex; }
   .logo-esquina-grande img { width: 100%; height: 100%; object-fit: contain; }
   /* Desglose Hipismo/Deportes (23-09-2026, a pedido del usuario: "en
@@ -244,7 +248,7 @@
   @media (max-width: 380px) {
     .mini-fila { flex-wrap: wrap; }
     .tarjeta-resumen .monto-grande { font-size: 27px; }
-    .logo-esquina-grande { width: 148px; height: 107px; }
+    .logo-esquina-grande { width: 165px; height: 119px; margin: -10px -12px -6px 0; }
   }
 </style>
 </head>
