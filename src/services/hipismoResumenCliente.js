@@ -98,22 +98,29 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   // Candidatos: clientes reales (nunca otra cuenta de comisión) cuyo %
-  // propio y/o % de aval resuelve a ESTA cuenta puntual — el "destino"
-  // (el cliente mismo, o su aval) ya quedó enlazado acá en
-  // jugadores.cuenta_comision_id la primera vez que se guardó un Plano/
-  // Remate que generó comisión (ver asegurarCuentasComisionParaNombres en
-  // services/hipismoComisionPropia.js), así que resolverlo es un simple
-  // JOIN, sin adivinar nombres.
+  // propio y/o % de algún avalador resuelve a ESTA cuenta puntual — el
+  // destino ya quedó enlazado acá en jugadores.cuenta_comision_id la
+  // primera vez que se guardó un Plano/Remate que generó comisión (ver
+  // asegurarCuentasComisionParaNombres en services/hipismoComisionPropia.js),
+  // así que resolverlo es un simple JOIN/EXISTS, sin adivinar nombres.
+  //
+  // 28-09-2026: comision_propia ahora SIEMPRE es para el propio cliente
+  // (se quitó la opción de mandarlo al aval), y el % de aval pasó de un
+  // solo avalado_por_id/porcentaje_devuelto_aval a la tabla
+  // jugadores_avales_porcentaje (varios avaladores por cliente) — ver la
+  // nota grande de obtenerComisionesPropias en services/hipismoComisionPropia.js.
   const rFuentes = await db.query(
     `SELECT j.nombre
        FROM jugadores j
-       LEFT JOIN jugadores av ON av.id = j.avalado_por_id
       WHERE j.grupo_id = $1
         AND NOT COALESCE(j.es_cuenta_comision, false)
         AND (
-          (j.porcentaje_devuelto_destino = 'cliente' AND j.cuenta_comision_id = $2 AND j.comision_propia > 0)
-          OR (j.porcentaje_devuelto_destino = 'aval' AND av.cuenta_comision_id = $2 AND j.comision_propia > 0)
-          OR (av.cuenta_comision_id = $2 AND j.porcentaje_devuelto_aval > 0)
+          (j.cuenta_comision_id = $2 AND j.comision_propia > 0)
+          OR EXISTS (
+            SELECT 1 FROM jugadores_avales_porcentaje jap
+              JOIN jugadores av ON av.id = jap.avalador_id
+             WHERE jap.jugador_id = j.id AND jap.porcentaje > 0 AND av.cuenta_comision_id = $2
+          )
         )`,
     [jugador.grupo_id, jugador.id]
   );

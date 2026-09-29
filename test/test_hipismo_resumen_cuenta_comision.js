@@ -18,8 +18,22 @@ const Module = require('module');
 const path = require('path');
 const originalLoad = Module._load;
 
+// FECHA dinámica (28-09-2026, arreglo de la prueba que quedaba flaky con el
+// tiempo: antes usaba una fecha fija '2026-09-24', que dejó de caer dentro
+// de "la semana actual" apenas pasó esa semana calendario, haciendo que
+// TODAS las jugadas de este archivo quedaran fuera del rango desde/hasta
+// que calcula construirResumenCuentaComisionHipismo con semana:'actual' —
+// mismo criterio que ya usa test_superadmin_balance_y_sabana.js (FECHA_HOY)
+// para no repetir este mismo problema.
+function formatearFechaISOLocal(d) {
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mes + '-' + dia;
+}
+
 const TABLAS = {
   jugadores: [],
+  jugadores_avales_porcentaje: [],
   hipismo_tickets: [],
   hipismo_planos: [],
   hipismo_hipodromos: [],
@@ -37,41 +51,47 @@ function ejecutarQuery(text, params) {
 
   // --- Candidatos: clientes reales cuyo % resuelve a ESTA cuenta puntual
   //     (construirResumenCuentaComisionHipismo, services/hipismoResumenCliente.js).
-  if (/^SELECT j\.nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+WHERE j\.grupo_id = \$1/i.test(sql)) {
+  //     28-09-2026: comision_propia ahora SIEMPRE es para el propio cliente,
+  //     y el % de aval pasó a la tabla jugadores_avales_porcentaje (varios
+  //     avaladores por cliente) — ver la nota grande de esa tabla en
+  //     sql/schema.sql.
+  if (/^SELECT j\.nombre\s+FROM jugadores j\s+WHERE j\.grupo_id = \$1/i.test(sql)) {
     const [grupoId, cuentaId] = params;
     const delGrupo = TABLAS.jugadores.filter(j => j.grupo_id === grupoId);
-    const porId = new Map(delGrupo.map(j => [j.id, j]));
     const rows = delGrupo.filter(j => {
       if (j.es_cuenta_comision) return false;
-      const av = j.avalado_por_id ? porId.get(j.avalado_por_id) : null;
-      const destinoCliente = (j.porcentaje_devuelto_destino || 'cliente') === 'cliente';
-      const cond1 = destinoCliente && j.cuenta_comision_id === cuentaId && (Number(j.comision_propia) || 0) > 0;
-      const cond2 = !destinoCliente && av && av.cuenta_comision_id === cuentaId && (Number(j.comision_propia) || 0) > 0;
-      const cond3 = !!av && av.cuenta_comision_id === cuentaId && (Number(j.porcentaje_devuelto_aval) || 0) > 0;
-      return cond1 || cond2 || cond3;
+      const cond1 = j.cuenta_comision_id === cuentaId && (Number(j.comision_propia) || 0) > 0;
+      const cond2 = TABLAS.jugadores_avales_porcentaje.some(a => {
+        if (a.jugador_id !== j.id || !(Number(a.porcentaje) > 0)) return false;
+        const avalador = TABLAS.jugadores.find(x => x.id === a.avalador_id);
+        return avalador && avalador.cuenta_comision_id === cuentaId;
+      });
+      return cond1 || cond2;
     }).map(j => ({ nombre: j.nombre }));
     return { rows };
   }
 
   // --- obtenerComisionesPropias (services/hipismoComisionPropia.js) ---
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre/i.test(sql)) {
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
     const delGrupo = TABLAS.jugadores.filter(j => j.grupo_id === grupoId);
     const porId = new Map(delGrupo.map(j => [j.id, j]));
     const rows = delGrupo.filter(j => nombres.includes(j.nombre)).map(j => {
-      const av = j.avalado_por_id ? porId.get(j.avalado_por_id) : null;
       const ccPropio = j.cuenta_comision_id ? porId.get(j.cuenta_comision_id) : null;
-      const ccAval = av && av.cuenta_comision_id ? porId.get(av.cuenta_comision_id) : null;
-      return {
-        nombre: j.nombre,
-        comision_propia: j.comision_propia,
-        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino,
-        porcentaje_devuelto_aval: j.porcentaje_devuelto_aval,
-        aval_nombre: av ? av.nombre : null,
-        cc_propio_nombre: ccPropio ? ccPropio.nombre : null,
-        cc_aval_nombre: ccAval ? ccAval.nombre : null
-      };
+      return { id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: ccPropio ? ccPropio.nombre : null };
     });
+    return { rows };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const rows = TABLAS.jugadores_avales_porcentaje
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
+      .map(a => {
+        const avalador = porId.get(a.avalador_id);
+        const ccAval = avalador && avalador.cuenta_comision_id ? porId.get(avalador.cuenta_comision_id) : null;
+        return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: avalador ? avalador.nombre : null, cc_avalador_nombre: ccAval ? ccAval.nombre : null };
+      });
     return { rows };
   }
 
@@ -189,21 +209,19 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 (async function main() {
   const GRUPO_ID = 'grupo-comision-1';
   const grupo = { nombre: 'Zenyatta', logo_url: 'https://ejemplo.com/logo.png', modulo_deportes_habilitado: true };
-  const FECHA = '2026-09-24';
+  const FECHA = formatearFechaISOLocal(new Date());
 
   TABLAS.hipismo_hipodromos.push({ id: 'hip-1', pais: 'VE' });
   TABLAS.hipismo_planos.push({ id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 5, fecha: FECHA, pizarra: '3.9.5' });
 
-  // --- PEDRO: % propio del 1%, sin aval — cuenta "PEDRO - PORCENTAJE" ---
+  // --- PEDRO: % propio del 1%, sin avalador — cuenta "PEDRO - PORCENTAJE" ---
   TABLAS.jugadores.push({
     id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1,
-    porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0,
-    avalado_por_id: null, cuenta_comision_id: 'cta-pedro', es_cuenta_comision: false
+    cuenta_comision_id: 'cta-pedro', es_cuenta_comision: false
   });
   TABLAS.jugadores.push({
     id: 'cta-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO - PORCENTAJE', comision_propia: 0,
-    porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0,
-    avalado_por_id: null, cuenta_comision_id: null, es_cuenta_comision: true
+    cuenta_comision_id: null, es_cuenta_comision: true
   });
 
   // Tercios: PEDRO pierde 100 → 1% de 100 = 1.00 (SIEMPRE positivo, aunque
@@ -250,45 +268,53 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(!!bloqueTraspasos && bloqueTraspasos.carreras.length === 1 && bloqueTraspasos.carreras[0].resultado === -0.50,
     'El Traspaso de Comisión aparece en su propio bloque "Traspasos de Comisión", separado de las jugadas');
 
-  // --- LUIS/MARIA: % propio redirigido al aval (2%) + % de aval adicional
-  //     (1%) — AMBOS caen en la MISMA cuenta "MARIA - PORCENTAJE" (ver la
-  //     nota grande de obtenerComisionesPropias: "hasta 2 entradas
-  //     simultáneas por cliente"). ---
+  // --- LUIS/MARIA (28-09-2026, modelo nuevo: comision_propia SIEMPRE es
+  //     para el propio cliente, "porcentaje_devuelto_destino" ya no
+  //     existe): LUIS genera su propio % (2%, cae en SU cuenta "LUIS -
+  //     PORCENTAJE") Y, POR SEPARADO Y SIMULTÁNEO, un % adicional (1%)
+  //     para su avaladora MARIA (jugadores_avales_porcentaje) — 2 destinos
+  //     DISTINTOS sobre la MISMA jugada, cada uno a su propia cuenta. ---
   TABLAS.jugadores.push({
     id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0,
-    porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0,
-    avalado_por_id: null, cuenta_comision_id: 'cta-maria', es_cuenta_comision: false
+    cuenta_comision_id: 'cta-maria', es_cuenta_comision: false
   });
   TABLAS.jugadores.push({
     id: 'cta-maria', grupo_id: GRUPO_ID, nombre: 'MARIA - PORCENTAJE', comision_propia: 0,
-    porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0,
-    avalado_por_id: null, cuenta_comision_id: null, es_cuenta_comision: true
+    cuenta_comision_id: null, es_cuenta_comision: true
   });
   TABLAS.jugadores.push({
     id: 'j-luis', grupo_id: GRUPO_ID, nombre: 'LUIS', comision_propia: 2,
-    porcentaje_devuelto_destino: 'aval', porcentaje_devuelto_aval: 1,
-    avalado_por_id: 'j-maria', cuenta_comision_id: null, es_cuenta_comision: false
+    cuenta_comision_id: 'cta-luis', es_cuenta_comision: false
   });
+  TABLAS.jugadores.push({
+    id: 'cta-luis', grupo_id: GRUPO_ID, nombre: 'LUIS - PORCENTAJE', comision_propia: 0,
+    cuenta_comision_id: null, es_cuenta_comision: true
+  });
+  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'j-luis', avalador_id: 'j-maria', porcentaje: 1 });
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'LUIS', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '3', monto: 100, resultado_jugador: 95, resultado_banquero: -95 });
 
   const cuentaMaria = { id: 'cta-maria', grupo_id: GRUPO_ID, nombre: 'MARIA - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
   const resumenMaria = await construirResumenClienteHipismo(cuentaMaria, grupo, 'actual');
 
-  const esperadoMaria = round2(2.00 + 1.00);
+  const esperadoMaria = round2(1.00);
   check(resumenMaria.resumen.totalSemana === esperadoMaria,
-    `El saldo de "MARIA - PORCENTAJE" suma las 2 entradas simultáneas de LUIS (2%% propio redirigido + 1%% de aval) sobre la MISMA jugada: ${esperadoMaria} (obtenido: ${resumenMaria.resumen.totalSemana})`);
+    `El saldo de "MARIA - PORCENTAJE" solo trae el 1%% que LUIS le genera como avaladora (el 2%% propio de LUIS ya NO cae acá, cae en la cuenta de LUIS): ${esperadoMaria} (obtenido: ${resumenMaria.resumen.totalSemana})`);
   const diaMaria = resumenMaria.dias.find(d => d.fecha === FECHA);
   const hipMaria = diaMaria.hipodromos.find(h => h.nombre === 'La Rinconada');
-  check(hipMaria.carreras.filter(c => c.tipo === 'comision').length === 2,
-    'La jugada de LUIS genera 2 líneas de comisión separadas (una por cada entrada) dentro de la cuenta de MARIA');
-  check(hipMaria.carreras.every(c => c.clienteOrigen === 'LUIS'), 'Ambas líneas identifican a LUIS como quien las generó');
+  check(hipMaria.carreras.filter(c => c.tipo === 'comision').length === 1,
+    'La jugada de LUIS genera exactamente 1 línea de comisión dentro de la cuenta de MARIA (la del avalador, no la propia)');
+  check(hipMaria.carreras.every(c => c.clienteOrigen === 'LUIS'), 'La línea identifica a LUIS como quien la generó');
+
+  const cuentaLuis = { id: 'cta-luis', grupo_id: GRUPO_ID, nombre: 'LUIS - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
+  const resumenLuis = await construirResumenClienteHipismo(cuentaLuis, grupo, 'actual');
+  check(resumenLuis.resumen.totalSemana === round2(2.00),
+    `El saldo de "LUIS - PORCENTAJE" trae su propio 2%% (comision_propia SIEMPRE es para el propio cliente): esperado 2, obtenido ${resumenLuis.resumen.totalSemana}`);
 
   // --- Regresión: una cuenta de comisión sin ningún cliente real
   //     apuntándole (recién creada) da saldo 0 limpio, sin explotar. ---
   TABLAS.jugadores.push({
     id: 'cta-huerfana', grupo_id: GRUPO_ID, nombre: 'HUERFANO - PORCENTAJE', comision_propia: 0,
-    porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0,
-    avalado_por_id: null, cuenta_comision_id: null, es_cuenta_comision: true
+    cuenta_comision_id: null, es_cuenta_comision: true
   });
   const cuentaHuerfana = { id: 'cta-huerfana', grupo_id: GRUPO_ID, nombre: 'HUERFANO - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
   const resumenHuerfano = await construirResumenClienteHipismo(cuentaHuerfana, grupo, 'actual');

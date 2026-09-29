@@ -74,8 +74,12 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   // "% DEVUELTO" (28-09-2026): esta prueba no configura ningún jugador
-  // con % propio — obtenerComisionesPropias siempre vacío.
-  if (/^SELECT j\.nombre, j\.comision_propia,/i.test(sql)) {
+  // con % propio ni avaladores — obtenerComisionesPropias siempre vacío
+  // (2 consultas: jugadores, y jugadores_avales_porcentaje).
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
+    return { rows: [] };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
     return { rows: [] };
   }
   // "TRASPASO DE COMISIÓN" (28-09-2026): esta prueba no crea ningún

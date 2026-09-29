@@ -1,14 +1,20 @@
 // =================================================================
-// PRUEBA: Ajuste de Pozo (+/- con motivo, historial) y Aval/"% devuelto"
-// en jugadores.js (23-09-2026, duodécima-tercera ronda, a pedido del
-// usuario: "desde pozo necesito seleccionar el cliente y editar el
+// PRUEBA: Ajuste de Pozo (+/- con motivo, historial) y "varios avaladores
+// con %" en jugadores.js (23-09-2026, duodécima-tercera ronda, a pedido
+// del usuario: "desde pozo necesito seleccionar el cliente y editar el
 // pozo, aumentarlo diminuirlo etc" -> respondió "Ajuste +/- con motivo"
 // cuando se le preguntó cómo debía funcionar; y "en la pestaña clientes
 // quiero... si el porcentaje que se le devuelve no es para el si no
 // para su aval" -> respondió "Otro cliente ya existente" cuando se le
 // preguntó qué es un aval). Ver la nota grande en sql/schema.sql (tablas
-// pozo_ajustes, columnas jugadores.avalado_por_id/
-// porcentaje_devuelto_destino) y en src/routes/jugadores.js.
+// pozo_ajustes, jugadores_avales_porcentaje) y en src/routes/jugadores.js.
+//
+// 28-09-2026: el modelo de aval pasó de UN solo avalado_por_id/
+// porcentaje_devuelto_destino a VARIOS avaladores con % cada uno (tabla
+// jugadores_avales_porcentaje) — las pruebas 4-7 de más abajo se
+// actualizan para probar el modelo nuevo (mismas reglas de validación:
+// otro jugador del mismo grupo, nunca de otro grupo, nunca el propio
+// jugador, nunca repetido).
 //
 // Mismo patrón de base de datos falsa en memoria que
 // test_jugadores_modelo_comision.js (Module._load intercepta
@@ -20,14 +26,14 @@
 //      hizo, el pozo resultante).
 //   2. Validaciones: monto 0/NaN -> 400; jugador que no existe -> 404.
 //   3. GET /:id/pozo-ajustes: historial más reciente primero.
-//   4. POST/PUT /jugadores con avaladoPorId apuntando a OTRO jugador ya
-//      existente del MISMO grupo -> se guarda.
-//   5. avaladoPorId apuntando a un jugador de OTRO grupo -> 400 (nunca
-//      cruza grupos).
-//   6. avaladoPorId = el propio jugador que se está editando -> 400 (no
-//      puede ser su propio aval).
-//   7. porcentajeDevueltoDestino: 'aval' se guarda tal cual; cualquier
-//      otro valor (undefined, '', basura) se normaliza a 'cliente'.
+//   4. PUT /jugadores con avalesPorcentaje=[{avaladorId: OTRO jugador ya
+//      existente del MISMO grupo, porcentaje}] -> se guarda.
+//   5. avalesPorcentaje con avaladorId de un jugador de OTRO grupo -> 400
+//      (nunca cruza grupos).
+//   6. avalesPorcentaje con avaladorId = el propio jugador que se está
+//      editando -> 400 (no puede ser su propio avalador).
+//   7. avalesPorcentaje con el MISMO avaladorId repetido en 2 filas ->
+//      400; con 2 avaladores DISTINTOS -> se guardan los 2.
 const Module = require('module');
 const path = require('path');
 const originalLoad = Module._load;
@@ -36,11 +42,13 @@ const GRUPO_ID = 'grupo-pozo-1';
 const OTRO_GRUPO_ID = 'grupo-pozo-2';
 const TABLAS = {
   jugadores: [
-    { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', pozo_inicial: 100, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
-    { id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', pozo_inicial: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
-    { id: 'j-otro-grupo', grupo_id: OTRO_GRUPO_ID, nombre: 'EXTRANJERO', pozo_inicial: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' }
+    { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', pozo_inicial: 100 },
+    { id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', pozo_inicial: 0 },
+    { id: 'j-carlos', grupo_id: GRUPO_ID, nombre: 'CARLOS', pozo_inicial: 0 },
+    { id: 'j-otro-grupo', grupo_id: OTRO_GRUPO_ID, nombre: 'EXTRANJERO', pozo_inicial: 0 }
   ],
-  pozo_ajustes: []
+  pozo_ajustes: [],
+  jugadores_avales_porcentaje: []
 };
 let seq = 1;
 const nuevoId = (prefijo) => prefijo + (seq++);
@@ -72,34 +80,44 @@ function ejecutarQuery(text, params) {
     return { rows: TABLAS.pozo_ajustes.filter(a => a.grupo_id === grupoId && a.jugador_id === jugadorId).sort((a, b) => b.creado_en - a.creado_en) };
   }
 
-  // ---- validarAvaladoPorId ----
-  if (/^SELECT id FROM jugadores WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
-    const [id, grupoId] = params;
-    const j = TABLAS.jugadores.find(x => x.id === id && x.grupo_id === grupoId);
-    return { rows: j ? [{ id: j.id }] : [] };
+  // ---- normalizarAvalesPorcentaje ----
+  if (/^SELECT id FROM jugadores WHERE grupo_id = \$1 AND id = ANY\(\$2::uuid\[\]\)$/i.test(sql)) {
+    const [grupoId, ids] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && ids.includes(j.id));
+    return { rows: filas.map(j => ({ id: j.id })) };
+  }
+  // ---- reemplazarAvalesPorcentaje ----
+  if (/^DELETE FROM jugadores_avales_porcentaje WHERE grupo_id = \$1 AND jugador_id = \$2$/i.test(sql)) {
+    const [grupoId, jugadorId] = params;
+    TABLAS.jugadores_avales_porcentaje = TABLAS.jugadores_avales_porcentaje.filter(a => !(a.grupo_id === grupoId && a.jugador_id === jugadorId));
+    return { rows: [] };
+  }
+  if (/^INSERT INTO jugadores_avales_porcentaje \(grupo_id, jugador_id, avalador_id, porcentaje\)/i.test(sql)) {
+    const [grupoId, jugadorId, avaladorId, porcentaje] = params;
+    TABLAS.jugadores_avales_porcentaje.push({ grupo_id: grupoId, jugador_id: jugadorId, avalador_id: avaladorId, porcentaje });
+    return { rows: [] };
   }
 
   // ---- POST /jugadores ----
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino, porcentaje_devuelto_aval\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, destino, porcentajeAval] = params;
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: nuevoId('j'), grupo_id: grupoId, nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta,
       pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
-      modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: destino,
-      porcentaje_devuelto_aval: porcentajeAval
+      modulos_anclados: modulosAnclados
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
   // ---- PUT /jugadores/:id ----
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*avalado_por_id = \$11, porcentaje_devuelto_destino = \$12, porcentaje_devuelto_aval = \$13\s*WHERE id = \$14 AND grupo_id = \$15/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, destino, porcentajeAval, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, id, grupoId] = params;
     const j = TABLAS.jugadores.find(x => x.id === id && x.grupo_id === grupoId);
     if (!j) return { rows: [] };
-    Object.assign(j, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: destino, porcentaje_devuelto_aval: porcentajeAval });
+    Object.assign(j, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados });
     return { rows: [j] };
   }
 
@@ -197,33 +215,43 @@ function check(cond, msg) {
   check(resHistorial._status === 200 && resHistorial._json.length === 2, '3) GET /:id/pozo-ajustes trae los 2 ajustes de PEDRO');
   check(resHistorial._json[0].monto === -30 && resHistorial._json[1].monto === 50, 'Más reciente primero (-30 antes que +50)');
 
-  // --- 4) Aval: apuntar a OTRO jugador ya existente del MISMO grupo ---
+  // --- 4) avalesPorcentaje: apuntar a OTRO jugador ya existente del MISMO grupo ---
   const resPutAvalOk = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avaladoPorId: 'j-maria', porcentajeDevueltoDestino: 'aval' }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalOk._status === 200, '4) PUT con avaladoPorId apuntando a otro jugador del mismo grupo responde 200');
-  check(resPutAvalOk._json.avalado_por_id === 'j-maria', 'Se guarda el aval (MARIA)');
-  check(resPutAvalOk._json.porcentaje_devuelto_destino === 'aval', 'Se guarda el destino "aval"');
+  check(resPutAvalOk._status === 200, '4) PUT con avalesPorcentaje apuntando a otro jugador del mismo grupo responde 200');
+  check(resPutAvalOk._json.avalesPorcentaje.length === 1 && resPutAvalOk._json.avalesPorcentaje[0].avaladorId === 'j-maria' && resPutAvalOk._json.avalesPorcentaje[0].porcentaje === 1, 'Se guarda el avalador (MARIA) con su %');
+  check(TABLAS.jugadores_avales_porcentaje.some(a => a.jugador_id === 'j-pedro' && a.avalador_id === 'j-maria' && a.porcentaje === 1), 'Queda insertado en jugadores_avales_porcentaje');
 
-  // --- 5) Aval de OTRO grupo -> 400 ---
+  // --- 5) avalesPorcentaje con avaladorId de OTRO grupo -> 400 ---
   const resPutAvalOtroGrupo = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avaladoPorId: 'j-otro-grupo' }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-otro-grupo', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalOtroGrupo._status === 400, '5) PUT con avaladoPorId de OTRO grupo responde 400 (nunca cruza grupos)');
+  check(resPutAvalOtroGrupo._status === 400, '5) PUT con avalesPorcentaje de OTRO grupo responde 400 (nunca cruza grupos)');
 
-  // --- 6) Un jugador no puede ser su propio aval ---
+  // --- 6) Un jugador no puede ser su propio avalador ---
   const resPutAvalPropio = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avaladoPorId: 'j-pedro' }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-pedro', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalPropio._status === 400, '6) PUT con avaladoPorId = el propio jugador responde 400');
+  check(resPutAvalPropio._status === 400, '6) PUT con avalesPorcentaje = el propio jugador responde 400');
 
-  // --- 7) porcentajeDevueltoDestino: normalización ---
-  const resPostDestinoInvalido = await invocarRuta(handlerPost, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'CARLOS', comisionPropia: 0, porcentajeDevueltoDestino: 'lo-que-sea' }
-  }));
-  check(resPostDestinoInvalido._status === 201 && resPostDestinoInvalido._json.porcentaje_devuelto_destino === 'cliente', '7) Un valor inválido de porcentajeDevueltoDestino se normaliza a "cliente"');
-  const resPostSinDestino = await invocarRuta(handlerPost, Object.assign(reqBase(GRUPO_ID), { body: { nombre: 'ANA', comisionPropia: 0 } }));
-  check(resPostSinDestino._json.porcentaje_devuelto_destino === 'cliente' && resPostSinDestino._json.avalado_por_id === null, 'Sin mandar ninguno de los 2 campos, quedan en sus valores por defecto (cliente / sin aval)');
+  // --- 7) Varios avaladores a la vez (28-09-2026, a pedido del usuario:
+  // "un cliente puede generarle 2% por darte un ejemplo repartido en
+  // varias personas") + rechazo de un avalador repetido en 2 filas ---
+  const resPutDosAvales = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }, { avaladorId: 'j-carlos', porcentaje: 1 }] }
+  }), { id: 'j-pedro' });
+  check(resPutDosAvales._status === 200 && resPutDosAvales._json.avalesPorcentaje.length === 2, '7) PUT con 2 avaladores distintos (MARIA y CARLOS) guarda los 2');
+  check(TABLAS.jugadores_avales_porcentaje.filter(a => a.jugador_id === 'j-pedro').length === 2, 'La fila vieja (solo MARIA) se reemplazó por las 2 nuevas, no se acumulan');
+
+  const resPutAvalRepetido = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }, { avaladorId: 'j-maria', porcentaje: 1 }] }
+  }), { id: 'j-pedro' });
+  check(resPutAvalRepetido._status === 400, 'PUT con el MISMO avalador repetido en 2 filas responde 400 (hay que juntar el % en una sola fila)');
+
+  // --- Sin mandar avalesPorcentaje: queda vacío, sin romper nada (retrocompatible) ---
+  const resPostSinAvales = await invocarRuta(handlerPost, Object.assign(reqBase(GRUPO_ID), { body: { nombre: 'ANA', comisionPropia: 0 } }));
+  check(resPostSinAvales._status === 201 && Array.isArray(resPostSinAvales._json.avalesPorcentaje) && resPostSinAvales._json.avalesPorcentaje.length === 0, 'POST sin avalesPorcentaje crea el cliente con la lista vacía, sin romper nada');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

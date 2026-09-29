@@ -4143,15 +4143,13 @@ async function guardarJugador() {
     // (grupo sin los 2 módulos) se manda su valor por defecto (false), que
     // ya venía siendo el default de la columna igual.
     modulosAnclados: document.getElementById('jugadorModulosAnclados') ? document.getElementById('jugadorModulosAnclados').checked : false,
-    // Aval / destino del "% devuelto" (23-09-2026, pestaña Clientes de
-    // Hipismo) — este formulario general de Administración no los toca, así
-    // que se conservan tal cual estaban (mismo criterio que comisionPropia).
-    avaladoPorId: existente ? existente.avalado_por_id : null,
-    porcentajeDevueltoDestino: existente ? existente.porcentaje_devuelto_destino : 'cliente',
-    // % ADICIONAL para el aval (24-09-2026, "hay clientes que generan %
-    // para el mismo y aparte le generan % a su avalador") — tampoco lo
-    // toca este formulario, mismo criterio que los 2 de arriba.
-    porcentajeDevueltoAval: existente ? existente.porcentaje_devuelto_aval : 0
+    // Avaladores con % (23-09-2026, pestaña Clientes de Hipismo; 28-09-2026
+    // pasó a admitir VARIOS — ver jugadores_avales_porcentaje en
+    // sql/schema.sql) — este formulario general de Administración no los
+    // toca, así que se conservan tal cual estaban (mismo criterio que
+    // comisionPropia). GET /api/jugadores ya devuelve avalesPorcentaje
+    // resuelto para cada jugador, así que alcanza con reenviarlo tal cual.
+    avalesPorcentaje: existente ? (existente.avalesPorcentaje || []) : []
   };
 
   // "Moneda del Jugador" (18-09-2026) — solo se manda cuando el selector
@@ -4671,10 +4669,9 @@ async function guardarComisionPropia() {
         // Se conserva el interruptor de "Anclar módulos" tal cual estaba —
         // este formulario no lo toca, así que no hay que pisarlo (ver
         // jugadorModulosAnclados en app.js/grupo.html). Mismo criterio para
-        // el aval y el destino del "% devuelto" (23-09-2026).
+        // los avaladores con % (23-09-2026, 28-09-2026 pasó a admitir varios).
         modulosAnclados: j.modulos_anclados,
-        avaladoPorId: j.avalado_por_id, porcentajeDevueltoDestino: j.porcentaje_devuelto_destino,
-        porcentajeDevueltoAval: j.porcentaje_devuelto_aval
+        avalesPorcentaje: j.avalesPorcentaje || []
       })
     });
     document.getElementById('comisionPorcentajeInput').value = '';
@@ -4717,8 +4714,7 @@ async function quitarComisionPropia(id) {
         nombre: j.nombre, telefono: j.telefono, notas: j.notas, activo: j.activo,
         tipoCuenta: j.tipo_cuenta, pozoInicial: j.pozo_inicial, comisionPropia: 0, modeloComision: null,
         modulosAnclados: j.modulos_anclados,
-        avaladoPorId: j.avalado_por_id, porcentajeDevueltoDestino: j.porcentaje_devuelto_destino,
-        porcentajeDevueltoAval: j.porcentaje_devuelto_aval
+        avalesPorcentaje: j.avalesPorcentaje || []
       })
     });
     await cargarJugadores();

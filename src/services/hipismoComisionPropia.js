@@ -51,57 +51,71 @@ const { round2 } = require('./hipismoAdelantadasCalc');
 // (agrupado por quien apostó, no por quien cobra), a propósito, para que
 // se pueda auditar "quién generó cuánto" aparte de "a quién se le pagó".
 //
-// ACTUALIZACIÓN 24-09-2026 ("hay clientes que generan % para el mismo y
-// aparte le generan % a su avalador....." — confirmado por
-// AskUserQuestion: "Dos % independientes y simultáneos"): cada cliente
-// puede ahora generar HASTA 2 créditos de "% devuelto" a la vez sobre el
-// MISMO monto apostado, así que el valor de este mapa pasó de ser un
-// solo { pct, destino } a ser un ARREGLO de ellos (puede venir vacío,
-// con 1, o con 2 entradas) — ver jugadores.porcentaje_devuelto_aval en
-// la nota grande de sql/schema.sql, que es 100% independiente y no toca
-// para nada comision_propia/porcentaje_devuelto_destino de siempre.
+// ACTUALIZACIÓN 28-09-2026 ("en cliente la parte donde coloco el % que le
+// genera a otro cliente dejame elegir varios ya que un cliente le puede
+// generar % a varios" — de paso el usuario simplificó el otro campo: "%
+// que se le devuelve" ahora SIEMPRE es para el propio cliente, se quita
+// la opción de mandarlo al aval). Reemplaza el modelo viejo (UN solo aval
+// por cliente vía jugadores.avalado_por_id + jugadores.
+// porcentaje_devuelto_aval, y jugadores.porcentaje_devuelto_destino para
+// elegir si comision_propia iba al cliente o a ese aval) por:
+//   - comision_propia: siempre para el propio cliente (ya no se lee
+//     porcentaje_devuelto_destino ni avalado_por_id para esta entrada).
+//   - jugadores_avales_porcentaje: 0, 1 o VARIAS filas por cliente, cada
+//     una con su propio avalador y su propio %, 100% independientes
+//     entre sí y de comision_propia — cada fila es un ítem "{avalador} -
+//     PORCENTAJE" propio. Ver la nota grande de esta tabla en
+//     sql/schema.sql (incluye la migración de los datos viejos).
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
-  // cc_propio/cc_aval (26-09-2026): la cuenta de comisión REAL de cada
-  // posible destino (jugadores.cuenta_comision_id, ver la nota grande en
-  // sql/schema.sql) — si ya existe (se crea sola al confirmar un Plano/
-  // Remate, ver asegurarCuentasComisionParaNombres más abajo), su NOMBRE
-  // ACTUAL manda sobre el texto armado a mano, así que renombrarla desde
+  // cc_propio (26-09-2026): la cuenta de comisión REAL de cada cliente
+  // (jugadores.cuenta_comision_id, ver la nota grande en sql/schema.sql)
+  // — si ya existe (se crea sola al confirmar un Plano/Remate, ver
+  // asegurarCuentasComisionParaNombres más abajo), su NOMBRE ACTUAL manda
+  // sobre el texto armado a mano, así que renombrarla desde
   // Administración > Clientes se refleja acá para siempre.
-  const r = await db.query(
-    `SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, av.nombre AS aval_nombre,
-            cc_propio.nombre AS cc_propio_nombre, cc_aval.nombre AS cc_aval_nombre
+  const rJugadores = await db.query(
+    `SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre
        FROM jugadores j
-       LEFT JOIN jugadores av ON av.id = j.avalado_por_id
        LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id
-       LEFT JOIN jugadores cc_aval ON cc_aval.id = av.cuenta_comision_id
       WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
+  const idsJugadores = rJugadores.rows.map(j => j.id);
+  const avalesPorJugadorId = {};
+  if (idsJugadores.length) {
+    const rAvales = await db.query(
+      `SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre
+         FROM jugadores_avales_porcentaje jap
+         JOIN jugadores av ON av.id = jap.avalador_id
+         LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id
+        WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])`,
+      [grupoId, idsJugadores]
+    );
+    rAvales.rows.forEach(fila => {
+      if (!avalesPorJugadorId[fila.jugador_id]) avalesPorJugadorId[fila.jugador_id] = [];
+      avalesPorJugadorId[fila.jugador_id].push(fila);
+    });
+  }
   const mapa = {};
-  r.rows.forEach(j => {
+  rJugadores.rows.forEach(j => {
     const entradas = [];
-    // Entrada 1: la de siempre — comision_propia, para el cliente o para
-    // su aval según porcentaje_devuelto_destino (sin cambios).
+    // Entrada 1: comision_propia — SIEMPRE para el propio cliente.
     const pctPropio = Number(j.comision_propia) || 0;
     if (pctPropio) {
-      const usaAval = j.porcentaje_devuelto_destino === 'aval' && j.aval_nombre;
-      const destino = usaAval ? j.aval_nombre : j.nombre;
-      const cuentaNombre = (usaAval ? j.cc_aval_nombre : j.cc_propio_nombre) || `${destino} - PORCENTAJE`;
-      entradas.push({ pct: pctPropio, destino, cuentaNombre, esAvalAdicional: false });
+      const cuentaNombre = j.cc_propio_nombre || `${j.nombre} - PORCENTAJE`;
+      entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre, esAvalAdicional: false });
     }
-    // Entrada 2 (NUEVA): porcentaje_devuelto_aval, siempre y cuando este
-    // cliente tenga un aval configurado — INDEPENDIENTE y SIMULTÁNEA a
-    // la de arriba, con su propio %, siempre acreditada al aval (nunca
-    // al propio cliente — para eso ya está la entrada 1 con destino
-    // ='cliente').
-    const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
-    if (pctAval && j.aval_nombre) {
-      const destino = j.aval_nombre;
-      const cuentaNombre = j.cc_aval_nombre || `${destino} - PORCENTAJE`;
+    // Entradas 2..N: una por cada avalador configurado en
+    // jugadores_avales_porcentaje, cada una con su propio %.
+    (avalesPorJugadorId[j.id] || []).forEach(fila => {
+      const pctAval = Number(fila.porcentaje) || 0;
+      if (!pctAval) return;
+      const destino = fila.avalador_nombre;
+      const cuentaNombre = fila.cc_avalador_nombre || `${destino} - PORCENTAJE`;
       entradas.push({ pct: pctAval, destino, cuentaNombre, esAvalAdicional: true });
-    }
+    });
     mapa[j.nombre] = entradas;
   });
   return mapa;
@@ -137,27 +151,28 @@ async function crearYLinkearCuentaComision(grupoId, jugadorId, nombreBase) {
 async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return;
-  const r = await db.query(
-    `SELECT j.id, j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, j.cuenta_comision_id,
-            av.id AS aval_id, av.nombre AS aval_nombre, av.cuenta_comision_id AS aval_cuenta_comision_id
-       FROM jugadores j
-       LEFT JOIN jugadores av ON av.id = j.avalado_por_id
-      WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
+  const rJugadores = await db.query(
+    `SELECT id, nombre, comision_propia, cuenta_comision_id FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
-  for (const j of r.rows) {
+  for (const j of rJugadores.rows) {
     const pctPropio = Number(j.comision_propia) || 0;
-    const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
-    if (pctPropio) {
-      const usaAval = j.porcentaje_devuelto_destino === 'aval' && j.aval_id;
-      if (usaAval) {
-        if (!j.aval_cuenta_comision_id) await crearYLinkearCuentaComision(grupoId, j.aval_id, j.aval_nombre);
-      } else if (!j.cuenta_comision_id) {
-        await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
-      }
+    if (pctPropio && !j.cuenta_comision_id) {
+      await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
     }
-    if (pctAval && j.aval_id && !j.aval_cuenta_comision_id) {
-      await crearYLinkearCuentaComision(grupoId, j.aval_id, j.aval_nombre);
+  }
+  const idsJugadores = rJugadores.rows.map(j => j.id);
+  if (!idsJugadores.length) return;
+  const rAvales = await db.query(
+    `SELECT DISTINCT jap.avalador_id, av.nombre AS avalador_nombre, av.cuenta_comision_id AS avalador_cuenta_comision_id
+       FROM jugadores_avales_porcentaje jap
+       JOIN jugadores av ON av.id = jap.avalador_id
+      WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[]) AND jap.porcentaje > 0`,
+    [grupoId, idsJugadores]
+  );
+  for (const av of rAvales.rows) {
+    if (!av.avalador_cuenta_comision_id) {
+      await crearYLinkearCuentaComision(grupoId, av.avalador_id, av.avalador_nombre);
     }
   }
 }

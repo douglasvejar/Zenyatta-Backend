@@ -1258,6 +1258,53 @@ alter table jugadores add column if not exists porcentaje_devuelto_destino text 
 alter table jugadores add column if not exists porcentaje_devuelto_aval numeric not null default 0;
 
 -- =================================================================
+-- VARIOS AVALADORES CON % CADA UNO (28-09-2026, a pedido del usuario: "en
+-- cliente la parte donde coloco el % que le genera a otro cliente dejame
+-- elegir varios ya que un cliente le puede generar % a varios... a
+-- medida que seleccione uno me aparece otra lista despegable y asi
+-- sucesivamente"). Reemplaza el modelo de arriba (avalado_por_id +
+-- porcentaje_devuelto_aval, UN solo aval con UN solo %) por una tabla de
+-- muchas filas: un cliente puede generarle % a VARIOS avaladores
+-- distintos a la vez (ej. "2% repartido entre 2 personas").
+--
+-- De paso, el usuario pidió simplificar "% que se le devuelve"
+-- (comision_propia): a partir de ahora SIEMPRE es para el propio cliente
+-- (ya no existe la opción de mandarlo al aval) — porcentaje_devuelto_
+-- destino queda SIN USO desde el código (se deja la columna tal cual,
+-- sin romper ni borrar nada, por si hace falta consultar cómo estaba
+-- configurado un cliente viejo).
+--
+-- avalado_por_id/porcentaje_devuelto_aval (arriba) también quedan SIN USO
+-- desde el código a partir de esta ronda — se migran una sola vez a la
+-- tabla nueva (ver el INSERT de abajo) y se dejan las columnas viejas
+-- tal cual, sin dropearlas, mismo criterio.
+--
+-- A PROPÓSITO sigue sin tocar la tabla "avales" (avalador_id/avalado_id/
+-- porcentaje) de mucho más arriba — esa es la de Deportes, concepto
+-- distinto, ver la nota grande de avalado_por_id un poco más arriba.
+create table if not exists jugadores_avales_porcentaje (
+  id          uuid primary key default gen_random_uuid(),
+  grupo_id    uuid not null references grupos(id) on delete cascade,
+  jugador_id  uuid not null references jugadores(id) on delete cascade,   -- quien GENERA el %
+  avalador_id uuid not null references jugadores(id) on delete cascade,   -- quien lo RECIBE (el avalador)
+  porcentaje  numeric not null check (porcentaje > 0),
+  creado_en   timestamptz not null default now(),
+  unique (jugador_id, avalador_id),
+  check (jugador_id <> avalador_id)
+);
+create index if not exists idx_jugadores_avales_pct_jugador on jugadores_avales_porcentaje(jugador_id);
+create index if not exists idx_jugadores_avales_pct_grupo on jugadores_avales_porcentaje(grupo_id);
+
+-- Migración única de los datos que ya existían en el modelo viejo (1 aval,
+-- 1 %) hacia la tabla nueva — segura de re-correr, "on conflict do
+-- nothing" evita duplicar si esta migración ya se corrió antes.
+insert into jugadores_avales_porcentaje (grupo_id, jugador_id, avalador_id, porcentaje)
+select grupo_id, id, avalado_por_id, porcentaje_devuelto_aval
+  from jugadores
+ where avalado_por_id is not null and porcentaje_devuelto_aval > 0
+on conflict (jugador_id, avalador_id) do nothing;
+
+-- =================================================================
 -- CUENTAS POR EMPLEADO DENTRO DE UN GRUPO (18-09-2026, a pedido del
 -- usuario: "soluciona la cuentas separas por empleado dentro de un
 -- grupo... un administrador que tiene acceso 100% y los empleados

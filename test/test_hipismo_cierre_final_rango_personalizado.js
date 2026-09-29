@@ -82,7 +82,14 @@ function ejecutarQuery(text, params) {
   if (/^SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
     return { rows: [] };
   }
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre,/i.test(sql)) {
+  // (28-09-2026) obtenerComisionesPropias() ahora hace 2 consultas: los
+  // jugadores en sí, y sus avaladores en jugadores_avales_porcentaje —
+  // ningún jugador de esta prueba tiene % propio ni avales configurados,
+  // así que ambas siempre dan vacío.
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
+    return { rows: [] };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
     return { rows: [] };
   }
   if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total\s+FROM hipismo_comisiones_ajustes\s+WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3\s+GROUP BY cliente_nombre/i.test(sql)) {

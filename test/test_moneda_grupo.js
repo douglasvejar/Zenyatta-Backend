@@ -60,6 +60,13 @@ const TABLAS_J = { jugadores: [] };
 let siguienteId = 1;
 function ejecutarQueryJugadores(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  // POST /api/jugadores ahora guarda dentro de una transacción (28-09-2026,
+  // ver db.transaccion en routes/jugadores.js) para poder reemplazar de
+  // una vez la lista de avaladores — esta prueba nunca manda
+  // avalesPorcentaje, así que solo hace falta que BEGIN/COMMIT/ROLLBACK y
+  // el DELETE de "limpieza" no revienten.
+  if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+  if (/^DELETE FROM jugadores_avales_porcentaje/i.test(sql)) return { rows: [] };
   if (/^INSERT INTO jugadores/i.test(sql)) {
     const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda] = params;
     const fila = { id: 'j' + (siguienteId++), grupo_id: grupoId, nombre, moneda };

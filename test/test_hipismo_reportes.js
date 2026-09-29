@@ -41,12 +41,14 @@ const FECHA3 = '2026-09-22'; // duodécima-tercera ronda: plano-3/4, para no int
 
 const TABLAS = {
   jugadores: [
-    { id: 'jug-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
-    { id: 'jug-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
-    // Aval de PEDRO (duodécima-tercera ronda, #63) — se activa a mitad de
-    // la prueba, ver más abajo.
-    { id: 'jug-aval-pedro', grupo_id: GRUPO_ID, nombre: 'AVAL DE PEDRO', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' }
+    { id: 'jug-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1 },
+    { id: 'jug-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0 },
+    // Avalador de PEDRO (duodécima-tercera ronda, #63; 28-09-2026 pasó a
+    // jugadores_avales_porcentaje) — se activa a mitad de la prueba, ver
+    // más abajo.
+    { id: 'jug-aval-pedro', grupo_id: GRUPO_ID, nombre: 'AVAL DE PEDRO', comision_propia: 0 }
   ],
+  jugadores_avales_porcentaje: [],
   hipismo_planos: [
     { id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 1, fecha: FECHA, ret: null, pizarra: '5.3.1', cruza_jugadas: false, texto_original: 'x1', texto_resultado: 'y1', comision_total: 2.5, creado_en: Date.now() },
     { id: 'plano-2', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 5, fecha: FECHA2, ret: null, pizarra: '1.2.3', cruza_jugadas: false, texto_original: 'x2', texto_resultado: 'y2', comision_total: 5, creado_en: Date.now() },
@@ -119,19 +121,28 @@ function ejecutarQuery(text, params) {
       .map(({ j, p }) => ({ id: j.id, cliente_nombre: j.cliente_nombre, tipo: j.tipo, monto: j.monto, numero_ejemplar: j.numero_ejemplar, numero1: j.numero1, numero2: j.numero2, carrera_numero: j.carrera_numero, hipodromo_nombre: p.hipodromo_nombre }));
     return { rows: filas };
   }
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre,\s+cc_propio\.nombre AS cc_propio_nombre, cc_aval\.nombre AS cc_aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id\s+LEFT JOIN jugadores cc_aval ON cc_aval\.id = av\.cuenta_comision_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+  // (28-09-2026) obtenerComisionesPropias() ahora hace 2 consultas: los
+  // jugadores en sí (comision_propia SIEMPRE para el propio cliente), y
+  // sus avaladores en jugadores_avales_porcentaje.
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
     const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
     return {
       rows: filas.map(j => ({
-        nombre: j.nombre, comision_propia: j.comision_propia || 0,
-        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
-        porcentaje_devuelto_aval: j.porcentaje_devuelto_aval || 0,
-        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null,
-        cc_propio_nombre: null,
-        cc_aval_nombre: null
+        id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0, cc_propio_nombre: null
       }))
     };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const filas = (TABLAS.jugadores_avales_porcentaje || [])
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
+      .map(a => {
+        const avalador = porId.get(a.avalador_id);
+        return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: avalador ? avalador.nombre : null, cc_avalador_nombre: null };
+      });
+    return { rows: filas };
   }
 
   // ---- "Eliminar Planos" — GET /planos/dias (23-09-2026, duodécima-
@@ -378,17 +389,22 @@ function check(cond, msg) {
   check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 3 && c.devuelto === 0.5), 'Carrera 3 (Tabla Fija, 50 apostado): devuelto 0,5');
   check(pedroDevuelto.destino === 'PEDRO', 'Sin aval configurado, "destino" es el propio cliente');
 
-  // --- 2b) Redirección al AVAL (23-09-2026, #63, a pedido del usuario:
+  // --- 2b) Avalador ADICIONAL (23-09-2026, #63, a pedido del usuario:
   // "si el porcentaje que se le devuelve no es para el si no para su
-  // aval") — se activa el aval de PEDRO y se repite la misma consulta:
-  // el monto/porcentaje NO cambian, pero el ítem se acredita al aval. ---
-  TABLAS.jugadores.find(j => j.nombre === 'PEDRO').avalado_por_id = 'jug-aval-pedro';
-  TABLAS.jugadores.find(j => j.nombre === 'PEDRO').porcentaje_devuelto_destino = 'aval';
+  // aval"; 28-09-2026 el usuario simplificó "% que se le devuelve" para
+  // que SIEMPRE sea del propio cliente y reemplazó la redirección por
+  // jugadores_avales_porcentaje) — se configura un avalador de PEDRO y se
+  // repite la misma consulta: la entrada propia de PEDRO sigue igual, y
+  // aparece una SEGUNDA entrada simultánea acreditada al avalador. ---
+  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'jug-pedro', avalador_id: 'jug-aval-pedro', porcentaje: 2 });
   const resDevueltasConAval = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
-  const pedroConAval = resDevueltasConAval._json.clientes[0];
-  check(pedroConAval.nombre === 'PEDRO', '2b) El reporte SIGUE agrupado por quién apostó (PEDRO), no por el aval — para poder auditar "quién generó cuánto"');
-  check(pedroConAval.total === 1.5 && pedroConAval.porcentaje === 1, 'El monto y el % no cambian (misma fórmula de siempre, ya sin Remate)');
-  check(pedroConAval.destino === 'AVAL DE PEDRO', 'Pero ahora "destino" apunta al aval configurado');
+  check(resDevueltasConAval._json.clientes.length === 2, '2b) Con el avalador configurado, PEDRO ahora sale en 2 renglones (su % propio + el del avalador), nunca mezclados');
+  const pedroPropioConAval = resDevueltasConAval._json.clientes.find(c => c.destino === 'PEDRO');
+  check(!!pedroPropioConAval && pedroPropioConAval.nombre === 'PEDRO' && pedroPropioConAval.total === 1.5 && pedroPropioConAval.porcentaje === 1 && !pedroPropioConAval.esAvalAdicional,
+    'La entrada propia de PEDRO no cambia: sigue en 1,5 con destino=PEDRO');
+  const pedroConAval = resDevueltasConAval._json.clientes.find(c => c.destino === 'AVAL DE PEDRO');
+  check(!!pedroConAval && pedroConAval.nombre === 'PEDRO', 'El reporte SIGUE agrupado por quién apostó (PEDRO), no por el avalador — para poder auditar "quién generó cuánto"');
+  check(!!pedroConAval && pedroConAval.total === 3 && pedroConAval.porcentaje === 2 && pedroConAval.esAvalAdicional === true, 'La entrada del avalador es un 2% aparte -> 3,00 (2% de 150), un renglón totalmente independiente del propio');
 
   // --- GET /planos/dias (23-09-2026, duodécima-tercera ronda, rediseño
   // de "Eliminar Planos": "al entrar alli vere ordenado por dia") — con

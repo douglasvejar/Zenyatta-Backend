@@ -66,8 +66,9 @@ const TICKET_PEDRO = {
 
 const TABLAS = {
   jugadores: [
-    { nombre: 'PEDRO', comision_propia: 5, porcentaje_devuelto_destino: null, porcentaje_devuelto_aval: 0, aval_nombre: null, cc_propio_nombre: null, cc_aval_nombre: null }
+    { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 5, cc_propio_nombre: null }
   ],
+  jugadores_avales_porcentaje: [],
   hipismo_tickets: [...TICKETS_CRUCE, TICKET_PEDRO],
   hipismo_planos: [
     { id: PLANO_CRUCE, grupo_id: GRUPO_ID, fecha: FECHA_CRUCE, cruza_jugadas: true, comision_total: 0 },
@@ -151,10 +152,14 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
-  // ---- compartida: obtenerComisionesPropias (jugadores) ----
-  if (sql === "SELECT j.nombre, j.comision_propia, j.porcentaje_devuelto_destino, j.porcentaje_devuelto_aval, av.nombre AS aval_nombre, cc_propio.nombre AS cc_propio_nombre, cc_aval.nombre AS cc_aval_nombre FROM jugadores j LEFT JOIN jugadores av ON av.id = j.avalado_por_id LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id LEFT JOIN jugadores cc_aval ON cc_aval.id = av.cuenta_comision_id WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])") {
+  // ---- compartida: obtenerComisionesPropias (28-09-2026, 2 consultas:
+  // jugadores + jugadores_avales_porcentaje) ----
+  if (sql === "SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])") {
     const nombres = params[1];
     return { rows: TABLAS.jugadores.filter(j => nombres.includes(j.nombre)) };
+  }
+  if (sql === "SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])") {
+    return { rows: [] };
   }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

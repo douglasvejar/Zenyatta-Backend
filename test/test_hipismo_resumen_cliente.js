@@ -18,6 +18,16 @@ const Module = require('module');
 const path = require('path');
 const originalLoad = Module._load;
 
+// FECHA dinámica (28-09-2026, mismo arreglo que test_hipismo_resumen_cuenta_
+// comision.js: una fecha fija dejaba de caer dentro de "la semana actual"
+// apenas pasaba esa semana calendario, y esta prueba pide 'actual').
+function formatearFechaISOLocal(d) {
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mes + '-' + dia;
+}
+const FECHA = formatearFechaISOLocal(new Date());
+
 const TABLAS = {
   hipismo_tickets: [],
   hipismo_planos: [],
@@ -123,10 +133,10 @@ function check(cond, msg) {
   const grupo = { nombre: 'Zenyatta', logo_url: 'https://ejemplo.com/logo.png', modulo_deportes_habilitado: true };
 
   // --- Fixture: HANRY, un Tercios normal + una Adelantada (Tabla Fija) ---
-  TABLAS.hipismo_planos.push({ id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 9, fecha: '2026-09-24', pizarra: '6.10.4' });
+  TABLAS.hipismo_planos.push({ id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 9, fecha: FECHA, pizarra: '6.10.4' });
   TABLAS.hipismo_hipodromos.push({ id: 'hip-1', pais: 'VE' });
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'HANRY', banquero_nombre: 'BANCO', modalidad: '9x2', caballo: '9', monto: 50, resultado_jugador: -50, resultado_banquero: 47.5 });
-  TABLAS.hipismo_adelantadas_planos.push({ id: 'plano-adel-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', fecha: '2026-09-24' });
+  TABLAS.hipismo_adelantadas_planos.push({ id: 'plano-adel-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', fecha: FECHA });
   TABLAS.hipismo_adelantadas_jugadas.push({
     id: 'adel-1', plano_id: 'plano-adel-1', grupo_id: GRUPO_ID, cliente_nombre: 'HANRY', carrera_numero: 9,
     tipo: 'tf', cantidad_tf: 1, numero_ejemplar: 1, monto: 50, resultado_cliente: 47.5, banqueadores: null,
@@ -143,8 +153,8 @@ function check(cond, msg) {
     'Sin Deportes anclado (modulos_anclados: false), aunque el grupo sí tenga Deportes habilitado');
   check(resumenHanry.resumen.totalSemana === -2.5, 'Total de HANRY: -50 (Tercios) + 47.5 (Adelantada) = -2.5 — el mismo caso reportado por el usuario');
   check(resumenHanry.resumen.cantidadJugadas === 2, 'Cuenta las 2 jugadas (1 Tercios + 1 Adelantada)');
-  const diaHanry = resumenHanry.dias.find(d => d.fecha === '2026-09-24');
-  check(!!diaHanry, 'Trae el día 2026-09-24 agrupado');
+  const diaHanry = resumenHanry.dias.find(d => d.fecha === FECHA);
+  check(!!diaHanry, 'Trae el día agrupado');
   const carrerasHanry = diaHanry.hipodromos.find(h => h.nombre === 'La Rinconada').carreras;
   check(carrerasHanry.length === 2, 'Las 2 jugadas de HANRY quedan agrupadas bajo el mismo hipódromo/día');
   check(!!carrerasHanry.find(c => c.tipo === 'adelantada' && c.subtipo === 'tf' && c.resultado === 47.5),
@@ -152,8 +162,8 @@ function check(cond, msg) {
 
   // --- Fixture: MULTI, con Hipismo + Deportes anclado ---
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'MULTI', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '5', monto: 40, resultado_jugador: 36, resultado_banquero: -36 });
-  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: '2026-09-24', cliente_nombre: 'MULTI', ticket: 'T1', detalle: 'Real Madrid ML', arriesga: 20, gana: 38, estado: 'GANADA', logros: null });
-  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: '2026-09-24', cliente_nombre: 'MULTI', ticket: 'T2', detalle: 'Barcelona ML', arriesga: 15, gana: 0, estado: 'PERDIDA', logros: null });
+  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: FECHA, cliente_nombre: 'MULTI', ticket: 'T1', detalle: 'Real Madrid ML', arriesga: 20, gana: 38, estado: 'GANADA', logros: null });
+  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: FECHA, cliente_nombre: 'MULTI', ticket: 'T2', detalle: 'Barcelona ML', arriesga: 15, gana: 0, estado: 'PERDIDA', logros: null });
 
   const jugadorMulti = { grupo_id: GRUPO_ID, nombre: 'MULTI', modulos_anclados: true };
   const resumenMulti = await construirResumenClienteHipismo(jugadorMulti, grupo, 'actual');
@@ -162,7 +172,7 @@ function check(cond, msg) {
   check(resumenMulti.resumen.totalHipismo === 36, 'Total de Hipismo de MULTI: 36 (Tercios)');
   check(resumenMulti.resumen.totalDeportes === 23, 'Total de Deportes de MULTI: 38 (ganada) - 15 (perdida) = 23');
   check(resumenMulti.resumen.totalSemana === 59, 'Total combinado de MULTI: 36 + 23 = 59 (Hipismo + Deportes juntos)');
-  const diaMulti = resumenMulti.dias.find(d => d.fecha === '2026-09-24');
+  const diaMulti = resumenMulti.dias.find(d => d.fecha === FECHA);
   const bloqueDeportes = diaMulti.hipodromos.find(h => h.tipo === 'deportes');
   check(!!bloqueDeportes && bloqueDeportes.carreras.length === 2, 'El bloque "Deportes" aparece separado, con sus 2 tickets');
 

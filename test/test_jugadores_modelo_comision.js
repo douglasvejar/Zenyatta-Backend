@@ -31,41 +31,49 @@ function ejecutarQuery(text, params) {
   // columna "modulos_anclados" en el INSERT/UPDATE — se agrega acá para
   // que las pruebas de esta excepción de comisión sigan pasando sin tocar
   // nada de lo que ya prueban.
-  // (23-09-2026, aval/"% devuelto" — duodécima-tercera ronda) jugadores.js
-  // ahora también manda "avalado_por_id" y "porcentaje_devuelto_destino" en
-  // el INSERT/UPDATE — se agregan acá por el mismo motivo que las 2 notas
-  // de arriba, sin que esta prueba necesite cubrir esas columnas puntuales
-  // (eso vive en test_jugadores_aval.js, nuevo de esta ronda).
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino, porcentaje_devuelto_aval\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino] = params;
+  // (28-09-2026, "varios avaladores con %") POST/PUT ahora guardan dentro
+  // de una transacción (ver db.transaccion en routes/jugadores.js) para
+  // poder reemplazar de una vez la lista de jugadores_avales_porcentaje —
+  // esta prueba nunca manda avalesPorcentaje, así que solo hace falta que
+  // BEGIN/COMMIT/ROLLBACK y el DELETE de "limpieza" no revienten. El
+  // INSERT/UPDATE de "jugadores" en sí ya NO manda avalado_por_id/
+  // porcentaje_devuelto_destino/porcentaje_devuelto_aval (esas 3 columnas
+  // quedaron sin uso desde el código, ver la nota grande en
+  // routes/jugadores.js) — columnas más cortas que antes.
+  if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+  if (/^DELETE FROM jugadores_avales_porcentaje/i.test(sql)) return { rows: [] };
+
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: 'j' + (siguienteId++), grupo_id: grupoId, nombre, telefono, notas, activo,
       tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
-      modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: porcentajeDevueltoDestino
+      modulos_anclados: modulosAnclados
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
 
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*avalado_por_id = \$11, porcentaje_devuelto_destino = \$12, porcentaje_devuelto_aval = \$13\s*WHERE id = \$14 AND grupo_id = \$15/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, porcentajeDevueltoAval, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, id, grupoId] = params;
     const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
     if (!fila) return { rows: [] };
-    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, avalado_por_id: avaladoPorId, porcentaje_devuelto_destino: porcentajeDevueltoDestino, porcentaje_devuelto_aval: porcentajeDevueltoAval });
+    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados });
     return { rows: [fila] };
   }
 
-  // Búsqueda por id (validarAvaladoPorId) -- sólo se dispara si el body
-  // manda avaladoPorId con algo adentro; ninguna prueba de este archivo lo
-  // manda, así que no debería llegar a matchear nunca, pero se deja acá
-  // para no romper si algún día una prueba nueva de este archivo lo manda.
-  if (/^SELECT id FROM jugadores WHERE id = \$1 AND grupo_id = \$2$/i.test(sql)) {
-    const [id, grupoId] = params;
-    const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
-    return { rows: fila ? [{ id: fila.id }] : [] };
+  // Búsqueda de avaladores (normalizarAvalesPorcentaje) -- sólo se dispara
+  // si el body manda avalesPorcentaje con algo adentro; ninguna prueba de
+  // este archivo lo manda, así que no debería llegar a matchear nunca, pero
+  // se deja acá para no romper si algún día una prueba nueva de este
+  // archivo lo manda.
+  if (/^SELECT id FROM jugadores WHERE grupo_id = \$1 AND id = ANY\(\$2::uuid\[\]\)$/i.test(sql)) {
+    const [grupoId, ids] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && ids.includes(j.id));
+    return { rows: filas.map(j => ({ id: j.id })) };
   }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

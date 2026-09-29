@@ -1,33 +1,37 @@
 // =================================================================
-// PRUEBA: "% devuelto" DOBLE Y SIMULTÁNEO (24-09-2026, a pedido del
-// usuario: "hay clientes que generan % para el mismo y aparte le
-// generan % a su avalador....." — respuesta confirmada por
-// AskUserQuestion: "Dos % independientes y simultáneos").
+// PRUEBA: VARIOS AVALADORES CON % CADA UNO (24-09-2026, "% devuelto"
+// doble y simultáneo; REESCRITA 28-09-2026 a pedido del usuario: "en
+// cliente la parte donde coloco el % que le genera a otro cliente
+// dejame elegir varios ya que un cliente le puede generar % a varios...
+// a medida que seleccione uno me aparece otra lista despegable y asi
+// sucesivamente" — de paso el usuario simplificó "% que se le devuelve":
+// ahora SIEMPRE es para el propio cliente, se quitó la opción de
+// mandarlo al aval).
 //
-// Hasta esta ronda, un cliente solo podía generar el % de
-// comision_propia PARA SÍ MISMO o PARA SU AVAL (jugadores.
-// porcentaje_devuelto_destino, either/or) — nunca los dos a la vez, y
-// nunca con un % distinto para cada uno. Ahora jugadores.
-// porcentaje_devuelto_aval agrega un SEGUNDO % 100% independiente,
-// siempre para el aval (si hay uno configurado), simultáneo al de
-// arriba — ver la nota grande de obtenerComisionesPropias en
-// routes/hipismo.js y la nota grande de sql/schema.sql.
+// El modelo viejo que probaba este archivo (jugadores.avalado_por_id +
+// jugadores.porcentaje_devuelto_destino='aval'/'cliente' +
+// jugadores.porcentaje_devuelto_aval, UN solo aval con dos % posibles)
+// quedó reemplazado por jugadores_avales_porcentaje: 0, 1 o VARIAS filas
+// por cliente, cada una con su propio avalador y su propio %, 100%
+// independientes entre sí y de comision_propia (que ya nunca se
+// redirige). Ver la nota grande de esa tabla en sql/schema.sql y de
+// obtenerComisionesPropias en services/hipismoComisionPropia.js.
 //
 // Casos cubiertos, con 4 clientes distintos (mismo día, mismo
 // hipódromo/carrera, apostando 100 cada uno, para que las cuentas sean
 // fáciles de verificar):
-//   1. PEDRO: comision_propia=1% (destino='cliente', para él mismo) +
-//      porcentaje_devuelto_aval=2% (para JUAN, su aval) — DOS ítems
-//      simultáneos por el MISMO ticket: "PEDRO - PORCENTAJE" (+1,00) y
-//      "JUAN - PORCENTAJE" (+2,00).
-//   2. ANA: comision_propia=3% con destino='aval' (redirección de
-//      SIEMPRE, sin tocar) hacia CARLOS, sin % adicional — sigue dando
-//      UN SOLO ítem "CARLOS - PORCENTAJE" (+3,00), retrocompatible.
-//   3. LUIS: comision_propia=2% con destino='aval' hacia ROSA, MÁS
-//      porcentaje_devuelto_aval=5% (también hacia ROSA) — caso límite:
-//      los DOS % van al MISMO destino (ROSA), pero deben quedar como 2
-//      ítems/renglones SEPARADOS (2,00 y 5,00), nunca mezclados o
-//      pisándose uno al otro, sumando 7,00 en el total general.
+//   1. PEDRO: comision_propia=1% (siempre para él mismo) + UN avalador
+//      (JUAN) con 2% — DOS ítems simultáneos por el MISMO ticket: "PEDRO
+//      - PORCENTAJE" (+1,00) y "JUAN - PORCENTAJE" (+2,00).
+//   2. ANA: sin comision_propia, con UN avalador (CARLOS) al 3% — UN
+//      SOLO ítem "CARLOS - PORCENTAJE" (+3,00); ya no existe la
+//      "redirección" de comision_propia de antes, así que esto ahora se
+//      configura como un avalador más, no como un caso especial.
+//   3. LUIS: comision_propia=2% (para él mismo) + DOS avaladores
+//      DISTINTOS (ROSA al 3%, SOFIA al 4%) sobre el MISMO ticket — el
+//      caso central de esta ronda ("un cliente le puede generar % a
+//      varios"): 3 ítems separados (LUIS +2,00, ROSA +3,00, SOFIA
+//      +4,00), nunca mezclados.
 //   4. MARIA: sin nada configurado — no aporta nada (retrocompatible,
 //      igual que siempre).
 //
@@ -45,13 +49,20 @@ const FECHA = '2026-09-24'; // jueves, semana lunes 21 a domingo 27 de sept de 2
 
 const TABLAS = {
   jugadores: [
-    { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1, avalado_por_id: 'j-juan', porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 2 },
-    { id: 'j-juan', grupo_id: GRUPO_ID, nombre: 'JUAN', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0 },
-    { id: 'j-ana', grupo_id: GRUPO_ID, nombre: 'ANA', comision_propia: 3, avalado_por_id: 'j-carlos', porcentaje_devuelto_destino: 'aval', porcentaje_devuelto_aval: 0 },
-    { id: 'j-carlos', grupo_id: GRUPO_ID, nombre: 'CARLOS', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0 },
-    { id: 'j-luis', grupo_id: GRUPO_ID, nombre: 'LUIS', comision_propia: 2, avalado_por_id: 'j-rosa', porcentaje_devuelto_destino: 'aval', porcentaje_devuelto_aval: 5 },
-    { id: 'j-rosa', grupo_id: GRUPO_ID, nombre: 'ROSA', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0 },
-    { id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente', porcentaje_devuelto_aval: 0 }
+    { id: 'j-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1 },
+    { id: 'j-juan', grupo_id: GRUPO_ID, nombre: 'JUAN', comision_propia: 0 },
+    { id: 'j-ana', grupo_id: GRUPO_ID, nombre: 'ANA', comision_propia: 0 },
+    { id: 'j-carlos', grupo_id: GRUPO_ID, nombre: 'CARLOS', comision_propia: 0 },
+    { id: 'j-luis', grupo_id: GRUPO_ID, nombre: 'LUIS', comision_propia: 2 },
+    { id: 'j-rosa', grupo_id: GRUPO_ID, nombre: 'ROSA', comision_propia: 0 },
+    { id: 'j-sofia', grupo_id: GRUPO_ID, nombre: 'SOFIA', comision_propia: 0 },
+    { id: 'j-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0 }
+  ],
+  jugadores_avales_porcentaje: [
+    { grupo_id: GRUPO_ID, jugador_id: 'j-pedro', avalador_id: 'j-juan', porcentaje: 2 },
+    { grupo_id: GRUPO_ID, jugador_id: 'j-ana', avalador_id: 'j-carlos', porcentaje: 3 },
+    { grupo_id: GRUPO_ID, jugador_id: 'j-luis', avalador_id: 'j-rosa', porcentaje: 3 },
+    { grupo_id: GRUPO_ID, jugador_id: 'j-luis', avalador_id: 'j-sofia', porcentaje: 4 }
   ],
   hipismo_planos: [
     { id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 1, fecha: FECHA }
@@ -136,20 +147,27 @@ function ejecutarQuery(text, params) {
     return { rows: [{ total: 0 }] };
   }
 
-  // ---- obtenerComisionesPropias ----
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre,\s+cc_propio\.nombre AS cc_propio_nombre, cc_aval\.nombre AS cc_aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id\s+LEFT JOIN jugadores cc_aval ON cc_aval\.id = av\.cuenta_comision_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+  // ---- obtenerComisionesPropias (28-09-2026, 2 consultas: la del propio
+  // cliente y la de sus avaladores en jugadores_avales_porcentaje) ----
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
     const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
     return {
       rows: filas.map(j => ({
-        nombre: j.nombre, comision_propia: j.comision_propia || 0,
-        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
-        porcentaje_devuelto_aval: j.porcentaje_devuelto_aval || 0,
-        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null,
-        cc_propio_nombre: null,
-        cc_aval_nombre: null
+        id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0, cc_propio_nombre: null
       }))
     };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const filas = TABLAS.jugadores_avales_porcentaje
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
+      .map(a => {
+        const avalador = porId.get(a.avalador_id);
+        return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: avalador ? avalador.nombre : null, cc_avalador_nombre: null };
+      });
+    return { rows: filas };
   }
 
   // "Traspaso de comisión" (26-09-2026) — /cierre-final ahora suma los
@@ -234,40 +252,42 @@ function check(cond, msg) {
 (async function main() {
   // --- 1) /comisiones-devueltas-por-hipodromo: solo totales, sin
   // importar destino — 1(PEDRO propio) + 2(PEDRO->JUAN) + 3(ANA->CARLOS)
-  // + 2(LUIS->ROSA propio) + 5(LUIS->ROSA adicional) = 13,00. MARIA no
+  // + 2(LUIS propio) + 3(LUIS->ROSA) + 4(LUIS->SOFIA) = 15,00. MARIA no
   // aporta nada (sin % configurado). ---
   const resHip = await invocarRuta(handlerComisionesDevueltasHipodromo, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(resHip._status === 200, '1) GET /comisiones-devueltas-por-hipodromo responde 200');
   check(resHip._json.hipodromos.length === 1, 'Un solo hipódromo (La Rinconada)');
   const rinconada = resHip._json.hipodromos[0];
   check(rinconada.carreras.length === 1 && rinconada.carreras[0].carreraNumero === 1, 'Una sola carrera');
-  check(rinconada.carreras[0].devuelto === 13, 'La carrera 1 suma los 5 % (propios + de aval, de los 3 clientes) = 13,00');
-  check(resHip._json.totalGeneral === 13, 'Total general del día: 13,00 — MARIA (sin % configurado) no aporta nada');
+  check(rinconada.carreras[0].devuelto === 15, 'La carrera 1 suma los 5 % (propios + de avales, de los 3 clientes) = 15,00');
+  check(resHip._json.totalGeneral === 15, 'Total general del día: 15,00 — MARIA (sin % configurado) no aporta nada');
 
-  // --- 2) /comisiones-devueltas: cada cliente aparece como 1 o 2
-  // renglones según cuántas entradas simultáneas tenga. ---
+  // --- 2) /comisiones-devueltas: cada cliente aparece como 1, 2 o 3
+  // renglones según cuántos avaladores tenga configurados. ---
   const resDev = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(resDev._status === 200, '2) GET /comisiones-devueltas responde 200');
-  check(resDev._json.clientes.length === 5, 'Salen 5 renglones: PEDRO(x2) + ANA(x1) + LUIS(x2), MARIA no aparece');
-  check(resDev._json.totalGeneral === 13, 'totalGeneral de /comisiones-devueltas también da 13,00');
+  check(resDev._json.clientes.length === 6, 'Salen 6 renglones: PEDRO(x2) + ANA(x1) + LUIS(x3), MARIA no aparece');
+  check(resDev._json.totalGeneral === 15, 'totalGeneral de /comisiones-devueltas también da 15,00');
 
   const filasPedro = resDev._json.clientes.filter(c => c.nombre === 'PEDRO');
-  check(filasPedro.length === 2, 'PEDRO sale en 2 renglones separados (su % propio y el % de su aval)');
+  check(filasPedro.length === 2, 'PEDRO sale en 2 renglones separados (su % propio y el % de su avalador)');
   const pedroPropio = filasPedro.find(c => c.destino === 'PEDRO');
   check(!!pedroPropio && pedroPropio.porcentaje === 1 && pedroPropio.total === 1 && !pedroPropio.esAvalAdicional, 'PEDRO propio: 1% -> 1,00 para él mismo, esAvalAdicional=false');
   const pedroAval = filasPedro.find(c => c.destino === 'JUAN');
-  check(!!pedroAval && pedroAval.porcentaje === 2 && pedroAval.total === 2 && pedroAval.esAvalAdicional === true, 'PEDRO -> JUAN (aval NUEVO): 2% -> 2,00 para JUAN, esAvalAdicional=true');
+  check(!!pedroAval && pedroAval.porcentaje === 2 && pedroAval.total === 2 && pedroAval.esAvalAdicional === true, 'PEDRO -> JUAN (avalador): 2% -> 2,00 para JUAN, esAvalAdicional=true');
 
   const filasAna = resDev._json.clientes.filter(c => c.nombre === 'ANA');
-  check(filasAna.length === 1, 'ANA sale en UN SOLO renglón (retrocompatible: solo tenía el destino=aval de siempre, sin % adicional)');
-  check(filasAna[0].destino === 'CARLOS' && filasAna[0].porcentaje === 3 && filasAna[0].total === 3 && !filasAna[0].esAvalAdicional, 'ANA -> CARLOS: 3% -> 3,00 (redirección de siempre, esAvalAdicional=false)');
+  check(filasAna.length === 1, 'ANA sale en UN SOLO renglón (sin % propio, solo su avalador CARLOS)');
+  check(filasAna[0].destino === 'CARLOS' && filasAna[0].porcentaje === 3 && filasAna[0].total === 3 && filasAna[0].esAvalAdicional === true, 'ANA -> CARLOS: 3% -> 3,00, esAvalAdicional=true (ya no existe la "redirección" de comision_propia de antes)');
 
   const filasLuis = resDev._json.clientes.filter(c => c.nombre === 'LUIS');
-  check(filasLuis.length === 2, 'LUIS sale en 2 renglones AUNQUE los 2 vayan al MISMO destino (ROSA) — nunca se mezclan ni se pisan');
-  const luisPropioRedirigido = filasLuis.find(c => c.porcentaje === 2);
-  const luisAvalAdicional = filasLuis.find(c => c.porcentaje === 5);
-  check(!!luisPropioRedirigido && luisPropioRedirigido.destino === 'ROSA' && luisPropioRedirigido.total === 2 && !luisPropioRedirigido.esAvalAdicional, 'LUIS -> ROSA (redirección de comision_propia, destino=aval de siempre): 2% -> 2,00');
-  check(!!luisAvalAdicional && luisAvalAdicional.destino === 'ROSA' && luisAvalAdicional.total === 5 && luisAvalAdicional.esAvalAdicional === true, 'LUIS -> ROSA (% adicional NUEVO): 5% -> 5,00, un renglón totalmente aparte del anterior');
+  check(filasLuis.length === 3, 'LUIS sale en 3 renglones: su % propio + 2 avaladores DISTINTOS (ROSA y SOFIA), nunca mezclados');
+  const luisPropio = filasLuis.find(c => c.destino === 'LUIS');
+  const luisRosa = filasLuis.find(c => c.destino === 'ROSA');
+  const luisSofia = filasLuis.find(c => c.destino === 'SOFIA');
+  check(!!luisPropio && luisPropio.porcentaje === 2 && luisPropio.total === 2 && !luisPropio.esAvalAdicional, 'LUIS propio: 2% -> 2,00 para él mismo');
+  check(!!luisRosa && luisRosa.porcentaje === 3 && luisRosa.total === 3 && luisRosa.esAvalAdicional === true, 'LUIS -> ROSA (avaladora 1): 3% -> 3,00');
+  check(!!luisSofia && luisSofia.porcentaje === 4 && luisSofia.total === 4 && luisSofia.esAvalAdicional === true, 'LUIS -> SOFIA (avaladora 2): 4% -> 4,00, un renglón totalmente aparte de ROSA');
 
   check(!resDev._json.clientes.some(c => c.nombre === 'MARIA'), 'MARIA no aparece (sin % configurado, retrocompatible)');
 
@@ -288,26 +308,30 @@ function check(cond, msg) {
     global.Date = OriginalDate;
   }
   check(resSaldo._status === 200, '3) GET /saldo-comisiones?semana=actual responde 200');
-  check(resSaldo._json.clientes.length === 5, '/saldo-comisiones también trae los 5 renglones (PEDRO x2, ANA x1, LUIS x2)');
-  check(resSaldo._json.totalGeneral === 13, 'totalGeneral semanal de /saldo-comisiones: 13,00');
+  check(resSaldo._json.clientes.length === 6, '/saldo-comisiones también trae los 6 renglones (PEDRO x2, ANA x1, LUIS x3)');
+  check(resSaldo._json.totalGeneral === 15, 'totalGeneral semanal de /saldo-comisiones: 15,00');
   const luisSaldo = resSaldo._json.clientes.filter(c => c.nombre === 'LUIS');
-  check(luisSaldo.length === 2 && luisSaldo.some(c => c.devueltoSemana === 2) && luisSaldo.some(c => c.devueltoSemana === 5), 'LUIS también sale con sus 2 renglones separados (2,00 y 5,00) en /saldo-comisiones');
+  check(luisSaldo.length === 3 && luisSaldo.some(c => c.devueltoSemana === 2) && luisSaldo.some(c => c.devueltoSemana === 3) && luisSaldo.some(c => c.devueltoSemana === 4),
+    'LUIS también sale con sus 3 renglones separados (2,00 propio + 3,00 ROSA + 4,00 SOFIA) en /saldo-comisiones');
 
-  // --- 4) /cierre-final: los 2 ítems "{destino} - PORCENTAJE" quedan
-  // sumados en su propio "cliente" dentro de la misma lista de saldos —
-  // ROSA acumula 2,00 + 5,00 = 7,00 bajo un SOLO ítem "ROSA -
-  // PORCENTAJE" (acá SÍ se suman, porque acumular() ya agrupa por nombre
-  // de ítem — la separación de arriba es solo para AUDITAR quién generó
-  // cada %, ver la nota grande de obtenerComisionesPropias). ---
+  // --- 4) /cierre-final: cada ítem "{destino} - PORCENTAJE" queda sumado
+  // en su propio "cliente" dentro de la misma lista de saldos — como acá
+  // cada avalador es DISTINTO, ROSA y SOFIA quedan en ítems separados
+  // (nunca se juntan entre sí, a diferencia del ejemplo viejo donde 2 %
+  // iban al MISMO destino). ---
   check(resCierre._status === 200, '4) GET /cierre-final responde 200');
   const itemPedro = resCierre._json.clientes.find(c => c.nombre === 'PEDRO - PORCENTAJE');
   const itemJuan = resCierre._json.clientes.find(c => c.nombre === 'JUAN - PORCENTAJE');
   const itemCarlos = resCierre._json.clientes.find(c => c.nombre === 'CARLOS - PORCENTAJE');
+  const itemLuis = resCierre._json.clientes.find(c => c.nombre === 'LUIS - PORCENTAJE');
   const itemRosa = resCierre._json.clientes.find(c => c.nombre === 'ROSA - PORCENTAJE');
+  const itemSofia = resCierre._json.clientes.find(c => c.nombre === 'SOFIA - PORCENTAJE');
   check(!!itemPedro && itemPedro.gano === 1, 'Ítem "PEDRO - PORCENTAJE": +1,00 (su % propio)');
-  check(!!itemJuan && itemJuan.gano === 2, 'Ítem "JUAN - PORCENTAJE": +2,00 (el % adicional que generó PEDRO para su aval)');
-  check(!!itemCarlos && itemCarlos.gano === 3, 'Ítem "CARLOS - PORCENTAJE": +3,00 (redirección de siempre de ANA)');
-  check(!!itemRosa && itemRosa.gano === 7, 'Ítem "ROSA - PORCENTAJE": +7,00 — SUMA los 2,00 (redirigido) y 5,00 (adicional) que generó LUIS, un solo ítem en el saldo real');
+  check(!!itemJuan && itemJuan.gano === 2, 'Ítem "JUAN - PORCENTAJE": +2,00 (el % que le generó PEDRO como avalador)');
+  check(!!itemCarlos && itemCarlos.gano === 3, 'Ítem "CARLOS - PORCENTAJE": +3,00 (el % que le generó ANA como avalador)');
+  check(!!itemLuis && itemLuis.gano === 2, 'Ítem "LUIS - PORCENTAJE": +2,00 (su % propio)');
+  check(!!itemRosa && itemRosa.gano === 3, 'Ítem "ROSA - PORCENTAJE": +3,00 (uno de los 2 avaladores de LUIS)');
+  check(!!itemSofia && itemSofia.gano === 4, 'Ítem "SOFIA - PORCENTAJE": +4,00 (el otro avalador de LUIS, en su propio ítem, nunca mezclado con el de ROSA)');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

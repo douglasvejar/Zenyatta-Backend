@@ -127,19 +127,22 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
-  if (/^SELECT j\.nombre, j\.comision_propia, j\.porcentaje_devuelto_destino, j\.porcentaje_devuelto_aval, av\.nombre AS aval_nombre,\s+cc_propio\.nombre AS cc_propio_nombre, cc_aval\.nombre AS cc_aval_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores av ON av\.id = j\.avalado_por_id\s+LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id\s+LEFT JOIN jugadores cc_aval ON cc_aval\.id = av\.cuenta_comision_id\s+WHERE j\.grupo_id = \$1 AND j\.nombre = ANY/i.test(sql)) {
+  // (28-09-2026) obtenerComisionesPropias() ahora hace 2 consultas: los
+  // jugadores en sí (comision_propia SIEMPRE para el propio cliente), y
+  // sus avaladores en jugadores_avales_porcentaje — ni PEDRO ni MARIA
+  // tienen filas ahí, así que la 2da siempre da vacío.
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
     const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
     return {
       rows: filas.map(j => ({
-        nombre: j.nombre, comision_propia: j.comision_propia || 0,
-        porcentaje_devuelto_destino: j.porcentaje_devuelto_destino || 'cliente',
-        porcentaje_devuelto_aval: j.porcentaje_devuelto_aval || 0,
-        aval_nombre: j.avalado_por_id ? ((TABLAS.jugadores.find(x => x.id === j.avalado_por_id) || {}).nombre || null) : null,
-        cc_propio_nombre: null,
-        cc_aval_nombre: null
+        id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
+        cc_propio_nombre: null
       }))
     };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+    return { rows: [] };
   }
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

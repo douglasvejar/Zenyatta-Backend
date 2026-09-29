@@ -24,9 +24,26 @@ function resolverMonedaJugador(monedaModoGrupo, monedaPedida) {
 
 router.get('/', asyncHandler(async (req, res) => {
   const r = await db.query('SELECT * FROM jugadores WHERE grupo_id = $1 ORDER BY nombre', [req.grupoId]);
+  // avalesPorcentaje (28-09-2026, ver la nota grande de
+  // jugadores_avales_porcentaje en sql/schema.sql) — una sola consulta
+  // para TODOS los jugadores de este grupo, agrupada acá mismo en JS, en
+  // vez de una consulta por jugador (mismo criterio que calcularPozoJugador
+  // de abajo, pero sin el ida-y-vuelta por cada fila).
+  const rAvales = await db.query(
+    `SELECT jap.jugador_id, jap.avalador_id, jap.porcentaje, av.nombre AS avalador_nombre
+       FROM jugadores_avales_porcentaje jap
+       JOIN jugadores av ON av.id = jap.avalador_id
+      WHERE jap.grupo_id = $1`,
+    [req.grupoId]
+  );
+  const avalesPorJugadorId = {};
+  rAvales.rows.forEach(fila => {
+    if (!avalesPorJugadorId[fila.jugador_id]) avalesPorJugadorId[fila.jugador_id] = [];
+    avalesPorJugadorId[fila.jugador_id].push({ avaladorId: fila.avalador_id, avaladorNombre: fila.avalador_nombre, porcentaje: Number(fila.porcentaje) });
+  });
   const conPozo = await Promise.all(r.rows.map(async j => {
     const pozo = j.tipo_cuenta === 'avalado' ? await calcularPozoJugador(req.grupoId, j) : null;
-    return { ...j, pozo };
+    return { ...j, pozo, avalesPorcentaje: avalesPorJugadorId[j.id] || [] };
   }));
   res.json(conPozo);
 }));
@@ -57,44 +74,82 @@ function normalizarModeloComisionJugador(valor) {
   return null;
 }
 
-// Normaliza "porcentajeDevueltoDestino" (23-09-2026, "en la pestaña clientes
-// quiero... si el porcentaje que se le devuelve no es para el si no para su
-// aval, cuanto se le da de %" — ver la nota grande en sql/schema.sql, columna
-// jugadores.porcentaje_devuelto_destino). Solo 2 valores válidos; cualquier
-// otra cosa (undefined, '', un typo) cae al default seguro 'cliente'.
-function normalizarDestinoPorcentaje(valor) {
-  return valor === 'aval' ? 'aval' : 'cliente';
+// =================================================================
+// VARIOS AVALADORES CON % CADA UNO (28-09-2026, a pedido del usuario: "en
+// cliente la parte donde coloco el % que le genera a otro cliente dejame
+// elegir varios ya que un cliente le puede generar % a varios... aqui es
+// donde quiero que me dejes elegir mas de un avalador, ya que un cliente
+// puede generarle 2% por darte un ejemplo repartido en varias personas").
+// Reemplaza el modelo viejo (avaladoPorId + porcentajeDevueltoAval, UN
+// solo destino) — ver la nota grande de jugadores_avales_porcentaje en
+// sql/schema.sql. De paso, "porcentajeDevueltoDestino" ya NO se lee del
+// body: "% que se le devuelve" (comisionPropia) ahora SIEMPRE es para el
+// propio cliente, a pedido del mismo usuario ("en % que se le devuelve,
+// coloca: % de devolucion para el mismo cliente... la celda que esta al
+// lado que pregunta pra quien es el % eliminala").
+//
+// Valida y devuelve la lista normalizada [{ avaladorId, porcentaje }] a
+// partir de `avalesPorcentaje` del body: cada avaladorId tiene que ser
+// OTRO jugador ya registrado en el MISMO grupo (nunca el propio jugador
+// que se está editando, nunca repetido, nunca de otro grupo), y cada
+// porcentaje tiene que ser un número mayor que 0 (una fila con % vacío o
+// en 0 simplemente se descarta, igual que el resto de los formularios de
+// este sistema).
+async function normalizarAvalesPorcentaje(grupoId, avalesPorcentaje, propioId) {
+  const lista = Array.isArray(avalesPorcentaje) ? avalesPorcentaje : [];
+  const vistos = new Set();
+  const resultado = [];
+  for (const entrada of lista) {
+    const avaladorId = ((entrada && entrada.avaladorId) || '').toString().trim();
+    const porcentaje = Number(entrada && entrada.porcentaje);
+    if (!avaladorId || !porcentaje || porcentaje <= 0) continue;
+    if (propioId && avaladorId === propioId) { const err = new Error('Un cliente no puede ser su propio avalador.'); err.status = 400; throw err; }
+    if (vistos.has(avaladorId)) { const err = new Error('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); err.status = 400; throw err; }
+    vistos.add(avaladorId);
+    resultado.push({ avaladorId, porcentaje });
+  }
+  if (resultado.length) {
+    const r = await db.query('SELECT id FROM jugadores WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [grupoId, resultado.map(a => a.avaladorId)]);
+    if (r.rows.length !== resultado.length) { const err = new Error('Alguno de los avaladores seleccionados no existe en este grupo.'); err.status = 400; throw err; }
+  }
+  return resultado;
 }
 
-// Valida "avaladoPorId" (a quién se le redirige el % devuelto cuando
-// destino='aval'). Respuesta del usuario en la AskUserQuestion de esta ronda:
-// "Otro cliente ya existente (Recomendado)" — el aval tiene que ser OTRO
-// jugador YA registrado en el MISMO grupo (nunca de otro grupo, nunca el
-// propio jugador que se está editando). Devuelve el id validado o null.
-async function validarAvaladoPorId(grupoId, avaladoPorId, propioId) {
-  const id = (avaladoPorId || '').trim();
-  if (!id) return null;
-  if (propioId && id === propioId) { const err = new Error('Un cliente no puede ser su propio aval.'); err.status = 400; throw err; }
-  const r = await db.query('SELECT id FROM jugadores WHERE id = $1 AND grupo_id = $2', [id, grupoId]);
-  if (r.rows.length === 0) { const err = new Error('El aval seleccionado no existe en este grupo.'); err.status = 400; throw err; }
-  return id;
+// Reemplaza TODAS las filas de jugadores_avales_porcentaje de `jugadorId`
+// por `avales` (borra las que ya no estén y agrega las nuevas) — mismo
+// criterio de "guardar de una vez la lista completa" que ya usa el resto
+// de este sistema para listas chicas administradas desde un formulario
+// (nunca un PATCH fila por fila). Se llama DESPUÉS de guardar el jugador
+// mismo, dentro de la misma transacción.
+async function reemplazarAvalesPorcentaje(client, grupoId, jugadorId, avales) {
+  await client.query('DELETE FROM jugadores_avales_porcentaje WHERE grupo_id = $1 AND jugador_id = $2', [grupoId, jugadorId]);
+  for (const a of avales) {
+    await client.query(
+      `INSERT INTO jugadores_avales_porcentaje (grupo_id, jugador_id, avalador_id, porcentaje) VALUES ($1, $2, $3, $4)`,
+      [grupoId, jugadorId, a.avaladorId, a.porcentaje]
+    );
+  }
 }
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, porcentajeDevueltoAval } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
-    const avaladoPorIdFinal = await validarAvaladoPorId(req.grupoId, avaladoPorId, null);
-    const r = await db.query(
-      `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, avalado_por_id, porcentaje_devuelto_destino, porcentaje_devuelto_aval)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
-      [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados,
-        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino), Number(porcentajeDevueltoAval) || 0]
-    );
-    res.status(201).json(r.rows[0]);
+    const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, null);
+    const jugador = await db.transaccion(async (client) => {
+      const r = await client.query(
+        `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
+          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados]
+      );
+      const nuevo = r.rows[0];
+      await reemplazarAvalesPorcentaje(client, req.grupoId, nuevo.id, avalesFinal);
+      return nuevo;
+    });
+    res.status(201).json({ ...jugador, avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });
@@ -105,21 +160,24 @@ router.post('/', asyncHandler(async (req, res) => {
 
 router.put('/:id', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avaladoPorId, porcentajeDevueltoDestino, porcentajeDevueltoAval } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje } = req.body;
     const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
-    const avaladoPorIdFinal = await validarAvaladoPorId(req.grupoId, avaladoPorId, req.params.id);
-    const r = await db.query(
-      `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
-         pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10,
-         avalado_por_id = $11, porcentaje_devuelto_destino = $12, porcentaje_devuelto_aval = $13
-       WHERE id = $14 AND grupo_id = $15 RETURNING *`,
-      [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
-        tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados,
-        avaladoPorIdFinal, normalizarDestinoPorcentaje(porcentajeDevueltoDestino), Number(porcentajeDevueltoAval) || 0, req.params.id, req.grupoId]
-    );
-    if (r.rows.length === 0) return res.status(404).json({ error: 'Jugador no encontrado.' });
-    res.json(r.rows[0]);
+    const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, req.params.id);
+    const jugador = await db.transaccion(async (client) => {
+      const r = await client.query(
+        `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
+           pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10
+         WHERE id = $11 AND grupo_id = $12 RETURNING *`,
+        [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
+          tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, req.params.id, req.grupoId]
+      );
+      if (r.rows.length === 0) { const err = new Error('Jugador no encontrado.'); err.status = 404; throw err; }
+      const actualizado = r.rows[0];
+      await reemplazarAvalesPorcentaje(client, req.grupoId, actualizado.id, avalesFinal);
+      return actualizado;
+    });
+    res.json({ ...jugador, avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });

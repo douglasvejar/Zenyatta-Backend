@@ -1808,6 +1808,19 @@
              información que le sirva al operador del día a día. -->
         <p class="desc">Ficha completa de cada cliente: datos personales, pozo, % de devolución y quién es su aval. Un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo.</p>
         <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button></div>
+        <!-- 28-09-2026, a pedido del usuario: "colcome una pestaña de
+             buscar para a medida que vaya escribiendo me filtres... si
+             coloco por ejemplo verdura me traera el cliente llamado
+             verdura y todo los avales de verdura etc" — filtro 100% en el
+             navegador (ya está toda la lista cargada en
+             CLIENTES_HIPISMO_CACHE), sin pedir nada nuevo al servidor. Ver
+             clientesQueCoincidenBusqueda() más abajo. -->
+        <div class="fila" style="margin-top:12px;">
+          <div style="max-width:320px;">
+            <label for="buscarClienteInput">🔎 Buscar cliente</label>
+            <input type="text" id="buscarClienteInput" placeholder="Escribe un nombre… también trae sus avales" oninput="filtrarTablaClientes()">
+          </div>
+        </div>
         <div id="tablaClientesWrap">
           <table style="margin-top:18px;">
             <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>% Adicional Aval</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
@@ -4830,6 +4843,10 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // "Cargar Winners" (26-09-2026) — mismo criterio que "Cargar Remate
   // Manual": refresca el <select> de Cliente de cada fila al entrar.
   cargarWinners: () => poblarJugadoresWinners(),
+  // Clientes (28-09-2026) — re-pinta la tabla (con el filtro de búsqueda
+  // que ya esté escrito) contra la caché más reciente al entrar, sin
+  // pedir nada nuevo al servidor.
+  clientes: () => pintarTablaClientesFiltrada(),
   // Balance General (24-09-2026) entra a esta lista junto con el resto de
   // reportes reales — ver la nota grande en pintarBalanceGeneral: antes
   // no estaba acá porque no pedía nada al servidor.
@@ -6522,23 +6539,72 @@ function copiarResultado() {
 // usuario: "no lo quiero abajo, colócalo al lado en otra columna con
 // el nombre del avalado abajo en paréntesis"): columna PROPIA "%
 // Adicional Aval" en la tabla de Clientes — SOLO si este cliente tiene
-// configurado el % ADICIONAL para su aval
-// (jugadores.porcentaje_devuelto_aval, ver la nota grande de
-// obtenerComisionesPropias en routes/hipismo.js), arriba el %, abajo
-// (entre paréntesis) a quién le cae. `jugadores` es la misma lista
-// completa que ya trajo GET /api/jugadores para esta pantalla, así que
-// el nombre del aval se resuelve ahí mismo sin pedir nada más al
-// servidor.
-function celdaPctAvalTabla(j, jugadores) {
-  const pctAval = Number(j.porcentaje_devuelto_aval) || 0;
-  if (!pctAval) return '—';
-  const aval = jugadores.find(x => String(x.id) === String(j.avalado_por_id));
-  if (!aval) return '—';
-  return `${pctAval}%<br><span style="font-size:11px; color:var(--text-dim);">(${formatNombre(aval.nombre)})</span>`;
+// algún avalador configurado.
+//
+// 28-09-2026: ahora puede haber VARIOS avaladores por cliente (ver la
+// nota grande de jugadores_avales_porcentaje en sql/schema.sql) — cada
+// uno se apila en la misma celda, separado por una rayita. `j.
+// avalesPorcentaje` ya viene resuelto con el nombre de cada avalador
+// desde GET /api/jugadores, sin pedir nada más al servidor.
+function celdaPctAvalTabla(j) {
+  const avales = j.avalesPorcentaje || [];
+  if (!avales.length) return '—';
+  return avales
+    .map(a => `${a.porcentaje}%<br><span style="font-size:11px; color:var(--text-dim);">(${formatNombre(a.avaladorNombre)})</span>`)
+    .join('<hr style="border:none; border-top:1px dashed var(--card-border); margin:5px 0;">');
 }
 
-async function cargarClientesReales() {
+// =================================================================
+// BUSCADOR DE CLIENTES (28-09-2026, a pedido del usuario: "colcome una
+// pestaña de buscar para a medida que vaya escribiendo me filtres asi
+// busco mas rapido un cliente... si coloco por ejemplo verdura me traera
+// el cliente llamado verdura y todo los avales de verdura etc"). Filtro
+// 100% en el navegador contra CLIENTES_HIPISMO_CACHE (ya está toda la
+// lista cargada), sin pedir nada nuevo al servidor cada vez que se
+// escribe.
+//
+// Además de los clientes cuyo NOMBRE coincide con lo escrito, trae
+// también su red de avales en AMBAS direcciones (confirmado por
+// AskUserQuestion): quienes le generan % a un cliente que coincidió, Y
+// a quienes ese cliente coincidente les genera % — un solo salto (los
+// avales "directos" de cada coincidencia, no toda la cadena).
+function normalizarTextoBusquedaCliente(s) {
+  return (s || '').toString().trim().toLowerCase();
+}
+function clientesQueCoincidenBusqueda(jugadores, textoBusqueda) {
+  const q = normalizarTextoBusquedaCliente(textoBusqueda);
+  if (!q) return jugadores;
+  const directos = jugadores.filter(j => j.nombre.toLowerCase().includes(q));
+  if (!directos.length) return [];
+  const idsIncluidos = new Set(directos.map(j => String(j.id)));
+  const resultado = directos.slice();
+  // Dirección 1: quienes le generan % a alguno de los clientes directos
+  // (ese cliente directo aparece como avalador en la lista de otro).
+  jugadores.forEach(j => {
+    if (idsIncluidos.has(String(j.id))) return;
+    const leGeneraAUnDirecto = (j.avalesPorcentaje || []).some(a => idsIncluidos.has(String(a.avaladorId)));
+    if (leGeneraAUnDirecto) { resultado.push(j); idsIncluidos.add(String(j.id)); }
+  });
+  // Dirección 2: a quién le genera % alguno de los clientes directos.
+  directos.forEach(j => {
+    (j.avalesPorcentaje || []).forEach(a => {
+      if (idsIncluidos.has(String(a.avaladorId))) return;
+      const destino = jugadores.find(x => String(x.id) === String(a.avaladorId));
+      if (destino) { resultado.push(destino); idsIncluidos.add(String(destino.id)); }
+    });
+  });
+  return resultado;
+}
+function filtrarTablaClientes() { pintarTablaClientesFiltrada(); }
+
+// Pinta #tablaClientes a partir de CLIENTES_HIPISMO_CACHE (ya cargado) +
+// lo que haya escrito el operador en #buscarClienteInput — separada de
+// cargarClientesReales() (28-09-2026) para poder re-pintar solo con
+// filtrar, sin pedir /api/jugadores de nuevo cada vez que se escribe una
+// letra.
+function pintarTablaClientesFiltrada() {
   const tbody = document.getElementById('tablaClientes');
+  if (!tbody) return;
   // "Anclar módulos" (23-09-2026) — la columna solo aparece si el grupo
   // tiene los 2 módulos contratados (mismo criterio que el selector
   // ⚽/🐎 de arriba); si no, no hay nada que anclar con nada.
@@ -6547,28 +6613,23 @@ async function cargarClientesReales() {
   if (thAnclar) thAnclar.style.display = hayLos2Modulos ? '' : 'none';
   const colspan = hayLos2Modulos ? 6 : 5;
 
-  let jugadores;
-  try {
-    jugadores = await apiHipismo('/api/jugadores');
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
-    return;
-  }
-  // Cache (23-09-2026, duodécima-tercera ronda) — para armar el detalle de
-  // un cliente (pintarFichaCliente()) y la lista de posibles avales sin
-  // tener que pedir /api/jugadores de nuevo.
-  CLIENTES_HIPISMO_CACHE = jugadores;
-  poblarSelectPozoAjusteCliente();
-  pintarTablaPozos();
+  const jugadores = CLIENTES_HIPISMO_CACHE || [];
   if (!jugadores.length) {
     tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos acá.</td></tr>`;
     return;
   }
-  tbody.innerHTML = jugadores.map(j => `
+  const inpBuscar = document.getElementById('buscarClienteInput');
+  const textoBusqueda = inpBuscar ? inpBuscar.value : '';
+  const filtrados = clientesQueCoincidenBusqueda(jugadores, textoBusqueda);
+  if (!filtrados.length) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Ningún cliente coincide con "${textoBusqueda}".</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtrados.map(j => `
     <tr data-cliente="${j.nombre}">
       <td>${formatNombre(j.nombre)}${j.es_cuenta_comision ? ' <span class="badge-pendiente" style="font-size:10.5px;">cuenta de comisión</span>' : (j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : '')}</td>
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
-      <td>${celdaPctAvalTabla(j, jugadores)}</td>
+      <td>${celdaPctAvalTabla(j)}</td>
       <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
       ${hayLos2Modulos ? `
       <td>
@@ -6584,6 +6645,108 @@ async function cargarClientesReales() {
       </td>
     </tr>
   `).join('');
+}
+
+async function cargarClientesReales() {
+  const tbody = document.getElementById('tablaClientes');
+  let jugadores;
+  try {
+    jugadores = await apiHipismo('/api/jugadores');
+  } catch (e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-dim);">No se pudo cargar la lista de clientes: ${e.message}</td></tr>`;
+    return;
+  }
+  // Cache (23-09-2026, duodécima-tercera ronda) — para armar el detalle de
+  // un cliente (pintarFichaCliente()) y la lista de posibles avales sin
+  // tener que pedir /api/jugadores de nuevo.
+  CLIENTES_HIPISMO_CACHE = jugadores;
+  poblarSelectPozoAjusteCliente();
+  pintarTablaPozos();
+  pintarTablaClientesFiltrada();
+}
+
+// =================================================================
+// "¿QUIÉN LO AVALA? ¿EL AVALADOR TAMBIÉN GANA % DE ESE TERCIO?" —
+// selector de VARIOS avaladores con % cada uno (28-09-2026, a pedido del
+// usuario: "aqui es donde quiero que me dejes elegir mas de un avalador,
+// ya que un cliente puede generarle 2% por darte un ejemplo repartido en
+// varias personas"). Mismo patrón dinámico que ya usa "Cargar Winners"
+// (ver onCambioClienteWinners): al elegir un avalador en la ÚLTIMA fila,
+// se abre sola una fila nueva vacía para agregar otro — repite tantas
+// veces como haga falta. Se usa tanto en "+ Crear cliente" como en el
+// detalle/edición de un cliente existente (2 tablas distintas, mismas
+// funciones).
+//
+// FICHA_AVALES_OTROS_CLIENTES: la lista de candidatos a avalador para el
+// formulario que esté abierto en este momento (todos los clientes menos
+// el que se está editando, o todos si es uno nuevo) — se fija justo antes
+// de armar el HTML del formulario, así opcionesAvalador() no necesita
+// que cada función que arma una fila le pase la lista aparte.
+let FICHA_AVALES_OTROS_CLIENTES = [];
+
+function opcionesAvalador(avaladorIdSeleccionado) {
+  return '<option value="">Seleccione</option>' + FICHA_AVALES_OTROS_CLIENTES
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(x => `<option value="${x.id}" ${String(x.id) === String(avaladorIdSeleccionado) ? 'selected' : ''}>${formatNombre(x.nombre)}</option>`)
+    .join('');
+}
+function filaAvalPorcentajeHtml(avaladorId, porcentaje) {
+  return `<tr>
+    <td><select class="avalSelAvalador" onchange="onCambioFilaAvalPorcentaje(this)">${opcionesAvalador(avaladorId)}</select></td>
+    <td><input type="number" class="avalInpPct" step="0.01" min="0" placeholder="Ej: 1" value="${porcentaje || ''}"></td>
+    <td><button type="button" class="btn btn-secundario" style="padding:4px 10px;" onclick="eliminarFilaAvalPorcentaje(this)" title="Quitar este avalador">✕</button></td>
+  </tr>`;
+}
+function filasAvalesPorcentajeHtml(avalesExistentes) {
+  const lista = (avalesExistentes && avalesExistentes.length) ? avalesExistentes : [{ avaladorId: '', porcentaje: '' }];
+  return lista.map(a => filaAvalPorcentajeHtml(a.avaladorId, a.porcentaje)).join('');
+}
+// Al elegir un avalador en la última fila, abre una fila nueva vacía sola
+// (mismo criterio que onCambioClienteWinners en "Cargar Winners").
+function onCambioFilaAvalPorcentaje(sel) {
+  const tbody = sel.closest('tbody');
+  const tr = sel.closest('tr');
+  if (sel.value && tbody && tr === tbody.lastElementChild) {
+    tbody.insertAdjacentHTML('beforeend', filaAvalPorcentajeHtml('', ''));
+  }
+}
+// Siempre deja al menos 1 fila (aunque quede vacía) — si es la última,
+// simplemente la limpia en vez de borrarla, mismo criterio que
+// eliminarFilaWinners en "Cargar Winners".
+function eliminarFilaAvalPorcentaje(btn) {
+  const tr = btn.closest('tr');
+  const tbody = tr ? tr.closest('tbody') : null;
+  if (!tr || !tbody) return;
+  if (tbody.children.length <= 1) {
+    tr.querySelector('.avalSelAvalador').value = '';
+    tr.querySelector('.avalInpPct').value = '';
+    return;
+  }
+  tr.remove();
+}
+// Lee la tabla y arma [{avaladorId, porcentaje}] — descarta filas vacías
+// o con % en 0 (mismo criterio que el resto de los formularios de este
+// sistema: una fila incompleta simplemente no cuenta).
+function extraerAvalesPorcentajeDeTabla(tbodyId) {
+  const avales = [];
+  document.querySelectorAll(`#${tbodyId} tr`).forEach(tr => {
+    const sel = tr.querySelector('.avalSelAvalador');
+    const inp = tr.querySelector('.avalInpPct');
+    if (!sel || !inp) return;
+    const avaladorId = sel.value;
+    const porcentajeTxt = (inp.value || '').toString().trim();
+    if (!avaladorId || !porcentajeTxt) return;
+    const porcentaje = parseFloat(porcentajeTxt.replace(',', '.'));
+    if (!isFinite(porcentaje) || porcentaje <= 0) return;
+    avales.push({ avaladorId, porcentaje });
+  });
+  return avales;
+}
+// Valida que no se haya elegido el mismo avalador 2 veces (el servidor
+// también lo rechaza, esto es solo para avisar antes de mandar nada).
+function avalesPorcentajeTieneDuplicados(avales) {
+  const ids = avales.map(a => String(a.avaladorId));
+  return new Set(ids).size !== ids.length;
 }
 
 // ------------------------------------------------------------------
@@ -6631,10 +6794,11 @@ function abrirCrearCliente() {
   if (tablaWrap) tablaWrap.style.display = 'none';
   wrap.style.display = 'block';
 
-  const opcionesAval = CLIENTES_HIPISMO_CACHE
-    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .map(x => `<option value="${x.id}">${formatNombre(x.nombre)}</option>`)
-    .join('');
+  // 28-09-2026: se fija ANTES de armar el HTML de abajo, porque
+  // filasAvalesPorcentajeHtml()/opcionesAvalador() la leen para poblar
+  // cada <select> de avalador. Todavía no existe este cliente, así que
+  // los candidatos son TODOS los clientes actuales.
+  FICHA_AVALES_OTROS_CLIENTES = CLIENTES_HIPISMO_CACHE;
 
   wrap.innerHTML = `
     <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">&lsaquo; Volver a la lista</button></div>
@@ -6667,25 +6831,22 @@ function abrirCrearCliente() {
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión? (opcional)</div>
       <div class="fila">
-        <div><label>% que se le devuelve</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0"></div>
-        <div>
-          <label>Ese % es para…</label>
-          <select id="nvoCteDestino">
-            <option value="cliente" selected>El propio cliente</option>
-            <option value="aval">Su aval (otro cliente)</option>
-          </select>
-        </div>
+        <div><label>% de devolución para el mismo cliente</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0"></div>
       </div>
-      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval, o si le pones % adicional abajo)</label>
-        <select id="nvoCteAval">
-          <option value="">— Nadie / no aplica —</option>
-          ${opcionesAval}
-        </select>
-      </div>
-      <div class="fila">
-        <div><label>% ADICIONAL para su avalador (aparte, simultáneo)</label><input type="number" id="nvoCteComisionAval" step="0.01" min="0" value="0"></div>
-        <div style="align-self:flex-end;"><p class="desc" style="margin:0;">Se suma AL MISMO TIEMPO que el % de arriba — déjalo en 0 si no aplica.</p></div>
-      </div>
+      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
+      <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
+           avala, y si el avalador tambien gana % de ese tercio, en caso
+           de que si, cuanto se gana... aqui es donde quiero que me dejes
+           elegir mas de un avalador, ya que un cliente puede generarle 2%
+           por darte un ejemplo repartido en varias personas" — 0, 1 o
+           varias filas, ver filasAvalesPorcentajeHtml()/
+           onCambioFilaAvalPorcentaje() más arriba. -->
+      <div style="font-weight:700; margin-bottom:6px;">🛡️ ¿Quién lo avala? ¿El avalador también gana % de ese tercio? (opcional)</div>
+      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — elige uno, se abre sola una fila nueva para agregar otro.</p>
+      <table>
+        <thead><tr><th>Avalador</th><th>% que gana</th><th></th></tr></thead>
+        <tbody id="nvoCteAvalesTbody">${filasAvalesPorcentajeHtml([])}</tbody>
+      </table>
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
         <button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">Cancelar</button>
@@ -6696,6 +6857,8 @@ function abrirCrearCliente() {
 async function guardarNuevoCliente() {
   const nombre = document.getElementById('nvoCteNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
+  const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('nvoCteAvalesTbody');
+  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
   const payload = {
     nombre,
     telefono: document.getElementById('nvoCteTelefono').value.trim(),
@@ -6704,9 +6867,7 @@ async function guardarNuevoCliente() {
     tipoCuenta: document.getElementById('nvoCteTipoCuenta').value,
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia: document.getElementById('nvoCteComisionPropia').value || 0,
-    avaladoPorId: document.getElementById('nvoCteAval').value || null,
-    porcentajeDevueltoDestino: document.getElementById('nvoCteDestino').value,
-    porcentajeDevueltoAval: document.getElementById('nvoCteComisionAval').value || 0
+    avalesPorcentaje
   };
   try {
     await apiHipismo('/api/jugadores', { method: 'POST', body: JSON.stringify(payload) });
@@ -6795,11 +6956,10 @@ async function pintarFichaCliente() {
   wrap.style.display = 'block';
   wrap.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
 
-  const otrosClientes = CLIENTES_HIPISMO_CACHE.filter(x => String(x.id) !== String(j.id));
-  const opcionesAval = otrosClientes
-    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .map(x => `<option value="${x.id}" ${String(j.avalado_por_id) === String(x.id) ? 'selected' : ''}>${formatNombre(x.nombre)}</option>`)
-    .join('');
+  // 28-09-2026: se fija ANTES de armar el HTML de abajo (ver la nota
+  // grande de FICHA_AVALES_OTROS_CLIENTES más arriba) — los candidatos a
+  // avalador de ESTE cliente son todos los demás, nunca él mismo.
+  FICHA_AVALES_OTROS_CLIENTES = CLIENTES_HIPISMO_CACHE.filter(x => String(x.id) !== String(j.id));
 
   const historial = await obtenerHistorialPozo(j.id);
 
@@ -6835,34 +6995,23 @@ async function pintarFichaCliente() {
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión?</div>
       <div class="fila">
-        <div><label>% que se le devuelve</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}"></div>
-        <div>
-          <label>Ese % es para…</label>
-          <select id="detCteDestino">
-            <option value="cliente" ${j.porcentaje_devuelto_destino !== 'aval' ? 'selected' : ''}>El propio cliente</option>
-            <option value="aval" ${j.porcentaje_devuelto_destino === 'aval' ? 'selected' : ''}>Su aval (otro cliente)</option>
-          </select>
-        </div>
+        <div><label>% de devolución para el mismo cliente</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}"></div>
       </div>
-      <div><label>¿Quién lo avala? (opcional — hace falta si el % es para el aval, o si le pones % adicional abajo)</label>
-        <select id="detCteAval">
-          <option value="">— Nadie / no aplica —</option>
-          ${opcionesAval}
-        </select>
-      </div>
-      <!-- 24-09-2026, a pedido del usuario: "hay clientes que generan %
-           para el mismo y aparte le generan % a su avalador....."
-           (confirmado por AskUserQuestion: "Dos % independientes y
-           simultáneos") — este % es 100% APARTE del de arriba: puede
-           tener valor aunque el de arriba también lo tenga (y aunque el
-           de arriba esté puesto "para el propio cliente"), y siempre se
-           acredita al aval, nunca al cliente. Ver
-           jugadores.porcentaje_devuelto_aval en la nota grande de
-           sql/schema.sql. -->
-      <div class="fila">
-        <div><label>% ADICIONAL para su avalador (aparte, simultáneo)</label><input type="number" id="detCteComisionAval" step="0.01" min="0" value="${j.porcentaje_devuelto_aval || 0}"></div>
-        <div style="align-self:flex-end;"><p class="desc" style="margin:0;">Se suma AL MISMO TIEMPO que el % de arriba (aunque ese vaya para el propio cliente) — siempre se acredita al aval elegido arriba. Déjalo en 0 si este cliente no necesita esto.</p></div>
-      </div>
+      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
+      <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
+           avala, y si el avalador tambien gana % de ese tercio, en caso
+           de que si, cuanto se gana... aqui es donde quiero que me dejes
+           elegir mas de un avalador, ya que un cliente puede generarle 2%
+           por darte un ejemplo repartido en varias personas" — antes era
+           UN solo avalado_por_id + UN solo porcentaje_devuelto_aval; ahora
+           0, 1 o varias filas (jugadores_avales_porcentaje, ver la nota
+           grande en sql/schema.sql), cada una 100% independiente. -->
+      <div style="font-weight:700; margin-bottom:6px;">🛡️ ¿Quién lo avala? ¿El avalador también gana % de ese tercio?</div>
+      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — elige uno, se abre sola una fila nueva para agregar otro. Déjalo vacío si este cliente no necesita esto.</p>
+      <table>
+        <thead><tr><th>Avalador</th><th>% que gana</th><th></th></tr></thead>
+        <tbody id="detCteAvalesTbody">${filasAvalesPorcentajeHtml(j.avalesPorcentaje || [])}</tbody>
+      </table>
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
       </div>
@@ -6886,6 +7035,8 @@ async function pintarFichaCliente() {
 
 async function guardarDetalleCliente(id) {
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
+  const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('detCteAvalesTbody');
+  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
   const payload = {
     nombre: document.getElementById('detCteNombre').value.trim(),
     telefono: document.getElementById('detCteTelefono').value.trim(),
@@ -6899,11 +7050,7 @@ async function guardarDetalleCliente(id) {
     modeloComision: j ? j.modelo_comision : null,
     moneda: j ? j.moneda : 'USD',
     modulosAnclados: j ? !!j.modulos_anclados : false,
-    avaladoPorId: document.getElementById('detCteAval').value || null,
-    porcentajeDevueltoDestino: document.getElementById('detCteDestino').value,
-    // % ADICIONAL para el aval (24-09-2026) — ver la nota grande arriba
-    // de este mismo campo en pintarFichaCliente().
-    porcentajeDevueltoAval: document.getElementById('detCteComisionAval').value || 0
+    avalesPorcentaje
   };
   if (!payload.nombre) { alert('Ingresa el nombre del cliente.'); return; }
   try {
