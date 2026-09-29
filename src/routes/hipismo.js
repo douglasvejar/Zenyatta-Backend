@@ -2335,6 +2335,23 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
   });
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
+  // "COMISIÓN REAL" (29-09-2026, a pedido del usuario: "de la comisión
+  // que queda en el grupo debes restar todos los % que se le devuelven a
+  // los clientes para ver la comisión real de cuánto queda en el
+  // grupo") — se necesita el TOTAL devuelto (todos los "{destino} -
+  // PORCENTAJE" juntos) para restárselo a comisionSemana más abajo. A
+  // propósito NO se le resta nada de "% DE TABLAS FIJAS" ni
+  // "PORCENTAJE MARCAS" (ver la nota grande de comisionAdelantadasSemana
+  // más abajo: esos 2 ya tienen su contraparte EXACTA dentro de la misma
+  // lista de "clientes" — TABLAS FIJAS, y cliente+banqueadores de una
+  // Marca — así que ya suman $0 netos entre sí; sumarlos o restarlos acá
+  // sería contarlos 2 veces). El usuario confirmó con un ejemplo numérico
+  // que la fórmula correcta es exactamente: comisión de Tercios del rango
+  // MENOS todo lo devuelto — matemáticamente idéntico a "voltear el signo
+  // de la suma de TODOS los saldos de la lista" (por eso, para no
+  // duplicar lógica, `comisionSemana` se termina de calcular más abajo
+  // restando `totalDevueltoSemana` de la comisión de Tercios).
+  let totalDevueltoSemana = 0;
   function acumularDevuelto(nombre, monto) {
     const infos = comisionesPropias[nombre];
     if (!infos || !infos.length) return;
@@ -2351,6 +2368,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
       // info.cuentaNombre ya es el nombre final, no hace falta pegarle
       // el sufijo de nuevo.
       acumular(info.cuentaNombre, devuelto);
+      totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
     });
   }
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
@@ -2472,13 +2490,28 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
 
   clientes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  // Comisión de la semana: mismo total ya guardado por plano (ver
-  // /comisiones-por-carrera arriba) — no depende de los tickets sueltos.
+  // Comisión de Tercios de la semana: mismo total ya guardado por plano
+  // (ver /comisiones-por-carrera arriba) — no depende de los tickets
+  // sueltos.
   const rComision = await db.query(
     `SELECT COALESCE(SUM(comision_total), 0) AS total
        FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
     [req.grupoId, desde, hasta]
   );
+  // "COMISIÓN REAL" (29-09-2026, ver la nota grande de totalDevueltoSemana
+  // más arriba, a pedido explícito del usuario: "de la comisión que queda
+  // en el grupo debes restar todos los % que se le devuelven a los
+  // clientes para ver la comisión real de cuánto queda en el grupo" —
+  // confirmado con un ejemplo numérico exacto, "CASO A PARA TODOS LOS
+  // RENGLONES"). comisionSemana pasa de ser la comisión BRUTA de Tercios
+  // a ser la comisión REAL: bruta menos todo lo devuelto — matemáticamente
+  // idéntico a voltear el signo de la suma de TODOS los saldos de
+  // "clientes" (ya que TABLAS FIJAS/% DE TABLAS FIJAS, PORCENTAJE
+  // MARCAS+banqueadores+cliente, REMATE+sus apuestas y WINNERS+sus
+  // clientes siempre suman $0 exacto entre sí — ver esos bloques más
+  // arriba — así que la única plata que "sobra" sin repartir en toda la
+  // lista es justo comisión de Tercios menos lo devuelto).
+  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana);
   res.json({
     rango: { desde, hasta },
     semana,
@@ -2486,7 +2519,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     numeroSemana,
     esSemanaActual,
     clientes,
-    comisionSemana: Number(rComision.rows[0].total),
+    comisionSemana,
     // comisionRemateSemana (26-09-2026): se sigue devolviendo el dato
     // crudo por compatibilidad, pero YA NO representa "comisión" — el
     // frontend ya no lo suma al total de comisión mostrado (ver el ítem
@@ -2777,14 +2810,22 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
   });
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, Array.from(nombresJugadores));
+  // "COMISIÓN REAL" por día (29-09-2026, mismo pedido/fórmula que
+  // /cierre-final — ver la nota grande de esa ruta, "CASO A PARA TODOS
+  // LOS RENGLONES"): se necesita, aparte de lo devuelto por CLIENTE (ya
+  // acumulado arriba con acumularDia), el TOTAL devuelto de CADA DÍA para
+  // restárselo a la comisión de Tercios de ese mismo día más abajo.
+  const devueltoPorFecha = {};
   function acumularDevueltoDia(nombre, fechaFila, monto) {
     const infos = comisionesPropias[nombre];
     if (!infos || !infos.length) return;
+    const fechaIso = fechaFila instanceof Date ? isoDeFechaUTC(fechaFila) : fechaFila;
     infos.forEach(info => {
       if (!info || !info.pct) return;
       const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
       if (!devuelto) return;
       acumularDia(info.cuentaNombre, fechaFila, devuelto);
+      devueltoPorFecha[fechaIso] = round2((devueltoPorFecha[fechaIso] || 0) + devuelto);
     });
   }
   // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
@@ -2866,37 +2907,40 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   // "COMISIÓN GRUPO" al pie de la tabla (24-09-2026, a pedido del
-  // usuario) — mismas 3 fuentes que ya suma Cierre Final (comisión de
-  // Tercios por plano, comisión de Remate por remate, comisión de
-  // Jugadas Adelantadas por jugada resuelta), pero agrupada por DÍA para
-  // poder mostrar una columna por día igual que el resto de la fila.
+  // usuario), AGREGADA POR DÍA para poder mostrar una columna por día
+  // igual que el resto de la fila.
+  //
+  // "COMISIÓN REAL" (29-09-2026, a pedido explícito del usuario: "de la
+  // comisión que queda en el grupo debes restar todos los % que se le
+  // devuelven a los clientes para ver la comisión real de cuánto queda en
+  // el grupo" — confirmado con un ejemplo numérico, "CASO A PARA TODOS
+  // LOS RENGLONES, BALANCES, CIERRE FINAL, SALDO POR DÍA, SALDO POR
+  // SEMANA"): esta fila pasa a IGUALARSE con Cierre Final/Balance General
+  // (ver la nota grande de GET /cierre-final) — solo la comisión de
+  // Tercios por plano, MENOS todo el % devuelto (devueltoPorFecha, ya
+  // acumulado arriba). Antes de este cambio, esta fila TAMBIÉN sumaba la
+  // comisión de Remate y de Jugadas Adelantadas (algo que Cierre Final
+  // nunca hizo, a propósito, para no pagar esa comisión 2 veces — ver la
+  // nota grande de comisionAdelantadasSemana en /cierre-final) — eso hacía
+  // que esta pantalla diera un número distinto al de Cierre Final para el
+  // mismo rango de fechas; ahora dan exactamente lo mismo.
   const rComisionPlanos = await db.query(
     `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
        FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
     [req.grupoId, desde, hasta]
   );
-  const rComisionRemates = await db.query(
-    `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
-       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
-    [req.grupoId, desde, hasta]
-  );
-  const rComisionAdelantadas = await db.query(
-    `SELECT p.fecha AS fecha, j.comision
-       FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
-      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
-    [req.grupoId, desde, hasta]
-  );
-  const comisionPorFecha = {};
-  function acumularComisionFecha(fechaFila, monto) {
-    if (monto == null) return;
-    const fechaIso = fechaFila instanceof Date ? isoDeFechaUTC(fechaFila) : fechaFila;
-    comisionPorFecha[fechaIso] = round2((comisionPorFecha[fechaIso] || 0) + Number(monto));
-  }
-  rComisionPlanos.rows.forEach(r => acumularComisionFecha(r.fecha, r.total));
-  rComisionRemates.rows.forEach(r => acumularComisionFecha(r.fecha, r.total));
-  rComisionAdelantadas.rows.forEach(r => acumularComisionFecha(r.fecha, r.comision));
-  const comisionPorDia = diasConDatos.map(d => round2(comisionPorFecha[d.fecha] || 0));
-  const comisionSemana = round2(Object.values(comisionPorFecha).reduce((a, b) => a + b, 0));
+  const comisionBrutaPorFecha = {};
+  rComisionPlanos.rows.forEach(r => {
+    const fechaIso = r.fecha instanceof Date ? isoDeFechaUTC(r.fecha) : r.fecha;
+    comisionBrutaPorFecha[fechaIso] = round2((comisionBrutaPorFecha[fechaIso] || 0) + Number(r.total));
+  });
+  const comisionPorDia = diasConDatos.map(d => round2((comisionBrutaPorFecha[d.fecha] || 0) - (devueltoPorFecha[d.fecha] || 0)));
+  // comisionSemana se saca de los totales COMPLETOS (todas las fechas del
+  // rango con comisión bruta o devuelto, no solo las de diasConDatos) para
+  // que el total no dependa de qué días termina mostrando la tabla.
+  const todasLasFechasConComision = new Set([...Object.keys(comisionBrutaPorFecha), ...Object.keys(devueltoPorFecha)]);
+  const comisionSemana = round2(Array.from(todasLasFechasConComision)
+    .reduce((acc, fechaIso) => acc + (comisionBrutaPorFecha[fechaIso] || 0) - (devueltoPorFecha[fechaIso] || 0), 0));
 
   res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias: diasConDatos, clientes, comisionPorDia, comisionSemana });
 }));

@@ -14,8 +14,13 @@
 //      domingo por dentro (rangoSemana no cambia).
 //   3. "abajo a final de la lista debe ir el item comision grupo" — el
 //      backend ahora también manda `comisionPorDia` (alineado con
-//      `dias`) y `comisionSemana`, sumando Tercios + Remate + Jugadas
-//      Adelantadas, igual que ya hace GET /cierre-final pero por día.
+//      `dias`) y `comisionSemana`.
+//
+// (29-09-2026, "CASO A PARA TODOS LOS RENGLONES... TODOS LOS SALDOS": esta
+// fila se igualó a GET /cierre-final — ver la nota grande de esa ruta —
+// así que ya NO suma Remate ni Jugadas Adelantadas, solo la comisión de
+// Tercios menos el % devuelto a clientes/avaladores. Antes de ese cambio
+// SÍ sumaba las 3 fuentes, como decía este comentario originalmente.
 //
 // Mismo patrón de base de datos falsa en memoria que
 // test_hipismo_reportes.js/test_hipismo_remate.js (Module._load
@@ -213,9 +218,12 @@ function check(cond, msg) {
   const ana = res._json.clientes.find(c => c.nombre === 'ANA');
   check(JSON.stringify(ana.porDia) === JSON.stringify([-30, 0, 0]), 'ANA: -30 el miércoles (primer día de la fila), 0 el resto');
 
-  // --- 3) "Comisión Grupo": Tercios (lunes+miércoles) + Remate (domingo) ---
-  check(JSON.stringify(res._json.comisionPorDia) === JSON.stringify([1.5, 20, 2.5]), 'comisionPorDia alineado a "dias": 1,5 miércoles (Tercios) + 20 domingo (Remate) + 2,5 lunes (Tercios)');
-  check(res._json.comisionSemana === 24, 'comisionSemana = 1,5 + 20 + 2,5 = 24 (suma de Tercios + Remate de toda la semana)');
+  // --- 3) "Comisión Grupo" (29-09-2026: igualada a Cierre Final, SOLO
+  // Tercios menos % devuelto — ya NO suma Remate, aunque el domingo haya
+  // dado +20 de comisión de Remate, esta prueba no configura ningún % de
+  // comisión propia, así que tampoco hay nada que restar) ---
+  check(JSON.stringify(res._json.comisionPorDia) === JSON.stringify([1.5, 0, 2.5]), 'comisionPorDia alineado a "dias": 1,5 miércoles (Tercios), 0 domingo (Remate ya NO cuenta acá), 2,5 lunes (Tercios)');
+  check(res._json.comisionSemana === 4, 'comisionSemana = 1,5 + 2,5 = 4 (solo Tercios, igual que Cierre Final -- el Remate ya no se suma)');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
