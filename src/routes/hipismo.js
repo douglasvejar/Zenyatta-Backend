@@ -695,8 +695,11 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   const ticket = rTicket.rows[0];
   if (!ticket) return res.status(404).json({ error: 'Ese ticket no pertenece a este plano.' });
 
-  const clienteFinal = ((clienteNombre || ticket.cliente_nombre) + '').trim().toUpperCase();
-  const banqueroFinal = ((banqueroNombre || ticket.banquero_nombre) + '').trim().toUpperCase();
+  // 29-09-2026 — mismo criterio que jugadores.js/hipismoCalc.js: colapsa
+  // espacios de más entre palabras (ver la nota grande de
+  // normalizarNombreJugador() en routes/jugadores.js).
+  const clienteFinal = ((clienteNombre || ticket.cliente_nombre) + '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const banqueroFinal = ((banqueroNombre || ticket.banquero_nombre) + '').trim().toUpperCase().replace(/\s+/g, ' ');
   const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(ticket.monto);
   if (!clienteFinal || !banqueroFinal) return res.status(400).json({ error: 'Faltan el cliente y/o el banquero.' });
   if (isNaN(montoFinal) || montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
@@ -1095,7 +1098,9 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   const jugada = rJugada.rows[0];
   if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
 
-  const clienteFinal = ((cliente || jugada.cliente_nombre) + '').trim().toUpperCase();
+  // 29-09-2026 — mismo criterio que jugadores.js/hipismoCalc.js: colapsa
+  // espacios de más entre palabras.
+  const clienteFinal = ((cliente || jugada.cliente_nombre) + '').trim().toUpperCase().replace(/\s+/g, ' ');
   if (!clienteFinal) return res.status(400).json({ error: 'Falta el cliente.' });
   const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(jugada.monto);
   if (isNaN(montoFinal) || montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
@@ -1552,7 +1557,13 @@ router.put('/winners/:id', asyncHandler(async (req, res) => {
   if (!winner) return res.status(404).json({ error: 'Winner no encontrado.' });
 
   const { cliente, caballo, monto } = req.body;
-  const clienteFinal = ((cliente !== undefined && cliente !== null && cliente !== '') ? String(cliente) : winner.cliente_nombre).trim();
+  // 29-09-2026 — antes no se forzaba MAYÚSCULA acá (a diferencia de TODO
+  // el resto del sistema para nombres de cliente), así que renombrar un
+  // Winner a mano podía dejarlo en minúscula o con un espacio de más,
+  // sin calzar nunca con jugadores.nombre — mismo criterio que
+  // jugadores.js/hipismoCalc.js ahora en todos lados (ver la nota grande
+  // de normalizarNombreJugador() en routes/jugadores.js).
+  const clienteFinal = ((cliente !== undefined && cliente !== null && cliente !== '') ? String(cliente) : winner.cliente_nombre).trim().toUpperCase().replace(/\s+/g, ' ');
   const caballoFinal = ((caballo !== undefined && caballo !== null && caballo !== '') ? String(caballo) : winner.caballo).trim();
   const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(winner.monto);
   if (!clienteFinal) return res.status(400).json({ error: 'Falta el cliente.' });
@@ -1877,15 +1888,23 @@ async function obtenerApuestasDelDia(grupoId, fecha) {
 router.get('/traspasos/jugadas', asyncHandler(async (req, res) => {
   const { fecha, cliente } = req.query;
   if (!fecha || !cliente) return res.status(400).json({ error: 'Falta la fecha y/o el cliente.' });
+  // 29-09-2026: compara colapsando espacios de más de los 2 lados (sin
+  // tocar nada de lo ya guardado) — así, si alguna jugada vieja quedó con
+  // un espacio de más en su cliente_nombre (ver la nota grande de
+  // normalizarNombreJugador() en routes/jugadores.js, y el caso real
+  // reportado: "mr increible... no sale como deberia sale -300"),
+  // buscarla tal cual se escribe siempre (sin ese espacio de más) igual
+  // la encuentra acá, para poder arreglarla con el traspaso de abajo.
+  const clienteBuscado = cliente.trim().toUpperCase().replace(/\s+/g, ' ');
   const detalle = (await obtenerApuestasDelDia(req.grupoId, fecha))
-    .filter(d => d.cliente === cliente.trim().toUpperCase() && d.tipo !== 'remate');
+    .filter(d => (d.cliente || '').replace(/\s+/g, ' ') === clienteBuscado && d.tipo !== 'remate');
 
   const porHipodromo = new Map();
   detalle.forEach(d => {
     if (!porHipodromo.has(d.hipodromoNombre)) porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, jugadas: [] });
     porHipodromo.get(d.hipodromoNombre).jugadas.push(d);
   });
-  res.json({ fecha, cliente: cliente.trim().toUpperCase(), hipodromos: Array.from(porHipodromo.values()) });
+  res.json({ fecha, cliente: clienteBuscado, hipodromos: Array.from(porHipodromo.values()) });
 }));
 
 router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
@@ -1893,7 +1912,11 @@ router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
   if (!['hipismo_tickets', 'hipismo_adelantadas_jugadas'].includes(tabla)) {
     return res.status(400).json({ error: 'Solo se pueden traspasar jugadas de Tercios o de Jugadas Adelantadas.' });
   }
-  const clienteNuevoFinal = ((clienteNuevo || '') + '').trim().toUpperCase();
+  // 29-09-2026 — mismo criterio que jugadores.js/hipismoCalc.js: colapsa
+  // espacios de más entre palabras (así, entre otras cosas, sirve para
+  // "arreglar" una jugada vieja con un espacio de más: traspasarla al
+  // MISMO nombre, retipeado limpio, deja el cliente_nombre normalizado).
+  const clienteNuevoFinal = ((clienteNuevo || '') + '').trim().toUpperCase().replace(/\s+/g, ' ');
   if (!clienteNuevoFinal) return res.status(400).json({ error: 'Falta el cliente al que se le pasa la jugada.' });
 
   const r = await db.query(
@@ -1921,8 +1944,10 @@ router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
 // auto-registra si todavía no existe, igual que el resto del sistema.
 router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
   const { clienteOrigen, clienteDestino, monto, fecha, nota } = req.body;
-  const origenFinal = ((clienteOrigen || '') + '').trim().toUpperCase();
-  const destinoFinal = ((clienteDestino || '') + '').trim().toUpperCase();
+  // 29-09-2026 — mismo criterio que jugadores.js/hipismoCalc.js: colapsa
+  // espacios de más entre palabras.
+  const origenFinal = ((clienteOrigen || '') + '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const destinoFinal = ((clienteDestino || '') + '').trim().toUpperCase().replace(/\s+/g, ' ');
   const montoFinal = Number(monto);
   const fechaFinal = fecha || fechaHoyVenezuela();
   if (!origenFinal || !destinoFinal) return res.status(400).json({ error: 'Falta el cliente de origen y/o el destino.' });

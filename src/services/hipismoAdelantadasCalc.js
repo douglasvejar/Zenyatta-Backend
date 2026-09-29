@@ -134,7 +134,11 @@ function parsearJugadasAdelantadas(textoOriginal) {
     if (RE_ENCABEZADO.test(linea)) return; // "PLANOS MARCAS Y TABLAS ADELANTADAS ZENYATTA" — decorativo
 
     const mCliente = linea.match(RE_CLIENTE);
-    if (mCliente) { clienteActual = mCliente[1].trim().toUpperCase(); return; }
+    // 29-09-2026 — mismo criterio y mismo motivo que hipismoCalc.js
+    // (colapsar espacios de más entre palabras, ver la nota grande ahí):
+    // Jugadas Adelantadas comparte la misma tabla "jugadores" y el mismo
+    // emparejamiento exacto por nombre para el % propio.
+    if (mCliente) { clienteActual = mCliente[1].trim().toUpperCase().replace(/\s+/g, ' '); return; }
 
     const mCarrera = linea.match(RE_CARRERA);
     if (!mCarrera) { sinReconocer.push(linea); return; }

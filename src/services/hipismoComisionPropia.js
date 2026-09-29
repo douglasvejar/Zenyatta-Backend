@@ -82,6 +82,14 @@ const { round2 } = require('./hipismoAdelantadasCalc');
 // de la jugada). Lo que este cliente gane por avalar a OTROS (entradas
 // 2..N, `esAvalAdicional: true`) NUNCA se ve afectado por este toggle —
 // sigue siempre yendo a su cuenta "{nombre} - PORCENTAJE" tal cual.
+// Colapsa espacios de más entre palabras (además de mayúscula/trim) —
+// mismo criterio que normalizarNombreJugador() en routes/jugadores.js.
+// Se usa acá SOLO para EMPAREJAR (nunca para decidir qué se guarda), ver
+// la nota grande de "CLIENTE DOBLE" POR ESPACIOS DE MÁS más abajo.
+function normalizarParaEmparejar(nombre) {
+  return (nombre || '').toString().trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
@@ -98,7 +106,53 @@ async function obtenerComisionesPropias(grupoId, nombres) {
       WHERE j.grupo_id = $1 AND j.nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
-  const idsJugadores = rJugadores.rows.map(j => j.id);
+
+  // =================================================================
+  // "CLIENTE DOBLE" POR ESPACIOS DE MÁS (29-09-2026, a pedido del usuario
+  // después del caso real: "mr increible se le devuelve el 1%... y no
+  // sale como deberia sale -300"). El match de arriba (j.nombre = ANY(...))
+  // es EXACTO letra por letra; si alguna jugada real ya quedó guardada en
+  // hipismo_tickets/hipismo_adelantadas_jugadas con un espacio de más
+  // entre palabras (ej. "MR  INCREIBLE" con doble espacio — INVISIBLE en
+  // el navegador, que colapsa espacios de más al mostrar texto, así que
+  // el cliente se ve idéntico en Balance General y en Clientes) ese
+  // nombre no calza ahí y su % queda sin aplicarse, sin ningún aviso. De
+  // acá en adelante esto ya no debería volver a pasar (ver la
+  // normalización agregada en hipismoCalc.js/hipismoAdelantadasCalc.js/
+  // routes/jugadores.js), pero una jugada YA guardada de antes sigue
+  // así hasta que se re-guarde — por eso, para los nombres que NO
+  // calzaron arriba, se trae (una sola vez) TODOS los jugadores del
+  // grupo y se empareja acá en JS, colapsando espacios de más de los 2
+  // lados. Solo se dispara si de verdad hace falta (`faltantes` no
+  // vacío), así que el camino feliz de siempre (todo calza exacto) no
+  // cambia en nada.
+  const encontrados = new Set(rJugadores.rows.map(j => j.nombre));
+  const faltantes = unicos.filter(n => !encontrados.has(n));
+  // filasConClave: cada fila de jugador emparejada, junto con la CLAVE
+  // ORIGINAL (el nombre tal cual aparece en la jugada real) bajo la que
+  // tiene que quedar en `mapa` — para el camino feliz son el mismo texto;
+  // para un rescate por espacios de más, la clave sigue siendo la de la
+  // jugada real (para que agregarPorcentajeDevuelto() la encuentre), pero
+  // los datos del jugador (nombre limpio, %, cuenta de comisión) son los
+  // de su ficha real.
+  const filasConClave = rJugadores.rows.map(j => ({ j, claveOriginal: j.nombre }));
+  if (faltantes.length) {
+    const rTodos = await db.query(
+      `SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre, j.incluir_porcentaje_en_jugadas
+         FROM jugadores j
+         LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id
+        WHERE j.grupo_id = $1`,
+      [grupoId]
+    );
+    const porNormalizado = new Map();
+    rTodos.rows.forEach(j => { if (!encontrados.has(j.nombre)) porNormalizado.set(normalizarParaEmparejar(j.nombre), j); });
+    faltantes.forEach(nombreOriginal => {
+      const match = porNormalizado.get(normalizarParaEmparejar(nombreOriginal));
+      if (match) filasConClave.push({ j: match, claveOriginal: nombreOriginal });
+    });
+  }
+
+  const idsJugadores = filasConClave.map(({ j }) => j.id);
   const avalesPorJugadorId = {};
   if (idsJugadores.length) {
     const rAvales = await db.query(
@@ -115,16 +169,20 @@ async function obtenerComisionesPropias(grupoId, nombres) {
     });
   }
   const mapa = {};
-  rJugadores.rows.forEach(j => {
+  filasConClave.forEach(({ j, claveOriginal }) => {
     const entradas = [];
     // Entrada 1: comision_propia — SIEMPRE para el propio cliente. Si el
     // toggle "incluir % en sus jugadas" está en ON, en vez de una cuenta
-    // aparte se marca `incluidaEnJugada` y `cuentaNombre` es su propio
-    // nombre (ver la nota grande arriba).
+    // aparte se marca `incluidaEnJugada` y `cuentaNombre` es `claveOriginal`
+    // (el mismo nombre bajo el que se acumuló su propia jugada más arriba
+    // — nunca j.nombre a secas, para que el % quede SIEMPRE en la misma
+    // fila que su jugada, incluso en el caso de rescate por espacios de
+    // más de arriba, donde j.nombre podría no ser byte-a-byte igual a
+    // como se acumuló la jugada).
     const pctPropio = Number(j.comision_propia) || 0;
     if (pctPropio) {
       if (j.incluir_porcentaje_en_jugadas) {
-        entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre: j.nombre, esAvalAdicional: false, incluidaEnJugada: true });
+        entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre: claveOriginal, esAvalAdicional: false, incluidaEnJugada: true });
       } else {
         const cuentaNombre = j.cc_propio_nombre || `${j.nombre} - PORCENTAJE`;
         entradas.push({ pct: pctPropio, destino: j.nombre, cuentaNombre, esAvalAdicional: false });
@@ -139,7 +197,7 @@ async function obtenerComisionesPropias(grupoId, nombres) {
       const cuentaNombre = fila.cc_avalador_nombre || `${destino} - PORCENTAJE`;
       entradas.push({ pct: pctAval, destino, cuentaNombre, esAvalAdicional: true });
     });
-    mapa[j.nombre] = entradas;
+    mapa[claveOriginal] = entradas;
   });
   return mapa;
 }
@@ -178,7 +236,30 @@ async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
     `SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])`,
     [grupoId, unicos]
   );
-  for (const j of rJugadores.rows) {
+  // "CLIENTE DOBLE" POR ESPACIOS DE MÁS (29-09-2026, ver la nota grande
+  // de obtenerComisionesPropias más arriba) — mismo rescate: si algún
+  // nombre de `unicos` no calzó arriba por un espacio de más entre
+  // palabras, se busca también por nombre normalizado, para que la
+  // cuenta de comisión real se termine creando/enlazando igual, sin
+  // depender de que el nombre quede byte-a-byte idéntico. Solo se
+  // dispara si de verdad hace falta, así que el camino feliz de siempre
+  // no cambia en nada.
+  const filas = rJugadores.rows.slice();
+  const encontrados = new Set(filas.map(j => j.nombre));
+  const faltantes = unicos.filter(n => !encontrados.has(n));
+  if (faltantes.length) {
+    const rTodos = await db.query(
+      `SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = $1`,
+      [grupoId]
+    );
+    const porNormalizado = new Map();
+    rTodos.rows.forEach(j => { if (!encontrados.has(j.nombre)) porNormalizado.set(normalizarParaEmparejar(j.nombre), j); });
+    faltantes.forEach(nombreOriginal => {
+      const match = porNormalizado.get(normalizarParaEmparejar(nombreOriginal));
+      if (match && !filas.some(f => f.id === match.id)) filas.push(match);
+    });
+  }
+  for (const j of filas) {
     const pctPropio = Number(j.comision_propia) || 0;
     // Con el toggle en ON no hace falta ninguna cuenta aparte para su
     // propia comisión (se acumula directo en su propia fila) — ver la
@@ -187,7 +268,7 @@ async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
       await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
     }
   }
-  const idsJugadores = rJugadores.rows.map(j => j.id);
+  const idsJugadores = filas.map(j => j.id);
   if (!idsJugadores.length) return;
   const rAvales = await db.query(
     `SELECT DISTINCT jap.avalador_id, av.nombre AS avalador_nombre, av.cuenta_comision_id AS avalador_cuenta_comision_id

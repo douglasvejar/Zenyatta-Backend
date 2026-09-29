@@ -95,7 +95,13 @@ function parsearRemate(textoOriginal) {
     if (!mMonto) { sinReconocer.push(linea); return; }
 
     const caballo = resto.slice(0, mMonto.index).trim();
-    const cliente = resto.slice(mMonto.index + mMonto[0].length).trim().toUpperCase();
+    // 29-09-2026 — mismo criterio y mismo motivo que hipismoCalc.js/
+    // hipismoAdelantadasCalc.js (ver la nota grande de la primera): acá el
+    // cliente SÍ puede venir con varias palabras (a diferencia de Tercios,
+    // que solo admite un token sin espacios), así que un espacio de más
+    // entre palabras es perfectamente posible y, sin este colapso, rompía
+    // en silencio el emparejamiento exacto contra jugadores.nombre.
+    const cliente = resto.slice(mMonto.index + mMonto[0].length).trim().toUpperCase().replace(/\s+/g, ' ');
     const monto = parseFloat(mMonto[1].replace(',', '.'));
     if (!caballo || !cliente || !isFinite(monto)) { sinReconocer.push(linea); return; }
 

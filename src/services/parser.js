@@ -593,9 +593,15 @@ function parsearSabana(texto, diccionarioEquipos) {
         // si el símbolo quedó pegado al principio del texto original.
         const simboloVaAntes = /^[✅❌⭕]/.test(matchFirmaConMarcador[0]);
         simboloFirma = simboloVaAntes ? matchFirmaConMarcador[1] : matchFirmaConMarcador[2];
-        nombreNuevo = (simboloVaAntes ? matchFirmaConMarcador[2] : matchFirmaConMarcador[1]).trim().toUpperCase();
+        // 29-09-2026 — mismo criterio y mismo motivo que Hipismo (ver la
+        // nota grande de normalizarNombreJugador() en routes/jugadores.js
+        // / el caso real de "mr increible"): colapsa espacios de más
+        // entre palabras además de MAYÚSCULA, para que un espacio de más
+        // tipeado en la sábana no rompa en silencio el emparejamiento
+        // exacto contra jugadores.nombre.
+        nombreNuevo = (simboloVaAntes ? matchFirmaConMarcador[2] : matchFirmaConMarcador[1]).trim().toUpperCase().replace(/\s+/g, ' ');
       } else {
-        nombreNuevo = lineaLimpia.toUpperCase();
+        nombreNuevo = lineaLimpia.toUpperCase().replace(/\s+/g, ' ');
       }
 
       // OJO (04-09-2026, formato real del grupo "Bernal"; AMPLIADO

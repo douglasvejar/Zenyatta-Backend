@@ -158,6 +158,17 @@ function ejecutarQuery(text, params) {
     const nombres = params[1];
     return { rows: TABLAS.jugadores.filter(j => nombres.includes(j.nombre)) };
   }
+  // "CLIENTE DOBLE" POR ESPACIOS DE MÁS (29-09-2026, ver la nota grande
+  // en services/hipismoComisionPropia.js) — segunda consulta SIN filtro
+  // de nombre, que obtenerComisionesPropias dispara solo cuando algún
+  // nombre no calzó arriba (acá pasa siempre: RICHARD/LUSHO/etc. no
+  // tienen fila en TABLAS.jugadores, a propósito, esta prueba solo
+  // necesita configurar a PEDRO) — nunca encuentra ningún rescate extra
+  // porque ninguno de esos nombres se parece a "PEDRO" ni por espacios de
+  // más, así que el resultado de esta prueba no cambia en nada.
+  if (sql === "SELECT j.id, j.nombre, j.comision_propia, cc_propio.nombre AS cc_propio_nombre, j.incluir_porcentaje_en_jugadas FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio.id = j.cuenta_comision_id WHERE j.grupo_id = $1") {
+    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId) };
+  }
   if (sql === "SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])") {
     return { rows: [] };
   }

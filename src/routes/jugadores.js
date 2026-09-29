@@ -22,6 +22,23 @@ function resolverMonedaJugador(monedaModoGrupo, monedaPedida) {
   return monedaPedida === 'BS' ? 'BS' : 'USD';
 }
 
+// Normaliza el nombre de un jugador/cliente al guardarlo (29-09-2026, a
+// pedido del usuario después del caso real de "mr increible se le
+// devuelve el 1%... y no sale como deberia sale -300"): además de
+// MAYÚSCULA (de siempre), colapsa espacios de más entre palabras a uno
+// solo (ej. "Mr  Increible" con doble espacio -> "MR INCREIBLE"). Sin
+// esto, un espacio de más acá es INVISIBLE en el navegador (que colapsa
+// espacios de más al mostrar texto) pero rompe en silencio el
+// emparejamiento EXACTO de jugadores.nombre contra
+// hipismo_tickets.cliente_nombre que usa obtenerComisionesPropias (ver
+// services/hipismoComisionPropia.js) para aplicar el % propio de cada
+// cliente — mismo criterio ahora usado también al parsear un plano/
+// remate/jugada adelantada (ver services/hipismoCalc.js y
+// hipismoAdelantadasCalc.js).
+function normalizarNombreJugador(nombre) {
+  return (nombre || '').toString().trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 router.get('/', asyncHandler(async (req, res) => {
   const r = await db.query('SELECT * FROM jugadores WHERE grupo_id = $1 ORDER BY nombre', [req.grupoId]);
   // avalesPorcentaje (28-09-2026, ver la nota grande de
@@ -142,7 +159,7 @@ router.post('/', asyncHandler(async (req, res) => {
       const r = await client.query(
         `INSERT INTO jugadores (grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-        [req.grupoId, nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
+        [req.grupoId, normalizarNombreJugador(nombre), telefono || null, notas || null, activo !== false, tipo,
           tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, !!incluirPorcentajeEnJugadas]
       );
       const nuevo = r.rows[0];
@@ -170,7 +187,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
            pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10,
            incluir_porcentaje_en_jugadas = $11
          WHERE id = $12 AND grupo_id = $13 RETURNING *`,
-        [nombre.trim().toUpperCase(), telefono || null, notas || null, activo !== false, tipo,
+        [normalizarNombreJugador(nombre), telefono || null, notas || null, activo !== false, tipo,
           tipo === 'avalado' ? (Number(pozoInicial) || 0) : 0, Number(comisionPropia) || 0, normalizarModeloComisionJugador(modeloComision), monedaFinal, !!modulosAnclados, !!incluirPorcentajeEnJugadas, req.params.id, req.grupoId]
       );
       if (r.rows.length === 0) { const err = new Error('Jugador no encontrado.'); err.status = 404; throw err; }

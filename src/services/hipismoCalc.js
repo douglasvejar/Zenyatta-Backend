@@ -687,8 +687,20 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
     // clientes separados por un tipeo distinto. formatNombre() más abajo
     // sigue siendo la única que decide cómo se VE (Primera mayúscula) en
     // el texto que se copia a WhatsApp — esto es la clave interna.
-    const jugador = jugadorCrudo.trim().toUpperCase();
-    const banco = bancoCrudo.trim().toUpperCase();
+    // 29-09-2026, a pedido del usuario después del caso real de "mr
+    // increible se le devuelve el 1%... y no sale como deberia sale
+    // -300": además de MAYÚSCULA, se colapsan los espacios de más entre
+    // palabras (ej. "Mr  Increible" con doble espacio, fácil de tipear
+    // sin querer en WhatsApp) a uno solo. Sin esto, un espacio de más acá
+    // queda GUARDADO tal cual en hipismo_tickets.cliente_nombre pero es
+    // INVISIBLE en el navegador (que colapsa espacios de más al mostrar
+    // texto) — así que el cliente se ve idéntico en Balance General y en
+    // Clientes, pero el emparejamiento EXACTO de jugadores.nombre =
+    // hipismo_tickets.cliente_nombre (obtenerComisionesPropias, en
+    // services/hipismoComisionPropia.js) fallaba en silencio y el % de
+    // ese cliente quedaba sin aplicarse a sus propias jugadas.
+    const jugador = jugadorCrudo.trim().toUpperCase().replace(/\s+/g, ' ');
+    const banco = bancoCrudo.trim().toUpperCase().replace(/\s+/g, ' ');
     // modalidadNorm: normaliza "guion pegado" vs "con espacio" en una
     // jugada mixta a SIEMPRE guion pegado (ver normalizarModalidadCombo
     // más arriba) — para una modalidad simple (sin combinar) esto no
