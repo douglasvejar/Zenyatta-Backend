@@ -16,6 +16,7 @@ const express = require('express');
 const { requiereGrupo, requierePermiso } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const { construirSaldosSemana } = require('../services/saldosSemana');
+const { urlLogoGrupo } = require('../services/logoGrupo');
 
 const router = express.Router();
 router.use(requiereGrupo);
@@ -27,7 +28,7 @@ router.use(requierePermiso('descargar'));
 // actual y vuelven a pedir). Sin ?fecha, es la semana actual (según la
 // fecha de HOY en Venezuela, ver fechaVenezuela.js).
 router.get('/saldos-semana', asyncHandler(async (req, res) => {
-  const datos = await construirSaldosSemana(req.grupoId, req.grupo.nombre, req.grupo.logo_url, req.query.fecha);
+  const datos = await construirSaldosSemana(req.grupoId, req.grupo.nombre, urlLogoGrupo(req.grupoId, req.grupo), req.query.fecha);
   res.json(datos);
 }));
 

@@ -48,10 +48,13 @@ function ejecutarQuery(text, params) {
     return { rows: [{ id: grupo.id, modelo_comision: grupo.modelo_comision, comision_tiers: grupo.comision_tiers }] };
   }
 
-  // --- lo que necesita GET /grupos/:id/detalle ---
-  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*FROM grupos WHERE id = \$1/i.test(sql)) {
+  // --- lo que necesita GET /grupos/:id/detalle --- (29-09-2026: "logo_url"
+  // cambió por un cálculo "tiene_logo", ver la nota grande junto a esa
+  // ruta -- regex relajada para no tener que mantenerla en sincro)
+  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent,.*FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
-    return { rows: grupo ? [grupo] : [] };
+    if (!grupo) return { rows: [] };
+    return { rows: [Object.assign({}, grupo, { tiene_logo: !!(grupo.logo_url || grupo.logo_base64) })] };
   }
   if (/^SELECT COUNT\(\*\)::int AS total FROM jugadores WHERE grupo_id = \$1 AND activo = true/i.test(sql)) return { rows: [{ total: 0 }] };
   if (/^SELECT \* FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: [] };

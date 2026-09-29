@@ -146,8 +146,10 @@ function check(cond, msg) {
   const jugadorHanry = { grupo_id: GRUPO_ID, nombre: 'HANRY', modulos_anclados: false };
   const resumenHanry = await construirResumenClienteHipismo(jugadorHanry, grupo, 'actual');
 
-  check(resumenHanry.grupo.nombre === 'Zenyatta' && resumenHanry.grupo.logoUrl === 'https://ejemplo.com/logo.png',
-    'El resumen trae el nombre y logo del grupo tal cual se le pasó (mismo shape que antes del refactor)');
+  // 29-09-2026: ya no viaja la logo_url cruda -- viaja la URL del proxy
+  // propio (ver services/logoGrupo.js), armada con jugador.grupo_id.
+  check(resumenHanry.grupo.nombre === 'Zenyatta' && resumenHanry.grupo.logoUrl === `/api/imagenes/logo-grupo/${GRUPO_ID}`,
+    'El resumen trae el nombre del grupo y la URL del proxy de su logo');
   check(resumenHanry.jugador.nombre === 'HANRY', 'El resumen trae el nombre del jugador');
   check(resumenHanry.modulos.hipismo === true && resumenHanry.modulos.deportes === false,
     'Sin Deportes anclado (modulos_anclados: false), aunque el grupo sí tenga Deportes habilitado');

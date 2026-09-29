@@ -98,7 +98,12 @@ async function requiereGrupo(req, res, next) {
     // (grupo.html/hipismo-mockup.html) las lee del login para decidir el
     // selector "⚽ Deportes / 🐎 Hipismo" — ver claude/plan-modulo-hipismo.md.
     const res2 = await db.query(
-      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1',
+      // logo_base64 (29-09-2026) sumado junto a logo_url -- ver
+      // services/logoGrupo.js: hace falta traer las 2 columnas para poder
+      // armar la URL del logo (GET /api/imagenes/logo-grupo/:grupoId) sin
+      // otra consulta aparte, sea que el grupo tenga el archivo nuevo o
+      // una logo_url legacy.
+      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1',
       [payload.grupoId]
     );
     const grupo = res2.rows[0];

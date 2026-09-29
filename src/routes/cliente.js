@@ -18,6 +18,7 @@ const { leerPolla } = require('../services/polla');
 const { fechaHoraVenezuelaTexto } = require('../services/fechaVenezuela');
 const { obtenerConfirmacionHoy, registrarConfirmacion } = require('../services/confirmaciones');
 const { telefonoPrincipal } = require('../services/telefonos');
+const { urlLogoGrupo } = require('../services/logoGrupo');
 // Hipismo "anclado" (23-09-2026, a pedido del usuario: "hazlo tambien al
 // revez, pero solo sucedera si yo anclo o lo avctivo esa funcion al
 // cliente, si no cada pantalla es independiente") — mismo criterio en
@@ -44,7 +45,7 @@ async function buscarJugadorYGrupo(token) {
     err.status = 404;
     throw err;
   }
-  const grupoRes = await db.query('SELECT activo, nombre, logo_url, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  const grupoRes = await db.query('SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = grupoRes.rows[0];
   if (!grupo || !grupo.activo) {
     const err = new Error('Esta cuenta no está disponible en este momento.');
@@ -131,7 +132,7 @@ router.get('/:token', asyncHandler(async (req, res) => {
   }
 
   res.json({
-    grupo: { nombre: grupo.nombre, logoUrl: grupo.logo_url },
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(jugador.grupo_id, grupo) },
     jugador: { nombre: jugador.nombre, tipoCuenta: jugador.tipo_cuenta },
     rango: { desde, hasta },
     horaVenezuela: fechaHoraVenezuelaTexto(),

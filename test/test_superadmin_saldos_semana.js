@@ -37,9 +37,9 @@ function enRango(fila, desde, hasta) {
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
-  if (/^SELECT id, nombre, logo_url FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT id, nombre, logo_url, logo_base64 FROM grupos WHERE id = \$1/i.test(sql)) {
     const g = TABLAS.grupos.find(x => x.id === params[0]);
-    return { rows: g ? [{ id: g.id, nombre: g.nombre, logo_url: g.logo_url }] : [] };
+    return { rows: g ? [{ id: g.id, nombre: g.nombre, logo_url: g.logo_url, logo_base64: g.logo_base64 || null }] : [] };
   }
   if (/^SELECT \* FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: TABLAS.jugadores.filter(j => j.grupo_id === params[0]) };
   if (/^SELECT \* FROM avales WHERE grupo_id = \$1/i.test(sql)) return { rows: TABLAS.avales.filter(a => a.grupo_id === params[0]) };
@@ -134,7 +134,7 @@ function check(cond, msg) {
   const r1 = await invocarRuta(handlerSaldosSemana, { params: { id: GRUPO_ID }, query: { fecha: '2026-09-17' } });
   check(r1._status === 200, 'saldos-semana: responde 200 para un grupo que existe');
   check(r1._json.grupo && r1._json.grupo.nombre === 'Deportes Bernal', 'saldos-semana: trae el nombre del grupo buscado por el :id DE LA URL (no de ninguna sesión de Grupo)');
-  check(r1._json.grupo.logoUrl === 'https://ejemplo.com/logo.png', 'saldos-semana: trae el logo del grupo buscado por :id');
+  check(r1._json.grupo.logoUrl === '/api/imagenes/logo-grupo/' + GRUPO_ID, 'saldos-semana: trae el logo del grupo buscado por :id (proxy propio, no la URL cruda)');
   check(r1._json.semana && r1._json.semana.desde === '2026-09-14' && r1._json.semana.hasta === '2026-09-20', 'saldos-semana: respeta ?fecha= para elegir la semana (jueves 17 -> semana del 14 al 20)');
   const manolo = (r1._json.clientes || []).find(c => c.nombre === 'MANOLO');
   check(!!manolo && manolo.ganadoSemana === 72, 'saldos-semana: el cálculo real de construirSaldosSemana llega intacto hasta la respuesta (MANOLO ganó 72 el martes)');

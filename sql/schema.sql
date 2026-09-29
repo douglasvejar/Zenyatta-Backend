@@ -45,15 +45,37 @@ alter table grupos add column if not exists ultimo_login_ip text;
 alter table grupos add column if not exists ultimo_login_user_agent text; -- navegador/SO reportado por el navegador — no es un modelo exacto de dispositivo, ver nota en superadmin.js
 
 -- Logo del Grupo (01-09-2026, a pedido del usuario, "para que sea algo más
--- personalizado"): se guarda como URL a una imagen ya subida a algún lado
--- (no como archivo en el servidor) — a propósito, para no depender del
--- disco del servidor (en Railway, el hosting elegido para la Fase 2, el
--- disco no es persistente entre despliegues sin configurar un volumen
--- aparte). Solo el Súper-admin puede ponerla/cambiarla (PATCH
+-- personalizado"): originalmente se guardaba SOLO como URL a una imagen ya
+-- subida a algún lado (no como archivo en el servidor) — a propósito, para
+-- no depender del disco del servidor (en Railway, el hosting elegido para
+-- la Fase 2, el disco no es persistente entre despliegues sin configurar
+-- un volumen aparte). Solo el Súper-admin puede ponerla/cambiarla (PATCH
 -- /api/superadmin/grupos/:id/logo, ver superadmin.js/superadmin.html) — el
 -- propio Grupo no tiene ningún botón para tocarla. Se muestra en
 -- cliente.html (la vista pública del Cliente).
+--
+-- REVISADO 29-09-2026, a pedido del usuario: "quiero subir el logo del
+-- grupo, no por url si no cargar la imagen del grupo desde super admin,
+-- queda cargada para cada grupo en su pagina" — ahora se puede subir el
+-- ARCHIVO directo desde Súper-admin (logo_base64/logo_mime abajo), en vez
+-- de tener que pegar un link a una imagen ya subida a algún otro lado.
+-- Sigue sin depender del disco del servidor: el archivo se guarda como
+-- base64 adentro de esta misma fila de Postgres (Supabase), EXACTO mismo
+-- patrón ya usado por pagos_grupo.captura_base64 (ver la nota grande junto
+-- a esa tabla, más abajo en este archivo) — esta app no tiene ninguna
+-- integración de storage de archivos (S3, Supabase Storage, etc.), así que
+-- esto es consistente con el resto del proyecto, no un atajo nuevo. Tope
+-- de 4MB decodificados validado en la ruta (PATCH .../logo), mismo tope
+-- que pagos_grupo.
+--
+-- logo_url queda como columna LEGACY: ya no hay forma de cargar una URL
+-- nueva desde la UI (se reemplazó por el archivo subido), pero se deja sin
+-- borrar por si algún grupo viejo todavía la tiene puesta desde antes de
+-- este cambio — GET /api/imagenes/logo-grupo/:grupoId sirve logo_base64
+-- si existe, y si no, cae a proxyar logo_url como hacía siempre.
 alter table grupos add column if not exists logo_url text;
+alter table grupos add column if not exists logo_base64 text;
+alter table grupos add column if not exists logo_mime text;
 
 -- Vínculo con el grupo de WhatsApp (03-09-2026, a pedido del usuario:
 -- "existe alguna manera de que en mi chat de whatssap yo actualice la

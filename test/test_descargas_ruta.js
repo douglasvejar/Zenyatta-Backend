@@ -83,7 +83,9 @@ function fakeRes() {
   await res.__listo;
 
   check(res.body && res.body.grupo && res.body.grupo.nombre === 'Deportes Bernal', 'la respuesta trae el nombre del grupo de la SESIÓN (req.grupo), no de ningún :id de la URL');
-  check(res.body.grupo.logoUrl === 'https://ejemplo.com/logo.png', 'la respuesta trae el logo del grupo de la sesión');
+  // 29-09-2026: ya no viaja la URL cruda -- viaja la URL del proxy propio
+  // (ver services/logoGrupo.js), construida con req.grupoId.
+  check(res.body.grupo.logoUrl === '/api/imagenes/logo-grupo/g1', 'la respuesta trae el logo del grupo de la sesión (URL del proxy)');
   check(res.body.semana && res.body.semana.desde === '2026-09-14' && res.body.semana.hasta === '2026-09-20', 'respeta ?fecha= para elegir la semana (jueves 17 -> semana del 14 al 20)');
   check(Array.isArray(res.body.clientes), 'la respuesta trae un arreglo de clientes (vacío en esta prueba, sin ningún jugador en la base falsa)');
 

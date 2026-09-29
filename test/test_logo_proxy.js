@@ -35,7 +35,9 @@ const fakeExpress = () => fakeExpressRouter();
 fakeExpress.Router = fakeExpressRouter;
 
 let SIMULAR_ERROR_RED = false;
+let LLAMADAS_FETCH = 0;
 function fakeFetch(url) {
+  LLAMADAS_FETCH++;
   if (SIMULAR_ERROR_RED) return Promise.reject(new Error('red caída'));
   if (url === 'https://www.mlbstatic.com/team-logos/117.svg') {
     return Promise.resolve({
@@ -60,12 +62,26 @@ const LOGOS_GRUPO = {
   'g2': 'http://www.mlbstatic.com/team-logos/117.svg', // http, no https -> se rechaza igual que en /logo
   'g3': null // grupo sin logo configurado
 };
+// 29-09-2026: cobertura del camino NUEVO (archivo subido desde Súper-admin,
+// ver test_superadmin_logo.js para el lado de la subida) — g4 tiene
+// logo_base64/logo_mime guardados y NO tiene logo_url, así que el endpoint
+// tiene que servir el archivo directo, sin intentar ningún fetch externo.
+const PNG_1X1_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const LOGOS_GRUPO_BASE64 = {
+  'g4': { logo_base64: PNG_1X1_BASE64, logo_mime: 'image/png' }
+};
 const fakePool = function () {
   this.query = async (text, params) => {
-    if (/SELECT logo_url FROM grupos WHERE id = \$1/i.test(text)) {
+    // 29-09-2026: el SELECT real ahora también trae logo_base64/logo_mime
+    // (ver la nota grande de la ruta) -- se cubren acá los DOS caminos: el
+    // LEGACY (logo_url externa, g1/g2/g3) y el NUEVO (archivo subido, g4).
+    if (/SELECT logo_url, logo_base64, logo_mime FROM grupos WHERE id = \$1/i.test(text)) {
       const id = params[0];
+      if (id in LOGOS_GRUPO_BASE64) {
+        return { rows: [{ logo_url: null, logo_base64: LOGOS_GRUPO_BASE64[id].logo_base64, logo_mime: LOGOS_GRUPO_BASE64[id].logo_mime }] };
+      }
       if (!(id in LOGOS_GRUPO)) return { rows: [] }; // grupo que no existe
-      return { rows: [{ logo_url: LOGOS_GRUPO[id] }] };
+      return { rows: [{ logo_url: LOGOS_GRUPO[id], logo_base64: null, logo_mime: null }] };
     }
     return { rows: [] };
   };
@@ -166,6 +182,16 @@ function check(cond, msg) {
 
   const rg4 = await invocarRuta(handlerGrupo, { params: { grupoId: 'no-existe' } });
   check(rg4._status === 404, 'grupo que no existe en la base -> 404 (no revienta)');
+
+  // --- Camino NUEVO (29-09-2026): archivo subido (logo_base64/logo_mime),
+  // sin logo_url -> se sirve directo, SIN pasar por ningún fetch externo.
+  const llamadasFetchAntes = LLAMADAS_FETCH;
+  const rg5 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g4' } });
+  check(rg5._status === 200 && rg5._body, 'grupo con logo subido (base64) -> 200 con el body de la imagen');
+  check(rg5._headers['Content-Type'] === 'image/png', 'devuelve el logo_mime guardado como content-type');
+  check(/max-age=300/.test(rg5._headers['Cache-Control'] || ''), 'cachea corto (5 min), igual que el camino legacy');
+  check(Buffer.compare(rg5._body, Buffer.from(PNG_1X1_BASE64, 'base64')) === 0, 'el body son los bytes decodificados de logo_base64 tal cual, sin tocar');
+  check(LLAMADAS_FETCH === llamadasFetchAntes, 'servir un logo subido NO hace ningún fetch externo (no depende de ningún CDN)');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

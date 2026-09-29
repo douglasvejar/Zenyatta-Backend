@@ -1208,11 +1208,11 @@
           <div class="detalle-tab-panel" data-tab-panel="logo">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
               <h3>🖼️ Logo del Grupo</h3>
-              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Pega el link a una imagen ya subida a algún lado (por ejemplo, la misma imagen que usan de portada en su grupo de WhatsApp) — no se sube ningún archivo acá.</p>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Sube la imagen directo desde acá — PNG, JPG, WEBP o GIF, hasta 4MB. No hace falta pegar ningún link externo.</p>
               <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
               <div class="cambiar-password-inline">
-                <input type="text" id="logoUrlInput" placeholder="https://... (déjalo vacío para quitar el logo)">
-                <button type="button" class="btn-secundario" onclick="guardarLogoGrupo()">Guardar</button>
+                <input type="file" id="logoArchivoInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="subirLogoGrupo()">
+                <button type="button" class="btn-secundario" onclick="quitarLogoGrupo()">Quitar logo</button>
               </div>
               <div id="logoError"></div>
               <div id="logoOk"></div>
@@ -2709,7 +2709,7 @@ async function abrirDetalleGrupo(id, nombre) {
   document.getElementById('passwordNueva').value = '';
   document.getElementById('passwordError').textContent = '';
   document.getElementById('passwordOk').textContent = '';
-  document.getElementById('logoUrlInput').value = '';
+  document.getElementById('logoArchivoInput').value = '';
   document.getElementById('logoError').textContent = '';
   document.getElementById('logoOk').textContent = '';
   document.getElementById('logoPreview').style.display = 'none';
@@ -2786,8 +2786,7 @@ async function abrirDetalleGrupo(id, nombre) {
     document.getElementById('detalleLoginDispositivo').textContent = resumenDispositivo(d.ultimoLogin.userAgent);
     document.getElementById('detalleLoginIp').textContent = d.ultimoLogin.ip || '—';
 
-    document.getElementById('logoUrlInput').value = d.logoUrl || '';
-    mostrarPreviewLogo(d.logoUrl);
+    mostrarPreviewLogo(d.tieneLogo);
 
     GRUPO_MODULO_DEPORTES_HABILITADO = !!d.moduloDeportesHabilitado;
     GRUPO_MODULO_HIPISMO_HABILITADO = !!d.moduloHipismoHabilitado;
@@ -2902,27 +2901,71 @@ async function cargarSaldoBancaDetalle(tipoForzado) {
   }
 }
 
-function mostrarPreviewLogo(url) {
+// 29-09-2026: el logo pasó de "pega un link externo" a "sube el archivo
+// directo desde acá" (a pedido del usuario: "quiero subir el logo del
+// grupo, no por url si no cargar la imagen del grupo desde super admin").
+// La preview y el proxy siguen siendo el mismo endpoint de siempre (GET
+// /api/imagenes/logo-grupo/:grupoId, ver urlLogoGrupoProxySA arriba) — lo
+// único que cambia es CÓMO llega la imagen al servidor.
+function mostrarPreviewLogo(tieneLogo) {
   const img = document.getElementById('logoPreview');
-  if (url) {
-    img.src = url;
+  if (tieneLogo) {
+    img.src = urlLogoGrupoProxySA();
     img.style.display = 'inline-block';
     img.onerror = () => { img.style.display = 'none'; };
   } else {
+    img.removeAttribute('src');
     img.style.display = 'none';
   }
 }
 
-async function guardarLogoGrupo() {
-  const logoUrl = document.getElementById('logoUrlInput').value.trim();
+const TOPE_LOGO_BYTES_SA = 4 * 1024 * 1024;
+const MIMES_LOGO_PERMITIDOS_SA = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+
+async function subirLogoGrupo() {
+  const input = document.getElementById('logoArchivoInput');
+  const archivo = input.files && input.files[0];
+  document.getElementById('logoError').textContent = '';
+  document.getElementById('logoOk').textContent = '';
+  if (!archivo || !GRUPO_DETALLE_ID) return;
+
+  if (!MIMES_LOGO_PERMITIDOS_SA.includes(archivo.type)) {
+    document.getElementById('logoError').textContent = 'Formato no soportado. Usa PNG, JPG, WEBP o GIF.';
+    input.value = '';
+    return;
+  }
+  if (archivo.size > TOPE_LOGO_BYTES_SA) {
+    document.getElementById('logoError').textContent = 'La imagen pesa más de 4MB. Usa una más liviana.';
+    input.value = '';
+    return;
+  }
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const lector = new FileReader();
+      lector.onload = () => resolve(lector.result);
+      lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      lector.readAsDataURL(archivo);
+    });
+    const logoBase64 = (dataUrl.split(',')[1]) || '';
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/logo', { method: 'PATCH', body: JSON.stringify({ logoBase64, logoMime: archivo.type }) });
+    mostrarPreviewLogo(r.tieneLogo);
+    document.getElementById('logoOk').textContent = r.tieneLogo ? '✅ Logo actualizado.' : '✅ Logo quitado — vuelve a mostrarse solo el nombre del Grupo.';
+  } catch (e) {
+    document.getElementById('logoError').textContent = e.message;
+  } finally {
+    input.value = '';
+  }
+}
+
+async function quitarLogoGrupo() {
   document.getElementById('logoError').textContent = '';
   document.getElementById('logoOk').textContent = '';
   if (!GRUPO_DETALLE_ID) return;
-
   try {
-    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/logo', { method: 'PATCH', body: JSON.stringify({ logoUrl }) });
-    mostrarPreviewLogo(r.logoUrl);
-    document.getElementById('logoOk').textContent = r.logoUrl ? '✅ Logo actualizado.' : '✅ Logo quitado — vuelve a mostrarse solo el nombre del Grupo.';
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/logo', { method: 'PATCH', body: JSON.stringify({ logoBase64: '' }) });
+    mostrarPreviewLogo(r.tieneLogo);
+    document.getElementById('logoOk').textContent = '✅ Logo quitado — vuelve a mostrarse solo el nombre del Grupo.';
   } catch (e) {
     document.getElementById('logoError').textContent = e.message;
   }

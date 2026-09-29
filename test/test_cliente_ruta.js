@@ -74,7 +74,7 @@ function ejecutarQuery(text, params) {
     const jugador = TABLAS.jugadores.find(j => j.token === params[0]);
     return { rows: jugador ? [jugador] : [] };
   }
-  if (/^SELECT activo, nombre, logo_url, modulo_hipismo_habilitado FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
     return { rows: grupo ? [grupo] : [] };
   }
@@ -211,7 +211,11 @@ function check(cond, msg) {
   check(res1._status === 200, 'Token válido responde 200');
   check(!!res1._json, 'Token válido devuelve un cuerpo JSON');
   check(res1._json.grupo && res1._json.grupo.nombre === 'Deportes Zenyatta TX', 'La respuesta trae el nombre del grupo');
-  check(res1._json.grupo && res1._json.grupo.logoUrl === 'https://ejemplo.com/logo.png', 'La respuesta trae el logoUrl del grupo cuando lo tiene cargado');
+  // 29-09-2026: el logo ya no viaja como la URL cruda guardada en la base
+  // -- viaja como la URL del proxy propio (GET /api/imagenes/logo-grupo/
+  // :grupoId, ver services/logoGrupo.js), que sirve el archivo subido o,
+  // si no hay, cae a proxyar la logo_url legacy -- nunca el valor crudo.
+  check(res1._json.grupo && res1._json.grupo.logoUrl === '/api/imagenes/logo-grupo/grupo-1', 'La respuesta trae la URL del proxy del logo cuando el grupo tiene uno cargado');
   check(res1._json.jugador.tipoCuenta === 'avalado', 'La respuesta trae el tipo de cuenta del jugador (avalado)');
   check(res1._json.tickets.length === 2, 'Trae los 2 tickets de RANDY dentro del rango pedido');
   check(Array.isArray(res1._json.diasConfirmados), 'diasConfirmados es un array');

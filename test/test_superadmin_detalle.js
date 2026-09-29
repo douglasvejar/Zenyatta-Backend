@@ -77,9 +77,13 @@ function filtrarTicketsHistorial(sql, params) {
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
-  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*FROM grupos WHERE id = \$1/i.test(sql)) {
+  // 29-09-2026: el SELECT real cambió "logo_url" por un cálculo
+  // "tiene_logo" (ver la nota grande junto a esa ruta) -- regex relajada
+  // y "tiene_logo" calculado acá mismo, igual que lo haría el SQL real.
+  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent,.*FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
-    return { rows: grupo ? [grupo] : [] };
+    if (!grupo) return { rows: [] };
+    return { rows: [Object.assign({}, grupo, { tiene_logo: !!(grupo.logo_url || grupo.logo_base64) })] };
   }
   if (/^SELECT COUNT\(\*\)::int AS total FROM jugadores WHERE grupo_id = \$1 AND activo = true/i.test(sql)) {
     return { rows: [{ total: TABLAS.jugadores.filter(j => j.grupo_id === params[0] && j.activo).length }] };

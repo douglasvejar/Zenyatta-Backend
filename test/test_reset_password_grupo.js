@@ -65,7 +65,11 @@ function ejecutarQuery(text, params) {
     TABLAS.grupos.push(fila);
     return { rows: [{ id: fila.id, nombre: fila.nombre, email: fila.email, activo: fila.activo, creado_en: fila.creado_en }] };
   }
-  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra.*hipismo_cruzar_habilitado\s*FROM grupos WHERE id = \$1/i.test(sql)) {
+  // 29-09-2026: el SELECT real cambió "logo_url" por un cálculo
+  // "tiene_logo" (ver la nota grande junto a esa ruta) -- regex relajada
+  // acá para no tener que mantenerla en sincro con cada columna nueva que
+  // se agregue a este detalle.
+  if (/^SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent,.*hipismo_cruzar_habilitado\s*FROM grupos WHERE id = \$1/i.test(sql)) {
     const grupo = TABLAS.grupos.find(g => g.id === params[0]);
     return { rows: grupo ? [grupo] : [] };
   }

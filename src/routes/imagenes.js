@@ -71,30 +71,52 @@ router.get('/logo', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
-// PROXY DEL LOGO DE UN GRUPO (21-09-2026, misma necesidad de arriba pero
-// para la pestaña nueva "⬇️ Descargar" > "📅 Saldos Semana": el header de
-// la imagen/PDF que se genera lleva el logo del propio grupo, y ese logo
-// es una URL EXTERNA cualquiera que puso el Súper-admin (grupos.logo_url,
-// ver PATCH /api/superadmin/grupos/:id/logo) — no un puñado fijo de CDN
-// de equipos, así que no alcanza con el whitelist de dominios de arriba.
+// PROXY/SERVIDOR DEL LOGO DE UN GRUPO (21-09-2026, para la pestaña
+// "⬇️ Descargar" > "📅 Saldos Semana": el header de la imagen/PDF que se
+// genera lleva el logo del propio grupo). Sin login a propósito, mismo
+// criterio que /logo y que GET /api/cliente/:token (el link del cliente
+// YA muestra este mismo logo sin pedir ninguna sesión) — no es
+// información nueva ni sensible de ningún grupo, es literalmente la
+// misma imagen que cualquiera con el link de un cliente de ese grupo ya
+// puede ver.
 //
-// A diferencia de /logo (que recibe la URL directo por query string —
-// solo sirve porque el whitelist de dominios evita que se use como proxy
-// genérico), acá NUNCA se acepta una URL desde el cliente: se recibe
-// nada más que un :grupoId y ESTE SERVIDOR busca en su propia base cuál
-// es el logo_url guardado para ese grupo — así no hay ningún riesgo de
-// SSRF (el navegador no puede pedir "de intermediario" ninguna URL que
-// no haya puesto ya el propio Súper-admin).
-//
-// Sin login a propósito, mismo criterio que /logo y que
-// GET /api/cliente/:token (el link del cliente YA muestra este mismo
-// logo sin pedir ninguna sesión) — no es información nueva ni sensible
-// de ningún grupo, es literalmente la misma imagen que cualquiera con el
-// link de un cliente de ese grupo ya puede ver.
-// =================================================================
+// REVISADO 29-09-2026, a pedido del usuario: "quiero subir el logo del
+// grupo, no por url si no cargar la imagen del grupo desde super admin" —
+// ahora el logo casi siempre es un ARCHIVO subido, guardado como base64
+// en grupos.logo_base64/logo_mime (ver la nota grande junto a esas
+// columnas en sql/schema.sql, y PATCH /api/superadmin/grupos/:id/logo).
+// Este endpoint sirve ESE archivo directo cuando existe — ya no hace
+// falta ningún fetch a un servidor externo para el caso normal. Si el
+// grupo NO tiene un archivo subido (nunca lo actualizó desde antes de
+// este cambio) cae al comportamiento legacy: proxyar la logo_url externa
+// que tenía pegada, exactamente como funcionaba hasta ahora — así un
+// grupo viejo no se queda de repente sin logo por no haber vuelto a
+// subirlo.
 router.get('/logo-grupo/:grupoId', asyncHandler(async (req, res) => {
-  const r = await db.query('SELECT logo_url FROM grupos WHERE id = $1', [req.params.grupoId]);
-  const logoUrl = r.rows[0] && r.rows[0].logo_url;
+  const r = await db.query('SELECT logo_url, logo_base64, logo_mime FROM grupos WHERE id = $1', [req.params.grupoId]);
+  const fila = r.rows[0];
+  if (!fila) return res.status(404).end();
+
+  if (fila.logo_base64) {
+    res.set('Content-Type', fila.logo_mime || 'image/png');
+    // El Súper-admin puede volver a subir un logo distinto — cache corto
+    // (5 min) en vez de "immutable" (el de los escudos de equipo, que
+    // nunca cambian), para que un cambio se vea reflejado sin que el
+    // usuario tenga que limpiar caché a mano.
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.send(Buffer.from(fila.logo_base64, 'base64'));
+  }
+
+  // --- Legacy: logo_url externa pegada antes del 29-09-2026 ---
+  // A diferencia de /logo (que recibe la URL directo por query string —
+  // solo sirve porque el whitelist de dominios de arriba evita que se use
+  // como proxy genérico), acá NUNCA se acepta una URL desde el cliente:
+  // se recibe nada más que un :grupoId y ESTE SERVIDOR busca en su propia
+  // base cuál es la logo_url guardada para ese grupo — así no hay ningún
+  // riesgo de SSRF (el navegador no puede pedir "de intermediario"
+  // ninguna URL que no haya puesto ya el propio Súper-admin, tiempo
+  // atrás).
+  const logoUrl = fila.logo_url;
   if (!logoUrl) return res.status(404).end();
 
   let url;
@@ -113,10 +135,6 @@ router.get('/logo-grupo/:grupoId', asyncHandler(async (req, res) => {
     const buffer = Buffer.from(await resp.arrayBuffer());
 
     res.set('Content-Type', tipo);
-    // A diferencia del escudo de un equipo (que nunca cambia), el
-    // Súper-admin puede actualizar el logo de un grupo — cache corto
-    // (5 min) en vez de "immutable", para que un cambio de logo se vea
-    // reflejado sin que el usuario tenga que limpiar caché a mano.
     res.set('Cache-Control', 'public, max-age=300');
     res.send(buffer);
   } catch (e) {

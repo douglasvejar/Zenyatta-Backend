@@ -27,6 +27,7 @@ const { obtenerSabanaDeFecha } = require('../services/sabanaDia');
 // routes/descargas.js): se reusa la MISMA función que arma ese reporte,
 // solo que acá el grupo lo elige el Súper-admin por :id de la URL.
 const { construirSaldosSemana } = require('../services/saldosSemana');
+const { urlLogoGrupo } = require('../services/logoGrupo');
 
 const router = express.Router();
 router.use(requiereSuperadmin);
@@ -134,7 +135,13 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const grupoRes = await db.query(
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, logo_url, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
+    // 29-09-2026: ya NO se trae "logo_url"/"logo_base64" completos acá —
+    // el logo ahora se sube como archivo (ver PATCH .../logo más abajo) y
+    // el frontend lo carga aparte, directo de GET /api/imagenes/logo-
+    // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
+    // base64 completo en este SELECT inflaría la respuesta de "detalle"
+    // sin necesidad, solo hace falta saber SI existe uno.
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -171,7 +178,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     jugadoresActivos: jugadoresActivosRes.rows[0].total,
     saldoBanca: balance.balanceBanca,
     rango: { desde, hasta },
-    logoUrl: grupo.logo_url,
+    tieneLogo: grupo.tiene_logo,
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
     sabanaMuestra: grupo.sabana_muestra,
@@ -276,11 +283,11 @@ router.get('/grupos/:id/balance-clientes', asyncHandler(async (req, res) => {
 // =================================================================
 router.get('/grupos/:id/saldos-semana', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const grupoRes = await db.query('SELECT id, nombre, logo_url FROM grupos WHERE id = $1', [id]);
+  const grupoRes = await db.query('SELECT id, nombre, logo_url, logo_base64 FROM grupos WHERE id = $1', [id]);
   const grupo = grupoRes.rows[0];
   if (!grupo) return res.status(404).json({ error: 'Grupo no encontrado.' });
 
-  const datos = await construirSaldosSemana(id, grupo.nombre, grupo.logo_url, req.query.fecha);
+  const datos = await construirSaldosSemana(id, grupo.nombre, urlLogoGrupo(id, grupo), req.query.fecha);
   res.json(datos);
 }));
 
@@ -322,23 +329,49 @@ router.patch('/grupos/:id/password', asyncHandler(async (req, res) => {
 }));
 
 // Logo del Grupo (01-09-2026, a pedido del usuario, "para que sea algo
-// más personalizado") — solo el Súper-admin puede ponerlo/cambiarlo, ver
-// la nota grande junto a la columna "logo_url" en sql/schema.sql sobre
-// por qué es una URL y no un archivo subido. `logoUrl: ''` (string
-// vacío) borra el logo — vuelve a mostrarse el nombre del Grupo solo,
-// como hasta ahora.
+// más personalizado") — solo el Súper-admin puede ponerlo/cambiarlo.
+//
+// REVISADO 29-09-2026, a pedido del usuario: "quiero subir el logo del
+// grupo, no por url si no cargar la imagen del grupo desde super admin,
+// queda cargada para cada grupo en su pagina" — ya no se pega un link,
+// se sube el ARCHIVO directo (el frontend lo lee con FileReader y lo
+// manda acá como base64, mismo patrón ya usado por POST /pagos con la
+// captura del comprobante, ver routes/pagos.js). Se guarda en
+// grupos.logo_base64/logo_mime, ver la nota grande junto a esas columnas
+// en sql/schema.sql sobre por qué es así y no un archivo en el disco del
+// servidor. `logoBase64` vacío/ausente borra el logo (archivo Y la
+// logo_url legacy, si algún grupo todavía la tenía) — vuelve a mostrarse
+// el nombre del Grupo solo, como hasta ahora.
+const TOPE_LOGO_BYTES = 4 * 1024 * 1024; // 4MB decodificados, mismo tope que pagos_grupo.captura_base64
+const MIMES_LOGO_PERMITIDOS = /^image\/(png|jpe?g|webp|gif)$/i;
 router.patch('/grupos/:id/logo', asyncHandler(async (req, res) => {
-  const { logoUrl } = req.body;
-  const valor = (logoUrl || '').trim();
-  if (valor && !/^https?:\/\//i.test(valor)) {
-    return res.status(400).json({ error: 'El logo tiene que ser una URL que empiece con http:// o https:// (por ejemplo, un link a una imagen ya subida a algún lado). Déjalo vacío para quitar el logo.' });
+  const { logoBase64, logoMime } = req.body;
+  const valor = (logoBase64 || '').trim();
+
+  if (!valor) {
+    const r = await db.query(
+      'UPDATE grupos SET logo_url = null, logo_base64 = null, logo_mime = null WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+    return res.json({ tieneLogo: false });
   }
+
+  const mime = (logoMime || '').trim();
+  if (!MIMES_LOGO_PERMITIDOS.test(mime)) {
+    return res.status(400).json({ error: 'El logo tiene que ser una imagen PNG, JPG, WEBP o GIF.' });
+  }
+  const bytes = Buffer.from(valor, 'base64').length;
+  if (bytes > TOPE_LOGO_BYTES) {
+    return res.status(400).json({ error: 'El logo pesa demasiado (máx. 4MB). Prueba con una imagen más chica o comprimida.' });
+  }
+
   const r = await db.query(
-    'UPDATE grupos SET logo_url = $1 WHERE id = $2 RETURNING logo_url',
-    [valor || null, req.params.id]
+    'UPDATE grupos SET logo_base64 = $1, logo_mime = $2, logo_url = null WHERE id = $3 RETURNING id',
+    [valor, mime, req.params.id]
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
-  res.json({ logoUrl: r.rows[0].logo_url });
+  res.json({ tieneLogo: true });
 }));
 
 // "Sábana de muestra" (05-09-2026, a pedido del usuario) — ver la nota

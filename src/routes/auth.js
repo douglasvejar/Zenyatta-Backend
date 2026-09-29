@@ -11,6 +11,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { firmarSesionGrupo, firmarSesionEmpleado } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
+const { urlLogoGrupo } = require('../services/logoGrupo');
 
 const router = express.Router();
 
@@ -72,14 +73,18 @@ router.post('/login', asyncHandler(async (req, res) => {
         // igual que los 2 de arriba, para que hipismo-mockup.html sepa,
         // sin otra llamada aparte, si este Grupo tiene permitido cruzar.
         hipismoCruzarHabilitado: grupo.hipismo_cruzar_habilitado,
-        logoUrl: grupo.logo_url || null
+        // 29-09-2026: ya no se manda grupo.logo_url crudo (podía ser un
+        // archivo subido, no una URL externa, desde este mismo cambio) --
+        // ver services/logoGrupo.js. "SELECT *" de arriba ya trae
+        // logo_base64 sin que haga falta tocar esa consulta.
+        logoUrl: urlLogoGrupo(grupo.id, grupo)
       }
     });
   }
 
   // No es el Administrador de ningún grupo — probamos si es un Empleado.
   const r2 = await db.query(
-    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url,
+    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, g.logo_base64 AS grupo_logo_base64,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
             g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado
@@ -115,7 +120,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
       moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
       hipismoCruzarHabilitado: empleado.grupo_hipismo_cruzar_habilitado,
-      logoUrl: empleado.grupo_logo_url || null
+      logoUrl: urlLogoGrupo(empleado.grupo_id, empleado, { campoUrl: 'grupo_logo_url', campoBase64: 'grupo_logo_base64' })
     }
   });
 }));
