@@ -6867,9 +6867,82 @@ function abrirCrearCliente() {
     </div>`;
 }
 
+// =================================================================
+// "CLIENTE DOBLE" — alerta de nombres muy parecidos (29-09-2026, a pedido
+// del usuario después del caso real de "mr increible" vs "mrincreible":
+// 2 nombres TÉCNICAMENTE distintos (un espacio de diferencia) que en la
+// práctica eran el mismo cliente, y terminaron generando un "cliente
+// fantasma" sin jugadas que rompía el Balance General de ese cliente. El
+// nombre EXACTAMENTE igual ya está bloqueado por la base de datos
+// (unique(grupo_id, nombre) en sql/schema.sql — ver el catch de 23505 en
+// guardarNuevoCliente()/guardarDetalleCliente() más abajo, que ya avisa
+// "Ya existe un jugador con ese nombre en este grupo"); esto agrega una
+// ALERTA aparte (no un bloqueo — puede ser de verdad una persona
+// distinta) para nombres CASI iguales, que el servidor no puede rechazar
+// porque técnicamente son otro texto.
+//
+// Normaliza sacando tildes y TODOS los espacios (así "MR INCREIBLE" y
+// "MRINCREIBLE" quedan idénticos de este lado) y compara contra cada
+// cliente ya registrado del grupo:
+//   1) Si el normalizado da IDÉNTICO -> coincide siempre (el caso real
+//      reportado).
+//   2) Si no, y el nombre es largo (8+ caracteres de los 2 lados), se
+//      admite hasta 1 carácter de diferencia (distancia de Levenshtein)
+//      -> típico error de tipeo de una sola letra. Nombres cortos no
+//      entran acá para no molestar con falsos positivos (ej. "LUIS" vs
+//      "LUISA" son, la mayoría de las veces, personas distintas).
+function normalizarNombreParaComparar(nombre) {
+  return (nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, '');
+}
+function distanciaLevenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const fila = new Array(n + 1);
+  for (let j = 0; j <= n; j++) fila[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let anterior = fila[0];
+    fila[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = fila[j];
+      fila[j] = a[i - 1] === b[j - 1] ? anterior : 1 + Math.min(anterior, fila[j], fila[j - 1]);
+      anterior = temp;
+    }
+  }
+  return fila[n];
+}
+function encontrarClienteParecido(nombre, idPropioAExcluir) {
+  const normalizadoNuevo = normalizarNombreParaComparar(nombre);
+  if (!normalizadoNuevo) return null;
+  for (const j of (CLIENTES_HIPISMO_CACHE || [])) {
+    if (idPropioAExcluir && String(j.id) === String(idPropioAExcluir)) continue;
+    const normalizadoExistente = normalizarNombreParaComparar(j.nombre);
+    if (normalizadoExistente === normalizadoNuevo) return j;
+    if (normalizadoNuevo.length >= 8 && normalizadoExistente.length >= 8 &&
+        distanciaLevenshtein(normalizadoExistente, normalizadoNuevo) <= 1) return j;
+  }
+  return null;
+}
+// Pregunta qué hacer al detectar un posible cliente doble — devuelve true
+// si hay que CANCELAR el guardado (el operador dijo "es el mismo", va a
+// revisar el cliente que ya existe en su lugar), false si hay que seguir
+// guardando igual ("es una persona distinta").
+function confirmarClienteParecido(parecido) {
+  return confirm(
+    '⚠️ Ya existe un cliente muy parecido: "' + formatNombre(parecido.nombre) + '" — ¿es la misma persona?\n\n' +
+    'Aceptar = sí, es el mismo — no crear/renombrar, voy a revisar el cliente que ya existe.\n' +
+    'Cancelar = no, es una persona distinta — seguir igual.'
+  );
+}
+
 async function guardarNuevoCliente() {
   const nombre = document.getElementById('nvoCteNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
+  const parecido = encontrarClienteParecido(nombre, null);
+  if (parecido && confirmarClienteParecido(parecido)) { cerrarFichaCliente(); abrirFichaCliente(parecido.id); return; }
   const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('nvoCteAvalesTbody');
   if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
   const payload = {
@@ -7031,8 +7104,15 @@ async function pintarFichaCliente() {
         <thead><tr><th>Avalador</th><th>% que gana</th><th></th></tr></thead>
         <tbody id="detCteAvalesTbody">${filasAvalesPorcentajeHtml(j.avalesPorcentaje || [])}</tbody>
       </table>
-      <div class="btn-fila" style="margin-top:14px;">
+      <div class="btn-fila" style="margin-top:14px; justify-content:space-between;">
         <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
+        <!-- "Eliminar cliente" desde la ficha (29-09-2026, a pedido del
+             usuario: "crea una opcion para al entrar en la informacion de
+             un cliente poderlo eliminar") — antes solo se podía eliminar
+             un cliente desde Administración > Jugador (Deportes); acá
+             reusa el MISMO DELETE /api/jugadores/:id (misma tabla
+             compartida). -->
+        <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarClienteDesdeFicha('${j.id}')">🗑️ Eliminar cliente</button>
       </div>
     </div>
     <div class="card" style="padding:16px;">
@@ -7054,10 +7134,18 @@ async function pintarFichaCliente() {
 
 async function guardarDetalleCliente(id) {
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
+  const nombreNuevo = document.getElementById('detCteNombre').value.trim();
+  if (!nombreNuevo) { alert('Ingresa el nombre del cliente.'); return; }
+  // "Cliente doble" (29-09-2026, ver la nota grande de
+  // encontrarClienteParecido() más arriba) — solo importa acá si el
+  // nombre realmente CAMBIÓ a algo parecido a OTRO cliente (idPropioAExcluir
+  // = este mismo id, así nunca se compara contra sí mismo).
+  const parecido = encontrarClienteParecido(nombreNuevo, id);
+  if (parecido && confirmarClienteParecido(parecido)) return;
   const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('detCteAvalesTbody');
   if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
   const payload = {
-    nombre: document.getElementById('detCteNombre').value.trim(),
+    nombre: nombreNuevo,
     telefono: document.getElementById('detCteTelefono').value.trim(),
     notas: document.getElementById('detCteNotas').value.trim(),
     activo: document.getElementById('detCteActivo').checked,
@@ -7072,7 +7160,6 @@ async function guardarDetalleCliente(id) {
     modulosAnclados: j ? !!j.modulos_anclados : false,
     avalesPorcentaje
   };
-  if (!payload.nombre) { alert('Ingresa el nombre del cliente.'); return; }
   try {
     await apiHipismo(`/api/jugadores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   } catch (e) {
@@ -7083,6 +7170,25 @@ async function guardarDetalleCliente(id) {
   CLIENTE_DETALLE_ID = id;
   await pintarFichaCliente();
   alert('✅ Cliente actualizado.');
+}
+
+// "Eliminar cliente" desde la ficha (29-09-2026, ver la nota grande del
+// botón en pintarFichaCliente()) — mismo DELETE /api/jugadores/:id y
+// mismo mensaje de confirmación que ya usa Administración > Jugador de
+// Deportes (eliminarJugador() en app.js), para que se comporte igual sin
+// importar desde qué módulo se elimine (una sola tabla "jugadores").
+async function eliminarClienteDesdeFicha(id) {
+  const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
+  if (!confirm('¿Eliminar el registro de "' + (j ? formatNombre(j.nombre) : id) + '"? Esto no borra su historial de jugadas ya procesadas.')) return;
+  try {
+    await apiHipismo('/api/jugadores/' + id, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  cerrarFichaCliente();
+  await cargarClientesReales();
+  alert('✅ Cliente eliminado.');
 }
 
 async function guardarAjustePozoDetalleCliente(id) {

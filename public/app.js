@@ -4090,6 +4090,11 @@ function cancelarEdicionJugador() {
   if (anclarChk) anclarChk.checked = false;
   const monedaSel = document.getElementById('jugadorMoneda');
   if (monedaSel) monedaSel.value = 'USD';
+  // "🗑️ Eliminar" del formulario (29-09-2026) — solo tiene sentido
+  // mientras se está EDITANDO un jugador ya existente (no hay nada que
+  // borrar al "Registrar Jugador Nuevo").
+  const btnEliminar = document.getElementById('btnEliminarJugadorEdicion');
+  if (btnEliminar) btnEliminar.style.display = 'none';
   actualizarVisibilidadPozoJugador();
   actualizarVisibilidadMonedaJugador();
   actualizarVisibilidadAnclarModulos();
@@ -4114,16 +4119,89 @@ function editarJugador(id) {
   // "Anclar módulos" (23-09-2026) — precarga con el valor real guardado.
   const anclarChk = document.getElementById('jugadorModulosAnclados');
   if (anclarChk) anclarChk.checked = !!j.modulos_anclados;
+  // "🗑️ Eliminar" del formulario (29-09-2026, a pedido del usuario:
+  // "crea una opcion para al entrar en la informacion de un cliente
+  // poderlo eliminar") — este panel de Deportes ya tenía el 🗑️ en la
+  // fila de la tabla (eliminarJugador() de abajo); esto agrega el mismo
+  // botón también DENTRO del formulario, para poder eliminar sin volver
+  // a bajar a la tabla mientras se está viendo/editando la ficha.
+  const btnEliminar = document.getElementById('btnEliminarJugadorEdicion');
+  if (btnEliminar) btnEliminar.style.display = '';
   actualizarVisibilidadPozoJugador();
   actualizarVisibilidadMonedaJugador();
   actualizarVisibilidadAnclarModulos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// =================================================================
+// "CLIENTE DOBLE" — alerta de nombres muy parecidos (29-09-2026, a pedido
+// del usuario después del caso real de "mr increible" vs "mrincreible":
+// 2 nombres TÉCNICAMENTE distintos (un espacio de diferencia) que en la
+// práctica eran el mismo cliente, y terminaron generando un "cliente
+// fantasma" sin jugadas que rompía el Balance General de ese cliente. El
+// nombre EXACTAMENTE igual ya está bloqueado por la base de datos
+// (unique(grupo_id, nombre) en sql/schema.sql — ver el catch de 23505 más
+// abajo, que ya avisa "Ya existe un jugador con ese nombre en este
+// grupo"); esto agrega una ALERTA aparte (no un bloqueo — puede ser de
+// verdad una persona distinta) para nombres CASI iguales, que el
+// servidor no puede rechazar porque técnicamente son otro texto. Misma
+// lógica exacta que encontrarClienteParecido() en hipismo-mockup.html
+// (archivo aparte, ver la nota grande de EMPLEADOS_HIP_CACHE ahí sobre
+// por qué Deportes y esta página no comparten script) — JUGADORES_CACHE
+// y CLIENTES_HIPISMO_CACHE vienen del mismo /api/jugadores, así que un
+// duplicado creado desde acá también se detecta si después se entra
+// desde Hipismo, y viceversa.
+function normalizarNombreParaComparar(nombre) {
+  return (nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, '');
+}
+function distanciaLevenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const fila = new Array(n + 1);
+  for (let j = 0; j <= n; j++) fila[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let anterior = fila[0];
+    fila[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = fila[j];
+      fila[j] = a[i - 1] === b[j - 1] ? anterior : 1 + Math.min(anterior, fila[j], fila[j - 1]);
+      anterior = temp;
+    }
+  }
+  return fila[n];
+}
+function encontrarJugadorParecido(nombre, idPropioAExcluir) {
+  const normalizadoNuevo = normalizarNombreParaComparar(nombre);
+  if (!normalizadoNuevo) return null;
+  for (const j of (JUGADORES_CACHE || [])) {
+    if (idPropioAExcluir && String(j.id) === String(idPropioAExcluir)) continue;
+    const normalizadoExistente = normalizarNombreParaComparar(j.nombre);
+    if (normalizadoExistente === normalizadoNuevo) return j;
+    if (normalizadoNuevo.length >= 8 && normalizadoExistente.length >= 8 &&
+        distanciaLevenshtein(normalizadoExistente, normalizadoNuevo) <= 1) return j;
+  }
+  return null;
+}
+// Devuelve true si hay que CANCELAR el guardado (el operador dijo "es el
+// mismo", va a revisar/editar el jugador que ya existe en su lugar).
+function confirmarJugadorParecido(parecido) {
+  return confirm(
+    '⚠️ Ya existe un jugador muy parecido: "' + parecido.nombre + '" — ¿es la misma persona?\n\n' +
+    'Aceptar = sí, es el mismo — no crear/renombrar, voy a revisar el jugador que ya existe.\n' +
+    'Cancelar = no, es una persona distinta — seguir igual.'
+  );
+}
+
 async function guardarJugador() {
   const id = document.getElementById('jugadorEditandoId').value;
   const nombre = document.getElementById('jugadorNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del jugador.'); return; }
+  const parecido = encontrarJugadorParecido(nombre, id || null);
+  if (parecido && confirmarJugadorParecido(parecido)) { editarJugador(parecido.id); return; }
 
   // Al editar, se conserva el % de comisión propia que ya tenía (este
   // formulario no lo toca — eso vive en Administración > Comisión).
@@ -4186,6 +4264,12 @@ async function eliminarJugador(id) {
   if (!confirm('¿Eliminar el registro de "' + (j ? j.nombre : id) + '"? Esto no borra su historial de jugadas ya procesadas.')) return;
   try {
     await api('/api/jugadores/' + id, { method: 'DELETE' });
+    // Si el jugador eliminado era justo el que estaba abierto en el
+    // formulario de edición de arriba (29-09-2026, ver el botón
+    // "🗑️ Eliminar" agregado ahí junto a "Cancelar edición"), limpia el
+    // formulario en vez de dejarlo mostrando datos de un jugador que ya
+    // no existe.
+    if (document.getElementById('jugadorEditandoId').value === String(id)) cancelarEdicionJugador();
     cargarJugadores();
   } catch (e) {
     alert('No se pudo eliminar: ' + e.message);

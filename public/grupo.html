@@ -1460,6 +1460,13 @@
         <input type="checkbox" id="jugadorModulosAnclados" style="width:auto;"> 🔗 Anclar Deportes + Hipismo en su link
       </label>
       <button type="button" class="btn-secundario btn-chico" onclick="cancelarEdicionJugador()">Cancelar edición</button>
+      <!-- "🗑️ Eliminar" del formulario (29-09-2026, a pedido del usuario:
+           "crea una opcion para al entrar en la informacion de un cliente
+           poderlo eliminar") — oculto por defecto (solo aparece mientras
+           se está editando un jugador ya existente, ver editarJugador()/
+           cancelarEdicionJugador() en app.js). Reusa la MISMA
+           eliminarJugador() que ya usa el 🗑️ de la tabla de abajo. -->
+      <button type="button" id="btnEliminarJugadorEdicion" class="btn-secundario btn-chico" style="display:none; color:#dc2626; border-color:#dc2626;" onclick="eliminarJugador(document.getElementById('jugadorEditandoId').value)">🗑️ Eliminar</button>
     </div>
     <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Este registro no se borra solo porque el jugador no aparezca en la sábana de un día — solo se borra si lo eliminas a mano aquí. Además, cualquier cliente nuevo detectado al procesar una sábana se registra aquí solo automáticamente.</small>
   </div>
