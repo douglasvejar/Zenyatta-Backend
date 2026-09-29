@@ -2422,11 +2422,20 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   // quedó 'sin_decidir' (nula, ver resolverClienteMarca en
   // hipismoAdelantadasCalc.js) — Tabla Fija siempre decide true/false, así
   // que filtrar por "j.gano !== null" descarta justo esas.
-  rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0))
+  //
+  // 29-09-2026, BUG REAL encontrado (caso Sebastian: seguía cobrando % de
+  // una Marca "pp" nula aun DESPUÉS de este mismo filtro, commit 0fac94f):
+  // "pg" devuelve una columna `numeric` como STRING de JS ("0.00"), nunca
+  // como number -- así que "t.resultado_jugador === 0" (comparación
+  // ESTRICTA string contra number) siempre daba false, sin importar el
+  // valor real, y el filtro nunca excluía nada en producción (el mock de
+  // los tests sí usaba numbers de JS directos, por eso las pruebas pasaban
+  // igual). Se envuelve en Number(...) para comparar de verdad.
+  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
     .forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
   // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
   // lado BANQUERO de Tercios ahora también genera % devuelto.
-  rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0))
+  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
     .forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
   rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
   // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
@@ -2656,8 +2665,9 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
   // EXACTA de /cierre-final) — se filtra por resultado_jugador/
   // resultado_banquero en 0 para Tercios, y por gano !== null para
-  // Adelantadas.
-  const ticketsDecididos = rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0));
+  // Adelantadas. Number(...) obligatorio -- ver la nota grande EXACTA de
+  // /cierre-final sobre por qué "pg" nunca da estas columnas como number.
+  const ticketsDecididos = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
   ticketsDecididos.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
   // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
   ticketsDecididos.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
@@ -2866,8 +2876,8 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   }
   // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
   // EXACTA de /cierre-final) — mismo filtro que /cierre-final y
-  // /saldo-comisiones.
-  const ticketsDecididosDia = rTickets.rows.filter(t => !(t.resultado_jugador === 0 && t.resultado_banquero === 0));
+  // /saldo-comisiones. Number(...) obligatorio -- ver esa misma nota.
+  const ticketsDecididosDia = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
   ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
   ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
   rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
