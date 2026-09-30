@@ -9,6 +9,10 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { cargarConfigGrupo } = require('../services/grupoConfig');
 const { calcularBalanceGeneral } = require('../services/balanceGeneral');
 const { calcularRangoRapido } = require('../services/historial');
+// construirCierreFinalHipismo (30-09-2026, ver la nota grande junto a GET
+// /grupos/:id/hipismo-cierre-final más abajo) — mismo cálculo que ya usa
+// GET /api/hipismo/cierre-final (routes/hipismo.js).
+const { construirCierreFinalHipismo } = require('../services/hipismoResumenCliente');
 const alertasService = require('../services/alertas');
 const chatService = require('../services/chat');
 const mantenimientoGrupo = require('../services/mantenimientoGrupo');
@@ -273,6 +277,51 @@ router.get('/grupos/:id/balance-clientes', asyncHandler(async (req, res) => {
 
   const resultado = await calcularBalanceGeneral(id, desde, hasta, config.porcentajesPropios, config.avalesMap, configComision);
   res.json({ mixto: false, moneda: monedaModo.toUpperCase(), rango: { desde, hasta }, ...resultado });
+}));
+
+// =================================================================
+// BALANCE GENERAL DE HIPISMO POR CLIENTE, para CUALQUIER grupo
+// (30-09-2026, a pedido del usuario: "desde super admin muestrame en la
+// pestaña balance por clientes, el balance general del grupo que
+// corresponda modulo hipismo") — mismo cálculo EXACTO que ya usa
+// GET /api/hipismo/cierre-final (la pantalla "📒 Balance General" del
+// propio panel del Grupo), ahora compartido vía
+// construirCierreFinalHipismo (services/hipismoResumenCliente.js) para no
+// duplicar esa lógica.
+//
+// A propósito usa el MISMO contrato de rango que /grupos/:id/balance-
+// clientes de arriba (?desde&hasta, o ?rango=hoy|semana|mes|todo, default
+// "semana", vía calcularRangoRapido) en vez del propio vocabulario de
+// Hipismo (?semana=actual|anterior|hace2) — así el frontend puede pedir
+// el mismo rango ya resuelto por el selector único de la pestaña
+// "💰 Balance por Cliente" (confirmado con el usuario: "mismo selector
+// que ya tiene esa pestaña") sin tener que traducir entre los 2
+// vocabularios.
+//
+// Solo tiene sentido si el grupo tiene el módulo de Hipismo habilitado
+// (grupos.modulo_hipismo_habilitado) — si no, 404 (el frontend ya sabe
+// no pedir este endpoint para un grupo sin Hipismo, ver
+// GRUPO_MODULO_HIPISMO_HABILITADO en public/superadmin.html, pero se
+// devuelve 404 igual por si acaso).
+router.get('/grupos/:id/hipismo-cierre-final', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const grupoRes = await db.query('SELECT id, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [id]);
+  if (grupoRes.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  if (!grupoRes.rows[0].modulo_hipismo_habilitado) {
+    return res.status(404).json({ error: 'Este grupo no tiene el módulo de Hipismo habilitado.' });
+  }
+
+  let desde = req.query.desde;
+  let hasta = req.query.hasta;
+  if (!desde && !hasta) {
+    const rango = await calcularRangoRapido(id, req.query.rango || 'semana');
+    desde = rango.desde;
+    hasta = rango.hasta;
+  }
+
+  const resultado = await construirCierreFinalHipismo(id, desde, hasta);
+  res.json({ rango: { desde, hasta }, ...resultado });
 }));
 
 // =================================================================

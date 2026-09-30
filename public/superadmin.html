@@ -1118,6 +1118,17 @@
               </div>
             </div>
             <div id="bcContenido">Cargando...</div>
+            <!-- Balance General de Hipismo (30-09-2026, a pedido del usuario:
+                 "desde super admin muestrame en la pestaña balance por
+                 clientes, el balance general del grupo que corresponda
+                 modulo hipismo") — se agrega DEBAJO del Balance de Deportes
+                 de arriba (confirmado con el usuario), usando el MISMO
+                 rango ya resuelto por el selector de arriba (nunca un
+                 selector aparte) — ver cargarBalanceClientesDetalle() y
+                 cargarBalanceHipismoDetalle() más abajo. Solo se muestra
+                 (y solo se pide) si el grupo tiene el módulo de Hipismo
+                 habilitado (GRUPO_MODULO_HIPISMO_HABILITADO). -->
+            <div id="bcContenidoHipismo"></div>
           </div>
 
           <!-- ==================== 📁 SÁBANAS (NUEVO, 19-09-2026) ====================
@@ -2116,6 +2127,60 @@ async function cargarBalanceClientesDetalle(tipoForzado) {
   } catch (e) {
     cont.innerHTML = '<p style="color:var(--danger); font-size:13px;">No se pudo cargar: ' + e.message + '</p>';
   }
+  // Balance General de Hipismo (30-09-2026) — se agrega DEBAJO, usando el
+  // MISMO rango que se acaba de resolver arriba para Deportes (nunca un
+  // selector aparte, ver la nota grande junto a #bcContenidoHipismo en el
+  // HTML) — solo si el grupo tiene el módulo de Hipismo habilitado.
+  const desdeResuelto = document.getElementById('bcDesde').value;
+  const hastaResuelto = document.getElementById('bcHasta').value;
+  if (desdeResuelto && hastaResuelto) {
+    cargarBalanceHipismoDetalle(desdeResuelto, hastaResuelto);
+  }
+}
+
+// Balance General de Hipismo, para el grupo abierto ahora mismo
+// (30-09-2026, ver la nota grande de cargarBalanceClientesDetalle arriba,
+// que es quien llama a esta función con el rango ya resuelto). Mismo
+// cálculo EXACTO que la pantalla "📒 Balance General" del propio panel
+// del Grupo (GET /api/superadmin/grupos/:id/hipismo-cierre-final, que por
+// dentro llama a construirCierreFinalHipismo — ver la nota grande en
+// src/routes/superadmin.js).
+async function cargarBalanceHipismoDetalle(desde, hasta) {
+  const cont = document.getElementById('bcContenidoHipismo');
+  if (!GRUPO_MODULO_HIPISMO_HABILITADO) { cont.innerHTML = ''; return; }
+  const titulo = '<h4 style="margin:18px 0 6px; color:var(--accent-cyan);">🐎 Balance General (Hipismo)</h4>';
+  cont.innerHTML = titulo + 'Cargando...';
+  try {
+    const url = '/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/hipismo-cierre-final' +
+      '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+    const data = await apiSuperadmin(url);
+    cont.innerHTML = titulo + tablaBalanceHipismoHTML(data);
+  } catch (e) {
+    cont.innerHTML = titulo + '<p style="color:var(--danger); font-size:13px;">No se pudo cargar: ' + e.message + '</p>';
+  }
+}
+
+function tablaBalanceHipismoHTML(data) {
+  const clientes = data.clientes || [];
+  if (clientes.length === 0) {
+    return '<p style="color:var(--text-dim); font-size:13px;">Sin movimientos de Hipismo en este rango.</p>';
+  }
+  const filaHTML = (c) => {
+    const color = c.saldo >= 0 ? 'var(--ok)' : 'var(--danger)';
+    return '<tr>' +
+      '<td>' + c.nombre + '</td>' +
+      '<td>' + c.jugadas + '</td>' +
+      '<td>' + formatDinero(c.gano) + '</td>' +
+      '<td>' + formatDinero(c.perdio) + '</td>' +
+      '<td style="font-weight:bold; color:' + color + ';">' + formatDinero(c.saldo) + '</td>' +
+    '</tr>';
+  };
+  return '<div style="overflow-x:auto; overflow-y:hidden;"><table class="tabla-balance-superadmin"><thead><tr>' +
+    '<th>Cliente</th><th>Jugadas</th><th>Ganó</th><th>Perdió</th><th>Saldo</th>' +
+    '</tr></thead><tbody>' +
+    clientes.map(filaHTML).join('') +
+    '</tbody></table></div>' +
+    '<p style="margin-top:8px; font-size:13px;">Comisión de la semana: <strong style="color:' + (data.comisionSemana >= 0 ? 'var(--ok)' : 'var(--danger)') + ';">' + formatDinero(data.comisionSemana) + '</strong></p>';
 }
 
 function tablaBalanceClientesHTML(data) {
@@ -2837,6 +2902,7 @@ async function abrirDetalleGrupo(id, nombre) {
   document.getElementById('bcDesde').value = '';
   document.getElementById('bcHasta').value = '';
   document.getElementById('bcContenido').innerHTML = 'Cargando...';
+  document.getElementById('bcContenidoHipismo').innerHTML = '';
   document.getElementById('sabanasFechaSelect').innerHTML = '<option value="">Cargando fechas…</option>';
   document.getElementById('sabanasContenido').innerHTML = '';
   BALANCE_CLIENTES_CARGADO = false;

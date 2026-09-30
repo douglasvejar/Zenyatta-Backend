@@ -28,7 +28,11 @@ const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // usa routes/hipismo.js para Balance General/Cierre Final/Saldo
 // Comisiones, ahora en su propio archivo (services/hipismoComisionPropia.js)
 // precisamente para poder reusarla acá sin duplicarla.
-const { obtenerComisionesPropias } = require('./hipismoComisionPropia');
+const { obtenerComisionesPropias, obtenerAjustesComision } = require('./hipismoComisionPropia');
+// calcularAjustesCruce (30-09-2026, ver la nota grande de
+// construirCierreFinalHipismo más abajo) — misma función que ya usaba
+// GET /cierre-final en routes/hipismo.js.
+const { calcularAjustesCruce } = require('./hipismoCalc');
 
 // "⚽ Deportes" se guarda como un hipódromo más dentro de "dias[].hipodromos"
 // (mismo shape que un hipódromo real), pero con tipo:'deportes' — ver la
@@ -40,6 +44,10 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // "dias[].hipodromos", con tipo:'traspaso', SOLO puede aparecer en el
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
 const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos de Comisión';
+// Mismo nombre de ítem que ya usaba GET /cierre-final en routes/hipismo.js
+// (NOMBRE_ITEM_REMATE) — ver la nota grande de construirCierreFinalHipismo
+// más abajo.
+const NOMBRE_ITEM_REMATE = 'REMATE';
 
 function resultadoTicketDeportes(t) {
   if (t.estado === 'GANADA') return t.gana;
@@ -628,4 +636,375 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
   };
 }
 
-module.exports = { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo };
+// =================================================================
+// CIERRE FINAL / BALANCE GENERAL DE HIPISMO (30-09-2026, a pedido del
+// usuario: "desde super admin muestrame en la pestaña balance por
+// clientes, el balance general del grupo que corresponda modulo
+// hipismo") — esta función es EXACTAMENTE la misma lógica que ya traía
+// GET /cierre-final en routes/hipismo.js (el motor real detrás de la
+// pantalla "📒 Balance General" de hipismo-mockup.html), sacada a este
+// archivo compartido para poder reusarla desde 2 lugares SIN duplicar
+// ninguna de sus reglas — varias de ellas fruto de bugs reales ya
+// corregidos (LUSHO-100 con el cruce de jugadas, Halland con Tablas
+// Fijas, el bug de comparación string/number de Sebastian, etc., ver los
+// comentarios de cada bloque más abajo):
+//   1) el propio GET /cierre-final (routes/hipismo.js), con
+//      grupoId=req.grupoId (la resolución de semana/rango sigue viviendo
+//      en la ruta, que es lo único realmente específico de esa pantalla), y
+//   2) la nueva ruta de Super-admin GET
+//      /api/superadmin/grupos/:id/hipismo-cierre-final, con
+//      grupoId=el :id de la URL — mismo criterio ya usado para el
+//      Balance por Cliente de Deportes (calcularBalanceGeneral).
+//
+// A diferencia de construirResumenClienteHipismo/RemateHipismo/
+// WinnersHipismo de arriba (que arman el DETALLE día-por-día de UN
+// cliente), esta función arma el RESUMEN de TODOS los clientes del grupo
+// para un rango — por eso recibe desde/hasta ya resueltos (no
+// semanaParam/rangoPersonalizado) y no arma "dias"/"hipodromos", solo la
+// lista `clientes` con su saldo ya neto, tal cual el shape que devolvía
+// GET /cierre-final.
+async function construirCierreFinalHipismo(grupoId, desde, hasta) {
+  const rTickets = await db.query(
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto,
+            t.plano_id, t.sin_comision, p.cruza_jugadas
+       FROM hipismo_tickets t
+       JOIN hipismo_planos p ON p.id = t.plano_id
+      WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+    [grupoId, desde, hasta]
+  );
+  const rApuestasRemate = await db.query(
+    `SELECT a.cliente_nombre, a.resultado, a.monto
+       FROM hipismo_remate_apuestas a
+       JOIN hipismo_remates r ON r.id = a.remate_id
+      WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+    [grupoId, desde, hasta]
+  );
+  // Jugadas Adelantadas (23-09-2026, ver la nota grande en
+  // services/hipismoAdelantadasCalc.js): el lado del CLIENTE que jugó
+  // (tf o marca) ya es definitivo apenas sale de 'pendiente' —
+  // 'resuelto', 'falta_banqueo' y 'sin_decidir' entran todos acá (en
+  // 'sin_decidir' resultado_cliente ya quedó en 0). El lado de los
+  // BANQUEADORES de una Marca solo existe una vez 'resuelto' (adentro
+  // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
+  // un cliente más (ej. "MARCAS ZENYATTA").
+  const rAdelantadas = await db.query(
+    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [grupoId, desde, hasta]
+  );
+  // "Cargar Winners" (26-09-2026, ver la nota grande junto a POST /winners):
+  // cada fila ya es el resultado NETO de ese cliente, así que se suma
+  // exactamente igual que un ticket ya resuelto — sin comisión ni "monto
+  // apostado" aparte (Winners no tiene ninguno de los 2).
+  //
+  // ÍTEM "WINNERS" (28-09-2026, a pedido del usuario: "ya le sale
+  // reflejada al cliente su jugada y su positivo y negativo eso esta
+  // excelente, pero eso debe ir contra el codigo llamado winners....
+  // si lusho tiene +400 en winners, winners debe decir -400... todo
+  // negativo debe tener su contra parte reflejado en la contabilidad")
+  // — mismo principio ya aplicado a TABLAS FIJAS/PORCENTAJE MARCAS/
+  // REMATE: cada monto que gana o pierde un cliente en Winners tiene
+  // que tener su contraparte exacta en otro renglón, o el balance no
+  // cuadra (la suma de TODOS los saldos positivos y negativos deja de
+  // dar 0). Acá "WINNERS" es literalmente el otro lado de la apuesta —
+  // si LUSHO ganó +400, alguien (el ítem "WINNERS") tiene que perder
+  // esos mismos 400. Ver el forEach más abajo, que acumula el espejo
+  // exacto (-monto) de cada fila junto con el lado del cliente.
+  const rWinners = await db.query(
+    `SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [grupoId, desde, hasta]
+  );
+
+  const porCliente = new Map();
+  function acumular(nombre, resultado) {
+    if (!porCliente.has(nombre)) porCliente.set(nombre, { nombre, jugadas: 0, gano: 0, perdio: 0 });
+    const c = porCliente.get(nombre);
+    c.jugadas += 1;
+    const n = Number(resultado);
+    if (n > 0) c.gano += n;
+    else if (n < 0) c.perdio += -n;
+  }
+  rTickets.rows.forEach(t => {
+    acumular(t.cliente_nombre, t.resultado_jugador);
+    acumular(t.banquero_nombre, t.resultado_banquero);
+  });
+  rApuestasRemate.rows.forEach(a => acumular(a.cliente_nombre, a.resultado));
+  rWinners.rows.forEach(w => {
+    acumular(w.cliente_nombre, w.monto);
+    acumular('WINNERS', -Number(w.monto));
+  });
+
+  let comisionAdelantadasSemana = 0;
+  rAdelantadas.rows.forEach(j => {
+    acumular(j.cliente_nombre, j.resultado_cliente);
+    if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
+    // "TABLAS FIJAS" / "% DE TABLAS FIJAS" (28-09-2026, a pedido del
+    // usuario: "el item tabla fijas no me sale en los balances... todos
+    // los item deben verse reflejado con su saldo en balances", y
+    // corregido el mismo día tras ver Halland -36 convertirse en "Tablas
+    // fijas +36" en vez de "+35,10 / % de tablas fijas +0,90") — el
+    // espejo de Tablas Fijas tiene que salir NETO de su propia comisión
+    // (mismo invariante que resolverTablaFija: cliente + tablasFijas +
+    // comisión = 0 exacto). Restar solo resultado_cliente (bruto) y
+    // ADEMÁS mostrar "% DE TABLAS FIJAS" aparte deja ese monto "de más"
+    // en el balance, sin ningún renglón que lo compense — por eso
+    // comisionAdelantadasSemana (abajo) YA NO se suma al total de
+    // "Comisión" del pie (ver la nota de comisionRemateSemana más abajo,
+    // mismo criterio: un ítem que ya se ve solo en el balance no se
+    // vuelve a sumar aparte).
+    if (j.tipo === 'tf') {
+      const comisionTf = j.comision != null ? Number(j.comision) : 0;
+      acumular('TABLAS FIJAS', -(Number(j.resultado_cliente) + comisionTf));
+      if (comisionTf) acumular('% DE TABLAS FIJAS', comisionTf);
+    }
+    // "PORCENTAJE MARCAS" (28-09-2026, a pedido del usuario: "ese item
+    // que también es como un cliente, me vas a ir sumando siempre ese
+    // 2.5% que deja [el banquero] en marcas") — la comisión de cada
+    // Marca ya banqueada (j.comision, armada por resolverBanqueoMarca)
+    // se suma acá como un "cliente" más, igual que "{cliente} -
+    // PORCENTAJE" para el % devuelto — mismo criterio de
+    // "TABLAS FIJAS"/"% DE TABLAS FIJAS" pero del lado de Marcas.
+    if (j.tipo === 'marca' && j.comision) acumular('PORCENTAJE MARCAS', Number(j.comision));
+    if (Array.isArray(j.banqueadores)) {
+      j.banqueadores.forEach(b => acumular(b.nombre, b.monto));
+    }
+  });
+
+  // "% DEVUELTO" (23-09-2026, undécima ronda, a pedido del usuario: "un
+  // item llama pedro - porcentaje... recuerda todo debe verse reflejado
+  // en balances") — mismo cálculo que Balance General de "Cargar Planos"
+  // (ver agregarPorcentajeDevuelto más arriba), pero agregado para TODA
+  // la semana: cada cliente con % propio configurado
+  // (jugadores.comision_propia) se gana ese % de TODO lo que apostó,
+  // gane o pierda cada jugada puntual, sumado como su propio "cliente"
+  // aparte ("{NOMBRE} - PORCENTAJE") en esta misma lista.
+  //
+  // TAMBIÉN EL LADO BANQUERO, EN CUALQUIER PRESENTACIÓN (29-09-2026, caso
+  // real "Mrincreible": tiene 1% propio configurado y avales, pero en la
+  // jugada real él era el BANQUERO — antes esto se excluía a propósito
+  // ("nunca lo que banqueó"); el usuario confirmó primero que quería el %
+  // también banqueando Tercios, y luego, a pedido explícito ("las marcas
+  // en todas sus presentaciones... deben cumplir todas la misma regla"),
+  // que el banqueo de una Marca (Jugadas Adelantadas, j.banqueadores
+  // arriba) también cuenta.
+  const nombresJugadores = new Set();
+  rTickets.rows.forEach(t => nombresJugadores.add(t.cliente_nombre));
+  rTickets.rows.forEach(t => nombresJugadores.add(t.banquero_nombre));
+  rApuestasRemate.rows.forEach(a => nombresJugadores.add(a.cliente_nombre));
+  rAdelantadas.rows.forEach(j => {
+    nombresJugadores.add(j.cliente_nombre);
+    if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
+  });
+  const comisionesPropias = await obtenerComisionesPropias(grupoId, Array.from(nombresJugadores));
+  // "COMISIÓN REAL" (29-09-2026, a pedido del usuario: "de la comisión
+  // que queda en el grupo debes restar todos los % que se le devuelven a
+  // los clientes para ver la comisión real de cuánto queda en el
+  // grupo") — se necesita el TOTAL devuelto (todos los "{destino} -
+  // PORCENTAJE" juntos) para restárselo a comisionSemana más abajo. A
+  // propósito NO se le resta nada de "% DE TABLAS FIJAS" ni
+  // "PORCENTAJE MARCAS" (ver la nota grande de comisionAdelantadasSemana
+  // más abajo: esos 2 ya tienen su contraparte EXACTA dentro de la misma
+  // lista de "clientes" — TABLAS FIJAS, y cliente+banqueadores de una
+  // Marca — así que ya suman $0 netos entre sí; sumarlos o restarlos acá
+  // sería contarlos 2 veces). El usuario confirmó con un ejemplo numérico
+  // que la fórmula correcta es exactamente: comisión de Tercios del rango
+  // MENOS todo lo devuelto — matemáticamente idéntico a "voltear el signo
+  // de la suma de TODOS los saldos de la lista" (por eso, para no
+  // duplicar lógica, `comisionSemana` se termina de calcular más abajo
+  // restando `totalDevueltoSemana` de la comisión de Tercios).
+  let totalDevueltoSemana = 0;
+  function acumularDevuelto(nombre, monto) {
+    const infos = comisionesPropias[nombre];
+    if (!infos || !infos.length) return;
+    // 24-09-2026: hasta 2 entradas simultáneas por cliente (ver la nota
+    // grande de obtenerComisionesPropias) — cada una con su propio
+    // destino, así que cada una suma su propio ítem "{destino} -
+    // PORCENTAJE" aparte (pueden ser 2 ítems distintos para el mismo
+    // cliente en la misma semana).
+    infos.forEach(info => {
+      if (!info || !info.pct) return;
+      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
+      // info.cuentaNombre ya es el nombre final, no hace falta pegarle
+      // el sufijo de nuevo.
+      acumular(info.cuentaNombre, devuelto);
+      totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
+    });
+  }
+  // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
+  // DEVOLUCION A LOS CLIENTES"): Remate SÍ suma al saldo normal (arriba,
+  // acumular()) pero NUNCA genera % devuelto — a propósito no se llama
+  // acumularDevuelto() con rApuestasRemate acá.
+  //
+  // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido explícito
+  // del usuario: "toda jugada que no se decida no genera % ni
+  // comisión"): un ticket de Tercios queda con resultado_jugador Y
+  // resultado_banquero en 0 cuando una Marca "pp"/"a premio" no tuvo
+  // ningún caballo que figurara (ver resolverCruzado() en
+  // hipismoCalc.js) — se excluye de acumularDevuelto() por completo. Una
+  // Marca de Jugadas Adelantadas queda con j.gano en null SOLO cuando
+  // quedó 'sin_decidir' (nula, ver resolverClienteMarca en
+  // hipismoAdelantadasCalc.js) — Tabla Fija siempre decide true/false, así
+  // que filtrar por "j.gano !== null" descarta justo esas.
+  //
+  // 29-09-2026, BUG REAL encontrado (caso Sebastian: seguía cobrando % de
+  // una Marca "pp" nula aun DESPUÉS de este mismo filtro, commit 0fac94f):
+  // "pg" devuelve una columna `numeric` como STRING de JS ("0.00"), nunca
+  // como number -- así que "t.resultado_jugador === 0" (comparación
+  // ESTRICTA string contra number) siempre daba false, sin importar el
+  // valor real, y el filtro nunca excluía nada en producción (el mock de
+  // los tests sí usaba numbers de JS directos, por eso las pruebas pasaban
+  // igual). Se envuelve en Number(...) para comparar de verdad.
+  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
+    .forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
+  // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
+  // lado BANQUERO de Tercios ahora también genera % devuelto.
+  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
+    .forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
+  // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
+  // % devuelto — j.monto es el monto TOTAL de la jugada, cada banqueador
+  // solo banqueó su `porcentaje` de esa jugada (ver resolverBanqueoMarca
+  // en services/hipismoAdelantadasCalc.js), así que la base de su % es
+  // j.monto * b.porcentaje/100, no j.monto completo. (Una Marca nula
+  // nunca llega a tener banqueadores -- solo se banquea una Marca ya
+  // decidida -- así que este bloque no necesita el mismo filtro de
+  // j.gano, pero se deja fuera del .filter() de arriba a propósito para
+  // no confundir al próximo lector con un filtro que acá nunca hace nada.)
+  rAdelantadas.rows.forEach(j => {
+    if (!Array.isArray(j.banqueadores)) return;
+    j.banqueadores.forEach(b => {
+      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      acumularDevuelto(b.nombre, parte);
+    });
+  });
+
+  const clientes = Array.from(porCliente.values())
+    .map(c => ({ ...c, saldo: c.gano - c.perdio }));
+
+  // AJUSTE POR CRUCE (26-09-2026, a pedido del usuario: "LOS PLANOS SI ME
+  // ESTAN CRUZANDO LAS JUGADAS SI ME LAS ESTA CRUZANDO FIJATE LUSHO-100
+  // PERO EN LOS BALANCES NO ME LA ESTA CRUZANDO... CORRIGE" — el bug: en
+  // un plano con cruza_jugadas=true, calcularPlano() guarda cada ticket
+  // con su valor YA "mostrado" línea por línea (sin cruzar) — el cruce
+  // real (neto por cliente, comisión una sola vez sobre el neto) solo
+  // vive en el total efímero que "Cargar Planos" muestra una vez y
+  // nunca se persiste. Acá se reconstruye ese neto cruzado por plano
+  // (calcularAjustesCruce, en services/hipismoCalc.js) y se suma la
+  // diferencia contra la suma "sin cruzar" de las líneas de ese cliente
+  // en ese plano — así el saldo de Cierre Final (y, por el mismo
+  // mecanismo en obtenerLineasHipismoCliente, Balance General y el link
+  // del cliente) coincide con lo que el plano cruzado realmente cobra.
+  const ticketsPorPlanoCruzado = new Map();
+  rTickets.rows.forEach(t => {
+    if (!t.cruza_jugadas) return;
+    if (!ticketsPorPlanoCruzado.has(t.plano_id)) ticketsPorPlanoCruzado.set(t.plano_id, []);
+    ticketsPorPlanoCruzado.get(t.plano_id).push({
+      clienteNombre: t.cliente_nombre,
+      banqueroNombre: t.banquero_nombre,
+      resultadoJugador: Number(t.resultado_jugador),
+      resultadoBanquero: Number(t.resultado_banquero),
+      sinComision: t.sin_comision
+    });
+  });
+  ticketsPorPlanoCruzado.forEach(ticketsDelPlano => {
+    const ajustesCruce = calcularAjustesCruce(ticketsDelPlano);
+    Object.keys(ajustesCruce).forEach(nombre => {
+      const monto = ajustesCruce[nombre];
+      if (!monto) return;
+      let c = clientes.find(x => x.nombre === nombre);
+      if (!c) { c = { nombre, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(c); }
+      c.saldo = round2(c.saldo + monto);
+    });
+  });
+
+  // TRASPASO DE COMISIÓN (26-09-2026, ver POST /comisiones/traspaso en
+  // routes/hipismo.js) — se suma/resta encima del saldo ya calculado; si
+  // el cliente del ajuste no tenía ninguna jugada esta semana (ej. recién
+  // recibió un traspaso sin haber jugado nada), se agrega como una fila
+  // nueva.
+  const ajustesComision = await obtenerAjustesComision(grupoId, desde, hasta);
+  Object.keys(ajustesComision).forEach(nombre => {
+    const monto = ajustesComision[nombre];
+    if (!monto) return;
+    let c = clientes.find(x => x.nombre === nombre);
+    if (!c) { c = { nombre, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(c); }
+    c.saldo = round2(c.saldo + monto);
+  });
+
+  // ÍTEM "REMATE" (26-09-2026, a pedido del usuario: "esos 2000 negativos
+  // deben salir en un ítem en balance como si fuera OTRO CLIENTE llamado
+  // REMATE, igual detallado en que carrera fue y en que hipódromo... creo
+  // que actualmente no lo estás colocando en su ítem llamado remate, sino
+  // que lo estás sumando en la comisión... soluciona eso"). Cada remate
+  // guarda en comision_total el resultado (ganancia o pérdida) de ESE
+  // remate puntual — sea "REMATE PAGA" (monto fijo) o "REMATE GARANTIZA"
+  // (piso + %, incluyendo el 20% de ganancia de la casa cuando aplica) —
+  // ver la nota grande de calcularRemate en services/hipismoRemateCalc.js.
+  // Acá se suma TODO eso como un ítem más de "clientes", nunca mezclado
+  // con comisionSemana/comisionAdelantadasSemana.
+  const rComisionRemate = await db.query(
+    `SELECT COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [grupoId, desde, hasta]
+  );
+  const resultadoRemateSemana = round2(Number(rComisionRemate.rows[0].total));
+  if (resultadoRemateSemana) {
+    let cRemate = clientes.find(x => x.nombre === NOMBRE_ITEM_REMATE);
+    if (!cRemate) { cRemate = { nombre: NOMBRE_ITEM_REMATE, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(cRemate); }
+    cRemate.saldo = round2(cRemate.saldo + resultadoRemateSemana);
+  }
+
+  clientes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  // Comisión de Tercios de la semana: mismo total ya guardado por plano
+  // (ver /comisiones-por-carrera en routes/hipismo.js) — no depende de
+  // los tickets sueltos.
+  const rComision = await db.query(
+    `SELECT COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
+    [grupoId, desde, hasta]
+  );
+  // "COMISIÓN REAL" (29-09-2026, ver la nota grande de totalDevueltoSemana
+  // más arriba, a pedido explícito del usuario: "de la comisión que queda
+  // en el grupo debes restar todos los % que se le devuelven a los
+  // clientes para ver la comisión real de cuánto queda en el grupo" —
+  // confirmado con un ejemplo numérico exacto, "CASO A PARA TODOS LOS
+  // RENGLONES"). comisionSemana pasa de ser la comisión BRUTA de Tercios
+  // a ser la comisión REAL: bruta menos todo lo devuelto — matemáticamente
+  // idéntico a voltear el signo de la suma de TODOS los saldos de
+  // "clientes" (ya que TABLAS FIJAS/% DE TABLAS FIJAS, PORCENTAJE
+  // MARCAS+banqueadores+cliente, REMATE+sus apuestas y WINNERS+sus
+  // clientes siempre suman $0 exacto entre sí — ver esos bloques más
+  // arriba — así que la única plata que "sobra" sin repartir en toda la
+  // lista es justo comisión de Tercios menos lo devuelto).
+  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana);
+
+  return {
+    clientes,
+    comisionSemana,
+    // comisionRemateSemana (26-09-2026): se sigue devolviendo el dato
+    // crudo por compatibilidad, pero YA NO representa "comisión" — el
+    // frontend ya no lo suma al total de comisión mostrado (ver el ítem
+    // "REMATE" arriba, dentro de "clientes", que es donde se muestra de
+    // verdad ahora).
+    comisionRemateSemana: Number(rComisionRemate.rows[0].total),
+    // comisionAdelantadasSemana (23-09-2026, ya no sumado al total de
+    // "Comisión" del pie desde el 28-09-2026): mismo criterio que
+    // comisionRemateSemana arriba — desde que "% DE TABLAS FIJAS" y
+    // "PORCENTAJE MARCAS" son ítems propios dentro de "clientes" (ver la
+    // nota grande más arriba), este número ya está 100% representado ahí
+    // adentro (con su contraparte exacta, no como un residuo suelto) —
+    // volver a sumarlo acá sería pagar la misma comisión dos veces. Se
+    // sigue devolviendo el dato crudo por compatibilidad.
+    comisionAdelantadasSemana
+  };
+}
+
+module.exports = {
+  construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo,
+  construirCierreFinalHipismo
+};
