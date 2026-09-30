@@ -6875,6 +6875,227 @@ async function guardarClientesSocio(id) {
 }
 
 // =================================================================
+// "🗂️ Grupo de Clientes" (30-09-2026, a pedido del usuario — ver la nota
+// grande en src/services/gruposClientes.js). A diferencia de "Socio"
+// (arriba, 1 cliente = a lo sumo 1 Socio, sin link propio), acá un
+// cliente puede pertenecer a VARIOS grupos a la vez, cada grupo elige un
+// titular (SIEMPRE cuenta también como miembro — confirmado con el
+// usuario), tiene su propio link público, y muestra el saldo semana
+// actual + semana anterior de respaldo de cada miembro — el MISMO
+// Balance General de siempre, nunca recalculado acá.
+//
+// GRUPOS_CLIENTES_CACHE trae solo el listado liviano (id/titular/
+// cantidadMiembros) — la tarjeta completa (miembros + saldos) de CADA
+// grupo se pide recién cuando se abre su <details> (GET /api/grupos-
+// clientes/:id), para no pedirle al servidor los saldos de todos los
+// grupos de una vez si el Administrador solo quiere ver o editar uno.
+// =================================================================
+let GRUPOS_CLIENTES_CACHE = [];
+const GRUPOS_CLIENTES_TARJETA_CACHE = {}; // id -> última tarjeta ya pedida (para no volver a pedirla si se cierra y reabre el <details> sin cambios)
+
+function abrirGruposClientes() {
+  document.getElementById('modalGruposClientes').classList.add('activo');
+  poblarSelectTitularGrupoCliente();
+  refrescarGruposClientes();
+}
+
+function cerrarGruposClientes() {
+  document.getElementById('modalGruposClientes').classList.remove('activo');
+}
+
+function poblarSelectTitularGrupoCliente() {
+  const sel = document.getElementById('selTitularNuevoGrupoCliente');
+  const clientesActivos = (JUGADORES_CACHE || []).filter(j => j.activo).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  sel.innerHTML = '<option value="">Elige el cliente titular…</option>' +
+    clientesActivos.map(j => '<option value="' + j.id + '">' + escaparHtmlSaldosSemana(j.nombre) + '</option>').join('');
+}
+
+async function refrescarGruposClientes() {
+  const cont = document.getElementById('listaGruposClientes');
+  const vacio = document.getElementById('gruposClientesVacio');
+  cont.innerHTML = '<p style="text-align:center; color:var(--text-dim); padding:10px;">Cargando...</p>';
+  try {
+    const data = await api('/api/grupos-clientes');
+    GRUPOS_CLIENTES_CACHE = data.grupos;
+  } catch (e) {
+    cont.innerHTML = '';
+    alert('No se pudieron cargar los Grupos de Clientes: ' + e.message);
+    return;
+  }
+  if (GRUPOS_CLIENTES_CACHE.length === 0) {
+    cont.innerHTML = '';
+    vacio.style.display = 'block';
+  } else {
+    vacio.style.display = 'none';
+    renderListaGruposClientes();
+  }
+}
+
+function renderListaGruposClientes() {
+  const cont = document.getElementById('listaGruposClientes');
+  let html = '';
+  GRUPOS_CLIENTES_CACHE.forEach(g => {
+    html += '<details class="gc-grupo-card" ontoggle="onToggleGrupoCliente(event, \'' + g.id + '\')">';
+    html += '<summary>🗂️ ' + escaparHtmlSaldosSemana(g.titularNombre) + ' <span class="gc-cant">(' + g.cantidadMiembros + ' miembro' + (g.cantidadMiembros === 1 ? '' : 's') + ' + titular)</span></summary>';
+    html += '<div id="gcContenido_' + g.id + '">Cargando…</div>';
+    html += '</details>';
+  });
+  cont.innerHTML = html;
+}
+
+// Se llama cada vez que se abre O se cierra un <details> — solo hace
+// falta pedir/pintar la tarjeta cuando se ABRE (event.target.open).
+async function onToggleGrupoCliente(event, id) {
+  if (!event.target.open) return;
+  await cargarYPintarTarjetaGrupoCliente(id);
+}
+
+async function cargarYPintarTarjetaGrupoCliente(id) {
+  const cont = document.getElementById('gcContenido_' + id);
+  if (!cont) return;
+  cont.innerHTML = '<p style="color:var(--text-dim); padding:8px 0;">Cargando saldos…</p>';
+  let tarjeta;
+  try {
+    tarjeta = await api('/api/grupos-clientes/' + id);
+    GRUPOS_CLIENTES_TARJETA_CACHE[id] = tarjeta;
+  } catch (e) {
+    cont.innerHTML = '<p style="color:var(--text-dim); padding:8px 0;">No se pudo cargar: ' + e.message + '</p>';
+    return;
+  }
+  cont.innerHTML = htmlTarjetaGrupoCliente(tarjeta) + htmlAdministrarMiembrosGrupoCliente(tarjeta);
+  pintarBloqueSemanaGrupoCliente(id, 'actual');
+}
+
+function celdaMontoGrupoCliente(monto) {
+  const n = Number(monto) || 0;
+  const clase = n > 0.004 ? 'gc-pos' : (n < -0.004 ? 'gc-neg' : 'gc-cero');
+  const texto = n > 0.004 ? ('+' + formatMoney(n)) : formatMoney(n);
+  return '<span class="' + clase + '">' + texto + '</span>';
+}
+
+// La misma tarjeta (encabezado + tabla) que arma el link público — ver
+// public/grupo-cliente.html. Acá, además, van los botones de "Copiar
+// link" y "Eliminar grupo". "Semana anterior" es solo un respaldo: no se
+// pinta de entrada, solo al hacer click en su botón (30-09-2026, a
+// pedido del usuario) — las 2 semanas ya vienen juntas en `t`
+// (GRUPOS_CLIENTES_TARJETA_CACHE), así que cambiar de semana acá es
+// puramente visual, ver pintarBloqueSemanaGrupoCliente() más abajo.
+function htmlTarjetaGrupoCliente(t) {
+  let html = '<div class="gc-acciones">';
+  html += '<button type="button" class="btn-secundario" onclick="copiarLinkGrupoCliente(\'' + t.token + '\', \'' + escaparHtmlSaldosSemana(t.titular.nombre).replace(/'/g, "\\'") + '\')">📋 Copiar link</button>';
+  html += '<button type="button" class="btn-secundario" onclick="eliminarGrupoClienteUI(\'' + t.id + '\', \'' + escaparHtmlSaldosSemana(t.titular.nombre).replace(/'/g, "\\'") + '\')">🗑️ Eliminar grupo</button>';
+  html += '</div>';
+
+  html += '<div class="gc-subnav" id="gcSubnav_' + t.id + '">';
+  html += '<button type="button" class="gc-activo" onclick="cambiarSemanaTarjetaGrupoCliente(\'' + t.id + '\', \'actual\', this)">Semana actual</button>';
+  html += '<button type="button" onclick="cambiarSemanaTarjetaGrupoCliente(\'' + t.id + '\', \'anterior\', this)">🗓️ Semana anterior</button>';
+  html += '</div>';
+  html += '<div id="gcBloque_' + t.id + '"></div>';
+  return html;
+}
+
+function cambiarSemanaTarjetaGrupoCliente(id, semana, btn) {
+  const subnav = document.getElementById('gcSubnav_' + id);
+  if (subnav) subnav.querySelectorAll('button').forEach(b => b.classList.remove('gc-activo'));
+  if (btn) btn.classList.add('gc-activo');
+  pintarBloqueSemanaGrupoCliente(id, semana);
+}
+
+function pintarBloqueSemanaGrupoCliente(id, semana) {
+  const t = GRUPOS_CLIENTES_TARJETA_CACHE[id];
+  const cont = document.getElementById('gcBloque_' + id);
+  if (!t || !cont) return;
+  const esActual = semana !== 'anterior';
+  const rango = esActual ? t.semanaActual : t.semanaAnterior;
+  const total = esActual ? t.totalSemanaActual : t.totalSemanaAnterior;
+  const tituloRango = (esActual ? 'Semana actual' : 'Semana anterior (de respaldo)') + ' — ' + rango.desde + ' al ' + rango.hasta;
+
+  let html = '<table class="gc-tabla"><thead><tr><th>' + tituloRango + '</th><th class="gc-col-monto">Saldo</th></tr></thead><tbody>';
+  t.miembros.forEach(m => {
+    const saldo = esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior;
+    html += '<tr class="' + (m.esTitular ? 'gc-fila-titular' : '') + '"><td>' + (m.esTitular ? '⭐ ' : '') + escaparHtmlSaldosSemana(m.nombre) + '</td><td class="gc-col-monto">' + celdaMontoGrupoCliente(saldo) + '</td></tr>';
+  });
+  html += '<tr class="gc-fila-total"><td>TOTAL</td><td class="gc-col-monto">' + celdaMontoGrupoCliente(total) + '</td></tr>';
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+// Checkboxes para agregar/quitar miembros (el titular no lleva checkbox
+// — siempre está adentro, no se puede "desmarcar"). Mismo patrón visual
+// que renderListaAdministrarSocios(), con "Guardar miembros" aparte.
+function htmlAdministrarMiembrosGrupoCliente(t) {
+  const idsActuales = new Set(t.miembros.filter(m => !m.esTitular).map(m => m.id));
+  const clientesActivos = (JUGADORES_CACHE || []).filter(j => j.activo && j.id !== t.titular.id).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  let html = '<div class="gc-checks">';
+  if (clientesActivos.length === 0) {
+    html += '<span style="color:var(--text-dim); font-size:13px;">No tienes más clientes activos para agregar.</span>';
+  }
+  clientesActivos.forEach(j => {
+    const marcado = idsActuales.has(j.id);
+    html += '<label style="font-weight:normal; display:flex; align-items:center; gap:5px; font-size:13px;"><input type="checkbox" class="chk-gc-miembro_' + t.id + '" value="' + j.id + '" ' + (marcado ? 'checked' : '') + ' style="width:auto;"> ' + escaparHtmlSaldosSemana(j.nombre) + '</label>';
+  });
+  html += '</div>';
+  html += '<button type="button" onclick="guardarMiembrosGrupoCliente(\'' + t.id + '\')">💾 Guardar miembros</button>';
+  return html;
+}
+
+async function crearGrupoClienteUI() {
+  const sel = document.getElementById('selTitularNuevoGrupoCliente');
+  const titularId = sel.value;
+  if (!titularId) { alert('Elige el cliente titular del nuevo grupo.'); return; }
+  try {
+    await api('/api/grupos-clientes', { method: 'POST', body: JSON.stringify({ titularId }) });
+    sel.value = '';
+    await refrescarGruposClientes();
+  } catch (e) {
+    alert('No se pudo crear el grupo: ' + e.message);
+  }
+}
+
+async function eliminarGrupoClienteUI(id, nombreTitular) {
+  if (!confirm('¿Borrar el grupo de "' + nombreTitular + '"? Los clientes NO se borran, solo dejan de estar agrupados acá — esto no afecta sus saldos ni jugadas.')) return;
+  try {
+    await api('/api/grupos-clientes/' + id, { method: 'DELETE' });
+    delete GRUPOS_CLIENTES_TARJETA_CACHE[id];
+    await refrescarGruposClientes();
+  } catch (e) {
+    alert('No se pudo borrar el grupo: ' + e.message);
+  }
+}
+
+// Compara los checkboxes marcados contra la última tarjeta pedida y solo
+// manda al servidor lo que de verdad cambió (agregar los que se
+// marcaron de nuevo, quitar los que se desmarcaron) — no hay una ruta
+// "reemplazar todos los miembros de una vez" como la de Socios, porque
+// acá agregar/quitar un miembro nunca recalcula nada pesado.
+async function guardarMiembrosGrupoCliente(id) {
+  const tarjetaPrevia = GRUPOS_CLIENTES_TARJETA_CACHE[id];
+  if (!tarjetaPrevia) return;
+  const idsAntes = new Set(tarjetaPrevia.miembros.filter(m => !m.esTitular).map(m => m.id));
+  const checks = document.querySelectorAll('.chk-gc-miembro_' + id + ':checked');
+  const idsDespues = new Set(Array.from(checks).map(c => c.value));
+
+  const aAgregar = Array.from(idsDespues).filter(jid => !idsAntes.has(jid));
+  const aQuitar = Array.from(idsAntes).filter(jid => !idsDespues.has(jid));
+  try {
+    await Promise.all([
+      ...aAgregar.map(jid => api('/api/grupos-clientes/' + id + '/miembros', { method: 'POST', body: JSON.stringify({ jugadorId: jid }) })),
+      ...aQuitar.map(jid => api('/api/grupos-clientes/' + id + '/miembros/' + jid, { method: 'DELETE' }))
+    ]);
+    await cargarYPintarTarjetaGrupoCliente(id);
+    await refrescarGruposClientes();
+    alert('Miembros guardados.');
+  } catch (e) {
+    alert('No se pudieron guardar los miembros: ' + e.message);
+  }
+}
+
+function copiarLinkGrupoCliente(token, nombreTitular) {
+  const link = location.origin + '/grupo-cliente.html?token=' + token;
+  copiarTextoAlPortapapeles(link, 'Link del grupo de ' + nombreTitular + ' copiado.');
+}
+
+// =================================================================
 // "🤝 Saldos por Socio" — imagen HD / PDF / Excel, MISMO patrón EXACTO
 // que ya usan capturarSaldosSemanaComoImagen()/descargarSaldosSemanaComoPDF()/
 // generarExcelSaldosSemana() más arriba, pero apuntando a #spsCaptura y

@@ -23,6 +23,8 @@ const descargasRoutes = require('./routes/descargas');
 const sociosRoutes = require('./routes/socios'); // 🤝 Administrar Socios — grupos de clientes para 'Saldos de Socios y sus Avalados' (ver routes/socios.js)
 const hipismoRoutes = require('./routes/hipismo'); // Módulo Hipismo (22-09-2026) — ver routes/hipismo.js
 const hipismoClienteRoutes = require('./routes/hipismoCliente'); // Portal público del Cliente de Hipismo (22-09-2026) — pública, sin login (ver comentario en routes/hipismoCliente.js)
+const gruposClientesRoutes = require('./routes/gruposClientes'); // 🗂️ Grupo de Clientes — Deportes (30-09-2026, ver routes/gruposClientes.js; el de Hipismo vive dentro de routes/hipismo.js)
+const gruposClientesPublicoRoutes = require('./routes/gruposClientesPublico'); // Link público de Grupo de Clientes, compartido Deportes+Hipismo — pública, sin login (ver routes/gruposClientesPublico.js)
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -64,6 +66,8 @@ app.use('/api/descargas', descargasRoutes); // ⬇️ Descargar — Saldos Seman
 app.use('/api/socios', sociosRoutes); // 🤝 Administrar Socios (ver routes/socios.js)
 app.use('/api/hipismo', hipismoRoutes); // Módulo Hipismo — Hipódromos + Cargar Planos (ver routes/hipismo.js)
 app.use('/api/hipismo-cliente', hipismoClienteRoutes); // pública, sin login — portal del cliente de Hipismo (ver routes/hipismoCliente.js)
+app.use('/api/grupos-clientes', gruposClientesRoutes); // 🗂️ Grupo de Clientes — Deportes (ver routes/gruposClientes.js)
+app.use('/api/grupo-cliente', gruposClientesPublicoRoutes); // pública, sin login — link de Grupo de Clientes (Deportes+Hipismo, ver routes/gruposClientesPublico.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se

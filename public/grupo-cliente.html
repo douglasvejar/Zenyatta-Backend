@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grupo de Clientes — Ludox Venezuela 🇻🇪</title>
+<link rel="icon" href="img/logo-ludox.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* =================================================================
+     "🗂️ GRUPO DE CLIENTES" — LINK PÚBLICO (30-09-2026, a pedido del
+     usuario — ver la nota grande en src/services/gruposClientes.js y en
+     sql/schema.sql). Mismos nombres/valores de variable que public/
+     cliente.html (paleta oscura LUDOX), para que este link se sienta
+     parte de la misma familia de páginas públicas aunque no muestre lo
+     mismo (acá no hay jugadas una por una, es el cuadro de saldos de
+     VARIOS clientes agrupados — ver la captura de "Saldos por Socio"
+     que el usuario tomó como referencia). Sin usuario/contraseña a
+     propósito: el token largo e impredecible de grupos_clientes.token
+     ES el acceso, igual que el link de un cliente puntual.
+     ================================================================= */
+  :root {
+    --bg: #03060f;
+    --bg-glow-1: #1e3aa8;
+    --bg-glow-2: #22d3ee;
+    --card: #0b0f1e;
+    --card-2: #121a30;
+    --card-border: rgba(255,255,255,0.08);
+    --border-light: rgba(255,255,255,0.14);
+    --text: #f4f6fb;
+    --text-dim: #93a0bd;
+    --accent-cyan: #38e0f0;
+    --accent-blue: #2f6bff;
+    --danger: #ff6b6b;
+    --ok: #34d399;
+    --warning: #facc15;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); padding: 20px; color: var(--text); margin: 0; position: relative; overflow-x: hidden; color-scheme: dark; }
+
+  body::before, body::after { content: ''; position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.32; z-index: -1; pointer-events: none; }
+  body::before { width: 560px; height: 560px; top: -160px; left: 50%; transform: translateX(-62%); background: radial-gradient(circle, var(--bg-glow-2) 0%, transparent 70%); }
+  body::after { width: 620px; height: 620px; bottom: -220px; right: 50%; transform: translateX(58%); background: radial-gradient(circle, var(--bg-glow-1) 0%, transparent 70%); opacity: 0.28; }
+  .fondo-logo-marca { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60vw; max-width: 640px; opacity: 0.05; filter: blur(4px); pointer-events: none; z-index: -1; user-select: none; }
+
+  .container { max-width: 760px; margin: 0 auto; background: var(--card); border: 1px solid var(--card-border); padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+
+  #estadoCarga, #estadoError { text-align: center; padding: 40px 10px; color: var(--text-dim); }
+  #estadoError { color: var(--danger); }
+
+  .gcp-header { text-align: center; margin-bottom: 18px; }
+  .gcp-etiqueta { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; font-weight: bold; }
+  .gcp-titular { font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 4px 0; }
+  .gcp-grupo { font-size: 13px; color: var(--text-dim); }
+
+  /* Selector "Semana actual / 🗓️ Semana anterior" (30-09-2026, a pedido
+     del usuario: "la semana anterior solo debe mostrarse al darle click
+     en el boton de semana anterior") — los 2 rangos YA vienen en la
+     misma respuesta (ver renderTarjeta más abajo), así que cambiar de
+     semana acá es puramente visual, sin volver a pedirle nada al
+     servidor. Mismo patrón de "pill" que ya usa el resto de Ludox
+     (public/hipismo-mockup.html, .subnav), con los colores propios de
+     esta página. */
+  .gcp-subnav { display: flex; justify-content: center; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .gcp-subnav button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
+  .gcp-subnav button.activo { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 65%); color: #04070f; border-color: transparent; }
+
+  .gcp-resumen { text-align: center; margin: 0 0 22px; }
+  .gcp-resumen .etiqueta { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: bold; }
+  .gcp-resumen .monto { font-family: 'Outfit', sans-serif; font-size: 34px; font-weight: 800; margin-top: 4px; }
+  .gcp-resumen .rango { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+  .gcp-pos { color: var(--ok); }
+  .gcp-neg { color: var(--danger); }
+  .gcp-cero { color: var(--text-dim); }
+
+  .gcp-seccion-titulo { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: bold; margin: 22px 0 8px; }
+
+  table.gcp-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.gcp-tabla th { background: var(--card-2); color: var(--text-dim); text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
+  table.gcp-tabla th.gcp-col-monto, table.gcp-tabla td.gcp-col-monto { text-align: right; font-variant-numeric: tabular-nums; }
+  table.gcp-tabla td { padding: 9px 12px; border-bottom: 1px solid var(--card-border); }
+  table.gcp-tabla tr.gcp-fila-titular td { font-weight: bold; color: var(--accent-cyan); }
+  table.gcp-tabla tr.gcp-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; padding-top: 12px; }
+
+  footer.pie-pagina { text-align: center; padding: 22px 10px 4px; color: var(--text-dim); font-size: 12px; }
+
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    .container { padding: 16px; border-radius: 8px; }
+    .gcp-titular { font-size: 21px; }
+    .gcp-resumen { gap: 18px; }
+    .gcp-resumen .monto { font-size: 21px; }
+    table.gcp-tabla { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  }
+</style>
+</head>
+<body>
+
+<img class="fondo-logo-marca" src="img/logo-ludox.png" alt="" aria-hidden="true">
+
+<div class="container">
+  <div id="estadoCarga">Cargando…</div>
+  <div id="estadoError" style="display:none;"></div>
+
+  <div id="contenido" style="display:none;">
+    <div class="gcp-header">
+      <div class="gcp-etiqueta">🗂️ Grupo de Clientes</div>
+      <div class="gcp-titular" id="gcpTitular">—</div>
+      <div class="gcp-grupo" id="gcpGrupo"></div>
+    </div>
+
+    <!-- "Semana anterior" es un respaldo, no se muestra de entrada — solo
+         al hacer click en el botón (30-09-2026, a pedido del usuario). -->
+    <div class="gcp-subnav" id="gcpSubnav">
+      <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaTarjeta('actual', this)">Semana actual</button>
+      <button type="button" data-semana="anterior" onclick="cambiarSemanaTarjeta('anterior', this)">🗓️ Semana anterior</button>
+    </div>
+
+    <div class="gcp-resumen">
+      <div class="etiqueta" id="gcpTotalEtiqueta">Total semana actual</div>
+      <div class="monto" id="gcpTotal">$0.00</div>
+      <div class="rango" id="gcpRango"></div>
+    </div>
+
+    <div class="gcp-seccion-titulo" id="gcpTablaTitulo">Saldo por cliente — semana actual</div>
+    <table class="gcp-tabla">
+      <thead><tr><th>Nombre</th><th class="gcp-col-monto">Saldo</th></tr></thead>
+      <tbody id="gcpTabla"></tbody>
+    </table>
+  </div>
+
+  <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
+</div>
+
+<script>
+// =================================================================
+// Vista pública de "Grupo de Clientes" — sin login, el token de la URL
+// ES el acceso (ver src/routes/gruposClientesPublico.js del backend).
+// Compartida por Deportes e Hipismo: el módulo llega ya resuelto en la
+// respuesta (data.modulo), esta página no necesita saberlo de antemano.
+// Cada visita vuelve a pedirle los saldos al servidor — nada se guarda
+// en este navegador.
+// =================================================================
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token');
+
+function formatMoney(n) {
+  const num = Number(n) || 0;
+  return (num < 0 ? '-$' : '$') + Math.abs(num).toFixed(2);
+}
+function claseMonto(n) {
+  const num = Number(n) || 0;
+  return num > 0.004 ? 'gcp-pos' : (num < -0.004 ? 'gcp-neg' : 'gcp-cero');
+}
+function formatMoneyConSigno(n) {
+  const num = Number(n) || 0;
+  return (num > 0.004 ? '+' : '') + formatMoney(num);
+}
+function escaparHtml(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto;
+  return div.innerHTML;
+}
+function formatFechaCorta(fechaISO) {
+  const partes = (fechaISO || '').split('-');
+  if (partes.length !== 3) return fechaISO || '';
+  const [anio, mes, dia] = partes;
+  return dia + '-' + mes + '-' + anio;
+}
+
+function mostrarError(msg) {
+  document.getElementById('estadoCarga').style.display = 'none';
+  document.getElementById('contenido').style.display = 'none';
+  const el = document.getElementById('estadoError');
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+function filaTabla(nombre, monto, esTitular) {
+  return '<tr class="' + (esTitular ? 'gcp-fila-titular' : '') + '"><td>' + (esTitular ? '⭐ ' : '') + escaparHtml(nombre) + '</td><td class="gcp-col-monto ' + claseMonto(monto) + '">' + formatMoneyConSigno(monto) + '</td></tr>';
+}
+
+let TARJETA_DATA = null; // la respuesta completa (trae las 2 semanas de una sola vez)
+let MIEMBROS_ORDENADOS = null;
+
+// "Semana anterior" es SOLO de respaldo — no se muestra hasta que se
+// hace click en su botón (30-09-2026, a pedido del usuario: "la semana
+// anterior solo debe mostrarse al darle click en el boton de semana
+// anterior"). Como las 2 semanas ya vienen en la misma respuesta del
+// servidor, cambiar de semana acá es puramente visual — no vuelve a
+// pedir nada.
+function cambiarSemanaTarjeta(semana, btn) {
+  document.querySelectorAll('#gcpSubnav button').forEach(b => b.classList.remove('activo'));
+  if (btn) btn.classList.add('activo');
+  pintarSemana(semana);
+}
+
+function pintarSemana(semana) {
+  if (!TARJETA_DATA) return;
+  const esActual = semana !== 'anterior';
+  const rango = esActual ? TARJETA_DATA.semanaActual : TARJETA_DATA.semanaAnterior;
+  const total = esActual ? TARJETA_DATA.totalSemanaActual : TARJETA_DATA.totalSemanaAnterior;
+
+  document.getElementById('gcpTotalEtiqueta').textContent = esActual ? 'Total semana actual' : 'Total semana anterior (de respaldo)';
+  document.getElementById('gcpTablaTitulo').textContent = esActual ? 'Saldo por cliente — semana actual' : 'Saldo por cliente — semana anterior (de respaldo)';
+  document.getElementById('gcpTotal').textContent = formatMoneyConSigno(total);
+  document.getElementById('gcpTotal').className = 'monto ' + claseMonto(total);
+  document.getElementById('gcpRango').textContent = formatFechaCorta(rango.desde) + ' al ' + formatFechaCorta(rango.hasta);
+  document.getElementById('gcpTabla').innerHTML = MIEMBROS_ORDENADOS.map(m => filaTabla(m.nombre, esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior, m.esTitular)).join('');
+}
+
+function renderTarjeta(data) {
+  document.getElementById('estadoCarga').style.display = 'none';
+  document.getElementById('estadoError').style.display = 'none';
+  document.getElementById('contenido').style.display = 'block';
+
+  document.title = 'Grupo de ' + data.titular.nombre + ' — Ludox Venezuela 🇻🇪';
+  document.getElementById('gcpTitular').textContent = data.titular.nombre;
+  const etiquetaModulo = data.modulo === 'hipismo' ? '🐎 Hipismo' : '⚽ Deportes';
+  document.getElementById('gcpGrupo').textContent = data.grupoNombre + ' · ' + etiquetaModulo;
+
+  TARJETA_DATA = data;
+  // El titular siempre aparece primero, sin importar el orden alfabético
+  // que ya trae data.miembros (confirmado con el usuario: el titular es
+  // la cabecera del grupo) — el resto se deja tal cual llega (alfabético).
+  MIEMBROS_ORDENADOS = data.miembros.slice().sort((a, b) => {
+    if (a.esTitular) return -1;
+    if (b.esTitular) return 1;
+    return 0;
+  });
+
+  pintarSemana('actual');
+}
+
+async function cargar() {
+  if (!TOKEN) { mostrarError('Este link no es válido. Pide a tu grupo que te reenvíe el link.'); return; }
+  try {
+    const res = await fetch('/api/grupo-cliente/' + encodeURIComponent(TOKEN));
+    const data = await res.json();
+    if (!res.ok) { mostrarError(data.error || 'No se pudo cargar este grupo.'); return; }
+    renderTarjeta(data);
+  } catch (e) {
+    mostrarError('No se pudo conectar con el servidor.');
+  }
+}
+
+cargar();
+</script>
+</body>
+</html>

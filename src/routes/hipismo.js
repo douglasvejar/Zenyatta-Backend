@@ -111,6 +111,18 @@ const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 // GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
 // services/hipismoResumenCliente.js.
 const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirCierreFinalHipismo } = require('../services/hipismoResumenCliente');
+// "Grupo de Clientes" (30-09-2026) — CRUD de este módulo para services/
+// gruposClientes.js, siempre con modulo='hipismo' fijo (ver la nota
+// grande arriba de ese archivo y en sql/schema.sql junto a
+// "create table grupos_clientes").
+const {
+  crearGrupoCliente,
+  listarGruposClientes,
+  eliminarGrupoCliente,
+  agregarMiembro,
+  quitarMiembro,
+  construirTarjetaGrupoCliente
+} = require('../services/gruposClientes');
 
 // fechaHoyVenezuela() (24-09-2026) — BUG encontrado a partir de "al
 // cargar plano no me esta jalando las jugadas adelantadas": el respaldo
@@ -2283,6 +2295,56 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     esSemanaActual,
     ...resultado
   });
+}));
+
+// =================================================================
+// "GRUPO DE CLIENTES" (30-09-2026, a pedido del usuario — ver la nota
+// grande en services/gruposClientes.js y en sql/schema.sql). CRUD de
+// este módulo (modulo='hipismo' fijo en cada llamada); el titular y los
+// miembros se eligen del mismo listado de clientes de GET /api/jugadores
+// (misma tabla jugadores, compartida con Deportes). La tarjeta
+// (GET /grupos-clientes/:id) trae saldo semana actual + semana anterior
+// de respaldo, sin recalcular nada — reusa construirCierreFinalHipismo.
+// El link público equivalente (sin login) es GET /api/grupo-cliente/:token,
+// compartido con Deportes (ver src/routes/gruposClientesPublico.js).
+// =================================================================
+router.get('/grupos-clientes', asyncHandler(async (req, res) => {
+  const grupos = await listarGruposClientes(req.grupoId, 'hipismo');
+  return res.json({ grupos });
+}));
+
+router.post('/grupos-clientes', asyncHandler(async (req, res) => {
+  const titularId = (req.body.titularId || '').toString().trim();
+  if (!titularId) return res.status(400).json({ error: 'Falta el cliente titular.' });
+  const resultado = await crearGrupoCliente(req.grupoId, 'hipismo', titularId);
+  if (!resultado.ok) return res.status(404).json({ error: 'Ese cliente titular no existe en este grupo.' });
+  return res.status(201).json({ grupoCliente: resultado.grupoCliente });
+}));
+
+router.get('/grupos-clientes/:id', asyncHandler(async (req, res) => {
+  const tarjeta = await construirTarjetaGrupoCliente(req.params.id, req.grupoId, 'hipismo');
+  if (!tarjeta) return res.status(404).json({ error: 'Grupo de clientes no encontrado.' });
+  return res.json(tarjeta);
+}));
+
+router.delete('/grupos-clientes/:id', asyncHandler(async (req, res) => {
+  const borrado = await eliminarGrupoCliente(req.grupoId, 'hipismo', req.params.id);
+  if (!borrado) return res.status(404).json({ error: 'Grupo de clientes no encontrado.' });
+  return res.json({ ok: true });
+}));
+
+router.post('/grupos-clientes/:id/miembros', asyncHandler(async (req, res) => {
+  const jugadorId = (req.body.jugadorId || '').toString().trim();
+  if (!jugadorId) return res.status(400).json({ error: 'Falta el cliente a agregar.' });
+  const resultado = await agregarMiembro(req.grupoId, 'hipismo', req.params.id, jugadorId);
+  if (!resultado.ok) return res.status(404).json({ error: resultado.motivo === 'cliente_no_encontrado' ? 'Ese cliente no existe en este grupo.' : 'Grupo de clientes no encontrado.' });
+  return res.json({ ok: true });
+}));
+
+router.delete('/grupos-clientes/:id/miembros/:jugadorId', asyncHandler(async (req, res) => {
+  const resultado = await quitarMiembro(req.grupoId, 'hipismo', req.params.id, req.params.jugadorId);
+  if (!resultado.ok) return res.status(404).json({ error: 'Grupo de clientes no encontrado.' });
+  return res.json({ ok: true });
 }));
 
 // =================================================================

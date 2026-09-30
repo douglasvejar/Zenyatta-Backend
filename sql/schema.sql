@@ -1612,3 +1612,76 @@ create index if not exists idx_hipismo_winners_grupo_cliente on hipismo_winners(
 --   asegurarCuentasComisionParaNombres) y services/hipismoResumenCliente.js
 --   (construirResumenClienteHipismo, construirResumenCuentaComisionHipismo).
 alter table jugadores add column if not exists incluir_porcentaje_en_jugadas boolean not null default false;
+
+-- =================================================================
+-- GRUPO DE CLIENTES (30-09-2026, a pedido del usuario: "en saldos crea
+-- un nuevo boton llamado... Grupo de Clientes, alli se va a seleccionar
+-- un cliente, y a su vez todos los item, nombres o clientes que
+-- pertenecen a su grupo... arriba muestra el nombre de quien pertenece
+-- ese grupo de clientes, y abajo ordenado el nombre de las personas que
+-- seleccione y al lado su saldo total semana, estos saldos lo jalas de
+-- balance general, no duplican nada solo es para llevar un control
+-- extra con nuevos filtros... esos grupos tambien llevan link que al
+-- abrirlo se vea ese cuadro... al crear un grupo ya queda predeterminado
+-- para todas las semanas, se pueden eliminar o agregar nuevos miembros").
+--
+-- DISTINTO de "socios" (arriba): un Socio es una relación 1-a-1 (un
+-- cliente pertenece A LO SUMO a un socio, jugadores.socio_id), sin link
+-- público propio. Un "Grupo de Clientes" es N-a-N (un mismo cliente
+-- puede aparecer en varios grupos distintos, y un grupo tiene cualquier
+-- cantidad de miembros elegidos a mano), CON su propio link público
+-- (mismo patrón que jugadores.token, pero un UUID propio de este grupo),
+-- y NUNCA calcula nada nuevo — solo arma una vista filtrada/reordenada
+-- de saldos que YA calcula Balance General (services/balanceGeneral.js
+-- en Deportes, construirCierreFinalHipismo en
+-- services/hipismoResumenCliente.js en Hipismo).
+--
+-- "titular_id" es el cliente elegido como dueño/título del grupo (el
+-- nombre que se muestra arriba, ej. "TYKHE" en el ejemplo que mandó el
+-- usuario) — confirmado con el usuario que el titular SIEMPRE aparece
+-- también como un renglón más de la tabla de abajo, con su propio saldo
+-- (igual que en su captura, donde "TYKHE" es el título Y también una
+-- fila de la tabla) — services/gruposClientes.js arma esa unión
+-- (titular + tabla grupos_clientes_miembros) cada vez que se pide la
+-- tarjeta, nunca hace falta insertar al titular dos veces.
+--
+-- "modulo" (30-09-2026, confirmado con el usuario: "crealo en el modulo
+-- de hipismo... aparte tambien crealo en el modulo de deportes pero son
+-- cuadros independientes por modulo"): un grupo vive en UN SOLO módulo
+-- — un grupo de Deportes y uno de Hipismo son filas completamente
+-- aparte, aunque compartan el mismo jugador como titular o miembro (la
+-- fila de jugadores es la misma para los 2 módulos, ver la nota grande
+-- en la definición de "jugadores" más arriba) — nunca se suman entre sí.
+create table if not exists grupos_clientes (
+  id         uuid primary key default gen_random_uuid(),
+  grupo_id   uuid not null references grupos(id) on delete cascade,
+  modulo     text not null check (modulo in ('deportes', 'hipismo')),
+  titular_id uuid not null references jugadores(id) on delete cascade,
+  -- Link público (30-09-2026, "esos grupos tambien llevan link que al
+  -- abrirlo se vea ese cuadro"): mismo patrón que jugadores.token, pero
+  -- un UUID propio de ESTE grupo — ver GET /api/grupos-clientes/:token
+  -- (routes/gruposClientesPublico.js), la ÚNICA ruta pública, sirve para
+  -- los 2 módulos (resuelve solo con la propia fila de "modulo").
+  token      uuid not null unique default gen_random_uuid(),
+  creado_en  timestamptz not null default now()
+);
+
+create index if not exists idx_grupos_clientes_grupo on grupos_clientes(grupo_id, modulo);
+create index if not exists idx_grupos_clientes_titular on grupos_clientes(titular_id);
+
+-- Miembros del grupo, aparte del titular (30-09-2026, "se pueden
+-- eliminar o agregar nuevos miembros" — a diferencia de socios.PUT
+-- /:id/clientes, que reemplaza TODA la membresía de un socio de una vez,
+-- acá se agrega/quita un miembro a la vez, ver POST/DELETE
+-- /api/.../grupos-clientes/:id/miembros en services/gruposClientes.js).
+create table if not exists grupos_clientes_miembros (
+  grupo_cliente_id uuid not null references grupos_clientes(id) on delete cascade,
+  jugador_id       uuid not null references jugadores(id) on delete cascade,
+  agregado_en      timestamptz not null default now(),
+  primary key (grupo_cliente_id, jugador_id)
+);
+
+create index if not exists idx_grupos_clientes_miembros_jugador on grupos_clientes_miembros(jugador_id);
+
+alter table grupos_clientes enable row level security;
+alter table grupos_clientes_miembros enable row level security;

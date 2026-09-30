@@ -569,6 +569,25 @@
   .modal-detalle-body { padding: 4px 18px 16px; overflow-y: auto; flex: 1; border-top: 1px solid var(--card-border); }
   .modal-detalle-acciones { padding: 12px 18px; border-top: 1px solid var(--card-border); display: flex; gap: 10px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
 
+  /* "🗂️ Grupo de Clientes" (30-09-2026) — mismos nombres de clase (gc-*)
+     que public/app.js/grupo.html (Deportes), pero definidos acá aparte
+     porque esta página es 100% self-contained (no comparte CSS con
+     Deportes). */
+  .gc-grupo-card { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 14px; }
+  .gc-grupo-card summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; }
+  .gc-grupo-card summary .gc-cant { font-weight: normal; color: var(--text-dim); font-size: 12px; }
+  .gc-acciones { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+  table.gc-tabla { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+  table.gc-tabla th { text-align: left; padding: 6px 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla th.gc-col-monto, table.gc-tabla td.gc-col-monto { text-align: right; }
+  table.gc-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla tr.gc-fila-titular td { font-weight: bold; }
+  table.gc-tabla tr.gc-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; }
+  .gc-pos { color: #34d399; }
+  .gc-neg { color: #f87171; }
+  .gc-cero { color: var(--text-dim); }
+  .gc-checks { display: flex; flex-wrap: wrap; gap: 10px; max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 8px 0; }
+
   #detalleClienteCaptura { background: #fff; border-radius: 10px; }
 
   .detmodal-resumen { text-align: center; padding: 4px 0 12px; }
@@ -826,6 +845,7 @@
       <button type="button" class="nav-item nav-child" data-vista="semanaPorDias" onclick="mostrarVista('semanaPorDias', this)">📅<span class="nav-lbl"> Semana por Días</span></button>
       <button type="button" class="nav-item nav-child" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="grupoClientes" onclick="mostrarVista('grupoClientes', this)">🗂️<span class="nav-lbl"> Grupo de Clientes</span></button>
     </div>
 
     <hr>
@@ -1590,6 +1610,35 @@
       </div>
     </section>
 
+    <!-- ============ "🗂️ GRUPO DE CLIENTES" (30-09-2026) ============
+         A pedido del usuario — ver la nota grande en src/services/
+         gruposClientes.js. A diferencia de un cliente puntual, acá se
+         arma un grupo a mano (un cliente puede estar en varios a la
+         vez), se elige un titular (que SIEMPRE cuenta también como
+         miembro), y cada grupo tiene su propio link público con el
+         saldo semana actual + semana anterior de respaldo de cada
+         miembro — el MISMO Balance General/Cierre Final de siempre,
+         nunca recalculado acá. Independiente del de Deportes aunque
+         comparta el mismo cliente/titular (confirmado con el usuario:
+         "son cuadros independiente por modulo"). -->
+    <section class="vista" id="vista-grupoClientes">
+      <div class="card">
+        <h2>🗂️ Grupo de Clientes</h2>
+        <p class="desc">Arma grupos a tu gusto (un cliente puede estar en varios a la vez) para llevar un control extra — el titular que elijas queda como cabecera del grupo y su link, pero también cuenta como un miembro más. Los saldos de cada miembro son los mismos de Cierre Final, nunca se recalculan aparte. Este listado es exclusivo de Hipismo — el de Deportes (en "⬇️ Descargar") es un cuadro completamente aparte, aunque compartan el mismo cliente.</p>
+
+        <div class="fila" style="align-items:flex-end; margin-bottom:16px;">
+          <div style="flex:1; min-width:220px;">
+            <label for="selTitularNuevoGrupoClienteHip">Cliente titular del nuevo grupo</label>
+            <select id="selTitularNuevoGrupoClienteHip"></select>
+          </div>
+          <button class="btn btn-primario" type="button" onclick="crearGrupoClienteHipUI()">➕ Crear Grupo</button>
+        </div>
+
+        <div id="listaGruposClientesHip" style="display:flex; flex-direction:column; gap:10px;"></div>
+        <p id="gruposClientesHipVacio" style="display:none; text-align:center; color:var(--text-dim); padding:16px;">Todavía no has creado ningún Grupo de Clientes.</p>
+      </div>
+    </section>
+
     <!-- ============ SEMANA POR DÍAS (24-09-2026) ============
          "crea una pestaña en apuestas que diga semana por días... allí
          me muestras cada cliente con sus totales por días" — una fila por
@@ -1825,11 +1874,30 @@
             <button class="btn btn-primario" type="button" onclick="buscarComisionesDevueltas()">🔎 Buscar</button>
           </div>
         </div>
-        <div class="comision-caja" style="margin:14px 0;">
-          <span class="etiqueta">↩️ Total devuelto del día</span>
-          <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
+
+        <!-- Logo del grupo (30-09-2026, a pedido del usuario: "... y
+             comisiones devueltas por hipodromo y por cliente todos esos
+             detalles deben tener el logo del grupo") — esta pantalla no
+             tenía la franja de encabezado (.encabezado-captura) que ya
+             tienen sus hermanas ("Comisión por Carrera", "Comisiones
+             Totales/Devueltas por Hipódromo"); se agrega acá el mismo
+             círculo con ".js-logo-grupo" que pintarLogosGrupo() ya llena
+             solo (ver la nota grande junto a esa función), sin tocar el
+             resto de la lógica de esta pantalla. -->
+        <div id="comisionesDevueltasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
+          <div class="encabezado-captura">
+            <div class="logo-grupo js-logo-grupo">🏇</div>
+            <div>
+              <div class="titulo" id="comisionesDevueltasNombreGrupoCaptura">👤 Comisiones Devueltas por Cliente</div>
+              <div class="fecha" id="comisionesDevueltasFechaCaptura"></div>
+            </div>
+          </div>
+          <div class="comision-caja" style="margin:14px 0;">
+            <span class="etiqueta">↩️ Total devuelto del día</span>
+            <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
+          </div>
+          <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
         </div>
-        <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
       </div>
     </section>
 
@@ -4886,7 +4954,11 @@ function pintarLogosGrupo() {
     // 24-09-2026 (vigesimocuarta ronda): título de captura de "↩️
     // Comisiones Devueltas por Hipódromo" (ver vista-
     // comisionesDevueltasPorHipodromo).
-    hipodromoDevueltasNombreGrupoCaptura: `↩️ Comisiones Devueltas por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`
+    hipodromoDevueltasNombreGrupoCaptura: `↩️ Comisiones Devueltas por Hipódromo / Carrera — ${nombreGrupo} 🇻🇪`,
+    // 30-09-2026, a pedido del usuario: mismo tratamiento de logo+título
+    // que ya tenían sus hermanas (ver la nota grande junto a
+    // #comisionesDevueltasCaptura en el HTML de arriba).
+    comisionesDevueltasNombreGrupoCaptura: `👤 Comisiones Devueltas por Cliente — ${nombreGrupo} 🇻🇪`
   };
   Object.keys(titulos).forEach(id => {
     const el = document.getElementById(id);
@@ -4946,6 +5018,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // que Balance General; ver pintarDetalladoCliente() más abajo.
   detalladoCliente: () => pintarDetalladoCliente(semanaActivaDeSelector('selectorSemanaDetalladoCliente')),
   cierreFinal: () => pintarCierreFinal(semanaActivaDeSelector('selectorSemanaCierre')),
+  // "Grupo de Clientes" (30-09-2026) — ver la nota grande junto a
+  // #vista-grupoClientes más arriba.
+  grupoClientes: () => refrescarGruposClientesHip(),
   semanaPorDias: () => pintarSemanaPorDias(semanaActivaDeSelector('selectorSemanaPorDias')),
   comisionesPorCarrera: () => pintarComisionesPorCarrera(),
   // 24-09-2026: "Comisiones Totales por Hipódromo" es nueva, mismo
@@ -7662,6 +7737,227 @@ function copiarLinkClienteHipismo(token, nombre) {
   }
 }
 
+// =================================================================
+// "🗂️ Grupo de Clientes" (30-09-2026, a pedido del usuario — ver la nota
+// grande junto a #vista-grupoClientes más arriba y en src/services/
+// gruposClientes.js). Mismo criterio EXACTO que su equivalente de
+// Deportes (public/app.js), adaptado a esta página self-contained:
+// apiHipismo() en vez de api(), escaparHtmlChat() como escapador
+// genérico, formatMonto() para los montos. Las rutas son
+// /api/hipismo/grupos-clientes... (con modulo='hipismo' fijo del lado
+// del servidor) — nunca se mezclan con las de Deportes aunque el mismo
+// cliente sea titular/miembro de los dos.
+// =================================================================
+let GRUPOS_CLIENTES_HIP_CACHE = [];
+const GRUPOS_CLIENTES_HIP_TARJETA_CACHE = {};
+
+async function refrescarGruposClientesHip() {
+  poblarSelectTitularGrupoClienteHip();
+  const cont = document.getElementById('listaGruposClientesHip');
+  const vacio = document.getElementById('gruposClientesHipVacio');
+  if (!cont) return;
+  cont.innerHTML = '<p style="text-align:center; color:var(--text-dim); padding:10px;">Cargando...</p>';
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/grupos-clientes');
+  } catch (e) {
+    cont.innerHTML = `<p style="text-align:center; color:var(--text-dim); padding:10px;">No se pudieron cargar: ${e.message}</p>`;
+    return;
+  }
+  GRUPOS_CLIENTES_HIP_CACHE = data.grupos;
+  if (GRUPOS_CLIENTES_HIP_CACHE.length === 0) {
+    cont.innerHTML = '';
+    vacio.style.display = 'block';
+  } else {
+    vacio.style.display = 'none';
+    renderListaGruposClientesHip();
+  }
+}
+
+async function poblarSelectTitularGrupoClienteHip() {
+  const sel = document.getElementById('selTitularNuevoGrupoClienteHip');
+  if (!sel) return;
+  let jugadores;
+  try {
+    jugadores = await apiHipismo('/api/jugadores');
+  } catch (e) {
+    return;
+  }
+  CLIENTES_HIPISMO_CACHE = jugadores;
+  const activos = jugadores.filter(j => j.activo).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  sel.innerHTML = '<option value="">Elige el cliente titular…</option>' +
+    activos.map(j => `<option value="${j.id}">${escaparHtmlChat(j.nombre)}</option>`).join('');
+}
+
+function renderListaGruposClientesHip() {
+  const cont = document.getElementById('listaGruposClientesHip');
+  let html = '';
+  GRUPOS_CLIENTES_HIP_CACHE.forEach(g => {
+    html += `<details class="gc-grupo-card" ontoggle="onToggleGrupoClienteHip(event, '${g.id}')">`;
+    html += `<summary>🗂️ ${escaparHtmlChat(g.titularNombre)} <span class="gc-cant">(${g.cantidadMiembros} miembro${g.cantidadMiembros === 1 ? '' : 's'} + titular)</span></summary>`;
+    html += `<div id="gcContenidoHip_${g.id}">Cargando…</div>`;
+    html += '</details>';
+  });
+  cont.innerHTML = html;
+}
+
+async function onToggleGrupoClienteHip(event, id) {
+  if (!event.target.open) return;
+  await cargarYPintarTarjetaGrupoClienteHip(id);
+}
+
+async function cargarYPintarTarjetaGrupoClienteHip(id) {
+  const cont = document.getElementById('gcContenidoHip_' + id);
+  if (!cont) return;
+  cont.innerHTML = '<p style="color:var(--text-dim); padding:8px 0;">Cargando saldos…</p>';
+  let tarjeta;
+  try {
+    tarjeta = await apiHipismo('/api/hipismo/grupos-clientes/' + id);
+    GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id] = tarjeta;
+  } catch (e) {
+    cont.innerHTML = `<p style="color:var(--text-dim); padding:8px 0;">No se pudo cargar: ${e.message}</p>`;
+    return;
+  }
+  cont.innerHTML = htmlTarjetaGrupoClienteHip(tarjeta) + htmlAdministrarMiembrosGrupoClienteHip(tarjeta);
+  pintarBloqueSemanaGrupoClienteHip(id, 'actual');
+}
+
+function celdaMontoGrupoClienteHip(monto) {
+  const n = Number(monto) || 0;
+  const clase = n > 0.004 ? 'gc-pos' : (n < -0.004 ? 'gc-neg' : 'gc-cero');
+  const signo = n > 0.004 ? '+' : '';
+  return `<span class="${clase}">${signo}${formatMonto(n)}</span>`;
+}
+
+// "Semana anterior" es solo un respaldo: no se pinta de entrada, solo al
+// hacer click en su botón (30-09-2026, a pedido del usuario: "la semana
+// anterior solo debe mostrarse al darle click en el boton de semana
+// anterior") — las 2 semanas ya vienen juntas en `t`
+// (GRUPOS_CLIENTES_HIP_TARJETA_CACHE), así que cambiar de semana acá es
+// puramente visual, ver pintarBloqueSemanaGrupoClienteHip() más abajo.
+// Reusa ".subnav"/"activo", el mismo componente de siempre (Cierre
+// Final, Detallado por Cliente, etc.).
+function htmlTarjetaGrupoClienteHip(t) {
+  let html = '<div class="gc-acciones">';
+  html += `<button type="button" class="btn btn-secundario" onclick="copiarLinkGrupoClienteHip('${t.token}', '${escaparHtmlChat(t.titular.nombre).replace(/'/g, "\\'")}')">📋 Copiar link</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="eliminarGrupoClienteHipUI('${t.id}', '${escaparHtmlChat(t.titular.nombre).replace(/'/g, "\\'")}')">🗑️ Eliminar grupo</button>`;
+  html += '</div>';
+
+  html += `<div class="subnav" id="gcSubnavHip_${t.id}">`;
+  html += `<button type="button" class="activo" onclick="cambiarSemanaTarjetaGrupoClienteHip('${t.id}', 'actual', this)">Semana actual</button>`;
+  html += `<button type="button" onclick="cambiarSemanaTarjetaGrupoClienteHip('${t.id}', 'anterior', this)">🗓️ Semana anterior</button>`;
+  html += '</div>';
+  html += `<div id="gcBloqueHip_${t.id}"></div>`;
+  return html;
+}
+
+function cambiarSemanaTarjetaGrupoClienteHip(id, semana, btn) {
+  const subnav = document.getElementById('gcSubnavHip_' + id);
+  if (subnav) subnav.querySelectorAll('button').forEach(b => b.classList.remove('activo'));
+  if (btn) btn.classList.add('activo');
+  pintarBloqueSemanaGrupoClienteHip(id, semana);
+}
+
+function pintarBloqueSemanaGrupoClienteHip(id, semana) {
+  const t = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+  const cont = document.getElementById('gcBloqueHip_' + id);
+  if (!t || !cont) return;
+  const esActual = semana !== 'anterior';
+  const rango = esActual ? t.semanaActual : t.semanaAnterior;
+  const total = esActual ? t.totalSemanaActual : t.totalSemanaAnterior;
+  const tituloRango = (esActual ? 'Semana actual' : 'Semana anterior (de respaldo)') + ` — ${rango.desde} al ${rango.hasta}`;
+
+  let html = `<table class="gc-tabla"><thead><tr><th>${tituloRango}</th><th class="gc-col-monto">Saldo</th></tr></thead><tbody>`;
+  t.miembros.forEach(m => {
+    const saldo = esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior;
+    html += `<tr class="${m.esTitular ? 'gc-fila-titular' : ''}"><td>${m.esTitular ? '⭐ ' : ''}${escaparHtmlChat(m.nombre)}</td><td class="gc-col-monto">${celdaMontoGrupoClienteHip(saldo)}</td></tr>`;
+  });
+  html += `<tr class="gc-fila-total"><td>TOTAL</td><td class="gc-col-monto">${celdaMontoGrupoClienteHip(total)}</td></tr>`;
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+function htmlAdministrarMiembrosGrupoClienteHip(t) {
+  const idsActuales = new Set(t.miembros.filter(m => !m.esTitular).map(m => m.id));
+  const activos = (CLIENTES_HIPISMO_CACHE || []).filter(j => j.activo && j.id !== t.titular.id).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+  let html = '<div class="gc-checks">';
+  if (activos.length === 0) {
+    html += '<span style="color:var(--text-dim); font-size:13px;">No tienes más clientes activos para agregar.</span>';
+  }
+  activos.forEach(j => {
+    const marcado = idsActuales.has(j.id);
+    html += `<label style="font-weight:normal; display:flex; align-items:center; gap:5px; font-size:13px;"><input type="checkbox" class="chk-gc-miembro-hip_${t.id}" value="${j.id}" ${marcado ? 'checked' : ''} style="width:auto;"> ${escaparHtmlChat(j.nombre)}</label>`;
+  });
+  html += '</div>';
+  html += `<button type="button" class="btn btn-secundario" onclick="guardarMiembrosGrupoClienteHip('${t.id}')">💾 Guardar miembros</button>`;
+  return html;
+}
+
+async function crearGrupoClienteHipUI() {
+  const sel = document.getElementById('selTitularNuevoGrupoClienteHip');
+  const titularId = sel.value;
+  if (!titularId) { alert('Elige el cliente titular del nuevo grupo.'); return; }
+  try {
+    await apiHipismo('/api/hipismo/grupos-clientes', { method: 'POST', body: JSON.stringify({ titularId }) });
+    sel.value = '';
+    await refrescarGruposClientesHip();
+  } catch (e) {
+    alert('No se pudo crear el grupo: ' + e.message);
+  }
+}
+
+async function eliminarGrupoClienteHipUI(id, nombreTitular) {
+  if (!confirm(`¿Borrar el grupo de "${nombreTitular}"? Los clientes NO se borran, solo dejan de estar agrupados acá — esto no afecta sus saldos ni jugadas.`)) return;
+  try {
+    await apiHipismo('/api/hipismo/grupos-clientes/' + id, { method: 'DELETE' });
+    delete GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+    await refrescarGruposClientesHip();
+  } catch (e) {
+    alert('No se pudo borrar el grupo: ' + e.message);
+  }
+}
+
+async function guardarMiembrosGrupoClienteHip(id) {
+  const tarjetaPrevia = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+  if (!tarjetaPrevia) return;
+  const idsAntes = new Set(tarjetaPrevia.miembros.filter(m => !m.esTitular).map(m => m.id));
+  const checks = document.querySelectorAll('.chk-gc-miembro-hip_' + id + ':checked');
+  const idsDespues = new Set(Array.from(checks).map(c => c.value));
+
+  const aAgregar = Array.from(idsDespues).filter(jid => !idsAntes.has(jid));
+  const aQuitar = Array.from(idsAntes).filter(jid => !idsDespues.has(jid));
+  try {
+    await Promise.all([
+      ...aAgregar.map(jid => apiHipismo('/api/hipismo/grupos-clientes/' + id + '/miembros', { method: 'POST', body: JSON.stringify({ jugadorId: jid }) })),
+      ...aQuitar.map(jid => apiHipismo('/api/hipismo/grupos-clientes/' + id + '/miembros/' + jid, { method: 'DELETE' }))
+    ]);
+    await cargarYPintarTarjetaGrupoClienteHip(id);
+    await refrescarGruposClientesHip();
+    alert('Miembros guardados.');
+  } catch (e) {
+    alert('No se pudieron guardar los miembros: ' + e.message);
+  }
+}
+
+function copiarLinkGrupoClienteHip(token, nombreTitular) {
+  const url = `${location.origin}/grupo-cliente.html?token=${token}`;
+  copiarTextoAlPortapapelesHip(url, `Link del grupo de ${nombreTitular} copiado.`);
+}
+
+// No existía un helper genérico de "copiar al portapapeles con mensaje
+// de éxito" en esta página (copiarLinkClienteHipismo de arriba arma su
+// propio mensaje largo de WhatsApp a mano) — acá el link solo se copia
+// tal cual, así que se agrega este chiquito en vez de duplicar el
+// try/catch de navigator.clipboard 2 veces más abajo.
+function copiarTextoAlPortapapelesHip(texto, mensajeExito) {
+  const hacerFallback = () => prompt('Copia el texto:', texto);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => alert(mensajeExito)).catch(hacerFallback);
+  } else {
+    hacerFallback();
+  }
+}
+
 // ------------------------------------------------------------------
 // Balance General (24-09-2026, corregido a pedido del usuario: "balance
 // general me da una información, por ejemplo el link de hanry me da
@@ -9850,6 +10146,8 @@ async function pintarComisionesDevueltas(fechaForzada) {
   const inp = document.getElementById('inpFechaComisionesDevueltas');
   const fecha = fechaForzada || inp.value || fechaLocalHoy();
   if (!fechaForzada) inp.value = fecha;
+  const elFecha = document.getElementById('comisionesDevueltasFechaCaptura');
+  if (elFecha) elFecha.textContent = formatFechaCortaDMY(fecha);
   const cont = document.getElementById('listaComisionesDevueltas');
   cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
   let data;
