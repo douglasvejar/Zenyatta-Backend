@@ -406,17 +406,64 @@
   .gc-grupo-card { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; }
   .gc-grupo-card summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; }
   .gc-grupo-card summary .gc-cant { font-weight: normal; color: var(--text-dim); font-size: 12px; }
-  .gc-acciones { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+  .gc-acciones { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; align-items: center; }
+
+  /* 30-09-2026 (a pedido del usuario: "colocale color entre lineas para
+     mejor aspecto... agregale tambien su logo del grupo... de fondo de
+     la tabla") — la tabla de saldos ahora vive dentro de este wrapper,
+     que pinta el degradado del encabezado, las líneas alternadas y el
+     logo del grupo como marca de agua, todo con el tema de color propio
+     del grupo (grupoColorPrimario/Secundario que ya viaja en la tarjeta,
+     ver services/gruposClientes.js) o el celeste/azul de Ludox por
+     defecto si el grupo nunca configuró uno (Súper-admin > 🖼️ Logo >
+     "Colores Reportes Cliente"). --gc-color-1/--gc-color-2 los pone el
+     JS en el style="" de este mismo div. */
+  .gc-tabla-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); --gc-color-1: var(--accent-cyan); --gc-color-2: var(--accent-blue); }
+  .gc-tabla-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.10; pointer-events: none; z-index: 0; }
+  .gc-tabla-wrap table.gc-tabla { position: relative; z-index: 1; margin: 0; background: transparent; }
   table.gc-tabla { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
-  table.gc-tabla th { text-align: left; padding: 6px 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla th { text-align: left; padding: 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
   table.gc-tabla th.gc-col-monto, table.gc-tabla td.gc-col-monto { text-align: right; }
-  table.gc-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .gc-tabla-wrap table.gc-tabla th { background: linear-gradient(100deg, var(--gc-color-1), var(--gc-color-2) 70%); color: #fff; border-bottom: none; }
+  .gc-tabla-wrap table.gc-tabla tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--gc-color-1) 9%, transparent); }
   table.gc-tabla tr.gc-fila-titular td { font-weight: bold; }
+  .gc-tabla-wrap table.gc-tabla tr.gc-fila-titular td { background: color-mix(in srgb, var(--gc-color-1) 16%, transparent); }
   table.gc-tabla tr.gc-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; }
+  .gc-tabla-wrap table.gc-tabla tr.gc-fila-total td { background: color-mix(in srgb, var(--gc-color-1) 24%, transparent); }
   .gc-pos { color: #34d399; }
   .gc-neg { color: #f87171; }
   .gc-cero { color: var(--text-dim); }
-  .gc-checks { display: flex; flex-wrap: wrap; gap: 10px; max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 8px 0; }
+
+  /* Mini-encabezado (titular + rango + logo chiquito) que se suma a
+     .gc-tabla-wrap dentro del contenedor que captura html2canvas, para
+     que la imagen/texto que se comparte tenga contexto sin los botones
+     de administración alrededor. */
+  .gc-captura { background: var(--card); border-radius: 10px; }
+  .gc-captura-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 2px; }
+  .gc-captura-logo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--card-2); border: 1px solid var(--card-border); flex-shrink: 0; }
+  .gc-captura-titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; }
+  .gc-captura-sub { font-size: 11px; color: var(--text-dim); }
+
+  /* Buscador de miembros (30-09-2026, a pedido del usuario: "sera en
+     lista despegable y con la opcion de buscar... la lista despegable
+     solo sale al editar o crear un grupo") — reemplaza la grilla fija de
+     checkboxes de antes. #gcEditor_<id> arranca oculto: solo se ve al
+     tocar "✏️ Editar miembros" (ver toggleEditorMiembrosGrupoCliente()). */
+  .gc-editor-miembros { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--card-border); }
+  .gc-editor-miembros.gc-abierto { display: block; }
+  .gc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 26px; }
+  .gc-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(56,224,240,0.12); border: 1px solid rgba(56,224,240,0.3); color: var(--text); border-radius: 20px; padding: 3px 6px 3px 10px; font-size: 12.5px; }
+  .gc-chip button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+  .gc-chip button:hover { color: var(--danger, #ff6b6b); }
+  .gc-buscador-miembros { position: relative; }
+  .gc-buscador-miembros input[type="text"] { width: 100%; background: var(--bg-input, var(--card)); border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+  .gc-dropdown-miembros { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--card-2); border: 1px solid var(--card-border); border-radius: 8px; max-height: 190px; overflow-y: auto; z-index: 20; box-shadow: 0 8px 22px rgba(0,0,0,0.35); display: none; }
+  .gc-dropdown-miembros.gc-abierto { display: block; }
+  .gc-dropdown-item { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .gc-dropdown-item:hover { background: rgba(255,255,255,0.06); }
+  .gc-dropdown-vacio { padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); }
+
   /* "Semana anterior" es un respaldo, no se muestra de entrada — solo al
      hacer click en su botón (30-09-2026, a pedido del usuario). Las 2
      semanas ya vienen juntas en la tarjeta (GET /api/grupos-clientes/:id),

@@ -2735,6 +2735,20 @@ function cerrarExportarExcelSaldosSemana() {
   document.getElementById('modalExportarExcelSaldosSemana').classList.remove('activo');
 }
 
+// (30-09-2026, a pedido del usuario: el separador de mil + 2 decimales
+// también aplica a los .xlsx descargables) — mismo helper que usa
+// public/app.js: le pone formato "#,##0.00" a las columnas de plata.
+function aplicarFormatoMonedaXlsx(hoja, colsMoneda) {
+  if (!hoja['!ref']) return;
+  const rango = XLSX.utils.decode_range(hoja['!ref']);
+  for (let R = rango.s.r; R <= rango.e.r; R++) {
+    colsMoneda.forEach(C => {
+      const celda = hoja[XLSX.utils.encode_cell({ r: R, c: C })];
+      if (celda && celda.t === 'n') celda.z = '#,##0.00';
+    });
+  }
+}
+
 function generarExcelSaldosSemana() {
   if (typeof XLSX === 'undefined') {
     alert('No se pudo cargar la herramienta para generar el Excel (revisa tu conexión a internet y vuelve a intentar).');
@@ -2786,6 +2800,7 @@ function generarExcelSaldosSemana() {
 
   const hoja = XLSX.utils.aoa_to_sheet([[tituloGrupo], [tituloSemana], [], ...filas]);
   hoja['!cols'] = encabezado.map((_, i) => ({ wch: i === 0 ? 20 : 14 }));
+  aplicarFormatoMonedaXlsx(hoja, encabezado.slice(2).map((_, i) => i + 2));
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Saldos Semana');
   XLSX.writeFile(libro, 'saldos_semana_' + datos.semana.anio + '_s' + datos.semana.numero + '.xlsx');
@@ -2801,10 +2816,12 @@ function colorEstadoTicketSuperadmin(estado) {
 }
 
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los saldos/reportes/balances de la página) — es-VE da "1.234,56".
 function formatDinero(n) {
   const num = Number(n) || 0;
   const signo = num < 0 ? '-' : '';
-  return signo + '$' + Math.abs(num).toFixed(2);
+  return signo + '$' + Math.abs(num).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatFechaHora(iso) {

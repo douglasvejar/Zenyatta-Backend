@@ -287,8 +287,10 @@ function resolverBanqueoMarca({ acierta, base }, banqueadores, comisionPorcentaj
   return { banqueadores: resueltos, comisionMarcas };
 }
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales
+// también en los mensajes de WhatsApp) — texto de salida únicamente.
 function formatMontoTabla(n) {
-  return Math.abs(n).toFixed(2).replace('.', ',');
+  return Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function formatNombre(nombre) {
   const n = (nombre || '').toString().trim().toLowerCase();

@@ -576,17 +576,59 @@
   .gc-grupo-card { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 14px; }
   .gc-grupo-card summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; }
   .gc-grupo-card summary .gc-cant { font-weight: normal; color: var(--text-dim); font-size: 12px; }
-  .gc-acciones { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+  .gc-acciones { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; align-items: center; }
+
+  /* 30-09-2026 (a pedido del usuario: "colocale color entre lineas para
+     mejor aspecto... agregale tambien su logo del grupo... de fondo de
+     la tabla") — la tabla de saldos vive dentro de este wrapper, que
+     pinta el degradado del encabezado, las líneas alternadas y el logo
+     del grupo como marca de agua, con el tema de color propio del grupo
+     (grupoColorPrimario/Secundario que ya viaja en la tarjeta, ver
+     services/gruposClientes.js) o el verde de Ludox por defecto si el
+     grupo nunca configuró uno (Súper-admin > 🖼️ Logo > "Colores Reportes
+     Cliente"). --gc-color-1/--gc-color-2 los pone el JS en el style="". */
+  .gc-tabla-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); --gc-color-1: var(--accent-grass); --gc-color-2: var(--accent-lime); }
+  .gc-tabla-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.10; pointer-events: none; z-index: 0; }
+  .gc-tabla-wrap table.gc-tabla { position: relative; z-index: 1; margin: 0; background: transparent; }
   table.gc-tabla { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
-  table.gc-tabla th { text-align: left; padding: 6px 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla th { text-align: left; padding: 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
   table.gc-tabla th.gc-col-monto, table.gc-tabla td.gc-col-monto { text-align: right; }
-  table.gc-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--card-border); }
+  table.gc-tabla td { padding: 7px 8px; border-bottom: 1px solid rgba(15,60,35,0.06); }
+  .gc-tabla-wrap table.gc-tabla th { background: linear-gradient(100deg, var(--gc-color-1), var(--gc-color-2) 70%); color: #fff; border-bottom: none; }
+  .gc-tabla-wrap table.gc-tabla tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--gc-color-1) 8%, transparent); }
   table.gc-tabla tr.gc-fila-titular td { font-weight: bold; }
+  .gc-tabla-wrap table.gc-tabla tr.gc-fila-titular td { background: color-mix(in srgb, var(--gc-color-1) 16%, transparent); }
   table.gc-tabla tr.gc-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; }
+  .gc-tabla-wrap table.gc-tabla tr.gc-fila-total td { background: color-mix(in srgb, var(--gc-color-1) 22%, transparent); }
   .gc-pos { color: #34d399; }
   .gc-neg { color: #f87171; }
   .gc-cero { color: var(--text-dim); }
-  .gc-checks { display: flex; flex-wrap: wrap; gap: 10px; max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 8px 0; }
+
+  /* Mini-encabezado (titular + logo chiquito) dentro del contenedor que
+     capturan copiarImagenGrupoClienteHip()/copiarTextoGrupoClienteHip()
+     — nunca los botones de administración alrededor. */
+  .gc-captura { background: var(--card); border-radius: 10px; }
+  .gc-captura-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 2px; }
+  .gc-captura-logo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--card-2); border: 1px solid var(--card-border); flex-shrink: 0; }
+  .gc-captura-titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; }
+  .gc-captura-sub { font-size: 11px; color: var(--text-dim); }
+
+  /* Buscador de miembros (30-09-2026, a pedido del usuario — reemplaza la
+     grilla fija de checkboxes de antes). .gc-editor-miembros arranca
+     oculto: solo se ve al tocar "✏️ Editar miembros". */
+  .gc-editor-miembros { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--card-border); }
+  .gc-editor-miembros.gc-abierto { display: block; }
+  .gc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 26px; }
+  .gc-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(22,163,74,0.10); border: 1px solid rgba(22,163,74,0.28); color: var(--text); border-radius: 20px; padding: 3px 6px 3px 10px; font-size: 12.5px; }
+  .gc-chip button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+  .gc-chip button:hover { color: var(--danger); }
+  .gc-buscador-miembros { position: relative; }
+  .gc-buscador-miembros input[type="text"] { width: 100%; background: #fff; border: 1px solid var(--card-border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+  .gc-dropdown-miembros { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--card-border); border-radius: 8px; max-height: 190px; overflow-y: auto; z-index: 20; box-shadow: 0 8px 22px rgba(15,60,35,0.18); display: none; }
+  .gc-dropdown-miembros.gc-abierto { display: block; }
+  .gc-dropdown-item { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .gc-dropdown-item:hover { background: var(--card-2); }
+  .gc-dropdown-vacio { padding: 10px 12px; font-size: 12.5px; color: var(--text-dim); }
 
   #detalleClienteCaptura { background: #fff; border-radius: 10px; }
 
@@ -5185,13 +5227,16 @@ function cerrarAvisoPizarraAnterior() {
   if (aviso) aviso.classList.remove('burbuja-visible');
 }
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los saldos/reportes/balances de la página) — es-VE da "1.234,56"
+// (antes solo cambiaba el punto por coma, sin separador de mil).
 function formatMonto(n) {
   const signo = n < 0 ? '-' : '';
-  const abs = Math.abs(n).toFixed(2).replace('.', ',');
+  const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return signo + '$ ' + abs;
 }
 function formatMontoTabla(n) {
-  return Math.abs(n).toFixed(2).replace('.', ',');
+  return Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 // Solo estética: en el TEXTO del plano ya calculado, cada nombre se muestra
 // con la primera letra en mayúscula (sin importar cómo lo haya tecleado el
@@ -6384,7 +6429,7 @@ function pintarPreviewAdelantadas(jugadas) {
       <td>${j.carreraNumero}</td>
       <td>${j.tipo === 'tf' ? 'Tabla Fija' : 'Marca'}</td>
       <td>${textoJugadaAdelantada(j)}</td>
-      <td class="num">${Number(j.monto).toFixed(2).replace('.', ',')}</td>
+      <td class="num">${formatMontoTabla(Number(j.monto))}</td>
       <td>${j.errorCalculo ? `⚠️ ${j.detalleError}` : ''}</td>
     </tr>`).join('');
   document.getElementById('resultadoVacioAdelantadas').style.display = 'none';
@@ -6520,7 +6565,7 @@ function agregarBanquero(jugadaId) {
 // uno colcocarle como se llama y cuanto").
 function textoMontoConSigno(nombre, monto) {
   const v = Number(monto);
-  return `${formatNombre(nombre)} ${v >= 0 ? '+' : '-'}${Math.abs(v).toFixed(2).replace('.', ',')}`;
+  return `${formatNombre(nombre)} ${v >= 0 ? '+' : '-'}${formatMontoTabla(v)}`;
 }
 
 async function enviarBanqueo(jugadaId, clienteNombre) {
@@ -6551,7 +6596,7 @@ async function enviarBanqueo(jugadaId, clienteNombre) {
   // cómo quedó el banqueo, nombre por nombre.
   const lineas = [textoMontoConSigno(clienteNombre || 'Cliente', data.resultadoCliente)];
   (data.banqueadores || []).forEach(b => lineas.push(textoMontoConSigno(b.nombre, b.monto)));
-  if (data.comisionMarcas) lineas.push(`Comisión Marcas +${Number(data.comisionMarcas).toFixed(2).replace('.', ',')}`);
+  if (data.comisionMarcas) lineas.push(`Comisión Marcas +${formatMontoTabla(data.comisionMarcas)}`);
   alert('✅ Banqueo resuelto:\n\n' + lineas.join('\n'));
 
   // Y, a pedido del usuario ("se va colocando positivo a marcas la
@@ -6648,7 +6693,7 @@ function filaJugadaPendienteHtml(carrera, j) {
     const botonAgregarDeshabilitado = lista.length >= MAX_BANQUEADORES_MARCA;
     extra = `
       <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
-        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${Number(j.resultadoCliente).toFixed(2).replace('.', ',')}. Asigna quién banquea, hasta ${MAX_BANQUEADORES_MARCA} (los % deben sumar 100):</div>
+        <div style="font-size:13px; margin-bottom:6px;">${j.gano ? '✅ Acertó' : '❌ No acertó'} — neto del cliente: ${j.resultadoCliente >= 0 ? '+' : ''}${formatMontoTabla(Number(j.resultadoCliente))}. Asigna quién banquea, hasta ${MAX_BANQUEADORES_MARCA} (los % deben sumar 100):</div>
         ${lista.map((b, idx) => filaBanqueadorHtml(j.id, idx, b)).join('')}
         <div class="btn-fila">
           <button class="btn btn-secundario" type="button" ${botonAgregarDeshabilitado ? 'disabled title="Ya son 4 banqueadores"' : ''} onclick="agregarBanquero('${j.id}')">+ Agregar banquero</button>
@@ -7750,6 +7795,11 @@ function copiarLinkClienteHipismo(token, nombre) {
 // =================================================================
 let GRUPOS_CLIENTES_HIP_CACHE = [];
 const GRUPOS_CLIENTES_HIP_TARJETA_CACHE = {};
+// id -> Set de ids de miembros (sin el titular) mientras se edita en el
+// buscador, ANTES de tocar "Guardar miembros" (30-09-2026, a pedido del
+// usuario — reemplaza los checkboxes de antes, ver
+// toggleEditorMiembrosGrupoClienteHip()/renderDropdownGrupoClienteHip()).
+const GC_EDICION_SELECCION_HIP = {};
 
 async function refrescarGruposClientesHip() {
   poblarSelectTitularGrupoClienteHip();
@@ -7818,7 +7868,7 @@ async function cargarYPintarTarjetaGrupoClienteHip(id) {
     cont.innerHTML = `<p style="color:var(--text-dim); padding:8px 0;">No se pudo cargar: ${e.message}</p>`;
     return;
   }
-  cont.innerHTML = htmlTarjetaGrupoClienteHip(tarjeta) + htmlAdministrarMiembrosGrupoClienteHip(tarjeta);
+  cont.innerHTML = htmlTarjetaGrupoClienteHip(tarjeta);
   pintarBloqueSemanaGrupoClienteHip(id, 'actual');
 }
 
@@ -7829,6 +7879,15 @@ function celdaMontoGrupoClienteHip(monto) {
   return `<span class="${clase}">${signo}${formatMonto(n)}</span>`;
 }
 
+function mostrarGcToastHip(id, msg, esError) {
+  const t = document.getElementById('gcToastHip_' + id);
+  if (!t) return;
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
 // "Semana anterior" es solo un respaldo: no se pinta de entrada, solo al
 // hacer click en su botón (30-09-2026, a pedido del usuario: "la semana
 // anterior solo debe mostrarse al darle click en el boton de semana
@@ -7836,18 +7895,39 @@ function celdaMontoGrupoClienteHip(monto) {
 // (GRUPOS_CLIENTES_HIP_TARJETA_CACHE), así que cambiar de semana acá es
 // puramente visual, ver pintarBloqueSemanaGrupoClienteHip() más abajo.
 // Reusa ".subnav"/"activo", el mismo componente de siempre (Cierre
-// Final, Detallado por Cliente, etc.).
+// Final, Detallado por Cliente, etc.). El editor de miembros (buscador)
+// arranca oculto: solo se ve al tocar "✏️ Editar miembros" (a pedido del
+// usuario: "la lista despegable solo sale al editar o crear un grupo" —
+// ver toggleEditorMiembrosGrupoClienteHip()). #gcCapturaHip_<id> es justo
+// lo que capturan copiarImagenGrupoClienteHip()/copiarTextoGrupoClienteHip()
+// — nunca los botones de administración.
 function htmlTarjetaGrupoClienteHip(t) {
+  const nombreEsc = escaparHtmlChat(t.titular.nombre).replace(/'/g, "\\'");
   let html = '<div class="gc-acciones">';
-  html += `<button type="button" class="btn btn-secundario" onclick="copiarLinkGrupoClienteHip('${t.token}', '${escaparHtmlChat(t.titular.nombre).replace(/'/g, "\\'")}')">📋 Copiar link</button>`;
-  html += `<button type="button" class="btn btn-secundario" onclick="eliminarGrupoClienteHipUI('${t.id}', '${escaparHtmlChat(t.titular.nombre).replace(/'/g, "\\'")}')">🗑️ Eliminar grupo</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="copiarLinkGrupoClienteHip('${t.token}', '${nombreEsc}')">📋 Copiar link</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="toggleEditorMiembrosGrupoClienteHip('${t.id}')">✏️ Editar miembros</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="copiarImagenGrupoClienteHip('${t.id}')">📸 Copiar Imagen HD</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="copiarTextoGrupoClienteHip('${t.id}')">📋 Copiar Texto</button>`;
+  html += `<button type="button" class="btn btn-secundario" onclick="eliminarGrupoClienteHipUI('${t.id}', '${nombreEsc}')">🗑️ Eliminar grupo</button>`;
+  html += `<span class="toast-copiado" id="gcToastHip_${t.id}"></span>`;
   html += '</div>';
 
   html += `<div class="subnav" id="gcSubnavHip_${t.id}">`;
   html += `<button type="button" class="activo" onclick="cambiarSemanaTarjetaGrupoClienteHip('${t.id}', 'actual', this)">Semana actual</button>`;
   html += `<button type="button" onclick="cambiarSemanaTarjetaGrupoClienteHip('${t.id}', 'anterior', this)">🗓️ Semana anterior</button>`;
   html += '</div>';
-  html += `<div id="gcBloqueHip_${t.id}"></div>`;
+
+  html += `<div class="gc-captura" id="gcCapturaHip_${t.id}">`;
+  html += '<div class="gc-captura-header">';
+  html += t.grupoLogoUrl
+    ? `<img class="gc-captura-logo" src="${t.grupoLogoUrl}" alt="">`
+    : '<div class="gc-captura-logo" style="display:flex; align-items:center; justify-content:center; font-size:15px;">🐎</div>';
+  html += `<div><div class="gc-captura-titulo">${escaparHtmlChat(t.titular.nombre)}</div><div class="gc-captura-sub">${escaparHtmlChat(t.grupoNombre || '')}</div></div>`;
+  html += '</div>';
+  html += `<div id="gcBloqueHip_${t.id}" style="padding:6px 12px 12px;"></div>`;
+  html += '</div>';
+
+  html += htmlEditorMiembrosGrupoClienteHip(t);
   return html;
 }
 
@@ -7858,6 +7938,20 @@ function cambiarSemanaTarjetaGrupoClienteHip(id, semana, btn) {
   pintarBloqueSemanaGrupoClienteHip(id, semana);
 }
 
+// true si "Semana actual" está activa en el subnav de ese grupo — lo usa
+// copiarTextoGrupoClienteHip() para saber qué semana está viendo el
+// Administrador en este momento.
+function esSemanaActualGrupoClienteHip(id) {
+  const subnav = document.getElementById('gcSubnavHip_' + id);
+  const btnAnterior = subnav ? subnav.querySelector('button:nth-child(2)') : null;
+  return !btnAnterior || !btnAnterior.classList.contains('activo');
+}
+
+// La tabla vive dentro de .gc-tabla-wrap, con el tema de color del grupo
+// (grupoColorPrimario/Secundario) y su logo como marca de agua de fondo
+// (30-09-2026, a pedido del usuario) — si el grupo nunca configuró un
+// color (Súper-admin > 🖼️ Logo), --gc-color-1/2 se dejan sin poner y la
+// tabla usa el verde de Ludox por defecto, ya puesto en el CSS.
 function pintarBloqueSemanaGrupoClienteHip(id, semana) {
   const t = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
   const cont = document.getElementById('gcBloqueHip_' + id);
@@ -7867,30 +7961,132 @@ function pintarBloqueSemanaGrupoClienteHip(id, semana) {
   const total = esActual ? t.totalSemanaActual : t.totalSemanaAnterior;
   const tituloRango = (esActual ? 'Semana actual' : 'Semana anterior (de respaldo)') + ` — ${rango.desde} al ${rango.hasta}`;
 
-  let html = `<table class="gc-tabla"><thead><tr><th>${tituloRango}</th><th class="gc-col-monto">Saldo</th></tr></thead><tbody>`;
+  const estiloTema = (t.grupoColorPrimario && t.grupoColorSecundario)
+    ? ` style="--gc-color-1:${t.grupoColorPrimario}; --gc-color-2:${t.grupoColorSecundario};"`
+    : '';
+  let html = `<div class="gc-tabla-wrap"${estiloTema}>`;
+  if (t.grupoLogoUrl) html += `<div class="gc-tabla-logo-fondo" style="background-image:url('${t.grupoLogoUrl}');"></div>`;
+  html += `<table class="gc-tabla"><thead><tr><th>${tituloRango}</th><th class="gc-col-monto">Saldo</th></tr></thead><tbody>`;
   t.miembros.forEach(m => {
     const saldo = esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior;
     html += `<tr class="${m.esTitular ? 'gc-fila-titular' : ''}"><td>${m.esTitular ? '⭐ ' : ''}${escaparHtmlChat(m.nombre)}</td><td class="gc-col-monto">${celdaMontoGrupoClienteHip(saldo)}</td></tr>`;
   });
   html += `<tr class="gc-fila-total"><td>TOTAL</td><td class="gc-col-monto">${celdaMontoGrupoClienteHip(total)}</td></tr>`;
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   cont.innerHTML = html;
 }
 
-function htmlAdministrarMiembrosGrupoClienteHip(t) {
-  const idsActuales = new Set(t.miembros.filter(m => !m.esTitular).map(m => m.id));
-  const activos = (CLIENTES_HIPISMO_CACHE || []).filter(j => j.activo && j.id !== t.titular.id).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
-  let html = '<div class="gc-checks">';
-  if (activos.length === 0) {
-    html += '<span style="color:var(--text-dim); font-size:13px;">No tienes más clientes activos para agregar.</span>';
-  }
-  activos.forEach(j => {
-    const marcado = idsActuales.has(j.id);
-    html += `<label style="font-weight:normal; display:flex; align-items:center; gap:5px; font-size:13px;"><input type="checkbox" class="chk-gc-miembro-hip_${t.id}" value="${j.id}" ${marcado ? 'checked' : ''} style="width:auto;"> ${escaparHtmlChat(j.nombre)}</label>`;
-  });
+// =================================================================
+// Editor de miembros — buscador con lista despegable (30-09-2026, a
+// pedido del usuario: "sera en lista despegable y con la opcion de
+// buscar, para encontrar mas rapido el cliente .... la lista despegable
+// solo sale al editar o crear un grupo"), en vez de la grilla fija de
+// checkboxes de antes. Mismo criterio EXACTO que public/app.js
+// (Deportes) — ver ese archivo para la nota completa.
+// =================================================================
+function htmlEditorMiembrosGrupoClienteHip(t) {
+  let html = `<div class="gc-editor-miembros" id="gcEditorHip_${t.id}">`;
+  html += `<div class="gc-chips" id="gcChipsHip_${t.id}"></div>`;
+  html += '<div class="gc-buscador-miembros">';
+  html += `<input type="text" placeholder="🔍 Buscar cliente para agregar…" id="gcBuscarHip_${t.id}" oninput="filtrarDropdownGrupoClienteHip('${t.id}', this.value)" onfocus="abrirDropdownGrupoClienteHip('${t.id}')" onblur="cerrarDropdownGrupoClienteHipConDelay('${t.id}')">`;
+  html += `<div class="gc-dropdown-miembros" id="gcDropdownHip_${t.id}"></div>`;
   html += '</div>';
-  html += `<button type="button" class="btn btn-secundario" onclick="guardarMiembrosGrupoClienteHip('${t.id}')">💾 Guardar miembros</button>`;
+  html += `<div style="margin-top:10px;"><button type="button" class="btn btn-secundario" onclick="guardarMiembrosGrupoClienteHip('${t.id}')">💾 Guardar miembros</button></div>`;
+  html += '</div>';
   return html;
+}
+
+function toggleEditorMiembrosGrupoClienteHip(id) {
+  const editor = document.getElementById('gcEditorHip_' + id);
+  if (!editor) return;
+  const abrir = !editor.classList.contains('gc-abierto');
+  editor.classList.toggle('gc-abierto', abrir);
+  if (abrir) {
+    const t = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+    if (!t) return;
+    GC_EDICION_SELECCION_HIP[id] = new Set(t.miembros.filter(m => !m.esTitular).map(m => m.id));
+    renderChipsGrupoClienteHip(id);
+    const input = document.getElementById('gcBuscarHip_' + id);
+    if (input) input.value = '';
+    renderDropdownGrupoClienteHip(id, '');
+  }
+}
+
+function renderChipsGrupoClienteHip(id) {
+  const cont = document.getElementById('gcChipsHip_' + id);
+  if (!cont) return;
+  const seleccion = GC_EDICION_SELECCION_HIP[id] || new Set();
+  if (seleccion.size === 0) {
+    cont.innerHTML = '<span style="font-size:12.5px; color:var(--text-dim);">Todavía no agregaste ningún miembro.</span>';
+    return;
+  }
+  const porId = new Map((CLIENTES_HIPISMO_CACHE || []).map(j => [j.id, j.nombre]));
+  let html = '';
+  seleccion.forEach(jid => {
+    const nombre = porId.get(jid) || '(cliente)';
+    html += `<span class="gc-chip">${escaparHtmlChat(nombre)}<button type="button" onclick="quitarMiembroSeleccionGrupoClienteHip('${id}', '${jid}')" title="Quitar">✕</button></span>`;
+  });
+  cont.innerHTML = html;
+}
+
+function quitarMiembroSeleccionGrupoClienteHip(id, jugadorId) {
+  const seleccion = GC_EDICION_SELECCION_HIP[id];
+  if (!seleccion) return;
+  seleccion.delete(jugadorId);
+  renderChipsGrupoClienteHip(id);
+  const input = document.getElementById('gcBuscarHip_' + id);
+  renderDropdownGrupoClienteHip(id, input ? input.value : '');
+}
+
+function agregarMiembroSeleccionGrupoClienteHip(id, jugadorId) {
+  const seleccion = GC_EDICION_SELECCION_HIP[id];
+  if (!seleccion) return;
+  seleccion.add(jugadorId);
+  renderChipsGrupoClienteHip(id);
+  const input = document.getElementById('gcBuscarHip_' + id);
+  if (input) { input.value = ''; input.focus(); }
+  renderDropdownGrupoClienteHip(id, '');
+}
+
+function filtrarDropdownGrupoClienteHip(id, texto) {
+  renderDropdownGrupoClienteHip(id, texto);
+}
+
+function abrirDropdownGrupoClienteHip(id) {
+  const dd = document.getElementById('gcDropdownHip_' + id);
+  if (dd) dd.classList.add('gc-abierto');
+}
+
+// El blur del buscador dispara ANTES que el click en un ítem del
+// desplegable — un pequeño delay deja que ese click (que además hace
+// preventDefault en mousedown, ver renderDropdownGrupoClienteHip) se
+// procese primero, así el desplegable no se cierra de golpe al elegir.
+function cerrarDropdownGrupoClienteHipConDelay(id) {
+  setTimeout(() => {
+    const dd = document.getElementById('gcDropdownHip_' + id);
+    if (dd) dd.classList.remove('gc-abierto');
+  }, 180);
+}
+
+function renderDropdownGrupoClienteHip(id, texto) {
+  const dd = document.getElementById('gcDropdownHip_' + id);
+  if (!dd) return;
+  const t = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+  const seleccion = GC_EDICION_SELECCION_HIP[id] || new Set();
+  const titularId = t ? t.titular.id : null;
+  const busqueda = (texto || '').trim().toLowerCase();
+  const candidatos = (CLIENTES_HIPISMO_CACHE || [])
+    .filter(j => j.activo && j.id !== titularId && !seleccion.has(j.id))
+    .filter(j => !busqueda || j.nombre.toLowerCase().includes(busqueda))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  if (candidatos.length === 0) {
+    dd.innerHTML = '<div class="gc-dropdown-vacio">Sin clientes para agregar.</div>';
+  } else {
+    dd.innerHTML = candidatos.slice(0, 50).map(j =>
+      `<div class="gc-dropdown-item" onmousedown="event.preventDefault(); agregarMiembroSeleccionGrupoClienteHip('${id}', '${j.id}')">${escaparHtmlChat(j.nombre)}</div>`
+    ).join('');
+  }
+  dd.classList.add('gc-abierto');
 }
 
 async function crearGrupoClienteHipUI() {
@@ -7911,18 +8107,22 @@ async function eliminarGrupoClienteHipUI(id, nombreTitular) {
   try {
     await apiHipismo('/api/hipismo/grupos-clientes/' + id, { method: 'DELETE' });
     delete GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+    delete GC_EDICION_SELECCION_HIP[id];
     await refrescarGruposClientesHip();
   } catch (e) {
     alert('No se pudo borrar el grupo: ' + e.message);
   }
 }
 
+// Ya no lee checkboxes — compara GC_EDICION_SELECCION_HIP (lo que arma
+// el buscador) contra la última tarjeta pedida y solo manda al servidor
+// lo que de verdad cambió, mismo criterio de siempre.
 async function guardarMiembrosGrupoClienteHip(id) {
   const tarjetaPrevia = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
-  if (!tarjetaPrevia) return;
+  const seleccion = GC_EDICION_SELECCION_HIP[id];
+  if (!tarjetaPrevia || !seleccion) return;
   const idsAntes = new Set(tarjetaPrevia.miembros.filter(m => !m.esTitular).map(m => m.id));
-  const checks = document.querySelectorAll('.chk-gc-miembro-hip_' + id + ':checked');
-  const idsDespues = new Set(Array.from(checks).map(c => c.value));
+  const idsDespues = seleccion;
 
   const aAgregar = Array.from(idsDespues).filter(jid => !idsAntes.has(jid));
   const aQuitar = Array.from(idsAntes).filter(jid => !idsDespues.has(jid));
@@ -7942,6 +8142,60 @@ async function guardarMiembrosGrupoClienteHip(id) {
 function copiarLinkGrupoClienteHip(token, nombreTitular) {
   const url = `${location.origin}/grupo-cliente.html?token=${token}`;
   copiarTextoAlPortapapelesHip(url, `Link del grupo de ${nombreTitular} copiado.`);
+}
+
+// "📸 Copiar Imagen HD" / "📋 Copiar Texto" (30-09-2026, a pedido del
+// usuario) — mismo patrón EXACTO que copiarPozosImagen()/
+// copiarPozosTexto() más abajo, apuntando solo a #gcCapturaHip_<id>
+// (encabezado + tabla), nunca a los botones de administración alrededor.
+async function copiarImagenGrupoClienteHip(id) {
+  const contenido = document.getElementById('gcCapturaHip_' + id);
+  if (!contenido) return;
+  if (typeof html2canvas !== 'function') {
+    mostrarGcToastHip(id, '⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarGcToastHip(id, '⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarGcToastHip(id, '✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'grupo_clientes.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarGcToastHip(id, 'No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarGcToastHip(id, '⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+function copiarTextoGrupoClienteHip(id) {
+  const t = GRUPOS_CLIENTES_HIP_TARJETA_CACHE[id];
+  if (!t) return;
+  const esActual = esSemanaActualGrupoClienteHip(id);
+  const rango = esActual ? t.semanaActual : t.semanaAnterior;
+  const total = esActual ? t.totalSemanaActual : t.totalSemanaAnterior;
+  const conSigno = n => (Number(n) > 0.004 ? '+' : '') + formatMonto(n);
+  let texto = `🗂️ *${t.titular.nombre}*${t.grupoNombre ? ' — ' + t.grupoNombre : ''} 🇻🇪\n`;
+  texto += `📅 ${esActual ? 'SEMANA ACTUAL' : 'SEMANA ANTERIOR'} — ${rango.desde} al ${rango.hasta}\n\n`;
+  t.miembros.forEach(m => {
+    const saldo = esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior;
+    texto += `${m.esTitular ? '⭐' : '•'} ${m.nombre}: ${conSigno(saldo)}\n`;
+  });
+  texto += `\nTOTAL: ${conSigno(total)}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarGcToastHip(id, '✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarGcToastHip(id, 'No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarGcToastHip(id, 'No se pudo copiar — selecciona el texto a mano.', true);
+  }
 }
 
 // No existía un helper genérico de "copiar al portapapeles con mensaje
@@ -8974,6 +9228,22 @@ async function descargarBalancePDF() {
   }
 }
 
+// (30-09-2026, a pedido del usuario: el separador de mil + 2 decimales
+// también aplica a los .xlsx descargables) — le pone a las columnas de
+// plata (índices 0-based) el formato de Excel "#,##0.00", igual que en
+// pantalla. Los títulos/encabezados de texto no son celdas numéricas, así
+// que `celda.t === 'n'` los deja intactos sin tener que excluir filas.
+function aplicarFormatoMonedaXlsx(hoja, colsMoneda) {
+  if (!hoja['!ref']) return;
+  const rango = XLSX.utils.decode_range(hoja['!ref']);
+  for (let R = rango.s.r; R <= rango.e.r; R++) {
+    colsMoneda.forEach(C => {
+      const celda = hoja[XLSX.utils.encode_cell({ r: R, c: C })];
+      if (celda && celda.t === 'n') celda.z = '#,##0.00';
+    });
+  }
+}
+
 function descargarBalanceExcel() {
   if (!BALANCE_GENERAL_ACTUAL) { mostrarToastBalance('Todavía se está cargando el balance — espera un momento.', true); return; }
   if (typeof XLSX === 'undefined') {
@@ -8987,6 +9257,7 @@ function descargarBalanceExcel() {
   const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(comisionTotal.toFixed(2))]];
   const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
+  aplicarFormatoMonedaXlsx(hoja, [1]); // "Saldo" / "Comisión"
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Balance General');
   XLSX.writeFile(libro, 'balance_general.xlsx');
@@ -9277,6 +9548,7 @@ function descargarSemanaExcel() {
     filaComision
   ]);
   hoja['!cols'] = encabezados.map((_, i) => ({ wch: i === 0 ? 18 : 12 }));
+  aplicarFormatoMonedaXlsx(hoja, encabezados.slice(1).map((_, i) => i + 1));
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Semana por Días');
   XLSX.writeFile(libro, 'semana_por_dias.xlsx');
@@ -9363,11 +9635,17 @@ function descargarCierreExcel() {
   const verGano = document.getElementById('chkColGano').checked;
   const verPerdio = document.getElementById('chkColPerdio').checked;
 
+  // "Jugadas" es una cantidad (no plata) -- se rastrean a mano los índices
+  // de columna de las que sí son plata para el formato del Excel más abajo
+  // (aplicarFormatoMonedaXlsx), porque cuáles columnas van varía según lo
+  // que el usuario tildó ver.
   const encabezados = ['Cliente'];
+  const colsMonedaCierre = [];
   if (verJugadas) encabezados.push('Jugadas');
-  if (verGano) encabezados.push('Ganó');
-  if (verPerdio) encabezados.push('Perdió');
+  if (verGano) { encabezados.push('Ganó'); colsMonedaCierre.push(encabezados.length - 1); }
+  if (verPerdio) { encabezados.push('Perdió'); colsMonedaCierre.push(encabezados.length - 1); }
   encabezados.push('Saldo definitivo');
+  colsMonedaCierre.push(encabezados.length - 1);
 
   const filas = data.clientes.map(c => {
     const fila = [formatNombre(c.nombre)];
@@ -9395,6 +9673,7 @@ function descargarCierreExcel() {
     filaComision
   ]);
   hoja['!cols'] = encabezados.map((_, i) => ({ wch: i === 0 ? 18 : 14 }));
+  aplicarFormatoMonedaXlsx(hoja, colsMonedaCierre);
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Cierre Final');
   XLSX.writeFile(libro, 'cierre_final.xlsx');
@@ -9859,7 +10138,7 @@ function mostrarToastComisionesPorCarrera(msg, esError) {
 // línea (con "* " adelante, como pidió en su ejemplo), y el subtotal del
 // hipódromo queda separado por una línea en blanco al final del bloque.
 function textoComisionesPorCarrera(data) {
-  let texto = `📈 *Comisión por Carrera de Clientes*\n*Total semana: $${data.totalGeneral.toFixed(2)}*\n`;
+  let texto = `📈 *Comisión por Carrera de Clientes*\n*Total semana: $${formatMontoTabla(data.totalGeneral)}*\n`;
   if (data.rango) texto += `📅 ${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}\n`;
   data.dias.forEach(dia => {
     texto += `\n📅 *${formatFechaCortaDMY(dia.fecha)}*\n`;
@@ -9871,10 +10150,10 @@ function textoComisionesPorCarrera(data) {
         if (!clientes.length) {
           texto += `sin comisión\n`;
         } else {
-          clientes.forEach(c => { texto += `* ${formatNombre(c.cliente)} $${c.total.toFixed(2)}\n`; });
+          clientes.forEach(c => { texto += `* ${formatNombre(c.cliente)} $${formatMontoTabla(c.total)}\n`; });
         }
       });
-      texto += `\n*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
+      texto += `\n*Subtotal ${hip.nombre}: $${formatMontoTabla(hip.totalComision)}*\n`;
     });
   });
   return texto;
@@ -9964,6 +10243,7 @@ function descargarComisionesPorCarreraExcel() {
   filas.push(['Total general', '', '', '', Number(COMISIONES_POR_CARRERA_ACTUAL.totalGeneral.toFixed(2))]);
   const hoja = XLSX.utils.aoa_to_sheet([['Comisión por Carrera de Clientes — Zenyatta 🇻🇪'], [document.getElementById('comisionesPorCarreraRangoCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 20 }, { wch: 12 }];
+  aplicarFormatoMonedaXlsx(hoja, [4]); // "Comisión"
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Comisión por Carrera');
   XLSX.writeFile(libro, 'comision_por_carrera_clientes.xlsx');
@@ -10007,7 +10287,7 @@ async function pintarComisionesPorHipodromo(fechaForzada) {
   }
   COMISIONES_HIPODROMO_ACTUAL = data;
   document.getElementById('hipodromoFechaCaptura').textContent = formatFechaCortaDMY(data.fecha);
-  document.getElementById('montoComisionesHipodromoTotal').textContent = '$' + data.totalGeneral.toFixed(2);
+  document.getElementById('montoComisionesHipodromoTotal').textContent = '$' + formatMontoTabla(data.totalGeneral);
 
   if (!data.hipodromos.length) {
     cont.innerHTML = '<div class="resultado-vacio">Sin planos calculados ese día — no hay comisión que mostrar todavía.</div>';
@@ -10018,8 +10298,8 @@ async function pintarComisionesPorHipodromo(fechaForzada) {
     <div class="bloque-hipodromo">
       <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
       <div class="cabecera-columnas">Carrera | Comisión</div>
-      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${c.comision.toFixed(2)}</span></div>`).join('')}
-      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${hip.totalComision.toFixed(2)}</span></div>
+      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${formatMontoTabla(c.comision)}</span></div>`).join('')}
+      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${formatMontoTabla(hip.totalComision)}</span></div>
     </div>
   `).join('');
 }
@@ -10032,16 +10312,18 @@ function mostrarToastComisionesHipodromo(msg, esError) {
   setTimeout(() => t.classList.remove('visible'), 2600);
 }
 
-// Arma EXACTO el texto que pegó el usuario como ejemplo (título, total
-// general, y por cada hipódromo: subtítulo "Carrera | Comisión", una
-// línea "Nª $X.XX" por carrera y "Subtotal {hipódromo}: $X.XX" al
-// cierre) — *negrita* con un solo asterisco, así se ve en WhatsApp.
+// Arma el texto que pegó el usuario como ejemplo (título, total general, y
+// por cada hipódromo: subtítulo "Carrera | Comisión", una línea "Nª $X,XX"
+// por carrera y "Subtotal {hipódromo}: $X,XX" al cierre) — *negrita* con un
+// solo asterisco, así se ve en WhatsApp. (30-09-2026: los montos ahora
+// llevan separador de mil, a pedido del usuario — "$X.XX" pasó a "$X,XX"
+// con "." de millar cuando el monto llega a 4 cifras.)
 function textoComisionesPorHipodromo(data) {
-  let texto = `🏇 *Comisiones por Hipódromo / Carrera*\n*Total: $${data.totalGeneral.toFixed(2)}*\n`;
+  let texto = `🏇 *Comisiones por Hipódromo / Carrera*\n*Total: $${formatMontoTabla(data.totalGeneral)}*\n`;
   data.hipodromos.forEach(hip => {
     texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Comisión*\n`;
-    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${c.comision.toFixed(2)}\n`; });
-    texto += `*Subtotal ${hip.nombre}: $${hip.totalComision.toFixed(2)}*\n`;
+    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${formatMontoTabla(c.comision)}\n`; });
+    texto += `*Subtotal ${hip.nombre}: $${formatMontoTabla(hip.totalComision)}*\n`;
   });
   return texto;
 }
@@ -10122,6 +10404,7 @@ function descargarComisionesHipodromoExcel() {
   filas.push(['Total general', '', Number(COMISIONES_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
   const hoja = XLSX.utils.aoa_to_sheet([['Comisiones por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
+  aplicarFormatoMonedaXlsx(hoja, [2]); // "Comisión"
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Comisiones por Hipódromo');
   XLSX.writeFile(libro, 'comisiones_por_hipodromo.xlsx');
@@ -10160,7 +10443,7 @@ async function pintarComisionesDevueltas(fechaForzada) {
   // 24-09-2026: total general que pidió el usuario ("ambas pantallas con
   // total devolucion") — el backend ya lo trae calculado (data.totalGeneral).
   const montoTotalEl = document.getElementById('montoComisionesDevueltasTotal');
-  if (montoTotalEl) montoTotalEl.textContent = '$' + Number(data.totalGeneral || 0).toFixed(2);
+  if (montoTotalEl) montoTotalEl.textContent = '$' + formatMontoTabla(Number(data.totalGeneral || 0));
   if (!data.clientes.length) {
     cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó ese día.</div>';
     return;
@@ -10256,7 +10539,7 @@ async function pintarComisionesDevueltasPorHipodromo(fechaForzada) {
   }
   COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL = data;
   document.getElementById('hipodromoDevueltasFechaCaptura').textContent = formatFechaCortaDMY(data.fecha);
-  document.getElementById('montoComisionesDevueltasHipodromoTotal').textContent = '$' + data.totalGeneral.toFixed(2);
+  document.getElementById('montoComisionesDevueltasHipodromoTotal').textContent = '$' + formatMontoTabla(data.totalGeneral);
 
   if (!data.hipodromos.length) {
     cont.innerHTML = '<div class="resultado-vacio">Ningún cliente con % propio configurado apostó ese día — no hay devolución que mostrar.</div>';
@@ -10267,8 +10550,8 @@ async function pintarComisionesDevueltasPorHipodromo(fechaForzada) {
     <div class="bloque-hipodromo">
       <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
       <div class="cabecera-columnas">Carrera | Devuelto</div>
-      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${c.devuelto.toFixed(2)}</span></div>`).join('')}
-      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${hip.totalDevuelto.toFixed(2)}</span></div>
+      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${formatMontoTabla(c.devuelto)}</span></div>`).join('')}
+      <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${formatMontoTabla(hip.totalDevuelto)}</span></div>
     </div>
   `).join('');
 }
@@ -10282,11 +10565,11 @@ function mostrarToastComisionesDevueltasHipodromo(msg, esError) {
 }
 
 function textoComisionesDevueltasPorHipodromo(data) {
-  let texto = `↩️ *Comisiones Devueltas por Hipódromo / Carrera*\n*Total devuelto: $${data.totalGeneral.toFixed(2)}*\n`;
+  let texto = `↩️ *Comisiones Devueltas por Hipódromo / Carrera*\n*Total devuelto: $${formatMontoTabla(data.totalGeneral)}*\n`;
   data.hipodromos.forEach(hip => {
     texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Devuelto*\n`;
-    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${c.devuelto.toFixed(2)}\n`; });
-    texto += `*Subtotal ${hip.nombre}: $${hip.totalDevuelto.toFixed(2)}*\n`;
+    hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${formatMontoTabla(c.devuelto)}\n`; });
+    texto += `*Subtotal ${hip.nombre}: $${formatMontoTabla(hip.totalDevuelto)}*\n`;
   });
   return texto;
 }
@@ -10367,6 +10650,7 @@ function descargarComisionesDevueltasHipodromoExcel() {
   filas.push(['Total general', '', Number(COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
   const hoja = XLSX.utils.aoa_to_sheet([['Comisiones Devueltas por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoDevueltasFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
+  aplicarFormatoMonedaXlsx(hoja, [2]); // "Devuelto"
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Comisiones Devueltas');
   XLSX.writeFile(libro, 'comisiones_devueltas_por_hipodromo.xlsx');

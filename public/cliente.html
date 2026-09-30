@@ -357,9 +357,12 @@ const CLASE_ESTADO = {
   'SUSPENDIDA': 'suspendida'
 };
 
+// (30-09-2026, a pedido del usuario: formato de todos los números de
+// saldos/reportes/links de clientes = separador de mil + 2 decimales)
+// es-VE da "1.234,56" (punto de millar, coma decimal).
 function formatMoney(n) {
   const num = Number(n) || 0;
-  return (num < 0 ? '-$' : '$') + Math.abs(num).toFixed(2);
+  return (num < 0 ? '-$' : '$') + Math.abs(num).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // Siempre con el signo +/- explícito (02-09-2026, a pedido del usuario:
@@ -368,7 +371,7 @@ function formatMoney(n) {
 // quien no distingue bien verde/rojo.
 function formatMoneyConSigno(n) {
   const num = Number(n) || 0;
-  return (num < 0 ? '-$' : '+$') + Math.abs(num).toFixed(2);
+  return (num < 0 ? '-$' : '+$') + Math.abs(num).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // "dd-mm-aaaa" a partir de "YYYY-MM-DD" en texto plano, sin pasar por
@@ -766,6 +769,16 @@ function celdaCSV(valor) {
   return texto;
 }
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los números de la página, incluyendo los reportes descargables)
+// — antes este CSV escribía "1234.56" (punto decimal), que ni siquiera
+// calzaba con el Excel en español que este mismo archivo asume (usa ";"
+// como separador de columna precisamente porque la "," ahí es decimal).
+// "1.234,56" es lo que un Excel en español reconoce como número.
+function numCSV(n) {
+  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function descargarExcel() {
   if (!ULTIMO_RESUMEN) {
     alert('Primero espera a que cargue tu resumen.');
@@ -775,25 +788,25 @@ function descargarExcel() {
   const filas = [];
   filas.push(['Fecha', 'Ticket', 'Detalle', 'Arriesga', 'Gana (neto)', 'Estado'].map(celdaCSV).join(';'));
   d.tickets.forEach(t => {
-    filas.push([t.fecha, t.ticket, t.detalle || '', t.arriesga.toFixed(2), t.gana.toFixed(2), t.estado].map(celdaCSV).join(';'));
+    filas.push([t.fecha, t.ticket, t.detalle || '', numCSV(t.arriesga), numCSV(t.gana), t.estado].map(celdaCSV).join(';'));
   });
   if (d.polla && d.polla.length > 0) {
     filas.push('');
     filas.push(['Fecha', 'Polla'].map(celdaCSV).join(';'));
     d.polla.forEach(p => {
-      filas.push([p.fecha, p.monto.toFixed(2)].map(celdaCSV).join(';'));
+      filas.push([p.fecha, numCSV(p.monto)].map(celdaCSV).join(';'));
     });
   }
   filas.push('');
-  filas.push(['Total Arriesgado', d.resumen.arriesgado.toFixed(2)].map(celdaCSV).join(';'));
-  filas.push(['Total Perdido', d.resumen.perdido.toFixed(2)].map(celdaCSV).join(';'));
-  filas.push(['Total Ganado (neto)', d.resumen.ganado.toFixed(2)].map(celdaCSV).join(';'));
+  filas.push(['Total Arriesgado', numCSV(d.resumen.arriesgado)].map(celdaCSV).join(';'));
+  filas.push(['Total Perdido', numCSV(d.resumen.perdido)].map(celdaCSV).join(';'));
+  filas.push(['Total Ganado (neto)', numCSV(d.resumen.ganado)].map(celdaCSV).join(';'));
   if (d.resumen.polla) {
-    filas.push(['Total Polla', d.resumen.polla.toFixed(2)].map(celdaCSV).join(';'));
+    filas.push(['Total Polla', numCSV(d.resumen.polla)].map(celdaCSV).join(';'));
   }
-  filas.push(['Balance', d.resumen.balance.toFixed(2)].map(celdaCSV).join(';'));
+  filas.push(['Balance', numCSV(d.resumen.balance)].map(celdaCSV).join(';'));
   if (d.pozo) {
-    filas.push(['Pozo disponible', d.pozo.pozoDisponible.toFixed(2)].map(celdaCSV).join(';'));
+    filas.push(['Pozo disponible', numCSV(d.pozo.pozoDisponible)].map(celdaCSV).join(';'));
   }
 
   const bom = '﻿'; // BOM UTF-8, así Excel no muestra los acentos/ñ/$ como caracteres raros

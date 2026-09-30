@@ -299,19 +299,19 @@ function fechaMasDias(fechaISO, n) {
   const textoSinJugadas = generarTextoBalanceSemanalCliente('CARLOS', { porFecha: {}, totalResultado: 0, totalComision: 0 });
   check(textoSinJugadas.includes('*Cliente: CARLOS*'), 'el balance semanal siempre arranca con "Cliente: <nombre>"');
   check(textoSinJugadas.includes('(sin jugadas esta semana)'), 'un cliente sin ninguna jugada esta semana lo dice explícito, en vez de una lista vacía');
-  check(textoSinJugadas.includes('*TOTAL SEMANA*') && textoSinJugadas.includes('+0.00$'), 'el total semana de alguien sin jugadas es +0.00$');
+  check(textoSinJugadas.includes('*TOTAL SEMANA*') && textoSinJugadas.includes('+0,00$'), 'el total semana de alguien sin jugadas es +0,00$');
 
   const datosBernal = { porFecha: { '2026-09-07': { resultado: -200, comision: 0 }, '2026-09-08': { resultado: 150, comision: 0 } }, totalResultado: -50, totalComision: 0 };
   const textoBernal = generarTextoBalanceSemanalCliente('BERNAL', datosBernal);
-  check(textoBernal.includes(nombreDiaSemana('2026-09-07') + ': -200.00$'), 'cada día con jugadas muestra su nombre en español + el monto con signo (lunes: -200.00$)');
-  check(textoBernal.includes(nombreDiaSemana('2026-09-08') + ': +150.00$'), 'un día ganador se muestra en positivo (martes: +150.00$)');
-  check(textoBernal.includes('*TOTAL SEMANA*') && textoBernal.trim().endsWith('-50.00$'), 'el total semana es la suma de los días (-200+150 = -50.00$)');
+  check(textoBernal.includes(nombreDiaSemana('2026-09-07') + ': -200,00$'), 'cada día con jugadas muestra su nombre en español + el monto con signo (lunes: -200,00$)');
+  check(textoBernal.includes(nombreDiaSemana('2026-09-08') + ': +150,00$'), 'un día ganador se muestra en positivo (martes: +150,00$)');
+  check(textoBernal.includes('*TOTAL SEMANA*') && textoBernal.trim().endsWith('-50,00$'), 'el total semana es la suma de los días (-200+150 = -50,00$)');
 
   const datosLopez = { porFecha: { '2026-09-09': { resultado: -100, comision: 10 } }, totalResultado: -100, totalComision: 10 };
   const textoPctLopez = generarTextoPorcentajeSemanalCliente('LOPEZ', datosLopez);
   check(textoPctLopez.includes('*Cliente: LOPEZ (%)*'), 'el mensaje de % se distingue del de balance en el encabezado');
-  check(textoPctLopez.includes('+10.00$'), 'el % de un día se muestra en su propia línea (+10.00$)');
-  check(textoPctLopez.trim().endsWith('+10.00$') && textoPctLopez.includes('*TOTAL SEMANA %*'), 'el total semana % es la suma de las comisiones del rango');
+  check(textoPctLopez.includes('+10,00$'), 'el % de un día se muestra en su propia línea (+10,00$)');
+  check(textoPctLopez.trim().endsWith('+10,00$') && textoPctLopez.includes('*TOTAL SEMANA %*'), 'el total semana % es la suma de las comisiones del rango');
 
   // =================================================================
   // 3) "corte semana" / "saldo total semana <nombre>" — integración
@@ -338,16 +338,16 @@ function fechaMasDias(fechaISO, n) {
   check(sockCorte.mensajes.every(m => m.jid === JID), 'todos los mensajes del corte semanal se mandan al JID correcto del grupo');
 
   const mensajeBernal = sockCorte.mensajes.find(m => m.text.includes('*Cliente: BERNAL*'));
-  check(!!mensajeBernal && mensajeBernal.text.includes(nombreDiaSemana(lunesSemana) + ': -200.00$') && mensajeBernal.text.includes(nombreDiaSemana(diaMartes) + ': +150.00$'), 'el mensaje de BERNAL trae sus 2 días con el resultado correcto de sus jugadas (sin comisión, sin Polla)');
-  check(mensajeBernal.text.trim().endsWith('-50.00$'), 'el total semana de BERNAL es -200+150 = -50.00$');
+  check(!!mensajeBernal && mensajeBernal.text.includes(nombreDiaSemana(lunesSemana) + ': -200,00$') && mensajeBernal.text.includes(nombreDiaSemana(diaMartes) + ': +150,00$'), 'el mensaje de BERNAL trae sus 2 días con el resultado correcto de sus jugadas (sin comisión, sin Polla)');
+  check(mensajeBernal.text.trim().endsWith('-50,00$'), 'el total semana de BERNAL es -200+150 = -50,00$');
   check(!sockCorte.mensajes.some(m => m.text.includes('Cliente: BERNAL (%)')), 'BERNAL no tiene ningún % configurado, así que NO se le manda un segundo mensaje de %');
 
   const mensajesLopez = sockCorte.mensajes.filter(m => m.text.includes('LOPEZ'));
   check(mensajesLopez.length === 2, 'LOPEZ (10% de comisión) recibe 2 mensajes: el balance y, aparte, su %');
   const balanceLopez = mensajesLopez.find(m => m.text.includes('*Cliente: LOPEZ*'));
   const pctLopez = mensajesLopez.find(m => m.text.includes('(%)'));
-  check(!!balanceLopez && balanceLopez.text.includes(nombreDiaSemana(diaMiercoles) + ': -100.00$'), 'el mensaje de balance de LOPEZ muestra -100.00$ (SOLO el resultado de la jugada, sin descontar la comisión)');
-  check(!!pctLopez && pctLopez.text.includes('+10.00$'), 'el mensaje de % de LOPEZ muestra su comisión de esa jugada perdida: 100*10% = 10.00$');
+  check(!!balanceLopez && balanceLopez.text.includes(nombreDiaSemana(diaMiercoles) + ': -100,00$'), 'el mensaje de balance de LOPEZ muestra -100,00$ (SOLO el resultado de la jugada, sin descontar la comisión)');
+  check(!!pctLopez && pctLopez.text.includes('+10,00$'), 'el mensaje de % de LOPEZ muestra su comisión de esa jugada perdida: 100*10% = 10,00$');
 
   const mensajeCarlos = sockCorte.mensajes.find(m => m.text.includes('*Cliente: CARLOS*'));
   check(!!mensajeCarlos && mensajeCarlos.text.includes('(sin jugadas esta semana)'), 'CARLOS (registrado pero sin ninguna jugada esta semana) igual recibe su reporte, avisando que no jugó');

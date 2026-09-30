@@ -78,12 +78,31 @@
 
   .gcp-seccion-titulo { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: bold; margin: 22px 0 8px; }
 
+  /* 30-09-2026 (a pedido del usuario: "igual que el admin" — el link
+     público también pinta el tema de color y el logo del grupo como
+     marca de agua de fondo, mismo mecanismo que grupo.html/hipismo-
+     mockup.html) — --gc-color-1/2 los pone el JS en el style="" según
+     TARJETA_DATA.grupoColorPrimario/Secundario, o se quedan sin poner y
+     usan el celeste/azul de Ludox por defecto. */
+  .gcp-tabla-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); --gc-color-1: var(--accent-cyan); --gc-color-2: var(--accent-blue); }
+  .gcp-tabla-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.08; pointer-events: none; z-index: 0; }
+  .gcp-tabla-wrap table.gcp-tabla { position: relative; z-index: 1; background: transparent; }
+
   table.gcp-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.gcp-tabla th { background: var(--card-2); color: var(--text-dim); text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--card-border); }
+  table.gcp-tabla th { text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: none; }
+  .gcp-tabla-wrap table.gcp-tabla th { background: linear-gradient(100deg, var(--gc-color-1), var(--gc-color-2) 70%); color: #04070f; }
   table.gcp-tabla th.gcp-col-monto, table.gcp-tabla td.gcp-col-monto { text-align: right; font-variant-numeric: tabular-nums; }
-  table.gcp-tabla td { padding: 9px 12px; border-bottom: 1px solid var(--card-border); }
+  table.gcp-tabla td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .gcp-tabla-wrap table.gcp-tabla tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--gc-color-1) 9%, transparent); }
   table.gcp-tabla tr.gcp-fila-titular td { font-weight: bold; color: var(--accent-cyan); }
+  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-titular td { background: color-mix(in srgb, var(--gc-color-1) 16%, transparent); }
   table.gcp-tabla tr.gcp-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; padding-top: 12px; }
+  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-total td { background: color-mix(in srgb, var(--gc-color-1) 24%, transparent); }
+
+  .gcp-acciones { display: flex; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .gcp-acciones button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: 20px; cursor: pointer; }
+  .gcp-acciones button:hover { background: rgba(255,255,255,0.08); }
+  .gcp-toast { display: block; text-align: center; margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--ok); min-height: 16px; }
 
   footer.pie-pagina { text-align: center; padding: 22px 10px 4px; color: var(--text-dim); font-size: 12px; }
 
@@ -106,12 +125,6 @@
   <div id="estadoError" style="display:none;"></div>
 
   <div id="contenido" style="display:none;">
-    <div class="gcp-header">
-      <div class="gcp-etiqueta">🗂️ Grupo de Clientes</div>
-      <div class="gcp-titular" id="gcpTitular">—</div>
-      <div class="gcp-grupo" id="gcpGrupo"></div>
-    </div>
-
     <!-- "Semana anterior" es un respaldo, no se muestra de entrada — solo
          al hacer click en el botón (30-09-2026, a pedido del usuario). -->
     <div class="gcp-subnav" id="gcpSubnav">
@@ -119,22 +132,48 @@
       <button type="button" data-semana="anterior" onclick="cambiarSemanaTarjeta('anterior', this)">🗓️ Semana anterior</button>
     </div>
 
-    <div class="gcp-resumen">
-      <div class="etiqueta" id="gcpTotalEtiqueta">Total semana actual</div>
-      <div class="monto" id="gcpTotal">$0.00</div>
-      <div class="rango" id="gcpRango"></div>
+    <!-- #gcpCaptura es justo lo que capturan copiarImagenGrupo()/
+         copiarTextoGrupo() — nunca el selector de semana ni los propios
+         botones de exportar (30-09-2026, a pedido del usuario: "colocale
+         su boton copiar imagen hd o descargar en texto, para asi envia
+         solo el cuadro con la informacion"). -->
+    <div id="gcpCaptura">
+      <div class="gcp-header">
+        <div class="gcp-etiqueta">🗂️ Grupo de Clientes</div>
+        <div class="gcp-titular" id="gcpTitular">—</div>
+        <div class="gcp-grupo" id="gcpGrupo"></div>
+      </div>
+
+      <div class="gcp-resumen">
+        <div class="etiqueta" id="gcpTotalEtiqueta">Total semana actual</div>
+        <div class="monto" id="gcpTotal">$0.00</div>
+        <div class="rango" id="gcpRango"></div>
+      </div>
+
+      <div class="gcp-seccion-titulo" id="gcpTablaTitulo">Saldo por cliente — semana actual</div>
+      <div class="gcp-tabla-wrap" id="gcpTablaWrap">
+        <div class="gcp-tabla-logo-fondo" id="gcpTablaLogoFondo" style="display:none;"></div>
+        <table class="gcp-tabla">
+          <thead><tr><th>Nombre</th><th class="gcp-col-monto">Saldo</th></tr></thead>
+          <tbody id="gcpTabla"></tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="gcp-seccion-titulo" id="gcpTablaTitulo">Saldo por cliente — semana actual</div>
-    <table class="gcp-tabla">
-      <thead><tr><th>Nombre</th><th class="gcp-col-monto">Saldo</th></tr></thead>
-      <tbody id="gcpTabla"></tbody>
-    </table>
+    <div class="gcp-acciones">
+      <button type="button" onclick="copiarImagenGrupo()">📸 Copiar Imagen HD</button>
+      <button type="button" onclick="copiarTextoGrupo()">📋 Copiar Texto</button>
+    </div>
+    <span class="gcp-toast" id="gcpToast"></span>
   </div>
 
   <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 </div>
 
+<!-- html2canvas (30-09-2026): convierte #gcpCaptura en una imagen para
+     "📸 Copiar Imagen HD" — mismo CDN público que ya usa el resto de
+     Ludox (grupo.html/hipismo-mockup.html). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // =================================================================
 // Vista pública de "Grupo de Clientes" — sin login, el token de la URL
@@ -147,9 +186,11 @@
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get('token');
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los saldos/reportes/links de clientes) — es-VE da "1.234,56".
 function formatMoney(n) {
   const num = Number(n) || 0;
-  return (num < 0 ? '-$' : '$') + Math.abs(num).toFixed(2);
+  return (num < 0 ? '-$' : '$') + Math.abs(num).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function claseMonto(n) {
   const num = Number(n) || 0;
@@ -222,6 +263,25 @@ function renderTarjeta(data) {
   const etiquetaModulo = data.modulo === 'hipismo' ? '🐎 Hipismo' : '⚽ Deportes';
   document.getElementById('gcpGrupo').textContent = data.grupoNombre + ' · ' + etiquetaModulo;
 
+  // "igual que el admin" (30-09-2026, a pedido del usuario) — el tema de
+  // color y el logo del grupo (data.grupoColorPrimario/Secundario/
+  // grupoLogoUrl, ver services/gruposClientes.js) se pintan acá con el
+  // mismo mecanismo que grupo.html/hipismo-mockup.html: variables CSS
+  // --gc-color-1/2 en el wrapper de la tabla, y el logo como marca de
+  // agua de fondo, adaptada al tamaño de la propia tabla.
+  const wrap = document.getElementById('gcpTablaWrap');
+  if (data.grupoColorPrimario && data.grupoColorSecundario) {
+    wrap.style.setProperty('--gc-color-1', data.grupoColorPrimario);
+    wrap.style.setProperty('--gc-color-2', data.grupoColorSecundario);
+  }
+  const logoFondo = document.getElementById('gcpTablaLogoFondo');
+  if (data.grupoLogoUrl) {
+    logoFondo.style.backgroundImage = 'url(\'' + data.grupoLogoUrl + '\')';
+    logoFondo.style.display = 'block';
+  } else {
+    logoFondo.style.display = 'none';
+  }
+
   TARJETA_DATA = data;
   // El titular siempre aparece primero, sin importar el orden alfabético
   // que ya trae data.miembros (confirmado con el usuario: el titular es
@@ -248,6 +308,67 @@ async function cargar() {
 }
 
 cargar();
+
+// "📸 Copiar Imagen HD" / "📋 Copiar Texto" (30-09-2026, a pedido del
+// usuario) — mismo patrón que ya usan grupo.html/hipismo-mockup.html
+// (html2canvas + portapapeles con fallback de descarga), apuntando solo
+// a #gcpCaptura (resumen + tabla), nunca al selector de semana ni a
+// estos mismos botones.
+function mostrarGcpToast(msg, esError) {
+  const t = document.getElementById('gcpToast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+}
+
+async function copiarImagenGrupo() {
+  const contenido = document.getElementById('gcpCaptura');
+  if (!contenido) return;
+  if (typeof html2canvas !== 'function') {
+    mostrarGcpToast('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#03060f', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarGcpToast('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarGcpToast('✅ Imagen copiada — pégala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'grupo_clientes.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarGcpToast('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarGcpToast('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
+}
+
+function copiarTextoGrupo() {
+  if (!TARJETA_DATA) return;
+  const btnAnterior = document.querySelector('#gcpSubnav button:nth-child(2)');
+  const esActual = !btnAnterior || !btnAnterior.classList.contains('activo');
+  const rango = esActual ? TARJETA_DATA.semanaActual : TARJETA_DATA.semanaAnterior;
+  const total = esActual ? TARJETA_DATA.totalSemanaActual : TARJETA_DATA.totalSemanaAnterior;
+  let texto = '🗂️ *' + TARJETA_DATA.titular.nombre + '*' + (TARJETA_DATA.grupoNombre ? ' — ' + TARJETA_DATA.grupoNombre : '') + ' 🇻🇪\n';
+  texto += '📅 ' + (esActual ? 'SEMANA ACTUAL' : 'SEMANA ANTERIOR') + ' — ' + formatFechaCorta(rango.desde) + ' al ' + formatFechaCorta(rango.hasta) + '\n\n';
+  MIEMBROS_ORDENADOS.forEach(m => {
+    const saldo = esActual ? m.saldoSemanaActual : m.saldoSemanaAnterior;
+    texto += (m.esTitular ? '⭐ ' : '• ') + m.nombre + ': ' + formatMoneyConSigno(saldo) + '\n';
+  });
+  texto += '\nTOTAL: ' + formatMoneyConSigno(total);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarGcpToast('✅ Texto copiado — pégalo en el grupo.'))
+      .catch(() => mostrarGcpToast('No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarGcpToast('No se pudo copiar — selecciona el texto a mano.', true);
+  }
+}
 </script>
 </body>
 </html>

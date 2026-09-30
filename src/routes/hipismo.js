@@ -1757,8 +1757,11 @@ function comisionDeLado(resultadoMostrado, sinComision) {
   return bruto - n;
 }
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los saldos/reportes de la página) — este texto se muestra en el
+// detalle de comisión por carrera, nunca se vuelve a parsear.
 function textoJugadaTicket(t) {
-  return `${t.modalidad} (${t.caballo}) con ${Number(t.monto).toFixed(2).replace('.', ',')}`;
+  return `${t.modalidad} (${t.caballo}) con ${Number(t.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // GET /semana-actual?semana=actual|anterior|hace2 (23-09-2026,

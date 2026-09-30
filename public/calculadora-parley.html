@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LUDOX — Calculadora de Parley</title>
+<link rel="icon" href="img/logo-ludox.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #03060f;
+    --bg-glow-1: #1e3aa8;
+    --bg-glow-2: #22d3ee;
+    --card: #0b0f1e;
+    --card-border: rgba(255,255,255,0.08);
+    --text: #f4f6fb;
+    --text-dim: #93a0bd;
+    --accent-cyan: #38e0f0;
+    --accent-blue: #2f6bff;
+    --accent-deep: #241fb8;
+    --danger: #ff6b6b;
+    --ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, Segoe UI, Roboto, sans-serif; min-height: 100%; }
+  body { min-height: 100vh; position: relative; overflow-x: hidden; padding-bottom: 60px; }
+  body::before, body::after { content: ''; position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.28; z-index: 0; pointer-events: none; }
+  body::before { width: 560px; height: 560px; top: -160px; left: 50%; transform: translateX(-62%); background: radial-gradient(circle, var(--bg-glow-2) 0%, transparent 70%); }
+  body::after { width: 620px; height: 620px; bottom: -220px; right: 50%; transform: translateX(58%); background: radial-gradient(circle, var(--bg-glow-1) 0%, transparent 70%); opacity: 0.24; }
+
+  /* ============ BARRA DE NAVEGACIÓN (misma que index.html) ============ */
+  .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; background: rgba(3, 6, 15, 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-border); }
+  .navbar-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .navbar-marca { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.02em; flex-shrink: 0; }
+  .navbar-marca img { width: 26px; height: 26px; object-fit: contain; }
+  .navbar-links { display: flex; align-items: center; gap: 4px; }
+  .navbar-link { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-dim); text-decoration: none; background: none; border: none; padding: 9px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: color 0.15s ease, background 0.15s ease; white-space: nowrap; }
+  .navbar-link:hover, .navbar-link.activo { color: var(--text); background: rgba(255,255,255,0.05); }
+  .navbar-link .caret { font-size: 10px; transition: transform 0.15s ease; opacity: 0.75; }
+  .navbar-dropdown.abierto .navbar-link .caret { transform: rotate(180deg); }
+  .navbar-cta { font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #04070f; text-decoration: none; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); border: none; padding: 10px 16px; border-radius: 9px; cursor: pointer; white-space: nowrap; box-shadow: 0 6px 18px -8px rgba(47, 107, 255, 0.65); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .navbar-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px rgba(47, 107, 255, 0.8); }
+  .navbar-dropdown { position: relative; }
+  .navbar-dropdown-panel { position: absolute; top: calc(100% + 8px); left: 0; min-width: 260px; background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 8px; box-shadow: 0 20px 50px -18px rgba(0,0,0,0.7); display: none; flex-direction: column; gap: 2px; }
+  .navbar-dropdown.abierto .navbar-dropdown-panel { display: flex; }
+  .navbar-dropdown-item { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13.5px; line-height: 1.35; }
+  .navbar-dropdown-item:hover, .navbar-dropdown-item.activo { background: rgba(56, 224, 240, 0.08); }
+  .navbar-dropdown-item .item-titulo { font-family: 'Outfit', sans-serif; font-weight: 600; display: block; }
+  .navbar-dropdown-item .item-sub { color: var(--text-dim); font-size: 12px; display: block; margin-top: 2px; }
+  .navbar-toggle { display: none; width: 38px; height: 38px; align-items: center; justify-content: center; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; color: var(--text); font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  @media (max-width: 720px) {
+    .navbar-links { display: none; }
+    .navbar-toggle { display: flex; }
+    .navbar-links.movil-abierto { display: flex; flex-direction: column; align-items: stretch; gap: 2px; position: fixed; top: 64px; left: 0; right: 0; background: var(--card); border-bottom: 1px solid var(--card-border); padding: 10px 14px 16px; box-shadow: 0 20px 40px -20px rgba(0,0,0,0.7); }
+    .navbar-links.movil-abierto .navbar-link { width: 100%; justify-content: space-between; }
+    .navbar-links.movil-abierto .navbar-dropdown-panel { position: static; box-shadow: none; margin: 0 0 4px 10px; }
+    .navbar-links.movil-abierto .navbar-cta { text-align: center; margin-top: 6px; }
+  }
+
+  /* ============ CONTENIDO ============ */
+  .pagina { position: relative; z-index: 1; max-width: 880px; margin: 0 auto; padding: 140px 20px 0; text-align: center; }
+  .eyebrow-pagina { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-cyan); margin: 0 0 14px; }
+  h1 { font-family: 'Outfit', sans-serif; font-size: clamp(28px, 5vw, 40px); font-weight: 700; margin: 0 0 16px; text-wrap: balance; }
+  .lead { color: var(--text-dim); font-size: 16px; line-height: 1.6; margin: 0 auto 36px; max-width: 560px; }
+  .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 32px; }
+  .btn-pagina { font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 22px; border-radius: 10px; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
+  .btn-pagina-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65); }
+  .btn-pagina-principal:hover { transform: translateY(-1px); }
+  .btn-pagina-secundario { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--card-border); }
+  .btn-pagina-secundario:hover { border-color: rgba(56, 224, 240, 0.5); background: rgba(56, 224, 240, 0.06); }
+  footer { position: relative; z-index: 1; margin-top: 56px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; text-align: center; }
+
+  /* ============ CALCULADORA DE PARLEY (30-09-2026) ============ */
+  .cp-card { text-align: left; background: var(--card); border: 1px solid var(--card-border); border-radius: 20px; padding: 26px; box-shadow: 0 30px 70px -32px rgba(47,107,255,0.45); margin-bottom: 28px; }
+  .cp-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .cp-grid { grid-template-columns: 1fr; } }
+
+  .cp-col-titulo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cp-col-titulo span.titulo { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 14.5px; }
+  .cp-contador { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 20px; padding: 3px 10px; }
+
+  #cpListaLogros { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .cp-fila { display: grid; grid-template-columns: 22px 34px 1fr 30px; align-items: center; gap: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 11px; padding: 8px 10px; }
+  .cp-fila-num { font-family: 'Outfit', sans-serif; font-size: 12px; color: var(--text-dim); text-align: center; }
+  .cp-toggle-signo { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.03); color: var(--ok); font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+  .cp-toggle-signo:hover { border-color: rgba(255,255,255,0.22); }
+  .cp-toggle-signo.activo { background: rgba(255,107,107,0.14); border-color: rgba(255,107,107,0.45); color: var(--danger); }
+  .cp-input-logro { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 9px 10px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+  .cp-input-logro:focus { outline: none; border-color: var(--accent-cyan); }
+  .cp-input-logro::placeholder { color: var(--text-dim); opacity: 0.6; }
+  .cp-quitar { width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--text-dim); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; }
+  .cp-quitar:hover { background: rgba(255,107,107,0.12); color: var(--danger); }
+  .cp-quitar:disabled { visibility: hidden; }
+
+  .cp-btn-agregar { width: 100%; background: rgba(56,224,240,0.06); border: 1px dashed rgba(56,224,240,0.35); color: var(--accent-cyan); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 13.5px; padding: 10px; border-radius: 10px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+  .cp-btn-agregar:hover { background: rgba(56,224,240,0.12); }
+  .cp-btn-agregar:disabled { opacity: 0.4; cursor: default; }
+  .cp-signo-ayuda { font-size: 11.5px; color: var(--text-dim); margin: 10px 2px 0; line-height: 1.5; }
+
+  .cp-resultado { display: flex; flex-direction: column; height: 100%; }
+  .cp-label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; font-family: 'Outfit', sans-serif; }
+  .cp-input-monto { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 10px; padding: 3px 12px; margin-bottom: 18px; }
+  .cp-input-monto input { flex: 1; background: none; border: none; color: var(--text); font-family: 'Inter', sans-serif; font-size: 16px; font-variant-numeric: tabular-nums; padding: 10px 0; }
+  .cp-input-monto input:focus { outline: none; }
+  .cp-input-monto:focus-within { border-color: var(--accent-cyan); }
+
+  .cp-resultado-filas { background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 12px; padding: 4px 14px; margin-bottom: 16px; }
+  .cp-resultado-fila { display: flex; align-items: baseline; justify-content: space-between; padding: 11px 0; font-size: 13.5px; color: var(--text-dim); }
+  .cp-resultado-fila + .cp-resultado-fila { border-top: 1px solid var(--card-border); }
+  .cp-resultado-fila strong { font-family: 'Outfit', sans-serif; font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .cp-resultado-total strong { color: var(--ok); font-size: 21px; }
+
+  .cp-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .cp-btn { font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 600; padding: 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
+  .cp-btn-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 22px -8px rgba(47,107,255,0.6); }
+  .cp-btn-principal:hover { transform: translateY(-1px); }
+  .cp-btn-secundario { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--card-border); }
+  .cp-btn-secundario:hover { border-color: rgba(255,255,255,0.22); }
+  .cp-btn-ghost { background: none; color: var(--text-dim); border-color: var(--card-border); }
+  .cp-btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.22); }
+  .cp-btn-whatsapp { background: rgba(52,211,153,0.12); color: var(--ok); border-color: rgba(52,211,153,0.35); }
+  .cp-btn-whatsapp:hover { background: rgba(52,211,153,0.2); }
+
+  .cp-error { color: var(--danger); font-size: 12.5px; margin: 2px 0 0; }
+  .cp-toast { display: block; font-size: 12.5px; color: var(--ok); margin-top: 2px; min-height: 16px; }
+  .cp-toast.error { color: var(--danger); }
+
+  /* ---- Reglas / cómo funciona ---- */
+  .cp-reglas { text-align: left; background: var(--card); border: 1px solid var(--card-border); border-radius: 20px; padding: 26px 28px; }
+  .cp-reglas h2 { font-family: 'Outfit', sans-serif; font-size: 19px; margin: 0 0 14px; }
+  .cp-reglas h3 { font-family: 'Outfit', sans-serif; font-size: 14.5px; margin: 22px 0 10px; color: var(--accent-cyan); }
+  .cp-reglas ol { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 14px; line-height: 1.75; }
+  .cp-reglas ol li strong { color: var(--text); }
+  .cp-formula { background: rgba(56,224,240,0.05); border: 1px solid rgba(56,224,240,0.22); border-radius: 12px; padding: 14px 16px; margin: 6px 0 16px; font-family: 'Outfit', sans-serif; font-size: 14px; color: var(--text); text-align: center; line-height: 1.6; }
+  .cp-formula small { display: block; color: var(--text-dim); font-family: 'Inter', sans-serif; font-size: 11.5px; margin-top: 4px; }
+
+  .cp-ejemplo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+  @media (max-width: 560px) { .cp-ejemplo { grid-template-columns: 1fr; } }
+  .cp-ej-celda { background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; }
+  .cp-ej-celda .ej-label { display: block; font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .cp-ej-celda .ej-valor { display: block; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; }
+  .cp-ej-resultado .ej-valor { color: var(--ok); }
+
+  /* ============ MODAL DE SOLICITAR DEMO (mismo mecanismo que index.html) ============ */
+  .overlay { position: fixed; inset: 0; background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
+  .overlay.abierto { display: flex; }
+  .modal { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px 26px 24px; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.7); max-height: 88vh; overflow-y: auto; text-align: left; }
+  .modal h2 { font-family: 'Outfit', sans-serif; font-size: 20px; margin: 0 0 4px; }
+  .modal .sub { color: var(--text-dim); font-size: 13.5px; margin: 0 0 20px; line-height: 1.5; }
+  .canal-contacto { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); margin-bottom: 10px; font-size: 14px; text-decoration: none; color: var(--text); }
+  .canal-contacto:hover { border-color: rgba(56, 224, 240, 0.4); }
+  .canal-contacto .icono { font-size: 16px; }
+  .canal-contacto .valor { color: var(--text-dim); margin-left: auto; font-size: 13px; }
+  .separador-o { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin: 18px 0 14px; }
+  .separador-o::before, .separador-o::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
+  .campo { margin-bottom: 12px; text-align: left; }
+  .campo label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
+  .campo input, .campo textarea { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 11px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; resize: vertical; }
+  .campo input:focus, .campo textarea:focus { outline: none; border-color: var(--accent-cyan); }
+  .campo textarea { min-height: 84px; }
+  .btn-enviar { width: 100%; margin-top: 4px; background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); color: #04070f; border: none; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; padding: 13px; border-radius: 10px; cursor: pointer; }
+  .btn-enviar:disabled { opacity: 0.6; cursor: default; }
+  .msg-form { font-size: 13px; margin-top: 10px; text-align: center; }
+  .msg-form.ok { color: var(--ok); }
+  .msg-form.error { color: var(--danger); }
+  .cerrar-modal { position: absolute; top: 16px; right: 16px; width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text-dim); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .cerrar-modal:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .modal-header { position: relative; }
+</style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a class="navbar-marca" href="index.html"><img src="img/logo-ludox.png" alt="">LUDOX</a>
+      <button type="button" class="navbar-toggle" id="navbarToggle" aria-label="Abrir menú">☰</button>
+      <div class="navbar-links" id="navbarLinks">
+        <div class="navbar-dropdown" id="navbarDropdownProducto">
+          <button type="button" class="navbar-link" id="navbarBtnProducto">Producto <span class="caret">▾</span></button>
+          <div class="navbar-dropdown-panel">
+            <a class="navbar-dropdown-item" href="producto-deportes.html">
+              <span class="item-titulo">Automatización de venta de deportes</span>
+              <span class="item-sub">Para Grupos que venden parleys y jugadas</span>
+            </a>
+            <a class="navbar-dropdown-item" href="producto-hipico.html">
+              <span class="item-titulo">Sistema contable hípico</span>
+              <span class="item-sub">Para Grupos de apuestas hípicas</span>
+            </a>
+          </div>
+        </div>
+        <a class="navbar-link activo" href="calculadora-parley.html">Calculadora Parley</a>
+        <a class="navbar-link" href="quienes-somos.html">Quiénes somos</a>
+        <a class="navbar-link" href="precios.html">Precios</a>
+        <button type="button" class="navbar-cta" id="navbarBtnDemo">Solicitar Demo</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="pagina">
+    <p class="eyebrow-pagina">Herramienta gratuita</p>
+    <h1>Calculadora de Parley</h1>
+    <p class="lead">Calcula en segundos cuánto paga tu ticket. Agrega el logro (moneyline) de cada selección, marca los favoritos con "−" y obtén la ganancia neta y el total a cobrar.</p>
+
+    <div class="cp-card">
+      <div class="cp-grid">
+        <div class="cp-selecciones">
+          <div class="cp-col-titulo">
+            <span class="titulo">Selecciones del parley</span>
+            <span class="cp-contador" id="cpContador">2 / 10</span>
+          </div>
+          <div id="cpListaLogros"></div>
+          <button type="button" class="cp-btn-agregar" id="cpBtnAgregar">+ Agregar selección</button>
+          <p class="cp-signo-ayuda">El botón "−" marca un equipo <strong style="color:var(--text)">favorito</strong> (logro negativo, ej. −125). Déjalo en "+" si es <strong style="color:var(--text)">contendor</strong> (logro positivo, ej. +130).</p>
+        </div>
+
+        <div class="cp-resultado">
+          <label class="cp-label" for="cpMontoApuesta">Monto de la apuesta</label>
+          <div class="cp-input-monto">
+            <input type="number" id="cpMontoApuesta" min="0" step="0.01" value="100" inputmode="decimal">
+          </div>
+
+          <div class="cp-resultado-filas">
+            <div class="cp-resultado-fila"><span>Ganancia neta</span><strong id="cpGanancia">0,00</strong></div>
+            <div class="cp-resultado-fila cp-resultado-total"><span>Total a cobrar</span><strong id="cpTotal">0,00</strong></div>
+          </div>
+
+          <div class="cp-acciones">
+            <button type="button" class="cp-btn cp-btn-principal" id="cpBtnCalcular">Calcular</button>
+            <button type="button" class="cp-btn cp-btn-secundario" id="cpBtnLimpiar">Limpiar</button>
+          </div>
+          <div class="cp-acciones">
+            <button type="button" class="cp-btn cp-btn-ghost" id="cpBtnCopiar">📋 Copiar texto</button>
+            <button type="button" class="cp-btn cp-btn-whatsapp" id="cpBtnCompartir">🟢 Compartir</button>
+          </div>
+          <p class="cp-error" id="cpError" style="display:none;"></p>
+          <span class="cp-toast" id="cpToast"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cp-reglas">
+      <h2>¿Cómo funciona la calculadora de Parley?</h2>
+      <ol>
+        <li>Agrega una fila por cada selección de tu parley y escribe su <strong>logro (moneyline)</strong> tal como aparece en la casa de apuestas — por ejemplo 125 o 130. Puedes calcular tickets de hasta <strong>10 combinaciones</strong>.</li>
+        <li>Si el equipo es <strong>favorito o "macho"</strong>, haz clic en la casilla "−" de esa fila para colocarle el signo negativo. Si no es favorito, déjala como está (signo positivo).</li>
+        <li>Escribe el <strong>monto de la apuesta</strong> y presiona <strong>Calcular</strong>. La calculadora te muestra la ganancia neta y el total a cobrar (ganancia + lo apostado), listos para copiar o compartir por WhatsApp.</li>
+      </ol>
+
+      <h3>¿Cómo se calcula el pago?</h3>
+      <div class="cp-formula">
+        Total a cobrar&nbsp; = &nbsp;Monto apostado &nbsp;×&nbsp; Precio 1 &nbsp;×&nbsp; Precio 2 &nbsp;×&nbsp; …
+        <small>Favorito (logro negativo): Precio = 1 + (100 ÷ logro) &nbsp;|&nbsp; Contendor (logro positivo): Precio = 1 + (logro ÷ 100)</small>
+      </div>
+
+      <h3>Ejemplo — apuesta de 100 a Giants −125 y Padres +130</h3>
+      <div class="cp-ejemplo">
+        <div class="cp-ej-celda">
+          <span class="ej-label">Giants −125 (favorito)</span>
+          <span class="ej-valor">1 + 100÷125 = 1,80</span>
+        </div>
+        <div class="cp-ej-celda">
+          <span class="ej-label">Padres +130 (contendor)</span>
+          <span class="ej-valor">1 + 130÷100 = 2,30</span>
+        </div>
+        <div class="cp-ej-celda cp-ej-resultado">
+          <span class="ej-label">Total a cobrar</span>
+          <span class="ej-valor">100 × 1,80 × 2,30 = 414,00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="acciones-pagina">
+      <a class="btn-pagina btn-pagina-secundario" href="index.html">← Volver al inicio</a>
+    </div>
+  </div>
+
+  <footer>LUDOX © <span id="anioActual"></span> — Soluciones digitales</footer>
+
+  <div class="overlay" id="overlayContacto">
+    <div class="modal">
+      <div class="modal-header">
+        <button type="button" class="cerrar-modal" id="cerrarContacto" aria-label="Cerrar">✕</button>
+        <h2>Solicita tu demo</h2>
+        <p class="sub">Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.</p>
+      </div>
+      <a class="canal-contacto" id="canalEmail" href="mailto:">
+        <span class="icono">✉</span> Email
+        <span class="valor" id="valorEmail">—</span>
+      </a>
+      <a class="canal-contacto" id="canalTelefono" href="#" style="display:none;">
+        <span class="icono">☎</span> Teléfono
+        <span class="valor" id="valorTelefono">—</span>
+      </a>
+      <div class="separador-o">o mandanos un mensaje</div>
+      <form id="formContacto">
+        <div class="campo">
+          <label for="ctNombre">Tu nombre (opcional)</label>
+          <input type="text" id="ctNombre" maxlength="200" autocomplete="name">
+        </div>
+        <div class="campo">
+          <label for="ctContacto">Email o teléfono para responderte</label>
+          <input type="text" id="ctContacto" maxlength="200" required autocomplete="email">
+        </div>
+        <div class="campo">
+          <label for="ctMensaje">Mensaje</label>
+          <textarea id="ctMensaje" maxlength="2000" required placeholder="Contanos qué necesitas..."></textarea>
+        </div>
+        <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
+        <div class="msg-form" id="msgFormContacto"></div>
+      </form>
+    </div>
+  </div>
+
+<script>
+document.getElementById('anioActual').textContent = new Date().getFullYear();
+
+const EMAIL_CONTACTO = 'contacto@ludoxapp.com';
+const TELEFONO_CONTACTO = ''; // ej: '+58 412 1234567' — vacío = se oculta el canal
+document.getElementById('valorEmail').textContent = EMAIL_CONTACTO;
+document.getElementById('canalEmail').href = 'mailto:' + EMAIL_CONTACTO;
+if (TELEFONO_CONTACTO) {
+  document.getElementById('valorTelefono').textContent = TELEFONO_CONTACTO;
+  document.getElementById('canalTelefono').href = 'https://wa.me/' + TELEFONO_CONTACTO.replace(/[^0-9]/g, '');
+  document.getElementById('canalTelefono').style.display = 'flex';
+}
+
+const overlay = document.getElementById('overlayContacto');
+function abrirContacto() {
+  overlay.classList.add('abierto');
+  document.getElementById('msgFormContacto').textContent = '';
+  document.getElementById('msgFormContacto').className = 'msg-form';
+}
+function cerrarContacto() { overlay.classList.remove('abierto'); }
+document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto(); });
+document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
+
+document.getElementById('formContacto').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnEnviarContacto');
+  const msgEl = document.getElementById('msgFormContacto');
+  const nombre = document.getElementById('ctNombre').value.trim();
+  const contacto = document.getElementById('ctContacto').value.trim();
+  const textoMensaje = document.getElementById('ctMensaje').value.trim();
+
+  if (!contacto || !textoMensaje) {
+    msgEl.textContent = 'Completa al menos el contacto y el mensaje.';
+    msgEl.className = 'msg-form error';
+    return;
+  }
+  const mensaje = '🎬 SOLICITUD DE DEMO (página Calculadora Parley)\n' + textoMensaje;
+
+  btn.disabled = true;
+  msgEl.textContent = '';
+  msgEl.className = 'msg-form';
+  try {
+    const res = await fetch('/api/contacto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, contacto, mensaje })
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error) || 'No se pudo enviar el mensaje.');
+    msgEl.textContent = '¡Gracias! Te vamos a contactar pronto.';
+    msgEl.className = 'msg-form ok';
+    document.getElementById('formContacto').reset();
+  } catch (err) {
+    msgEl.textContent = err.message || 'No se pudo enviar el mensaje. Intenta de nuevo.';
+    msgEl.className = 'msg-form error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+const dropdownProducto = document.getElementById('navbarDropdownProducto');
+document.getElementById('navbarBtnProducto').addEventListener('click', (e) => {
+  e.stopPropagation();
+  dropdownProducto.classList.toggle('abierto');
+});
+document.addEventListener('click', (e) => {
+  if (!dropdownProducto.contains(e.target)) dropdownProducto.classList.remove('abierto');
+});
+
+const navbarLinks = document.getElementById('navbarLinks');
+function cerrarMenuMovil() { navbarLinks.classList.remove('movil-abierto'); }
+document.getElementById('navbarToggle').addEventListener('click', () => {
+  navbarLinks.classList.toggle('movil-abierto');
+});
+
+// =================================================================
+// CALCULADORA DE PARLEY (30-09-2026)
+// Convención de money line -> precio decimal:
+//   Favorito (logro negativo, ej. -125):  Precio = 1 + (100 / |logro|)
+//   Contendor (logro positivo, ej. +130): Precio = 1 + (logro / 100)
+// Total a cobrar = Monto apostado x Precio1 x Precio2 x ...
+// Ganancia neta  = Total a cobrar - Monto apostado
+// =================================================================
+const CP_MAX_SELECCIONES = 10;
+let cpFilas = [];
+let cpSiguienteId = 1;
+let cpUltimoResultado = null;
+let cpToastTimeout = null;
+
+// (30-09-2026, a pedido del usuario: "no coloques Bs ni dolares, dejalo
+// sin moneda solo numero") — separador de mil + 2 decimales, sin ningún
+// símbolo de moneda delante.
+function cpFormatoNumero(n) {
+  return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// (30-09-2026) Cada fila se agrega/quita como un elemento DOM individual
+// -- nunca reconstruyendo el innerHTML completo de #cpListaLogros -- para
+// que agregar o quitar una selección no borre lo que el usuario ya
+// escribió en las demás filas.
+function cpCrearFila() {
+  if (cpFilas.length >= CP_MAX_SELECCIONES) return;
+  const id = cpSiguienteId++;
+  cpFilas.push({ id });
+
+  const div = document.createElement('div');
+  div.className = 'cp-fila';
+  div.dataset.id = id;
+  div.innerHTML = `
+    <span class="cp-fila-num"></span>
+    <button type="button" class="cp-toggle-signo" aria-label="Marcar como favorito" aria-pressed="false">+</button>
+    <input type="number" class="cp-input-logro" placeholder="Ej: 150" min="0" step="1" inputmode="numeric">
+    <button type="button" class="cp-quitar" aria-label="Quitar selección">✕</button>
+  `;
+  document.getElementById('cpListaLogros').appendChild(div);
+
+  const btnSigno = div.querySelector('.cp-toggle-signo');
+  btnSigno.addEventListener('click', () => {
+    btnSigno.classList.toggle('activo');
+    btnSigno.textContent = btnSigno.classList.contains('activo') ? '−' : '+';
+    btnSigno.setAttribute('aria-pressed', btnSigno.classList.contains('activo') ? 'true' : 'false');
+    cpCalcular(false);
+  });
+  div.querySelector('.cp-input-logro').addEventListener('input', () => cpCalcular(false));
+  div.querySelector('.cp-quitar').addEventListener('click', () => cpQuitarFila(id));
+
+  cpActualizarNumerosYContador();
+}
+
+function cpQuitarFila(id) {
+  cpFilas = cpFilas.filter(f => f.id !== id);
+  const el = document.querySelector('.cp-fila[data-id="' + id + '"]');
+  if (el) el.remove();
+  if (cpFilas.length === 0) { cpCrearFila(); return; }
+  cpActualizarNumerosYContador();
+  cpCalcular(false);
+}
+
+function cpActualizarNumerosYContador() {
+  const filas = document.querySelectorAll('.cp-fila');
+  filas.forEach((fila, i) => {
+    fila.querySelector('.cp-fila-num').textContent = i + 1;
+    fila.querySelector('.cp-quitar').disabled = filas.length <= 1;
+  });
+  document.getElementById('cpContador').textContent = filas.length + ' / ' + CP_MAX_SELECCIONES;
+  document.getElementById('cpBtnAgregar').disabled = filas.length >= CP_MAX_SELECCIONES;
+}
+
+function cpMostrarError(msg) {
+  const errorEl = document.getElementById('cpError');
+  errorEl.textContent = msg;
+  errorEl.style.display = 'block';
+  document.getElementById('cpGanancia').textContent = '0,00';
+  document.getElementById('cpTotal').textContent = '0,00';
+  cpUltimoResultado = null;
+}
+
+function cpCalcular(mostrarErrores) {
+  const errorEl = document.getElementById('cpError');
+  errorEl.style.display = 'none';
+
+  const monto = parseFloat(document.getElementById('cpMontoApuesta').value);
+  if (!monto || monto <= 0) {
+    if (mostrarErrores) cpMostrarError('Ingresa un monto de apuesta válido.');
+    return;
+  }
+
+  const filas = Array.from(document.querySelectorAll('.cp-fila'));
+  const selecciones = [];
+  for (const fila of filas) {
+    const input = fila.querySelector('.cp-input-logro');
+    const valor = parseFloat(input.value);
+    if (!valor || valor <= 0) continue;
+    const esFavorito = fila.querySelector('.cp-toggle-signo').classList.contains('activo');
+    const precio = esFavorito ? (1 + 100 / valor) : (1 + valor / 100);
+    selecciones.push({ valor, esFavorito, precio });
+  }
+
+  if (selecciones.length < 1) {
+    if (mostrarErrores) cpMostrarError('Ingresa al menos un logro (moneyline) para calcular.');
+    return;
+  }
+
+  const factorTotal = selecciones.reduce((acc, s) => acc * s.precio, 1);
+  const pago = monto * factorTotal;
+  const ganancia = pago - monto;
+
+  cpUltimoResultado = { monto, selecciones, pago, ganancia };
+  document.getElementById('cpGanancia').textContent = cpFormatoNumero(ganancia);
+  document.getElementById('cpTotal').textContent = cpFormatoNumero(pago);
+}
+
+function cpTextoResultado() {
+  if (!cpUltimoResultado) return null;
+  const { monto, selecciones, pago, ganancia } = cpUltimoResultado;
+  let txt = '🎯 *Calculadora de Parley — LUDOX*\n\n';
+  selecciones.forEach((s, i) => {
+    txt += (i + 1) + ') ' + (s.esFavorito ? '−' : '+') + s.valor + '\n';
+  });
+  txt += '\nMonto apostado: ' + cpFormatoNumero(monto);
+  txt += '\nGanancia neta: ' + cpFormatoNumero(ganancia);
+  txt += '\nTotal a cobrar: ' + cpFormatoNumero(pago);
+  return txt;
+}
+
+function cpMostrarToast(msg, esError) {
+  const toastEl = document.getElementById('cpToast');
+  toastEl.textContent = msg;
+  toastEl.className = 'cp-toast' + (esError ? ' error' : '');
+  clearTimeout(cpToastTimeout);
+  cpToastTimeout = setTimeout(() => { toastEl.textContent = ''; }, 2600);
+}
+
+document.getElementById('cpBtnAgregar').addEventListener('click', cpCrearFila);
+document.getElementById('cpBtnCalcular').addEventListener('click', () => cpCalcular(true));
+document.getElementById('cpMontoApuesta').addEventListener('input', () => cpCalcular(false));
+
+document.getElementById('cpBtnLimpiar').addEventListener('click', () => {
+  document.getElementById('cpMontoApuesta').value = '100';
+  document.getElementById('cpListaLogros').innerHTML = '';
+  cpFilas = [];
+  cpSiguienteId = 1;
+  cpCrearFila();
+  cpCrearFila();
+  document.getElementById('cpGanancia').textContent = '0,00';
+  document.getElementById('cpTotal').textContent = '0,00';
+  document.getElementById('cpError').style.display = 'none';
+  document.getElementById('cpToast').textContent = '';
+  cpUltimoResultado = null;
+});
+
+document.getElementById('cpBtnCopiar').addEventListener('click', async () => {
+  cpCalcular(true);
+  const texto = cpTextoResultado();
+  if (!texto) return;
+  try {
+    await navigator.clipboard.writeText(texto);
+    cpMostrarToast('Resultado copiado.');
+  } catch (err) {
+    cpMostrarToast('No se pudo copiar. Intenta de nuevo.', true);
+  }
+});
+
+document.getElementById('cpBtnCompartir').addEventListener('click', () => {
+  cpCalcular(true);
+  const texto = cpTextoResultado();
+  if (!texto) return;
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+});
+
+// Estado inicial: 2 filas vacías listas para escribir.
+cpCrearFila();
+cpCrearFila();
+</script>
+</body>
+</html>

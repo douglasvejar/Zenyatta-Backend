@@ -29,6 +29,7 @@ const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
 const { construirCierreFinalHipismo } = require('./hipismoResumenCliente');
 const { calcularSemana } = require('./fechaSemana');
 const { fechaVenezuelaHoy } = require('./fechaVenezuela');
+const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 
 const UN_DIA_MS = 24 * 60 * 60 * 1000;
 const MODULOS_VALIDOS = ['deportes', 'hipismo'];
@@ -157,9 +158,17 @@ async function construirTarjetaGrupoCliente(grupoClienteId, grupoId, modulo) {
   if (grupoId) { params.push(grupoId); filtro += ' AND gc.grupo_id = $' + params.length; }
   if (modulo) { params.push(modulo); filtro += ' AND gc.modulo = $' + params.length; }
 
+  // 30-09-2026 (a pedido del usuario: "colocale color entre lineas...
+  // agregale tambien su logo del grupo... el color y logo que se escoja
+  // en logos") — trae también el tema de color y el logo del propio
+  // GRUPO (tenant), para que la tarjeta (acá y en el link público) se
+  // pueda pintar con la identidad visual de cada negocio, reusando los
+  // mismos 2 helpers que ya usa el resto del proyecto (urlLogoGrupo/
+  // temaColorGrupo en services/logoGrupo.js) — nunca un mecanismo nuevo.
   const rGrupo = await db.query(
     `SELECT gc.id, gc.grupo_id, gc.modulo, gc.titular_id, gc.token, gc.creado_en,
-            g.nombre AS grupo_nombre
+            g.nombre AS grupo_nombre, g.logo_url, g.logo_base64,
+            g.tema_color_primario, g.tema_color_secundario
        FROM grupos_clientes gc
        JOIN grupos g ON g.id = gc.grupo_id
       WHERE gc.id = $1` + filtro,
@@ -213,11 +222,16 @@ async function construirTarjetaGrupoCliente(grupoClienteId, grupoId, modulo) {
   const totalSemanaActual = round2(miembros.reduce((s, m) => s + m.saldoSemanaActual, 0));
   const totalSemanaAnterior = round2(miembros.reduce((s, m) => s + m.saldoSemanaAnterior, 0));
 
+  const tema = temaColorGrupo(grupoCliente);
+
   return {
     id: grupoCliente.id,
     modulo: grupoCliente.modulo,
     token: grupoCliente.token,
     grupoNombre: grupoCliente.grupo_nombre,
+    grupoLogoUrl: urlLogoGrupo(grupoCliente.grupo_id, grupoCliente),
+    grupoColorPrimario: tema.colorPrimario,
+    grupoColorSecundario: tema.colorSecundario,
     titular: { id: titular.id, nombre: titular.nombre },
     semanaActual: { desde: semanaActual.desde, hasta: semanaActual.hasta },
     semanaAnterior: { desde: semanaAnterior.desde, hasta: semanaAnterior.hasta },

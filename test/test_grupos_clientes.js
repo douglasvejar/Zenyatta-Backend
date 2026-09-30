@@ -51,7 +51,7 @@ const JUG_OTRO_GRUPO = 'jug-de-otro-grupo'; // cliente de OTRO tenant, para el c
 // la semana actual.
 const TABLAS = {
   grupos: [
-    { id: GRUPO_ID, nombre: 'GORILAS GROUP', modelo_comision: null, comision_tiers: null }
+    { id: GRUPO_ID, nombre: 'GORILAS GROUP', modelo_comision: null, comision_tiers: null, logo_url: null, logo_base64: 'ZmFrZQ==', tema_color_primario: '#16a34a', tema_color_secundario: '#65a30d' }
   ],
   jugadores: [
     { id: JUG_LOBO, grupo_id: GRUPO_ID, nombre: 'LOBO', comision_propia: 0, modelo_comision: null, activo: true },
@@ -188,7 +188,7 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   // --- construirTarjetaGrupoCliente()/construirTarjetaPorToken() ---
-  if (/^SELECT gc\.id, gc\.grupo_id, gc\.modulo, gc\.titular_id, gc\.token, gc\.creado_en,\s+g\.nombre AS grupo_nombre\s+FROM grupos_clientes gc\s+JOIN grupos g ON g\.id = gc\.grupo_id\s+WHERE gc\.id = \$1/i.test(sql)) {
+  if (/^SELECT gc\.id, gc\.grupo_id, gc\.modulo, gc\.titular_id, gc\.token, gc\.creado_en,\s+g\.nombre AS grupo_nombre, g\.logo_url, g\.logo_base64,\s+g\.tema_color_primario, g\.tema_color_secundario\s+FROM grupos_clientes gc\s+JOIN grupos g ON g\.id = gc\.grupo_id\s+WHERE gc\.id = \$1/i.test(sql)) {
     const id = params[0];
     const gc = TABLAS.grupos_clientes.find(gc => gc.id === id);
     if (!gc) return { rows: [] };
@@ -197,7 +197,11 @@ function ejecutarQuery(text, params) {
     if (params.length >= 2 && gc.grupo_id !== params[1]) return { rows: [] };
     if (params.length >= 3 && gc.modulo !== params[2]) return { rows: [] };
     const grupo = TABLAS.grupos.find(g => g.id === gc.grupo_id);
-    return { rows: [{ id: gc.id, grupo_id: gc.grupo_id, modulo: gc.modulo, titular_id: gc.titular_id, token: gc.token, creado_en: gc.creado_en, grupo_nombre: grupo.nombre }] };
+    return { rows: [{
+      id: gc.id, grupo_id: gc.grupo_id, modulo: gc.modulo, titular_id: gc.titular_id, token: gc.token, creado_en: gc.creado_en,
+      grupo_nombre: grupo.nombre, logo_url: grupo.logo_url, logo_base64: grupo.logo_base64,
+      tema_color_primario: grupo.tema_color_primario, tema_color_secundario: grupo.tema_color_secundario
+    }] };
   }
   if (/^SELECT id, nombre FROM jugadores WHERE id = \$1$/i.test(sql)) {
     const j = TABLAS.jugadores.find(j => j.id === params[0]);
@@ -328,6 +332,12 @@ function check(cond, msg) {
     const tarjetaHip = resTarjetaHip._json;
     check(tarjetaHip.modulo === 'hipismo', 'La tarjeta trae modulo: "hipismo"');
     check(tarjetaHip.titular.nombre === 'LOBO', 'titular.nombre es LOBO');
+    // 30-09-2026 (a pedido del usuario: tabla de la tarjeta con el color y
+    // logo del grupo) — la tarjeta ahora también trae el tema de color y
+    // el logo del GRUPO (tenant), reusando urlLogoGrupo/temaColorGrupo.
+    check(tarjetaHip.grupoColorPrimario === '#16a34a', 'grupoColorPrimario viaja en la tarjeta (tema configurado en este grupo de prueba)');
+    check(tarjetaHip.grupoColorSecundario === '#65a30d', 'grupoColorSecundario viaja en la tarjeta');
+    check(tarjetaHip.grupoLogoUrl === '/api/imagenes/logo-grupo/' + GRUPO_ID, 'grupoLogoUrl apunta al proxy de siempre (el grupo de prueba tiene logo_base64)');
     check(tarjetaHip.miembros.length === 2, '6) La tarjeta trae 2 miembros: LOBO (titular, NUNCA insertado a mano en grupos_clientes_miembros) + MARCAS');
     const lobosHip = tarjetaHip.miembros.find(m => m.nombre === 'LOBO');
     const marcasHip = tarjetaHip.miembros.find(m => m.nombre === 'MARCAS');

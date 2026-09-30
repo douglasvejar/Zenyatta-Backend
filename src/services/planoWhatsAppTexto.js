@@ -23,15 +23,20 @@
 // misma función de listado (generarTextoListadoSabana) también es la
 // que se manda cada hora mientras el día sigue abierto — con o sin la
 // palabra "FINAL" en el título, según corresponda (ver `opciones.esFinal`).
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales
+// también en los mensajes de WhatsApp) — PORT 1 a 1 del mismo cambio en
+// public/app.js (ver el comentario grande ahí): esto es solo para el
+// Plano de WhatsApp (confirmación de tickets, una sola vía), nunca para
+// texto de sábana que se vuelva a parsear.
 function formatMontoPlano(numero) {
   const redondeado = Math.round(numero * 100) / 100;
-  return redondeado % 1 === 0 ? String(redondeado) : String(redondeado.toFixed(2)).replace(/0$/, '');
+  return redondeado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDineroPlano(numero) {
   const redondeado = Math.round(numero * 100) / 100;
   const signo = redondeado < 0 ? '-' : '+';
-  return signo + Math.abs(redondeado).toFixed(2) + '$';
+  return signo + Math.abs(redondeado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '$';
 }
 
 function formatLineaResultadoPlano(arriesga, pagaMostrado, estadoFinal) {
@@ -130,7 +135,7 @@ function generarTextoTotalesDia(resp) {
     }
     if (Math.abs(c.devolucion) > 0.001) {
       partes.push('*% ' + c.cliente + '*');
-      partes.push('+' + Math.abs(Math.round(c.devolucion * 100) / 100).toFixed(2) + '$');
+      partes.push('+' + Math.abs(Math.round(c.devolucion * 100) / 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '$');
     }
   });
 

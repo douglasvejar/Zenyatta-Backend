@@ -523,8 +523,12 @@ function formatNombre(nombre) {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
+// (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
+// todos los saldos/reportes, incluyendo los mensajes de WhatsApp) — este
+// texto es SOLO de salida (anuncio de resultado), nunca se vuelve a leer
+// como sábana, así que es seguro agregarle el separador de mil.
 function formatMontoTabla(n) {
-  return Math.abs(n).toFixed(2).replace('.', ',');
+  return Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function parsearPizarra(pizarraTxt) {

@@ -346,7 +346,7 @@ function ultimaSabanaPendiente() {
   check(resultado.accion === 'ENVIAR_CIERRE', 'con el partido ya "Final" y SABANA FINAL recibido, procesarDiaAbierto decide ENVIAR_CIERRE');
   check(sock6.mensajes.length === 2, 'el cierre manda EXACTAMENTE 2 mensajes: primero el listado, después los totales (nunca juntos en uno solo)');
   check(sock6.mensajes[0].text.includes('✅ *SÁBANA FINAL — todos los resultados*'), 'el primer mensaje del cierre es el listado, con el título de "SÁBANA FINAL"');
-  check(!sock6.mensajes[0].text.includes('❌') && !sock6.mensajes[0].text.includes('⭕') && (sock6.mensajes[0].text.match(/\/\/[\d.]+✅/g) || []).length === 2, 'los 2 tickets (houston -120, Astros ganaron) aparecen GANADA (arriesga//paga✅) — ninguno queda ❌/⭕/sin ícono');
+  check(!sock6.mensajes[0].text.includes('❌') && !sock6.mensajes[0].text.includes('⭕') && (sock6.mensajes[0].text.match(/\/\/[\d.,]+✅/g) || []).length === 2, 'los 2 tickets (houston -120, Astros ganaron) aparecen GANADA (arriesga//paga✅) — ninguno queda ❌/⭕/sin ícono (30-09-2026: el monto ahora lleva coma decimal, "90,00" en vez de "90")');
   check(sock6.mensajes[1].text.includes('*TOTALES DEL DÍA*'), 'el segundo mensaje del cierre es, aparte, el de los totales');
   const diaFinal = await obtenerEstadoDia(GRUPO_ID, FECHA);
   check(!!diaFinal.cierreEnviadoEn, 'el día queda marcado como cerrado (cierreEnviadoEn) — no se le va a volver a mandar nada más');

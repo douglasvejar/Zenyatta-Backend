@@ -27,23 +27,28 @@ function check(cond, msg) {
   else { fallaron++; console.error('FALLÓ:', msg); }
 }
 
-// --- 1) formatMontoPlano: sin ceros de más, sin ".00" ---
-check(formatMontoPlano(100) === '100', 'formatMontoPlano(100) = "100" (entero, sin decimales)');
-check(formatMontoPlano(100.5) === '100.5', 'formatMontoPlano(100.5) = "100.5" (un decimal, sin ceros de más)');
-check(formatMontoPlano(90) === '90', 'formatMontoPlano(90) = "90"');
-check(formatMontoPlano(45.25) === '45.25', 'formatMontoPlano(45.25) conserva los 2 decimales cuando hacen falta');
+// --- 1) formatMontoPlano: siempre 2 decimales, separador de mil
+// (30-09-2026, a pedido del usuario: "el formato para todos los numeros
+// de la pagina... debe ser separador de mil con dos decimales" — esto
+// incluye los mensajes de WhatsApp; antes recortaba ceros de más, ahora
+// es igual de consistente que el resto de la página: es-VE, "1.234,56") ---
+check(formatMontoPlano(100) === '100,00', 'formatMontoPlano(100) = "100,00"');
+check(formatMontoPlano(100.5) === '100,50', 'formatMontoPlano(100.5) = "100,50"');
+check(formatMontoPlano(90) === '90,00', 'formatMontoPlano(90) = "90,00"');
+check(formatMontoPlano(45.25) === '45,25', 'formatMontoPlano(45.25) conserva los 2 decimales');
+check(formatMontoPlano(12345.6) === '12.345,60', 'formatMontoPlano(12345.6) = "12.345,60" (separador de mil)');
 
 // --- 2) formatDineroPlano: signo +/- siempre, 2 decimales, "$" al final ---
-check(formatDineroPlano(70) === '+70.00$', 'formatDineroPlano(70) = "+70.00$"');
-check(formatDineroPlano(-70) === '-70.00$', 'formatDineroPlano(-70) = "-70.00$"');
-check(formatDineroPlano(0) === '+0.00$', 'formatDineroPlano(0) = "+0.00$" (cero cuenta como positivo)');
+check(formatDineroPlano(70) === '+70,00$', 'formatDineroPlano(70) = "+70,00$"');
+check(formatDineroPlano(-70) === '-70,00$', 'formatDineroPlano(-70) = "-70,00$"');
+check(formatDineroPlano(0) === '+0,00$', 'formatDineroPlano(0) = "+0,00$" (cero cuenta como positivo)');
 
 // --- 3) formatLineaResultadoPlano: un ícono distinto por estado ---
-check(formatLineaResultadoPlano(100, 90, 'GANADA') === '100//90✅', 'GANADA: "arriesga//paga✅"');
-check(formatLineaResultadoPlano(100, 90, 'PERDIDA') === '❌100//90', 'PERDIDA: "❌arriesga//paga"');
-check(formatLineaResultadoPlano(100, 0, 'ANULADA') === '⭕100//', 'ANULADA: "⭕arriesga//" (sin monto de pago)');
-check(formatLineaResultadoPlano(100, 0, 'SUSPENDIDA') === '⭕100//', 'SUSPENDIDA: mismo ícono que ANULADA');
-check(formatLineaResultadoPlano(100, 0, 'PENDIENTE') === '100//', 'PENDIENTE (o cualquier estado abierto): "arriesga//" sin ícono todavía');
+check(formatLineaResultadoPlano(100, 90, 'GANADA') === '100,00//90,00✅', 'GANADA: "arriesga//paga✅"');
+check(formatLineaResultadoPlano(100, 90, 'PERDIDA') === '❌100,00//90,00', 'PERDIDA: "❌arriesga//paga"');
+check(formatLineaResultadoPlano(100, 0, 'ANULADA') === '⭕100,00//', 'ANULADA: "⭕arriesga//" (sin monto de pago)');
+check(formatLineaResultadoPlano(100, 0, 'SUSPENDIDA') === '⭕100,00//', 'SUSPENDIDA: mismo ícono que ANULADA');
+check(formatLineaResultadoPlano(100, 0, 'PENDIENTE') === '100,00//', 'PENDIENTE (o cualquier estado abierto): "arriesga//" sin ícono todavía');
 
 // --- 4) agruparTicketsPorCliente: agrupa preservando orden de aparición ---
 const ticketsCrudos = [
@@ -70,8 +75,8 @@ check(textoActualizacion.includes('🔄 *Actualización de resultados*'), 'esFin
 check(!textoActualizacion.includes('SÁBANA FINAL'), 'esFinal:false -> NO dice "SÁBANA FINAL" en ningún lado');
 check(textoActualizacion.includes('03-09-2026'), 'la fecha se muestra en formato DD-MM-YYYY');
 check(textoActualizacion.includes('*GIANCO*') && textoActualizacion.includes('*MANOLO*'), 'ambos clientes aparecen, cada uno con su nombre en negrita');
-check(textoActualizacion.includes('100//90✅'), 'el ticket GANADA de GIANCO trae su línea de resultado con el ícono correcto');
-check(textoActualizacion.includes('50//'), 'el ticket PENDIENTE de MANOLO todavía no trae ícono (sigue abierto)');
+check(textoActualizacion.includes('100,00//90,00✅'), 'el ticket GANADA de GIANCO trae su línea de resultado con el ícono correcto');
+check(textoActualizacion.includes('50,00//'), 'el ticket PENDIENTE de MANOLO todavía no trae ícono (sigue abierto)');
 
 const textoCierre = generarTextoListadoSabana(respListado, { esFinal: true });
 check(textoCierre.includes('✅ *SÁBANA FINAL — todos los resultados*'), 'esFinal:true -> título de cierre "SÁBANA FINAL"');
@@ -103,11 +108,11 @@ const respTotales = {
 const textoTotales = generarTextoTotalesDia(respTotales);
 check(textoTotales.includes('*TOTALES DEL DÍA*'), 'generarTextoTotalesDia: encabezado fijo "TOTALES DEL DÍA"');
 check(textoTotales.includes('03-09-2026'), 'generarTextoTotalesDia: trae la fecha en DD-MM-YYYY');
-check(textoTotales.includes('*PEDRO*') && textoTotales.includes('+30.00$'), 'PEDRO: resultadoSabana(80) + polla(-50) = +30.00$ (misma fórmula que el Plano de siempre)');
-check(textoTotales.includes('*SOLOPOLLA*') && textoTotales.includes('+120.00$'), 'SOLOPOLLA: solo Polla, +120.00$ (aparece aunque no jugó sábana, por jugoPolla:true)');
+check(textoTotales.includes('*PEDRO*') && textoTotales.includes('+30,00$'), 'PEDRO: resultadoSabana(80) + polla(-50) = +30,00$ (misma fórmula que el Plano de siempre)');
+check(textoTotales.includes('*SOLOPOLLA*') && textoTotales.includes('+120,00$'), 'SOLOPOLLA: solo Polla, +120,00$ (aparece aunque no jugó sábana, por jugoPolla:true)');
 check(!textoTotales.includes('*MANOLO*'), 'MANOLO: ni jugoHoy ni jugoPolla -> no aparece con línea de total');
-check(textoTotales.includes('*% MANOLO*') && textoTotales.includes('+5.00$'), 'MANOLO: sí aparece con su línea de comisión "% MANOLO" (devolucion != 0)');
-check(textoTotales.includes('*TOTAL BANCA*') && textoTotales.includes('-70.00$'), 'TOTAL BANCA general: -70.00$ (planoWhatsApp.totalBanca)');
+check(textoTotales.includes('*% MANOLO*') && textoTotales.includes('+5,00$'), 'MANOLO: sí aparece con su línea de comisión "% MANOLO" (devolucion != 0)');
+check(textoTotales.includes('*TOTAL BANCA*') && textoTotales.includes('-70,00$'), 'TOTAL BANCA general: -70,00$ (planoWhatsApp.totalBanca)');
 check(textoTotales.includes('*🎲 BANCA POLLA*'), 'pollaRegistrada:true -> aparece la línea aparte de BANCA POLLA');
 
 const respTotalesSinPolla = {
@@ -116,7 +121,7 @@ const respTotalesSinPolla = {
 };
 const textoTotalesSinPolla = generarTextoTotalesDia(respTotalesSinPolla);
 check(!textoTotalesSinPolla.includes('BANCA POLLA'), 'pollaRegistrada:false -> NO aparece la línea de BANCA POLLA (mismo criterio que el Plano de siempre)');
-check(textoTotalesSinPolla.includes('+40.00$'), 'sin clientes con jugadas, igual muestra el TOTAL BANCA general');
+check(textoTotalesSinPolla.includes('+40,00$'), 'sin clientes con jugadas, igual muestra el TOTAL BANCA general');
 
 console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
 process.exit(fallaron > 0 ? 1 : 0);
