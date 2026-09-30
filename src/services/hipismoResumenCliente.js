@@ -22,7 +22,7 @@ const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
 const { round2 } = require('./hipismoAdelantadasCalc');
-const { urlLogoGrupo } = require('./logoGrupo');
+const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
 // usa routes/hipismo.js para Balance General/Cierre Final/Saldo
@@ -263,7 +263,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   return {
-    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(jugador.grupo_id, grupo) },
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(jugador.grupo_id, grupo), ...temaColorGrupo(grupo) },
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
@@ -423,7 +423,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   return {
-    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(jugador.grupo_id, grupo) },
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(jugador.grupo_id, grupo), ...temaColorGrupo(grupo) },
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
@@ -520,7 +520,7 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   return {
-    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo) },
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo), ...temaColorGrupo(grupo) },
     jugador: { nombre: 'REMATE' },
     semana,
     rango: { desde, hasta },
@@ -607,7 +607,7 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   return {
-    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo) },
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo), ...temaColorGrupo(grupo) },
     jugador: { nombre: 'WINNERS' },
     semana,
     rango: { desde, hasta },

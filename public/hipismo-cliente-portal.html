@@ -26,6 +26,18 @@
     --danger: #dc2626;
     --ok: #16a34a;
     --warning: #d97706;
+    /* Color del degradado de la tarjeta "Total de la semana" (29-09-2026,
+       a pedido del usuario: "colocame una ventana en logos que diga
+       colores reportes cliente... asi cada grupo lo puedo personalizar
+       segun sus logos"). Variables APARTE de --accent-deep/--accent-grass
+       de arriba a propósito: esas 2 también pintan otras cosas de la
+       página (el avatar del cliente, el numerito de cada carrera) que el
+       usuario confirmó que deben quedarse siempre igual para todos los
+       grupos — solo la tarjeta verde principal cambia de color. Por
+       defecto son el mismo verde clásico de siempre; renderDatos() las
+       sobreescribe con JS si el grupo eligió otro color en Súper-admin. */
+    --tarjeta-color-primario: var(--accent-deep);
+    --tarjeta-color-secundario: var(--accent-grass);
   }
   * { box-sizing: border-box; }
   body {
@@ -64,7 +76,7 @@
   .encabezado .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
   .tarjeta-resumen {
-    background: linear-gradient(120deg, var(--accent-deep), var(--accent-grass) 75%);
+    background: linear-gradient(120deg, var(--tarjeta-color-primario), var(--tarjeta-color-secundario) 75%);
     color: #ffffff; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px;
     box-shadow: 0 8px 20px rgba(20,83,45,0.22);
   }
@@ -497,6 +509,17 @@
       logoEsquina.classList.add('con-logo');
     } else {
       logoEsquina.classList.remove('con-logo');
+    }
+
+    // Color de la tarjeta (29-09-2026, ver la nota grande junto a
+    // --tarjeta-color-primario en el CSS) — si el grupo eligió un tema
+    // propio en Súper-admin, pinta el degradado con esos 2 colores; si
+    // no (los 2 vienen null), se queda con el verde clásico de siempre
+    // (las variables ya arrancan apuntando a ese verde por defecto, así
+    // que no hace falta "resetear" nada acá).
+    if (data.grupo.colorPrimario && data.grupo.colorSecundario) {
+      document.documentElement.style.setProperty('--tarjeta-color-primario', data.grupo.colorPrimario);
+      document.documentElement.style.setProperty('--tarjeta-color-secundario', data.grupo.colorSecundario);
     }
 
     // --- Tarjeta resumen ---

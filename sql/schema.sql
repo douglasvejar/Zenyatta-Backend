@@ -77,6 +77,31 @@ alter table grupos add column if not exists logo_url text;
 alter table grupos add column if not exists logo_base64 text;
 alter table grupos add column if not exists logo_mime text;
 
+-- Color del link del Cliente de Hipismo (29-09-2026, a pedido del
+-- usuario: "colocame una ventana en logos que diga colores reportes
+-- cliente... y desde alli pueda escoger el tema o colores en que se
+-- veran los reportes de los clientes desde su link..... asi cada grupo
+-- lo puedo personalizar segun sus logos"). Solo pinta el degradado de la
+-- tarjeta "Total de la semana" que ve el Cliente en su link
+-- (hipismo-cliente-portal.html, la misma tarjeta donde ya va el logo
+-- desde la sección 14-16 de las actualizaciones) — el resto de la
+-- página (fondo, títulos de sección) se queda igual para todos los
+-- grupos, a pedido explícito del usuario ("solo la tarjeta verde
+-- principal"). NO aplica al link de Deportes (cliente.html) ni a los
+-- reportes del propio Administrador (Balance General/Cierre Final) —
+-- esos se quedan con el verde de siempre.
+--
+-- Ambas columnas van SIEMPRE juntas: o las 2 tienen un color (hex de 6
+-- dígitos, ej. "#16a34a"), o las 2 quedan en null (vuelve al verde
+-- clásico por defecto) — nunca una sola, para no dejar armado un
+-- degradado a medias. Validado en PATCH /api/superadmin/grupos/:id/
+-- tema-cliente (ver superadmin.js). Súper-admin ofrece más de 70 temas
+-- prediseñados (con buen contraste ya probado contra texto blanco) más
+-- un selector de color libre para el que quiera afinar el tono exacto
+-- del logo de su grupo (ver superadmin.html, pestaña "🖼️ Logo").
+alter table grupos add column if not exists tema_color_primario text;
+alter table grupos add column if not exists tema_color_secundario text;
+
 -- Vínculo con el grupo de WhatsApp (03-09-2026, a pedido del usuario:
 -- "existe alguna manera de que en mi chat de whatssap yo actualice la
 -- sabana y se cargue automatico en el sistema?"). Es el "JID" (identificador

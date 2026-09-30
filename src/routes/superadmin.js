@@ -141,7 +141,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
     // base64 completo en este SELECT inflaría la respuesta de "detalle"
     // sin necesidad, solo hace falta saber SI existe uno.
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -179,6 +179,11 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     saldoBanca: balance.balanceBanca,
     rango: { desde, hasta },
     tieneLogo: grupo.tiene_logo,
+    // Color del link del Cliente de Hipismo (29-09-2026, ver la nota
+    // grande junto al PATCH .../tema-cliente más abajo) — null/null si el
+    // grupo nunca eligió ninguno (usa el verde clásico por defecto).
+    temaColorPrimario: grupo.tema_color_primario,
+    temaColorSecundario: grupo.tema_color_secundario,
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
     sabanaMuestra: grupo.sabana_muestra,
@@ -372,6 +377,49 @@ router.patch('/grupos/:id/logo', asyncHandler(async (req, res) => {
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ tieneLogo: true });
+}));
+
+// =================================================================
+// COLOR DEL LINK DEL CLIENTE DE HIPISMO (29-09-2026, a pedido del
+// usuario: "colocame una ventana en logos que diga colores reportes
+// cliente... y desde alli pueda escoger el tema o colores en que se
+// veran los reportes de los clientes desde su link..... asi cada grupo
+// lo puedo personalizar segun sus logos") — ver la nota grande junto a
+// tema_color_primario/tema_color_secundario en sql/schema.sql. Solo
+// pinta el degradado de la tarjeta "Total de la semana" que ve el
+// Cliente en su link de Hipismo (hipismo-cliente-portal.html) — el resto
+// de la página se queda igual para todos los grupos.
+//
+// Los 2 colores van SIEMPRE juntos: {colorPrimario:'', colorSecundario:''}
+// (o ambos ausentes) vuelve al verde clásico por defecto (null/null);
+// cualquier otra combinación exige los 2 en formato hex de 6 dígitos
+// (ej. "#16a34a") — nunca se guarda uno solo, para no dejar armado un
+// degradado a medias.
+const HEX_COLOR_TEMA = /^#[0-9a-f]{6}$/i;
+router.patch('/grupos/:id/tema-cliente', asyncHandler(async (req, res) => {
+  const { colorPrimario, colorSecundario } = req.body;
+  const p = (colorPrimario || '').trim();
+  const s = (colorSecundario || '').trim();
+
+  if (!p && !s) {
+    const r = await db.query(
+      'UPDATE grupos SET tema_color_primario = null, tema_color_secundario = null WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+    return res.json({ colorPrimario: null, colorSecundario: null });
+  }
+
+  if (!HEX_COLOR_TEMA.test(p) || !HEX_COLOR_TEMA.test(s)) {
+    return res.status(400).json({ error: 'Los colores tienen que ser un código hexadecimal válido (ej. #16a34a).' });
+  }
+
+  const r = await db.query(
+    'UPDATE grupos SET tema_color_primario = $1, tema_color_secundario = $2 WHERE id = $3 RETURNING id',
+    [p, s, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ colorPrimario: p, colorSecundario: s });
 }));
 
 // "Sábana de muestra" (05-09-2026, a pedido del usuario) — ver la nota

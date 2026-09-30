@@ -35,7 +35,11 @@ router.get('/:token', asyncHandler(async (req, res) => {
   const jugador = rJugador.rows[0];
   if (!jugador) return res.status(404).json({ error: 'Link inválido.' });
 
-  const rGrupo = await db.query('SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado, modulo_deportes_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  // tema_color_primario/tema_color_secundario (29-09-2026, ver la nota
+  // grande junto a esas columnas en sql/schema.sql): el color del
+  // degradado de la tarjeta "Total de la semana" que este grupo haya
+  // elegido en Súper-admin, si eligió alguno.
+  const rGrupo = await db.query('SELECT activo, nombre, logo_url, logo_base64, tema_color_primario, tema_color_secundario, modulo_hipismo_habilitado, modulo_deportes_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = rGrupo.rows[0];
   if (!grupo || !grupo.activo) {
     return res.status(403).json({ error: 'Esta cuenta no está disponible en este momento.' });

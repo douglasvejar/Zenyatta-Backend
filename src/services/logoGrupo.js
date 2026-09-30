@@ -35,4 +35,26 @@ function urlLogoGrupo(grupoId, filaGrupo, opts) {
   return `/api/imagenes/logo-grupo/${grupoId}`;
 }
 
-module.exports = { urlLogoGrupo };
+// =================================================================
+// Helper compartido: el color (o par de colores) del degradado de la
+// tarjeta "Total de la semana" que ve el Cliente en su link de Hipismo
+// (29-09-2026, a pedido del usuario: "colocame una ventana en logos que
+// diga colores reportes cliente... asi cada grupo lo puedo personalizar
+// segun sus logos" — ver la nota grande junto a tema_color_primario/
+// tema_color_secundario en sql/schema.sql).
+//
+// Mismo espíritu que urlLogoGrupo() de arriba: el consumidor (acá,
+// services/hipismoResumenCliente.js) no necesita saber si el grupo tiene
+// un color propio configurado o no — solo le pasa la fila de "grupos" que
+// ya haya traído estas 2 columnas, y si no las trajo (o el grupo nunca
+// configuró ninguna), simplemente devuelve los 2 en null, que el
+// frontend interpreta como "usa el verde clásico por defecto".
+function temaColorGrupo(filaGrupo) {
+  if (!filaGrupo) return { colorPrimario: null, colorSecundario: null };
+  return {
+    colorPrimario: filaGrupo.tema_color_primario || null,
+    colorSecundario: filaGrupo.tema_color_secundario || null
+  };
+}
+
+module.exports = { urlLogoGrupo, temaColorGrupo };
