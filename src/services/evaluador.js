@@ -503,16 +503,31 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
       : (esPrimeraMitad ? (config.textoPrimeraMitad || ' (primera mitad)') : ' (juego completo)');
 
   // Apuesta AL EMPATE (31-08-2026, a pedido del usuario): el cliente
-  // apuesta directamente a que el PARTIDO termine empatado, con su propia
-  // cuota — se escribe como "E (+201)" o "empate +201" junto al nombre de
-  // un equipo del partido (ej. "Napoli E (+201)"). Es un tipo de apuesta
-  // totalmente aparte de alta/baja y de hándicap/moneyline (no importa
-  // ningún hándicap ni margen, solo si el marcador final quedó igual), así
-  // que se resuelve ACÁ, antes de esas dos ramas, y siempre con el
-  // marcador COMPLETO del partido (no el de "1h"/primera mitad).
+  // apuesta directamente a que el PARTIDO (o el segmento pedido — ver más
+  // abajo) termine empatado, con su propia cuota — se escribe como
+  // "E (+201)" o "empate +201" junto al nombre de un equipo del partido
+  // (ej. "Napoli E (+201)"). Es un tipo de apuesta totalmente aparte de
+  // alta/baja y de hándicap/moneyline (no importa ningún hándicap ni
+  // margen, solo si el marcador quedó igual), así que se resuelve ACÁ,
+  // antes de esas dos ramas.
   // Distinto de `empatEsPerdidaEnMoneyline` (arriba en CONFIG_POR_DEPORTE):
   // esa regla es para cuando el cliente apostó a que un EQUIPO gana y el
   // partido empata; acá el cliente apostó AL empate mismo.
+  //
+  // CORREGIDO (30-09-2026, a pedido del usuario, con un ticket real:
+  // "Moldova empate 1h -115" marcado GANADA usando el marcador COMPLETO
+  // del partido en vez del de la primera mitad): hasta acá, esta rama
+  // SIEMPRE comparaba homeTotal/awayTotal, sin fijarse si la jugada traía
+  // "1h"/"2h" — un "empate 1h" es una apuesta a que el partido esté
+  // IGUALADO AL DESCANSO, no al final, así que podía marcar GANADA/PERDIDA
+  // al revés de lo que pasó de verdad en la primera mitad (ej. empatado al
+  // descanso pero el partido completo terminó con un ganador, o viceversa).
+  // La guarda de "partidoListoParaEstaJugada" (más arriba, líneas
+  // ~416-425) YA esperaba el dato correcto según esPrimeraMitad/
+  // esSegundaMitad antes de llegar hasta acá — el bug era solo que, una
+  // vez con el dato disponible, se leía el campo equivocado. Mismo patrón
+  // exacto que ya usan OVER/UNDER (más abajo) y hándicap/moneyline (cHome/
+  // cAway) para elegir el campo correcto según el segmento pedido.
   // Nota: en un partido de eliminatoria que se define por tiempo extra o
   // penales (ej. octavos de Champions League), esto usa el resultado que
   // la API marca como "finalizado", que puede no ser el empate en los 90
@@ -520,11 +535,19 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
   const marcaEmpatePorLetraE = /\be\b\s*\(?[+-]\d{3,}\)?/i.test(lineaJugada);
   const marcaEmpatePorPalabra = /\bempate\b/i.test(lineaJugada);
   if (config.permiteApuestaEmpate && (marcaEmpatePorLetraE || marcaEmpatePorPalabra)) {
-    const homeFinal = juego[config.campoHomeTotal];
-    const awayFinal = juego[config.campoAwayTotal];
+    const homeFinal = esSegundaMitad
+      ? juego[config.campoHomeSegundaMitad]
+      : esPrimeraMitad
+        ? juego[config.campoHomePrimeraMitad]
+        : juego[config.campoHomeTotal];
+    const awayFinal = esSegundaMitad
+      ? juego[config.campoAwaySegundaMitad]
+      : esPrimeraMitad
+        ? juego[config.campoAwayPrimeraMitad]
+        : juego[config.campoAwayTotal];
     const debugEmpate = {
       ...debugBase,
-      tipoApuesta: 'EMPATE (a que el partido termine igualado)',
+      tipoApuesta: 'EMPATE (a que termine igualado)' + textoSegmento,
       marcadorUsado: homeFinal + ' - ' + awayFinal
     };
     if (homeFinal === awayFinal) return { estado: 'GANADA', debug: debugEmpate };
