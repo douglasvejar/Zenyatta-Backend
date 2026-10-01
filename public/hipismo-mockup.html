@@ -662,7 +662,14 @@
   #cierreFinalCaptura .captura-logo-fondo,
   #comisionesDevueltasCaptura .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
-    background-size: 55%; opacity: 0.10; pointer-events: none; z-index: 0;
+    /* Opacidad subida de 0.10 a 0.14 el 01-10-2026 (el usuario reportó que
+       no se notaba) — ver la nota grande junto a .balance-fila/
+       .fila-carrera-comision más abajo: la causa real era que esas 2
+       clases tapaban el logo casi del todo con un fondo sólido, así que
+       este cambio de opacidad por sí solo no alcanzaba; se deja un poco
+       más alto que antes de todos modos porque con las filas ya
+       semi-transparentes, 0.10 quedaba demasiado tenue para notarse. */
+    background-size: 55%; opacity: 0.14; pointer-events: none; z-index: 0;
   }
   #balanceCaptura .captura-contenido,
   #cierreFinalCaptura .captura-contenido,
@@ -695,6 +702,21 @@
   #comisionesDevueltasCaptura .fila-carrera-comision .monto-carrera {
     color: var(--gc-color-1, var(--accent-grass));
   }
+  /* Logo de fondo invisible en la práctica (01-10-2026, reportado por el
+     usuario después de entregado): .balance-fila (background:
+     var(--card-2), sólido) y .fila-carrera-comision (background:#fff,
+     sólido) tapaban casi TODA la tarjeta, dejando el logo de fondo visible
+     solo en los huequitos de separación entre filas — con una lista larga
+     de clientes real (no las 2-3 filas de prueba del momento en que se
+     armó esto), el logo prácticamente desaparecía. Acá SOLO se baja la
+     opacidad del fondo sólido de esas 2 clases (nunca se les agrega color
+     de tema — eso se decidió a propósito que NO, ver la nota vieja junto a
+     #zonaResultadoLogoFondo en el HTML), escopeado a estos 2 IDs para no
+     tocar .balance-fila en Eliminar Planos/Eliminar Winners ni
+     .fila-carrera-comision en Comisión por Carrera de Clientes/Totales
+     por Hipódromo, que la reusan tal cual. */
+  #balanceCaptura .balance-fila { background: rgba(241, 248, 243, 0.55); }
+  #comisionesDevueltasCaptura .fila-carrera-comision { background: rgba(255, 255, 255, 0.55); }
 
   /* =================================================================
      LOGO DE FONDO en "Cargar Planos" — donde se pega el plano y donde
@@ -714,7 +736,12 @@
   #zonaPlanoLogoFondo .captura-logo-fondo,
   #zonaResultadoLogoFondo .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
-    background-size: 38%; opacity: 0.10; pointer-events: none; z-index: 0; border-radius: 8px;
+    /* Opacidad subida de 0.10 a 0.18 el 01-10-2026 (el usuario reportó que
+       no se notaba) — acá el fondo del textarea/caja de resultado ya
+       queda transparente de verdad (ver la regla de #txtPlano/
+       #resultadoCaja más abajo), así que el 0.10 original simplemente era
+       muy tenue para notarse a simple vista en una pantalla normal. */
+    background-size: 38%; opacity: 0.18; pointer-events: none; z-index: 0; border-radius: 8px;
   }
   #zonaPlanoLogoFondo .captura-contenido,
   #zonaResultadoLogoFondo .captura-contenido {
