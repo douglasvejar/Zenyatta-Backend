@@ -1685,3 +1685,66 @@ create index if not exists idx_grupos_clientes_miembros_jugador on grupos_client
 
 alter table grupos_clientes enable row level security;
 alter table grupos_clientes_miembros enable row level security;
+
+-- =================================================================
+-- CALCULADORA PARLEY — LOGROS AUTOMÁTICOS (01-10-2026, a pedido del
+-- usuario: "existe manera de cargar logros de apuestas, a la pagina?
+-- para que jueguen parley" — y luego, al preguntarle: "me gustaria
+-- conectarla a un proveedor que me cargue y actualice los logros
+-- automatico" + "en el servidor"). Un job del servidor (ver
+-- services/parleyLogros.js) consulta un proveedor externo de momios
+-- (The Odds API, the-odds-api.com) cada cierto tiempo y REEMPLAZA por
+-- completo el contenido de parley_juegos — no se guarda historial, cada
+-- corrida borra todo e inserta de nuevo (mismo criterio que "SABANA DE
+-- JUGADAS... siempre sustituye a la anterior" del bot de WhatsApp: acá
+-- tampoco interesa guardar lo viejo, solo lo vigente).
+--
+-- A diferencia de CASI toda otra tabla de este sistema, estas dos son
+-- GLOBALES (no tienen grupo_id): la Calculadora Parley es la página
+-- pública de mercadeo (public/calculadora-parley.html, sin login,
+-- abierta a cualquiera), no una herramienta de un Grupo en particular.
+--
+-- Una fila de parley_juegos = UNA selección elegible de UN juego (no una
+-- fila por juego): un partido de fútbol con mercado "head to head" trae
+-- 3 filas (gana local / empate / gana visitante), uno de MLB/NFL/NBA
+-- trae 2 (gana local / gana visitante) — así la Calculadora Parley arma
+-- cada opción ya lista para usar con la fórmula de favorito/contendor
+-- que ya tenía (ver cpCalcular() en calculadora-parley.html), sin tener
+-- que adivinar cuántas opciones trae cada deporte.
+--
+-- "evento_id" agrupa las filas de un mismo partido (viene del
+-- proveedor, NO se genera acá) para que el frontend las muestre juntas
+-- bajo el mismo encabezado "Equipo Local vs Equipo Visitante".
+create table if not exists parley_juegos (
+  id                uuid primary key default gen_random_uuid(),
+  deporte           text not null,       -- agrupador genérico ('baseball','americanfootball','basketball','soccer',...) — se arma solo del "sport_key" del proveedor (texto antes del primer "_"), nunca una lista fija a propósito: agregar una liga nueva es solo cambiar ODDS_API_DEPORTES (.env), sin tocar código.
+  liga              text,                -- nombre visible de la liga/competencia tal como lo manda el proveedor (ej. "MLB", "NFL", "Premier League")
+  evento_id         text not null,       -- id del proveedor para ESE partido — agrupa las filas de un mismo juego
+  equipo_local      text not null,
+  equipo_visitante  text not null,
+  hora_inicio       timestamptz,
+  seleccion         text not null,       -- 'local' | 'visitante' | 'empate'
+  nombre_seleccion  text not null,       -- nombre a mostrar para esta opción (nombre del equipo, o "Empate")
+  logro             numeric not null,    -- momio americano de ESTA selección puntual (negativo = favorito, positivo = contendor) — mismo formato que ya usa la Calculadora Parley
+  actualizado_en    timestamptz not null default now()
+);
+
+create index if not exists idx_parley_juegos_evento on parley_juegos(evento_id);
+create index if not exists idx_parley_juegos_deporte on parley_juegos(deporte);
+create index if not exists idx_parley_juegos_hora on parley_juegos(hora_inicio);
+
+-- Fila única (patrón singleton, "id" fijo en true) con el estado de la
+-- ÚLTIMA corrida del job — para que la propia página pueda avisar "logros
+-- actualizados hace X minutos" o "no disponibles ahora mismo" sin tener
+-- que adivinarlo a partir de parley_juegos (que puede estar vacía tanto
+-- por "nunca corrió" como por "corrió y el proveedor no tenía juegos hoy").
+create table if not exists parley_estado (
+  id                 boolean primary key default true check (id),
+  ultima_corrida_en  timestamptz,
+  exitosa            boolean,
+  mensaje            text,
+  juegos_cargados    integer
+);
+
+alter table parley_juegos enable row level security;
+alter table parley_estado enable row level security;

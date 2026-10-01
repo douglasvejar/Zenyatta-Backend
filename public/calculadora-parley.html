@@ -82,7 +82,7 @@
   .cp-contador { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 20px; padding: 3px 10px; }
 
   #cpListaLogros { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-  .cp-fila { display: grid; grid-template-columns: 22px 34px 1fr 30px; align-items: center; gap: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 11px; padding: 8px 10px; }
+  .cp-fila { display: grid; grid-template-columns: 22px 34px 1fr 34px 30px; align-items: center; gap: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 11px; padding: 8px 10px; }
   .cp-fila-num { font-family: 'Outfit', sans-serif; font-size: 12px; color: var(--text-dim); text-align: center; }
   .cp-toggle-signo { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.03); color: var(--ok); font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
   .cp-toggle-signo:hover { border-color: rgba(255,255,255,0.22); }
@@ -90,9 +90,18 @@
   .cp-input-logro { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 9px 10px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14.5px; font-variant-numeric: tabular-nums; }
   .cp-input-logro:focus { outline: none; border-color: var(--accent-cyan); }
   .cp-input-logro::placeholder { color: var(--text-dim); opacity: 0.6; }
+  .cp-btn-elegir-juego { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--card-border); background: rgba(56,224,240,0.06); color: var(--accent-cyan); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, border-color 0.15s ease; }
+  .cp-btn-elegir-juego:hover { border-color: rgba(56,224,240,0.45); background: rgba(56,224,240,0.14); }
   .cp-quitar { width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--text-dim); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; }
   .cp-quitar:hover { background: rgba(255,107,107,0.12); color: var(--danger); }
   .cp-quitar:disabled { visibility: hidden; }
+  .cp-fila-juego-label { grid-column: 2 / span 3; font-size: 11px; color: var(--text-dim); margin-top: -2px; display: none; }
+  .cp-fila-juego-label.visible { display: block; }
+
+  /* ---- Estado de logros automáticos (01-10-2026) ---- */
+  .cp-estado-logros { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); margin: -2px 0 10px; }
+  .cp-estado-logros .punto { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+  .cp-estado-logros.sin-datos .punto { background: var(--text-dim); }
 
   .cp-btn-agregar { width: 100%; background: rgba(56,224,240,0.06); border: 1px dashed rgba(56,224,240,0.35); color: var(--accent-cyan); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 13.5px; padding: 10px; border-radius: 10px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
   .cp-btn-agregar:hover { background: rgba(56,224,240,0.12); }
@@ -168,6 +177,22 @@
   .cerrar-modal { position: absolute; top: 16px; right: 16px; width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text-dim); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .cerrar-modal:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
   .modal-header { position: relative; }
+
+  /* ============ MODAL "ELEGIR JUEGO" (01-10-2026, logros automáticos) ============ */
+  .cp-modal-juegos { max-width: 480px; }
+  .cp-input-buscar { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 10px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; margin-bottom: 14px; }
+  .cp-input-buscar:focus { outline: none; border-color: var(--accent-cyan); }
+  .cp-lista-juegos { max-height: 50vh; overflow-y: auto; }
+  .cp-grupo-liga + .cp-grupo-liga { margin-top: 14px; }
+  .cp-grupo-liga-titulo { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-cyan); margin: 0 0 7px; }
+  .cp-opcion-juego { width: 100%; text-align: left; background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 13.5px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; transition: border-color 0.15s ease, background 0.15s ease; }
+  .cp-opcion-juego:hover { border-color: rgba(56,224,240,0.4); background: rgba(56,224,240,0.07); }
+  .cp-opcion-juego .nombre { font-weight: 500; display: block; }
+  .cp-opcion-juego .vs { color: var(--text-dim); font-size: 11.5px; display: block; margin-top: 2px; }
+  .cp-opcion-juego .logro { font-family: 'Outfit', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .cp-opcion-juego .logro.favorito { color: var(--danger); }
+  .cp-opcion-juego .logro.contendor { color: var(--ok); }
+  .cp-sin-juegos { color: var(--text-dim); font-size: 13px; text-align: center; padding: 24px 4px; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -210,6 +235,7 @@
             <span class="titulo">Selecciones del parley</span>
             <span class="cp-contador" id="cpContador">2 / 10</span>
           </div>
+          <p class="cp-estado-logros" id="cpEstadoLogros"><span class="punto"></span> Buscando logros automáticos...</p>
           <div id="cpListaLogros"></div>
           <button type="button" class="cp-btn-agregar" id="cpBtnAgregar">+ Agregar selección</button>
           <p class="cp-signo-ayuda">El botón "−" marca un equipo <strong style="color:var(--text)">favorito</strong> (logro negativo, ej. −125). Déjalo en "+" si es <strong style="color:var(--text)">contendor</strong> (logro positivo, ej. +130).</p>
@@ -243,8 +269,8 @@
     <div class="cp-reglas">
       <h2>¿Cómo funciona la calculadora de Parley?</h2>
       <ol>
-        <li>Agrega una fila por cada selección de tu parley y escribe su <strong>logro (moneyline)</strong> tal como aparece en la casa de apuestas — por ejemplo 125 o 130. Puedes calcular tickets de hasta <strong>10 combinaciones</strong>.</li>
-        <li>Si el equipo es <strong>favorito o "macho"</strong>, haz clic en la casilla "−" de esa fila para colocarle el signo negativo. Si no es favorito, déjala como está (signo positivo).</li>
+        <li>Agrega una fila por cada selección de tu parley y escribe su <strong>logro (moneyline)</strong> tal como aparece en la casa de apuestas — por ejemplo 125 o 130. Puedes calcular tickets de hasta <strong>10 combinaciones</strong>. También puedes tocar el botón 🔍 de la fila y elegir el juego real de la lista cargada automáticamente, en vez de escribir el número a mano.</li>
+        <li>Si el equipo es <strong>favorito o "macho"</strong>, haz clic en la casilla "−" de esa fila para colocarle el signo negativo. Si no es favorito, déjala como está (signo positivo). Al elegir un juego de la lista 🔍, esto se marca solo.</li>
         <li>Escribe el <strong>monto de la apuesta</strong> y presiona <strong>Calcular</strong>. La calculadora te muestra la ganancia neta y el total a cobrar (ganancia + lo apostado), listos para copiar o compartir por WhatsApp.</li>
       </ol>
 
@@ -310,6 +336,19 @@
         <button type="submit" class="btn-enviar" id="btnEnviarContacto">Enviar mensaje</button>
         <div class="msg-form" id="msgFormContacto"></div>
       </form>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlayJuegos">
+    <div class="modal cp-modal-juegos">
+      <div class="modal-header">
+        <button type="button" class="cerrar-modal" id="cerrarJuegos" aria-label="Cerrar">✕</button>
+        <h2>Elegir juego</h2>
+        <p class="sub">Logros cargados automáticamente. Elige una selección para completar esta fila (igual puedes editar el número después).</p>
+      </div>
+      <input type="text" id="cpBuscarJuego" class="cp-input-buscar" placeholder="Buscar equipo o liga...">
+      <div id="cpListaJuegos" class="cp-lista-juegos"></div>
+      <p class="cp-sin-juegos" id="cpSinJuegos" style="display:none;"></p>
     </div>
   </div>
 
@@ -426,7 +465,9 @@ function cpCrearFila() {
     <span class="cp-fila-num"></span>
     <button type="button" class="cp-toggle-signo" aria-label="Marcar como favorito" aria-pressed="false">+</button>
     <input type="number" class="cp-input-logro" placeholder="Ej: 150" min="0" step="1" inputmode="numeric">
+    <button type="button" class="cp-btn-elegir-juego" aria-label="Elegir juego real" title="Elegir juego real">🔍</button>
     <button type="button" class="cp-quitar" aria-label="Quitar selección">✕</button>
+    <span class="cp-fila-juego-label"></span>
   `;
   document.getElementById('cpListaLogros').appendChild(div);
 
@@ -438,6 +479,7 @@ function cpCrearFila() {
     cpCalcular(false);
   });
   div.querySelector('.cp-input-logro').addEventListener('input', () => cpCalcular(false));
+  div.querySelector('.cp-btn-elegir-juego').addEventListener('click', () => cpAbrirSelectorJuego(id));
   div.querySelector('.cp-quitar').addEventListener('click', () => cpQuitarFila(id));
 
   cpActualizarNumerosYContador();
@@ -564,9 +606,158 @@ document.getElementById('cpBtnCompartir').addEventListener('click', () => {
   window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
 });
 
+// =================================================================
+// LOGROS AUTOMÁTICOS (01-10-2026, a pedido del usuario: "existe manera
+// de cargar logros de apuestas, a la pagina? para que jueguen parley"
+// -> "me gustaria conectarla a un proveedor que me cargue y actulice
+// los logros automatico"). Se conecta a GET /api/parley/juegos
+// (público, sin login) que a su vez lee la tabla parley_juegos — la
+// llena un job del lado del servidor consultando The Odds API cada
+// cierto tiempo (ver src/services/parleyLogros.js). Si el servidor
+// todavía no tiene ODDS_API_KEY configurada, ese endpoint devuelve una
+// lista vacía y acá se avisa que toca escribir los logros a mano — la
+// calculadora JAMÁS deja de funcionar en modo manual, esto es 100% un
+// plus encima, nunca un reemplazo.
+// =================================================================
+let cpJuegosProveedor = []; // filas crudas del endpoint (1 fila = 1 selección elegible)
+let cpFilaParaElegir = null; // id de la fila que abrió el selector
+
+async function cpCargarJuegos() {
+  const estadoEl = document.getElementById('cpEstadoLogros');
+  try {
+    const res = await fetch('/api/parley/juegos');
+    if (!res.ok) throw new Error('respuesta no OK');
+    const data = await res.json();
+    cpJuegosProveedor = Array.isArray(data.juegos) ? data.juegos : [];
+
+    if (cpJuegosProveedor.length === 0) {
+      estadoEl.classList.add('sin-datos');
+      estadoEl.innerHTML = '<span class="punto"></span> Logros automáticos no disponibles ahora mismo — escríbelos manual.';
+      return;
+    }
+    estadoEl.classList.remove('sin-datos');
+    const min = data.actualizadoHaceMinutos;
+    const cuando = (min === null || min === undefined) ? '' : (min < 1 ? ' · hace menos de 1 min' : ' · hace ' + min + ' min');
+    estadoEl.innerHTML = '<span class="punto"></span> Logros actualizados automáticamente' + cuando + '.';
+  } catch (err) {
+    cpJuegosProveedor = [];
+    estadoEl.classList.add('sin-datos');
+    estadoEl.innerHTML = '<span class="punto"></span> Logros automáticos no disponibles ahora mismo — escríbelos manual.';
+  }
+}
+
+// Arma 1 "juego" por evento_id, con su lista de selecciones elegibles
+// (2 en MLB/NFL/NBA: local/visitante — 3 en fútbol: local/empate/
+// visitante), ordenados por hora de inicio.
+function cpAgruparJuegosPorEvento() {
+  const eventos = new Map();
+  cpJuegosProveedor.forEach(fila => {
+    if (!eventos.has(fila.evento_id)) {
+      eventos.set(fila.evento_id, {
+        deporte: fila.deporte,
+        liga: fila.liga,
+        equipoLocal: fila.equipo_local,
+        equipoVisitante: fila.equipo_visitante,
+        horaInicio: fila.hora_inicio,
+        opciones: []
+      });
+    }
+    eventos.get(fila.evento_id).opciones.push({ nombre: fila.nombre_seleccion, logro: Number(fila.logro) });
+  });
+  return Array.from(eventos.values()).sort((a, b) => new Date(a.horaInicio || 0) - new Date(b.horaInicio || 0));
+}
+
+function cpEscaparHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function cpAbrirSelectorJuego(filaId) {
+  cpFilaParaElegir = filaId;
+  const buscador = document.getElementById('cpBuscarJuego');
+  buscador.value = '';
+  cpRenderListaJuegos('');
+  document.getElementById('overlayJuegos').classList.add('abierto');
+  buscador.focus();
+}
+function cpCerrarSelectorJuego() {
+  document.getElementById('overlayJuegos').classList.remove('abierto');
+  cpFilaParaElegir = null;
+}
+
+function cpRenderListaJuegos(filtro) {
+  const cont = document.getElementById('cpListaJuegos');
+  const sinJuegosEl = document.getElementById('cpSinJuegos');
+  const eventos = cpAgruparJuegosPorEvento();
+  const f = (filtro || '').trim().toLowerCase();
+  const filtrados = !f ? eventos : eventos.filter(ev =>
+    (ev.equipoLocal + ' ' + ev.equipoVisitante + ' ' + (ev.liga || '')).toLowerCase().includes(f)
+  );
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = '';
+    sinJuegosEl.style.display = 'block';
+    sinJuegosEl.textContent = eventos.length === 0
+      ? 'No hay logros cargados en este momento. Cierra esta ventana y escribe el número manualmente.'
+      : 'Ningún juego coincide con tu búsqueda.';
+    return;
+  }
+  sinJuegosEl.style.display = 'none';
+
+  const porLiga = new Map();
+  filtrados.forEach(ev => {
+    const clave = ev.liga || ev.deporte;
+    if (!porLiga.has(clave)) porLiga.set(clave, []);
+    porLiga.get(clave).push(ev);
+  });
+
+  let html = '';
+  porLiga.forEach((lista, liga) => {
+    html += '<div class="cp-grupo-liga"><p class="cp-grupo-liga-titulo">' + cpEscaparHtml(liga) + '</p>';
+    lista.forEach(ev => {
+      const vs = cpEscaparHtml(ev.equipoLocal) + ' vs ' + cpEscaparHtml(ev.equipoVisitante);
+      ev.opciones.forEach(op => {
+        const esFavorito = op.logro < 0;
+        html += '<button type="button" class="cp-opcion-juego" data-logro="' + op.logro + '" data-nombre="' + cpEscaparHtml(op.nombre) + '" data-vs="' + vs.replace(/"/g, '&quot;') + '">'
+          + '<span><span class="nombre">' + cpEscaparHtml(op.nombre) + '</span><span class="vs">' + vs + '</span></span>'
+          + '<span class="logro ' + (esFavorito ? 'favorito' : 'contendor') + '">' + (esFavorito ? '−' : '+') + Math.abs(op.logro) + '</span>'
+          + '</button>';
+      });
+    });
+    html += '</div>';
+  });
+  cont.innerHTML = html;
+
+  cont.querySelectorAll('.cp-opcion-juego').forEach(btn => {
+    btn.addEventListener('click', () => {
+      cpAplicarJuegoAFila(cpFilaParaElegir, parseFloat(btn.dataset.logro), btn.dataset.nombre, btn.dataset.vs);
+      cpCerrarSelectorJuego();
+    });
+  });
+}
+
+function cpAplicarJuegoAFila(filaId, logro, nombreSeleccion, vsTexto) {
+  const fila = document.querySelector('.cp-fila[data-id="' + filaId + '"]');
+  if (!fila) return;
+  const esFavorito = logro < 0;
+  const btnSigno = fila.querySelector('.cp-toggle-signo');
+  btnSigno.classList.toggle('activo', esFavorito);
+  btnSigno.textContent = esFavorito ? '−' : '+';
+  btnSigno.setAttribute('aria-pressed', esFavorito ? 'true' : 'false');
+  fila.querySelector('.cp-input-logro').value = Math.abs(logro);
+  const label = fila.querySelector('.cp-fila-juego-label');
+  label.textContent = nombreSeleccion + ' — ' + vsTexto;
+  label.classList.add('visible');
+  cpCalcular(false);
+}
+
+document.getElementById('cerrarJuegos').addEventListener('click', cpCerrarSelectorJuego);
+document.getElementById('overlayJuegos').addEventListener('click', (e) => { if (e.target.id === 'overlayJuegos') cpCerrarSelectorJuego(); });
+document.getElementById('cpBuscarJuego').addEventListener('input', (e) => cpRenderListaJuegos(e.target.value));
+
 // Estado inicial: 2 filas vacías listas para escribir.
 cpCrearFila();
 cpCrearFila();
+cpCargarJuegos();
 </script>
 </body>
 </html>

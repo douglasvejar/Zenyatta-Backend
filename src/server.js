@@ -25,6 +25,7 @@ const hipismoRoutes = require('./routes/hipismo'); // Módulo Hipismo (22-09-202
 const hipismoClienteRoutes = require('./routes/hipismoCliente'); // Portal público del Cliente de Hipismo (22-09-2026) — pública, sin login (ver comentario en routes/hipismoCliente.js)
 const gruposClientesRoutes = require('./routes/gruposClientes'); // 🗂️ Grupo de Clientes — Deportes (30-09-2026, ver routes/gruposClientes.js; el de Hipismo vive dentro de routes/hipismo.js)
 const gruposClientesPublicoRoutes = require('./routes/gruposClientesPublico'); // Link público de Grupo de Clientes, compartido Deportes+Hipismo — pública, sin login (ver routes/gruposClientesPublico.js)
+const parleyRoutes = require('./routes/parley'); // 🎯 Logros automáticos de la Calculadora Parley (01-10-2026) — pública, sin login (ver routes/parley.js)
 
 const app = express();
 // El día que esto corra detrás de un proxy (Cloudflare Tunnel en la Fase
@@ -68,6 +69,7 @@ app.use('/api/hipismo', hipismoRoutes); // Módulo Hipismo — Hipódromos + Car
 app.use('/api/hipismo-cliente', hipismoClienteRoutes); // pública, sin login — portal del cliente de Hipismo (ver routes/hipismoCliente.js)
 app.use('/api/grupos-clientes', gruposClientesRoutes); // 🗂️ Grupo de Clientes — Deportes (ver routes/gruposClientes.js)
 app.use('/api/grupo-cliente', gruposClientesPublicoRoutes); // pública, sin login — link de Grupo de Clientes (Deportes+Hipismo, ver routes/gruposClientesPublico.js)
+app.use('/api/parley', parleyRoutes); // 🎯 Calculadora Parley — logros automáticos (ver routes/parley.js)
 
 // =================================================================
 // BOT DE WHATSAPP (03-09-2026) — 100% opcional, apagado por defecto. Se
@@ -83,6 +85,33 @@ if (process.env.WHATSAPP_BOT_ACTIVADO === 'true') {
   require('./services/whatsappBot').iniciarBotWhatsApp().catch((err) => {
     console.error('[whatsappBot] No se pudo arrancar el bot de WhatsApp (el resto del servidor sigue funcionando normal):', err);
   });
+}
+
+// =================================================================
+// LOGROS AUTOMÁTICOS DE LA CALCULADORA PARLEY (01-10-2026) — 100%
+// opcional, igual que FOOTBALL_DATA_API_KEY/API_FOOTBALL_KEY: si no hay
+// ODDS_API_KEY en el .env, esto no hace nada y la Calculadora Parley
+// sigue funcionando en modo 100% manual, como hasta ahora (ver
+// .env.example para el paso a paso de cómo conseguir la clave gratis).
+// Corre UNA vez apenas arranca el servidor y después cada
+// ODDS_API_INTERVALO_MINUTOS (default 30) — un setInterval alcanza acá,
+// no hace falta agregar una librería de cron nueva para un solo job tan
+// simple. Un error de un refresco puntual (proveedor caído, créditos
+// agotados, etc.) queda en el log y NUNCA tumba el servidor — se
+// reintenta solo en el próximo intervalo.
+// =================================================================
+if (process.env.ODDS_API_KEY) {
+  const { refrescarLogrosParley } = require('./services/parleyLogros');
+  const intervaloMin = parseInt(process.env.ODDS_API_INTERVALO_MINUTOS, 10) || 30;
+  const corridaProgramada = () => {
+    refrescarLogrosParley().catch((err) => {
+      console.error('[parleyLogros] Falló un refresco de logros (se reintenta en ' + intervaloMin + ' min, el resto del servidor sigue funcionando normal):', err);
+    });
+  };
+  corridaProgramada();
+  setInterval(corridaProgramada, intervaloMin * 60 * 1000);
+} else {
+  console.log('ODDS_API_KEY no configurada — la Calculadora Parley funciona en modo manual (sin logros automáticos). Ver .env.example para activarlos.');
 }
 
 // =================================================================
