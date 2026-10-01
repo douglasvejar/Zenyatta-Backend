@@ -2327,11 +2327,9 @@
           <div style="flex:0; min-width:auto;">
             <button class="btn btn-primario" type="button" onclick="buscarComisionesSinDevoluciones()">🔎 Buscar</button>
           </div>
-          <div style="flex:0; min-width:auto;">
-            <label style="display:flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; white-space:nowrap;">
-              <input type="checkbox" id="chkComisionesSinDevolucionesConPozos" onchange="buscarComisionesSinDevoluciones()">
-              Ver con Pozos
-            </label>
+          <div class="check-fila" style="flex:0; min-width:auto; margin-bottom:0;">
+            <input type="checkbox" id="chkComisionesSinDevolucionesConPozos" onchange="buscarComisionesSinDevoluciones()">
+            <label for="chkComisionesSinDevolucionesConPozos" style="white-space:nowrap; cursor:pointer;">Ver con Pozos</label>
           </div>
         </div>
 
