@@ -1102,6 +1102,10 @@
       <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltasPorHipodromo" onclick="mostrarVista('comisionesDevueltasPorHipodromo', this)">↩️<span class="nav-lbl"> Comisiones Devueltas por Hipódromo</span></button>
       <button type="button" class="nav-item nav-child" data-vista="comisionesDevueltas" onclick="mostrarVista('comisionesDevueltas', this)">👤<span class="nav-lbl"> Comisiones Devueltas por Cliente</span></button>
       <button type="button" class="nav-item nav-child" data-vista="saldoComisiones" onclick="mostrarVista('saldoComisiones', this)">💳<span class="nav-lbl"> Saldo Comisiones</span></button>
+      <!-- 01-10-2026, nueva pantalla a pedido del usuario: "crea en
+           comisiones un boton que diga grupo sin devoluciones" — ver
+           vista-comisionesSinDevoluciones más abajo. -->
+      <button type="button" class="nav-item nav-child" data-vista="comisionesSinDevoluciones" onclick="mostrarVista('comisionesSinDevoluciones', this)">🧮<span class="nav-lbl"> Grupo sin Devoluciones</span></button>
     </div>
 
     <hr>
@@ -2286,6 +2290,83 @@
           <thead><tr><th>Cliente</th><th class="num">% Devolución</th><th class="num">Devuelto esta semana</th></tr></thead>
           <tbody id="tablaSaldoComisiones"></tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- "GRUPO SIN DEVOLUCIONES" (01-10-2026, a pedido del usuario: "quiero
+         ver como quedaria el grupo sin devoluciones... como quedarian los
+         tercios jugando solo con el 5% sin devolverle nada a nadie... si
+         gana gana -5% juegue o banque... si pierde pierde completo juegue
+         o banquee"). SIMULACIÓN de Tercios (mismo alcance que "Comisión
+         por Carrera de Clientes" — ver GET /comisiones-sin-devoluciones
+         en routes/hipismo.js): el % propio de cada cliente NUNCA se mete
+         adentro del resultado de su jugada (eso siempre fue un ítem
+         aparte, "{cliente} - PORCENTAJE") — acá se omite esa línea por
+         completo y la comisión que se muestra es la BRUTA (sin restarle
+         lo devuelto). Mismo layout Pierden/Ganan + comisión que Balance
+         General (ver <vista-balanceGeneral> arriba), para comparar lado
+         a lado "con devoluciones" vs. "sin devoluciones".
+
+         Desde/Hasta arrancan VACÍOS a propósito (mismo criterio que
+         Montos Apostados/Pizarras): la primera búsqueda sale sin
+         parámetros y el backend calcula su propio default — acá "semana
+         actual" (no "hoy"), a pedido explícito del usuario. -->
+    <section class="vista" id="vista-comisionesSinDevoluciones">
+      <div class="card">
+        <h2>🧮 Grupo sin Devoluciones</h2>
+        <p class="desc">Simulación de Tercios: así quedaría la comisión del grupo y el saldo de cada cliente si nadie tuviera % propio configurado — todos juegan solo con el 5% (gana -5%, pierde completo, jugando o banqueando), sin devolverle nada a nadie.</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpDesdeComisionesSinDevoluciones">Desde</label>
+            <input type="date" id="inpDesdeComisionesSinDevoluciones">
+          </div>
+          <div>
+            <label for="inpHastaComisionesSinDevoluciones">Hasta</label>
+            <input type="date" id="inpHastaComisionesSinDevoluciones">
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-primario" type="button" onclick="buscarComisionesSinDevoluciones()">🔎 Buscar</button>
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; white-space:nowrap;">
+              <input type="checkbox" id="chkComisionesSinDevolucionesConPozos" onchange="buscarComisionesSinDevoluciones()">
+              Ver con Pozos
+            </label>
+          </div>
+        </div>
+
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-primario" type="button" onclick="copiarComisionesSinDevolucionesImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesSinDevolucionesTexto()">📋 Copiar Texto</button>
+          <span class="toast-copiado" id="toastComisionesSinDevoluciones"></span>
+        </div>
+
+        <div id="comisionesSinDevolucionesCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px;">
+          <div class="captura-logo-fondo" id="comisionesSinDevolucionesLogoFondo"></div>
+          <div class="captura-contenido" style="padding:18px 20px;">
+            <div class="encabezado-captura">
+              <div class="logo-grupo js-logo-grupo">🏇</div>
+              <div>
+                <div class="titulo" id="comisionesSinDevolucionesNombreGrupoCaptura">🧮 Grupo sin Devoluciones</div>
+                <div class="fecha" id="comisionesSinDevolucionesFechaCaptura"></div>
+              </div>
+            </div>
+            <div class="balance-cols">
+              <div class="balance-col">
+                <h3><span class="flecha flecha-roja">▼</span> Pierden</h3>
+                <div class="balance-lista" id="listaComisionesSinDevolucionesPierden"></div>
+              </div>
+              <div class="balance-col">
+                <h3><span class="flecha flecha-verde">▲</span> Ganan</h3>
+                <div class="balance-lista" id="listaComisionesSinDevolucionesGanan"></div>
+              </div>
+            </div>
+            <div class="comision-caja">
+              <span class="etiqueta">💼 Comisión del grupo (bruta, sin devoluciones)</span>
+              <span class="monto" id="montoComisionesSinDevolucionesTotal">$ 0,00</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -5453,7 +5534,7 @@ function pintarLogosGrupo() {
   // logo pero donde se PEGA el plano) estuvo acá mismo el mismo día,
   // pero se sacó: con el cuadro vacío se veía como un pedazo de imagen
   // suelto — queda solo en el resultado.
-  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'montosApostadosLogoFondo', 'resultadoLogoFondo'].forEach(id => {
+  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'montosApostadosLogoFondo', 'resultadoLogoFondo', 'comisionesSinDevolucionesLogoFondo'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.backgroundImage = logoUrl ? `url('${logoUrl}')` : '';
@@ -5480,13 +5561,50 @@ function pintarLogosGrupo() {
     // 01-10-2026, a pedido del usuario: mismo tratamiento de logo+título
     // que sus hermanas de arriba (ver la nota grande del rediseño de
     // Montos Apostados en el HTML de vista-montosApostados).
-    montosApostadosNombreGrupoCaptura: `💰 Montos Apostados — ${nombreGrupo} 🇻🇪`
+    montosApostadosNombreGrupoCaptura: `💰 Montos Apostados — ${nombreGrupo} 🇻🇪`,
+    // 01-10-2026 (segunda ronda), a pedido del usuario: "crea en comisiones
+    // un boton que diga , grupo sin devoluciones" — mismo tratamiento de
+    // logo+título que sus hermanas de arriba.
+    comisionesSinDevolucionesNombreGrupoCaptura: `🧮 Grupo sin Devoluciones — ${nombreGrupo} 🇻🇪`
   };
   Object.keys(titulos).forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = titulos[id];
   });
 }
+
+// Logo de fondo del resultado de "Cargar Planos" — SOLO visible cuando
+// #resultadoCaja (el resultado de verdad, ya calculado) es lo que se
+// está mostrando (01-10-2026, reportado de nuevo por el usuario con una
+// captura real: "cargar planos sigue saliendo un pedazo de imagen que no
+// me gusta"). Antes el logo quedaba SIEMPRE prendido detrás de las 3
+// variantes de esta zona (#resultadoVacio/#avisoResultado/#resultadoCaja,
+// ver el HTML) — con el placeholder corto ("El plano resuelto va a
+// aparecer acá...") o un mensaje de error, sin texto largo alrededor que
+// lo disimulara, se veía exactamente como "un pedazo de imagen" suelto:
+// el mismo problema que ya se había encontrado y sacado del textarea
+// #txtPlano, esta vez en la zona del resultado cuando todavía está
+// vacía.
+//
+// calcularPlano()/confirmarPlano()/limpiarPlano() tocan
+// caja.style.display en varios puntos distintos (vista previa, error de
+// cálculo, guardado, limpiar) — en vez de acordarse de apagar/prender el
+// logo en cada uno de esos puntos (fácil de olvidar en el próximo
+// cambio), un MutationObserver sobre el style de #resultadoCaja cubre
+// los 3 solo, mismo patrón ya usado en superadmin.html para el bloqueo
+// de scroll del modal.
+(function sincronizarLogoResultadoPlano() {
+  const caja = document.getElementById('resultadoCaja');
+  const logo = document.getElementById('resultadoLogoFondo');
+  if (!caja || !logo) return;
+  function actualizar() {
+    // '' (sin inline override) deja que la regla de CSS de arriba
+    // (opacity: 0.18) mande de nuevo; '0' lo esconde del todo.
+    logo.style.opacity = (caja.style.display === 'block') ? '' : '0';
+  }
+  new MutationObserver(actualizar).observe(caja, { attributes: true, attributeFilter: ['style'] });
+  actualizar();
+})();
 
 // ------------------------------------------------------------------
 // Navegación (sidebar + subnav) — solo maqueta visual
@@ -5557,6 +5675,8 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   comisionesDevueltasPorHipodromo: () => pintarComisionesDevueltasPorHipodromo(),
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   saldoComisiones: () => pintarSaldoComisiones(),
+  // "Grupo sin Devoluciones" (01-10-2026) — ver pintarComisionesSinDevoluciones() más abajo.
+  comisionesSinDevoluciones: () => pintarComisionesSinDevoluciones(),
   montosApostados: () => pintarMontosApostados(),
   // "Pizarras" (01-10-2026) — ver pintarPizarras() más abajo.
   pizarras: () => pintarPizarras(),
@@ -11886,6 +12006,21 @@ async function pintarEliminarWinnersDia() {
 //     "Eliminar Winners"); la tarjeta pasa a mostrar "⏳ Pendiente de
 //     pizarra" con un botón "Cargar pizarra" en vez de "Editar".
 //
+// ACTUALIZACIÓN 01-10-2026 (segunda ronda, tras ver la pantalla en
+// producción — ver la nota grande "ACTUALIZACIÓN... (segunda ronda)" en
+// routes/hipismo.js para el detalle completo del lado del servidor):
+//   - Jugadas Adelantadas AHORA SÍ aparece acá (tipo:'adelantadas'), como
+//     una tarjeta más por carrera — se edita/elimina con su PROPIO par de
+//     endpoints (PUT/DELETE /pizarras/adelantadas, por fecha+hipódromo+
+//     carrera en vez de por :id, porque acá no hay una sola fila sino
+//     varias jugadas). Winners se confirmó que NO entra (no tiene pizarra
+//     ni se calcula nada del lado del servidor).
+//   - "Aplicar a todas" ahora tiene un checkbox por cada modalidad
+//     presente en la carrera (todos marcados por default) — en palabras
+//     del usuario: "elegir a quien aplica esos cambios... los que no
+//     seleccione se quedan con la pizarra que ya tenian cargada desde
+//     planos". Antes aplicaba SIEMPRE a todas sin poder elegir.
+//
 // Mismo patrón Desde/Hasta que Montos Apostados (desde/hasta vacíos la
 // primera vez -> el servidor calcula su propio default y lo devuelve en
 // la respuesta), pero agrupado acá además por DÍA (un rango puede
@@ -11893,7 +12028,7 @@ async function pintarEliminarWinnersDia() {
 // Winners" arriba.
 let PIZARRAS_ACTUAL = null; // última respuesta cruda del servidor (filas sin agrupar)
 let PIZARRAS_EDITANDO = null; // "tipo:id" (o "todas:fecha:hipodromo:carrera") de lo que tiene el campo de pizarra abierto, o null
-const TIPO_TEXTO_PIZARRA = { tercios: 'Tercios', remate: 'Remate' };
+const TIPO_TEXTO_PIZARRA = { tercios: 'Tercios', remate: 'Remate', adelantadas: 'Jugadas Adelantadas' };
 
 function cargarPizarras() { pintarPizarras(); }
 
@@ -12007,12 +12142,44 @@ function cerrarEdicionPizarra() {
   renderPizarras();
 }
 
+// Busca la fila completa (con fecha/hipodromoNombre/carreraNumero) por
+// tipo+id — hace falta para 'adelantadas' (01-10-2026), que no se edita/
+// borra por :id como Tercios/Remate sino por fecha+hipódromo+carrera
+// (ver apiPizarraUrlYOpciones más abajo).
+function filaPizarraDe(tipo, id) {
+  return (PIZARRAS_ACTUAL || []).find(f => f.tipo === tipo && String(f.id) === String(id));
+}
+
+// Arma la URL/opciones correctas para PUT/DELETE de UNA fila de Pizarras
+// — Tercios/Remate van por su propio :id (PUT|DELETE /pizarras/<tipo>/:id,
+// como siempre); Jugadas Adelantadas (01-10-2026) no tiene un :id de una
+// sola fila (son varias jugadas), así que va por fecha+hipódromo+carrera:
+// PUT /pizarras/adelantadas con esos 3 datos + la pizarra en el body,
+// DELETE /pizarras/adelantadas con esos 3 datos en la query string.
+function apiPizarraUrlYOpciones(f, metodo, pizarra) {
+  if (f.tipo === 'adelantadas') {
+    if (metodo === 'DELETE') {
+      const qs = new URLSearchParams({ fecha: f.fecha, hipodromoNombre: f.hipodromoNombre, carreraNumero: f.carreraNumero }).toString();
+      return { url: `/api/hipismo/pizarras/adelantadas?${qs}`, opciones: { method: 'DELETE' } };
+    }
+    return {
+      url: `/api/hipismo/pizarras/adelantadas`,
+      opciones: { method: 'PUT', body: JSON.stringify({ fecha: f.fecha, hipodromoNombre: f.hipodromoNombre, carreraNumero: f.carreraNumero, pizarra }) }
+    };
+  }
+  if (metodo === 'DELETE') return { url: `/api/hipismo/pizarras/${f.tipo}/${f.id}`, opciones: { method: 'DELETE' } };
+  return { url: `/api/hipismo/pizarras/${f.tipo}/${f.id}`, opciones: { method: 'PUT', body: JSON.stringify({ pizarra }) } };
+}
+
 async function guardarEdicionPizarra(tipo, id) {
   const inp = document.getElementById(`editPizarra_${tipo}_${id}`);
   const pizarra = (inp && inp.value || '').trim();
   if (!pizarra) { alert('Escribe la pizarra (orden de llegada).'); return; }
+  const f = filaPizarraDe(tipo, id);
+  if (!f) { alert('No se encontró esa carrera — recarga Pizarras e intenta de nuevo.'); return; }
+  const { url, opciones } = apiPizarraUrlYOpciones(f, 'PUT', pizarra);
   try {
-    await apiHipismo(`/api/hipismo/pizarras/${tipo}/${id}`, { method: 'PUT', body: JSON.stringify({ pizarra }) });
+    await apiHipismo(url, opciones);
   } catch (e) {
     alert('No se pudo guardar: ' + e.message);
     return;
@@ -12022,9 +12189,18 @@ async function guardarEdicionPizarra(tipo, id) {
 }
 
 async function eliminarPizarra(tipo, id, hipodromoNombre, carreraNumero) {
-  if (!confirm(`¿Eliminar la pizarra de ${hipodromoNombre}, ${carreraNumero}ta Carrera (${TIPO_TEXTO_PIZARRA[tipo] || tipo})? La carrera NO se borra — queda pendiente de pizarra, con sus jugadas sin decidir, hasta que cargues la llegada de nuevo.`)) return;
+  // Aviso extra para Adelantadas (01-10-2026): si hay alguna Marca ya
+  // bancada entre esas jugadas, eliminar la pizarra la deja "pendiente"
+  // de nuevo y pierde ese banqueo (mismo criterio que corregir la
+  // pizarra — ver la nota grande de guardarResolucionAdelantadas en
+  // routes/hipismo.js) — mejor que el operador lo sepa ANTES de confirmar.
+  const avisoAdelantadas = tipo === 'adelantadas' ? ' Si alguna Marca ya estaba bancada, también pierde su banqueo.' : '';
+  if (!confirm(`¿Eliminar la pizarra de ${hipodromoNombre}, ${carreraNumero}ta Carrera (${TIPO_TEXTO_PIZARRA[tipo] || tipo})? La carrera NO se borra — queda pendiente de pizarra, con sus jugadas sin decidir, hasta que cargues la llegada de nuevo.${avisoAdelantadas}`)) return;
+  const f = filaPizarraDe(tipo, id);
+  if (!f) { alert('No se encontró esa carrera — recarga Pizarras e intenta de nuevo.'); return; }
+  const { url, opciones } = apiPizarraUrlYOpciones(f, 'DELETE');
   try {
-    await apiHipismo(`/api/hipismo/pizarras/${tipo}/${id}`, { method: 'DELETE' });
+    await apiHipismo(url, opciones);
   } catch (e) {
     alert('No se pudo eliminar: ' + e.message);
     return;
@@ -12033,11 +12209,12 @@ async function eliminarPizarra(tipo, id, hipodromoNombre, carreraNumero) {
 }
 
 // "Aplicar a todas" (01-10-2026, respuesta libre del usuario, ver la
-// nota grande de arriba): un solo campo de pizarra que, al guardar,
-// llama PUT /pizarras/<tipo>/:id para CADA modalidad presente en esa
-// carrera, una tras otra. Si alguna falla a mitad de camino, avisa
-// cuáles sí quedaron guardadas antes de cortar (nunca deja la duda de
-// "¿guardó algo o no?").
+// nota grande de arriba): un checkbox por cada modalidad presente en la
+// carrera (todos marcados por default) — al guardar, llama PUT a cada
+// modalidad MARCADA, una tras otra; las que el operador desmarque "se
+// quedan con la pizarra que ya tenían cargada desde planos" (en sus
+// palabras). Si alguna falla a mitad de camino, avisa cuáles sí quedaron
+// guardadas antes de cortar (nunca deja la duda de "¿guardó algo o no?").
 function abrirAplicarATodasPizarra(fecha, hipodromoNombre, carreraNumero) {
   PIZARRAS_EDITANDO = `todas:${fecha}:${hipodromoNombre}:${carreraNumero}`;
   renderPizarras();
@@ -12045,16 +12222,28 @@ function abrirAplicarATodasPizarra(fecha, hipodromoNombre, carreraNumero) {
 }
 
 function formAplicarATodasHtml(fecha, hipodromoNombre, carreraNumero, modalidades) {
-  const nombresModalidades = modalidades.map(f => TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo).join(' + ');
   const hipodromoJs = hipodromoNombre.replace(/'/g, "\\'");
+  const checkboxesHtml = modalidades.map(f => `
+    <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:13px; font-weight:400;">
+      <input type="checkbox" id="chkAplicarTodas_${f.tipo}" checked>
+      ${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo}
+    </label>`).join('');
+  // Aviso de Marcas bancadas (01-10-2026) solo si Adelantadas está entre
+  // las modalidades de esta carrera — ver la nota grande de
+  // guardarResolucionAdelantadas en routes/hipismo.js.
+  const avisoAdelantadas = modalidades.some(f => f.tipo === 'adelantadas')
+    ? `<div style="font-size:12px; color:var(--danger); margin:4px 0 6px;">⚠️ Si incluyes Jugadas Adelantadas y alguna Marca ya estaba bancada, pierde su banqueo (hay que rebancarla con el resultado corregido).</div>`
+    : '';
   return `
     <div style="margin:4px 0 10px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
-      <div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Se va a aplicar la MISMA pizarra a: ${nombresModalidades}.</div>
-      <div class="fila" style="margin-bottom:6px;">
+      <div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Elige a qué modalidades aplicar la MISMA pizarra nueva — las que desmarques se quedan con la pizarra que ya tenían cargada desde planos.</div>
+      ${checkboxesHtml}
+      ${avisoAdelantadas}
+      <div class="fila" style="margin:6px 0;">
         <input type="text" id="editPizarraTodas" placeholder="Ej. 6.10.4.8.2">
       </div>
       <div class="btn-fila">
-        <button class="btn btn-primario" type="button" onclick="guardarAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${carreraNumero})">💾 Guardar y recalcular todas</button>
+        <button class="btn btn-primario" type="button" onclick="guardarAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${carreraNumero})">💾 Guardar y recalcular las marcadas</button>
         <button class="btn btn-secundario" type="button" onclick="cerrarEdicionPizarra()">Cancelar</button>
       </div>
     </div>`;
@@ -12065,10 +12254,16 @@ async function guardarAplicarATodasPizarra(fecha, hipodromoNombre, carreraNumero
   const pizarra = (inp && inp.value || '').trim();
   if (!pizarra) { alert('Escribe la pizarra (orden de llegada).'); return; }
   const modalidades = (PIZARRAS_ACTUAL || []).filter(f => f.fecha === fecha && f.hipodromoNombre === hipodromoNombre && f.carreraNumero === carreraNumero);
+  const seleccionadas = modalidades.filter(f => {
+    const chk = document.getElementById(`chkAplicarTodas_${f.tipo}`);
+    return chk ? chk.checked : true;
+  });
+  if (!seleccionadas.length) { alert('Marca al menos una modalidad.'); return; }
   const guardadas = [];
-  for (const f of modalidades) {
+  for (const f of seleccionadas) {
+    const { url, opciones } = apiPizarraUrlYOpciones(f, 'PUT', pizarra);
     try {
-      await apiHipismo(`/api/hipismo/pizarras/${f.tipo}/${f.id}`, { method: 'PUT', body: JSON.stringify({ pizarra }) });
+      await apiHipismo(url, opciones);
       guardadas.push(TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo);
     } catch (e) {
       alert(`Se guardó ${guardadas.join(', ') || 'ninguna modalidad todavía'} pero falló ${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo}: ${e.message}`);
@@ -12248,6 +12443,185 @@ async function pintarSaldoComisiones() {
     tr.innerHTML = `<td>${nombreMostrado}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
     tbody.appendChild(tr);
   });
+}
+
+// ------------------------------------------------------------------
+// "🧮 Grupo sin Devoluciones" (01-10-2026, segunda ronda) — a pedido del
+// usuario: "crea en comisiones un boton que diga , grupo sin
+// devoluciones.... aqui me mostraras como seria la comision y como
+// quedarian los tercios jugando solo con el 5% sin devolverle nada a
+// nadie ... si gana gan -5% juegue o banque... si pierde pierde completo
+// juegue o banquee". Simulación de Tercios (mismo alcance que "Comisión
+// por Carrera de Clientes", ver GET /comisiones-por-carrera): como ya
+// quedaría guardado el resultado de cada ticket (resultado_jugador/
+// resultado_banquero) es SIEMPRE "gana -5%, pierde completo" sin importar
+// el % propio que tenga configurado el cliente (ver la nota grande en
+// GET /comisiones-sin-devoluciones en routes/hipismo.js) — por eso esta
+// pantalla no resta ninguna devolución, y la comisión que se muestra es
+// la BRUTA de cada plano, ya que acá nadie recibe nada de vuelta.
+// Mismo layout que Balance General (columnas Pierden/Ganan + caja de
+// comisión) para que se puedan comparar lado a lado, y mismo patrón de
+// "Desde/Hasta en blanco" que Montos Apostados/Pizarras/Comisiones
+// Devueltas por Cliente — el backend decide la semana actual por
+// default y esta función rellena los campos con lo que devuelva.
+// ------------------------------------------------------------------
+let COMISIONES_SIN_DEVOLUCIONES_ACTUAL = null;
+
+function buscarComisionesSinDevoluciones() {
+  const desde = document.getElementById('inpDesdeComisionesSinDevoluciones').value;
+  const hasta = document.getElementById('inpHastaComisionesSinDevoluciones').value;
+  pintarComisionesSinDevoluciones(desde, hasta);
+}
+
+async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
+  const inpDesde = document.getElementById('inpDesdeComisionesSinDevoluciones');
+  const inpHasta = document.getElementById('inpHastaComisionesSinDevoluciones');
+  const listaPierden = document.getElementById('listaComisionesSinDevolucionesPierden');
+  const listaGanan = document.getElementById('listaComisionesSinDevolucionesGanan');
+  listaPierden.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  listaGanan.innerHTML = '';
+
+  const params = new URLSearchParams();
+  if (desdeForzado) params.set('desde', desdeForzado);
+  if (hastaForzado) params.set('hasta', hastaForzado);
+
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-sin-devoluciones?${params.toString()}`);
+  } catch (e) {
+    COMISIONES_SIN_DEVOLUCIONES_ACTUAL = null;
+    listaPierden.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
+    listaGanan.innerHTML = '';
+    return;
+  }
+  // "Ver con Pozos" (01-10-2026, tercera ronda), a pedido del usuario:
+  // "en este nuevo boton , agrega una casilla que diga ver con pozos....
+  // si pulso alli veo lo mismo pero ahora con el pozo que tenga cada
+  // cliente ya sumado" — mismo criterio que ya usa "💰 Pozos" > "Saldos +
+  // Pozos" (ver pintarTablaPozos más arriba): el pozo de cada cliente
+  // (j.pozo.pozoActual, calculado en services/pozo.js — TODO el histórico,
+  // nunca solo el rango elegido acá) se SUMA al saldo que ya trae este
+  // reporte, cliente por cliente, por nombre. La lista de clientes NO
+  // cambia (sigue siendo solo quien jugó/banqueó en el rango elegido) —
+  // nadie nuevo se agrega por tener pozo sin haber jugado acá — y la
+  // comisión del grupo tampoco se toca (el pozo es plata del cliente, no
+  // de la comisión).
+  const chkConPozos = document.getElementById('chkComisionesSinDevolucionesConPozos');
+  const conPozos = !!(chkConPozos && chkConPozos.checked);
+  if (conPozos) {
+    const jugadoresParaPozo = CLIENTES_HIPISMO_CACHE.length ? CLIENTES_HIPISMO_CACHE : await apiHipismo('/api/jugadores');
+    const pozoPorNombre = new Map();
+    jugadoresParaPozo.forEach(j => pozoPorNombre.set(j.nombre, j.pozo ? Number(j.pozo.pozoActual) : 0));
+    data.clientes = data.clientes.map(c => ({
+      ...c,
+      saldo: Math.round((Number(c.saldo) + (pozoPorNombre.get(c.nombre) || 0)) * 100) / 100
+    }));
+  }
+  data.conPozos = conPozos;
+  COMISIONES_SIN_DEVOLUCIONES_ACTUAL = data;
+  // El backend ya decidió el rango (semana actual si no se pidió nada) —
+  // se rellenan los campos con eso, igual que Comisiones Devueltas por
+  // Cliente/Montos Apostados.
+  inpDesde.value = data.desde;
+  inpHasta.value = data.hasta;
+
+  const elFecha = document.getElementById('comisionesSinDevolucionesFechaCaptura');
+  if (elFecha) {
+    elFecha.textContent = (data.desde === data.hasta
+      ? formatFechaCortaDMY(data.desde)
+      : `Del ${formatFechaCortaDMY(data.desde)} al ${formatFechaCortaDMY(data.hasta)}`) + (conPozos ? ' · con pozos' : '');
+  }
+
+  aplicarDensidadCaptura('comisionesSinDevolucionesCaptura', data.clientes.length);
+
+  function filaComisionSinDevoluciones(nombre, monto, clase) {
+    const fila = document.createElement('div');
+    fila.className = 'balance-fila ' + clase;
+    const signo = monto > 0 ? '+' : '';
+    fila.innerHTML = `<span class="nombre">${formatNombre(nombre)}</span><span class="monto">${signo}${formatMonto(monto)}</span>`;
+    return fila;
+  }
+
+  listaPierden.innerHTML = '';
+  listaGanan.innerHTML = '';
+  const pierden = data.clientes.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
+  const ganan = data.clientes.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+  pierden.forEach(c => listaPierden.appendChild(filaComisionSinDevoluciones(c.nombre, c.saldo, 'perdedor')));
+  ganan.forEach(c => listaGanan.appendChild(filaComisionSinDevoluciones(c.nombre, c.saldo, 'ganador')));
+  if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en este rango.</div>';
+  if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en este rango.</div>';
+
+  document.getElementById('montoComisionesSinDevolucionesTotal').textContent = formatMonto(Number(data.comisionGrupo));
+}
+
+// Texto para copiar al grupo de WhatsApp — mismo estilo (título en
+// negrita con el rango, línea de guiones, bloques con bullets y total
+// final en negrita) que "Destinatarios de Devolución %" (ver
+// textoComisionesDevueltas más arriba), adaptado a esta pantalla: en vez
+// de agrupar por destinatario, se listan los que pierden y los que
+// ganan, y al final la comisión del grupo en vez del total devuelto.
+function textoComisionesSinDevoluciones(data) {
+  const pierden = (data.clientes || []).filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
+  const ganan = (data.clientes || []).filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+
+  let texto = `*Grupo sin Devoluciones${data.conPozos ? ' (con Pozos)' : ''} - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
+  if (pierden.length) {
+    texto += `\n🔴 *Pierden*\n`;
+    pierden.forEach(c => { texto += `  • ${formatNombre(c.nombre)}:  ${formatMontoTabla(c.saldo)}\n`; });
+  }
+  if (ganan.length) {
+    texto += `\n🟢 *Ganan*\n`;
+    ganan.forEach(c => { texto += `  • ${formatNombre(c.nombre)}:  +${formatMontoTabla(c.saldo)}\n`; });
+  }
+  texto += `\n──────────────────────────────\n*COMISIÓN DEL GRUPO: ${formatMontoTabla(data.comisionGrupo)} USD*`;
+  return texto;
+}
+
+function mostrarToastComisionesSinDevoluciones(msg, esError) {
+  const t = document.getElementById('toastComisionesSinDevoluciones');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+function copiarComisionesSinDevolucionesTexto() {
+  if (!COMISIONES_SIN_DEVOLUCIONES_ACTUAL) { mostrarToastComisionesSinDevoluciones('Todavía se está cargando — espera un momento.', true); return; }
+  const texto = textoComisionesSinDevoluciones(COMISIONES_SIN_DEVOLUCIONES_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesSinDevoluciones('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastComisionesSinDevoluciones('No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarToastComisionesSinDevoluciones('No se pudo copiar — selecciona el texto a mano.', true);
+  }
+}
+
+async function copiarComisionesSinDevolucionesImagen() {
+  if (!COMISIONES_SIN_DEVOLUCIONES_ACTUAL) { mostrarToastComisionesSinDevoluciones('Todavía se está cargando — espera un momento.', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastComisionesSinDevoluciones('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('comisionesSinDevolucionesCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastComisionesSinDevoluciones('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastComisionesSinDevoluciones('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'grupo_sin_devoluciones.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastComisionesSinDevoluciones('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastComisionesSinDevoluciones('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
 }
 
 // Cierre automático del calendario nativo (28-09-2026, a pedido del

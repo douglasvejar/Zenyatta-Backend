@@ -28,6 +28,12 @@
 //   6. obtenerApuestasDelRango (vía GET /montos-apostados) trata un
 //      remate con numero_ganador=NULL como "sin decidir" (decidida:false,
 //      gano:null), no como "PERDIÓ" — el ajuste que motivó esta prueba.
+//   7. GET /pizarras: el montoTotal de Tercios ahora es la comisión NETA
+//      (comision_total menos el % propio/aval devuelto generado por los
+//      tickets de ESE plano), no la bruta — ver calcularDevueltoPorPlanoTercios
+//      en routes/hipismo.js. Los endpoints nuevos de Jugadas Adelantadas
+//      (PUT/DELETE /pizarras/adelantadas) y la fila tipo:'adelantadas' de
+//      GET /pizarras tienen su PROPIA prueba, test_hipismo_pizarras_adelantadas.js.
 const assert = require('assert');
 const Module = require('module');
 const path = require('path');
@@ -40,8 +46,10 @@ const TABLAS = {
   hipismo_tickets: [],
   hipismo_remates: [],
   hipismo_remate_apuestas: [],
+  hipismo_adelantadas_planos: [],
   hipismo_adelantadas_jugadas: [],
-  hipismo_alertas: []
+  hipismo_alertas: [],
+  jugadores: []
 };
 
 function ejecutarQuery(text, params) {
@@ -70,6 +78,48 @@ function ejecutarQuery(text, params) {
         cantidad: TABLAS.hipismo_remate_apuestas.filter(a => a.remate_id === r.id).length
       }));
     return { rows: filas };
+  }
+  // ---- GET /pizarras: fila agregada tipo:'adelantadas' (01-10-2026) ----
+  if (/^SELECT p\.fecha, p\.hipodromo_nombre, j\.carrera_numero, COUNT\(\*\)::int AS cantidad, COALESCE\(SUM\(j\.monto\), 0\) AS monto_total, bool_and\(j\.estado = 'pendiente'\) AS todas_pendientes/i.test(sql)) {
+    const [grupoId, desde, hasta] = params;
+    const grupos = new Map();
+    TABLAS.hipismo_adelantadas_jugadas.forEach(j => {
+      if (j.grupo_id !== grupoId) return;
+      const plano = TABLAS.hipismo_adelantadas_planos.find(p => p.id === j.plano_id);
+      if (!plano || plano.fecha < desde || plano.fecha > hasta) return;
+      const clave = `${plano.fecha}::${plano.hipodromo_nombre}::${j.carrera_numero}`;
+      if (!grupos.has(clave)) grupos.set(clave, { fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre, carrera_numero: j.carrera_numero, jugadas: [] });
+      grupos.get(clave).jugadas.push(j);
+    });
+    const filas = Array.from(grupos.values()).map(g => {
+      const resueltas = g.jugadas.filter(j => j.resuelto_en != null).sort((a, b) => b.resuelto_en - a.resuelto_en);
+      return {
+        fecha: g.fecha, hipodromo_nombre: g.hipodromo_nombre, carrera_numero: g.carrera_numero,
+        cantidad: g.jugadas.length,
+        monto_total: g.jugadas.reduce((s, j) => s + Number(j.monto), 0),
+        todas_pendientes: g.jugadas.every(j => j.estado === 'pendiente'),
+        pizarra_usada: resueltas.length ? resueltas[0].pizarra_usada : null
+      };
+    });
+    return { rows: filas };
+  }
+  // ---- calcularDevueltoPorPlanoTercios: tickets de TODOS los planos del rango ----
+  if (/^SELECT plano_id, cliente_nombre, banquero_nombre, monto, resultado_jugador, resultado_banquero FROM hipismo_tickets WHERE plano_id = ANY\(\$1::uuid\[\]\)$/i.test(sql)) {
+    const [planoIds] = params;
+    return { rows: TABLAS.hipismo_tickets.filter(t => planoIds.includes(t.plano_id)) };
+  }
+  // ---- obtenerComisionesPropias: jugadores por nombre exacto, y el
+  // rescate "todos los jugadores del grupo" cuando algún nombre no calzó.
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre, j\.incluir_porcentaje_en_jugadas FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id WHERE j\.grupo_id = \$1 AND j\.nombre = ANY\(\$2::text\[\]\)$/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre)).map(j => ({ id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: null, incluir_porcentaje_en_jugadas: !!j.incluir_porcentaje_en_jugadas })) };
+  }
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre, j\.incluir_porcentaje_en_jugadas FROM jugadores j LEFT JOIN jugadores cc_propio ON cc_propio\.id = j\.cuenta_comision_id WHERE j\.grupo_id = \$1$/i.test(sql)) {
+    const [grupoId] = params;
+    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId).map(j => ({ id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: null, incluir_porcentaje_en_jugadas: !!j.incluir_porcentaje_en_jugadas })) };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap/i.test(sql)) {
+    return { rows: [] };
   }
 
   // ---- hipismo_planos: lookup + update ----
@@ -281,6 +331,8 @@ function check(cond, msg) {
   check(!!filaRemate && filaRemate.pizarra === '7.1.2' && filaRemate.pendiente === false, '1) El remate sale con su pizarra y pendiente=false');
   check(filaTercios.cantidad === 2, '1) El plano de Tercios reporta sus 2 tickets');
   check(filaRemate.cantidad === 2, '1) El remate reporta sus 2 apuestas');
+  check(filaTercios.montoTotal === 2.5, '7) Sin comisión propia configurada para PEDRO/MARIA/FLACO, la comisión NETA de Tercios es igual a la bruta (comision_total)');
+  check(filaRemate.montoTotal === 80, '1) El montoTotal del Remate sigue siendo el pool_total (monto apostado), sin cambios');
 
   // --- 2) PUT /pizarras/tercios/:id: corrige la pizarra (ahora gana el 3, no el 5) ---
   const res2 = await invocarRuta(handlerPutTercios, reqBase(GRUPO_ID, { params: { id: 'plano-1' }, body: { pizarra: '3.5.1' } }));
@@ -337,6 +389,31 @@ function check(cond, msg) {
   const lineaRemateCarlos = detalleCarlos && detalleCarlos.detalle.find(d => d.tipo === 'remate');
   check(!!lineaRemateCarlos, '6) La jugada de remate de CARLOS sigue apareciendo en Montos Apostados (con monto, aunque esté pendiente)');
   check(lineaRemateCarlos.gano === null, '6) gano=null (sin decidir) para un remate con pizarra eliminada, no false ("perdió")');
+
+  // --- 7) GET /pizarras: comisión NETA de Tercios con % propio real ---
+  // (01-10-2026, a pedido del usuario tras ver "115,50" en producción:
+  // "debes mostrar el % que quedo en comsion para el grupo en esa carrera
+  // ya descontando todas las devoluciones"). Plano nuevo, carrera propia
+  // (99) para no pisar plano-1 (ya "pendiente" tras la prueba 3).
+  TABLAS.hipismo_planos.push({
+    id: 'plano-net', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada',
+    carrera_numero: 99, fecha: '2026-09-29', ret: null, pizarra: '2.1.3', cruza_jugadas: false,
+    texto_original: 'texto', texto_resultado: 'texto', comision_total: 100, creado_en: 3000
+  });
+  TABLAS.hipismo_tickets.push(
+    { id: 'tk-net', plano_id: 'plano-net', grupo_id: GRUPO_ID, cliente_nombre: 'JUAN', banquero_nombre: 'LUIS', modalidad: '1P', caballo: '2', monto: 200, resultado_jugador: 190, resultado_banquero: -200, sin_comision: false, creado_en: 3000 }
+  );
+  // JUAN: 5% propio sobre lo que apostó (200) = 10. LUIS: 2% = 4. Ningún
+  // aval configurado (jugadores_avales_porcentaje queda vacío arriba).
+  TABLAS.jugadores.push(
+    { id: 'jug-juan', grupo_id: GRUPO_ID, nombre: 'JUAN', comision_propia: 5, incluir_porcentaje_en_jugadas: false },
+    { id: 'jug-luis', grupo_id: GRUPO_ID, nombre: 'LUIS', comision_propia: 2, incluir_porcentaje_en_jugadas: false }
+  );
+  const res7 = await invocarRuta(handlerGetPizarras, reqBase(GRUPO_ID, { query: { desde: '2026-09-29', hasta: '2026-09-29' } }));
+  const filaNet = res7._json.filas.find(f => f.tipo === 'tercios' && f.id === 'plano-net');
+  check(!!filaNet, '7) GET /pizarras trae el plano-net nuevo');
+  // 100 (bruto) - 10 (JUAN, 5% de 200) - 4 (LUIS, 2% de 200) = 86.
+  check(filaNet && filaNet.montoTotal === 86, `7) La comisión NETA descuenta el % propio de cliente Y banquero (esperado 86, salió ${filaNet && filaNet.montoTotal})`);
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
