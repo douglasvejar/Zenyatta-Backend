@@ -630,6 +630,72 @@
   .gc-captura-titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; }
   .gc-captura-sub { font-size: 11px; color: var(--text-dim); }
 
+  /* =================================================================
+     TEMA DE MARCA + LOGO DE FONDO en Comisiones Devueltas por Cliente,
+     Balance General y Cierre Final (01-10-2026, a pedido del usuario:
+     "QUIERO LOS CUADRES COMO HICISTE EL DE GRUPO DE CLIENTES, CON LOS
+     COLORES QUE TENGA EL LOGO CONFIGURADO, Y EL LOGO DE FONDO") — mismo
+     tratamiento que ya tiene 🗂️ Grupo de Clientes más arriba (--gc-color-1/
+     2/1-rgb + .gc-tabla-logo-fondo), pero acá el color/logo NO es el de un
+     grupo de clientes puntual: es GRUPO.temaColorPrimario/Secundario +
+     GRUPO.logoUrl — el MISMO tema tenant-wide configurado una sola vez en
+     Súper-admin > 🖼️ Logo > "Colores Reportes Cliente" (ver
+     services/logoGrupo.js), que esa pantalla ya reusa. pintarLogosGrupo()
+     más abajo en el JS es quien pone las variables --gc-color-* (inline,
+     solo si el grupo configuró un tema propio) y el background-image del
+     logo de fondo en estos 3 contenedores — si el grupo nunca configuró
+     nada, se quedan con el verde de Ludox de siempre, CERO cambio visual.
+
+     Todo esto queda ESCOPEADO a estos 3 IDs puntuales (nunca a las clases
+     sueltas .logo-grupo/.balance-fila/.fila-carrera-comision, que también
+     usan otras pantallas como "Comisiones por Carrera"/"por Hipódromo") —
+     así ninguna otra pantalla cambia de aspecto por este pedido.
+
+     "EL CUADRO LO VAS HACIENDO GRANDE A MEDIDA QUE VAYAS TENIENDO DATOS EN
+     LA TABLA": a propósito NINGUNO de estos 3 contenedores lleva
+     max-width/max-height — a diferencia de .gc-captura (420px, pensada
+     para una tarjeta angosta de WhatsApp), estos 3 reportes pueden traer
+     listas largas de clientes, así que crecen libremente con el contenido,
+     como ya hacían antes de este cambio. */
+  #balanceCaptura, #cierreFinalCaptura, #comisionesDevueltasCaptura { position: relative; overflow: hidden; }
+  #balanceCaptura .captura-logo-fondo,
+  #cierreFinalCaptura .captura-logo-fondo,
+  #comisionesDevueltasCaptura .captura-logo-fondo {
+    position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
+    background-size: 55%; opacity: 0.10; pointer-events: none; z-index: 0;
+  }
+  #balanceCaptura .captura-contenido,
+  #cierreFinalCaptura .captura-contenido,
+  #comisionesDevueltasCaptura .captura-contenido {
+    position: relative; z-index: 1;
+  }
+  /* Logo chico (Balance General/Comisiones Devueltas) y banner grande
+     (Cierre Final) — mismo degradado de siempre (verde Ludox) como
+     fallback de var(), así que sin tema propio configurado no cambia nada. */
+  #balanceCaptura .logo-grupo,
+  #comisionesDevueltasCaptura .logo-grupo {
+    background: linear-gradient(135deg, var(--gc-color-1, var(--accent-grass)), var(--gc-color-2, var(--accent-lime)));
+  }
+  #cierreFinalCaptura .logo-grupo-grande {
+    background: linear-gradient(135deg, var(--gc-color-1, var(--accent-grass)), var(--gc-color-2, var(--accent-lime)));
+  }
+  /* Cierre Final: encabezado de tabla con degradado (no tenía ninguno
+     antes) + filas pares con un tinte suave del color del tema, mismo
+     criterio que la tabla de Grupo de Clientes. */
+  #cierreFinalCaptura .cierre-final-cuerpo table thead th {
+    background: linear-gradient(100deg, var(--gc-color-1, var(--accent-grass)), var(--gc-color-2, var(--accent-lime)) 70%);
+    color: #fff; border-bottom: none;
+  }
+  #cierreFinalCaptura tbody tr:nth-child(even) td { background: rgba(var(--gc-color-1-rgb, 22, 163, 74), 0.08); }
+  /* Comisiones Devueltas por Cliente: cada renglón de cliente/hipódromo y
+     su monto adoptan el tinte/color del tema, igual que Grupo de Clientes. */
+  #comisionesDevueltasCaptura .fila-carrera-comision .cabecera-carrera {
+    background: rgba(var(--gc-color-1-rgb, 22, 163, 74), 0.08);
+  }
+  #comisionesDevueltasCaptura .fila-carrera-comision .monto-carrera {
+    color: var(--gc-color-1, var(--accent-grass));
+  }
+
   /* Buscador de miembros (30-09-2026, a pedido del usuario — reemplaza la
      grilla fija de checkboxes de antes). .gc-editor-miembros arranca
      oculto: solo se ve al tocar "✏️ Editar miembros". */
@@ -1566,28 +1632,31 @@
           <span class="toast-copiado" id="toastBalance"></span>
         </div>
 
-        <div id="balanceCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
-          <div class="logo-banner-real" id="logoBannerRealBalance"><img alt="Logo del grupo"></div>
-          <div class="encabezado-captura">
-            <div class="logo-grupo js-logo-grupo" id="logoChicoBalance">🏇</div>
-            <div>
-              <div class="titulo" id="balanceNombreGrupoCaptura">📒 Balance General</div>
-              <div class="fecha" id="balanceFechaCaptura"></div>
+        <div id="balanceCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px;">
+          <div class="captura-logo-fondo" id="balanceLogoFondo"></div>
+          <div class="captura-contenido" style="padding:18px 20px;">
+            <div class="logo-banner-real" id="logoBannerRealBalance"><img alt="Logo del grupo"></div>
+            <div class="encabezado-captura">
+              <div class="logo-grupo js-logo-grupo" id="logoChicoBalance">🏇</div>
+              <div>
+                <div class="titulo" id="balanceNombreGrupoCaptura">📒 Balance General</div>
+                <div class="fecha" id="balanceFechaCaptura"></div>
+              </div>
             </div>
-          </div>
-          <div class="balance-cols">
-            <div class="balance-col">
-              <h3><span class="flecha flecha-roja">▼</span> Pierden</h3>
-              <div class="balance-lista" id="listaPierden"></div>
+            <div class="balance-cols">
+              <div class="balance-col">
+                <h3><span class="flecha flecha-roja">▼</span> Pierden</h3>
+                <div class="balance-lista" id="listaPierden"></div>
+              </div>
+              <div class="balance-col">
+                <h3><span class="flecha flecha-verde">▲</span> Ganan</h3>
+                <div class="balance-lista" id="listaGanan"></div>
+              </div>
             </div>
-            <div class="balance-col">
-              <h3><span class="flecha flecha-verde">▲</span> Ganan</h3>
-              <div class="balance-lista" id="listaGanan"></div>
+            <div class="comision-caja">
+              <span class="etiqueta">💼 Comisión</span>
+              <span class="monto" id="montoComision">$ 0,00</span>
             </div>
-          </div>
-          <div class="comision-caja">
-            <span class="etiqueta">💼 Comisión</span>
-            <span class="monto" id="montoComision">$ 0,00</span>
           </div>
         </div>
       </div>
@@ -1647,22 +1716,25 @@
         </div>
 
         <div id="cierreFinalCaptura" class="ocultar-jugadas ocultar-gano ocultar-perdio" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
-          <div class="logo-banner-real" id="logoBannerRealCierre"><img alt="Logo del grupo"></div>
-          <div class="logo-grupo-grande">
-            <div class="logo-grande-icono js-logo-grupo" id="logoChicoCierre">🏇</div>
-            <div>
-              <div class="titulo" id="cierreNombreGrupoCaptura">🏁 Cierre Final</div>
-              <div class="fecha" id="cierreRangoCaptura"></div>
+          <div class="captura-logo-fondo" id="cierreLogoFondo"></div>
+          <div class="captura-contenido">
+            <div class="logo-banner-real" id="logoBannerRealCierre"><img alt="Logo del grupo"></div>
+            <div class="logo-grupo-grande">
+              <div class="logo-grande-icono js-logo-grupo" id="logoChicoCierre">🏇</div>
+              <div>
+                <div class="titulo" id="cierreNombreGrupoCaptura">🏁 Cierre Final</div>
+                <div class="fecha" id="cierreRangoCaptura"></div>
+              </div>
             </div>
-          </div>
-          <div class="cierre-final-cuerpo">
-            <table>
-              <thead><tr><th>Cliente</th><th class="num col-jugadas">Jugadas</th><th class="num col-gano">Ganó</th><th class="num col-perdio">Perdió</th><th class="num">Saldo definitivo</th></tr></thead>
-              <tbody id="tablaCierreFinal"></tbody>
-            </table>
-            <div class="comision-caja">
-              <span class="etiqueta">💼 Comisión de la semana</span>
-              <span class="monto" id="montoComisionCierre">$ 0,00</span>
+            <div class="cierre-final-cuerpo">
+              <table>
+                <thead><tr><th>Cliente</th><th class="num col-jugadas">Jugadas</th><th class="num col-gano">Ganó</th><th class="num col-perdio">Perdió</th><th class="num">Saldo definitivo</th></tr></thead>
+                <tbody id="tablaCierreFinal"></tbody>
+              </table>
+              <div class="comision-caja">
+                <span class="etiqueta">💼 Comisión de la semana</span>
+                <span class="monto" id="montoComisionCierre">$ 0,00</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1971,19 +2043,22 @@
              círculo con ".js-logo-grupo" que pintarLogosGrupo() ya llena
              solo (ver la nota grande junto a esa función), sin tocar el
              resto de la lógica de esta pantalla. -->
-        <div id="comisionesDevueltasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
-          <div class="encabezado-captura">
-            <div class="logo-grupo js-logo-grupo">🏇</div>
-            <div>
-              <div class="titulo" id="comisionesDevueltasNombreGrupoCaptura">👤 Comisiones Devueltas por Cliente</div>
-              <div class="fecha" id="comisionesDevueltasFechaCaptura"></div>
+        <div id="comisionesDevueltasCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px;">
+          <div class="captura-logo-fondo" id="comisionesDevueltasLogoFondo"></div>
+          <div class="captura-contenido" style="padding:18px 20px;">
+            <div class="encabezado-captura">
+              <div class="logo-grupo js-logo-grupo">🏇</div>
+              <div>
+                <div class="titulo" id="comisionesDevueltasNombreGrupoCaptura">👤 Comisiones Devueltas por Cliente</div>
+                <div class="fecha" id="comisionesDevueltasFechaCaptura"></div>
+              </div>
             </div>
+            <div class="comision-caja" style="margin:14px 0;">
+              <span class="etiqueta">↩️ Total devuelto del día</span>
+              <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
+            </div>
+            <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
           </div>
-          <div class="comision-caja" style="margin:14px 0;">
-            <span class="etiqueta">↩️ Total devuelto del día</span>
-            <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
-          </div>
-          <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
         </div>
       </div>
     </section>
@@ -5026,6 +5101,42 @@ function pintarLogosGrupo() {
       banner.classList.remove('con-logo');
       if (chico) chico.style.display = '';
     }
+  });
+
+  // Tema de marca + logo de fondo en Comisiones Devueltas por Cliente/
+  // Balance General/Cierre Final (01-10-2026, a pedido del usuario:
+  // "QUIERO LOS CUADRES COMO HICISTE EL DE GRUPO DE CLIENTES, CON LOS
+  // COLORES QUE TENGA EL LOGO CONFIGURADO, Y EL LOGO DE FONDO") — reusa el
+  // MISMO tema tenant-wide que ya usa 🗂️ Grupo de Clientes
+  // (GRUPO.temaColorPrimario/Secundario viajan en la sesión desde esta
+  // misma ronda, ver POST /api/auth/login — igual que logoUrl arriba, una
+  // sesión vieja simplemente no las trae todavía hasta volver a entrar).
+  // Mismas 3 variables CSS que ya usa .gc-tabla-wrap (--gc-color-1/2/
+  // 1-rgb), puestas inline SOLO si el grupo configuró un tema propio — si
+  // no, se dejan sin tocar y el CSS (var(--gc-color-1, var(--accent-grass)))
+  // cae solo al verde de Ludox de siempre, cero cambio visual.
+  const temaPrimario = GRUPO && GRUPO.temaColorPrimario;
+  const temaSecundario = GRUPO && GRUPO.temaColorSecundario;
+  const temaRgbPrimario = hexARgbTripleta(temaPrimario);
+  ['balanceCaptura', 'cierreFinalCaptura', 'comisionesDevueltasCaptura'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (temaPrimario && temaSecundario) {
+      el.style.setProperty('--gc-color-1', temaPrimario);
+      el.style.setProperty('--gc-color-2', temaSecundario);
+      if (temaRgbPrimario) el.style.setProperty('--gc-color-1-rgb', temaRgbPrimario);
+      else el.style.removeProperty('--gc-color-1-rgb');
+    } else {
+      el.style.removeProperty('--gc-color-1');
+      el.style.removeProperty('--gc-color-2');
+      el.style.removeProperty('--gc-color-1-rgb');
+    }
+  });
+  // El logo de fondo (marca de agua) reusa el MISMO logoUrl de arriba.
+  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.backgroundImage = logoUrl ? `url('${logoUrl}')` : '';
   });
 
   const titulos = {

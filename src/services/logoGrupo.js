@@ -49,11 +49,22 @@ function urlLogoGrupo(grupoId, filaGrupo, opts) {
 // ya haya traído estas 2 columnas, y si no las trajo (o el grupo nunca
 // configuró ninguna), simplemente devuelve los 2 en null, que el
 // frontend interpreta como "usa el verde clásico por defecto".
-function temaColorGrupo(filaGrupo) {
+//
+// `opts.campoPrimario`/`campoSecundario` (01-10-2026, a pedido del
+// usuario: "QUIERO LOS CUADRES COMO HICISTE EL DE GRUPO DE CLIENTES, CON
+// LOS COLORES QUE TENGA EL LOGO CONFIGURADO" — ver POST /api/auth/login en
+// routes/auth.js) — mismo truco de alias que ya tiene urlLogoGrupo() de
+// arriba, para el login del Empleado, cuyo JOIN con "grupos" trae estas 2
+// columnas con otro nombre (g.tema_color_primario AS
+// grupo_tema_color_primario, etc.) para no chocar con columnas propias del
+// empleado.
+function temaColorGrupo(filaGrupo, opts) {
   if (!filaGrupo) return { colorPrimario: null, colorSecundario: null };
+  const campoPrimario = (opts && opts.campoPrimario) || 'tema_color_primario';
+  const campoSecundario = (opts && opts.campoSecundario) || 'tema_color_secundario';
   return {
-    colorPrimario: filaGrupo.tema_color_primario || null,
-    colorSecundario: filaGrupo.tema_color_secundario || null
+    colorPrimario: filaGrupo[campoPrimario] || null,
+    colorSecundario: filaGrupo[campoSecundario] || null
   };
 }
 

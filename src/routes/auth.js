@@ -11,7 +11,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { firmarSesionGrupo, firmarSesionEmpleado } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
-const { urlLogoGrupo } = require('../services/logoGrupo');
+const { urlLogoGrupo, temaColorGrupo } = require('../services/logoGrupo');
 
 const router = express.Router();
 
@@ -63,6 +63,18 @@ router.post('/login', asyncHandler(async (req, res) => {
     // pero nunca había viajado en la sesión del propio Administrador/
     // Empleado — sin esto, Cierre Final/Balance General/Semana por Días/
     // Pozos no tenían de dónde sacar el logo real para sus encabezados.
+    //
+    // temaColorPrimario/Secundario (01-10-2026, a pedido del usuario:
+    // "QUIERO LOS CUADRES COMO HICISTE EL DE GRUPO DE CLIENTES, CON LOS
+    // COLORES QUE TENGA EL LOGO CONFIGURADO, Y EL LOGO DE FONDO" — ver la
+    // nota grande junto a #balanceCaptura/#cierreFinalCaptura/
+    // #comisionesDevueltasCaptura en hipismo-mockup.html) — mismo
+    // tema_color_primario/secundario que ya usa 🗂️ Grupo de Clientes
+    // (configurado en Súper-admin > 🖼️ Logo > "Colores Reportes Cliente"),
+    // ahora también disponible en la sesión del propio Administrador/
+    // Empleado, igual que logoUrl. "SELECT *" de arriba ya trae estas 2
+    // columnas sin que haga falta tocar esa consulta.
+    const temaAdmin = temaColorGrupo(grupo);
     return res.json({
       token,
       grupo: {
@@ -77,7 +89,9 @@ router.post('/login', asyncHandler(async (req, res) => {
         // archivo subido, no una URL externa, desde este mismo cambio) --
         // ver services/logoGrupo.js. "SELECT *" de arriba ya trae
         // logo_base64 sin que haga falta tocar esa consulta.
-        logoUrl: urlLogoGrupo(grupo.id, grupo)
+        logoUrl: urlLogoGrupo(grupo.id, grupo),
+        temaColorPrimario: temaAdmin.colorPrimario,
+        temaColorSecundario: temaAdmin.colorSecundario
       }
     });
   }
@@ -87,7 +101,9 @@ router.post('/login', asyncHandler(async (req, res) => {
     `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, g.logo_base64 AS grupo_logo_base64,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
-            g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado
+            g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado,
+            g.tema_color_primario AS grupo_tema_color_primario,
+            g.tema_color_secundario AS grupo_tema_color_secundario
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
       WHERE e.email = $1`,
     [email]
@@ -113,6 +129,12 @@ router.post('/login', asyncHandler(async (req, res) => {
 
   const tokenEmpleado = firmarSesionEmpleado(empleado);
   const permisos = Array.isArray(empleado.permisos) ? empleado.permisos : [];
+  // temaColorPrimario/Secundario (01-10-2026) — mismo alias que ya usa
+  // logoUrl arriba (campoUrl/campoBase64): el JOIN trae las columnas de
+  // "grupos" con el prefijo "grupo_" para no chocar con las propias del
+  // empleado, así que temaColorGrupo() necesita que se le diga bajo qué
+  // nombre quedaron.
+  const temaEmpleado = temaColorGrupo(empleado, { campoPrimario: 'grupo_tema_color_primario', campoSecundario: 'grupo_tema_color_secundario' });
   res.json({
     token: tokenEmpleado,
     grupo: {
@@ -120,7 +142,9 @@ router.post('/login', asyncHandler(async (req, res) => {
       moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
       moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
       hipismoCruzarHabilitado: empleado.grupo_hipismo_cruzar_habilitado,
-      logoUrl: urlLogoGrupo(empleado.grupo_id, empleado, { campoUrl: 'grupo_logo_url', campoBase64: 'grupo_logo_base64' })
+      logoUrl: urlLogoGrupo(empleado.grupo_id, empleado, { campoUrl: 'grupo_logo_url', campoBase64: 'grupo_logo_base64' }),
+      temaColorPrimario: temaEmpleado.colorPrimario,
+      temaColorSecundario: temaEmpleado.colorSecundario
     }
   });
 }));
