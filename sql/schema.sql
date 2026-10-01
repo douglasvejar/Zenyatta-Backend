@@ -1748,3 +1748,55 @@ create table if not exists parley_estado (
 
 alter table parley_juegos enable row level security;
 alter table parley_estado enable row level security;
+
+-- =================================================================
+-- PARLEY_JUEGOS — RL/Alta-Baja/1er Tiempo + logos de equipo (01-10-2026,
+-- a pedido del usuario: "agrega a cada equipo su logo igual que en el
+-- modulo de deportes... en los logros coloca el rl la alta y la baja, si
+-- tienes logros a medio juego o 5to o 1h agregalos tambien").
+--
+-- GENERALIZACIÓN DEL MODELO: hasta acá, una fila de parley_juegos era
+-- siempre "1 selección elegible del mercado head-to-head (ganador)" —
+-- ahora puede ser la selección de CUALQUIER mercado pedido (ver
+-- MERCADOS_POR_GRUPO_DEPORTE en services/oddsApiProvider.js), así que se
+-- agregan 2 columnas nuevas en vez de tocar las que ya existían:
+--   - mercado: la clave del mercado del proveedor ('h2h' = Ganador,
+--     'spreads' = RL/Línea, 'totals' = Alta/Baja, y sus 3 equivalentes
+--     de 1er Tiempo/Medio Juego: 'h2h_h1', 'spreads_h1', 'totals_h1').
+--     Default 'h2h' para que una fila ya guardada ANTES de este cambio
+--     (de cuando esta tabla solo tenía moneyline) siga leyéndose como lo
+--     que siempre fue, sin tener que reprocesarla.
+--   - punto: el número de la línea/total de ESTA selección puntual (ej.
+--     -1.5 para el favorito en "spreads", 8.5 para "Alta"/"Baja" en
+--     "totals") — NULL en 'h2h'/'h2h_h1' (el ganador no tiene punto).
+--
+-- "seleccion" (columna ya existente) se sigue usando igual para
+-- 'spreads'/'spreads_h1' (sigue siendo 'local'/'visitante', un EQUIPO
+-- con un punto encima) — solo 'totals'/'totals_h1' usa los 2 valores
+-- nuevos 'alta'/'baja' (Over/Under, sin equipo). Ver interpretarOutcome()
+-- en oddsApiProvider.js.
+--
+-- NO se agregó el mercado "5to" (1st 5 innings de MLB) que también pidió
+-- el usuario: la propia documentación oficial de The Odds API confirma
+-- que ESE mercado puntual exige el endpoint "por evento" (costo en
+-- créditos = partidos × mercados × regiones, muy por encima del resto de
+-- mercados de acá, que viajan todos juntos en 1 solo pedido por liga) —
+-- se dejó afuera a propósito para no disparar el consumo de créditos del
+-- plan gratis/pagado del usuario sin avisarle antes. Ver la nota grande
+-- al principio de oddsApiProvider.js.
+alter table parley_juegos add column if not exists mercado text not null default 'h2h';
+alter table parley_juegos add column if not exists punto numeric;
+
+-- Logos de equipo (01-10-2026): URL directa del escudo tal como la dan
+-- los proveedores GRATIS ya usados en el módulo de Deportes —
+-- mlbstatic.com (MLB, vía su directorio de equipos) o a.espncdn.com
+-- (NFL/NBA/fútbol, vía el scoreboard de ESPN) — ver
+-- services/logosEquiposParley.js. Nullable a propósito: si el proveedor
+-- de logos no tiene el equipo ese día (nombre distinto, liga sin mapear
+-- a ESPN todavía, etc.), la fila se guarda igual, solo sin logo — el
+-- frontend ya oculta el <img> si la URL viene vacía o si la imagen no
+-- carga (mismo criterio "onerror" que ya usa el resto del sistema).
+-- Mismas 2 URLs para TODAS las filas de un mismo evento_id (el logo es
+-- del PARTIDO, no de la selección puntual).
+alter table parley_juegos add column if not exists logo_local text;
+alter table parley_juegos add column if not exists logo_visitante text;

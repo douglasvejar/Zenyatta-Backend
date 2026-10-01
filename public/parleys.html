@@ -88,18 +88,40 @@
   .pl-grupo-liga + .pl-grupo-liga { margin-top: 22px; }
   .pl-grupo-liga-titulo { font-family: 'Outfit', sans-serif; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-cyan); margin: 0 0 10px; }
 
+  /* Selector de período (01-10-2026, a pedido del usuario, con una captura
+     real de referencia de un sportsbook: "coloca una seccion donde pueda
+     escoger juego completo/primera mitad/segunda mitad... segun lo que yo
+     escoja muestres los logros correspondiente") — un solo selector
+     global, filtra TODOS los juegos de la pestaña de deporte activa. */
+  .pl-periodos { display: flex; gap: 6px; margin-bottom: 16px; }
+  .pl-periodo { font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.03); color: var(--text-dim); cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+  .pl-periodo:hover { border-color: rgba(56,224,240,0.4); color: var(--text); }
+  .pl-periodo.activo { background: rgba(56,224,240,0.14); border-color: rgba(56,224,240,0.5); color: var(--accent-cyan); }
+
   .pl-juego { background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 13px; padding: 14px 16px; margin-bottom: 10px; }
-  .pl-juego-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .pl-juego-equipos { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 14.5px; }
+  .pl-juego-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pl-juego-liga-chip { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
   .pl-juego-hora { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
-  .pl-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
-  .pl-opcion { background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 8px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-  .pl-opcion .nombre { color: var(--text); }
-  .pl-opcion .logro { font-family: 'Outfit', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .pl-opcion .logro.favorito { color: var(--danger); }
-  .pl-opcion .logro.contendor { color: var(--ok); }
+
+  /* Tabla estilo "sportsbook" — 3 columnas fijas (Ganador/Alta-Baja/RL) x
+     2-3 filas (local/visitante, +empate en fútbol), igual estructura que
+     la captura de referencia del usuario (M Line/Total/Run Line). */
+  .pl-sb-tabla { display: grid; grid-template-columns: minmax(0,1fr) 64px 64px 64px; gap: 6px 6px; align-items: center; }
+  .pl-sb-col-titulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); text-align: center; padding-bottom: 4px; }
+  .pl-sb-equipo { display: flex; align-items: center; gap: 7px; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 12.5px; min-width: 0; line-height: 1.25; }
+  .pl-sb-equipo .nombre { min-width: 0; }
+  .pl-sb-valor { background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 6px 4px; text-align: center; line-height: 1.35; }
+  .pl-sb-valor .top { display: block; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .pl-sb-valor .bottom { display: block; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .pl-sb-valor .bottom.favorito { color: var(--danger); }
+  .pl-sb-valor .bottom.contendor { color: var(--ok); }
+  .pl-sb-valor.vacio { background: none; border-color: transparent; }
+  .pl-sb-valor.vacio .bottom { color: var(--text-dim); font-weight: 500; }
 
   .pl-vacio { color: var(--text-dim); font-size: 14px; text-align: center; padding: 44px 10px; line-height: 1.7; }
+
+  /* Logo de equipo (01-10-2026, mismo criterio que .logo-equipo del módulo de Deportes — ver public/grupo.html) */
+  .pl-logo-equipo { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; background: #f4f7fb; border-radius: 50%; padding: 2px; box-sizing: content-box; box-shadow: 0 0 0 1px rgba(56,224,240,.35); }
 
   /* ============ MODAL DE SOLICITAR DEMO (mismo mecanismo que index.html) ============ */
   .overlay { position: fixed; inset: 0; background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
@@ -166,6 +188,7 @@
 
     <div class="pl-panel">
       <div class="pl-tabs" id="plTabs"></div>
+      <div class="pl-periodos" id="plPeriodos"></div>
       <div id="plLista"></div>
     </div>
 
@@ -301,6 +324,20 @@ document.getElementById('navbarToggle').addEventListener('click', () => {
 // =================================================================
 let plJuegosProveedor = [];
 let plDeporteActivo = null;
+// Período elegido en el selector global (01-10-2026, a pedido del
+// usuario, con una captura real de un sportsbook de referencia: "coloca
+// una seccion donde pueda escoger juego completo/primera mitad/segunda
+// mitad... segun lo que yo escoja muestres los logros correspondiente").
+// "Segunda Mitad" (h2h_h2/spreads_h2/totals_h2) se agregó a pedido
+// explícito del usuario, aun sabiendo que la documentación oficial de The
+// Odds API nunca quedó 100% clara sobre si esos mercados viajan en el
+// mismo pedido barato (bulk) que el resto, o si exigen el endpoint "por
+// evento" (mucho más caro) — ver la nota grande en oddsApiProvider.js. El
+// backend pide esta mitad en una llamada aparte que, si falla, no rompe
+// nada más (ver obtenerLogrosDeDeporte): acá simplemente el botón "2da
+// Mitad" no aparecería si no llegan filas "_h2" (mismo criterio que ya
+// se usa para "1er Tiempo").
+let plPeriodoActivo = 'completo'; // 'completo' | 'h1' | 'h2'
 
 // Mismo criterio que services/parleyLogros.js del lado del servidor:
 // "deporte" es un agrupador genérico (prefijo de "sport_key" antes del
@@ -310,6 +347,14 @@ let plDeporteActivo = null;
 const PL_ICONOS_DEPORTE = { baseball: '⚾', americanfootball: '🏈', basketball: '🏀', soccer: '⚽', icehockey: '🏒' };
 const PL_NOMBRES_DEPORTE = { baseball: 'Béisbol', americanfootball: 'Fútbol Americano', basketball: 'Baloncesto', soccer: 'Fútbol', icehockey: 'Hockey sobre hielo' };
 const PL_ORDEN_DEPORTE = ['baseball', 'americanfootball', 'basketball', 'soccer', 'icehockey'];
+
+// Mismo proxy de logos que ya usa el resto del sistema (ver
+// urlLogoProxy()/logoEquipoHTML() en public/app.js) — nunca se pide el
+// logo directo al CDN externo desde acá.
+function plLogoHtml(url, clase) {
+  if (!url) return '';
+  return '<img src="/api/imagenes/logo?url=' + encodeURIComponent(url) + '" alt="" class="' + (clase || 'pl-logo-equipo') + '" onerror="this.style.display=\'none\'">';
+}
 
 function plEtiquetaDeporte(deporte) {
   const nombre = PL_NOMBRES_DEPORTE[deporte] || (deporte.charAt(0).toUpperCase() + deporte.slice(1));
@@ -330,6 +375,10 @@ function plFormatearHora(iso) {
   }
 }
 
+// Arma 1 "juego" por evento_id, con sus mercados agrupados (01-10-2026:
+// antes era una lista plana de 2-3 opciones de "h2h" — ahora cada evento
+// puede traer varios mercados distintos — ver plRenderTablaJuego()).
+// ev.mercados['spreads'] = [{ nombre, logro, punto, seleccion }, ...]
 function plAgruparJuegosPorEvento(filas) {
   const eventos = new Map();
   filas.forEach(fila => {
@@ -340,10 +389,19 @@ function plAgruparJuegosPorEvento(filas) {
         equipoLocal: fila.equipo_local,
         equipoVisitante: fila.equipo_visitante,
         horaInicio: fila.hora_inicio,
-        opciones: []
+        logoLocal: fila.logo_local || null,
+        logoVisitante: fila.logo_visitante || null,
+        mercados: {}
       });
     }
-    eventos.get(fila.evento_id).opciones.push({ nombre: fila.nombre_seleccion, logro: Number(fila.logro) });
+    const ev = eventos.get(fila.evento_id);
+    if (!ev.mercados[fila.mercado]) ev.mercados[fila.mercado] = [];
+    ev.mercados[fila.mercado].push({
+      nombre: fila.nombre_seleccion,
+      logro: Number(fila.logro),
+      punto: (fila.punto === null || fila.punto === undefined) ? null : Number(fila.punto),
+      seleccion: fila.seleccion
+    });
   });
   return Array.from(eventos.values()).sort((a, b) => new Date(a.horaInicio || 0) - new Date(b.horaInicio || 0));
 }
@@ -404,7 +462,102 @@ function plRenderTabs() {
     });
   });
 
+  plRenderPeriodos();
   plRenderLista();
+}
+
+// Selector global "Juego completo" / "1er Tiempo" / "2da Mitad"
+// (01-10-2026) — filtra TODOS los juegos de la pestaña de deporte activa
+// a la vez. Cada botón de mitad solo aparece si al menos un juego de ESA
+// pestaña trae de verdad algún mercado de esa mitad (si no, el botón ni
+// se muestra — mismo criterio del resto del sistema: nunca un control
+// para algo que no hay, incluyendo el caso donde el proveedor rechazó esa
+// mitad y el backend simplemente no guardó filas de ella).
+function plRenderPeriodos() {
+  const cont = document.getElementById('plPeriodos');
+  const filas = plJuegosProveedor.filter(f => f.deporte === plDeporteActivo);
+  const hayH1 = filas.some(f => f.mercado === 'h2h_h1' || f.mercado === 'spreads_h1' || f.mercado === 'totals_h1');
+  const hayH2 = filas.some(f => f.mercado === 'h2h_h2' || f.mercado === 'spreads_h2' || f.mercado === 'totals_h2');
+
+  const periodos = [{ clave: 'completo', etiqueta: 'Juego completo' }];
+  if (hayH1) periodos.push({ clave: 'h1', etiqueta: '1er Tiempo' });
+  if (hayH2) periodos.push({ clave: 'h2', etiqueta: '2da Mitad' });
+
+  if (!periodos.some(p => p.clave === plPeriodoActivo)) plPeriodoActivo = 'completo';
+
+  cont.style.display = periodos.length > 1 ? 'flex' : 'none';
+  cont.innerHTML = periodos.map(p =>
+    '<button type="button" class="pl-periodo' + (p.clave === plPeriodoActivo ? ' activo' : '') + '" data-periodo="' + p.clave + '">' + p.etiqueta + '</button>'
+  ).join('');
+
+  cont.querySelectorAll('.pl-periodo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      plPeriodoActivo = btn.dataset.periodo;
+      plRenderPeriodos();
+      plRenderLista();
+    });
+  });
+}
+
+// Celda de la tabla estilo "sportsbook" (01-10-2026, con una captura real
+// de referencia que trajo el usuario): null = sin dato para esa
+// combinación período/mercado/lado -> se pinta un guion, nunca se
+// inventa un valor.
+function plCeldaGanador(mercados, sufijo, seleccion) {
+  const op = (mercados['h2h' + sufijo] || []).find(o => o.seleccion === seleccion);
+  if (!op) return null;
+  return { top: null, bottom: op.logro, favorito: op.logro < 0 };
+}
+function plCeldaRL(mercados, sufijo, seleccion) {
+  const op = (mercados['spreads' + sufijo] || []).find(o => o.seleccion === seleccion);
+  if (!op) return null;
+  const signoPunto = op.punto > 0 ? '+' : '';
+  return { top: signoPunto + op.punto, bottom: op.logro, favorito: op.logro < 0 };
+}
+function plCeldaAltaBaja(mercados, sufijo, cual) {
+  const op = (mercados['totals' + sufijo] || []).find(o => o.seleccion === cual);
+  if (!op) return null;
+  return { top: (cual === 'alta' ? 'Alta' : 'Baja') + ' ' + op.punto, bottom: op.logro, favorito: op.logro < 0 };
+}
+function plRenderCelda(celda) {
+  if (!celda) return '<span class="pl-sb-valor vacio"><span class="bottom">—</span></span>';
+  const signo = celda.bottom > 0 ? '+' : '−';
+  const clase = celda.favorito ? 'favorito' : 'contendor';
+  return '<span class="pl-sb-valor">' + (celda.top ? '<span class="top">' + plEscaparHtml(celda.top) + '</span>' : '')
+    + '<span class="bottom ' + clase + '">' + signo + Math.abs(celda.bottom) + '</span></span>';
+}
+
+// Tabla de 3 columnas fijas (Ganador/Alta-Baja/RL) x 2 filas (local y
+// visitante) + 1 fila extra de "Empate" si el partido la trae (fútbol a
+// 3 vías) — misma estructura que la captura real de sportsbook que trajo
+// el usuario (M Line/Total/Run Line), con los términos en español que ya
+// usa el resto del sistema.
+function plRenderTablaJuego(ev, periodo) {
+  const sufijo = periodo === 'h1' ? '_h1' : (periodo === 'h2' ? '_h2' : '');
+  const filas = [
+    { nombre: ev.equipoLocal, logo: ev.logoLocal, seleccion: 'local', altaBaja: 'alta' },
+    { nombre: ev.equipoVisitante, logo: ev.logoVisitante, seleccion: 'visitante', altaBaja: 'baja' }
+  ];
+
+  let filasHtml = filas.map(f =>
+    '<span class="pl-sb-equipo">' + plLogoHtml(f.logo) + '<span class="nombre">' + plEscaparHtml(f.nombre) + '</span></span>'
+    + plRenderCelda(plCeldaGanador(ev.mercados, sufijo, f.seleccion))
+    + plRenderCelda(plCeldaAltaBaja(ev.mercados, sufijo, f.altaBaja))
+    + plRenderCelda(plCeldaRL(ev.mercados, sufijo, f.seleccion))
+  ).join('');
+
+  const empate = (ev.mercados['h2h' + sufijo] || []).find(o => o.seleccion === 'empate');
+  if (empate) {
+    filasHtml += '<span class="pl-sb-equipo">Empate</span>'
+      + plRenderCelda({ top: null, bottom: empate.logro, favorito: empate.logro < 0 })
+      + '<span class="pl-sb-valor vacio"><span class="bottom">—</span></span>'
+      + '<span class="pl-sb-valor vacio"><span class="bottom">—</span></span>';
+  }
+
+  return '<div class="pl-sb-tabla">'
+    + '<span></span><span class="pl-sb-col-titulo">Ganador</span><span class="pl-sb-col-titulo">Alta/Baja</span><span class="pl-sb-col-titulo">RL</span>'
+    + filasHtml
+    + '</div>';
 }
 
 function plRenderLista() {
@@ -429,15 +582,10 @@ function plRenderLista() {
     html += '<div class="pl-grupo-liga"><p class="pl-grupo-liga-titulo">' + plEscaparHtml(liga) + '</p>';
     lista.forEach(ev => {
       html += '<div class="pl-juego">'
-        + '<div class="pl-juego-cabecera"><span class="pl-juego-equipos">' + plEscaparHtml(ev.equipoLocal) + ' vs ' + plEscaparHtml(ev.equipoVisitante) + '</span>'
+        + '<div class="pl-juego-cabecera"><span class="pl-juego-liga-chip">' + plEscaparHtml(ev.liga || ev.deporte) + '</span>'
         + '<span class="pl-juego-hora">' + plEscaparHtml(plFormatearHora(ev.horaInicio)) + '</span></div>'
-        + '<div class="pl-opciones">'
-        + ev.opciones.map(op => {
-            const esFavorito = op.logro < 0;
-            return '<span class="pl-opcion"><span class="nombre">' + plEscaparHtml(op.nombre) + '</span>'
-              + '<span class="logro ' + (esFavorito ? 'favorito' : 'contendor') + '">' + (esFavorito ? '−' : '+') + Math.abs(op.logro) + '</span></span>';
-          }).join('')
-        + '</div></div>';
+        + plRenderTablaJuego(ev, plPeriodoActivo)
+        + '</div>';
     });
     html += '</div>';
   });

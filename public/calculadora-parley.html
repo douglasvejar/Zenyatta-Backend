@@ -185,14 +185,39 @@
   .cp-lista-juegos { max-height: 50vh; overflow-y: auto; }
   .cp-grupo-liga + .cp-grupo-liga { margin-top: 14px; }
   .cp-grupo-liga-titulo { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-cyan); margin: 0 0 7px; }
-  .cp-opcion-juego { width: 100%; text-align: left; background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 13.5px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; transition: border-color 0.15s ease, background 0.15s ease; }
-  .cp-opcion-juego:hover { border-color: rgba(56,224,240,0.4); background: rgba(56,224,240,0.07); }
-  .cp-opcion-juego .nombre { font-weight: 500; display: block; }
-  .cp-opcion-juego .vs { color: var(--text-dim); font-size: 11.5px; display: block; margin-top: 2px; }
-  .cp-opcion-juego .logro { font-family: 'Outfit', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-  .cp-opcion-juego .logro.favorito { color: var(--danger); }
-  .cp-opcion-juego .logro.contendor { color: var(--ok); }
+  /* Selector de período (01-10-2026, con una captura real de un
+     sportsbook de referencia que trajo el usuario) — filtra TODOS los
+     juegos listados en el selector a la vez. */
+  .cp-periodos { display: flex; gap: 6px; margin: -6px 0 12px; }
+  .cp-periodo { font-family: 'Outfit', sans-serif; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.03); color: var(--text-dim); cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+  .cp-periodo:hover { border-color: rgba(56,224,240,0.4); color: var(--text); }
+  .cp-periodo.activo { background: rgba(56,224,240,0.14); border-color: rgba(56,224,240,0.5); color: var(--accent-cyan); }
+
+  .cp-evento-juego { background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 10px 4px; margin-bottom: 8px; }
+  .cp-evento-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .cp-evento-liga-chip { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+  .cp-evento-hora { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+
+  /* Tabla estilo "sportsbook" (01-10-2026): 3 columnas (Ganador/Alta-Baja/
+     RL) clickeables — cada celda es un botón que carga ese precio exacto
+     en la fila del parley que abrió este selector. */
+  .cp-sb-tabla { display: grid; grid-template-columns: minmax(0,1fr) 56px 56px 56px; gap: 5px; align-items: center; margin-bottom: 8px; }
+  .cp-sb-col-titulo { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); text-align: center; }
+  .cp-sb-equipo { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; min-width: 0; line-height: 1.2; }
+  .cp-sb-equipo .nombre { min-width: 0; }
+  .cp-sb-valor { background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 5px 2px; text-align: center; line-height: 1.3; cursor: pointer; color: inherit; font-family: 'Inter', sans-serif; transition: border-color 0.15s ease, background 0.15s ease; }
+  .cp-sb-valor:hover { border-color: rgba(56,224,240,0.45); background: rgba(56,224,240,0.1); }
+  .cp-sb-valor .top { display: block; font-size: 9.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .cp-sb-valor .bottom { display: block; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .cp-sb-valor .bottom.favorito { color: var(--danger); }
+  .cp-sb-valor .bottom.contendor { color: var(--ok); }
+  .cp-sb-valor.vacio { background: none; border-color: transparent; cursor: default; }
+  .cp-sb-valor.vacio:hover { background: none; border-color: transparent; }
+  .cp-sb-valor.vacio .bottom { color: var(--text-dim); font-weight: 500; }
   .cp-sin-juegos { color: var(--text-dim); font-size: 13px; text-align: center; padding: 24px 4px; line-height: 1.6; }
+
+  /* Logo de equipo (01-10-2026, mismo criterio que .logo-equipo del módulo de Deportes — ver public/grupo.html) */
+  .cp-logo-equipo { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; background: #f4f7fb; border-radius: 50%; padding: 2px; box-sizing: content-box; box-shadow: 0 0 0 1px rgba(56,224,240,.35); }
 </style>
 </head>
 <body>
@@ -348,6 +373,7 @@
         <p class="sub">Logros cargados automáticamente. Elige una selección para completar esta fila (igual puedes editar el número después).</p>
       </div>
       <input type="text" id="cpBuscarJuego" class="cp-input-buscar" placeholder="Buscar equipo o liga...">
+      <div class="cp-periodos" id="cpPeriodos"></div>
       <div id="cpListaJuegos" class="cp-lista-juegos"></div>
       <p class="cp-sin-juegos" id="cpSinJuegos" style="display:none;"></p>
     </div>
@@ -620,8 +646,35 @@ document.getElementById('cpBtnCompartir').addEventListener('click', () => {
 // calculadora JAMÁS deja de funcionar en modo manual, esto es 100% un
 // plus encima, nunca un reemplazo.
 // =================================================================
-let cpJuegosProveedor = []; // filas crudas del endpoint (1 fila = 1 selección elegible)
+let cpJuegosProveedor = []; // filas crudas del endpoint (1 fila = 1 selección elegible de 1 mercado)
 let cpFilaParaElegir = null; // id de la fila que abrió el selector
+// Período elegido en el selector del modal (01-10-2026, con una captura
+// real de un sportsbook de referencia que trajo el usuario: "coloca una
+// seccion donde pueda escoger juego completo/primera mitad/segunda
+// mitad... segun lo que yo escoja muestres los logros correspondiente").
+// "Segunda Mitad" se agregó a pedido explícito del usuario, aun sabiendo
+// que la documentación oficial de The Odds API nunca quedó 100% clara
+// sobre si ese mercado viaja en el mismo pedido barato que el resto, o si
+// exige el endpoint "por evento" (mucho más caro) — ver la nota grande en
+// oddsApiProvider.js. El backend pide esta mitad en una llamada aparte
+// que, si falla, no rompe nada más: acá simplemente el botón "2da Mitad"
+// no aparecería si no llegan filas "_h2" (mismo criterio que "1er Tiempo").
+let cpPeriodoActivo = 'completo'; // 'completo' | 'h1' | 'h2'
+
+// Mercados que puede traer una fila (01-10-2026, a pedido del usuario:
+// "en los logros coloca el rl la alta y la baja, si tienes logros a
+// medio juego o 5to o 1h agregalos tambien") — "5to" (1st 5 innings de
+// MLB) no se agregó porque esa es la 2da parte, pendiente de confirmar
+// con el usuario el costo en créditos (ver nota grande en
+// oddsApiProvider.js).
+
+// Mismo proxy de logos que ya usa el resto del sistema (ver
+// urlLogoProxy()/logoEquipoHTML() en public/app.js) — nunca se pide el
+// logo directo al CDN externo (mlbstatic.com/a.espncdn.com) desde acá.
+function cpLogoHtml(url) {
+  if (!url) return '';
+  return '<img src="/api/imagenes/logo?url=' + encodeURIComponent(url) + '" alt="" class="cp-logo-equipo" onerror="this.style.display=\'none\'">';
+}
 
 async function cpCargarJuegos() {
   const estadoEl = document.getElementById('cpEstadoLogros');
@@ -647,9 +700,10 @@ async function cpCargarJuegos() {
   }
 }
 
-// Arma 1 "juego" por evento_id, con su lista de selecciones elegibles
-// (2 en MLB/NFL/NBA: local/visitante — 3 en fútbol: local/empate/
-// visitante), ordenados por hora de inicio.
+// Arma 1 "juego" por evento_id, con sus mercados agrupados (01-10-2026:
+// antes era una sola lista plana de 2-3 opciones de "h2h" — ahora cada
+// evento puede traer varios mercados distintos — ver cpRenderTablaJuego()).
+// ev.mercados['spreads'] = [{ nombre, logro, punto, seleccion }, ...]
 function cpAgruparJuegosPorEvento() {
   const eventos = new Map();
   cpJuegosProveedor.forEach(fila => {
@@ -660,10 +714,19 @@ function cpAgruparJuegosPorEvento() {
         equipoLocal: fila.equipo_local,
         equipoVisitante: fila.equipo_visitante,
         horaInicio: fila.hora_inicio,
-        opciones: []
+        logoLocal: fila.logo_local || null,
+        logoVisitante: fila.logo_visitante || null,
+        mercados: {}
       });
     }
-    eventos.get(fila.evento_id).opciones.push({ nombre: fila.nombre_seleccion, logro: Number(fila.logro) });
+    const ev = eventos.get(fila.evento_id);
+    if (!ev.mercados[fila.mercado]) ev.mercados[fila.mercado] = [];
+    ev.mercados[fila.mercado].push({
+      nombre: fila.nombre_seleccion,
+      logro: Number(fila.logro),
+      punto: (fila.punto === null || fila.punto === undefined) ? null : Number(fila.punto),
+      seleccion: fila.seleccion
+    });
   });
   return Array.from(eventos.values()).sort((a, b) => new Date(a.horaInicio || 0) - new Date(b.horaInicio || 0));
 }
@@ -672,10 +735,20 @@ function cpEscaparHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function cpFormatearHoraJuego(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    return '';
+  }
+}
+
 function cpAbrirSelectorJuego(filaId) {
   cpFilaParaElegir = filaId;
   const buscador = document.getElementById('cpBuscarJuego');
   buscador.value = '';
+  cpRenderPeriodos();
   cpRenderListaJuegos('');
   document.getElementById('overlayJuegos').classList.add('abierto');
   buscador.focus();
@@ -683,6 +756,97 @@ function cpAbrirSelectorJuego(filaId) {
 function cpCerrarSelectorJuego() {
   document.getElementById('overlayJuegos').classList.remove('abierto');
   cpFilaParaElegir = null;
+}
+
+// Selector global "Juego completo" / "1er Tiempo" / "2da Mitad" dentro
+// del modal (01-10-2026) — filtra TODOS los juegos listados a la vez.
+// Cada botón de mitad solo aparece si de verdad hay algún juego cargado
+// con mercado de esa mitad (si no, ni se muestra el botón — incluyendo el
+// caso donde el proveedor rechazó esa mitad y el backend no guardó filas).
+function cpRenderPeriodos() {
+  const cont = document.getElementById('cpPeriodos');
+  const hayH1 = cpJuegosProveedor.some(f => f.mercado === 'h2h_h1' || f.mercado === 'spreads_h1' || f.mercado === 'totals_h1');
+  const hayH2 = cpJuegosProveedor.some(f => f.mercado === 'h2h_h2' || f.mercado === 'spreads_h2' || f.mercado === 'totals_h2');
+
+  const periodos = [{ clave: 'completo', etiqueta: 'Juego completo' }];
+  if (hayH1) periodos.push({ clave: 'h1', etiqueta: '1er Tiempo' });
+  if (hayH2) periodos.push({ clave: 'h2', etiqueta: '2da Mitad' });
+  if (!periodos.some(p => p.clave === cpPeriodoActivo)) cpPeriodoActivo = 'completo';
+
+  cont.style.display = periodos.length > 1 ? 'flex' : 'none';
+  cont.innerHTML = periodos.map(p =>
+    '<button type="button" class="cp-periodo' + (p.clave === cpPeriodoActivo ? ' activo' : '') + '" data-periodo="' + p.clave + '">' + p.etiqueta + '</button>'
+  ).join('');
+
+  cont.querySelectorAll('.cp-periodo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      cpPeriodoActivo = btn.dataset.periodo;
+      cpRenderPeriodos();
+      cpRenderListaJuegos(document.getElementById('cpBuscarJuego').value);
+    });
+  });
+}
+
+// Celdas de la tabla estilo "sportsbook" (01-10-2026, con una captura
+// real de referencia que trajo el usuario) — null = sin dato para esa
+// combinación período/mercado/lado, nunca se inventa un valor.
+function cpCeldaGanador(mercados, sufijo, seleccion) {
+  const op = (mercados['h2h' + sufijo] || []).find(o => o.seleccion === seleccion);
+  if (!op) return null;
+  return { top: null, bottom: op.logro, favorito: op.logro < 0, nombre: op.nombre };
+}
+function cpCeldaRL(mercados, sufijo, seleccion) {
+  const op = (mercados['spreads' + sufijo] || []).find(o => o.seleccion === seleccion);
+  if (!op) return null;
+  const signoPunto = op.punto > 0 ? '+' : '';
+  return { top: signoPunto + op.punto, bottom: op.logro, favorito: op.logro < 0, nombre: op.nombre + ' ' + signoPunto + op.punto };
+}
+function cpCeldaAltaBaja(mercados, sufijo, cual) {
+  const op = (mercados['totals' + sufijo] || []).find(o => o.seleccion === cual);
+  if (!op) return null;
+  const etiqueta = (cual === 'alta' ? 'Alta' : 'Baja') + ' ' + op.punto;
+  return { top: etiqueta, bottom: op.logro, favorito: op.logro < 0, nombre: etiqueta };
+}
+// Cada celda con dato se renderiza como un <button> clickeable (carga ESE
+// precio exacto en la fila que abrió el selector); sin dato = celda
+// vacía, no clickeable.
+function cpRenderCelda(celda, vsTexto) {
+  if (!celda) return '<span class="cp-sb-valor vacio"><span class="bottom">—</span></span>';
+  const signo = celda.bottom > 0 ? '+' : '−';
+  const clase = celda.favorito ? 'favorito' : 'contendor';
+  return '<button type="button" class="cp-sb-valor" data-logro="' + celda.bottom + '" data-nombre="' + cpEscaparHtml(celda.nombre) + '" data-vs="' + vsTexto.replace(/"/g, '&quot;') + '">'
+    + (celda.top ? '<span class="top">' + cpEscaparHtml(celda.top) + '</span>' : '')
+    + '<span class="bottom ' + clase + '">' + signo + Math.abs(celda.bottom) + '</span></button>';
+}
+
+// Tabla de 3 columnas fijas (Ganador/Alta-Baja/RL) x 2 filas (local y
+// visitante) + fila de "Empate" si el partido la trae (fútbol a 3 vías).
+function cpRenderTablaJuego(ev, periodo, vs) {
+  const sufijo = periodo === 'h1' ? '_h1' : (periodo === 'h2' ? '_h2' : '');
+  const filas = [
+    { nombre: ev.equipoLocal, logo: ev.logoLocal, seleccion: 'local', altaBaja: 'alta' },
+    { nombre: ev.equipoVisitante, logo: ev.logoVisitante, seleccion: 'visitante', altaBaja: 'baja' }
+  ];
+
+  let filasHtml = filas.map(f =>
+    '<span class="cp-sb-equipo">' + cpLogoHtml(f.logo) + '<span class="nombre">' + cpEscaparHtml(f.nombre) + '</span></span>'
+    + cpRenderCelda(cpCeldaGanador(ev.mercados, sufijo, f.seleccion), vs)
+    + cpRenderCelda(cpCeldaAltaBaja(ev.mercados, sufijo, f.altaBaja), vs)
+    + cpRenderCelda(cpCeldaRL(ev.mercados, sufijo, f.seleccion), vs)
+  ).join('');
+
+  const empate = (ev.mercados['h2h' + sufijo] || []).find(o => o.seleccion === 'empate');
+  if (empate) {
+    filasHtml += '<span class="cp-sb-equipo">Empate</span>'
+      + cpRenderCelda({ top: null, bottom: empate.logro, favorito: empate.logro < 0, nombre: 'Empate' }, vs)
+      + '<span class="cp-sb-valor vacio"><span class="bottom">—</span></span>'
+      + '<span class="cp-sb-valor vacio"><span class="bottom">—</span></span>';
+  }
+
+  return '<div class="cp-sb-tabla">'
+    + '<span></span><span class="cp-sb-col-titulo">Ganador</span><span class="cp-sb-col-titulo">Alta/Baja</span><span class="cp-sb-col-titulo">RL</span>'
+    + filasHtml
+    + '</div>';
 }
 
 function cpRenderListaJuegos(filtro) {
@@ -716,19 +880,17 @@ function cpRenderListaJuegos(filtro) {
     html += '<div class="cp-grupo-liga"><p class="cp-grupo-liga-titulo">' + cpEscaparHtml(liga) + '</p>';
     lista.forEach(ev => {
       const vs = cpEscaparHtml(ev.equipoLocal) + ' vs ' + cpEscaparHtml(ev.equipoVisitante);
-      ev.opciones.forEach(op => {
-        const esFavorito = op.logro < 0;
-        html += '<button type="button" class="cp-opcion-juego" data-logro="' + op.logro + '" data-nombre="' + cpEscaparHtml(op.nombre) + '" data-vs="' + vs.replace(/"/g, '&quot;') + '">'
-          + '<span><span class="nombre">' + cpEscaparHtml(op.nombre) + '</span><span class="vs">' + vs + '</span></span>'
-          + '<span class="logro ' + (esFavorito ? 'favorito' : 'contendor') + '">' + (esFavorito ? '−' : '+') + Math.abs(op.logro) + '</span>'
-          + '</button>';
-      });
+      html += '<div class="cp-evento-juego">'
+        + '<div class="cp-evento-cabecera"><span class="cp-evento-liga-chip">' + cpEscaparHtml(ev.liga || ev.deporte) + '</span>'
+        + '<span class="cp-evento-hora">' + cpEscaparHtml(cpFormatearHoraJuego(ev.horaInicio)) + '</span></div>'
+        + cpRenderTablaJuego(ev, cpPeriodoActivo, vs)
+        + '</div>';
     });
     html += '</div>';
   });
   cont.innerHTML = html;
 
-  cont.querySelectorAll('.cp-opcion-juego').forEach(btn => {
+  cont.querySelectorAll('.cp-sb-valor:not(.vacio)').forEach(btn => {
     btn.addEventListener('click', () => {
       cpAplicarJuegoAFila(cpFilaParaElegir, parseFloat(btn.dataset.logro), btn.dataset.nombre, btn.dataset.vs);
       cpCerrarSelectorJuego();

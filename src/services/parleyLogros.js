@@ -10,6 +10,7 @@
 // =================================================================
 const db = require('../db');
 const { obtenerTodosLosLogros } = require('./oddsApiProvider');
+const { construirMapaLogos } = require('./logosEquiposParley');
 
 // Ligas por defecto si no se configura ODDS_API_DEPORTES — las 3 del
 // pedido original del usuario que SIEMPRE usan moneyline americano
@@ -53,17 +54,27 @@ async function refrescarLogrosParley() {
     console.error('Logros Parley: hubo errores consultando The Odds API:\n - ' + errores.join('\n - '));
   }
 
+  // Logos de equipo (01-10-2026, a pedido del usuario) — proveedores
+  // GRATIS y separados por completo de ODDS_API_KEY (ver
+  // logosEquiposParley.js); si esto fallara por completo (ej. ESPN o
+  // MLB caídos ese momento), construirMapaLogos() ya atrapa cada error
+  // por su cuenta y devuelve logos en null — nunca frena la carga de
+  // los logros en sí.
+  const mapaLogosPorEvento = await construirMapaLogos(filas);
+
   await db.transaccion(async (client) => {
     await client.query('DELETE FROM parley_juegos');
     // Un solo INSERT multi-fila en vez de una query por fila — puede
-    // haber varios cientos de filas (6+ ligas, varios partidos y
-    // selecciones cada una) y no hace falta una ida y vuelta por fila.
+    // haber varios cientos de filas (6+ ligas, varios partidos, varios
+    // mercados y selecciones cada una) y no hace falta una ida y vuelta
+    // por fila.
     if (filas.length > 0) {
-      const columnas = ['deporte', 'liga', 'evento_id', 'equipo_local', 'equipo_visitante', 'hora_inicio', 'seleccion', 'nombre_seleccion', 'logro'];
+      const columnas = ['deporte', 'liga', 'evento_id', 'equipo_local', 'equipo_visitante', 'hora_inicio', 'mercado', 'punto', 'seleccion', 'nombre_seleccion', 'logro', 'logo_local', 'logo_visitante'];
       const valores = [];
       const placeholders = filas.map((f, i) => {
         const base = i * columnas.length;
-        valores.push(f.deporte, f.liga, f.eventoId, f.equipoLocal, f.equipoVisitante, f.horaInicio, f.seleccion, f.nombreSeleccion, f.logro);
+        const logos = mapaLogosPorEvento[f.eventoId] || { logoLocal: null, logoVisitante: null };
+        valores.push(f.deporte, f.liga, f.eventoId, f.equipoLocal, f.equipoVisitante, f.horaInicio, f.mercado, f.punto, f.seleccion, f.nombreSeleccion, f.logro, logos.logoLocal, logos.logoVisitante);
         return '(' + columnas.map((_, j) => '$' + (base + j + 1)).join(', ') + ')';
       });
       await client.query(
@@ -96,7 +107,7 @@ async function refrescarLogrosParley() {
 // adivinarlo.
 async function obtenerLogrosVigentes() {
   const { rows: juegos } = await db.query(
-    `select deporte, liga, evento_id, equipo_local, equipo_visitante, hora_inicio, seleccion, nombre_seleccion, logro
+    `select deporte, liga, evento_id, equipo_local, equipo_visitante, hora_inicio, mercado, punto, seleccion, nombre_seleccion, logro, logo_local, logo_visitante
      from parley_juegos
      order by hora_inicio asc nulls last`
   );
