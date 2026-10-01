@@ -7066,6 +7066,23 @@ function esSemanaActualGrupoCliente(id) {
   return !btnAnterior || !btnAnterior.classList.contains('gc-activo');
 }
 
+// Convierte un color hexadecimal ("#16a34a" o "16a34a", de 3 o 6
+// dígitos) a su tripleta "R, G, B" para usar dentro de rgba() (01-10-2026,
+// FIX de "Copiar Imagen HD" — ver el comentario grande sobre
+// --gc-color-1-rgb en grupo.html). Si el texto no es un hex válido (ej.
+// el Súper-admin guardó algo raro), devuelve null y quien llama se queda
+// con el valor por defecto ya puesto en el CSS.
+function hexARgbTripleta(hex) {
+  if (!hex) return null;
+  let h = String(hex).trim().replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return r + ', ' + g + ', ' + b;
+}
+
 // La tabla vive dentro de .gc-tabla-wrap, con el tema de color del grupo
 // (grupoColorPrimario/Secundario) y su logo como marca de agua de fondo
 // (30-09-2026, a pedido del usuario) — si el grupo nunca configuró un
@@ -7080,8 +7097,14 @@ function pintarBloqueSemanaGrupoCliente(id, semana) {
   const total = esActual ? t.totalSemanaActual : t.totalSemanaAnterior;
   const tituloRango = (esActual ? 'Semana actual' : 'Semana anterior (de respaldo)') + ' — ' + rango.desde + ' al ' + rango.hasta;
 
+  // --gc-color-1-rgb (01-10-2026): necesaria para que las filas con tinte
+  // de color (rgba(var(--gc-color-1-rgb), X)) se pinten bien también
+  // cuando el grupo SÍ tiene su propio color — ver nota grande en
+  // grupo.html sobre por qué ya no se usa color-mix() acá (html2canvas no
+  // lo entiende y tumbaba "Copiar Imagen HD").
+  const rgbPrimario = hexARgbTripleta(t.grupoColorPrimario);
   const estiloTema = (t.grupoColorPrimario && t.grupoColorSecundario)
-    ? ' style="--gc-color-1:' + t.grupoColorPrimario + '; --gc-color-2:' + t.grupoColorSecundario + ';"'
+    ? ' style="--gc-color-1:' + t.grupoColorPrimario + '; --gc-color-2:' + t.grupoColorSecundario + ';' + (rgbPrimario ? ' --gc-color-1-rgb:' + rgbPrimario + ';' : '') + '"'
     : '';
   let html = '<div class="gc-tabla-wrap"' + estiloTema + '>';
   if (t.grupoLogoUrl) html += '<div class="gc-tabla-logo-fondo" style="background-image:url(\'' + t.grupoLogoUrl + '\');"></div>';

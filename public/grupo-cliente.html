@@ -83,8 +83,19 @@
      marca de agua de fondo, mismo mecanismo que grupo.html/hipismo-
      mockup.html) — --gc-color-1/2 los pone el JS en el style="" según
      TARJETA_DATA.grupoColorPrimario/Secundario, o se quedan sin poner y
-     usan el celeste/azul de Ludox por defecto. */
-  .gcp-tabla-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); --gc-color-1: var(--accent-cyan); --gc-color-2: var(--accent-blue); }
+     usan el celeste/azul de Ludox por defecto.
+
+     --gc-color-1-rgb (01-10-2026, FIX de "Copiar Imagen HD" — confirmado
+     con un clic real del usuario en el Grupo de Clientes de Hipismo, que
+     usa exactamente este mismo mecanismo): el mismo color de
+     --gc-color-1 pero como tripleta "R, G, B" sin el "#", para usar
+     dentro de rgba(). Las 3 líneas de abajo usaban color-mix(in srgb,
+     var(--gc-color-1) X%, transparent) para el tinte suave — se ve igual
+     que rgba(color, X%), pero html2canvas 1.4.1 (la librería del botón
+     "Copiar Imagen HD") no entiende "color-mix(...)" y tumbaba la
+     generación de la imagen con "Attempting to parse an unsupported
+     color function". rgba() sí lo entiende perfecto. */
+  .gcp-tabla-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); --gc-color-1: var(--accent-cyan); --gc-color-2: var(--accent-blue); --gc-color-1-rgb: 56, 224, 240; }
   .gcp-tabla-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.08; pointer-events: none; z-index: 0; }
   .gcp-tabla-wrap table.gcp-tabla { position: relative; z-index: 1; background: transparent; }
 
@@ -93,11 +104,11 @@
   .gcp-tabla-wrap table.gcp-tabla th { background: linear-gradient(100deg, var(--gc-color-1), var(--gc-color-2) 70%); color: #04070f; }
   table.gcp-tabla th.gcp-col-monto, table.gcp-tabla td.gcp-col-monto { text-align: right; font-variant-numeric: tabular-nums; }
   table.gcp-tabla td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-  .gcp-tabla-wrap table.gcp-tabla tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--gc-color-1) 9%, transparent); }
+  .gcp-tabla-wrap table.gcp-tabla tbody tr:nth-child(even) td { background: rgba(var(--gc-color-1-rgb), 0.09); }
   table.gcp-tabla tr.gcp-fila-titular td { font-weight: bold; color: var(--accent-cyan); }
-  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-titular td { background: color-mix(in srgb, var(--gc-color-1) 16%, transparent); }
+  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-titular td { background: rgba(var(--gc-color-1-rgb), 0.16); }
   table.gcp-tabla tr.gcp-fila-total td { font-weight: bold; border-top: 2px solid var(--card-border); border-bottom: none; padding-top: 12px; }
-  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-total td { background: color-mix(in srgb, var(--gc-color-1) 24%, transparent); }
+  .gcp-tabla-wrap table.gcp-tabla tr.gcp-fila-total td { background: rgba(var(--gc-color-1-rgb), 0.24); }
 
   .gcp-acciones { display: flex; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   .gcp-acciones button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: 20px; cursor: pointer; }
@@ -205,6 +216,23 @@ function escaparHtml(texto) {
   div.textContent = texto;
   return div.innerHTML;
 }
+
+// Convierte un color hexadecimal ("#16a34a" o "16a34a", de 3 o 6
+// dígitos) a su tripleta "R, G, B" para usar dentro de rgba() (01-10-2026,
+// FIX de "Copiar Imagen HD" — ver el comentario grande sobre
+// --gc-color-1-rgb en el <style>). Si el texto no es un hex válido,
+// devuelve null y quien llama se queda con el valor por defecto ya
+// puesto en el CSS.
+function hexARgbTripleta(hex) {
+  if (!hex) return null;
+  let h = String(hex).trim().replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return r + ', ' + g + ', ' + b;
+}
 function formatFechaCorta(fechaISO) {
   const partes = (fechaISO || '').split('-');
   if (partes.length !== 3) return fechaISO || '';
@@ -273,6 +301,13 @@ function renderTarjeta(data) {
   if (data.grupoColorPrimario && data.grupoColorSecundario) {
     wrap.style.setProperty('--gc-color-1', data.grupoColorPrimario);
     wrap.style.setProperty('--gc-color-2', data.grupoColorSecundario);
+    // --gc-color-1-rgb (01-10-2026, FIX de "Copiar Imagen HD"): necesaria
+    // para que las filas con tinte de color (rgba(var(--gc-color-1-rgb),
+    // X)) se pinten bien también cuando el grupo SÍ tiene su propio color
+    // — ver la nota grande sobre --gc-color-1-rgb más arriba, en el
+    // <style>, sobre por qué ya no se usa color-mix() acá.
+    const rgbPrimario = hexARgbTripleta(data.grupoColorPrimario);
+    if (rgbPrimario) wrap.style.setProperty('--gc-color-1-rgb', rgbPrimario);
   }
   const logoFondo = document.getElementById('gcpTablaLogoFondo');
   if (data.grupoLogoUrl) {
