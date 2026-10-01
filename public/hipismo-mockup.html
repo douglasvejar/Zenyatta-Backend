@@ -617,8 +617,14 @@
 
   /* Mini-encabezado (titular + logo chiquito) dentro del contenedor que
      capturan copiarImagenGrupoClienteHip()/copiarTextoGrupoClienteHip()
-     — nunca los botones de administración alrededor. */
-  .gc-captura { background: var(--card); border-radius: 10px; }
+     — nunca los botones de administración alrededor.
+     max-width (01-10-2026, a pedido del usuario: "no hagas estos reportes
+     tan anchos" — el PNG le salía gigante/vacío porque .gc-captura, sin
+     ancho propio, estiraba hasta el ancho completo del panel de
+     Súper-admin) — 420px deja una imagen compacta tipo "tarjeta para
+     WhatsApp", igual de legible y sin tanto espacio en blanco entre el
+     nombre y el monto. */
+  .gc-captura { background: var(--card); border-radius: 10px; max-width: 420px; }
   .gc-captura-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 2px; }
   .gc-captura-logo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--card-2); border: 1px solid var(--card-border); flex-shrink: 0; }
   .gc-captura-titulo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; }
