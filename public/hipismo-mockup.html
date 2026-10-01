@@ -11665,7 +11665,19 @@ poblarJugadoresRemateManual();
 construirFilasWinners();
 poblarJugadoresWinners();
 document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
-document.getElementById('inpFechaComisionesDevueltas').value = fechaLocalHoy();
+// La línea de acá abajo (document.getElementById('inpFechaComisionesDevueltas')...)
+// se borró el 01-10-2026: desde el cambio a rango "Desde/Hasta" en
+// Comisiones Devueltas por Cliente (commit 2536f0f, ver la nota grande
+// junto a pintarComisionesDevueltas() más abajo), ese campo único ya NO
+// existe en el HTML — quedó huérfana de antes del refactor y, como
+// corría acá en el código global (sin try/catch), su TypeError ("null is
+// not an object") frenaba en seco TODO lo que viene después de esta
+// línea en la inicialización de la página — incluido cargarHipodromos()
+// unas líneas más abajo. Por eso la lista de Hipódromos (y el selector
+// de "Cargar Planos") se quedaban siempre vacíos/"cargando…", aunque el
+// backend funcionara perfecto. pintarComisionesDevueltas() ya pone la
+// fecha de hoy sola en inpDesde/inpHastaComisionesDevueltas cuando hace
+// falta, así que no hace falta reemplazar esta línea por nada.
 document.getElementById('inpFechaEliminarJornada').value = fechaLocalHoy();
 cargarResumenJornada();
 // 25-09-2026, a pedido del usuario: "eso no debe salir eso debe estar
