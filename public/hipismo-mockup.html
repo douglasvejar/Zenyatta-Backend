@@ -1923,15 +1923,43 @@
     <section class="vista" id="vista-comisionesDevueltas">
       <div class="card">
         <h2>👤 Comisiones Devueltas por Cliente</h2>
-        <p class="desc">Cuánto se le devuelve a cada cliente por su % propio configurado, sobre TODO lo que apostó esa fecha (gane o pierda cada jugada puntual). Haz clic en un cliente para ver el detalle por hipódromo y carrera.</p>
+        <p class="desc">Cuánto se le devuelve a cada cliente por su % propio configurado, sobre TODO lo que apostó en el rango elegido (gane o pierda cada jugada puntual). Haz clic en un cliente para ver el detalle por hipódromo y carrera.</p>
+        <!-- Desde/Hasta (01-10-2026, a pedido del usuario: "LA FECHA QUE VAS
+             A MOSTRAR ARRIBA ES EL RANGO QUE YO ESCOJA") — antes era un solo
+             campo "Fecha" (un día puntual); ahora deja elegir un rango,
+             igual que Balance General/Cierre Final. Los 2 arrancan en HOY,
+             así que si el operador no toca nada el comportamiento es
+             idéntico a como era antes (un solo día). -->
         <div class="fila" style="align-items:flex-end;">
           <div>
-            <label for="inpFechaComisionesDevueltas">Fecha</label>
-            <input type="date" id="inpFechaComisionesDevueltas">
+            <label for="inpDesdeComisionesDevueltas">Desde</label>
+            <input type="date" id="inpDesdeComisionesDevueltas">
+          </div>
+          <div>
+            <label for="inpHastaComisionesDevueltas">Hasta</label>
+            <input type="date" id="inpHastaComisionesDevueltas">
           </div>
           <div style="flex:0; min-width:auto;">
             <button class="btn btn-primario" type="button" onclick="buscarComisionesDevueltas()">🔎 Buscar</button>
           </div>
+        </div>
+
+        <!-- "Destinatarios de Devolución" (01-10-2026, a pedido explícito del
+             usuario, con el texto exacto que quiere para copiar y pegar al
+             grupo de WhatsApp: "FIJATE QUE SALE EL CLIEMNTE QUE SE LE
+             DEVUELVE Y ABAJO ORDENADO CUANTO SE LE DEVOLVIO Y TODOS LOS QUE
+             LE GENERAN A EL % Y CUANTO... QUIEN GANA EL % TOTAL TANTO Y
+             ABAJO SU DETALLADO DE COMO SE GANA ESE DINERO CUANTO LE DEJA
+             CADA CLIENTE"). A propósito agrupa AL REVÉS que la lista de
+             abajo: la lista de abajo (y el backend de /comisiones-devueltas)
+             agrupan por quien APOSTÓ/generó el %; este texto reagrupa esos
+             mismos datos por DESTINO (a quién se le acredita — él mismo, o
+             su aval), con el total de ese destinatario arriba y, debajo, el
+             detalle de cada cliente que se lo generó y cuánto aportó cada
+             uno — ver textoComisionesDevueltas() más abajo. -->
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesDevueltasTexto()">📋 Copiar Texto (Destinatarios de Devolución)</button>
+          <span class="toast-copiado" id="toastComisionesDevueltas"></span>
         </div>
 
         <!-- Logo del grupo (30-09-2026, a pedido del usuario: "... y
@@ -10459,33 +10487,56 @@ function descargarComisionesHipodromoExcel() {
 // hipódromos; al expandir un hipódromo, sus carreras con el detalle de
 // cómo se fue sumando el %.
 let idComisionDevueltaSeq = 0;
+// COMISIONES_DEVUELTAS_ACTUAL (01-10-2026, para "Copiar Texto (Destinatarios
+// de Devolución)" — ver textoComisionesDevueltas() más abajo): esta vista no
+// guardaba los datos de la última búsqueda en ningún lado (los pintaba
+// directo al DOM); se guarda acá, mismo criterio que ya usa
+// COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL más abajo para su propio "Copiar
+// Texto".
+let COMISIONES_DEVUELTAS_ACTUAL = null;
 
+// buscarComisionesDevueltas/pintarComisionesDevueltas (01-10-2026, a
+// pedido del usuario: "LA FECHA QUE VAS A MOSTRAR ARRIBA ES EL RANGO QUE
+// YO ESCOJA") — antes era un solo campo "Fecha"; ahora son "Desde"/"Hasta"
+// (igual que Balance General/Cierre Final). Si el operador deja los 2
+// iguales (el default, los 2 arrancan en HOY) el comportamiento es
+// idéntico a como era antes.
 function buscarComisionesDevueltas() {
-  const fecha = document.getElementById('inpFechaComisionesDevueltas').value;
-  pintarComisionesDevueltas(fecha);
+  const desde = document.getElementById('inpDesdeComisionesDevueltas').value;
+  const hasta = document.getElementById('inpHastaComisionesDevueltas').value;
+  pintarComisionesDevueltas(desde, hasta);
 }
 
-async function pintarComisionesDevueltas(fechaForzada) {
-  const inp = document.getElementById('inpFechaComisionesDevueltas');
-  const fecha = fechaForzada || inp.value || fechaLocalHoy();
-  if (!fechaForzada) inp.value = fecha;
+async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
+  const inpDesde = document.getElementById('inpDesdeComisionesDevueltas');
+  const inpHasta = document.getElementById('inpHastaComisionesDevueltas');
+  const hoy = fechaLocalHoy();
+  let desde = desdeForzado || inpDesde.value || hoy;
+  let hasta = hastaForzado || inpHasta.value || hoy;
+  // Si vienen invertidos (desde > hasta) se ordenan solos en vez de fallar
+  // — mismo criterio que rangoPersonalizadoDeQuery() en routes/hipismo.js.
+  if (desde > hasta) { const t = desde; desde = hasta; hasta = t; }
+  if (!desdeForzado) inpDesde.value = desde;
+  if (!hastaForzado) inpHasta.value = hasta;
   const elFecha = document.getElementById('comisionesDevueltasFechaCaptura');
-  if (elFecha) elFecha.textContent = formatFechaCortaDMY(fecha);
+  if (elFecha) elFecha.textContent = desde === hasta ? formatFechaCortaDMY(desde) : `Del ${formatFechaCortaDMY(desde)} al ${formatFechaCortaDMY(hasta)}`;
   const cont = document.getElementById('listaComisionesDevueltas');
   cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
   let data;
   try {
-    data = await apiHipismo(`/api/hipismo/comisiones-devueltas?fecha=${fecha}`);
+    data = await apiHipismo(`/api/hipismo/comisiones-devueltas?desde=${desde}&hasta=${hasta}`);
   } catch (e) {
+    COMISIONES_DEVUELTAS_ACTUAL = null;
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
     return;
   }
+  COMISIONES_DEVUELTAS_ACTUAL = data;
   // 24-09-2026: total general que pidió el usuario ("ambas pantallas con
   // total devolucion") — el backend ya lo trae calculado (data.totalGeneral).
   const montoTotalEl = document.getElementById('montoComisionesDevueltasTotal');
   if (montoTotalEl) montoTotalEl.textContent = '$' + formatMontoTabla(Number(data.totalGeneral || 0));
   if (!data.clientes.length) {
-    cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó ese día.</div>';
+    cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó en ese rango.</div>';
     return;
   }
   cont.innerHTML = '';
@@ -10518,13 +10569,18 @@ async function pintarComisionesDevueltas(fechaForzada) {
       <div class="detalle-carrera comision-nivel-hipodromos"></div>`;
     const contHipodromos = filaCliente.querySelector('.comision-nivel-hipodromos');
 
+    // Columna "Fecha" (01-10-2026): solo tiene sentido mostrarla cuando el
+    // rango pedido abarca más de un día — con un solo día (el caso de
+    // siempre hasta esta ronda) sería una columna repetida sin aportar
+    // nada, así que la tabla se queda exactamente igual que antes.
+    const esRangoVarios = data.desde !== data.hasta;
     cliente.hipodromos.forEach(hip => {
       const idHip = 'comDevHip' + (idComisionDevueltaSeq++);
       const filaHip = document.createElement('div');
       filaHip.className = 'fila-carrera-comision';
       filaHip.id = idHip;
       const filasDetalle = hip.carreras.map(c =>
-        `<tr><td>${ordinalCarrera(c.carreraNumero)} — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
+        `<tr>${esRangoVarios ? `<td>${formatFechaCortaDMY(c.fecha)}</td>` : ''}<td>${ordinalCarrera(c.carreraNumero)} — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
       ).join('');
       filaHip.innerHTML = `
         <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idHip}')">
@@ -10537,7 +10593,7 @@ async function pintarComisionesDevueltas(fechaForzada) {
         </div>
         <div class="detalle-carrera">
           <table>
-            <thead><tr><th>Carrera / Jugada</th><th class="num">Apostado</th><th class="num">Devuelto</th></tr></thead>
+            <thead><tr>${esRangoVarios ? '<th>Fecha</th>' : ''}<th>Carrera / Jugada</th><th class="num">Apostado</th><th class="num">Devuelto</th></tr></thead>
             <tbody>${filasDetalle}</tbody>
           </table>
         </div>`;
@@ -10546,6 +10602,92 @@ async function pintarComisionesDevueltas(fechaForzada) {
 
     cont.appendChild(filaCliente);
   });
+}
+
+// =================================================================
+// "DESTINATARIOS DE DEVOLUCIÓN" — texto para copiar y pegar al grupo de
+// WhatsApp (01-10-2026, a pedido explícito del usuario, con un ejemplo
+// exacto del formato que quiere siempre: "EN COMOSIONES DEVIUELTAS POR
+// CLIENTES QUIERO QUE ME DES SIEMPRE EL REPORTE ASI CUANDO TE LO PIDA EN
+// FORMATO TEXTO... FIJATE EL FORMATO QUE TIENE Y EL ORDEN QUE TIENE, LO
+// QUIERO ASI MISMO... QUIEN GANA EL % TOTAL TANTO Y ABAJO SU DETALLADO DE
+// COMO SE GANA ESE DINERO CUANTO LE DEJA CADA CLIENTE").
+//
+// La lista de arriba (y GET /comisiones-devueltas) agrupan por quien
+// APOSTÓ/generó el % (`cliente.nombre`), con `cliente.destino` como dato
+// aparte para auditar a quién se le acredita cuando hay un aval
+// configurado (ver la nota grande de obtenerComisionesPropias en
+// services/hipismoComisionPropia.js). Este texto reagrupa esos MISMOS
+// datos al revés, por DESTINO (a quién se le acredita — él mismo, o su
+// aval) — el total de ese destinatario arriba, y debajo, ordenado, cada
+// cliente que se lo generó con cuánto le aportó. Ejemplo real que dio el
+// usuario como plantilla exacta (BOSS cobra su propio % Y el % ADICIONAL
+// que le genera PLACE como su avalado, en una sola línea "BOSS" con 2
+// renglones debajo):
+//   🔀 *BOSS* — Total: *80,93*
+//     • BOSS:  44,87
+//     • PLACE:  36,06
+//
+// Formato línea por línea (igual que el ejemplo, nada se infiere): título
+// en negrita con "{desde} a {hasta}" (01-10-2026: ahora un rango real que
+// el usuario elige arriba — "LA FECHA QUE VAS A MOSTRAR ARRIBA ES EL RANGO
+// QUE YO ESCOJA"; con un solo día, desde === hasta, igual que el ejemplo
+// original que dio el usuario); línea de guiones (32); línea en blanco;
+// por cada destinatario, ordenado alfabéticamente:
+// "🔀 *{DESTINO}* — Total: *{monto}*", y debajo cada generador (también
+// alfabético) como "  • {NOMBRE}:  {monto}" (dos espacios antes del
+// monto, tal cual el ejemplo), con una línea en blanco después de cada
+// grupo; al final, línea de guiones (30, un poco más corta que la de
+// arriba — así venía el ejemplo) y "*TOTAL DEVOLUCIONES: {total} USD*" en
+// negrita. Nombres tal cual los guarda la base (ya en mayúsculas) — SIN
+// pasar por formatNombre() (que pondría "Boss" en vez de "BOSS"), porque
+// el ejemplo del usuario los quiere en mayúsculas igual que Balance
+// General/Cierre Final.
+function textoComisionesDevueltas(data) {
+  // redondeo2 local: este archivo es frontend puro, no tiene el round2()
+  // de services/hipismoAdelantadasCalc.js (ese vive solo en el backend) —
+  // mismo criterio que ya usa este archivo en otros lados (ver
+  // Math.round(... * 100) / 100 más arriba, ej. pintarSaldoComisiones).
+  const redondeo2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  const porDestino = new Map();
+  (data.clientes || []).forEach(c => {
+    if (!porDestino.has(c.destino)) porDestino.set(c.destino, { destino: c.destino, total: 0, generadores: new Map() });
+    const d = porDestino.get(c.destino);
+    d.total = redondeo2(d.total + c.total);
+    d.generadores.set(c.nombre, redondeo2((d.generadores.get(c.nombre) || 0) + c.total));
+  });
+
+  const destinatarios = Array.from(porDestino.values()).sort((a, b) => a.destino.localeCompare(b.destino, 'es'));
+
+  let texto = `*Destinatarios de Devolucion - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
+  destinatarios.forEach(d => {
+    texto += `\n🔀 *${d.destino}* — Total: *${formatMontoTabla(d.total)}*\n`;
+    Array.from(d.generadores.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+      .forEach(([nombre, monto]) => { texto += `  • ${nombre}:  ${formatMontoTabla(monto)}\n`; });
+  });
+  texto += `\n──────────────────────────────\n*TOTAL DEVOLUCIONES: ${formatMontoTabla(data.totalGeneral)} USD*`;
+  return texto;
+}
+
+function mostrarToastComisionesDevueltas(msg, esError) {
+  const t = document.getElementById('toastComisionesDevueltas');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+function copiarComisionesDevueltasTexto() {
+  if (!COMISIONES_DEVUELTAS_ACTUAL) { mostrarToastComisionesDevueltas('Todavía se está cargando — espera un momento.', true); return; }
+  if (!COMISIONES_DEVUELTAS_ACTUAL.clientes.length) { mostrarToastComisionesDevueltas('Ningún cliente con % propio configurado apostó en ese rango.', true); return; }
+  const texto = textoComisionesDevueltas(COMISIONES_DEVUELTAS_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastComisionesDevueltas('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastComisionesDevueltas('No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarToastComisionesDevueltas('No se pudo copiar — selecciona el texto a mano.', true);
+  }
 }
 
 // ------------------------------------------------------------------

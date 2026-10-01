@@ -1922,42 +1922,90 @@ router.get('/comisiones-por-hipodromo', asyncHandler(async (req, res) => {
 // `decidida` -- lo apostado es lo apostado, se haya decidido o no la
 // jugada; solo los reportes de COMISIÓN/% devuelto deben filtrar por esto.
 async function obtenerApuestasDelDia(grupoId, fecha) {
-  const detalle = [];
+  return obtenerApuestasDelRango(grupoId, fecha, fecha);
+}
 
-  const rTickets = await db.query(
-    `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero
-       FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
-      WHERE t.grupo_id = $1 AND p.fecha = $2`,
-    [grupoId, fecha]
-  );
+// Normaliza una fecha de Postgres (tipo `date`, que pg puede devolver como
+// objeto Date) al mismo string "YYYY-MM-DD" que ya usa el resto del
+// sistema — mismo criterio EXACTO que ya usan /saldo-comisiones y
+// /comisiones-por-hipodromo más arriba (`row.fecha instanceof Date ? ... :
+// row.fecha`).
+function fechaComoISO(v) {
+  return v instanceof Date ? v.toISOString().slice(0, 10) : v;
+}
+
+// obtenerApuestasDelRango (01-10-2026, a pedido del usuario: "LA FECHA QUE
+// VAS A MOSTRAR ARRIBA ES EL RANGO QUE YO ESCOJA" — "Comisiones Devueltas
+// por Cliente" pasa de UN día puntual a poder elegir un rango, igual que
+// Balance General/Cierre Final) — generaliza obtenerApuestasDelDia a un
+// rango [desde, hasta] (ambos inclusive). Con `desde === hasta` (el caso
+// de SIEMPRE para Montos Apostados, Traspaso de Jugadas y Comisiones
+// Devueltas por Hipódromo, que NUNCA pasaron a pedir rango) usa el MISMO
+// texto de consulta exacto de siempre (`p.fecha = $2`, sin pedir la
+// columna `fecha` de vuelta) para no tocarle el SQL a ningún llamador
+// existente ni a sus pruebas; con un rango real (desde !== hasta, nuevo,
+// SOLO lo pide GET /comisiones-devueltas más abajo) usa BETWEEN y trae
+// también `fecha` por fila, para poder distinguir en qué día puntual cayó
+// cada carrera cuando el detalle expandido mezcla varios días.
+async function obtenerApuestasDelRango(grupoId, desde, hasta) {
+  const detalle = [];
+  const mismoDia = desde === hasta;
+
+  const rTickets = mismoDia
+    ? await db.query(
+        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero
+           FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
+          WHERE t.grupo_id = $1 AND p.fecha = $2`,
+        [grupoId, desde]
+      )
+    : await db.query(
+        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero, p.fecha
+           FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
+          WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+        [grupoId, desde, hasta]
+      );
   rTickets.rows.forEach(t => detalle.push({
-    id: t.id, tabla: 'hipismo_tickets',
+    id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
     cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
     tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
     decidida: !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0)
   }));
 
-  const rRemate = await db.query(
-    `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero
-       FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
-      WHERE a.grupo_id = $1 AND r.fecha = $2`,
-    [grupoId, fecha]
-  );
+  const rRemate = mismoDia
+    ? await db.query(
+        `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero
+           FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
+          WHERE a.grupo_id = $1 AND r.fecha = $2`,
+        [grupoId, desde]
+      )
+    : await db.query(
+        `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero, r.fecha
+           FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
+          WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+        [grupoId, desde, hasta]
+      );
   rRemate.rows.forEach(a => detalle.push({
-    id: a.id, tabla: 'hipismo_remate_apuestas',
+    id: a.id, tabla: 'hipismo_remate_apuestas', fecha: mismoDia ? desde : fechaComoISO(a.fecha),
     cliente: a.cliente_nombre, hipodromoNombre: a.hipodromo_nombre, carreraNumero: a.carrera_numero,
     tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto),
     decidida: true
   }));
 
-  const rAdelantadas = await db.query(
-    `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
-       FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
-      WHERE j.grupo_id = $1 AND p.fecha = $2`,
-    [grupoId, fecha]
-  );
+  const rAdelantadas = mismoDia
+    ? await db.query(
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
+           FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+          WHERE j.grupo_id = $1 AND p.fecha = $2`,
+        [grupoId, desde]
+      )
+    : await db.query(
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre, p.fecha
+           FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+          WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
+        [grupoId, desde, hasta]
+      );
   rAdelantadas.rows.forEach(j => detalle.push({
-    id: j.id, tabla: 'hipismo_adelantadas_jugadas',
+    id: j.id, tabla: 'hipismo_adelantadas_jugadas', fecha: mismoDia ? desde : fechaComoISO(j.fecha),
     cliente: j.cliente_nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
     tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
     detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
@@ -2106,10 +2154,20 @@ router.get('/montos-apostados', asyncHandler(async (req, res) => {
 // fila con su total devuelto ese día, y al expandirlo, el detalle
 // ordenado por hipódromo > carrera de cómo se fue sumando ese %.
 //
-// GET /comisiones-devueltas?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+// GET /comisiones-devueltas?fecha=YYYY-MM-DD (default: hoy en hora
+// Venezuela) — un solo día, como siempre; o ?desde=&hasta= (01-10-2026, a
+// pedido del usuario: "LA FECHA QUE VAS A MOSTRAR ARRIBA ES EL RANGO QUE
+// YO ESCOJA") para sumar varios días de corrido, igual que ya hacen
+// Balance General/Cierre Final con ?desde=&hasta= (ver
+// rangoPersonalizadoDeQuery más arriba) — si vienen los 2 válidos, GANAN
+// sobre `fecha`. Con un solo día (?fecha= de siempre, o ?desde=&hasta= con
+// el mismo valor) el comportamiento/los números no cambian en nada.
 router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
+  const rango = rangoPersonalizadoDeQuery(req);
   const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
-  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+  const desde = rango ? rango.desde : fecha;
+  const hasta = rango ? rango.hasta : fecha;
+  const detalle = await obtenerApuestasDelRango(req.grupoId, desde, hasta);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
 
   // 24-09-2026: un cliente puede tener hasta 2 entradas simultáneas (ver
@@ -2154,7 +2212,12 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
       if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, total: 0, carreras: [] });
       const h = c.hipodromos.get(d.hipodromoNombre);
       h.total = round2(h.total + devuelto);
-      h.carreras.push({ carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
+      // `fecha` por carrera (01-10-2026): con un rango de varios días, el
+      // mismo hipódromo+número de carrera puede repetirse en días
+      // distintos — se incluye acá para que el detalle expandido (y el
+      // texto de "Destinatarios de Devolución") no las confunda entre sí.
+      // Con un solo día es simplemente esa misma fecha, siempre.
+      h.carreras.push({ fecha: d.fecha, carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
     });
   });
 
@@ -2164,7 +2227,10 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
 
   const totalGeneralDevueltas = round2(clientes.reduce((s, c) => s + c.total, 0));
 
-  res.json({ fecha, clientes, totalGeneral: totalGeneralDevueltas });
+  // `fecha` se mantiene por compatibilidad (siempre = desde, como antes
+  // cuando esto era de UN solo día); `desde`/`hasta` son los nuevos, para
+  // que el frontend pueda mostrar el rango real que el usuario eligió.
+  res.json({ fecha: desde, desde, hasta, clientes, totalGeneral: totalGeneralDevueltas });
 }));
 
 // =================================================================
