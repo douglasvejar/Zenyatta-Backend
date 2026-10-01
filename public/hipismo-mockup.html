@@ -440,11 +440,21 @@
   #cierreFinalCaptura td.num { text-align: center; }
   #cierreFinalCaptura tbody tr:nth-child(even) { background: var(--card-2); }
   /* 24-09-2026: renglón "↳ {cliente} - Porcentaje" (% devuelto) dentro de
-     Cierre Final — ya sale pegado debajo de su cliente base por orden
-     alfabético; acá solo se le baja un poco el tono para que se note que
-     es un ítem aparte, sin cambiar el layout de la tabla. */
-  #cierreFinalCaptura tr.fila-porcentaje td:first-child { font-style: italic; color: var(--text-dim); }
-  #cierreFinalCaptura tr.fila-porcentaje { opacity: 0.85; }
+     Cierre Final — se asumía que siempre salía pegado debajo de su
+     cliente base por orden alfabético, así que se le bajaba el tono y se
+     le ponía una flechita para marcarlo como "ítem aparte, no otro
+     cliente". 01-10-2026, a pedido del usuario ("hay % que no
+     corresponden a esos clientes"): esa idea fallaba justo para los
+     clientes que SOLO tienen % devuelto esa semana (no jugaron nada, así
+     que no tienen fila propia) — ahí el "{CLIENTE} - PORCENTAJE" queda
+     flotando solo en la lista y, con la cursiva/sangría/opacidad de antes,
+     parecía pertenecer al cliente de arriba (uno totalmente distinto) en
+     vez de ser su propia entrada. Se saca todo el tratamiento especial —
+     esta regla de CSS se borra y, en pintarCierreFinal() más abajo, ya no
+     se le agrega ni la flechita "↳" ni la clase "fila-porcentaje" — para
+     que cada "{CLIENTE} - PORCENTAJE" se lea como lo que es: otro cliente
+     más en la lista, ganando su %, sin ninguna diferencia visual con una
+     fila de cliente normal. */
 
   /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
      más abajo) — mientras más clientes, más chico cada renglón, para que
@@ -9600,17 +9610,21 @@ async function pintarCierreFinal(semana) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Sin jugadas en este rango.</td></tr>';
   } else {
     data.clientes.forEach(c => {
-      // 24-09-2026: el ítem "{cliente} - PORCENTAJE" (% devuelto) ya
-      // sale pegado justo debajo de su cliente base gracias al orden
-      // alfabético de siempre (ver la nota grande en pintarBalanceGeneral
-      // — acá no hace falta reordenar nada) — se le agrega una marca
-      // visual sutil ("↳" + fila más clara) para que se note que es un
-      // renglón de devolución, no otro cliente más.
-      const esPorcentaje = c.nombre.endsWith(' - PORCENTAJE');
+      // 24-09-2026: el ítem "{cliente} - PORCENTAJE" (% devuelto) se
+      // marcaba con una flechita "↳" + cursiva + fila más clara, dando
+      // por sentado que siempre salía pegado debajo de su cliente base
+      // por orden alfabético. 01-10-2026, a pedido del usuario ("hay %
+      // que no corresponden a esos clientes"): eso fallaba justo con los
+      // clientes que ESE rango solo tienen % devuelto y ninguna jugada
+      // propia — no tienen fila base en esta lista, así que su
+      // "{CLIENTE} - PORCENTAJE" quedaba flotando y, con la marca visual
+      // de "ítem aparte", parecía pertenecer al cliente de arriba (uno
+      // sin ninguna relación). Se saca la marca especial: ahora es una
+      // fila de cliente normal y corriente, como cualquier otra — el
+      // propio nombre "CLIENTE - PORCENTAJE" ya dice de qué se trata.
       const tr = document.createElement('tr');
-      if (esPorcentaje) tr.className = 'fila-porcentaje';
       tr.innerHTML = `
-        <td>${esPorcentaje ? '↳ ' : ''}${formatNombre(c.nombre)}</td>
+        <td>${formatNombre(c.nombre)}</td>
         <td class="num col-jugadas">${c.jugadas}</td>
         <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
         <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
