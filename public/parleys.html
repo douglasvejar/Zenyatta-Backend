@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LUDOX — Quiénes somos</title>
+<title>LUDOX — Parleys</title>
 <link rel="icon" href="img/logo-ludox.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,21 +60,46 @@
   }
 
   /* ============ CONTENIDO ============ */
-  .pagina { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 148px 20px 0; text-align: center; }
+  .pagina { position: relative; z-index: 1; max-width: 880px; margin: 0 auto; padding: 140px 20px 0; text-align: center; }
   .eyebrow-pagina { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-cyan); margin: 0 0 14px; }
   h1 { font-family: 'Outfit', sans-serif; font-size: clamp(28px, 5vw, 40px); font-weight: 700; margin: 0 0 16px; text-wrap: balance; }
-  .lead { color: var(--text-dim); font-size: 16px; line-height: 1.6; margin: 0 auto 36px; max-width: 540px; }
-  .caja-pendiente { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 32px 28px; margin: 0 auto 28px; }
-  .caja-pendiente .icono { font-size: 30px; margin-bottom: 12px; }
-  .caja-pendiente h2 { font-family: 'Outfit', sans-serif; font-size: 18px; margin: 0 0 8px; }
-  .caja-pendiente p { color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0; }
-  .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .lead { color: var(--text-dim); font-size: 16px; line-height: 1.6; margin: 0 auto 28px; max-width: 560px; }
+  .acciones-pagina { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 32px; }
   .btn-pagina { font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 22px; border-radius: 10px; text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease; }
   .btn-pagina-principal { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep)); color: #04070f; box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65); }
   .btn-pagina-principal:hover { transform: translateY(-1px); }
   .btn-pagina-secundario { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--card-border); }
   .btn-pagina-secundario:hover { border-color: rgba(56, 224, 240, 0.5); background: rgba(56, 224, 240, 0.06); }
   footer { position: relative; z-index: 1; margin-top: 56px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.04em; text-align: center; }
+
+  /* ============ PARLEYS — logros por deporte (01-10-2026) ============ */
+  .pl-estado-logros { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--text-dim); margin: 0 0 26px; }
+  .pl-estado-logros .punto { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+  .pl-estado-logros.sin-datos .punto { background: var(--text-dim); }
+
+  .pl-panel { text-align: left; background: var(--card); border: 1px solid var(--card-border); border-radius: 20px; padding: 26px; box-shadow: 0 30px 70px -32px rgba(47,107,255,0.45); }
+
+  .pl-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .pl-tab { font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 600; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.03); color: var(--text-dim); cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease; display: flex; align-items: center; gap: 6px; }
+  .pl-tab:hover { border-color: rgba(56,224,240,0.4); color: var(--text); }
+  .pl-tab.activo { background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 60%, var(--accent-deep)); color: #04070f; border-color: transparent; }
+  .pl-tab .cuenta { font-size: 11px; opacity: 0.8; }
+
+  .pl-grupo-liga + .pl-grupo-liga { margin-top: 22px; }
+  .pl-grupo-liga-titulo { font-family: 'Outfit', sans-serif; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-cyan); margin: 0 0 10px; }
+
+  .pl-juego { background: rgba(255,255,255,0.025); border: 1px solid var(--card-border); border-radius: 13px; padding: 14px 16px; margin-bottom: 10px; }
+  .pl-juego-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pl-juego-equipos { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 14.5px; }
+  .pl-juego-hora { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .pl-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pl-opcion { background: rgba(255,255,255,0.04); border: 1px solid var(--card-border); border-radius: 9px; padding: 8px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .pl-opcion .nombre { color: var(--text); }
+  .pl-opcion .logro { font-family: 'Outfit', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pl-opcion .logro.favorito { color: var(--danger); }
+  .pl-opcion .logro.contendor { color: var(--ok); }
+
+  .pl-vacio { color: var(--text-dim); font-size: 14px; text-align: center; padding: 44px 10px; line-height: 1.7; }
 
   /* ============ MODAL DE SOLICITAR DEMO (mismo mecanismo que index.html) ============ */
   .overlay { position: fixed; inset: 0; background: rgba(2, 4, 10, 0.72); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
@@ -124,8 +149,8 @@
           </div>
         </div>
         <a class="navbar-link" href="calculadora-parley.html">Calculadora Parley</a>
-        <a class="navbar-link" href="parleys.html">Parleys</a>
-        <a class="navbar-link activo" href="quienes-somos.html">Quiénes somos</a>
+        <a class="navbar-link activo" href="parleys.html">Parleys</a>
+        <a class="navbar-link" href="quienes-somos.html">Quiénes somos</a>
         <a class="navbar-link" href="precios.html">Precios</a>
         <button type="button" class="navbar-cta" id="navbarBtnDemo">Solicitar Demo</button>
       </div>
@@ -133,18 +158,19 @@
   </nav>
 
   <div class="pagina">
-    <p class="eyebrow-pagina">Nosotros</p>
-    <h1>Quiénes somos</h1>
-    <p class="lead">La historia de LUDOX está en camino.</p>
+    <p class="eyebrow-pagina">Logros en vivo</p>
+    <h1>Parleys</h1>
+    <p class="lead">Todos los juegos y logros (moneyline) cargados automáticamente, ordenados por deporte. Elige una pestaña para ver solo esa liga.</p>
 
-    <div class="caja-pendiente">
-      <div class="icono">🚧</div>
-      <h2>Estamos armando esta página</h2>
-      <p>Muy pronto vas a encontrar acá quiénes somos y qué nos mueve. Mientras tanto, pide una demo y te contamos en vivo.</p>
+    <p class="pl-estado-logros" id="plEstadoLogros"><span class="punto"></span> Buscando logros automáticos...</p>
+
+    <div class="pl-panel">
+      <div class="pl-tabs" id="plTabs"></div>
+      <div id="plLista"></div>
     </div>
 
     <div class="acciones-pagina">
-      <button type="button" class="btn-pagina btn-pagina-principal" id="navbarBtnDemo2">Solicitar Demo</button>
+      <a class="btn-pagina btn-pagina-principal" href="calculadora-parley.html">🎯 Ir a la Calculadora Parley</a>
       <a class="btn-pagina btn-pagina-secundario" href="index.html">← Volver al inicio</a>
     </div>
   </div>
@@ -207,7 +233,6 @@ function abrirContacto() {
 }
 function cerrarContacto() { overlay.classList.remove('abierto'); }
 document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto(); });
-document.getElementById('navbarBtnDemo2').addEventListener('click', abrirContacto);
 document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
 overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
 
@@ -217,8 +242,6 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   const msgEl = document.getElementById('msgFormContacto');
   const nombre = document.getElementById('ctNombre').value.trim();
   const contacto = document.getElementById('ctContacto').value.trim();
-  // (18-09-2026) Mismo mecanismo que "Contacto": esta página SOLO abre el
-  // modal en su variante "Demo", así que el mensaje siempre va etiquetado.
   const textoMensaje = document.getElementById('ctMensaje').value.trim();
 
   if (!contacto || !textoMensaje) {
@@ -226,7 +249,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
     msgEl.className = 'msg-form error';
     return;
   }
-  const mensaje = '🎬 SOLICITUD DE DEMO (página Quiénes somos)\n' + textoMensaje;
+  const mensaje = '🎬 SOLICITUD DE DEMO (página Parleys)\n' + textoMensaje;
 
   btn.disabled = true;
   msgEl.textContent = '';
@@ -264,6 +287,164 @@ function cerrarMenuMovil() { navbarLinks.classList.remove('movil-abierto'); }
 document.getElementById('navbarToggle').addEventListener('click', () => {
   navbarLinks.classList.toggle('movil-abierto');
 });
+
+// =================================================================
+// PARLEYS — logros por deporte (01-10-2026, a pedido del usuario: "crea
+// una pestaña llamada PARLEYS... alli quiero ver que se desplieguen los
+// logros ordenados por deporte, es decir si seleccino mlb ver solo mlb
+// y asi sucesivamente"). Consume el mismo endpoint público que ya usa
+// el botón 🔍 de la Calculadora Parley (GET /api/parley/juegos) — ver
+// cpCargarJuegos() en calculadora-parley.html y src/routes/parley.js.
+// Esta página es de SOLO LECTURA (no llena ninguna fila): el que quiera
+// calcular un parley con estos logros va a la Calculadora Parley aparte
+// (botón de abajo).
+// =================================================================
+let plJuegosProveedor = [];
+let plDeporteActivo = null;
+
+// Mismo criterio que services/parleyLogros.js del lado del servidor:
+// "deporte" es un agrupador genérico (prefijo de "sport_key" antes del
+// primer "_"), nunca una lista fija — un deporte nuevo que no esté en
+// este mapa igual se muestra bien, solo que con un ícono/nombre
+// genérico en vez de uno a medida.
+const PL_ICONOS_DEPORTE = { baseball: '⚾', americanfootball: '🏈', basketball: '🏀', soccer: '⚽', icehockey: '🏒' };
+const PL_NOMBRES_DEPORTE = { baseball: 'Béisbol', americanfootball: 'Fútbol Americano', basketball: 'Baloncesto', soccer: 'Fútbol', icehockey: 'Hockey sobre hielo' };
+const PL_ORDEN_DEPORTE = ['baseball', 'americanfootball', 'basketball', 'soccer', 'icehockey'];
+
+function plEtiquetaDeporte(deporte) {
+  const nombre = PL_NOMBRES_DEPORTE[deporte] || (deporte.charAt(0).toUpperCase() + deporte.slice(1));
+  const icono = PL_ICONOS_DEPORTE[deporte] || '🏆';
+  return icono + ' ' + nombre;
+}
+
+function plEscaparHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function plFormatearHora(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    return '';
+  }
+}
+
+function plAgruparJuegosPorEvento(filas) {
+  const eventos = new Map();
+  filas.forEach(fila => {
+    if (!eventos.has(fila.evento_id)) {
+      eventos.set(fila.evento_id, {
+        deporte: fila.deporte,
+        liga: fila.liga,
+        equipoLocal: fila.equipo_local,
+        equipoVisitante: fila.equipo_visitante,
+        horaInicio: fila.hora_inicio,
+        opciones: []
+      });
+    }
+    eventos.get(fila.evento_id).opciones.push({ nombre: fila.nombre_seleccion, logro: Number(fila.logro) });
+  });
+  return Array.from(eventos.values()).sort((a, b) => new Date(a.horaInicio || 0) - new Date(b.horaInicio || 0));
+}
+
+async function plCargarJuegos() {
+  const estadoEl = document.getElementById('plEstadoLogros');
+  try {
+    const res = await fetch('/api/parley/juegos');
+    if (!res.ok) throw new Error('respuesta no OK');
+    const data = await res.json();
+    plJuegosProveedor = Array.isArray(data.juegos) ? data.juegos : [];
+
+    if (plJuegosProveedor.length === 0) {
+      estadoEl.classList.add('sin-datos');
+      estadoEl.innerHTML = '<span class="punto"></span> Logros automáticos no disponibles ahora mismo.';
+      document.getElementById('plTabs').innerHTML = '';
+      document.getElementById('plLista').innerHTML = '<p class="pl-vacio">Todavía no hay juegos cargados. En cuanto el servidor haga su próximo refresco, vas a ver acá los logros del día ordenados por deporte.</p>';
+      return;
+    }
+
+    estadoEl.classList.remove('sin-datos');
+    const min = data.actualizadoHaceMinutos;
+    const cuando = (min === null || min === undefined) ? '' : (min < 1 ? ' · hace menos de 1 min' : ' · hace ' + min + ' min');
+    estadoEl.innerHTML = '<span class="punto"></span> Logros actualizados automáticamente' + cuando + '.';
+    plRenderTabs();
+  } catch (err) {
+    plJuegosProveedor = [];
+    estadoEl.classList.add('sin-datos');
+    estadoEl.innerHTML = '<span class="punto"></span> Logros automáticos no disponibles ahora mismo.';
+    document.getElementById('plTabs').innerHTML = '';
+    document.getElementById('plLista').innerHTML = '<p class="pl-vacio">No se pudo conectar con el servidor de logros. Intenta de nuevo en unos minutos.</p>';
+  }
+}
+
+function plRenderTabs() {
+  const deportes = Array.from(new Set(plJuegosProveedor.map(f => f.deporte)));
+  deportes.sort((a, b) => {
+    const ia = PL_ORDEN_DEPORTE.indexOf(a), ib = PL_ORDEN_DEPORTE.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  if (!plDeporteActivo || !deportes.includes(plDeporteActivo)) plDeporteActivo = deportes[0];
+
+  const tabsEl = document.getElementById('plTabs');
+  tabsEl.innerHTML = deportes.map(d => {
+    const cantidad = plAgruparJuegosPorEvento(plJuegosProveedor.filter(f => f.deporte === d)).length;
+    return '<button type="button" class="pl-tab' + (d === plDeporteActivo ? ' activo' : '') + '" data-deporte="' + d + '">'
+      + plEtiquetaDeporte(d) + ' <span class="cuenta">(' + cantidad + ')</span></button>';
+  }).join('');
+
+  tabsEl.querySelectorAll('.pl-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      plDeporteActivo = btn.dataset.deporte;
+      plRenderTabs();
+    });
+  });
+
+  plRenderLista();
+}
+
+function plRenderLista() {
+  const cont = document.getElementById('plLista');
+  const filas = plJuegosProveedor.filter(f => f.deporte === plDeporteActivo);
+  const eventos = plAgruparJuegosPorEvento(filas);
+
+  if (eventos.length === 0) {
+    cont.innerHTML = '<p class="pl-vacio">No hay juegos cargados de esta liga en este momento.</p>';
+    return;
+  }
+
+  const porLiga = new Map();
+  eventos.forEach(ev => {
+    const clave = ev.liga || ev.deporte;
+    if (!porLiga.has(clave)) porLiga.set(clave, []);
+    porLiga.get(clave).push(ev);
+  });
+
+  let html = '';
+  porLiga.forEach((lista, liga) => {
+    html += '<div class="pl-grupo-liga"><p class="pl-grupo-liga-titulo">' + plEscaparHtml(liga) + '</p>';
+    lista.forEach(ev => {
+      html += '<div class="pl-juego">'
+        + '<div class="pl-juego-cabecera"><span class="pl-juego-equipos">' + plEscaparHtml(ev.equipoLocal) + ' vs ' + plEscaparHtml(ev.equipoVisitante) + '</span>'
+        + '<span class="pl-juego-hora">' + plEscaparHtml(plFormatearHora(ev.horaInicio)) + '</span></div>'
+        + '<div class="pl-opciones">'
+        + ev.opciones.map(op => {
+            const esFavorito = op.logro < 0;
+            return '<span class="pl-opcion"><span class="nombre">' + plEscaparHtml(op.nombre) + '</span>'
+              + '<span class="logro ' + (esFavorito ? 'favorito' : 'contendor') + '">' + (esFavorito ? '−' : '+') + Math.abs(op.logro) + '</span></span>';
+          }).join('')
+        + '</div></div>';
+    });
+    html += '</div>';
+  });
+  cont.innerHTML = html;
+}
+
+plCargarJuegos();
 </script>
 </body>
 </html>
