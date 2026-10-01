@@ -696,6 +696,38 @@
     color: var(--gc-color-1, var(--accent-grass));
   }
 
+  /* =================================================================
+     LOGO DE FONDO en "Cargar Planos" — donde se pega el plano y donde
+     aparece el resultado (01-10-2026, a pedido del usuario: "donde pego
+     el plano y donde me das el resultado colocame el logo del grupo
+     tambien de fondo claro, eso no va a salir en el whatsapp es solo un
+     fondo para el programa, asi el trabajador sabe en que grupo esta
+     trabajando"). Es SOLO decorativo (una capa aparte detrás, ver
+     .captura-logo-fondo arriba, mismo patrón que ya usan Balance
+     General/Cierre Final/Comisiones Devueltas): "Copiar Resultado" y
+     cualquier copia/pegado siguen moviendo solo TEXTO, el logo nunca
+     viaja a ningún lado, es puramente visual para el operador. Reusa el
+     mismo logoUrl de siempre (GRUPO.logoUrl) — acá NO se pidió color de
+     tema propio, solo el logo, así que --gc-color-* no se toca en estas
+     2 zonas. */
+  #zonaPlanoLogoFondo, #zonaResultadoLogoFondo { position: relative; }
+  #zonaPlanoLogoFondo .captura-logo-fondo,
+  #zonaResultadoLogoFondo .captura-logo-fondo {
+    position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
+    background-size: 38%; opacity: 0.10; pointer-events: none; z-index: 0; border-radius: 8px;
+  }
+  #zonaPlanoLogoFondo .captura-contenido,
+  #zonaResultadoLogoFondo .captura-contenido {
+    position: relative; z-index: 1;
+  }
+  /* El textarea y la caja de resultado mantienen el mismo color de fondo
+     de siempre (var(--card-2)/#fbfffc, ver las reglas de arriba) pero
+     transparente SOLO acá (escopeado por ID — nunca toca #txtRemate ni
+     ningún otro textarea/.resultado-caja de otra pantalla) para que el
+     logo de la capa de atrás se note tenue detrás del texto. */
+  #zonaPlanoLogoFondo #txtPlano { background: transparent; }
+  #zonaResultadoLogoFondo #resultadoCaja { background: transparent; }
+
   /* Buscador de miembros (30-09-2026, a pedido del usuario — reemplaza la
      grilla fija de checkboxes de antes). .gc-editor-miembros arranca
      oculto: solo se ve al tocar "✏️ Editar miembros". */
@@ -1118,8 +1150,20 @@
           </div>
         </div>
 
-        <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
-        <textarea id="txtPlano" rows="14"></textarea>
+        <!-- Logo del grupo de fondo (01-10-2026, a pedido del usuario:
+             "donde pego el plano... colocame el logo del grupo tambien de
+             fondo claro... asi el trabajador sabe en que grupo esta
+             trabajando") — ver la nota grande junto a #zonaPlanoLogoFondo
+             en el <style> de arriba. pintarLogosGrupo() más abajo es quien
+             llena planoLogoFondo con el logo real (o lo deja vacío si el
+             grupo no subió ninguno, sin ningún cambio visual). -->
+        <div id="zonaPlanoLogoFondo">
+          <div class="captura-logo-fondo" id="planoLogoFondo"></div>
+          <div class="captura-contenido">
+            <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
+            <textarea id="txtPlano" rows="14"></textarea>
+          </div>
+        </div>
 
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" id="btnCalcularPlano" onclick="calcularPlano()">🧮 Calcular</button>
@@ -1133,9 +1177,21 @@
           <span class="toast-copiado" id="toastCopiado">Copiado ✅</span>
         </div>
 
-        <div id="resultadoVacio" class="resultado-vacio">El plano resuelto va a aparecer acá cuando le des Calcular.</div>
-        <div id="avisoResultado" class="aviso-resultado" style="display:none;"></div>
-        <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
+        <!-- Mismo logo de fondo, ahora detrás de "donde te doy el
+             resultado" (resultadoVacio/avisoResultado/resultadoCaja, los 3
+             estados posibles de esta zona) — ver resultadoLogoFondo en
+             pintarLogosGrupo(). aviso-resultado se deja SIN tocar (su
+             fondo azul/verde es semántico: indica vista previa vs. ya
+             confirmado), igual que no se retiñe .balance-fila en los
+             cuadres de Balance General. -->
+        <div id="zonaResultadoLogoFondo">
+          <div class="captura-logo-fondo" id="resultadoLogoFondo"></div>
+          <div class="captura-contenido">
+            <div id="resultadoVacio" class="resultado-vacio">El plano resuelto va a aparecer acá cuando le des Calcular.</div>
+            <div id="avisoResultado" class="aviso-resultado" style="display:none;"></div>
+            <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -5133,7 +5189,13 @@ function pintarLogosGrupo() {
     }
   });
   // El logo de fondo (marca de agua) reusa el MISMO logoUrl de arriba.
-  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo'].forEach(id => {
+  // planoLogoFondo/resultadoLogoFondo (01-10-2026, a pedido del usuario:
+  // "en cargar plano donde pego el plano y donde me das el resultado
+  // colocame el logo del grupo tambien de fondo claro... es solo un
+  // fondo para el programa") — se suman a esta misma lista: mismo
+  // logoUrl, sin ningún color de tema (eso NO se pidió acá, ver la nota
+  // grande junto a #zonaPlanoLogoFondo en el <style>).
+  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'planoLogoFondo', 'resultadoLogoFondo'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.backgroundImage = logoUrl ? `url('${logoUrl}')` : '';
