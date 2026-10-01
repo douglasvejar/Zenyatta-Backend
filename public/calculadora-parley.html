@@ -652,13 +652,20 @@ let cpFilaParaElegir = null; // id de la fila que abrió el selector
 // real de un sportsbook de referencia que trajo el usuario: "coloca una
 // seccion donde pueda escoger juego completo/primera mitad/segunda
 // mitad... segun lo que yo escoja muestres los logros correspondiente").
-// "Segunda Mitad" se agregó a pedido explícito del usuario, aun sabiendo
-// que la documentación oficial de The Odds API nunca quedó 100% clara
-// sobre si ese mercado viaja en el mismo pedido barato que el resto, o si
-// exige el endpoint "por evento" (mucho más caro) — ver la nota grande en
-// oddsApiProvider.js. El backend pide esta mitad en una llamada aparte
-// que, si falla, no rompe nada más: acá simplemente el botón "2da Mitad"
-// no aparecería si no llegan filas "_h2" (mismo criterio que "1er Tiempo").
+//
+// ACTUALIZACIÓN (01-10-2026, mismo día): "1er Tiempo"/"2da Mitad" se
+// probaron en producción y The Odds API los rechazó con un error real
+// (HTTP 422 — "Markets not supported by this endpoint") — esos mercados
+// no existen en el pedido barato que usa este sistema, solo en el
+// endpoint "por evento", que cobra por cada partido y puede salir muy
+// caro (ver el cálculo y la nota grande en oddsApiProvider.js). El
+// usuario, ya con el costo real sobre la mesa, decidió dejarlos fuera por
+// ahora. Este selector de período se deja tal cual (no se le pidió
+// quitarlo del código) porque ya se auto-oculta solo: como ningún logro
+// va a traer mercado "_h1"/"_h2" nunca más, "hayH1"/"hayH2" siempre dan
+// false y el contenedor de botones queda en display:none. Si algún día
+// se implementa el endpoint "por evento", este mismo código vuelve a
+// funcionar solo, sin tocar nada acá.
 let cpPeriodoActivo = 'completo'; // 'completo' | 'h1' | 'h2'
 
 // Mercados que puede traer una fila (01-10-2026, a pedido del usuario:
