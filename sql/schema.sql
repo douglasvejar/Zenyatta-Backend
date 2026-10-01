@@ -634,9 +634,16 @@ create index if not exists idx_hipismo_alertas_grupo on hipismo_alertas(grupo_id
 -- llegaba a la versión final de abajo. Se deja UN SOLO DROP+ADD con la
 -- lista completa, para que re-correr este archivo en cualquier momento
 -- (con cualquier historial de alertas ya guardado) sea siempre seguro.
+--
+-- PIZARRA_EDITADA / PIZARRA_ELIMINADA (01-10-2026) — se agregan 2 tipos
+-- más, para la nueva pantalla "Pizarras" (ver routes/hipismo.js, PUT/
+-- DELETE /pizarras/tercios/:id y /pizarras/remate/:id), a pedido del
+-- usuario ("crea un boton debajo de hipodromos que diga pizarras...
+-- alli puedo ver, editar, eliminar... las llegadas de las carreras").
+-- Mismo criterio de UN SOLO DROP+ADD consolidado explicado arriba.
 alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
 alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
-  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO'));
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA'));
 
 -- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
@@ -1800,3 +1807,31 @@ alter table parley_juegos add column if not exists punto numeric;
 -- del PARTIDO, no de la selección puntual).
 alter table parley_juegos add column if not exists logo_local text;
 alter table parley_juegos add column if not exists logo_visitante text;
+
+-- =================================================================
+-- PIZARRAS — pantalla para ver/editar/eliminar la llegada (pizarra) de
+-- una carrera ya cargada, por día > hipódromo > carrera (01-10-2026, a
+-- pedido del usuario: "crea un boton debajo de hipodromos que diga
+-- pizarras / alli puedo ver, editar, eliminar... por dia por hipodromo
+-- ordenado, las llegadas de las carreras").
+--
+-- "Eliminar" acá NO borra el plano/remate completo (eso ya lo hace
+-- "Eliminar Planos" / "Eliminar Winners") — el usuario, preguntado
+-- explícitamente, pidió que la carrera quede "sin pizarra (pendiente)":
+-- todos sus tickets/apuestas vuelven al estado "sin decidir" (mismo
+-- patrón 0/0 que ya usa decidida/gano en Montos Apostados) y queda
+-- esperando que se cargue una pizarra de nuevo — ver DELETE
+-- /pizarras/tercios/:id y DELETE /pizarras/remate/:id. Por eso ambas
+-- columnas "pizarra" (que hasta ahora eran NOT NULL, porque un plano/
+-- remate siempre nacía con su llegada ya puesta) pasan a admitir NULL.
+--
+-- hipismo_remates.numero_ganador también pasa a admitir NULL por la
+-- misma razón: sin pizarra todavía no hay ganador. hubo_ganador se
+-- deja con su default (false) — una carrera pendiente no es lo mismo
+-- que "quedó para la banca" (ver services/hipismoRemateCalc.js), pero
+-- el código que lee estas filas ya distingue ambos casos por
+-- numero_ganador IS NULL primero (ver obtenerApuestasDelRango arriba
+-- en este mismo cambio).
+alter table hipismo_planos alter column pizarra drop not null;
+alter table hipismo_remates alter column pizarra drop not null;
+alter table hipismo_remates alter column numero_ganador drop not null;

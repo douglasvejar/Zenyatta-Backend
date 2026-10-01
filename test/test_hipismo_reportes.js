@@ -72,17 +72,19 @@ const TABLAS = {
     { id: 'ticket-b', plano_id: 'plano-3', grupo_id: GRUPO_ID, cliente_nombre: 'CARLOS2', banquero_nombre: 'BANCO2', modalidad: '2p', caballo: '9', monto: 30, resultado_jugador: -30, resultado_banquero: 28.5, creado_en: 2000 },
     { id: 'ticket-c', plano_id: 'plano-4', grupo_id: GRUPO_ID, cliente_nombre: 'PEPE', banquero_nombre: 'BANCO3', modalidad: '1p', caballo: '2', monto: 10, resultado_jugador: 9.5, resultado_banquero: -10, creado_en: 3000 }
   ],
+  // numero_ganador/hubo_ganador (01-10-2026, "gano" de Montos Apostados):
+  // PEDRO jugó al (7) y ganó la carrera el (7) -> su remate SÍ ganó.
   hipismo_remates: [
-    { id: 'remate-1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 2, fecha: FECHA }
+    { id: 'remate-1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 2, fecha: FECHA, numero_ganador: 7, hubo_ganador: true }
   ],
   hipismo_remate_apuestas: [
-    { id: 'ra-1', grupo_id: GRUPO_ID, remate_id: 'remate-1', cliente_nombre: 'PEDRO', caballo: '(7)', monto: 30 }
+    { id: 'ra-1', grupo_id: GRUPO_ID, remate_id: 'remate-1', cliente_nombre: 'PEDRO', caballo: '(7)', numero_ejemplar: 7, monto: 30 }
   ],
   hipismo_adelantadas_planos: [
     { id: 'adplano-1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', fecha: FECHA }
   ],
   hipismo_adelantadas_jugadas: [
-    { id: 'adj-1', plano_id: 'adplano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', tipo: 'tf', monto: 50, numero_ejemplar: 5, numero1: null, numero2: null, carrera_numero: 3 }
+    { id: 'adj-1', plano_id: 'adplano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', tipo: 'tf', monto: 50, numero_ejemplar: 5, numero1: null, numero2: null, carrera_numero: 3, gano: true }
   ],
   hipismo_planos_papelera: []
 };
@@ -105,13 +107,13 @@ function ejecutarQuery(text, params) {
       .map(({ t, p }) => ({ id: t.id, cliente_nombre: t.cliente_nombre, modalidad: t.modalidad, caballo: t.caballo, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
     return { rows: filas };
   }
-  if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.monto, r\.hipodromo_nombre, r\.carrera_numero\s+FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.numero_ejemplar, a\.monto, r\.hipodromo_nombre, r\.carrera_numero, r\.numero_ganador, r\.hubo_ganador\s+FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha = \$2/i.test(sql)) {
     const [grupoId, fecha] = params;
     const filas = TABLAS.hipismo_remate_apuestas
       .filter(a => a.grupo_id === grupoId)
       .map(a => ({ a, r: TABLAS.hipismo_remates.find(rm => rm.id === a.remate_id) }))
       .filter(({ r }) => r && r.fecha === fecha)
-      .map(({ a, r }) => ({ id: a.id, cliente_nombre: a.cliente_nombre, caballo: a.caballo, monto: a.monto, hipodromo_nombre: r.hipodromo_nombre, carrera_numero: r.carrera_numero }));
+      .map(({ a, r }) => ({ id: a.id, cliente_nombre: a.cliente_nombre, caballo: a.caballo, numero_ejemplar: a.numero_ejemplar, monto: a.monto, hipodromo_nombre: r.hipodromo_nombre, carrera_numero: r.carrera_numero, numero_ganador: r.numero_ganador, hubo_ganador: r.hubo_ganador }));
     return { rows: filas };
   }
   if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, p\.hipodromo_nombre\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
@@ -367,6 +369,23 @@ function check(cond, msg) {
   check(pedroMontos.detalle.some(d => d.tipo === 'tabla_fija' && d.monto === 50 && d.carreraNumero === 3), 'El detalle incluye su línea de Tabla Fija (carrera 3, 50)');
   const mariaMontos = resMontos._json.clientes.find(c => c.nombre === 'MARIA');
   check(mariaMontos.total === 40, 'MARIA apostó 40 en total (solo Tercios)');
+
+  // "gano" por línea (01-10-2026, a pedido del usuario: "EN MONTOS
+  // APOSTADOS MUESTRAME SI JUGO O DIO EL CABALLO"):
+  //   - Tercios: ticket-pedro-1 tiene resultado_jugador=-100 (PEDRO, quien
+  //     apostó, perdió esa línea) -> gano === false.
+  //   - Remate: PEDRO jugó al (7) con numero_ejemplar 7, y el remate-1
+  //     ganó el (7) -> gano === true.
+  //   - Tabla fija: adj-1 se fijó con gano:true en el fixture -> llega tal
+  //     cual, sin transformar.
+  const pedroTercios = pedroMontos.detalle.find(d => d.tipo === 'tercios');
+  check(pedroTercios.gano === false, 'La línea de Tercios de PEDRO quedó marcada PERDIÓ (gano === false)');
+  const pedroRemate = pedroMontos.detalle.find(d => d.tipo === 'remate');
+  check(pedroRemate.gano === true, 'La línea de Remate de PEDRO quedó marcada GANÓ (gano === true, jugó el número ganador)');
+  const pedroTablaFija = pedroMontos.detalle.find(d => d.tipo === 'tabla_fija');
+  check(pedroTablaFija.gano === true, 'La línea de Tabla Fija de PEDRO quedó marcada GANÓ (gano === true)');
+  const mariaTercios = resMontos._json.clientes.find(c => c.nombre === 'MARIA').detalle[0];
+  check(mariaTercios.gano === false, 'La línea de Tercios de MARIA (resultado_jugador=-40) también quedó marcada PERDIÓ');
 
   // Una fecha sin ninguna jugada -> lista vacía, no un error.
   const resMontosVacio = await invocarRuta(handlerMontosApostados, Object.assign(reqBase(GRUPO_ID), { query: { fecha: '2026-01-01' } }));

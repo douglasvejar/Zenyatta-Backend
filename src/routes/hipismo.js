@@ -1480,6 +1480,307 @@ router.get('/remates/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// "PIZARRAS" (01-10-2026, a pedido del usuario: "crea un boton debajo de
+// hipodromos que diga pizarras / alli puedo ver, editar, eliminar...
+// por dia por hipodromo ordenado, las llegadas de las carreras").
+//
+// Pantalla nueva en Administración, debajo de "Hipódromos", para ver/
+// editar/eliminar la LLEGADA (pizarra) de una carrera ya cargada — por
+// día > hipódromo > carrera, con cada modalidad presente en esa carrera
+// (Tercios y/o Remate) como su propia tarjeta, independiente una de la
+// otra. Esto se definió con el usuario en una ronda de 3 preguntas
+// (AskUserQuestion, 01-10-2026):
+//
+//  1) ALCANCE: el usuario pidió, en sus propias palabras, poder "escoger
+//     donde modificar, si seleccionar todas, o elegir si me modifica la
+//     llegada para una sola modalidad de juego y las demas se siguen
+//     decidiendo con su pizarra ya cargada" — por eso cada modalidad se
+//     edita con su PROPIO endpoint (PUT /pizarras/tercios/:id,
+//     PUT /pizarras/remate/:id), nunca un solo endpoint "por carrera":
+//     el frontend decide si llama uno solo (una modalidad puntual) o los
+//     2 seguidos (botón "aplicar a todas" cuando la carrera tiene más de
+//     una modalidad cargada).
+//  2) EDITAR: el usuario eligió "Recalcula todo el dinero" — editar la
+//     pizarra de un plano/remate ya guardado tiene que recalcular TODOS
+//     sus tickets/apuestas con la llegada corregida, no solo guardar el
+//     texto nuevo. Se arma reusando el MISMO motor de cálculo que ya usa
+//     PUT /planos/:id/tickets/:ticketId (Tercios) y POST /remates
+//     (Remate) — nada de lógica de cálculo nueva acá.
+//  3) ELIMINAR: el usuario eligió "Deja la carrera sin pizarra
+//     (pendiente)", explícitamente NO "Elimina todo el plano/remate"
+//     (eso ya lo hace "Eliminar Planos"/"Eliminar Winners"). Acá
+//     "eliminar" vacía la pizarra (columna ahora NULLABLE, ver
+//     sql/schema.sql) y pone todos los tickets/apuestas de esa carrera
+//     en estado "sin decidir" — mismo patrón 0/0 que ya usa
+//     decidida/gano en Montos Apostados (ver obtenerApuestasDelRango más
+//     arriba), para que Balance General/Cierre Final/Pozo/Comisiones
+//     Devueltas/Montos Apostados (que ya saben tratar 0 como "no
+//     contribuye a nada") no necesiten ningún caso especial nuevo.
+//
+// Jugadas Adelantadas queda FUERA de esta pantalla a propósito: su
+// modelo de pizarra es distinto (se resuelve jugada por jugada contra
+// `pizarra_usada`, no hay un plano-nivel "pizarra" único que editar) —
+// posible ronda aparte si el usuario lo pide.
+// =================================================================
+
+// Texto placeholder para un plano/remate que queda "pendiente de
+// pizarra" tras un DELETE acá — a propósito NO se reusa
+// armarTextoResultado()/armarTextoResultadoRemate() (esas funciones
+// asumen que YA hay un resultado que mostrar: con todo en 0 mostrarían
+// "GANAN +0.00" para todo el mundo, lo cual sería engañoso — acá no
+// ganó nadie todavía, está pendiente).
+function textoPizarraPendiente({ hipodromoNombre, carreraNumero }) {
+  return `⏳ *${hipodromoNombre}, ${carreraNumero}ta Carrera* — pendiente de pizarra (llegada eliminada). Esta carrera quedó sin decidir hasta que se cargue la llegada de nuevo.`;
+}
+
+// GET /pizarras?desde=&hasta= : lista Tercios (planos) + Remates en el
+// rango, para que el frontend los agrupe por día > hipódromo > carrera.
+router.get('/pizarras', asyncHandler(async (req, res) => {
+  const hoy = fechaHoyVenezuela();
+  const desde = req.query.desde || hoy;
+  const hasta = req.query.hasta || hoy;
+
+  const rPlanos = await db.query(
+    `SELECT p.id, p.fecha, p.hipodromo_nombre, p.carrera_numero, p.pizarra, p.comision_total,
+            (SELECT COUNT(*)::int FROM hipismo_tickets t WHERE t.plano_id = p.id) AS cantidad
+       FROM hipismo_planos p
+      WHERE p.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3
+      ORDER BY p.fecha, p.hipodromo_nombre, p.carrera_numero`,
+    [req.grupoId, desde, hasta]
+  );
+  const rRemates = await db.query(
+    `SELECT r.id, r.fecha, r.hipodromo_nombre, r.carrera_numero, r.pizarra, r.pool_total,
+            (SELECT COUNT(*)::int FROM hipismo_remate_apuestas a WHERE a.remate_id = r.id) AS cantidad
+       FROM hipismo_remates r
+      WHERE r.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3
+      ORDER BY r.fecha, r.hipodromo_nombre, r.carrera_numero`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const filas = [
+    ...rPlanos.rows.map(p => ({
+      tipo: 'tercios', id: p.id, fecha: fechaComoISO(p.fecha), hipodromoNombre: p.hipodromo_nombre,
+      carreraNumero: p.carrera_numero, pizarra: p.pizarra, pendiente: p.pizarra === null,
+      cantidad: p.cantidad, montoTotal: Number(p.comision_total)
+    })),
+    ...rRemates.rows.map(r => ({
+      tipo: 'remate', id: r.id, fecha: fechaComoISO(r.fecha), hipodromoNombre: r.hipodromo_nombre,
+      carreraNumero: r.carrera_numero, pizarra: r.pizarra, pendiente: r.pizarra === null,
+      cantidad: r.cantidad, montoTotal: Number(r.pool_total)
+    }))
+  ];
+  // Respuesta envuelta en {desde, hasta, filas} (mismo criterio que GET
+  // /montos-apostados y GET /comisiones-devueltas): el frontend, al
+  // entrar sin elegir fechas, pide SIN query y el default ("hoy") que
+  // calculó el servidor arriba vuelve en la respuesta para reflejarse en
+  // los campos Desde/Hasta — el cálculo del default vive en un solo lugar.
+  res.json({ desde, hasta, filas });
+}));
+
+// PUT /pizarras/tercios/:id { pizarra } : corrige la llegada de un plano
+// de Tercios ya guardado y recalcula TODOS sus tickets con la llegada
+// nueva (ver punto 2 de la nota grande de arriba) — mismo patrón que
+// PUT /planos/:id/tickets/:ticketId, pero sobre el plano completo.
+router.put('/pizarras/tercios/:id', asyncHandler(async (req, res) => {
+  const { pizarra } = req.body;
+  if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
+
+  const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+
+  const pizarraFinal = pizarra.trim();
+  const rank = parsearPizarra(pizarraFinal);
+
+  const rTodosTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
+  const ticketsRecalculados = [];
+  for (const t of rTodosTickets.rows) {
+    const recalculado = recalcularTicket({ modalidad: t.modalidad, caballo: t.caballo, monto: Number(t.monto), sinComision: t.sin_comision }, rank);
+    if (!recalculado) return res.status(400).json({ error: `No se pudo recalcular el ticket de ${t.cliente_nombre} (modalidad "${t.modalidad}" no reconocida) con esta pizarra.` });
+    ticketsRecalculados.push({ id: t.id, ...recalculado, raw: t });
+  }
+
+  const ticketsPlanos = ticketsRecalculados.map(({ raw, resultadoJugador, resultadoBanquero }) => ({
+    clienteNombre: raw.cliente_nombre, banqueroNombre: raw.banquero_nombre, modalidad: raw.modalidad, caballo: raw.caballo,
+    monto: Number(raw.monto), resultadoJugador, resultadoBanquero, sinComision: !!raw.sin_comision
+  }));
+  const { totalesFinales, comisionTotal } = recalcularTotalesPlano(ticketsPlanos, plano.cruza_jugadas);
+
+  let textoResultadoFinal = plano.texto_resultado;
+  if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
+    textoResultadoFinal = armarTextoResultado({
+      nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+      ret: plano.ret, pizarra: pizarraFinal, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      totalesFinales, totalJugadas: ticketsPlanos.length
+    });
+  }
+
+  await db.transaccion(async (client) => {
+    for (const t of ticketsRecalculados) {
+      await client.query(
+        'UPDATE hipismo_tickets SET resultado_jugador = $1, resultado_banquero = $2 WHERE id = $3',
+        [t.resultadoJugador, t.resultadoBanquero, t.id]
+      );
+    }
+    await client.query(
+      'UPDATE hipismo_planos SET pizarra = $1, comision_total = $2, texto_resultado = $3 WHERE id = $4',
+      [pizarraFinal, comisionTotal, textoResultadoFinal, plano.id]
+    );
+  });
+
+  // Si esta carrera todavía tiene Jugadas Adelantadas 'pendiente' (no se
+  // resolvieron cuando se cargó el plano la primera vez, por ejemplo
+  // porque llegaron DESPUÉS), la pizarra corregida también las resuelve
+  // acá — mismo mecanismo que ya usa POST /planos al guardar de verdad.
+  const fechaPlano = fechaComoISO(plano.fecha);
+  const { resueltas } = await calcularResolucionAdelantadas(req, {
+    hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaPlano, pizarra: pizarraFinal
+  });
+  if (resueltas.length) {
+    await db.transaccion(async (client) => { await guardarResolucionAdelantadas(client, req, resueltas, pizarraFinal); });
+  }
+
+  await registrarAlerta(req, {
+    tipo: 'PIZARRA_EDITADA', hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaPlano,
+    mensaje: `Se corrigió la pizarra del plano de ${plano.hipodromo_nombre}, carrera ${plano.carrera_numero} (${pizarraFinal}) y se recalcularon sus tickets.`
+  });
+
+  const rTicketsFinales = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
+  res.json({
+    plano: { ...plano, pizarra: pizarraFinal, comision_total: comisionTotal, texto_resultado: textoResultadoFinal },
+    tickets: rTicketsFinales.rows,
+    totalesFinales
+  });
+}));
+
+// DELETE /pizarras/tercios/:id : NO borra el plano — lo deja "pendiente
+// de pizarra" (ver punto 3 de la nota grande de arriba). Todos sus
+// tickets vuelven a resultado_jugador=0/resultado_banquero=0 (el mismo
+// "sin decidir" que ya reconocen Balance General/Cierre Final/Pozo/
+// Comisiones Devueltas/Montos Apostados), la pizarra queda NULL y el
+// texto se reemplaza por un aviso de pendiente.
+router.delete('/pizarras/tercios/:id', asyncHandler(async (req, res) => {
+  const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+
+  const textoPendiente = textoPizarraPendiente({ hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero });
+
+  await db.transaccion(async (client) => {
+    await client.query('UPDATE hipismo_tickets SET resultado_jugador = 0, resultado_banquero = 0 WHERE plano_id = $1', [plano.id]);
+    await client.query(
+      'UPDATE hipismo_planos SET pizarra = NULL, comision_total = 0, texto_resultado = $1 WHERE id = $2',
+      [textoPendiente, plano.id]
+    );
+  });
+
+  await registrarAlerta(req, {
+    tipo: 'PIZARRA_ELIMINADA', hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+    fecha: fechaComoISO(plano.fecha),
+    mensaje: `Se eliminó la pizarra del plano de ${plano.hipodromo_nombre}, carrera ${plano.carrera_numero} — queda pendiente de llegada.`
+  });
+
+  res.json({ ok: true, pendiente: true });
+}));
+
+// PUT /pizarras/remate/:id { pizarra } : corrige la llegada de un remate
+// ya guardado y recalcula TODAS sus apuestas con la llegada nueva —
+// mismo motor que usa POST /remates al guardar.
+router.put('/pizarras/remate/:id', asyncHandler(async (req, res) => {
+  const { pizarra } = req.body;
+  if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
+
+  const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const remate = rRemate.rows[0];
+  if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+
+  const pizarraFinal = pizarra.trim();
+  const numeroGanador = primerNumeroPizarra(pizarraFinal);
+  if (numeroGanador === null) return res.status(400).json({ error: 'No reconocí ningún número en esa pizarra.' });
+
+  const rApuestas = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = $1 ORDER BY creado_en', [remate.id]);
+  const apuestas = rApuestas.rows.map(a => ({ numeroEjemplar: a.numero_ejemplar, caballo: a.caballo, cliente: a.cliente_nombre, monto: Number(a.monto) }));
+
+  const resultado = calcularRemate({
+    apuestas, garantia: remate.garantia != null ? Number(remate.garantia) : null,
+    pagoFijo: remate.pago_fijo != null ? Number(remate.pago_fijo) : null,
+    comisionPorcentaje: Number(remate.comision_porcentaje), numeroGanador
+  });
+  const textoResultado = armarTextoResultadoRemate({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    pizarra: pizarraFinal, apuestas, garantia: remate.garantia != null ? Number(remate.garantia) : null,
+    pagoFijo: remate.pago_fijo != null ? Number(remate.pago_fijo) : null, numeroGanador, resultado
+  });
+
+  await db.transaccion(async (client) => {
+    for (const a of rApuestas.rows) {
+      const esGanadora = resultado.hayGanador && a.numero_ejemplar === numeroGanador;
+      const lineaResultado = esGanadora ? (resultado.pagoGanador - Number(a.monto)) : -Number(a.monto);
+      await client.query('UPDATE hipismo_remate_apuestas SET resultado = $1 WHERE id = $2', [lineaResultado, a.id]);
+    }
+    await client.query(
+      `UPDATE hipismo_remates
+          SET pizarra = $1, numero_ganador = $2, hubo_ganador = $3, caballo_ganador = $4, cliente_ganador = $5,
+              pago_ganador = $6, comision_total = $7, texto_resultado = $8
+        WHERE id = $9`,
+      [
+        pizarraFinal, numeroGanador, resultado.hayGanador,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.caballo : null,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.cliente : null,
+        resultado.pagoGanador, resultado.resultadoRemate, textoResultado, remate.id
+      ]
+    );
+  });
+
+  await registrarAlerta(req, {
+    tipo: 'PIZARRA_EDITADA', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    fecha: fechaComoISO(remate.fecha),
+    mensaje: `Se corrigió la pizarra del remate de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} (${pizarraFinal}) y se recalcularon sus apuestas.`
+  });
+
+  const rApuestasFinales = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = $1 ORDER BY numero_ejemplar', [remate.id]);
+  res.json({
+    remate: {
+      ...remate, pizarra: pizarraFinal, numero_ganador: numeroGanador, hubo_ganador: resultado.hayGanador,
+      pago_ganador: resultado.pagoGanador, comision_total: resultado.resultadoRemate, texto_resultado: textoResultado
+    },
+    apuestas: rApuestasFinales.rows,
+    totalesPorCliente: resultado.totalesPorCliente
+  });
+}));
+
+// DELETE /pizarras/remate/:id : NO borra el remate — lo deja "pendiente
+// de pizarra" (mismo criterio que Tercios arriba). Todas sus apuestas
+// vuelven a resultado=0 ("sin decidir"), numero_ganador/pizarra quedan
+// NULL y el texto se reemplaza por un aviso de pendiente.
+router.delete('/pizarras/remate/:id', asyncHandler(async (req, res) => {
+  const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const remate = rRemate.rows[0];
+  if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+
+  const textoPendiente = textoPizarraPendiente({ hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero });
+
+  await db.transaccion(async (client) => {
+    await client.query('UPDATE hipismo_remate_apuestas SET resultado = 0 WHERE remate_id = $1', [remate.id]);
+    await client.query(
+      `UPDATE hipismo_remates
+          SET pizarra = NULL, numero_ganador = NULL, hubo_ganador = false, caballo_ganador = NULL, cliente_ganador = NULL,
+              pago_ganador = 0, comision_total = 0, texto_resultado = $1
+        WHERE id = $2`,
+      [textoPendiente, remate.id]
+    );
+  });
+
+  await registrarAlerta(req, {
+    tipo: 'PIZARRA_ELIMINADA', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    fecha: fechaComoISO(remate.fecha),
+    mensaje: `Se eliminó la pizarra del remate de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} — queda pendiente de llegada.`
+  });
+
+  res.json({ ok: true, pendiente: true });
+}));
+
+// =================================================================
 // "CARGAR WINNERS" (26-09-2026, confirmando el formato que quedó
 // pendiente desde que se creó la pestaña: "en cargar winners se
 // selecciona el cliente... con el hipodromo y la carrera, el numero del
@@ -1964,32 +2265,63 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
           WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
       );
-  rTickets.rows.forEach(t => detalle.push({
-    id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
-    cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
-    tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
-    decidida: !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0)
-  }));
+  // `gano` (01-10-2026, a pedido del usuario: "EN MONTOS APOSTADOS MUESTRAME
+  // SI JUGO O DIO EL CABALLO" — quiere ver, jugada por jugada, si esa línea
+  // GANÓ, PERDIÓ o todavía no se puede saber (SIN DECIDIR), no solo si ya
+  // se "decidió" como grupo). Para Tercios se deriva del MISMO par
+  // resultado_jugador/resultado_banquero que ya usa `decidida` arriba (ver
+  // montoMostrado()/resultadoJugador-Banquero en services/hipismoCalc.js):
+  // el jugador (quien apostó, nunca el banquero) ganó esa línea cuando
+  // resultado_jugador > 0; perdió cuando es <= 0 pero resultado_banquero >
+  // 0 (ganó el otro lado); y null (sin decidir) solo en el mismo caso en
+  // que decidida ya daba false (los 2 en 0 — una Marca "pp"/"a premio" sin
+  // ningún caballo que figurara, o una familia "Nn" empatada).
+  rTickets.rows.forEach(t => {
+    const rj = Number(t.resultado_jugador), rb = Number(t.resultado_banquero);
+    const sinDecidir = rj === 0 && rb === 0;
+    detalle.push({
+      id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
+      cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
+      tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
+      decidida: !sinDecidir,
+      gano: sinDecidir ? null : rj > 0
+    });
+  });
 
   const rRemate = mismoDia
     ? await db.query(
-        `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero
+        `SELECT a.id, a.cliente_nombre, a.caballo, a.numero_ejemplar, a.monto, r.hipodromo_nombre, r.carrera_numero, r.numero_ganador, r.hubo_ganador
            FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
           WHERE a.grupo_id = $1 AND r.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT a.id, a.cliente_nombre, a.caballo, a.monto, r.hipodromo_nombre, r.carrera_numero, r.fecha
+        `SELECT a.id, a.cliente_nombre, a.caballo, a.numero_ejemplar, a.monto, r.hipodromo_nombre, r.carrera_numero, r.numero_ganador, r.hubo_ganador, r.fecha
            FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
           WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
       );
-  rRemate.rows.forEach(a => detalle.push({
-    id: a.id, tabla: 'hipismo_remate_apuestas', fecha: mismoDia ? desde : fechaComoISO(a.fecha),
-    cliente: a.cliente_nombre, hipodromoNombre: a.hipodromo_nombre, carreraNumero: a.carrera_numero,
-    tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto),
-    decidida: true
-  }));
+  // Remate `gano` (01-10-2026): mismo criterio EXACTO que ya usa POST
+  // /remates al calcular cada línea al guardarla (ver "esGanadora" en esa
+  // ruta, más arriba) — compara el número de ejemplar jugado contra
+  // r.numero_ganador, nunca el texto libre `caballo`. Con
+  // hubo_ganador=false ("quedó para la banca") nadie gana nada, así que
+  // `gano` da false para todo el mundo sin excepción.
+  // Pendiente de pizarra (01-10-2026, módulo "Pizarras"): al eliminar la
+  // pizarra de un remate desde esa pantalla, r.numero_ganador queda en
+  // NULL (ver DELETE /pizarras/remate/:id) y la carrera vuelve a estar sin
+  // decidir, igual que un plano de Tercios sin pizarra — acá SÍ puede
+  // haber "sin decidir", a diferencia de lo que decía antes este comentario.
+  rRemate.rows.forEach(a => {
+    const pendiente = a.numero_ganador === null || a.numero_ganador === undefined;
+    detalle.push({
+      id: a.id, tabla: 'hipismo_remate_apuestas', fecha: mismoDia ? desde : fechaComoISO(a.fecha),
+      cliente: a.cliente_nombre, hipodromoNombre: a.hipodromo_nombre, carreraNumero: a.carrera_numero,
+      tipo: 'remate', detalleTexto: `Remate (${a.caballo})`, monto: Number(a.monto),
+      decidida: !pendiente,
+      gano: pendiente ? null : !!(a.hubo_ganador && Number(a.numero_ejemplar) === Number(a.numero_ganador))
+    });
+  });
 
   const rAdelantadas = mismoDia
     ? await db.query(
@@ -2010,7 +2342,12 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
     tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
     detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
     monto: Number(j.monto),
-    decidida: j.gano !== null
+    decidida: j.gano !== null,
+    // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
+    // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
+    // (Marca todavía sin pizarra — Tabla Fija siempre decide true/false, ver
+    // la nota grande de obtenerApuestasDelDia más arriba).
+    gano: j.gano
   }));
 
   return detalle;
@@ -2126,10 +2463,30 @@ router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
 // services/hipismoResumenCliente.js — se importa arriba junto con
 // obtenerComisionesPropias.
 
-// GET /montos-apostados?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
+// GET /montos-apostados?desde=&hasta= (01-10-2026, a pedido del usuario:
+// "PUEDO FILTRAR POR CLIENTE Y POR FECHA... AGREGAR RANGO, Y MOSTRAS
+// SIEMPRE POR DEFECTO SEMANA COMPLETA EN CURSO, PERO PUEDO ELEGIR UN DIA O
+// DOS ETC LO QUE NECESITE") — pasa de UN día puntual a un rango real,
+// mismo patrón ?desde=&hasta= que ya usan Balance General/Cierre
+// Final/Comisiones Devueltas (ver rangoPersonalizadoDeQuery más arriba).
+// Sin ningún parámetro, el default YA NO es "hoy" sino la SEMANA COMPLETA
+// EN CURSO (lunes a domingo, mismo cálculo EXACTO de rangoSemana() que ya
+// usan Cierre Final/Comisiones por Carrera/Saldo Comisiones con offset 0)
+// — así el operador ve de entrada toda la semana, y la puede angostar a 1
+// o 2 días puntuales con ?desde=&hasta=. `?fecha=` de siempre se sigue
+// aceptando tal cual (un día puntual, como funcionaba hasta esta ronda)
+// para no romper ningún llamador viejo — ver test_hipismo_reportes.js.
 router.get('/montos-apostados', asyncHandler(async (req, res) => {
-  const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
-  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  let desde, hasta;
+  if (rangoPersonalizado) {
+    ({ desde, hasta } = rangoPersonalizado);
+  } else if (req.query.fecha) {
+    desde = hasta = req.query.fecha;
+  } else {
+    ({ desde, hasta } = rangoSemana(hoyVenezuela(), 0));
+  }
+  const detalle = await obtenerApuestasDelRango(req.grupoId, desde, hasta);
 
   const porCliente = new Map();
   detalle.forEach(d => {
@@ -2140,7 +2497,10 @@ router.get('/montos-apostados', asyncHandler(async (req, res) => {
   });
   const clientes = Array.from(porCliente.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  res.json({ fecha, clientes });
+  // `fecha` se mantiene por compatibilidad (= desde, como antes cuando
+  // esto era de UN solo día); `desde`/`hasta` son los nuevos, para que el
+  // frontend pueda mostrar/editar el rango real.
+  res.json({ fecha: desde, desde, hasta, clientes });
 }));
 
 // =================================================================

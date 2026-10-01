@@ -1901,6 +1901,11 @@ async function entrar() {
   try {
     await apiSuperadmin('/api/superadmin/grupos');
     localStorage.setItem('zenyatta_superadmin_secret', SECRET);
+    // Cierre de sesión por inactividad (01-10-2026) — ver la nota grande
+    // de registrarActividadSuperadmin()/revisarInactividadSuperadmin()
+    // más abajo. Un ingreso nuevo arranca el reloj de actividad de una,
+    // mismo criterio que ya usa iniciarSesion() en app.js.
+    registrarActividadSuperadmin();
     mostrarPanel();
   } catch (e) {
     SECRET = null;
@@ -1910,11 +1915,64 @@ async function entrar() {
 
 function salir() {
   localStorage.removeItem('zenyatta_superadmin_secret');
+  // Cierre de sesión por inactividad (01-10-2026) — se limpia acá (no
+  // solo cuando revisarInactividadSuperadmin() es quien llama a salir())
+  // para que el PRÓXIMO ingreso arranque siempre con el reloj en cero.
+  // Clave PROPIA ('zenyatta_superadmin_ultima_actividad'), nunca
+  // compartida con 'zenyatta_ultima_actividad' de Grupo/Hipismo — son 2
+  // sesiones completamente independientes, aunque se abran en el mismo
+  // navegador.
+  localStorage.removeItem('zenyatta_superadmin_ultima_actividad');
   SECRET = null;
   if (ALERTAS_INTERVALO_SUPERADMIN) { clearInterval(ALERTAS_INTERVALO_SUPERADMIN); ALERTAS_INTERVALO_SUPERADMIN = null; }
   document.getElementById('accesoSecret').value = '';
   mostrarAcceso('');
 }
+
+// =================================================================
+// CIERRE DE SESIÓN POR INACTIVIDAD (01-10-2026, a pedido del usuario: "si
+// alguna sesion ya sea super admin o algun grupo dura mas de 1 hora sin
+// tener actividad, cerrar la sesion y deven loguearse, le dejas un
+// mesajen que la sesion fue cerrada por inactividad") — mismo mecanismo
+// que app.js/hipismo-mockup.html (ver la nota grande de
+// registrarActividad() en app.js para el razonamiento completo: por qué
+// NO se resetea con el polling de fondo, por qué el throttle de ~5s,
+// etc.), pero con su PROPIA clave de localStorage e intervalo — la sesión
+// de Súper-admin es independiente de la de Grupo/Hipismo.
+const MS_INACTIVIDAD_MAXIMA_SA = 60 * 60 * 1000; // 1 hora, a pedido del usuario
+const MS_THROTTLE_ACTIVIDAD_SA = 5000;
+let ultimaEscrituraActividadSA = 0;
+
+function registrarActividadSuperadmin() {
+  const ahora = Date.now();
+  if (ahora - ultimaEscrituraActividadSA < MS_THROTTLE_ACTIVIDAD_SA) return;
+  ultimaEscrituraActividadSA = ahora;
+  try { localStorage.setItem('zenyatta_superadmin_ultima_actividad', String(ahora)); } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+}
+
+// revisarInactividadSuperadmin(): true si CERRÓ la sesión por inactividad
+// (para que el chequeo de auto-entrada, al final del archivo, sepa que no
+// debe seguir a mostrarPanel()). Sin SECRET no hay sesión que revisar.
+function revisarInactividadSuperadmin() {
+  if (!SECRET) return false;
+  let ultima;
+  try { ultima = parseInt(localStorage.getItem('zenyatta_superadmin_ultima_actividad'), 10); } catch (e) { ultima = NaN; }
+  if (!ultima || isNaN(ultima)) { registrarActividadSuperadmin(); return false; }
+  if (Date.now() - ultima > MS_INACTIVIDAD_MAXIMA_SA) {
+    salir();
+    mostrarAcceso('Tu sesión se cerró por inactividad. Inicia sesión de nuevo.');
+    return true;
+  }
+  return false;
+}
+
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(function (evento) {
+  document.addEventListener(evento, registrarActividadSuperadmin, { passive: true });
+});
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') revisarInactividadSuperadmin();
+});
+setInterval(revisarInactividadSuperadmin, 30000);
 
 function badgeEstado(activo) {
   return activo
@@ -4381,8 +4439,13 @@ if (new URLSearchParams(location.search).get('ingreso') === 'portal') {
 }
 
 // Si ya había un secreto guardado de una visita anterior, entra directo
-// (mismo espíritu que el auto-login del panel del Grupo).
-if (SECRET) {
+// (mismo espíritu que el auto-login del panel del Grupo) — salvo que
+// revisarInactividadSuperadmin() (01-10-2026, ver la nota grande más
+// arriba) encuentre que ya pasó más de 1 hora sin actividad, en cuyo caso
+// ya se encargó de cerrar la sesión sola y dejar su aviso en
+// #accesoError — no hay que seguir a mostrarPanel() con un secreto que
+// se acaba de invalidar.
+if (SECRET && !revisarInactividadSuperadmin()) {
   mostrarPanel();
 }
 </script>

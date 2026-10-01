@@ -439,6 +439,27 @@
   #cierreFinalCaptura th:first-child, #cierreFinalCaptura td:first-child { text-align: left; }
   #cierreFinalCaptura td.num { text-align: center; }
   #cierreFinalCaptura tbody tr:nth-child(even) { background: var(--card-2); }
+  /* 01-10-2026, a pedido del usuario ("no hagas la tabla tan hancha, para
+     que los saldos se vea lo mas pegado posible al nombre"): la regla
+     global "table { width: 100% }" (ver arriba del todo del <style>)
+     estiraba esta tabla a lo ancho de TODO el panel disponible, no al
+     ancho de su contenido — con la configuración por defecto (solo
+     "Cliente"/"Saldo definitivo", 2 columnas angostas) eso dejaba un
+     espacio enorme entre el nombre y su monto. #cierreFinalCaptura entero
+     pasa a "inline-block" para que la tarjeta completa (logo, tabla, caja
+     de comisión) se achique hasta el ancho real de su contenido en vez de
+     ocupar el ancho del panel — "la imagen y la tabla va creciendo a
+     medida que vayas teniendo información" sigue cumpliéndose igual: con
+     un nombre largo, más columnas tildadas (Jugadas/Ganó/Perdió) o más
+     clientes, la tabla/tarjeta se ensancha sola porque así funciona
+     table-layout:auto (el default, nunca se tocó) — simplemente ya no se
+     ensancha de más sin necesidad. Esto es lo que hace que la imagen
+     exportada (ver html2canvas en copiarCierreImagen()/
+     descargarCierrePDF(), que capturan este mismo div tal cual está en
+     pantalla) salga más chica y nítida en vez de un PNG innecesariamente
+     ancho con la mitad vacía. */
+  #cierreFinalCaptura { display: inline-block; max-width: 100%; }
+  #cierreFinalCaptura table { width: auto; }
   /* 24-09-2026: renglón "↳ {cliente} - Porcentaje" (% devuelto) dentro de
      Cierre Final — se asumía que siempre salía pegado debajo de su
      cliente base por orden alfabético, así que se le bajaba el tono y se
@@ -667,10 +688,11 @@
      para una tarjeta angosta de WhatsApp), estos 3 reportes pueden traer
      listas largas de clientes, así que crecen libremente con el contenido,
      como ya hacían antes de este cambio. */
-  #balanceCaptura, #cierreFinalCaptura, #comisionesDevueltasCaptura { position: relative; overflow: hidden; }
+  #balanceCaptura, #cierreFinalCaptura, #comisionesDevueltasCaptura, #montosApostadosCaptura { position: relative; overflow: hidden; }
   #balanceCaptura .captura-logo-fondo,
   #cierreFinalCaptura .captura-logo-fondo,
-  #comisionesDevueltasCaptura .captura-logo-fondo {
+  #comisionesDevueltasCaptura .captura-logo-fondo,
+  #montosApostadosCaptura .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
     /* Opacidad subida de 0.10 a 0.14 el 01-10-2026 (el usuario reportó que
        no se notaba) — ver la nota grande junto a .balance-fila/
@@ -683,14 +705,17 @@
   }
   #balanceCaptura .captura-contenido,
   #cierreFinalCaptura .captura-contenido,
-  #comisionesDevueltasCaptura .captura-contenido {
+  #comisionesDevueltasCaptura .captura-contenido,
+  #montosApostadosCaptura .captura-contenido {
     position: relative; z-index: 1;
   }
-  /* Logo chico (Balance General/Comisiones Devueltas) y banner grande
-     (Cierre Final) — mismo degradado de siempre (verde Ludox) como
-     fallback de var(), así que sin tema propio configurado no cambia nada. */
+  /* Logo chico (Balance General/Comisiones Devueltas/Montos Apostados) y
+     banner grande (Cierre Final) — mismo degradado de siempre (verde
+     Ludox) como fallback de var(), así que sin tema propio configurado no
+     cambia nada. */
   #balanceCaptura .logo-grupo,
-  #comisionesDevueltasCaptura .logo-grupo {
+  #comisionesDevueltasCaptura .logo-grupo,
+  #montosApostadosCaptura .logo-grupo {
     background: linear-gradient(135deg, var(--gc-color-1, var(--accent-grass)), var(--gc-color-2, var(--accent-lime)));
   }
   #cierreFinalCaptura .logo-grupo-grande {
@@ -706,10 +731,12 @@
   #cierreFinalCaptura tbody tr:nth-child(even) td { background: rgba(var(--gc-color-1-rgb, 22, 163, 74), 0.08); }
   /* Comisiones Devueltas por Cliente: cada renglón de cliente/hipódromo y
      su monto adoptan el tinte/color del tema, igual que Grupo de Clientes. */
-  #comisionesDevueltasCaptura .fila-carrera-comision .cabecera-carrera {
+  #comisionesDevueltasCaptura .fila-carrera-comision .cabecera-carrera,
+  #montosApostadosCaptura .fila-carrera-comision .cabecera-carrera {
     background: rgba(var(--gc-color-1-rgb, 22, 163, 74), 0.08);
   }
-  #comisionesDevueltasCaptura .fila-carrera-comision .monto-carrera {
+  #comisionesDevueltasCaptura .fila-carrera-comision .monto-carrera,
+  #montosApostadosCaptura .fila-carrera-comision .monto-carrera {
     color: var(--gc-color-1, var(--accent-grass));
   }
   /* Logo de fondo invisible en la práctica (01-10-2026, reportado por el
@@ -726,43 +753,52 @@
      .fila-carrera-comision en Comisión por Carrera de Clientes/Totales
      por Hipódromo, que la reusan tal cual. */
   #balanceCaptura .balance-fila { background: rgba(241, 248, 243, 0.55); }
-  #comisionesDevueltasCaptura .fila-carrera-comision { background: rgba(255, 255, 255, 0.55); }
+  #comisionesDevueltasCaptura .fila-carrera-comision,
+  #montosApostadosCaptura .fila-carrera-comision { background: rgba(255, 255, 255, 0.55); }
 
   /* =================================================================
-     LOGO DE FONDO en "Cargar Planos" — donde se pega el plano y donde
-     aparece el resultado (01-10-2026, a pedido del usuario: "donde pego
-     el plano y donde me das el resultado colocame el logo del grupo
-     tambien de fondo claro, eso no va a salir en el whatsapp es solo un
-     fondo para el programa, asi el trabajador sabe en que grupo esta
-     trabajando"). Es SOLO decorativo (una capa aparte detrás, ver
-     .captura-logo-fondo arriba, mismo patrón que ya usan Balance
-     General/Cierre Final/Comisiones Devueltas): "Copiar Resultado" y
-     cualquier copia/pegado siguen moviendo solo TEXTO, el logo nunca
-     viaja a ningún lado, es puramente visual para el operador. Reusa el
-     mismo logoUrl de siempre (GRUPO.logoUrl) — acá NO se pidió color de
-     tema propio, solo el logo, así que --gc-color-* no se toca en estas
-     2 zonas. */
-  #zonaPlanoLogoFondo, #zonaResultadoLogoFondo { position: relative; }
-  #zonaPlanoLogoFondo .captura-logo-fondo,
+     LOGO DE FONDO en "Cargar Planos" — donde aparece el resultado
+     (01-10-2026, a pedido del usuario: "donde pego el plano y donde me
+     das el resultado colocame el logo del grupo tambien de fondo claro,
+     eso no va a salir en el whatsapp es solo un fondo para el programa,
+     asi el trabajador sabe en que grupo esta trabajando"). Es SOLO
+     decorativo (una capa aparte detrás, ver .captura-logo-fondo arriba,
+     mismo patrón que ya usan Balance General/Cierre Final/Comisiones
+     Devueltas): "Copiar Resultado" y cualquier copia/pegado siguen
+     moviendo solo TEXTO, el logo nunca viaja a ningún lado, es puramente
+     visual para el operador. Reusa el mismo logoUrl de siempre
+     (GRUPO.logoUrl) — acá NO se pidió color de tema propio, solo el
+     logo, así que --gc-color-* no se toca en esta zona.
+
+     01-10-2026 (ronda 2): originalmente esto se puso en 2 zonas —
+     también detrás de "donde se pega el plano" (#zonaPlanoLogoFondo,
+     #txtPlano) — pero el usuario reportó que ahí se veía mal: con la
+     opacidad ya subida (0.10→0.18, para que se notara) y el cuadro
+     vacío antes de pegar nada, el logo se veía como "un pedazo de
+     imagen" suelto adentro del cuadro de texto, sin nada de contenido
+     alrededor que lo disimulara — justo lo opuesto al caso del
+     resultado, que siempre tiene texto encima. Se saca esa zona por
+     completo (ver el HTML, el <div id="zonaPlanoLogoFondo"> volvió a
+     ser un <div> normal sin logo) y se deja SOLO en el resultado, que es
+     donde el usuario confirmó que se ve bien. */
+  #zonaResultadoLogoFondo { position: relative; }
   #zonaResultadoLogoFondo .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
     /* Opacidad subida de 0.10 a 0.18 el 01-10-2026 (el usuario reportó que
-       no se notaba) — acá el fondo del textarea/caja de resultado ya
-       queda transparente de verdad (ver la regla de #txtPlano/
-       #resultadoCaja más abajo), así que el 0.10 original simplemente era
-       muy tenue para notarse a simple vista en una pantalla normal. */
+       no se notaba) — acá el fondo de la caja de resultado ya queda
+       transparente de verdad (ver la regla de #resultadoCaja más abajo),
+       así que el 0.10 original simplemente era muy tenue para notarse a
+       simple vista en una pantalla normal. */
     background-size: 38%; opacity: 0.18; pointer-events: none; z-index: 0; border-radius: 8px;
   }
-  #zonaPlanoLogoFondo .captura-contenido,
   #zonaResultadoLogoFondo .captura-contenido {
     position: relative; z-index: 1;
   }
-  /* El textarea y la caja de resultado mantienen el mismo color de fondo
-     de siempre (var(--card-2)/#fbfffc, ver las reglas de arriba) pero
-     transparente SOLO acá (escopeado por ID — nunca toca #txtRemate ni
+  /* La caja de resultado mantiene el mismo color de fondo de siempre
+     (var(--card-2)/#fbfffc, ver las reglas de arriba) pero transparente
+     SOLO acá (escopeado por ID — nunca toca #txtRemate/#txtPlano ni
      ningún otro textarea/.resultado-caja de otra pantalla) para que el
      logo de la capa de atrás se note tenue detrás del texto. */
-  #zonaPlanoLogoFondo #txtPlano { background: transparent; }
   #zonaResultadoLogoFondo #resultadoCaja { background: transparent; }
 
   /* Buscador de miembros (30-09-2026, a pedido del usuario — reemplaza la
@@ -1078,6 +1114,16 @@
       <button type="button" class="nav-item nav-child" data-vista="traspasos" onclick="mostrarVista('traspasos', this)">🔄<span class="nav-lbl"> Traspaso de Saldo</span></button>
       <button type="button" class="nav-item nav-child" data-vista="gastos" onclick="mostrarVista('gastos', this)">🧾<span class="nav-lbl"> Gastos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="hipodromos" onclick="mostrarVista('hipodromos', this)">🏟️<span class="nav-lbl"> Hipódromos</span></button>
+      <!-- "Pizarras" (01-10-2026, a pedido del usuario: "crea un boton
+           debajo de hipodromos que diga pizarras / alli puedo ver,
+           editar, eliminar... por dia por hipodromo ordenado, las
+           llegadas de las carreras") — ver la nota grande en
+           routes/hipismo.js (sección "PIZARRAS") para el alcance
+           completo (editar recalcula todo el dinero de esa modalidad;
+           eliminar deja la carrera "pendiente de pizarra", NO borra el
+           plano/remate — eso ya lo hace "Planos Eliminados"/"Eliminar
+           Winners"). -->
+      <button type="button" class="nav-item nav-child" data-vista="pizarras" onclick="mostrarVista('pizarras', this)">🏁<span class="nav-lbl"> Pizarras</span></button>
       <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅<span class="nav-lbl"> Fecha de Semana</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝<span class="nav-lbl"> Cabeza y Pie de Plano</span></button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️<span class="nav-lbl"> Planos Eliminados</span></button>
@@ -1187,19 +1233,15 @@
           </div>
         </div>
 
-        <!-- Logo del grupo de fondo (01-10-2026, a pedido del usuario:
-             "donde pego el plano... colocame el logo del grupo tambien de
-             fondo claro... asi el trabajador sabe en que grupo esta
-             trabajando") — ver la nota grande junto a #zonaPlanoLogoFondo
-             en el <style> de arriba. pintarLogosGrupo() más abajo es quien
-             llena planoLogoFondo con el logo real (o lo deja vacío si el
-             grupo no subió ninguno, sin ningún cambio visual). -->
-        <div id="zonaPlanoLogoFondo">
-          <div class="captura-logo-fondo" id="planoLogoFondo"></div>
-          <div class="captura-contenido">
-            <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
-            <textarea id="txtPlano" rows="14"></textarea>
-          </div>
+        <!-- 01-10-2026: acá hubo un logo del grupo de fondo (igual que el
+             del resultado, más abajo), pero se sacó el mismo día — con el
+             cuadro vacío antes de pegar el plano se veía como "un pedazo
+             de imagen" suelto adentro, sin texto que lo disimulara (ver
+             la nota grande junto a #zonaResultadoLogoFondo en el <style>
+             de arriba). Queda solo en el resultado. -->
+        <div>
+          <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
+          <textarea id="txtPlano" rows="14"></textarea>
         </div>
 
         <div class="btn-fila">
@@ -1522,27 +1564,97 @@
       </div>
     </section>
 
-    <!-- ============ MONTOS APOSTADOS (23-09-2026, duodécima ronda) ============
+    <!-- ============ MONTOS APOSTADOS (23-09-2026, duodécima ronda; rediseño
+         01-10-2026) ============
          A pedido del usuario: "un boton en apuestas llamado montos
          apostados, alli vere por cliente cuanto han apostado en el
          grupo, igual ordenado por fecha... y si lo selcciono en la
          fechita al lado izquierdo de su nombre se despliega toda su
-         informacion". Usa GET /montos-apostados?fecha= (suma Tercios +
-         Remate + Jugadas Adelantadas de esa fecha puntual, por cliente). -->
+         informacion".
+         Rediseño 01-10-2026 (a pedido explícito del usuario, con una
+         captura de "Loba" expandida como ejemplo): "EN MONTOS APOSTADOS
+         MUESTRAME SI JUGO O DIO EL CABALLO, SOLO ME MUESTRAS QUE JUGADA ES
+         Y A QUE CABALLO AÑADE LA PALABRA QUE CORRESPONDA, AÑADE EL BOTON DE
+         COPIAR IMAGEN HD, Y DE COPIAR EN TEXTO... SI COPIO EN TEXTO ME VAS
+         A DAR EL MISMO FORMATO DE TEXTO QUE USAS PARA COMISIONES DEVUELTAS
+         POR CLIENTE... PUEDO FILTRAR POR CLIENTE Y POR FECHA... ASI SI
+         QUIERO COPIAR UNA IMAGEN PUEDO SOLO ELEGIR ESE CLIENTE IGUAL POR
+         TEXTO". Alcance confirmado con 4 AskUserQuestion:
+           1) Etiqueta GANÓ/PERDIÓ/SIN DECIDIR por jugada (ver `gano` en
+              obtenerApuestasDelRango, routes/hipismo.js).
+           2) "Copiar Texto" con el MISMO estilo visual de
+              textoComisionesDevueltas() ("Destinatarios de Devolución"),
+              adaptado a la forma cliente -> jugadas de esta pantalla (sin
+              el concepto de "destino", que es propio de Comisiones
+              Devueltas) — ver textoMontosApostados() más abajo.
+           3) Filtro de cliente: "ambos" -> un solo <input> combo (escribe
+              libre O elige de la lista, <datalist>, mismo patrón que ya
+              usa el nombre de Hipódromo en Administración).
+           4) Pasa de UN día puntual a un rango Desde/Hasta (mismo patrón
+              ?desde=&hasta= que Balance General/Cierre Final/Comisiones
+              Devueltas), pero con un default NUEVO: sin tocar nada, el
+              operador ve de entrada la SEMANA COMPLETA EN CURSO (lunes a
+              domingo, GET /montos-apostados sin parámetros ya calcula ese
+              rango solo — ver la nota grande en routes/hipismo.js), y
+              puede angostarlo a 1 o 2 días puntuales cuando quiera.
+         El filtro de cliente es 100% del lado del cliente (sin volver a
+         pedir al servidor): ya se trae TODO el rango de una vez, así que
+         escribir/elegir un cliente solo repinta la lista ya cargada — y
+         eso es lo que además permite "si quiero copiar una imagen puedo
+         solo elegir ese cliente": los botones de Copiar Imagen/Texto usan
+         la MISMA lista ya filtrada que se ve en pantalla. -->
     <section class="vista" id="vista-montosApostados">
       <div class="card">
         <h2>💰 Montos Apostados</h2>
-        <p class="desc">Cuánto apostó cada cliente en el grupo esa fecha, sumando Tercios, Remate y Jugadas Adelantadas. Haz clic en un cliente para desplegar toda su información (carrera por carrera).</p>
+        <p class="desc">Cuánto apostó cada cliente en el grupo en el rango elegido, sumando Tercios, Remate y Jugadas Adelantadas, con si GANÓ, PERDIÓ o quedó SIN DECIDIR cada jugada. Haz clic en un cliente para desplegar toda su información (carrera por carrera).</p>
         <div class="fila" style="align-items:flex-end;">
           <div>
-            <label for="inpFechaMontosApostados">Fecha</label>
-            <input type="date" id="inpFechaMontosApostados">
+            <label for="inpDesdeMontosApostados">Desde</label>
+            <input type="date" id="inpDesdeMontosApostados">
+          </div>
+          <div>
+            <label for="inpHastaMontosApostados">Hasta</label>
+            <input type="date" id="inpHastaMontosApostados">
           </div>
           <div style="flex:0; min-width:auto;">
             <button class="btn btn-primario" type="button" onclick="buscarMontosApostados()">🔎 Buscar</button>
           </div>
         </div>
-        <div id="listaMontosApostados"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
+        <div class="fila" style="align-items:flex-end; margin-top:10px;">
+          <div>
+            <label for="inpFiltroClienteMontosApostados">Filtrar por cliente</label>
+            <input type="text" id="inpFiltroClienteMontosApostados" placeholder="Escribe o elige un cliente…" list="listaClientesMontosApostados" autocomplete="off" oninput="filtrarMontosApostados()">
+            <!-- 01-10-2026, a pedido del usuario ("puedo filtrar por
+                 cliente... ambos"): se repuebla con los clientes del
+                 rango recién cargado (ver pintarMontosApostados() más
+                 abajo) — no es una lista fija, crece/cambia con cada
+                 búsqueda. -->
+            <datalist id="listaClientesMontosApostados"></datalist>
+          </div>
+          <div style="flex:0; min-width:auto;">
+            <button class="btn btn-secundario" type="button" onclick="document.getElementById('inpFiltroClienteMontosApostados').value=''; filtrarMontosApostados();">✖️ Quitar filtro</button>
+          </div>
+        </div>
+
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-secundario" type="button" onclick="copiarMontosApostadosTexto()">📋 Copiar Texto</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarMontosApostadosImagen()">📸 Copiar Imagen HD</button>
+          <span class="toast-copiado" id="toastMontosApostados"></span>
+        </div>
+
+        <div id="montosApostadosCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px;">
+          <div class="captura-logo-fondo" id="montosApostadosLogoFondo"></div>
+          <div class="captura-contenido" style="padding:18px 20px;">
+            <div class="encabezado-captura">
+              <div class="logo-grupo js-logo-grupo">🏇</div>
+              <div>
+                <div class="titulo" id="montosApostadosNombreGrupoCaptura">💰 Montos Apostados</div>
+                <div class="fecha" id="montosApostadosFechaCaptura"></div>
+              </div>
+            </div>
+            <div id="listaMontosApostados"><div class="placeholder-card">Elige un rango de fechas y dale Buscar.</div></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -2582,6 +2694,32 @@ Pizarra: [se llena al calcular]
       </div>
     </section>
 
+    <!-- "Pizarras" (01-10-2026) — ver la nota grande de GET/PUT/DELETE
+         /pizarras en routes/hipismo.js. Editar una modalidad RECALCULA
+         todo el dinero de esa carrera con la pizarra corregida; eliminar
+         deja la carrera "pendiente de pizarra" (nunca borra el plano o
+         remate completo). Cuando una carrera tiene más de una modalidad
+         cargada (Tercios y Remate), aparece además el botón "Aplicar a
+         todas" para no tener que editar/eliminar cada una por separado —
+         a pedido explícito del usuario. -->
+    <section class="vista" id="vista-pizarras">
+      <div class="card">
+        <h2>🏁 Pizarras</h2>
+        <p class="desc">Ve, edita o elimina la llegada (pizarra) de una carrera ya cargada, por día → hipódromo → carrera. Editar recalcula todo el dinero de esa modalidad con la llegada corregida. Eliminar NO borra el plano/remate — deja la carrera pendiente de pizarra, con sus jugadas sin decidir, hasta que se cargue la llegada de nuevo.</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpDesdePizarras">Desde</label>
+            <input type="date" id="inpDesdePizarras" onchange="cargarPizarras()">
+          </div>
+          <div>
+            <label for="inpHastaPizarras">Hasta</label>
+            <input type="date" id="inpHastaPizarras" onchange="cargarPizarras()">
+          </div>
+        </div>
+        <div id="listaPizarras" style="margin-top:14px;"><div class="resultado-vacio">Cargando…</div></div>
+      </div>
+    </section>
+
     <footer class="pie-pagina">Sistema Ludox · Since 2026</footer>
 
   </main>
@@ -2674,6 +2812,34 @@ let TOKEN = localStorage.getItem('zenyatta_token') || null;
 let GRUPO = null;
 try { GRUPO = JSON.parse(localStorage.getItem('zenyatta_grupo') || 'null'); } catch (e) { GRUPO = null; }
 
+// Cierre de sesión por inactividad (01-10-2026, a pedido del usuario: "si
+// alguna sesion ya sea super admin o algun grupo dura mas de 1 hora sin
+// tener actividad, cerrar la sesion y deven loguearse, le dejas un
+// mesajen que la sesion fue cerrada por inactividad") — ver la nota
+// grande junto a registrarActividadHip()/revisarInactividadHip() más
+// abajo para el detalle completo (mismo mecanismo que app.js, misma
+// clave de localStorage 'zenyatta_ultima_actividad' — la actividad en
+// CUALQUIERA de las 2 páginas cuenta para la misma sesión). Esta página
+// no tiene su propia pantalla de login (comparte la de grupo.html), así
+// que si el token guardado ya pasó la 1 hora sin actividad, se limpia
+// ACÁ, ANTES de que el resto de este script llegue a usar TOKEN/GRUPO
+// para nada, y se redirige a grupo.html dejando el aviso en la misma
+// bandera de un solo uso 'zenyatta_login_mensaje' que ya lee
+// intentarSesionGuardada() en app.js al entrar.
+const MS_INACTIVIDAD_MAXIMA_HIP = 60 * 60 * 1000; // 1 hora, a pedido del usuario
+if (TOKEN && GRUPO) {
+  let ultimaActividadInicial;
+  try { ultimaActividadInicial = parseInt(localStorage.getItem('zenyatta_ultima_actividad'), 10); } catch (e) { ultimaActividadInicial = NaN; }
+  if (ultimaActividadInicial && !isNaN(ultimaActividadInicial) && (Date.now() - ultimaActividadInicial > MS_INACTIVIDAD_MAXIMA_HIP)) {
+    localStorage.removeItem('zenyatta_token');
+    localStorage.removeItem('zenyatta_grupo');
+    localStorage.removeItem('zenyatta_ultima_actividad');
+    try { localStorage.setItem('zenyatta_login_mensaje', 'Tu sesión se cerró por inactividad. Inicia sesión de nuevo.'); } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+    TOKEN = null;
+    GRUPO = null;
+  }
+}
+
 if (!TOKEN || !GRUPO || !GRUPO.moduloHipismoHabilitado) {
   window.location.href = 'grupo.html';
 }
@@ -2755,9 +2921,12 @@ async function apiHipismo(path, options = {}) {
   let data = null;
   try { data = await res.json(); } catch (e) { /* respuestas sin body */ }
   if (res.status === 401) {
-    localStorage.removeItem('zenyatta_token');
-    localStorage.removeItem('zenyatta_grupo');
-    window.location.href = 'grupo.html';
+    // 01-10-2026: reusa cerrarSesionHipismo(mensaje) en vez de limpiar las
+    // claves a mano acá (como antes) — mismo criterio que ya usa api() en
+    // app.js, para que un 401 cualquiera (token vencido, grupo desactivado
+    // por el súper-admin, etc.) deje el mismo aviso en la pantalla de
+    // login que ya deja el cierre por inactividad.
+    cerrarSesionHipismo(data && data.error ? data.error : 'Tu sesión venció. Inicia sesión de nuevo.');
     throw new Error('Sesión inválida.');
   }
   if (!res.ok) {
@@ -2793,11 +2962,60 @@ function irAModuloDeportes() { window.location.href = 'grupo.html'; }
 // mismo). Todo lo que ya se hizo (jugadas, planos, resultados, etc.) queda
 // guardado del lado del servidor desde que se hizo — no hay ningún dato
 // "sin guardar" que se pierda al cerrar sesión.
-function cerrarSesionHipismo() {
+// mensaje (01-10-2026, ver la nota grande de cierre por inactividad más
+// arriba, junto a MS_INACTIVIDAD_MAXIMA_HIP): opcional — cuando viene, se
+// deja en la bandera de un solo uso 'zenyatta_login_mensaje' ANTES de
+// navegar a grupo.html, para que intentarSesionGuardada() en app.js lo
+// muestre en #loginError apenas carga esa página. Sin mensaje (botón
+// normal de "Cerrar sesión" del operador) no se deja ningún aviso, igual
+// que siempre.
+function cerrarSesionHipismo(mensaje) {
   localStorage.removeItem('zenyatta_token');
   localStorage.removeItem('zenyatta_grupo');
+  localStorage.removeItem('zenyatta_ultima_actividad');
+  if (mensaje) {
+    try { localStorage.setItem('zenyatta_login_mensaje', mensaje); } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+  }
   window.location.href = 'grupo.html';
 }
+
+// Cierre de sesión por inactividad, parte 2 (01-10-2026) — ver la nota
+// grande junto a MS_INACTIVIDAD_MAXIMA_HIP más arriba (el chequeo AL
+// ENTRAR a la página) para el contexto completo. Esto cubre la otra
+// mitad: una pestaña de Hipismo que queda ABIERTA y sin tocar durante
+// más de 1 hora SEGUIDA. Copia tal cual (mismas claves de localStorage,
+// mismo umbral, mismo criterio de qué cuenta como "actividad") de
+// registrarActividad()/revisarInactividad() en app.js — no se puede
+// compartir el código entre los 2 archivos (esta página no carga
+// app.js), así que se duplica a propósito en vez de intentar un include
+// que complicaría el despliegue para 2 líneas de ahorro.
+const MS_THROTTLE_ACTIVIDAD_HIP = 5000;
+let ultimaEscrituraActividadHip = 0;
+
+function registrarActividadHip() {
+  const ahora = Date.now();
+  if (ahora - ultimaEscrituraActividadHip < MS_THROTTLE_ACTIVIDAD_HIP) return;
+  ultimaEscrituraActividadHip = ahora;
+  try { localStorage.setItem('zenyatta_ultima_actividad', String(ahora)); } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+}
+
+function revisarInactividadHip() {
+  if (!TOKEN) return;
+  let ultima;
+  try { ultima = parseInt(localStorage.getItem('zenyatta_ultima_actividad'), 10); } catch (e) { ultima = NaN; }
+  if (!ultima || isNaN(ultima)) { registrarActividadHip(); return; }
+  if (Date.now() - ultima > MS_INACTIVIDAD_MAXIMA_HIP) {
+    cerrarSesionHipismo('Tu sesión se cerró por inactividad. Inicia sesión de nuevo.');
+  }
+}
+
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(evento => {
+  document.addEventListener(evento, registrarActividadHip, { passive: true });
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') revisarInactividadHip();
+});
+setInterval(revisarInactividadHip, 30000);
 
 // =================================================================
 // CHAT DE SOPORTE (con el Súper-admin) — 26-09-2026, a pedido del
@@ -5211,7 +5429,7 @@ function pintarLogosGrupo() {
   const temaPrimario = GRUPO && GRUPO.temaColorPrimario;
   const temaSecundario = GRUPO && GRUPO.temaColorSecundario;
   const temaRgbPrimario = hexARgbTripleta(temaPrimario);
-  ['balanceCaptura', 'cierreFinalCaptura', 'comisionesDevueltasCaptura'].forEach(id => {
+  ['balanceCaptura', 'cierreFinalCaptura', 'comisionesDevueltasCaptura', 'montosApostadosCaptura'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     if (temaPrimario && temaSecundario) {
@@ -5226,13 +5444,16 @@ function pintarLogosGrupo() {
     }
   });
   // El logo de fondo (marca de agua) reusa el MISMO logoUrl de arriba.
-  // planoLogoFondo/resultadoLogoFondo (01-10-2026, a pedido del usuario:
-  // "en cargar plano donde pego el plano y donde me das el resultado
-  // colocame el logo del grupo tambien de fondo claro... es solo un
-  // fondo para el programa") — se suman a esta misma lista: mismo
-  // logoUrl, sin ningún color de tema (eso NO se pidió acá, ver la nota
-  // grande junto a #zonaPlanoLogoFondo en el <style>).
-  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'planoLogoFondo', 'resultadoLogoFondo'].forEach(id => {
+  // resultadoLogoFondo (01-10-2026, a pedido del usuario: "en cargar
+  // plano... donde me das el resultado colocame el logo del grupo
+  // tambien de fondo claro... es solo un fondo para el programa") — se
+  // suma a esta misma lista: mismo logoUrl, sin ningún color de tema
+  // (eso NO se pidió acá, ver la nota grande junto a
+  // #zonaResultadoLogoFondo en el <style>). "planoLogoFondo" (el mismo
+  // logo pero donde se PEGA el plano) estuvo acá mismo el mismo día,
+  // pero se sacó: con el cuadro vacío se veía como un pedazo de imagen
+  // suelto — queda solo en el resultado.
+  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'montosApostadosLogoFondo', 'resultadoLogoFondo'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.backgroundImage = logoUrl ? `url('${logoUrl}')` : '';
@@ -5255,7 +5476,11 @@ function pintarLogosGrupo() {
     // 30-09-2026, a pedido del usuario: mismo tratamiento de logo+título
     // que ya tenían sus hermanas (ver la nota grande junto a
     // #comisionesDevueltasCaptura en el HTML de arriba).
-    comisionesDevueltasNombreGrupoCaptura: `👤 Comisiones Devueltas por Cliente — ${nombreGrupo} 🇻🇪`
+    comisionesDevueltasNombreGrupoCaptura: `👤 Comisiones Devueltas por Cliente — ${nombreGrupo} 🇻🇪`,
+    // 01-10-2026, a pedido del usuario: mismo tratamiento de logo+título
+    // que sus hermanas de arriba (ver la nota grande del rediseño de
+    // Montos Apostados en el HTML de vista-montosApostados).
+    montosApostadosNombreGrupoCaptura: `💰 Montos Apostados — ${nombreGrupo} 🇻🇪`
   };
   Object.keys(titulos).forEach(id => {
     const el = document.getElementById(id);
@@ -5333,6 +5558,8 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   saldoComisiones: () => pintarSaldoComisiones(),
   montosApostados: () => pintarMontosApostados(),
+  // "Pizarras" (01-10-2026) — ver pintarPizarras() más abajo.
+  pizarras: () => pintarPizarras(),
   usuarios: () => cargarEmpleadosHip(),
   // Filtro de Pozos (27-09-2026): los filtros "Saldos + Pozos" y "Solo
   // Saldos" necesitan el saldo de la semana (GET /cierre-final) — se
@@ -11054,42 +11281,120 @@ function descargarComisionesDevueltasHipodromoExcel() {
 }
 
 // ------------------------------------------------------------------
-// "Montos Apostados" REAL (23-09-2026, duodécima ronda) — a pedido del
-// usuario: "por cliente cuanto han apostado en el grupo... si lo
-// selcciono en la fechita al lado izquierdo de su nombre se despliega
-// toda su informacion".
+// "Montos Apostados" REAL (23-09-2026, duodécima ronda; rediseño
+// 01-10-2026) — ver la nota grande completa en la sección
+// <vista-montosApostados> del HTML de arriba (pedido exacto del usuario +
+// las 4 respuestas de AskUserQuestion que confirmaron el alcance).
 let idMontoApostadoSeq = 0;
+const TIPO_TEXTO_MONTOS = { tercios: 'Tercios', remate: 'Remate', tabla_fija: 'Tabla fija', marca: 'Marca' };
 
-function buscarMontosApostados() {
-  const fecha = document.getElementById('inpFechaMontosApostados').value;
-  pintarMontosApostados(fecha);
+// MONTOS_APOSTADOS_ACTUAL (01-10-2026): la respuesta COMPLETA (sin
+// filtrar) de la última búsqueda — el filtro de cliente (ver
+// filtrarMontosApostados() más abajo) y los botones "Copiar Texto"/"Copiar
+// Imagen HD" trabajan SIEMPRE sobre esto, nunca vuelven a pedirle nada al
+// servidor: así, elegir un cliente en el filtro repinta al instante (sin
+// esperar red) y además hace que "copiar" traiga SOLO lo que se ve en
+// pantalla en ese momento (pedido explícito: "si quiero copiar una imagen
+// puedo solo elegir ese cliente igual por texto").
+let MONTOS_APOSTADOS_ACTUAL = null;
+
+// "gano" -> etiqueta (01-10-2026, a pedido del usuario: "MUESTRAME SI JUGO
+// O DIO EL CABALLO... AÑADE LA PALABRA QUE CORRESPONDA"). true/false/null
+// tal cual los manda obtenerApuestasDelRango (ver la nota grande en
+// routes/hipismo.js) — null es "SIN DECIDIR" (jugada que todavía no se
+// puede calificar, nunca se inventa un ganó/perdió para ese caso).
+function etiquetaGanoMontosApostados(gano, paraHtml) {
+  if (gano === true) return paraHtml ? '<span class="pos">✅ GANÓ</span>' : 'GANÓ';
+  if (gano === false) return paraHtml ? '<span class="neg">❌ PERDIÓ</span>' : 'PERDIÓ';
+  return paraHtml ? '<span style="color:var(--text-dim);">⏳ SIN DECIDIR</span>' : 'SIN DECIDIR';
 }
 
-async function pintarMontosApostados(fechaForzada) {
-  const inp = document.getElementById('inpFechaMontosApostados');
-  const fecha = fechaForzada || inp.value || fechaLocalHoy();
-  if (!fechaForzada) inp.value = fecha;
+function buscarMontosApostados() {
+  const desde = document.getElementById('inpDesdeMontosApostados').value;
+  const hasta = document.getElementById('inpHastaMontosApostados').value;
+  pintarMontosApostados(desde, hasta);
+}
+
+async function pintarMontosApostados(desdeForzado, hastaForzado) {
+  const inpDesde = document.getElementById('inpDesdeMontosApostados');
+  const inpHasta = document.getElementById('inpHastaMontosApostados');
   const cont = document.getElementById('listaMontosApostados');
   cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  // Sin desde/hasta Y sin nada ya escrito en los campos (primera entrada a
+  // la pantalla): se pide SIN parámetros a propósito, para que el backend
+  // calcule su propio default de "semana completa en curso" (ver GET
+  // /montos-apostados en routes/hipismo.js) — así el cálculo de la semana
+  // vive en UN solo lugar, nunca duplicado acá.
+  const desde = desdeForzado || inpDesde.value || '';
+  const hasta = hastaForzado || inpHasta.value || '';
+  const query = desde && hasta ? `?desde=${desde}&hasta=${hasta}` : '';
   let data;
   try {
-    data = await apiHipismo(`/api/hipismo/montos-apostados?fecha=${fecha}`);
+    data = await apiHipismo(`/api/hipismo/montos-apostados${query}`);
   } catch (e) {
+    MONTOS_APOSTADOS_ACTUAL = null;
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
     return;
   }
-  if (!data.clientes.length) {
-    cont.innerHTML = '<div class="placeholder-card">Nadie apostó nada ese día.</div>';
+  // Los campos SIEMPRE quedan reflejando el rango real que se usó (el
+  // elegido a mano, o el default de "semana completa en curso" que
+  // calculó el servidor cuando no se pidió nada) — mismo criterio que ya
+  // usa pintarComisionesDevueltas().
+  inpDesde.value = data.desde;
+  inpHasta.value = data.hasta;
+  const elFecha = document.getElementById('montosApostadosFechaCaptura');
+  if (elFecha) elFecha.textContent = data.desde === data.hasta ? formatFechaCortaDMY(data.desde) : `Del ${formatFechaCortaDMY(data.desde)} al ${formatFechaCortaDMY(data.hasta)}`;
+
+  MONTOS_APOSTADOS_ACTUAL = data;
+
+  // Repuebla el <datalist> del filtro de cliente con los clientes de ESTE
+  // rango (01-10-2026, "puedo filtrar por cliente... ambos" -- lista +
+  // texto libre).
+  const datalist = document.getElementById('listaClientesMontosApostados');
+  if (datalist) datalist.innerHTML = data.clientes.map(c => `<option value="${formatNombre(c.nombre)}"></option>`).join('');
+
+  renderMontosApostados();
+}
+
+// filtrarMontosApostados() (01-10-2026): repinta con el filtro de cliente
+// actual, SIN volver a pedir nada al servidor -- ver la nota grande de
+// MONTOS_APOSTADOS_ACTUAL más arriba.
+function filtrarMontosApostados() {
+  renderMontosApostados();
+}
+
+// clientesFiltradosMontosApostados(): MONTOS_APOSTADOS_ACTUAL.clientes
+// recortado al texto del filtro (coincidencia parcial, sin mayúsculas/
+// minúsculas -- el campo admite tanto elegir de la lista como escribir
+// libre, "ambos" fue la respuesta explícita del usuario). Con el filtro
+// vacío, devuelve la lista completa tal cual.
+function clientesFiltradosMontosApostados() {
+  if (!MONTOS_APOSTADOS_ACTUAL) return [];
+  const inp = document.getElementById('inpFiltroClienteMontosApostados');
+  const filtro = (inp && inp.value || '').trim().toUpperCase();
+  if (!filtro) return MONTOS_APOSTADOS_ACTUAL.clientes;
+  return MONTOS_APOSTADOS_ACTUAL.clientes.filter(c => c.nombre.toUpperCase().includes(filtro));
+}
+
+function renderMontosApostados() {
+  const cont = document.getElementById('listaMontosApostados');
+  if (!MONTOS_APOSTADOS_ACTUAL) return;
+  const clientes = clientesFiltradosMontosApostados();
+  if (!clientes.length) {
+    cont.innerHTML = `<div class="placeholder-card">${MONTOS_APOSTADOS_ACTUAL.clientes.length ? 'Ningún cliente coincide con ese filtro.' : 'Nadie apostó nada en ese rango.'}</div>`;
     return;
   }
-  const TIPO_TEXTO = { tercios: 'Tercios', remate: 'Remate', tabla_fija: 'Tabla fija', marca: 'Marca' };
+  // Columna "Fecha" (mismo criterio que /comisiones-devueltas en el
+  // frontend): solo tiene sentido mostrarla cuando el rango pedido abarca
+  // más de un día.
+  const esRangoVarios = MONTOS_APOSTADOS_ACTUAL.desde !== MONTOS_APOSTADOS_ACTUAL.hasta;
   cont.innerHTML = '';
-  data.clientes.forEach(cliente => {
+  clientes.forEach(cliente => {
     const idCliente = 'montoCli' + (idMontoApostadoSeq++);
     const filasDetalle = cliente.detalle
       .slice()
-      .sort((a, b) => a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
-      .map(d => `<tr><td>${d.hipodromoNombre}</td><td>${ordinalCarrera(d.carreraNumero)}</td><td>${TIPO_TEXTO[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td></tr>`)
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
+      .map(d => `<tr>${esRangoVarios ? `<td>${formatFechaCortaDMY(d.fecha)}</td>` : ''}<td>${d.hipodromoNombre}</td><td>${ordinalCarrera(d.carreraNumero)}</td><td>${TIPO_TEXTO_MONTOS[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td><td>${etiquetaGanoMontosApostados(d.gano, true)}</td></tr>`)
       .join('');
     const fila = document.createElement('div');
     fila.className = 'fila-carrera-comision';
@@ -11105,12 +11410,100 @@ async function pintarMontosApostados(fechaForzada) {
       </div>
       <div class="detalle-carrera">
         <table>
-          <thead><tr><th>Hipódromo</th><th>Carrera</th><th>Jugada</th><th class="num">Monto</th></tr></thead>
+          <thead><tr>${esRangoVarios ? '<th>Fecha</th>' : ''}<th>Hipódromo</th><th>Carrera</th><th>Jugada</th><th class="num">Monto</th><th>Resultado</th></tr></thead>
           <tbody>${filasDetalle}</tbody>
         </table>
       </div>`;
     cont.appendChild(fila);
   });
+}
+
+function mostrarToastMontosApostados(msg, esError) {
+  const t = document.getElementById('toastMontosApostados');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+
+// textoMontosApostados() (01-10-2026, a pedido explícito del usuario: "SI
+// COPIO EN TEXTO ME VAS A DAR EL MISMO FORMATO DE TEXTO QUE USAS PARA
+// COMISIONES DEVUELTAS POR CLIENTE") — MISMO estilo visual que
+// textoComisionesDevueltas() (título en negrita + rango, línea de
+// guiones, un bloque por cliente con su total en negrita y debajo cada
+// jugada con viñeta "•"), adaptado a la forma de ESTA pantalla: acá no
+// existe el concepto de "destino" (eso es propio de Comisiones Devueltas,
+// por el % que se le acredita a un aval) — el bloque es directo
+// cliente -> sus jugadas, cada una con su GANÓ/PERDIÓ/SIN DECIDIR. Usa la
+// MISMA lista YA FILTRADA que se ve en pantalla (clientesFiltradosMontosApostados()),
+// así "copiar" respeta el filtro de cliente elegido.
+function textoMontosApostados(data, clientes) {
+  const listaClientes = clientes.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const rangoTexto = data.desde === data.hasta ? data.desde : `${data.desde} a ${data.hasta}`;
+  let texto = `*Montos Apostados - ${rangoTexto}*\n────────────────────────────────\n`;
+  listaClientes.forEach(c => {
+    texto += `\n👤 *${c.nombre}* — Total: *${formatMontoTabla(c.total)}*\n`;
+    c.detalle
+      .slice()
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
+      .forEach(d => {
+        const etiqueta = etiquetaGanoMontosApostados(d.gano, false);
+        texto += `  • ${d.hipodromoNombre} (${ordinalCarrera(d.carreraNumero)}) — ${TIPO_TEXTO_MONTOS[d.tipo] || d.tipo} ${d.detalleTexto}:  ${formatMontoTabla(d.monto)} — ${etiqueta}\n`;
+      });
+  });
+  const totalGeneral = listaClientes.reduce((s, c) => s + Number(c.total || 0), 0);
+  texto += `\n──────────────────────────────\n*TOTAL APOSTADO: ${formatMontoTabla(totalGeneral)} USD*`;
+  return texto;
+}
+
+function copiarMontosApostadosTexto() {
+  if (!MONTOS_APOSTADOS_ACTUAL) { mostrarToastMontosApostados('Todavía se está cargando — espera un momento.', true); return; }
+  const clientes = clientesFiltradosMontosApostados();
+  if (!clientes.length) { mostrarToastMontosApostados('No hay nada que copiar con ese filtro.', true); return; }
+  const texto = textoMontosApostados(MONTOS_APOSTADOS_ACTUAL, clientes);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => mostrarToastMontosApostados('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => mostrarToastMontosApostados('No se pudo copiar — selecciona el texto a mano.', true));
+  } else {
+    mostrarToastMontosApostados('No se pudo copiar — selecciona el texto a mano.', true);
+  }
+}
+
+// copiarMontosApostadosImagen() (01-10-2026, "añade el boton de copiar
+// imagen hd") — MISMO patrón html2canvas que ya usan Balance General/
+// Cierre Final/Comisiones Devueltas (ver copiarCierreImagen() más arriba).
+// Como el filtro de cliente (si hay uno puesto) ya recorta lo que se ve
+// en #montosApostadosCaptura (renderMontosApostados() solo pinta la lista
+// filtrada), "copiar imagen" automáticamente trae SOLO el cliente elegido
+// cuando el operador filtró a uno -- sin lógica aparte acá.
+async function copiarMontosApostadosImagen() {
+  if (!MONTOS_APOSTADOS_ACTUAL) { mostrarToastMontosApostados('Todavía se está cargando — espera un momento.', true); return; }
+  if (!clientesFiltradosMontosApostados().length) { mostrarToastMontosApostados('No hay nada que copiar con ese filtro.', true); return; }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastMontosApostados('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  try {
+    const contenido = document.getElementById('montosApostadosCaptura');
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastMontosApostados('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastMontosApostados('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'montos_apostados.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastMontosApostados('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) {
+    mostrarToastMontosApostados('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  }
 }
 
 // ------------------------------------------------------------------
@@ -11474,6 +11867,221 @@ async function pintarEliminarWinnersDia() {
 }
 
 // ------------------------------------------------------------------
+// "PIZARRAS" (01-10-2026) — ver la nota grande en routes/hipismo.js
+// (sección "PIZARRAS", GET/PUT/DELETE /pizarras) para el alcance
+// completo, confirmado con el usuario en una ronda de 3 preguntas
+// (AskUserQuestion):
+//   - ALCANCE: cada modalidad (Tercios/Remate) de una carrera se edita/
+//     elimina por SEPARADO con su propio botón, más un botón "Aplicar a
+//     todas" cuando la carrera tiene más de una modalidad cargada — en
+//     sus propias palabras: "yo escoger donde modificar, si seleccionar
+//     todas, o elegir si me modifica la llegada para una sola modalidad
+//     de juego y las demas se siguen decidiendo con su pizarra ya
+//     cargada".
+//   - EDITAR: "Recalcula todo el dinero" — PUT /pizarras/<tipo>/:id ya
+//     hace el recálculo completo en el servidor, acá solo se pide la
+//     pizarra nueva y se repinta con lo que devuelva.
+//   - ELIMINAR: "Deja la carrera sin pizarra (pendiente)" — el plano/
+//     remate NO se borra (eso lo sigue haciendo "Planos Eliminados"/
+//     "Eliminar Winners"); la tarjeta pasa a mostrar "⏳ Pendiente de
+//     pizarra" con un botón "Cargar pizarra" en vez de "Editar".
+//
+// Mismo patrón Desde/Hasta que Montos Apostados (desde/hasta vacíos la
+// primera vez -> el servidor calcula su propio default y lo devuelve en
+// la respuesta), pero agrupado acá además por DÍA (un rango puede
+// abarcar varios) antes de hipódromo > carrera, igual que "Eliminar
+// Winners" arriba.
+let PIZARRAS_ACTUAL = null; // última respuesta cruda del servidor (filas sin agrupar)
+let PIZARRAS_EDITANDO = null; // "tipo:id" (o "todas:fecha:hipodromo:carrera") de lo que tiene el campo de pizarra abierto, o null
+const TIPO_TEXTO_PIZARRA = { tercios: 'Tercios', remate: 'Remate' };
+
+function cargarPizarras() { pintarPizarras(); }
+
+async function pintarPizarras(desdeForzado, hastaForzado) {
+  const inpDesde = document.getElementById('inpDesdePizarras');
+  const inpHasta = document.getElementById('inpHastaPizarras');
+  const cont = document.getElementById('listaPizarras');
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  const desde = desdeForzado || inpDesde.value || '';
+  const hasta = hastaForzado || inpHasta.value || '';
+  const query = desde && hasta ? `?desde=${desde}&hasta=${hasta}` : '';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/pizarras${query}`);
+  } catch (e) {
+    PIZARRAS_ACTUAL = null;
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    return;
+  }
+  inpDesde.value = data.desde;
+  inpHasta.value = data.hasta;
+  PIZARRAS_ACTUAL = data.filas;
+  PIZARRAS_EDITANDO = null;
+  renderPizarras();
+}
+
+function renderPizarras() {
+  const cont = document.getElementById('listaPizarras');
+  if (!PIZARRAS_ACTUAL) return;
+  if (!PIZARRAS_ACTUAL.length) {
+    cont.innerHTML = '<div class="placeholder-card">No hay planos ni remates cargados en ese rango.</div>';
+    return;
+  }
+  const porDia = new Map();
+  PIZARRAS_ACTUAL.forEach(f => {
+    if (!porDia.has(f.fecha)) porDia.set(f.fecha, []);
+    porDia.get(f.fecha).push(f);
+  });
+  let html = '';
+  Array.from(porDia.keys()).sort().forEach(fecha => {
+    const porHipodromo = new Map();
+    porDia.get(fecha).forEach(f => {
+      if (!porHipodromo.has(f.hipodromoNombre)) porHipodromo.set(f.hipodromoNombre, []);
+      porHipodromo.get(f.hipodromoNombre).push(f);
+    });
+    let htmlDia = `<div style="font-weight:700; margin:16px 0 8px;">📅 ${formatFechaCortaDMY(fecha)}</div>`;
+    Array.from(porHipodromo.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(hipodromoNombre => {
+      const porCarrera = new Map();
+      porHipodromo.get(hipodromoNombre).forEach(f => {
+        if (!porCarrera.has(f.carreraNumero)) porCarrera.set(f.carreraNumero, []);
+        porCarrera.get(f.carreraNumero).push(f);
+      });
+      const hipodromoJs = hipodromoNombre.replace(/'/g, "\\'");
+      const carrerasHtml = Array.from(porCarrera.keys()).sort((a, b) => a - b).map(numCarrera => {
+        const modalidades = porCarrera.get(numCarrera);
+        const tarjetas = modalidades.map(f => tarjetaPizarraHtml(f)).join('');
+        // "Aplicar a todas" solo tiene sentido cuando esta carrera tiene
+        // MÁS de una modalidad cargada — con una sola no hay "las demás"
+        // a las que aplicar.
+        const claveTodas = `todas:${fecha}:${hipodromoNombre}:${numCarrera}`;
+        const botonTodas = modalidades.length > 1 && PIZARRAS_EDITANDO !== claveTodas
+          ? `<div style="margin:6px 0 10px;"><button class="btn btn-secundario" type="button" onclick="abrirAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${numCarrera})">🔁 Aplicar una misma pizarra a todas las modalidades de esta carrera</button></div>`
+          : '';
+        const formTodas = PIZARRAS_EDITANDO === claveTodas ? formAplicarATodasHtml(fecha, hipodromoNombre, numCarrera, modalidades) : '';
+        return `<div style="margin-bottom:12px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">${ordinalCarrera(numCarrera)} Carrera</div>${tarjetas}${botonTodas}${formTodas}</div>`;
+      }).join('');
+      htmlDia += `<div style="margin-bottom:14px;"><h3 style="margin:0 0 8px; font-size:14px;">🏟️ ${hipodromoNombre}</h3>${carrerasHtml}</div>`;
+    });
+    html += htmlDia;
+  });
+  cont.innerHTML = html;
+}
+
+function tarjetaPizarraHtml(f) {
+  if (PIZARRAS_EDITANDO === `${f.tipo}:${f.id}`) return formEditarPizarraHtml(f);
+  const estadoHtml = f.pendiente
+    ? '<span style="color:var(--text-dim);">⏳ Pendiente de pizarra</span>'
+    : `Pizarra: <b>${f.pizarra}</b>`;
+  const hipodromoJs = f.hipodromoNombre.replace(/'/g, "\\'");
+  return `
+    <div class="balance-fila" style="margin-bottom:4px;">
+      <span class="nombre">${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo} — ${estadoHtml} <span style="color:var(--text-dim); font-size:12px;">(${f.cantidad} jugada${f.cantidad === 1 ? '' : 's'}, ${formatMontoTabla(f.montoTotal)})</span></span>
+      <span class="btn-fila" style="gap:6px;">
+        <button class="btn btn-secundario" type="button" onclick="abrirEdicionPizarra('${f.tipo}', '${f.id}')">✏️ ${f.pendiente ? 'Cargar pizarra' : 'Editar'}</button>
+        ${f.pendiente ? '' : `<button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarPizarra('${f.tipo}', '${f.id}', '${hipodromoJs}', ${f.carreraNumero})">🗑️ Eliminar</button>`}
+      </span>
+    </div>`;
+}
+
+function formEditarPizarraHtml(f) {
+  const valorActual = (f.pizarra || '').replace(/"/g, '&quot;');
+  return `
+    <div style="margin:4px 0 10px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editPizarra_${f.tipo}_${f.id}" placeholder="Ej. 6.10.4.8.2" value="${valorActual}">
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarEdicionPizarra('${f.tipo}', '${f.id}')">💾 Guardar y recalcular</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionPizarra()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function abrirEdicionPizarra(tipo, id) {
+  PIZARRAS_EDITANDO = `${tipo}:${id}`;
+  renderPizarras();
+  setTimeout(() => { const el = document.getElementById(`editPizarra_${tipo}_${id}`); if (el) el.focus(); }, 0);
+}
+function cerrarEdicionPizarra() {
+  PIZARRAS_EDITANDO = null;
+  renderPizarras();
+}
+
+async function guardarEdicionPizarra(tipo, id) {
+  const inp = document.getElementById(`editPizarra_${tipo}_${id}`);
+  const pizarra = (inp && inp.value || '').trim();
+  if (!pizarra) { alert('Escribe la pizarra (orden de llegada).'); return; }
+  try {
+    await apiHipismo(`/api/hipismo/pizarras/${tipo}/${id}`, { method: 'PUT', body: JSON.stringify({ pizarra }) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  PIZARRAS_EDITANDO = null;
+  pintarPizarras();
+}
+
+async function eliminarPizarra(tipo, id, hipodromoNombre, carreraNumero) {
+  if (!confirm(`¿Eliminar la pizarra de ${hipodromoNombre}, ${carreraNumero}ta Carrera (${TIPO_TEXTO_PIZARRA[tipo] || tipo})? La carrera NO se borra — queda pendiente de pizarra, con sus jugadas sin decidir, hasta que cargues la llegada de nuevo.`)) return;
+  try {
+    await apiHipismo(`/api/hipismo/pizarras/${tipo}/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  pintarPizarras();
+}
+
+// "Aplicar a todas" (01-10-2026, respuesta libre del usuario, ver la
+// nota grande de arriba): un solo campo de pizarra que, al guardar,
+// llama PUT /pizarras/<tipo>/:id para CADA modalidad presente en esa
+// carrera, una tras otra. Si alguna falla a mitad de camino, avisa
+// cuáles sí quedaron guardadas antes de cortar (nunca deja la duda de
+// "¿guardó algo o no?").
+function abrirAplicarATodasPizarra(fecha, hipodromoNombre, carreraNumero) {
+  PIZARRAS_EDITANDO = `todas:${fecha}:${hipodromoNombre}:${carreraNumero}`;
+  renderPizarras();
+  setTimeout(() => { const el = document.getElementById('editPizarraTodas'); if (el) el.focus(); }, 0);
+}
+
+function formAplicarATodasHtml(fecha, hipodromoNombre, carreraNumero, modalidades) {
+  const nombresModalidades = modalidades.map(f => TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo).join(' + ');
+  const hipodromoJs = hipodromoNombre.replace(/'/g, "\\'");
+  return `
+    <div style="margin:4px 0 10px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Se va a aplicar la MISMA pizarra a: ${nombresModalidades}.</div>
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editPizarraTodas" placeholder="Ej. 6.10.4.8.2">
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${carreraNumero})">💾 Guardar y recalcular todas</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionPizarra()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarAplicarATodasPizarra(fecha, hipodromoNombre, carreraNumero) {
+  const inp = document.getElementById('editPizarraTodas');
+  const pizarra = (inp && inp.value || '').trim();
+  if (!pizarra) { alert('Escribe la pizarra (orden de llegada).'); return; }
+  const modalidades = (PIZARRAS_ACTUAL || []).filter(f => f.fecha === fecha && f.hipodromoNombre === hipodromoNombre && f.carreraNumero === carreraNumero);
+  const guardadas = [];
+  for (const f of modalidades) {
+    try {
+      await apiHipismo(`/api/hipismo/pizarras/${f.tipo}/${f.id}`, { method: 'PUT', body: JSON.stringify({ pizarra }) });
+      guardadas.push(TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo);
+    } catch (e) {
+      alert(`Se guardó ${guardadas.join(', ') || 'ninguna modalidad todavía'} pero falló ${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo}: ${e.message}`);
+      PIZARRAS_EDITANDO = null;
+      pintarPizarras();
+      return;
+    }
+  }
+  PIZARRAS_EDITANDO = null;
+  pintarPizarras();
+}
+
+// ------------------------------------------------------------------
 // Papelera de Planos (Administración > 🗑️ Planos Eliminados) — restaura
 // lo que se borró desde "Eliminar Planos", arriba.
 async function pintarPlanosEliminados() {
@@ -11678,8 +12286,19 @@ construirFilasRemateManual();
 poblarJugadoresRemateManual();
 construirFilasWinners();
 poblarJugadoresWinners();
-document.getElementById('inpFechaMontosApostados').value = fechaLocalHoy();
-// La línea de acá abajo (document.getElementById('inpFechaComisionesDevueltas')...)
+// (01-10-2026) Montos Apostados pasó de un solo campo "Fecha" a
+// "Desde"/"Hasta" (ver la nota grande del rediseño en <vista-
+// montosApostados>, HTML de arriba) — a propósito NO se inicializan acá
+// con fechaLocalHoy(): dejarlos vacíos hace que la primera búsqueda (al
+// entrar a la pestaña, ver pintarMontosApostados() más abajo) salga SIN
+// parámetros, así el backend calcula su propio default de "semana
+// completa en curso" (GET /montos-apostados sin query, ver routes/
+// hipismo.js) y pintarMontosApostados() después rellena los 2 campos con
+// ese rango real — exactamente el mismo criterio que ya usa
+// pintarComisionesDevueltas() más abajo para sus propios inpDesde/
+// inpHastaComisionesDevueltas.
+//
+// La línea vieja de acá abajo (document.getElementById('inpFechaComisionesDevueltas')...)
 // se borró el 01-10-2026: desde el cambio a rango "Desde/Hasta" en
 // Comisiones Devueltas por Cliente (commit 2536f0f, ver la nota grande
 // junto a pintarComisionesDevueltas() más abajo), ese campo único ya NO

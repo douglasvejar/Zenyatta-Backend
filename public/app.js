@@ -298,6 +298,13 @@ async function iniciarSesion() {
     // a hipismo-mockup.html — esa página necesita poder leer esta misma
     // bandera para saber que también le toca mostrar el mensaje.
     localStorage.setItem('zenyatta_mostrar_bienvenida', '1');
+    // Cierre de sesión por inactividad (01-10-2026, ver la nota grande de
+    // registrarActividad()/revisarInactividad() más abajo): un login
+    // nuevo arranca el reloj de actividad de una — sin esto, el primer
+    // revisarInactividad() (a los 30s, o al volver a la pestaña) no
+    // encontraría ninguna marca todavía y la pondría él solo, pero más
+    // vale dejarla puesta ya mismo que depender de ese primer tick.
+    registrarActividad();
     mostrarApp();
   } catch (e) {
     errorBox.textContent = e.message;
@@ -2396,6 +2403,12 @@ function cerrarSesion(mensaje) {
   GRUPO = null;
   localStorage.removeItem('zenyatta_token');
   localStorage.removeItem('zenyatta_grupo');
+  // Cierre de sesión por inactividad (01-10-2026) — ver la nota grande de
+  // registrarActividad() más abajo. Se limpia acá (no solo cuando
+  // revisarInactividad() es quien llama a cerrarSesion) para que el
+  // PRÓXIMO login arranque siempre con el reloj en cero, nunca con una
+  // marca vieja de la sesión anterior.
+  localStorage.removeItem('zenyatta_ultima_actividad');
   if (PIZARRA_INTERVALO) { clearInterval(PIZARRA_INTERVALO); PIZARRA_INTERVALO = null; }
   if (ALERTAS_INTERVALO) { clearInterval(ALERTAS_INTERVALO); ALERTAS_INTERVALO = null; }
   if (CHAT_WIDGET_POLL_ABIERTO) { clearInterval(CHAT_WIDGET_POLL_ABIERTO); CHAT_WIDGET_POLL_ABIERTO = null; }
@@ -2409,6 +2422,76 @@ function cerrarSesion(mensaje) {
   // de login se queda con el tema oscuro (y su video de fondo) de siempre.
   document.body.classList.remove('tema-deportes-claro');
 }
+
+// =================================================================
+// CIERRE DE SESIÓN POR INACTIVIDAD (01-10-2026, a pedido del usuario: "si
+// alguna sesion ya sea super admin o algun grupo dura mas de 1 hora sin
+// tener actividad, cerrar la sesion y deven loguearse, le dejas un
+// mesajen que la sesion fue cerrada por inactividad"). 100% del lado del
+// navegador (localStorage), igual que el resto del manejo de sesión de
+// esta app — sin endpoint nuevo ni columna nueva: el backend ya rechaza
+// cualquier llamada con ese token igual (JWT con su propia expiración),
+// esto solo adelanta el cierre del lado del navegador para que el
+// operador vea el aviso y tenga que loguearse de nuevo aunque no toque
+// nada que dispare una llamada al servidor.
+//
+// A PROPÓSITO el reloj de actividad NO se resetea con el polling de
+// fondo que ya corre solo mientras la pestaña está abierta
+// (ALERTAS_INTERVALO cada 25s, CHAT_WIDGET_POLL_ABIERTO cada 8s,
+// PIZARRA_INTERVALO en hipismo-mockup.html) — si se reseteara ahí, el
+// temporizador de inactividad nunca llegaría a dispararse mientras la
+// pestaña quedara abierta sola sin que nadie la toque, y la función
+// entera no serviría para nada. Solo cuenta interacción REAL del
+// operador con la página — click, tecla, movimiento de mouse, scroll o
+// toque — throttled a como mucho 1 escritura a localStorage cada ~5s (no
+// hace falta más precisión, y evita escribir en cada pixel de un
+// "mousemove").
+//
+// Misma función/mismas claves de localStorage ('zenyatta_ultima_actividad')
+// en hipismo-mockup.html, que la copia tal cual (esa página no carga
+// app.js) — ver la nota grande junto a revisarInactividadHip() ahí.
+const MS_INACTIVIDAD_MAXIMA = 60 * 60 * 1000; // 1 hora, a pedido del usuario
+const MS_THROTTLE_ACTIVIDAD = 5000;
+let ultimaEscrituraActividad = 0;
+
+function registrarActividad() {
+  const ahora = Date.now();
+  if (ahora - ultimaEscrituraActividad < MS_THROTTLE_ACTIVIDAD) return;
+  ultimaEscrituraActividad = ahora;
+  try { localStorage.setItem('zenyatta_ultima_actividad', String(ahora)); } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+}
+
+// revisarInactividad(): true si CERRÓ la sesión por inactividad (para que
+// quien llame pueda cortar lo que estuviera por hacer, ej. no seguir con
+// mostrarApp() si la sesión ya se cerró sola). Sin sesión abierta
+// (!TOKEN) no hay nada que revisar.
+function revisarInactividad() {
+  if (!TOKEN) return false;
+  let ultima;
+  try { ultima = parseInt(localStorage.getItem('zenyatta_ultima_actividad'), 10); } catch (e) { ultima = NaN; }
+  // Sin ninguna marca de actividad todavía (sesión recién iniciada en
+  // este navegador, o un token guardado de una versión anterior a este
+  // cambio) se toma AHORA como la primera marca, en vez de cerrar sesión
+  // de una por no tener con qué comparar.
+  if (!ultima || isNaN(ultima)) { registrarActividad(); return false; }
+  if (Date.now() - ultima > MS_INACTIVIDAD_MAXIMA) {
+    cerrarSesion('Tu sesión se cerró por inactividad. Inicia sesión de nuevo.');
+    return true;
+  }
+  return false;
+}
+
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(evento => {
+  document.addEventListener(evento, registrarActividad, { passive: true });
+});
+// Al volver a la pestaña (ej. el operador la dejó minimizada o cambió de
+// pestaña un rato largo) se revisa de una, sin esperar al siguiente tick
+// del setInterval de abajo — así no queda una sesión vencida "viva" unos
+// segundos de más justo cuando el operador vuelve a mirarla.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') revisarInactividad();
+});
+setInterval(revisarInactividad, 30000);
 
 // Selector de módulo "⚽ Deportes / 🐎 Hipismo" (22-09-2026, a pedido del
 // usuario — ver claude/plan-modulo-hipismo.md). GRUPO.moduloDeportesHabilitado/
@@ -8072,7 +8155,31 @@ function reproducirSonidoNotificacionChat() {
 // logueado (cuando había un token guardado) — con un login nuevo (sin token
 // todavía) esta función no hace nada y el bug no se nota.
 (function intentarSesionGuardada() {
+  // Mensaje redirigido desde hipismo-mockup.html (01-10-2026, ver la nota
+  // grande de registrarActividad()/revisarInactividad() más arriba) — esa
+  // página no tiene su propia pantalla de login, así que cuando le toca
+  // cerrar sesión (por inactividad, o por un 401 cualquiera de
+  // apiHipismo) redirige PARA ACÁ dejando el aviso en esta bandera de un
+  // solo uso (mismo patrón que 'zenyatta_mostrar_bienvenida'): se lee y
+  // se borra de una, nunca sobrevive a un segundo refresco.
+  let mensajeRedirigido = null;
+  try {
+    mensajeRedirigido = localStorage.getItem('zenyatta_login_mensaje');
+    if (mensajeRedirigido) localStorage.removeItem('zenyatta_login_mensaje');
+  } catch (e) { /* localStorage puede fallar en modo privado — no es crítico */ }
+
   if (TOKEN && GRUPO) {
+    // revisarInactividad() corta acá mismo (con su propio cerrarSesion(),
+    // que ya deja su propio aviso en #loginError) si el token guardado de
+    // una visita anterior ya pasó la 1 hora sin actividad — en ese caso
+    // NO hay que seguir a mostrarApp() con una sesión que se acaba de
+    // cerrar sola.
+    if (revisarInactividad()) return;
     mostrarApp();
+    return;
   }
+  // Sin sesión guardada (o recién cerrada arriba): si venía un mensaje
+  // redirigido, se muestra en la pantalla de login que ya queda visible
+  // por default.
+  if (mensajeRedirigido) document.getElementById('loginError').textContent = mensajeRedirigido;
 })();
