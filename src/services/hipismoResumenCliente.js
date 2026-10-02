@@ -21,7 +21,7 @@
 const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
-const { round2 } = require('./hipismoAdelantadasCalc');
+const { round2, montoDecidido } = require('./hipismoAdelantadasCalc');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -53,6 +53,40 @@ function resultadoTicketDeportes(t) {
   if (t.estado === 'GANADA') return t.gana;
   if (t.estado === 'PERDIDA') return -t.arriesga;
   return 0;
+}
+
+// montoBaseParaPct(linea) (02-10-2026, a pedido del usuario: "LOS % QUE SE
+// DEVUELVEN ES DE LO DECIDIDO NO DE LO APOSTADO... SIEMPRE ES BASE A LO
+// DECIDIDO SIN SACARLE EL 5%... LO QUE SE DECIDA EN LA JUGADA NETA") —
+// toma una línea de obtenerLineasHipismoCliente() (services/
+// hipismoLineasCliente.js) y devuelve la base correcta sobre la que debe
+// calcularse el % propio/de aval de un cliente (o de su banquero), para
+// CUALQUIER tipo de línea: nunca `linea.monto` (lo apostado bruto), salvo
+// que coincida con lo decidido (como en una pérdida completa).
+//   - Tercios (linea.tipo ausente, ver obtenerLineasHipismoCliente): usa
+//     montoDecidido() sobre linea.resultado (resultado_jugador o
+//     resultado_banquero, según linea.rol) + linea.sinComision -- la
+//     inversa exacta de montoMostrado() en hipismoCalc.js.
+//   - Adelantada, rol jugador: linea.resultado YA es resultado_cliente, un
+//     neto definitivo sin ningún 5% embebido (ver resolverTablaFija/
+//     resolverClienteMarca en hipismoAdelantadasCalc.js) -- montoDecidido
+//     con sinComision=true simplemente lo deja en valor absoluto.
+//   - Adelantada, rol banquero: cada banquero cubre `porcentajeBanqueado`%
+//     de la base DECIDIDA de la jugada completa (linea.resultadoClienteJugada
+//     -- mismo "base" que ya usa resolverBanqueoMarca para repartir entre
+//     banqueadores), nunca de linea.monto (el apostado bruto de la Marca
+//     completa) ni de linea.resultado (que además puede traer una comisión
+//     VARIABLE y opcional del propio banquero, un mecanismo totalmente
+//     aparte del 5% de Tercios -- ver resolverBanqueoMarca).
+function montoBaseParaPct(linea) {
+  if (linea.tipo === 'adelantada' && linea.rol === 'banquero') {
+    const baseJugada = montoDecidido(linea.resultadoClienteJugada, true);
+    return round2(baseJugada * (Number(linea.porcentajeBanqueado) || 0) / 100);
+  }
+  if (linea.tipo === 'adelantada') {
+    return montoDecidido(linea.resultado, true);
+  }
+  return montoDecidido(linea.resultado, linea.sinComision);
 }
 
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -195,15 +229,13 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         // también genera % propio/de aval, sea Tercios o una Marca de
         // Jugadas Adelantadas.
         //
-        // montoParaPct: para una Marca banqueada, `linea.monto` es el
-        // monto TOTAL de la jugada, no lo que banqueó puntualmente ESTE
-        // banquero — hay que escalarlo por su `porcentajeBanqueado` (ver
-        // la nota grande en hipismoLineasCliente.js). Para Tercios (o el
-        // rol jugador de una adelantada) el monto ya es el correcto tal
-        // cual.
-        const montoParaPct = (linea.tipo === 'adelantada' && linea.rol === 'banquero')
-          ? round2(Math.abs(Number(linea.monto) || 0) * (Number(linea.porcentajeBanqueado) || 0) / 100)
-          : linea.monto;
+        // montoParaPct (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
+        // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de
+        // montoBaseParaPct arriba del todo del archivo): NUNCA
+        // linea.monto (lo apostado bruto) salvo que coincida con lo
+        // decidido — para una Marca banqueada, además, hay que escalar a
+        // la PARTE real de ESTE banquero (`porcentajeBanqueado`).
+        const montoParaPct = montoBaseParaPct(linea);
 
         entradas.forEach(info => {
           const devuelto = round2(Math.abs(Number(montoParaPct) || 0) * (info.pct / 100));
@@ -354,10 +386,10 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // todas sus presentaciones... deben cumplir todas la misma regla"),
     // que el banqueo de una Marca (Jugadas Adelantadas) también cuenta.
     //
-    // montoParaPct: igual que en construirResumenCuentaComisionHipismo,
-    // para una Marca banqueada `linea.monto` es el monto TOTAL de la
-    // jugada, no lo que banqueó puntualmente este banquero — se escala
-    // por `linea.porcentajeBanqueado` (ver hipismoLineasCliente.js).
+    // montoParaPct (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO DECIDIDO
+    // NO DE LO APOSTADO" — igual que en construirResumenCuentaComisionHipismo,
+    // ver la nota grande de montoBaseParaPct arriba del todo del archivo):
+    // NUNCA linea.monto salvo que coincida con lo decidido.
     // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido
     // explícito del usuario: "toda jugada que no se decida no genera %
     // ni comisión") — mismo chequeo que construirResumenCuentaComisionHipismo
@@ -365,9 +397,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // acá (linea.resultado en 0).
     let comisionIncluida = 0;
     if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
-      const montoParaPct = (linea.tipo === 'adelantada' && linea.rol === 'banquero')
-        ? round2(Math.abs(Number(linea.monto) || 0) * (Number(linea.porcentajeBanqueado) || 0) / 100)
-        : linea.monto;
+      const montoParaPct = montoBaseParaPct(linea);
       comisionIncluida = round2(Math.abs(Number(montoParaPct) || 0) * (pctPropioIncluido / 100));
     }
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
@@ -863,26 +893,40 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // valor real, y el filtro nunca excluía nada en producción (el mock de
   // los tests sí usaba numbers de JS directos, por eso las pruebas pasaban
   // igual). Se envuelve en Number(...) para comparar de verdad.
+  // 02-10-2026 ("LOS % QUE SE DEVUELVEN ES DE LO DECIDIDO NO DE LO
+  // APOSTADO... SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE EL 5%"): la base
+  // del % propio/de aval es montoDecidido() (la inversa de montoMostrado()
+  // en hipismoCalc.js) sobre el resultado YA DECIDIDO de esa línea, nunca
+  // t.monto (lo apostado bruto) — en una jugada fraccionada ("10A4") el
+  // que gana solo decide una fracción del monto, aunque el que pierde sí
+  // suele perder el monto completo (ahí lo decidido y lo apostado
+  // coinciden, por eso el bug viejo no se notaba en las pérdidas).
   rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
-    .forEach(t => acumularDevuelto(t.cliente_nombre, t.monto));
+    .forEach(t => acumularDevuelto(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
   // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
   // lado BANQUERO de Tercios ahora también genera % devuelto.
   rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
-    .forEach(t => acumularDevuelto(t.banquero_nombre, t.monto));
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, j.monto));
+    .forEach(t => acumularDevuelto(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  // resultado_cliente de Jugadas Adelantadas ya es un neto DEFINITIVO sin
+  // ningún 5% embebido (ver resolverTablaFija/resolverClienteMarca en
+  // hipismoAdelantadasCalc.js) -- montoDecidido con sinComision=true lo
+  // deja tal cual, en valor absoluto.
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, montoDecidido(j.resultado_cliente, true)));
   // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
-  // % devuelto — j.monto es el monto TOTAL de la jugada, cada banqueador
-  // solo banqueó su `porcentaje` de esa jugada (ver resolverBanqueoMarca
-  // en services/hipismoAdelantadasCalc.js), así que la base de su % es
-  // j.monto * b.porcentaje/100, no j.monto completo. (Una Marca nula
-  // nunca llega a tener banqueadores -- solo se banquea una Marca ya
-  // decidida -- así que este bloque no necesita el mismo filtro de
-  // j.gano, pero se deja fuera del .filter() de arriba a propósito para
-  // no confundir al próximo lector con un filtro que acá nunca hace nada.)
+  // % devuelto — cada banqueador solo banqueó su `porcentaje` de la base
+  // DECIDIDA de la jugada completa (|resultado_cliente|, el mismo "base"
+  // que ya usa resolverBanqueoMarca para repartir entre banqueadores —
+  // ver services/hipismoAdelantadasCalc.js), nunca de j.monto (el
+  // apostado bruto de la Marca completa). (Una Marca nula nunca llega a
+  // tener banqueadores -- solo se banquea una Marca ya decidida -- así que
+  // este bloque no necesita el mismo filtro de j.gano, pero se deja fuera
+  // del .filter() de arriba a propósito para no confundir al próximo
+  // lector con un filtro que acá nunca hace nada.)
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
+    const baseJugada = montoDecidido(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
-      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularDevuelto(b.nombre, parte);
     });
   });

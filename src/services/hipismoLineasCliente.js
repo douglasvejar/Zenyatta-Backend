@@ -65,6 +65,15 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
       modalidad: row.modalidad,
       caballo: row.caballo,
       monto: Number(row.monto),
+      // sinComision (02-10-2026, a pedido del usuario: "LOS % QUE SE
+      // DEVUELVEN ES DE LO DECIDIDO NO DE LO APOSTADO... SIN SACARLE EL
+      // 5%") -- hace falta para que montoDecidido() (services/
+      // hipismoAdelantadasCalc.js) pueda reconstruir el monto DECIDIDO de
+      // esta línea a partir de `resultado` (que ya viene con el 5%
+      // descontado si fue una ganancia con comisión, ver montoMostrado()
+      // en hipismoCalc.js) sin inventar un 5% que en realidad nunca se
+      // cobró en una jugada exenta.
+      sinComision: row.sin_comision,
       rol,
       resultado
     };
@@ -209,7 +218,17 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
       numeroEjemplar: row.numero_ejemplar,
       numero1: row.numero1,
       numero2: row.numero2,
-      monto: Number(row.monto)
+      monto: Number(row.monto),
+      // resultadoClienteJugada (02-10-2026, "SIEMPRE ES BASE A LO
+      // DECIDIDO... LO QUE SE DECIDA EN LA JUGADA NETA"): el resultado del
+      // CLIENTE que jugó esta Marca/Tabla Fija, sin importar de quién es
+      // ESTA línea puntual (jugador o banquero) -- hace falta en la línea
+      // del BANQUERO porque su % propio/de aval tiene que calcularse sobre
+      // la PARTE decidida de la jugada (ver resolverClienteMarca/
+      // resolverBanqueoMarca en hipismoAdelantadasCalc.js: "base" ahí es
+      // exactamente |resultado_cliente|, gane o pierda), nunca sobre
+      // `monto` (el apostado bruto de la Marca completa).
+      resultadoClienteJugada: Number(row.resultado_cliente)
     };
     if (row.cliente_nombre === nombreJugador) {
       lineasAdelantadas.push({ ...base, rol: 'jugador', resultado: Number(row.resultado_cliente) });

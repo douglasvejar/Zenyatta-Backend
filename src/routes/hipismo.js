@@ -77,7 +77,8 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 // asigna quién banquea (POST /adelantadas/jugadas/:id/banquear).
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
-  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2
+  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2,
+  montoDecidido
 } = require('../services/hipismoAdelantadasCalc');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
@@ -497,10 +498,21 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   // null SOLO en ese caso (Tabla Fija siempre decide true/false), así que
   // filtrar por "r.gano !== null" descarta justo esas sin afectar Tabla
   // Fija ni una Marca sí decidida.
+  // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO DECIDIDO NO
+  // DE LO APOSTADO... SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE EL 5%" —
+  // ver la nota grande de montoDecidido() en services/hipismoAdelantadasCalc.js):
+  // NUNCA t.monto (lo apostado bruto) — en una jugada fraccionada ("10A4")
+  // el que gana solo decide una fracción del monto apostado. Jugadas
+  // Adelantadas resueltas acá (r.resultadoCliente) ya es un neto
+  // DEFINITIVO sin ningún 5% embebido, así que montoDecidido con
+  // sinComision=true simplemente lo deja en valor absoluto.
   const entradasApostadas = resultado.tickets
     .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
-    .flatMap(t => [{ nombre: t.clienteNombre, monto: t.monto }, { nombre: t.banqueroNombre, monto: t.monto }])
-    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: r.monto })));
+    .flatMap(t => [
+      { nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) },
+      { nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) }
+    ])
+    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
@@ -633,10 +645,16 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // (26-09-2026, ver la nota grande de esa función) — recién cuando el
   // plano se guarda de verdad, nunca en un "Calcular" que el operador
   // después no confirma.
+  // Ver la nota grande de montoDecidido() en /planos/calcular — NUNCA
+  // t.monto (lo apostado bruto), la base del % propio/de aval es siempre
+  // lo DECIDIDO en esa jugada puntual, sin sacarle el 5%.
   const entradasApostadas = resultado.tickets
     .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
-    .flatMap(t => [{ nombre: t.clienteNombre, monto: t.monto }, { nombre: t.banqueroNombre, monto: t.monto }])
-    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: r.monto })));
+    .flatMap(t => [
+      { nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) },
+      { nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) }
+    ])
+    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
   const nombresApostados = entradasApostadas.map(e => e.nombre);
   await asegurarCuentasComisionParaNombres(req.grupoId, nombresApostados);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, nombresApostados);
@@ -1618,7 +1636,7 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
   const porPlano = new Map();
   if (!planoIds.length) return porPlano;
   const rTickets = await db.query(
-    `SELECT plano_id, cliente_nombre, banquero_nombre, monto, resultado_jugador, resultado_banquero
+    `SELECT plano_id, cliente_nombre, banquero_nombre, monto, resultado_jugador, resultado_banquero, sin_comision
        FROM hipismo_tickets WHERE plano_id = ANY($1::uuid[])`,
     [planoIds]
   );
@@ -1635,10 +1653,17 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
     });
     return total;
   }
+  // montoDecidido (02-10-2026, "SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE
+  // EL 5%" — ver la nota grande de montoDecidido() en
+  // services/hipismoAdelantadasCalc.js): NUNCA t.monto, cada lado usa su
+  // propio resultado ya decidido.
   rTickets.rows
     .filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
     .forEach(t => {
-      const devuelto = round2(devueltoDeNombre(t.cliente_nombre, t.monto) + devueltoDeNombre(t.banquero_nombre, t.monto));
+      const devuelto = round2(
+        devueltoDeNombre(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)) +
+        devueltoDeNombre(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision))
+      );
       if (!devuelto) return;
       porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devuelto));
     });
@@ -2535,13 +2560,13 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
 
   const rTickets = mismoDia
     ? await db.query(
-        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero
+        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero
            FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
           WHERE t.grupo_id = $1 AND p.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, p.hipodromo_nombre, p.carrera_numero, p.fecha
+        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero, p.fecha
            FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
           WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
@@ -2564,6 +2589,15 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
       id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
       cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
       tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
+      // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
+      // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido()
+      // en services/hipismoAdelantadasCalc.js): esta línea SIEMPRE es el
+      // lado JUGADOR (ver la nota grande de más arriba, "nunca lo que
+      // banqueó/cubrió"), así que su base es resultado_jugador. Se deja
+      // aparte de `monto` (que /montos-apostados necesita intacto, en
+      // bruto) para que los reportes de % devuelto (más abajo) usen esta
+      // en cambio.
+      montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
       decidida: !sinDecidir,
       gano: sinDecidir ? null : rj > 0
     });
@@ -2606,13 +2640,13 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
 
   const rAdelantadas = mismoDia
     ? await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre, p.fecha
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre, p.fecha
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
@@ -2623,6 +2657,10 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
     tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
     detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
     monto: Number(j.monto),
+    // resultado_cliente ya es un neto DEFINITIVO sin ningún 5% embebido
+    // (ver la nota grande de montoDecidido más arriba, junto a Tercios) —
+    // montoDecidido con sinComision=true lo deja en valor absoluto.
+    montoDecidido: montoDecidido(j.resultado_cliente, true),
     decidida: j.gano !== null,
     // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
     // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
@@ -2839,7 +2877,10 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
       // construirResumenClienteHipismo en services/hipismoResumenCliente.js)
       // — mostrarla acá de nuevo la duplicaría.
       if (info.incluidaEnJugada) return;
-      const devuelto = round2(Math.abs(d.monto) * (info.pct / 100));
+      // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
+      // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido
+      // junto a obtenerApuestasDelRango más arriba): NUNCA d.monto.
+      const devuelto = round2((Number(d.montoDecidido) || 0) * (info.pct / 100));
       if (!devuelto) return;
       // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
       // destino — este reporte audita "quién generó cuánto %"; `destino` se
@@ -2913,7 +2954,9 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
       // "incluir % en sus jugadas" (29-09-2026) — ver la nota grande
       // EXACTA de /comisiones-devueltas arriba.
       if (info.incluidaEnJugada) return;
-      devueltoTotalLinea = round2(devueltoTotalLinea + Math.abs(d.monto) * (info.pct / 100));
+      // montoDecidido (02-10-2026) — ver la nota grande EXACTA de
+      // /comisiones-devueltas arriba: NUNCA d.monto.
+      devueltoTotalLinea = round2(devueltoTotalLinea + (Number(d.montoDecidido) || 0) * (info.pct / 100));
     });
     if (!devueltoTotalLinea) return;
     const devuelto = devueltoTotalLinea;
@@ -3078,7 +3121,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   const numeroSemana = numeroSemanaISO(desde);
 
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto, t.resultado_jugador, t.resultado_banquero
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -3092,7 +3135,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.monto, j.banqueadores, j.gano
+    `SELECT j.cliente_nombre, j.monto, j.resultado_cliente, j.banqueadores, j.gano
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -3141,18 +3184,24 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // resultado_banquero en 0 para Tercios, y por gano !== null para
   // Adelantadas. Number(...) obligatorio -- ver la nota grande EXACTA de
   // /cierre-final sobre por qué "pg" nunca da estas columnas como number.
+  // montoDecidido (02-10-2026, "SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE
+  // EL 5%" — ver la nota grande de montoDecidido() en
+  // services/hipismoAdelantadasCalc.js): NUNCA t.monto/j.monto.
   const ticketsDecididos = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
-  ticketsDecididos.forEach(t => acumularSaldo(t.cliente_nombre, t.monto));
+  ticketsDecididos.forEach(t => acumularSaldo(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
   // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
-  ticketsDecididos.forEach(t => acumularSaldo(t.banquero_nombre, t.monto));
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, j.monto));
-  // 29-09-2026 — lado BANQUERO de una Marca: j.monto es el monto TOTAL de
-  // la jugada, cada banqueador solo banqueó su `porcentaje` de esa jugada
-  // (ver resolverBanqueoMarca en services/hipismoAdelantadasCalc.js).
+  ticketsDecididos.forEach(t => acumularSaldo(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, montoDecidido(j.resultado_cliente, true)));
+  // 29-09-2026 — lado BANQUERO de una Marca: cada banqueador solo banqueó
+  // su `porcentaje` de la base DECIDIDA de la jugada completa
+  // (|resultado_cliente|, el mismo "base" que ya usa resolverBanqueoMarca
+  // para repartir entre banqueadores — ver services/hipismoAdelantadasCalc.js),
+  // nunca de j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
+    const baseJugada = montoDecidido(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
-      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularSaldo(b.nombre, parte);
     });
   });
@@ -3351,17 +3400,22 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // NUNCA una jugada que "no se decidió" (29-09-2026, ver la nota grande
   // EXACTA de /cierre-final) — mismo filtro que /cierre-final y
   // /saldo-comisiones. Number(...) obligatorio -- ver esa misma nota.
+  // montoDecidido (02-10-2026, "SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE
+  // EL 5%" — ver la nota grande de montoDecidido() en
+  // services/hipismoAdelantadasCalc.js): NUNCA t.monto/j.monto.
   const ticketsDecididosDia = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
-  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, t.monto));
-  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, t.monto));
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, j.monto));
+  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecidido(t.resultado_jugador, t.sin_comision)));
+  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecidido(j.resultado_cliente, true)));
   // 29-09-2026 — lado BANQUERO de una Marca (ver la nota grande de
-  // /cierre-final): j.monto es el monto TOTAL de la jugada, cada
-  // banqueador solo banqueó su `porcentaje` de esa jugada.
+  // /cierre-final): cada banqueador solo banqueó su `porcentaje` de la
+  // base DECIDIDA de la jugada completa (|resultado_cliente|), nunca de
+  // j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
+    const baseJugada = montoDecidido(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
-      const parte = Math.abs(Number(j.monto) || 0) * (Number(b.porcentaje) || 0) / 100;
+      const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularDevueltoDia(b.nombre, j.fecha, parte);
     });
   });

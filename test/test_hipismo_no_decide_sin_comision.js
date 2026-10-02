@@ -47,7 +47,13 @@ const TABLAS = {
   hipismo_planos: [{ id: 'p1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 1, fecha: FECHA, cruza_jugadas: false }],
   hipismo_tickets: [
     // DECIDIDO: PEDRO le gana 100 a BANCO -- SÍ debe generar 2% = 2,00.
-    { id: 't-decidido', plano_id: 'p1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1P', caballo: '5', monto: 100, resultado_jugador: 100, resultado_banquero: -100, sin_comision: false },
+    // resultado_jugador (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
+    // DECIDIDO NO DE LO APOSTADO... SIN SACARLE EL 5%" -- ver montoDecidido
+    // en services/hipismoAdelantadasCalc.js): 95, no 100 -- un "1P" ganado
+    // con 5% de comisión muestra/guarda monto*0.95 (ver montoMostrado() en
+    // hipismoCalc.js), así que lo DECIDIDO real (montoDecidido(95,false) =
+    // 95/0.95 = 100) sigue siendo 100, igual que antes de este ajuste.
+    { id: 't-decidido', plano_id: 'p1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1P', caballo: '5', monto: 100, resultado_jugador: 95, resultado_banquero: -100, sin_comision: false },
     // ANULADO ("pp" sin que ninguno figure en la pizarra): 0 y 0 -- NO
     // debe generar el 2% de 50 (=1,00); si el bug existiera, PEDRO daría
     // 3,00 en vez de 2,00.
@@ -57,7 +63,11 @@ const TABLAS = {
   hipismo_adelantadas_planos: [{ id: 'ap1', grupo_id: GRUPO_ID, fecha: FECHA }],
   hipismo_adelantadas_jugadas: [
     // DECIDIDA: ANA ganó su Marca de 200 -- SÍ debe generar 3% = 6,00.
-    { id: 'ad-decidida', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true, cliente_nombre: 'ANA', monto: 200, resultado_cliente: 190, comision: 10, banqueadores: [] },
+    // resultado_cliente (02-10-2026, ver la nota grande de montoDecidido
+    // más arriba): 200, no 190 -- el % propio/de aval de una Marca se
+    // calcula sobre lo DECIDIDO (|resultado_cliente|, un neto ya
+    // definitivo sin ningún 5% embebido), nunca sobre `monto`.
+    { id: 'ad-decidida', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true, cliente_nombre: 'ANA', monto: 200, resultado_cliente: 200, comision: 10, banqueadores: [] },
     // ANULADA (ninguno de los 2 caballos figuró -- estado 'sin_decidir',
     // gano=null): NO debe generar el 3% de 80 (=2,40); si el bug
     // existiera, ANA daría 8,40 en vez de 6,00.
@@ -112,18 +122,18 @@ function ejecutarQuery(text, params) {
         .filter(t => t.grupo_id === grupoId)
         .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
         .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-        .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero }))
+        .map(({ t }) => ({ cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, sin_comision: t.sin_comision }))
     };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     return {
       rows: TABLAS.hipismo_adelantadas_jugadas
         .filter(j => j.grupo_id === grupoId)
         .map(j => ({ j, p: TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id) }))
         .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-        .map(({ j }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, banqueadores: j.banqueadores, gano: j.gano }))
+        .map(({ j }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, resultado_cliente: j.resultado_cliente, banqueadores: j.banqueadores, gano: j.gano }))
     };
   }
 

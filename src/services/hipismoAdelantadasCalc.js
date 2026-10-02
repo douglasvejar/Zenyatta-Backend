@@ -103,6 +103,39 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+// montoDecidido (02-10-2026, a pedido del usuario: "LOS % QUE SE DEVUELVEN
+// ES DE LO DECIDIDO NO DE LO APOSTADO... SI JUGARON 700 10A4 Y LA GANAN SE
+// SACA % BASE A LOS 280 QUE SE DECIDEN... SI LA PIERDE SI SERIA BASE A LOS
+// 700... SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE EL 5%"). Es la inversa
+// EXACTA de montoMostrado() (services/hipismoCalc.js): a partir de un
+// resultado YA MOSTRADO/guardado (resultado_jugador, resultado_banquero, o
+// el resultado_cliente/monto del banquero de una Marca de Jugadas
+// Adelantadas — ver resolverBanqueoMarca más abajo), devuelve el monto
+// "decidido" tal cual quedó la jugada, SIN el 5% de comisión descontado.
+//
+// Por qué hace falta: en una jugada fraccionada (familia "decimos"/"a
+// premio" de resolverModalidad en hipismoCalc.js, ej. "10A4"), el que GANA
+// solo decide una FRACCIÓN del monto apostado (280 de 700, no 700) — así
+// que el % propio/de aval de un cliente (o de su banquero) tiene que
+// calcularse sobre esos 280, nunca sobre los 700 apostados. El que PIERDE,
+// en cambio, casi siempre pierde el monto COMPLETO (por eso "si la pierde
+// si seria base a los 700" -- ahí lo decidido Y lo apostado coinciden, y
+// el bug viejo "pasaba colado" sin que se notara). montoMostrado() ya le
+// resta el 5% a cualquier ganancia (salvo sinComision) antes de guardarla
+// -- acá se hace la cuenta al revés (dividir entre 0.95) para recuperar lo
+// decidido ANTES de esa resta, que es justo lo que pidió el usuario
+// ("SIN SACARLE EL 5%").
+//
+// Para una pérdida (resultadoMostrado <= 0) no hay ningún 5% que deshacer
+// -- montoMostrado() nunca le resta nada a una pérdida -- así que el
+// "decidido" es directamente su valor absoluto (sea una pérdida completa,
+// -monto, o una pérdida parcial de la familia "AyB", ej. -0.5*monto).
+function montoDecidido(resultadoMostrado, sinComision) {
+  const r = Number(resultadoMostrado) || 0;
+  if (r > 0 && !sinComision) return round2(r / 0.95);
+  return round2(Math.abs(r));
+}
+
 // Mismo criterio de parseo de montos que ya usa hipismoCalc.js/
 // hipismoRemateCalc.js en el resto del módulo ("." = separador de miles,
 // "," = decimal) — en la práctica los planos de ejemplo no traen
@@ -333,5 +366,6 @@ module.exports = {
   armarBloqueAdelantadas,
   formatMontoTabla,
   formatNombre,
-  round2
+  round2,
+  montoDecidido
 };

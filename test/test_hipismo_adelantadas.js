@@ -617,9 +617,14 @@ function reqBase(grupoId) {
   check(Math.round((resPlanos12._json.totalesFinales.LINARES + resPlanos12._json.totalesFinales.MATURIN + (resPlanos12._json.totalesFinales.HALLAND - (-120)) + resPlanos12._json.totalesFinales['TABLAS FIJAS'] + resPlanos12._json.totalesFinales['% DE TABLAS FIJAS']) * 100) === 0,
     'Los 3 clientes de Tablas Fijas (aislando a Halland de su Marca, que se banquea aparte) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto — nada queda "de más" sin contraparte');
   // 23-09-2026 (undécima ronda), "% devuelto" — LINARES tiene 1% de
-  // comisión propia (cargado arriba): se gana 1% de lo que jugó en su
-  // Tabla Fija (75) = 0,75, SIN que su resultado normal (+225) se toque.
-  check(resPlanos12._json.totalesFinales['LINARES - PORCENTAJE'] === 0.75, 'Balance General trae el ítem "LINARES - PORCENTAJE" +0,75 (1% de los 75 que jugó en su Tabla Fija), sin tocar su +225 normal');
+  // comisión propia (cargado arriba). 02-10-2026, corregido tras el
+  // reporte del usuario ("LOS % QUE SE DEVUELVEN ES DE LO DECIDIDO NO DE
+  // LO APOSTADO... SIEMPRE ES BASE A LO DECIDIDO"): se gana 1% de lo
+  // DECIDIDO en su Tabla Fija (+225, la ganancia neta ya resuelta —
+  // resolverTablaFija() nunca le resta ninguna comisión a resultadoCliente,
+  // así que 225 ya es "lo decidido" sin comisión que invertir), NO de los
+  // 75 apostados = 2,25, SIN que su resultado normal (+225) se toque.
+  check(resPlanos12._json.totalesFinales['LINARES - PORCENTAJE'] === 2.25, 'Balance General trae el ítem "LINARES - PORCENTAJE" +2,25 (1% de los 225 decididos en su Tabla Fija, no de los 75 apostados), sin tocar su +225 normal');
   // La Marca de Halland todavía no tiene banqueadores asignados (sigue
   // 'falta_banqueo') — solo entra el lado del cliente por ahora, el de
   // los banqueadores se suma más adelante cuando se resuelva el banqueo
