@@ -74,7 +74,7 @@ function ejecutarQuery(text, params) {
     const [grupoId, nombres] = params;
     return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre)).map(j => ({ id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: null, incluir_porcentaje_en_jugadas: j.incluir_porcentaje_en_jugadas })) };
   }
-  if (sql === 'SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])') {
+  if (sql === 'SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])') {
     const [grupoId, idsJugadores] = params;
     return {
       rows: TABLAS.jugadores_avales_porcentaje
@@ -176,17 +176,21 @@ async function invocarRuta(handler, req) {
   check(!!salidaCierre, '1a) GET /cierre-final respondió algo');
   const clientes = (salidaCierre && salidaCierre.clientes) || [];
   const filaMrPct = clientes.find(c => c.nombre === 'MRINCREIBLE - PORCENTAJE');
-  const filaFerro = clientes.find(c => c.nombre === 'FERROCARRIL - PORCENTAJE');
-  const filaPurga = clientes.find(c => c.nombre === 'PURGA - PORCENTAJE');
+  // 02-10-2026: tras el rediseño, avalador_id YA ES directamente la ficha
+  // elegida por el operador -- en este caso, el cliente real FERROCARRIL /
+  // PURGA (sin ninguna sub-cuenta "- PORCENTAJE" auto-creada por detrás),
+  // así que el % de aval se suma a la MISMA ficha de FERROCARRIL/PURGA.
+  const filaFerro = clientes.find(c => c.nombre === 'FERROCARRIL');
+  const filaPurga = clientes.find(c => c.nombre === 'PURGA');
 
   // MRINCREIBLE banqueó el 50% de una Marca de $600 = $300 puntuales.
   // 1% de $300 = $3,00; cada aval al 0,5% de $300 = $1,50.
   check(!!filaMrPct && Math.abs(filaMrPct.saldo - 3.00) < 0.001,
     `1b) ARREGLO: "MRINCREIBLE - PORCENTAJE" aparece con +3,00 (1% de los $300 que banqueó de la Marca, escalados de su 50% sobre $600) -- dio ${filaMrPct ? filaMrPct.saldo : 'nada (bug reproducido)'}`);
   check(!!filaFerro && Math.abs(filaFerro.saldo - 1.50) < 0.001,
-    `1c) "FERROCARRIL - PORCENTAJE" (aval de MRINCREIBLE al 0,5%) aparece con +1,50 -- dio ${filaFerro ? filaFerro.saldo : 'nada (bug reproducido)'}`);
+    `1c) "FERROCARRIL" (aval de MRINCREIBLE al 0,5%, directo a su propia ficha) aparece con +1,50 -- dio ${filaFerro ? filaFerro.saldo : 'nada (bug reproducido)'}`);
   check(!!filaPurga && Math.abs(filaPurga.saldo - 1.50) < 0.001,
-    `1d) "PURGA - PORCENTAJE" (el otro aval de MRINCREIBLE al 0,5%) aparece con +1,50 -- dio ${filaPurga ? filaPurga.saldo : 'nada (bug reproducido)'}`);
+    `1d) "PURGA" (el otro aval de MRINCREIBLE al 0,5%, directo a su propia ficha) aparece con +1,50 -- dio ${filaPurga ? filaPurga.saldo : 'nada (bug reproducido)'}`);
 
   // ---- 2) GET /saldo-comisiones (mismo cálculo, vista de saldo semanal) ----
   const reqSaldo = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };

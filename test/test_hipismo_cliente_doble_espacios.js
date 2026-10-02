@@ -109,7 +109,7 @@ function ejecutarQuery(text, params) {
     const [grupoId] = params;
     return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId).map(j => ({ id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: null, incluir_porcentaje_en_jugadas: j.incluir_porcentaje_en_jugadas })) };
   }
-  if (sql === 'SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])') {
+  if (sql === 'SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap JOIN jugadores av ON av.id = jap.avalador_id WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])') {
     return { rows: [] };
   }
   if (sql === 'SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])') {

@@ -7583,36 +7583,54 @@ async function cargarClientesReales() {
 // detalle/edición de un cliente existente (2 tablas distintas, mismas
 // funciones).
 //
-// FICHA_AVALES_OTROS_CLIENTES: la lista de candidatos a avalador para el
-// formulario que esté abierto en este momento (todos los clientes menos
-// el que se está editando, o todos si es uno nuevo) — se fija justo antes
-// de armar el HTML del formulario, así opcionesAvalador() no necesita
-// que cada función que arma una fila le pase la lista aparte.
+// FICHA_AVALES_OTROS_CLIENTES: la lista de candidatos (solo para el
+// autocompletar/datalist) para el formulario que esté abierto en este
+// momento (todos los clientes menos el que se está editando, o todos si
+// es uno nuevo) — se fija justo antes de armar el HTML del formulario.
+//
+// 02-10-2026 (a pedido explícito del usuario: "no quiero que se creen los
+// agregados porcentajer automatico, quiero que yo elija en que ficha y
+// como yo quiera que se llame la ficha donde va ese %"): esto YA NO es un
+// <select> de clientes existentes — es un campo de TEXTO LIBRE (con
+// datalist solo de sugerencia/autocompletar) donde el operador escribe el
+// nombre EXACTO de la ficha donde quiere que caiga el %, igual que un
+// nombre de cliente nuevo. El servidor (buscarOCrearFicha, ver la nota
+// grande en services/hipismoComisionPropia.js) busca-o-crea esa ficha —
+// así nunca más se arma sola una cuenta "{Cliente} - PORCENTAJE" por
+// detrás sin que el operador la haya pedido.
 let FICHA_AVALES_OTROS_CLIENTES = [];
 
-function opcionesAvalador(avaladorIdSeleccionado) {
-  return '<option value="">Seleccione</option>' + FICHA_AVALES_OTROS_CLIENTES
+// Datalist compartido por TODOS los campos de "ficha" de este formulario
+// (el % propio y cada fila de aval) — solo sugiere, nunca obliga: el
+// operador puede escribir cualquier nombre, exista o no todavía.
+function datalistFichasComisionHtml(idDatalist) {
+  const opciones = FICHA_AVALES_OTROS_CLIENTES
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .map(x => `<option value="${x.id}" ${String(x.id) === String(avaladorIdSeleccionado) ? 'selected' : ''}>${formatNombre(x.nombre)}</option>`)
+    .map(x => `<option value="${formatNombre(x.nombre).replace(/"/g, '&quot;')}">`)
     .join('');
+  return `<datalist id="${idDatalist}">${opciones}</datalist>`;
 }
-function filaAvalPorcentajeHtml(avaladorId, porcentaje) {
+function filaAvalPorcentajeHtml(fichaNombre, porcentaje) {
   return `<tr>
-    <td><select class="avalSelAvalador" onchange="onCambioFilaAvalPorcentaje(this)">${opcionesAvalador(avaladorId)}</select></td>
+    <td><input type="text" class="avalInpFicha" list="datalistFichasComision" placeholder="Nombre de la ficha (ej: Ferrocarril)" value="${(fichaNombre || '').toString().replace(/"/g, '&quot;')}" onchange="onCambioFilaAvalPorcentaje(this)"></td>
     <td><input type="number" class="avalInpPct" step="0.01" min="0" placeholder="Ej: 1" value="${porcentaje || ''}"></td>
     <td><button type="button" class="btn btn-secundario" style="padding:4px 10px;" onclick="eliminarFilaAvalPorcentaje(this)" title="Quitar este avalador">✕</button></td>
   </tr>`;
 }
 function filasAvalesPorcentajeHtml(avalesExistentes) {
-  const lista = (avalesExistentes && avalesExistentes.length) ? avalesExistentes : [{ avaladorId: '', porcentaje: '' }];
-  return lista.map(a => filaAvalPorcentajeHtml(a.avaladorId, a.porcentaje)).join('');
+  // avaladorNombre (02-10-2026): el nombre ACTUAL de la ficha donde cae
+  // hoy este aval (ver GET /api/jugadores en routes/jugadores.js) — se
+  // precarga tal cual, así el operador ve/confirma lo que ya hay en vez de
+  // encontrar el campo vacío.
+  const lista = (avalesExistentes && avalesExistentes.length) ? avalesExistentes : [{ avaladorNombre: '', porcentaje: '' }];
+  return lista.map(a => filaAvalPorcentajeHtml(a.avaladorNombre, a.porcentaje)).join('');
 }
-// Al elegir un avalador en la última fila, abre una fila nueva vacía sola
-// (mismo criterio que onCambioClienteWinners en "Cargar Winners").
-function onCambioFilaAvalPorcentaje(sel) {
-  const tbody = sel.closest('tbody');
-  const tr = sel.closest('tr');
-  if (sel.value && tbody && tr === tbody.lastElementChild) {
+// Al escribir en la última fila, abre una fila nueva vacía sola (mismo
+// criterio que onCambioClienteWinners en "Cargar Winners").
+function onCambioFilaAvalPorcentaje(inp) {
+  const tbody = inp.closest('tbody');
+  const tr = inp.closest('tr');
+  if (inp.value.trim() && tbody && tr === tbody.lastElementChild) {
     tbody.insertAdjacentHTML('beforeend', filaAvalPorcentajeHtml('', ''));
   }
 }
@@ -7624,35 +7642,82 @@ function eliminarFilaAvalPorcentaje(btn) {
   const tbody = tr ? tr.closest('tbody') : null;
   if (!tr || !tbody) return;
   if (tbody.children.length <= 1) {
-    tr.querySelector('.avalSelAvalador').value = '';
+    tr.querySelector('.avalInpFicha').value = '';
     tr.querySelector('.avalInpPct').value = '';
     return;
   }
   tr.remove();
 }
-// Lee la tabla y arma [{avaladorId, porcentaje}] — descarta filas vacías
+// Lee la tabla y arma [{fichaNombre, porcentaje}] — descarta filas vacías
 // o con % en 0 (mismo criterio que el resto de los formularios de este
 // sistema: una fila incompleta simplemente no cuenta).
 function extraerAvalesPorcentajeDeTabla(tbodyId) {
   const avales = [];
   document.querySelectorAll(`#${tbodyId} tr`).forEach(tr => {
-    const sel = tr.querySelector('.avalSelAvalador');
-    const inp = tr.querySelector('.avalInpPct');
-    if (!sel || !inp) return;
-    const avaladorId = sel.value;
-    const porcentajeTxt = (inp.value || '').toString().trim();
-    if (!avaladorId || !porcentajeTxt) return;
+    const inp = tr.querySelector('.avalInpFicha');
+    const inpPct = tr.querySelector('.avalInpPct');
+    if (!inp || !inpPct) return;
+    const fichaNombre = (inp.value || '').toString().trim();
+    const porcentajeTxt = (inpPct.value || '').toString().trim();
+    if (!fichaNombre || !porcentajeTxt) return;
     const porcentaje = parseFloat(porcentajeTxt.replace(',', '.'));
     if (!isFinite(porcentaje) || porcentaje <= 0) return;
-    avales.push({ avaladorId, porcentaje });
+    avales.push({ fichaNombre, porcentaje });
   });
   return avales;
 }
-// Valida que no se haya elegido el mismo avalador 2 veces (el servidor
-// también lo rechaza, esto es solo para avisar antes de mandar nada).
+// Valida que no se haya escrito la misma ficha 2 veces (el servidor
+// también lo rechaza, esto es solo para avisar antes de mandar nada) —
+// compara normalizado (mayúscula + espacios colapsados), igual que el
+// servidor (normalizarNombreFicha en routes/jugadores.js).
+function normalizarNombreFichaCliente(nombre) {
+  return (nombre || '').toString().trim().toUpperCase().replace(/\s+/g, ' ');
+}
 function avalesPorcentajeTieneDuplicados(avales) {
-  const ids = avales.map(a => String(a.avaladorId));
-  return new Set(ids).size !== ids.length;
+  const nombres = avales.map(a => normalizarNombreFichaCliente(a.fichaNombre));
+  return new Set(nombres).size !== nombres.length;
+}
+// "Ya existe un cliente real con ese nombre" (02-10-2026, a pedido
+// explícito del usuario: "informarme que ese cliente ya existe y pedirme
+// confirmasion para hacerlo o no") — se fija ANTES de guardar, para cada
+// nombre de ficha que el operador haya escrito (el % propio y cada fila
+// de aval). Busca SOLO entre clientes REALES (nunca otra cuenta de
+// comisión — mandar el % a una cuenta "... - PORCENTAJE" que ya existe es
+// justamente el camino normal, no hace falta avisar nada en ese caso).
+// Devuelve el cliente real encontrado, o null si el nombre no coincide
+// con ningún cliente real (sea porque no existe todavía, o porque ya es
+// una cuenta de comisión).
+function buscarClienteRealPorNombreFicha(fichaNombre, idPropioAExcluir) {
+  const norm = normalizarNombreFichaCliente(fichaNombre);
+  if (!norm) return null;
+  return (CLIENTES_HIPISMO_CACHE || []).find(x =>
+    !x.es_cuenta_comision &&
+    (!idPropioAExcluir || String(x.id) !== String(idPropioAExcluir)) &&
+    normalizarNombreFichaCliente(x.nombre) === norm
+  ) || null;
+}
+// Revisa el % propio + cada fila de aval del formulario y, por cada
+// nombre que coincida con un cliente real ya existente, pide confirmación
+// UNA vez por nombre (nunca al propio cliente que se está editando — ESE
+// caso ya lo rechaza el servidor aparte, por "mándalo a su misma ficha
+// con el toggle, no así"). Devuelve true si hay que CANCELAR el guardado
+// (el operador dijo que no, prefiere revisar/corregir el nombre).
+function hayQueCancelarPorFichaDeClienteReal(nombres, idPropioAExcluir) {
+  const yaPreguntados = new Set();
+  for (const nombre of nombres) {
+    const norm = normalizarNombreFichaCliente(nombre);
+    if (!norm || yaPreguntados.has(norm)) continue;
+    yaPreguntados.add(norm);
+    const clienteReal = buscarClienteRealPorNombreFicha(nombre, idPropioAExcluir);
+    if (!clienteReal) continue;
+    const sigue = confirm(
+      '⚠️ "' + formatNombre(clienteReal.nombre) + '" ya existe como cliente real (con sus propias jugadas).\n\n' +
+      'Aceptar = sí, de verdad quiero que este % caiga DIRECTO en su ficha (se va a mezclar con sus jugadas normales).\n' +
+      'Cancelar = no, voy a corregir el nombre (quería una ficha aparte).'
+    );
+    if (!sigue) return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------------
@@ -7737,13 +7802,17 @@ function abrirCrearCliente() {
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión? (opcional)</div>
       <div class="fila">
-        <div><label>% de devolución para el mismo cliente</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0"></div>
+        <div><label>% de devolución para el mismo cliente</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0" oninput="actualizarVisibilidadFichaPropiaCliente('nvoCte')"></div>
       </div>
       <div class="check-fila" style="margin-top:6px;">
-        <input type="checkbox" id="nvoCteIncluirPorcentaje">
+        <input type="checkbox" id="nvoCteIncluirPorcentaje" onchange="actualizarVisibilidadFichaPropiaCliente('nvoCte')">
         <label for="nvoCteIncluirPorcentaje" style="margin:0;">Incluir % en sus jugadas</label>
       </div>
-      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado (por defecto): sus jugadas salen normales y su % se acumula aparte en "{NOMBRE} - PORCENTAJE" — como siempre. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
+      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado (por defecto): sus jugadas salen normales y su % se acumula en la ficha que elijas abajo. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
+      <div class="fila" id="nvoCteFichaPropiaWrap" style="display:none; margin-top:6px;">
+        <div><label>¿En qué ficha va ese %?</label><input type="text" id="nvoCteComisionPropiaFicha" list="datalistFichasComision" placeholder="Ej: su propio nombre, o cualquier otro nombre que elijas"></div>
+      </div>
+      <p class="desc" id="nvoCteFichaPropiaDesc" style="margin-top:-2px; display:none;">Escribe el nombre EXACTO de la ficha donde quieres que caiga este %: puede ser una ficha nueva (se crea sola) o una que ya exista.</p>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
            avala, y si el avalador tambien gana % de ese tercio, en caso
@@ -7751,18 +7820,23 @@ function abrirCrearCliente() {
            elegir mas de un avalador, ya que un cliente puede generarle 2%
            por darte un ejemplo repartido en varias personas" — 0, 1 o
            varias filas, ver filasAvalesPorcentajeHtml()/
-           onCambioFilaAvalPorcentaje() más arriba. -->
+           onCambioFilaAvalPorcentaje() más arriba. 02-10-2026: cada fila
+           ahora es un campo de texto libre con el nombre de la ficha
+           destino (ver la nota grande de FICHA_AVALES_OTROS_CLIENTES más
+           arriba), no un <select> de clientes existentes. -->
       <div style="font-weight:700; margin-bottom:6px;">🛡️ ¿Quién lo avala? ¿El avalador también gana % de ese tercio? (opcional)</div>
-      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — elige uno, se abre sola una fila nueva para agregar otro.</p>
+      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — escribe en qué ficha cae cada uno (se abre sola una fila nueva al escribir en la última).</p>
       <table>
-        <thead><tr><th>Avalador</th><th>% que gana</th><th></th></tr></thead>
+        <thead><tr><th>Ficha del avalador</th><th>% que gana</th><th></th></tr></thead>
         <tbody id="nvoCteAvalesTbody">${filasAvalesPorcentajeHtml([])}</tbody>
       </table>
+      ${datalistFichasComisionHtml('datalistFichasComision')}
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
         <button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">Cancelar</button>
       </div>
     </div>`;
+  actualizarVisibilidadFichaPropiaCliente('nvoCte');
 }
 
 // =================================================================
@@ -7874,13 +7948,41 @@ function confirmarClienteParecido(parecido) {
   );
 }
 
+// Muestra/esconde "¿En qué ficha va ese %?" según el % propio y el toggle
+// "incluir % en sus jugadas" (02-10-2026) — solo hace falta elegir una
+// ficha cuando hay % propio configurado Y el toggle está en OFF (si está
+// en ON, el % se incluye directo en sus jugadas, no necesita ficha
+// aparte). `prefijo` es 'nvoCte' o 'detCte' según el formulario.
+function actualizarVisibilidadFichaPropiaCliente(prefijo) {
+  const pct = parseFloat((document.getElementById(prefijo + 'ComisionPropia').value || '0').toString().replace(',', '.')) || 0;
+  const incluido = document.getElementById(prefijo + 'IncluirPorcentaje').checked;
+  const mostrar = pct > 0 && !incluido;
+  const wrap = document.getElementById(prefijo + 'FichaPropiaWrap');
+  const desc = document.getElementById(prefijo + 'FichaPropiaDesc');
+  if (wrap) wrap.style.display = mostrar ? 'flex' : 'none';
+  if (desc) desc.style.display = mostrar ? 'block' : 'none';
+}
+
 async function guardarNuevoCliente() {
   const nombre = document.getElementById('nvoCteNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
   const parecido = encontrarClienteParecido(nombre, null);
   if (parecido && confirmarClienteParecido(parecido)) { cerrarFichaCliente(); abrirFichaCliente(parecido.id); return; }
   const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('nvoCteAvalesTbody');
-  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
+  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes escribir la misma ficha dos veces — junta el % en una sola fila.'); return; }
+  const comisionPropia = document.getElementById('nvoCteComisionPropia').value || 0;
+  const incluirPorcentajeEnJugadas = document.getElementById('nvoCteIncluirPorcentaje').checked;
+  const comisionPropiaFicha = document.getElementById('nvoCteComisionPropiaFicha').value.trim();
+  if (Number(comisionPropia) > 0 && !incluirPorcentajeEnJugadas && !comisionPropiaFicha) {
+    alert('Falta elegir en qué ficha va el % propio de este cliente (o activa "Incluir % en sus jugadas").');
+    return;
+  }
+  // "Ya existe un cliente real con ese nombre" (ver la nota grande de
+  // hayQueCancelarPorFichaDeClienteReal más arriba) — se revisa el % propio
+  // y cada ficha de aval antes de mandar nada. Como este cliente todavía
+  // no existe (es un alta), no hay id propio que excluir.
+  const nombresFicha = [comisionPropiaFicha, ...avalesPorcentaje.map(a => a.fichaNombre)];
+  if (hayQueCancelarPorFichaDeClienteReal(nombresFicha, null)) return;
   const payload = {
     nombre,
     telefono: document.getElementById('nvoCteTelefono').value.trim(),
@@ -7888,8 +7990,9 @@ async function guardarNuevoCliente() {
     activo: document.getElementById('nvoCteActivo').checked,
     tipoCuenta: document.getElementById('nvoCteTipoCuenta').value,
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
-    comisionPropia: document.getElementById('nvoCteComisionPropia').value || 0,
-    incluirPorcentajeEnJugadas: document.getElementById('nvoCteIncluirPorcentaje').checked,
+    comisionPropia,
+    incluirPorcentajeEnJugadas,
+    comisionPropiaFicha,
     avalesPorcentaje
   };
   try {
@@ -8018,13 +8121,22 @@ async function pintarFichaCliente() {
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión?</div>
       <div class="fila">
-        <div><label>% de devolución para el mismo cliente</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}"></div>
+        <div><label>% de devolución para el mismo cliente</label><input type="number" id="detCteComisionPropia" step="0.01" min="0" value="${j.comision_propia || 0}" oninput="actualizarVisibilidadFichaPropiaCliente('detCte')"></div>
       </div>
       <div class="check-fila" style="margin-top:6px;">
-        <input type="checkbox" id="detCteIncluirPorcentaje" ${j.incluir_porcentaje_en_jugadas ? 'checked' : ''}>
+        <input type="checkbox" id="detCteIncluirPorcentaje" ${j.incluir_porcentaje_en_jugadas ? 'checked' : ''} onchange="actualizarVisibilidadFichaPropiaCliente('detCte')">
         <label for="detCteIncluirPorcentaje" style="margin:0;">Incluir % en sus jugadas</label>
       </div>
-      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado: sus jugadas salen normales y su % se acumula aparte en "{NOMBRE} - PORCENTAJE" — como siempre. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
+      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado: sus jugadas salen normales y su % se acumula en la ficha que elijas abajo. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
+      <!-- 02-10-2026: precargado con cc_propio_nombre (la ficha donde cae
+           HOY su % propio, ver GET /api/jugadores en routes/jugadores.js)
+           -- si todavía no tiene ninguna asignada (cliente viejo, nunca
+           guardado desde este rediseño), queda vacío y hay que elegir una
+           antes de guardar. -->
+      <div class="fila" id="detCteFichaPropiaWrap" style="display:none; margin-top:6px;">
+        <div><label>¿En qué ficha va ese %?</label><input type="text" id="detCteComisionPropiaFicha" list="datalistFichasComision" value="${(j.cc_propio_nombre || '').toString().replace(/"/g, '&quot;')}" placeholder="Ej: su propio nombre, o cualquier otro nombre que elijas"></div>
+      </div>
+      <p class="desc" id="detCteFichaPropiaDesc" style="margin-top:-2px; display:none;">Escribe el nombre EXACTO de la ficha donde quieres que caiga este %: puede ser una ficha nueva (se crea sola) o una que ya exista.</p>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
            avala, y si el avalador tambien gana % de ese tercio, en caso
@@ -8033,13 +8145,17 @@ async function pintarFichaCliente() {
            por darte un ejemplo repartido en varias personas" — antes era
            UN solo avalado_por_id + UN solo porcentaje_devuelto_aval; ahora
            0, 1 o varias filas (jugadores_avales_porcentaje, ver la nota
-           grande en sql/schema.sql), cada una 100% independiente. -->
+           grande en sql/schema.sql), cada una 100% independiente.
+           02-10-2026: cada fila es un campo de texto libre con el nombre
+           de la ficha destino, precargado con avaladorNombre (la ficha
+           donde cae HOY, ver GET /api/jugadores). -->
       <div style="font-weight:700; margin-bottom:6px;">🛡️ ¿Quién lo avala? ¿El avalador también gana % de ese tercio?</div>
-      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — elige uno, se abre sola una fila nueva para agregar otro. Déjalo vacío si este cliente no necesita esto.</p>
+      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — escribe en qué ficha cae cada uno (se abre sola una fila nueva al escribir en la última). Déjalo vacío si este cliente no necesita esto.</p>
       <table>
-        <thead><tr><th>Avalador</th><th>% que gana</th><th></th></tr></thead>
+        <thead><tr><th>Ficha del avalador</th><th>% que gana</th><th></th></tr></thead>
         <tbody id="detCteAvalesTbody">${filasAvalesPorcentajeHtml(j.avalesPorcentaje || [])}</tbody>
       </table>
+      ${datalistFichasComisionHtml('datalistFichasComision')}
       <div class="btn-fila" style="margin-top:14px; justify-content:space-between;">
         <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
         <!-- "Eliminar cliente" desde la ficha (29-09-2026, a pedido del
@@ -8066,6 +8182,7 @@ async function pintarFichaCliente() {
         </tbody>
       </table>
     </div>`;
+  actualizarVisibilidadFichaPropiaCliente('detCte');
 }
 
 async function guardarDetalleCliente(id) {
@@ -8079,7 +8196,20 @@ async function guardarDetalleCliente(id) {
   const parecido = encontrarClienteParecido(nombreNuevo, id);
   if (parecido && confirmarClienteParecido(parecido)) return;
   const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('detCteAvalesTbody');
-  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes elegir el mismo avalador dos veces — junta el % en una sola fila.'); return; }
+  if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes escribir la misma ficha dos veces — junta el % en una sola fila.'); return; }
+  const comisionPropia = document.getElementById('detCteComisionPropia').value || 0;
+  const incluirPorcentajeEnJugadas = document.getElementById('detCteIncluirPorcentaje').checked;
+  const comisionPropiaFicha = document.getElementById('detCteComisionPropiaFicha').value.trim();
+  if (Number(comisionPropia) > 0 && !incluirPorcentajeEnJugadas && !comisionPropiaFicha) {
+    alert('Falta elegir en qué ficha va el % propio de este cliente (o activa "Incluir % en sus jugadas").');
+    return;
+  }
+  // "Ya existe un cliente real con ese nombre" (ver la nota grande de
+  // hayQueCancelarPorFichaDeClienteReal más arriba) — se excluye este
+  // mismo cliente (id) de la búsqueda, para no preguntar nada si el
+  // operador simplemente dejó su % propio en su misma ficha de siempre.
+  const nombresFicha = [comisionPropiaFicha, ...avalesPorcentaje.map(a => a.fichaNombre)];
+  if (hayQueCancelarPorFichaDeClienteReal(nombresFicha, id)) return;
   const payload = {
     nombre: nombreNuevo,
     telefono: document.getElementById('detCteTelefono').value.trim(),
@@ -8089,8 +8219,9 @@ async function guardarDetalleCliente(id) {
     // El pozo NO lo toca este formulario — se conserva tal cual estaba
     // (se edita aparte, con el ajuste +/- de abajo).
     pozoInicial: j ? j.pozo_inicial : 0,
-    comisionPropia: document.getElementById('detCteComisionPropia').value || 0,
-    incluirPorcentajeEnJugadas: document.getElementById('detCteIncluirPorcentaje').checked,
+    comisionPropia,
+    incluirPorcentajeEnJugadas,
+    comisionPropiaFicha,
     modeloComision: j ? j.modelo_comision : null,
     moneda: j ? j.moneda : 'USD',
     modulosAnclados: j ? !!j.modulos_anclados : false,

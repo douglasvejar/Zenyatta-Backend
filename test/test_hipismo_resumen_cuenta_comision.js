@@ -61,10 +61,13 @@ function ejecutarQuery(text, params) {
     const rows = delGrupo.filter(j => {
       if (j.es_cuenta_comision) return false;
       const cond1 = j.cuenta_comision_id === cuentaId && (Number(j.comision_propia) || 0) > 0;
+      // 02-10-2026: cond2 ya NO pasa por avalador.cuenta_comision_id (esa
+      // indirección doble quedó eliminada) -- ahora jap.avalador_id YA ES
+      // directamente la ficha elegida por el operador, así que basta
+      // comparar avalador_id contra cuentaId.
       const cond2 = TABLAS.jugadores_avales_porcentaje.some(a => {
         if (a.jugador_id !== j.id || !(Number(a.porcentaje) > 0)) return false;
-        const avalador = TABLAS.jugadores.find(x => x.id === a.avalador_id);
-        return avalador && avalador.cuenta_comision_id === cuentaId;
+        return a.avalador_id === cuentaId;
       });
       return cond1 || cond2;
     }).map(j => ({ nombre: j.nombre }));
@@ -82,7 +85,7 @@ function ejecutarQuery(text, params) {
     });
     return { rows };
   }
-  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap/i.test(sql)) {
     const [grupoId, idsJugadores] = params;
     const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
     const rows = TABLAS.jugadores_avales_porcentaje
@@ -293,7 +296,11 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
     id: 'cta-luis', grupo_id: GRUPO_ID, nombre: 'LUIS - PORCENTAJE', comision_propia: 0,
     cuenta_comision_id: null, es_cuenta_comision: true
   });
-  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'j-luis', avalador_id: 'j-maria', porcentaje: 1 });
+  // 02-10-2026: avalador_id ya ES directamente la ficha elegida por el
+  // operador al configurar este aval -- acá el operador escribió "MARIA -
+  // PORCENTAJE" (la cuenta dedicada ya existente), no "MARIA" a secas, así
+  // que avalador_id apunta a 'cta-maria', no a 'j-maria'.
+  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'j-luis', avalador_id: 'cta-maria', porcentaje: 1 });
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'LUIS', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '3', monto: 100, resultado_jugador: 95, resultado_banquero: -95 });
 
   const cuentaMaria = { id: 'cta-maria', grupo_id: GRUPO_ID, nombre: 'MARIA - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };

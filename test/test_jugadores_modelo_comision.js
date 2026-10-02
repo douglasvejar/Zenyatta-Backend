@@ -43,25 +43,25 @@ function ejecutarQuery(text, params) {
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
   if (/^DELETE FROM jugadores_avales_porcentaje/i.test(sql)) return { rows: [] };
 
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas] = params;
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas, cuenta_comision_id\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, cuentaComisionId] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: 'j' + (siguienteId++), grupo_id: grupoId, nombre, telefono, notas, activo,
       tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
-      modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas
+      modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas, cuenta_comision_id: cuentaComisionId || null
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
 
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*incluir_porcentaje_en_jugadas = \$11\s*WHERE id = \$12 AND grupo_id = \$13/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*incluir_porcentaje_en_jugadas = \$11, cuenta_comision_id = \$12\s*WHERE id = \$13 AND grupo_id = \$14/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, cuentaComisionId, id, grupoId] = params;
     const fila = TABLAS.jugadores.find(j => j.id === id && j.grupo_id === grupoId);
     if (!fila) return { rows: [] };
-    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas });
+    Object.assign(fila, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas, cuenta_comision_id: cuentaComisionId || null });
     return { rows: [fila] };
   }
 
@@ -149,12 +149,16 @@ function check(cond, msg) {
   check(res2._json.modelo_comision === 'por_tipo_jugada', 'se guarda modelo_comision = "por_tipo_jugada" tal cual vino');
 
   // --- 3) POST sin modeloComision (undefined) -> null, hereda del grupo ---
-  const req3 = { grupoId: GRUPO_ID, body: { nombre: 'CARLOS', comisionPropia: 5 } };
+  // (02-10-2026: comisionPropia en 0 a propósito -- esta prueba es sobre
+  // modelo_comision, no sobre el % propio/ficha; con comisionPropia > 0 y
+  // sin comisionPropiaFicha, resolverCuentaComisionPropiaId del nuevo
+  // rediseño exigiría elegir una ficha, que no es lo que prueba este caso).
+  const req3 = { grupoId: GRUPO_ID, body: { nombre: 'CARLOS', comisionPropia: 0 } };
   const res3 = await invocarRuta(handlerPost, req3);
   check(res3._json.modelo_comision === null, 'sin modeloComision en el body, se normaliza a null (hereda el modelo del grupo) -- retrocompatible con como se creaban los jugadores antes de esta función existir');
 
   // --- 4) POST con un valor inválido/basura -> también se normaliza a null ---
-  const req4 = { grupoId: GRUPO_ID, body: { nombre: 'PEDRO', comisionPropia: 3, modeloComision: 'lo-que-sea' } };
+  const req4 = { grupoId: GRUPO_ID, body: { nombre: 'PEDRO', comisionPropia: 0, modeloComision: 'lo-que-sea' } };
   const res4 = await invocarRuta(handlerPost, req4);
   check(res4._json.modelo_comision === null, 'un modeloComision con cualquier valor que no sea "plano" ni "por_tipo_jugada" se normaliza a null, en vez de guardar basura');
 

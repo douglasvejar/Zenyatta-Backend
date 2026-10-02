@@ -90,6 +90,56 @@ function normalizarParaEmparejar(nombre) {
   return (nombre || '').toString().trim().toUpperCase().replace(/\s+/g, ' ');
 }
 
+// =================================================================
+// buscarOCrearFicha() (02-10-2026, a pedido del usuario después del caso
+// real de "Agregados Ferrocarril - porcentaje - porcentaje"): reemplaza
+// a crearYLinkearCuentaComision()/asegurarCuentasComisionParaNombres()
+// como la forma de resolver la ficha donde va un % — el usuario fue
+// explícito: "no quiero que se creen los agregados porcentaje
+// automatico, quiero que yo elija en que ficha y como yo quiera que se
+// llame la ficha donde va ese %". Antes, el sistema SIEMPRE inventaba el
+// nombre "{Cliente} - PORCENTAJE" por su cuenta (y lo hacía en el momento
+// de calcular un Plano/Remate, sin que el operador lo viera venir) — eso
+// es justo lo que generó el bug real: una ficha YA auto-creada con ese
+// sufijo ("Agregados Ferrocarril - PORCENTAJE") terminó, sin que nadie lo
+// pidiera, con su PROPIO % configurado encima (o puesta como aval de
+// otro cliente), y el sistema le volvió a pegar "- PORCENTAJE" por
+// segunda vez.
+//
+// De ahora en adelante, el NOMBRE de esa ficha lo escribe el operador
+// (en la ficha del Cliente, al configurar su % propio o un aval — ver
+// routes/jugadores.js) ANTES de que exista cualquier Plano/Remate, nunca
+// se inventa solo. Esta función solo busca-o-crea esa ficha EXACTA que
+// el operador pidió:
+//   - Si ya existe un jugador en el grupo con ese nombre (comparación
+//     normalizada, mismo criterio que normalizarParaEmparejar — no
+//     importa mayúscula/espacios de más), se REUSA tal cual está (puede
+//     ser una cuenta de comisión dedicada YA creada antes, o incluso un
+//     cliente real que SÍ juega — routes/jugadores.js es quien decide si
+//     hace falta avisar de eso antes de llamar acá, ver
+//     advierteSiEsClienteReal más abajo).
+//   - Si no existe, se crea una ficha NUEVA marcada es_cuenta_comision
+//     (para que no se ofrezca como "quién apostó" en Cargar Planos/
+//     Remates/Adelantadas), con el nombre EXACTO que pidió el operador
+//     (normalizado igual que cualquier otro nombre de cliente, ver
+//     normalizarNombreJugador en routes/jugadores.js).
+// Devuelve null si nombreTexto viene vacío.
+async function buscarOCrearFicha(grupoId, nombreTexto) {
+  const nombreNorm = (nombreTexto || '').toString().trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!nombreNorm) return null;
+  const rTodos = await db.query('SELECT id, nombre, es_cuenta_comision FROM jugadores WHERE grupo_id = $1', [grupoId]);
+  const existente = rTodos.rows.find(j => normalizarParaEmparejar(j.nombre) === nombreNorm);
+  if (existente) {
+    return { id: existente.id, nombre: existente.nombre, esNuevo: false, esClienteReal: !existente.es_cuenta_comision };
+  }
+  const r = await db.query(
+    `INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial, es_cuenta_comision)
+     VALUES ($1, $2, true, true, 'libre', 0, true) RETURNING id, nombre`,
+    [grupoId, nombreNorm]
+  );
+  return { id: r.rows[0].id, nombre: r.rows[0].nombre, esNuevo: true, esClienteReal: false };
+}
+
 async function obtenerComisionesPropias(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return {};
@@ -155,11 +205,17 @@ async function obtenerComisionesPropias(grupoId, nombres) {
   const idsJugadores = filasConClave.map(({ j }) => j.id);
   const avalesPorJugadorId = {};
   if (idsJugadores.length) {
+    // 02-10-2026: ya NO se junta con la "cuenta de comisión propia" del
+    // avalador (cc_av/avalador.cuenta_comision_id) — desde este cambio,
+    // avalador_id YA ES directamente la ficha elegida por el operador al
+    // configurar el aval (ver buscarOCrearFicha más arriba y
+    // routes/jugadores.js), así que avalador_nombre es, de una vez, el
+    // nombre final a acreditar — sin ninguna capa de sufijo automático
+    // por detrás.
     const rAvales = await db.query(
-      `SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre, cc_av.nombre AS cc_avalador_nombre
+      `SELECT jap.jugador_id, jap.porcentaje, av.nombre AS avalador_nombre
          FROM jugadores_avales_porcentaje jap
          JOIN jugadores av ON av.id = jap.avalador_id
-         LEFT JOIN jugadores cc_av ON cc_av.id = av.cuenta_comision_id
         WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[])`,
       [grupoId, idsJugadores]
     );
@@ -189,13 +245,15 @@ async function obtenerComisionesPropias(grupoId, nombres) {
       }
     }
     // Entradas 2..N: una por cada avalador configurado en
-    // jugadores_avales_porcentaje, cada una con su propio %.
+    // jugadores_avales_porcentaje, cada una con su propio %. 02-10-2026:
+    // cuentaNombre YA ES avalador_nombre directo (ver la nota grande de
+    // la consulta de arriba) — nunca más "{destino} - PORCENTAJE"
+    // inventado acá.
     (avalesPorJugadorId[j.id] || []).forEach(fila => {
       const pctAval = Number(fila.porcentaje) || 0;
       if (!pctAval) return;
       const destino = fila.avalador_nombre;
-      const cuentaNombre = fila.cc_avalador_nombre || `${destino} - PORCENTAJE`;
-      entradas.push({ pct: pctAval, destino, cuentaNombre, esAvalAdicional: true });
+      entradas.push({ pct: pctAval, destino, cuentaNombre: destino, esAvalAdicional: true });
     });
     mapa[claveOriginal] = entradas;
   });
@@ -227,8 +285,24 @@ async function crearYLinkearCuentaComision(grupoId, jugadorId, nombreBase) {
 // Se llama SOLO al GUARDAR de verdad un Plano o un Remate (nunca en la
 // vista previa de "Calcular", para no crear cuentas de cálculos que el
 // operador después no confirma) — antes de leer obtenerComisionesPropias
-// para el guardado real, se asegura de que cada jugador (o su aval) que
-// vaya a generar comisión YA tenga su cuenta de comisión real enlazada.
+// para el guardado real, se asegura de que cada jugador que tenga % PROPIO
+// (comisionPropia, nunca aval) YA tenga su cuenta de comisión real
+// enlazada, como red de seguridad.
+//
+// 02-10-2026 (a pedido del usuario, ver la nota grande de buscarOCrearFicha
+// más arriba): esto YA NO es el camino normal para crear esa ficha — desde
+// esta ronda, el operador elige el nombre él mismo en la ficha del Cliente
+// (routes/jugadores.js, comisionPropiaFicha) o lo confirma en "Revisar %
+// Automáticos" (GET/POST /jugadores/.../comisiones-automaticas). Esta
+// función queda SOLO como red de seguridad para un cliente viejo que
+// todavía no pasó por ninguno de los 2 (cuenta_comision_id sigue en
+// NULL) — una vez que ese cliente se revisa/confirma una vez, nunca
+// vuelve a entrar acá (el IF de abajo ya no encuentra nada que hacer).
+// El lado de AVALES que vivía acá (crear una cuenta "{avalador} -
+// PORCENTAJE" aparte) SE QUITÓ por completo: desde este cambio,
+// avalador_id YA ES la ficha elegida por el operador al configurar el
+// aval (ver obtenerComisionesPropias más arriba) — crear algo más encima
+// sería exactamente el bug que se está arreglando.
 async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
   const unicos = Array.from(new Set((nombres || []).filter(Boolean)));
   if (!unicos.length) return;
@@ -266,20 +340,6 @@ async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
     // nota grande de obtenerComisionesPropias más arriba.
     if (pctPropio && !j.cuenta_comision_id && !j.incluir_porcentaje_en_jugadas) {
       await crearYLinkearCuentaComision(grupoId, j.id, j.nombre);
-    }
-  }
-  const idsJugadores = filas.map(j => j.id);
-  if (!idsJugadores.length) return;
-  const rAvales = await db.query(
-    `SELECT DISTINCT jap.avalador_id, av.nombre AS avalador_nombre, av.cuenta_comision_id AS avalador_cuenta_comision_id
-       FROM jugadores_avales_porcentaje jap
-       JOIN jugadores av ON av.id = jap.avalador_id
-      WHERE jap.grupo_id = $1 AND jap.jugador_id = ANY($2::uuid[]) AND jap.porcentaje > 0`,
-    [grupoId, idsJugadores]
-  );
-  for (const av of rAvales.rows) {
-    if (!av.avalador_cuenta_comision_id) {
-      await crearYLinkearCuentaComision(grupoId, av.avalador_id, av.avalador_nombre);
     }
   }
 }
@@ -329,6 +389,7 @@ async function obtenerAjustesComision(grupoId, desde, hasta) {
 
 module.exports = {
   obtenerComisionesPropias,
+  buscarOCrearFicha,
   crearYLinkearCuentaComision,
   asegurarCuentasComisionParaNombres,
   agregarPorcentajeDevuelto,

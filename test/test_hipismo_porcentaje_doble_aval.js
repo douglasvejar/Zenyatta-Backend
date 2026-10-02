@@ -166,7 +166,7 @@ function ejecutarQuery(text, params) {
       }))
     };
   }
-  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap/i.test(sql)) {
     const [grupoId, idsJugadores] = params;
     const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
     const filas = TABLAS.jugadores_avales_porcentaje
@@ -322,24 +322,28 @@ function check(cond, msg) {
   check(luisSaldo.length === 3 && luisSaldo.some(c => c.devueltoSemana === 2) && luisSaldo.some(c => c.devueltoSemana === 3) && luisSaldo.some(c => c.devueltoSemana === 4),
     'LUIS también sale con sus 3 renglones separados (2,00 propio + 3,00 ROSA + 4,00 SOFIA) en /saldo-comisiones');
 
-  // --- 4) /cierre-final: cada ítem "{destino} - PORCENTAJE" queda sumado
-  // en su propio "cliente" dentro de la misma lista de saldos — como acá
+  // --- 4) /cierre-final: el % propio (sin cc_propio_nombre configurado)
+  // sigue cayendo en su cuenta aparte "{cliente} - PORCENTAJE" (safety net
+  // retrocompatible, sin cambios). El % de AVAL, en cambio, cae DIRECTO en
+  // la ficha real del avalador (02-10-2026: avalador_id ya ES la ficha
+  // elegida por el operador — en este caso, JUAN/CARLOS/ROSA/SOFIA mismos,
+  // sin ninguna sub-cuenta "- PORCENTAJE" auto-creada por detrás). Como acá
   // cada avalador es DISTINTO, ROSA y SOFIA quedan en ítems separados
   // (nunca se juntan entre sí, a diferencia del ejemplo viejo donde 2 %
   // iban al MISMO destino). ---
   check(resCierre._status === 200, '4) GET /cierre-final responde 200');
   const itemPedro = resCierre._json.clientes.find(c => c.nombre === 'PEDRO - PORCENTAJE');
-  const itemJuan = resCierre._json.clientes.find(c => c.nombre === 'JUAN - PORCENTAJE');
-  const itemCarlos = resCierre._json.clientes.find(c => c.nombre === 'CARLOS - PORCENTAJE');
+  const itemJuan = resCierre._json.clientes.find(c => c.nombre === 'JUAN');
+  const itemCarlos = resCierre._json.clientes.find(c => c.nombre === 'CARLOS');
   const itemLuis = resCierre._json.clientes.find(c => c.nombre === 'LUIS - PORCENTAJE');
-  const itemRosa = resCierre._json.clientes.find(c => c.nombre === 'ROSA - PORCENTAJE');
-  const itemSofia = resCierre._json.clientes.find(c => c.nombre === 'SOFIA - PORCENTAJE');
+  const itemRosa = resCierre._json.clientes.find(c => c.nombre === 'ROSA');
+  const itemSofia = resCierre._json.clientes.find(c => c.nombre === 'SOFIA');
   check(!!itemPedro && itemPedro.gano === 1, 'Ítem "PEDRO - PORCENTAJE": +1,00 (su % propio)');
-  check(!!itemJuan && itemJuan.gano === 2, 'Ítem "JUAN - PORCENTAJE": +2,00 (el % que le generó PEDRO como avalador)');
-  check(!!itemCarlos && itemCarlos.gano === 3, 'Ítem "CARLOS - PORCENTAJE": +3,00 (el % que le generó ANA como avalador)');
+  check(!!itemJuan && itemJuan.gano === 2, 'Ítem "JUAN" (directo a su propia ficha): +2,00 (el % que le generó PEDRO como avalador)');
+  check(!!itemCarlos && itemCarlos.gano === 3, 'Ítem "CARLOS" (directo a su propia ficha): +3,00 (el % que le generó ANA como avalador)');
   check(!!itemLuis && itemLuis.gano === 2, 'Ítem "LUIS - PORCENTAJE": +2,00 (su % propio)');
-  check(!!itemRosa && itemRosa.gano === 3, 'Ítem "ROSA - PORCENTAJE": +3,00 (uno de los 2 avaladores de LUIS)');
-  check(!!itemSofia && itemSofia.gano === 4, 'Ítem "SOFIA - PORCENTAJE": +4,00 (el otro avalador de LUIS, en su propio ítem, nunca mezclado con el de ROSA)');
+  check(!!itemRosa && itemRosa.gano === 3, 'Ítem "ROSA" (directo a su propia ficha): +3,00 (uno de los 2 avaladores de LUIS)');
+  check(!!itemSofia && itemSofia.gano === 4, 'Ítem "SOFIA" (directo a su propia ficha): +4,00 (el otro avalador de LUIS, en su propio ítem, nunca mezclado con el de ROSA)');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

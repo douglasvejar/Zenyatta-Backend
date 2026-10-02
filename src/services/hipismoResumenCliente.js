@@ -125,6 +125,12 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   // construirResumenClienteHipismo más abajo) — el primer cond1 lo
   // excluye a propósito. El % que gane por ser AVALADOR de otros
   // (cond2) nunca se ve afectado por su propio toggle.
+  //
+  // 02-10-2026: cond2 ya NO pasa por av.cuenta_comision_id (esa
+  // indirección doble quedó eliminada, ver la nota grande de
+  // obtenerComisionesPropias en hipismoComisionPropia.js) — ahora
+  // jap.avalador_id YA ES directamente la ficha elegida por el operador,
+  // así que basta comparar avalador_id contra esta cuenta puntual.
   const rFuentes = await db.query(
     `SELECT j.nombre
        FROM jugadores j
@@ -134,8 +140,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
           (j.cuenta_comision_id = $2 AND j.comision_propia > 0 AND NOT COALESCE(j.incluir_porcentaje_en_jugadas, false))
           OR EXISTS (
             SELECT 1 FROM jugadores_avales_porcentaje jap
-              JOIN jugadores av ON av.id = jap.avalador_id
-             WHERE jap.jugador_id = j.id AND jap.porcentaje > 0 AND av.cuenta_comision_id = $2
+             WHERE jap.jugador_id = j.id AND jap.porcentaje > 0 AND jap.avalador_id = $2
           )
         )`,
     [jugador.grupo_id, jugador.id]

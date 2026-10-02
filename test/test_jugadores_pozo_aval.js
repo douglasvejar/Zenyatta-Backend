@@ -80,11 +80,23 @@ function ejecutarQuery(text, params) {
     return { rows: TABLAS.pozo_ajustes.filter(a => a.grupo_id === grupoId && a.jugador_id === jugadorId).sort((a, b) => b.creado_en - a.creado_en) };
   }
 
-  // ---- normalizarAvalesPorcentaje ----
-  if (/^SELECT id FROM jugadores WHERE grupo_id = \$1 AND id = ANY\(\$2::uuid\[\]\)$/i.test(sql)) {
-    const [grupoId, ids] = params;
-    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && ids.includes(j.id));
-    return { rows: filas.map(j => ({ id: j.id })) };
+  // ---- buscarOCrearFicha (normalizarAvalesPorcentaje / resolverCuentaComisionPropiaId,
+  // 02-10-2026, ver la nota grande en services/hipismoComisionPropia.js) ----
+  if (/^SELECT id, nombre, es_cuenta_comision FROM jugadores WHERE grupo_id = \$1$/i.test(sql)) {
+    const [grupoId] = params;
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId);
+    return { rows: filas.map(j => ({ id: j.id, nombre: j.nombre, es_cuenta_comision: !!j.es_cuenta_comision })) };
+  }
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial, es_cuenta_comision\)/i.test(sql)) {
+    const [grupoId, nombre] = params;
+    let cuenta = TABLAS.jugadores.find(j => j.grupo_id === grupoId && j.nombre === nombre);
+    if (!cuenta) {
+      cuenta = { id: nuevoId('cta'), grupo_id: grupoId, nombre, activo: true, auto_creado: true, tipo_cuenta: 'libre', pozo_inicial: 0, es_cuenta_comision: true };
+      TABLAS.jugadores.push(cuenta);
+    } else {
+      cuenta.es_cuenta_comision = true;
+    }
+    return { rows: [{ id: cuenta.id, nombre: cuenta.nombre }] };
   }
   // ---- reemplazarAvalesPorcentaje ----
   if (/^DELETE FROM jugadores_avales_porcentaje WHERE grupo_id = \$1 AND jugador_id = \$2$/i.test(sql)) {
@@ -99,25 +111,25 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- POST /jugadores ----
-  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas\)/i.test(sql)) {
-    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas] = params;
+  if (/^INSERT INTO jugadores \(grupo_id, nombre, telefono, notas, activo, tipo_cuenta, pozo_inicial, comision_propia, modelo_comision, moneda, modulos_anclados, incluir_porcentaje_en_jugadas, cuenta_comision_id\)/i.test(sql)) {
+    const [grupoId, nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, cuentaComisionId] = params;
     if (TABLAS.jugadores.some(j => j.grupo_id === grupoId && j.nombre === nombre)) {
       const err = new Error('duplicado'); err.code = '23505'; throw err;
     }
     const fila = {
       id: nuevoId('j'), grupo_id: grupoId, nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta,
       pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda,
-      modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas
+      modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas, cuenta_comision_id: cuentaComisionId || null
     };
     TABLAS.jugadores.push(fila);
     return { rows: [fila] };
   }
   // ---- PUT /jugadores/:id ----
-  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*incluir_porcentaje_en_jugadas = \$11\s*WHERE id = \$12 AND grupo_id = \$13/i.test(sql)) {
-    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, id, grupoId] = params;
+  if (/^UPDATE jugadores SET nombre = \$1, telefono = \$2, notas = \$3, activo = \$4, tipo_cuenta = \$5,\s*pozo_inicial = \$6, comision_propia = \$7, modelo_comision = \$8, moneda = \$9, auto_creado = false, modulos_anclados = \$10,\s*incluir_porcentaje_en_jugadas = \$11, cuenta_comision_id = \$12\s*WHERE id = \$13 AND grupo_id = \$14/i.test(sql)) {
+    const [nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, incluirPorcentajeEnJugadas, cuentaComisionId, id, grupoId] = params;
     const j = TABLAS.jugadores.find(x => x.id === id && x.grupo_id === grupoId);
     if (!j) return { rows: [] };
-    Object.assign(j, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas });
+    Object.assign(j, { nombre, telefono, notas, activo, tipo_cuenta: tipoCuenta, pozo_inicial: pozoInicial, comision_propia: comisionPropia, modelo_comision: modeloComision, moneda, modulos_anclados: modulosAnclados, incluir_porcentaje_en_jugadas: incluirPorcentajeEnJugadas, cuenta_comision_id: cuentaComisionId || null });
     return { rows: [j] };
   }
 
@@ -215,39 +227,50 @@ function check(cond, msg) {
   check(resHistorial._status === 200 && resHistorial._json.length === 2, '3) GET /:id/pozo-ajustes trae los 2 ajustes de PEDRO');
   check(resHistorial._json[0].monto === -30 && resHistorial._json[1].monto === 50, 'Más reciente primero (-30 antes que +50)');
 
-  // --- 4) avalesPorcentaje: apuntar a OTRO jugador ya existente del MISMO grupo ---
+  // --- 4) avalesPorcentaje (02-10-2026, rediseño "elegir ficha a mano": ya
+  // no se manda avaladorId de un <select>, se escribe fichaNombre y el
+  // backend la busca-o-crea con buscarOCrearFicha, ver la nota grande en
+  // services/hipismoComisionPropia.js) -- acá MARIA ya existe como cliente
+  // real del MISMO grupo, así que se encuentra y se usa su id tal cual ---
   const resPutAvalOk = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }] }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ fichaNombre: 'MARIA', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalOk._status === 200, '4) PUT con avalesPorcentaje apuntando a otro jugador del mismo grupo responde 200');
-  check(resPutAvalOk._json.avalesPorcentaje.length === 1 && resPutAvalOk._json.avalesPorcentaje[0].avaladorId === 'j-maria' && resPutAvalOk._json.avalesPorcentaje[0].porcentaje === 1, 'Se guarda el avalador (MARIA) con su %');
+  check(resPutAvalOk._status === 200, '4) PUT con avalesPorcentaje (fichaNombre) apuntando a otro cliente ya existente del mismo grupo responde 200');
+  check(resPutAvalOk._json.avalesPorcentaje.length === 1 && resPutAvalOk._json.avalesPorcentaje[0].avaladorId === 'j-maria' && resPutAvalOk._json.avalesPorcentaje[0].porcentaje === 1, 'Se guarda el avalador (MARIA) con su %, resuelto a su id real (no se crea una ficha nueva, ya existía)');
   check(TABLAS.jugadores_avales_porcentaje.some(a => a.jugador_id === 'j-pedro' && a.avalador_id === 'j-maria' && a.porcentaje === 1), 'Queda insertado en jugadores_avales_porcentaje');
 
-  // --- 5) avalesPorcentaje con avaladorId de OTRO grupo -> 400 ---
+  // --- 5) avalesPorcentaje con un nombre que coincide con un cliente de
+  // OTRO grupo -> buscarOCrearFicha busca SOLO dentro de este grupo
+  // (nunca cruza grupos), así que en vez de reusar a "EXTRANJERO" del otro
+  // grupo, crea una ficha NUEVA con ese nombre acá mismo ---
   const resPutAvalOtroGrupo = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-otro-grupo', porcentaje: 1 }] }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ fichaNombre: 'EXTRANJERO', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalOtroGrupo._status === 400, '5) PUT con avalesPorcentaje de OTRO grupo responde 400 (nunca cruza grupos)');
+  check(resPutAvalOtroGrupo._status === 200, '5) PUT con fichaNombre que coincide con un cliente de OTRO grupo responde 200 (no es un error)');
+  const avalExtranjero = resPutAvalOtroGrupo._json.avalesPorcentaje[0];
+  check(!!avalExtranjero && avalExtranjero.avaladorId !== 'j-otro-grupo', 'Nunca cruza grupos: NO reusa el id de "EXTRANJERO" del otro grupo');
+  check(TABLAS.jugadores.some(j => j.id === avalExtranjero.avaladorId && j.grupo_id === GRUPO_ID && j.nombre === 'EXTRANJERO' && j.es_cuenta_comision), 'En vez de eso, crea una ficha NUEVA llamada "EXTRANJERO" dentro de ESTE grupo');
 
-  // --- 6) Un jugador no puede ser su propio avalador ---
+  // --- 6) Un cliente no puede mandarle el % a su propia ficha por esta vía
+  // (para eso está "Incluir % en sus jugadas" / comisionPropiaFicha) ---
   const resPutAvalPropio = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-pedro', porcentaje: 1 }] }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ fichaNombre: 'PEDRO', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalPropio._status === 400, '6) PUT con avalesPorcentaje = el propio jugador responde 400');
+  check(resPutAvalPropio._status === 400, '6) PUT con avalesPorcentaje.fichaNombre = su propio nombre responde 400');
 
   // --- 7) Varios avaladores a la vez (28-09-2026, a pedido del usuario:
   // "un cliente puede generarle 2% por darte un ejemplo repartido en
-  // varias personas") + rechazo de un avalador repetido en 2 filas ---
+  // varias personas") + rechazo de la MISMA ficha escrita 2 veces ---
   const resPutDosAvales = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }, { avaladorId: 'j-carlos', porcentaje: 1 }] }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ fichaNombre: 'MARIA', porcentaje: 1 }, { fichaNombre: 'CARLOS', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutDosAvales._status === 200 && resPutDosAvales._json.avalesPorcentaje.length === 2, '7) PUT con 2 avaladores distintos (MARIA y CARLOS) guarda los 2');
+  check(resPutDosAvales._status === 200 && resPutDosAvales._json.avalesPorcentaje.length === 2, '7) PUT con 2 fichas distintas (MARIA y CARLOS) guarda los 2');
   check(TABLAS.jugadores_avales_porcentaje.filter(a => a.jugador_id === 'j-pedro').length === 2, 'La fila vieja (solo MARIA) se reemplazó por las 2 nuevas, no se acumulan');
 
   const resPutAvalRepetido = await invocarRuta(handlerPut, Object.assign(reqBase(GRUPO_ID), {
-    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ avaladorId: 'j-maria', porcentaje: 1 }, { avaladorId: 'j-maria', porcentaje: 1 }] }
+    body: { nombre: 'PEDRO', tipoCuenta: 'libre', pozoInicial: 120, comisionPropia: 0, avalesPorcentaje: [{ fichaNombre: 'MARIA', porcentaje: 1 }, { fichaNombre: 'maria', porcentaje: 1 }] }
   }), { id: 'j-pedro' });
-  check(resPutAvalRepetido._status === 400, 'PUT con el MISMO avalador repetido en 2 filas responde 400 (hay que juntar el % en una sola fila)');
+  check(resPutAvalRepetido._status === 400, 'PUT con la MISMA ficha escrita 2 veces (sin importar mayúsculas) responde 400 (hay que juntar el % en una sola fila)');
 
   // --- Sin mandar avalesPorcentaje: queda vacío, sin romper nada (retrocompatible) ---
   const resPostSinAvales = await invocarRuta(handlerPost, Object.assign(reqBase(GRUPO_ID), { body: { nombre: 'ANA', comisionPropia: 0 } }));

@@ -81,7 +81,7 @@ function ejecutarQuery(text, params) {
     });
     return { rows };
   }
-  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre, cc_av\.nombre AS cc_avalador_nombre/i.test(sql)) {
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap/i.test(sql)) {
     const [grupoId, idsJugadores] = params;
     const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
     const rows = TABLAS.jugadores_avales_porcentaje
@@ -234,8 +234,14 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const entradasOtro = comisiones['OTRO'] || [];
   check(entradasOtro.length === 1 && entradasOtro[0].destino === 'PEDRO' && entradasOtro[0].esAvalAdicional === true,
     'OTRO genera 1 entrada hacia su avalador PEDRO (2%)');
-  check(entradasOtro[0].cuentaNombre === 'PEDRO - PORCENTAJE' && !entradasOtro[0].incluidaEnJugada,
-    'Lo que PEDRO gana por avalar a OTRO sigue yendo a "PEDRO - PORCENTAJE" (cuenta aparte), sin importar que el propio toggle de PEDRO esté en ON — son 2 relaciones totalmente independientes');
+  // 02-10-2026: tras el rediseño, avalador_id YA ES directamente la ficha
+  // elegida por el operador al configurar este aval -- en este caso, el
+  // PROPIO PEDRO (su cliente real), así que lo que gana por avalar a OTRO
+  // cae DIRECTO en su misma ficha, sin ninguna cuenta "PEDRO - PORCENTAJE"
+  // auto-creada por detrás. Si el operador hubiera querido una ficha
+  // aparte, la habría escrito explícitamente al configurar el aval.
+  check(entradasOtro[0].cuentaNombre === 'PEDRO' && !entradasOtro[0].incluidaEnJugada,
+    'Lo que PEDRO gana por avalar a OTRO cae directo en su propia ficha "PEDRO" (el operador eligió esa ficha al configurar el aval) -- ya no se auto-crea una cuenta aparte');
 
   // =========== 2) asegurarCuentasComisionParaNombres ===========
   await asegurarCuentasComisionParaNombres(GRUPO_ID, ['PEDRO', 'MARIA', 'OTRO']);
@@ -244,19 +250,16 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(!!mariaActualizada.cuenta_comision_id, 'MARIA (toggle OFF): SÍ se le crea/enlaza su cuenta "MARIA - PORCENTAJE", como siempre');
   const cuentaMariaCreada = TABLAS.jugadores.find(j => j.id === mariaActualizada.cuenta_comision_id);
   check(!!cuentaMariaCreada && cuentaMariaCreada.nombre === 'MARIA - PORCENTAJE', 'La cuenta creada para MARIA se llama "MARIA - PORCENTAJE"');
-  // PEDRO (toggle ON) SÍ termina con jugadores.cuenta_comision_id enlazado
-  // — pero NO por su propia comisión (el primer loop de
-  // asegurarCuentasComisionParaNombres la salta, ver el "false" de arriba)
-  // sino porque el SEGUNDO loop (independiente) le crea/enlaza la cuenta
-  // "PEDRO - PORCENTAJE" para recibir lo que gana por avalar a OTRO — el
-  // mismo campo cuenta_comision_id sirve para las 2 cosas, y
-  // obtenerComisionesPropias/construirResumenCuentaComisionHipismo ya
-  // filtran por el toggle para no mezclar su propia comisión ahí (ver los
-  // checks de arriba y abajo).
-  const cuentaPedroPorcentaje = TABLAS.jugadores.find(j => j.nombre === 'PEDRO - PORCENTAJE');
-  check(!!cuentaPedroPorcentaje, 'Se crea la cuenta "PEDRO - PORCENTAJE" para recibir lo que PEDRO gana por avalar a OTRO (independiente de su propio toggle)');
-  check(pedroActualizado.cuenta_comision_id === cuentaPedroPorcentaje.id,
-    'Esa cuenta de avalador queda enlazada en jugadores.cuenta_comision_id de PEDRO (mismo campo que usaría su comisión propia si el toggle estuviera OFF) — no crea una SEGUNDA cuenta aparte solo por tener el toggle en ON');
+  // 02-10-2026: PEDRO (toggle ON) ya NO termina con jugadores.cuenta_comision_id
+  // enlazado -- el segundo loop que antes creaba/enlazaba una cuenta aparte
+  // para avaladores fue ELIMINADO (ver la nota grande sobre
+  // asegurarCuentasComisionParaNombres en hipismoComisionPropia.js): ahora
+  // avalador_id ya apunta directo a la ficha elegida por el operador, sin
+  // necesitar ningún enlace adicional acá.
+  check(!pedroActualizado.cuenta_comision_id,
+    'PEDRO (toggle ON) NO recibe ningún cuenta_comision_id por avalar a OTRO -- ya no existe esa creación automática de cuenta aparte');
+  check(!TABLAS.jugadores.some(j => j.nombre === 'PEDRO - PORCENTAJE'),
+    'No se crea ninguna cuenta "PEDRO - PORCENTAJE" -- el crédito del aval ya fue directo a la ficha real de PEDRO');
 
   // =========== 3) construirResumenClienteHipismo (ficha propia) ===========
   // PEDRO juega 300 y pierde -> con el toggle ON, su propia ficha debe
