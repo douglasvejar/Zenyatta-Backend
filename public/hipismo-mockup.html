@@ -345,6 +345,13 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .pos { color: var(--ok); font-weight: 700; }
   .neg { color: var(--danger); font-weight: 700; }
+  /* Fila de TOTAL/subtotal genérica dentro de una tabla plana (02-10-2026,
+     usada en el detalle de "Comisiones Devueltas por Cliente" para sumar
+     las jugadas de UNA misma carrera, y al final de "Saldo Comisiones"
+     para el total general de la semana) — mismo criterio visual que ya
+     usaba tr.gc-fila-total en Grupo de Clientes, pero genérico (sin
+     depender de esa clase, que vive dentro de su propio componente). */
+  tr.fila-total-comision td { font-weight: 700; background: var(--card-2); border-top: 1px solid var(--card-border); }
 
   .balance-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .balance-col h3 { font-family: 'Outfit', sans-serif; font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; color: var(--text); }
@@ -11305,9 +11312,38 @@ async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
       const filaHip = document.createElement('div');
       filaHip.className = 'fila-carrera-comision';
       filaHip.id = idHip;
-      const filasDetalle = hip.carreras.map(c =>
-        `<tr>${esRangoVarios ? `<td>${formatFechaCortaDMY(c.fecha)}</td>` : ''}<td>${ordinalCarrera(c.carreraNumero)} — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
-      ).join('');
+      // Total por carrera (02-10-2026, a pedido del usuario: "suma el total
+      // de cada carrera y colocamelo, asi es mas facil para revisar...
+      // quiero que sumes el total de cada carrera para ver total 8va de
+      // belmont tanto por ejemplo") — una misma carrera puede traer varias
+      // jugadas sueltas (ej. varios tickets banqueados en esa carrera), así
+      // que se agrupan por fecha+carrera y se agrega una fila "Total Nta"
+      // con la suma, debajo de sus jugadas. Puramente visual para que no
+      // haya que sumarlas a mano: NO toca hip.total ni cliente.total (esos
+      // ya vienen sumados UNA sola vez desde el backend) — "no es que vas a
+      // doblar el saldo", solo se repite agrupado el mismo monto que ya
+      // estaba en cada fila.
+      const redondeo2Carrera = n => Math.round((Number(n) || 0) * 100) / 100;
+      const porCarreraDetalle = new Map();
+      hip.carreras.forEach(c => {
+        const clave = c.fecha + '::' + c.carreraNumero;
+        if (!porCarreraDetalle.has(clave)) porCarreraDetalle.set(clave, { fecha: c.fecha, carreraNumero: c.carreraNumero, filas: [], totalMonto: 0, totalDevuelto: 0 });
+        const g = porCarreraDetalle.get(clave);
+        g.filas.push(c);
+        g.totalMonto = redondeo2Carrera(g.totalMonto + c.monto);
+        g.totalDevuelto = redondeo2Carrera(g.totalDevuelto + c.devuelto);
+      });
+      const filasDetalle = Array.from(porCarreraDetalle.values()).map(g => {
+        const filas = g.filas.map(c =>
+          `<tr>${esRangoVarios ? `<td>${formatFechaCortaDMY(c.fecha)}</td>` : ''}<td>${ordinalCarrera(c.carreraNumero)} — ${c.detalleTexto}</td><td class="num">${formatMontoTabla(c.monto)}</td><td class="num pos">+${formatMontoTabla(c.devuelto)}</td></tr>`
+        ).join('');
+        // Solo se agrega la fila de Total cuando hay más de 1 jugada en esa
+        // carrera — con una sola jugada esa misma fila YA ES el total.
+        const filaTotal = g.filas.length > 1
+          ? `<tr class="fila-total-comision">${esRangoVarios ? '<td></td>' : ''}<td>Total ${ordinalCarrera(g.carreraNumero)}</td><td class="num">${formatMontoTabla(g.totalMonto)}</td><td class="num pos">+${formatMontoTabla(g.totalDevuelto)}</td></tr>`
+          : '';
+        return filas + filaTotal;
+      }).join('');
       filaHip.innerHTML = `
         <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idHip}')">
           <span class="flecha-expandir">▶</span>
@@ -12676,6 +12712,15 @@ async function pintarSaldoComisiones() {
     tr.innerHTML = `<td>${nombreMostrado}</td><td class="num">${c.porcentaje}%</td><td class="num ${c.devueltoSemana > 0 ? 'pos' : ''}">${c.devueltoSemana > 0 ? '+' : ''}${formatMontoTabla(c.devueltoSemana)}</td>`;
     tbody.appendChild(tr);
   });
+  // TOTAL general (02-10-2026, a pedido del usuario: "en saldos comisiones
+  // a final de la lista agregame el total seria la sumatoria de todo") —
+  // el backend ya lo trae calculado (data.totalGeneral, la suma exacta de
+  // todos los devueltoSemana de arriba), acá solo se agrega como última
+  // fila de la tabla.
+  const trTotal = document.createElement('tr');
+  trTotal.className = 'fila-total-comision';
+  trTotal.innerHTML = `<td>TOTAL</td><td></td><td class="num pos">+${formatMontoTabla(Number(data.totalGeneral || 0))}</td>`;
+  tbody.appendChild(trTotal);
 }
 
 // ------------------------------------------------------------------
