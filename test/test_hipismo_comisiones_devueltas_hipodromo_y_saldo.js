@@ -46,11 +46,18 @@ const OTRA_FECHA = '2026-09-14';
 const TABLAS = {
   jugadores: [
     { id: 'jug-pedro', grupo_id: GRUPO_ID, nombre: 'PEDRO', comision_propia: 1, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
-    { id: 'jug-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' }
+    { id: 'jug-maria', grupo_id: GRUPO_ID, nombre: 'MARIA', comision_propia: 0, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' },
+    // LEGOLAS (02-10-2026, caso real del usuario): 1% propio con el
+    // toggle "incluir_porcentaje_en_jugadas" en ON -- antes de este
+    // cambio, estos 3 reportes de auditoría lo excluían por completo
+    // (ver la nota grande en hipismoComisionPropia.js); ahora debe
+    // aparecer igual que PEDRO, con su propio % como línea aparte.
+    { id: 'jug-legolas', grupo_id: GRUPO_ID, nombre: 'LEGOLAS', comision_propia: 1, incluir_porcentaje_en_jugadas: true, avalado_por_id: null, porcentaje_devuelto_destino: 'cliente' }
   ],
   hipismo_planos: [
     { id: 'plano-1', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 1, fecha: FECHA },
     { id: 'plano-2', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 2, fecha: FECHA },
+    { id: 'plano-3', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 3, fecha: FECHA },
     { id: 'plano-otro-grupo', grupo_id: OTRO_GRUPO_ID, hipodromo_nombre: 'Assiniboia', carrera_numero: 1, fecha: FECHA },
     { id: 'plano-otra-fecha', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 9, fecha: OTRA_FECHA }
   ],
@@ -66,6 +73,10 @@ const TABLAS = {
     // pero no tiene % configurado -> no aporta nada al reporte.
     { id: 'ticket-2', plano_id: 'plano-2', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', modalidad: '2P', caballo: '(3)', monto: 200, resultado_jugador: 190 },
     { id: 'ticket-3', plano_id: 'plano-2', grupo_id: GRUPO_ID, cliente_nombre: 'MARIA', modalidad: '1P', caballo: '(7)', monto: 50, resultado_jugador: 47.5 },
+    // Carrera 3: LEGOLAS (toggle ON) apostó 100 y pierde -> 1% de lo
+    // decidido (100, ya que perdió) = 1.00 devuelto -- debe aparecer en
+    // los 3 reportes de este archivo a pesar del toggle.
+    { id: 'ticket-legolas', plano_id: 'plano-3', grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLAS', modalidad: '1P', caballo: '(9)', monto: 100, resultado_jugador: -100 },
     // Otro grupo -- NUNCA debe aparecer.
     { id: 'ticket-otro-grupo', plano_id: 'plano-otro-grupo', grupo_id: OTRO_GRUPO_ID, cliente_nombre: 'PEDRO', modalidad: '1P', caballo: '(1)', monto: 999 },
     // Otra fecha -- no debe aparecer al pedir FECHA.
@@ -148,7 +159,8 @@ function ejecutarQuery(text, params) {
     return {
       rows: filas.map(j => ({
         id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
-        cc_propio_nombre: null
+        cc_propio_nombre: null,
+        incluir_porcentaje_en_jugadas: !!j.incluir_porcentaje_en_jugadas
       }))
     };
   }
@@ -234,11 +246,18 @@ function check(cond, msg) {
   check(res1._json.hipodromos.length === 1, 'Trae 1 solo hipódromo (La Rinconada) -- Churchill Downs solo tenía Remate, que ya no genera % devuelto');
   check(res1._json.hipodromos[0].nombre === 'La Rinconada', 'La Rinconada es el único hipódromo del reporte');
   const rinconada = res1._json.hipodromos[0];
-  check(rinconada.carreras.length === 2, 'La Rinconada trae sus 2 carreras');
+  check(rinconada.carreras.length === 3, 'La Rinconada trae sus 3 carreras (incluida la de LEGOLAS)');
   check(rinconada.carreras.find(c => c.carreraNumero === 1).devuelto === 1, 'Carrera 1: 1,00 devuelto (1% de 100 de PEDRO)');
   check(rinconada.carreras.find(c => c.carreraNumero === 2).devuelto === 2, 'Carrera 2: 2,00 devuelto (1% de 200 de PEDRO; MARIA no aporta, sin % configurado)');
-  check(rinconada.totalDevuelto === 3, 'Subtotal de La Rinconada: 3,00 (1,00 + 2,00)');
-  check(res1._json.totalGeneral === 3, 'Total general del día: 3,00 (solo La Rinconada -- el Remate de Churchill Downs ya no cuenta, ni el otro grupo (999) ni la otra fecha (500))');
+  // 02-10-2026, caso real del usuario: LEGOLAS tiene el toggle "incluir %
+  // en sus jugadas" en ON -- antes de este cambio, este reporte lo
+  // excluía por completo (ver la nota grande en hipismoComisionPropia.js
+  // y el comentario junto a `info.incluidaEnJugada` en /comisiones-
+  // devueltas-por-hipodromo). Ahora sí aparece, igual que cualquier otro
+  // % propio.
+  check(rinconada.carreras.find(c => c.carreraNumero === 3).devuelto === 1, 'Carrera 3: 1,00 devuelto (1% de 100 de LEGOLAS, a pesar de tener "incluir % en sus jugadas" en ON)');
+  check(rinconada.totalDevuelto === 4, 'Subtotal de La Rinconada: 4,00 (1,00 + 2,00 + 1,00 de LEGOLAS)');
+  check(res1._json.totalGeneral === 4, 'Total general del día: 4,00 (incluye el 1,00 de LEGOLAS -- el Remate de Churchill Downs sigue sin contar, ni el otro grupo (999) ni la otra fecha (500))');
 
   // --- 2) Un día sin ninguna devolución: vacío, no error ---
   const res2 = await invocarRuta(handlerComisionesDevueltasHipodromo, Object.assign(reqBase(GRUPO_ID), { query: { fecha: '2026-01-01' } }));
@@ -249,7 +268,10 @@ function check(cond, msg) {
   // --- 3) GET /comisiones-devueltas ya trae totalGeneral ---
   const res3 = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(res3._status === 200, '3) GET /comisiones-devueltas responde 200');
-  check(res3._json.totalGeneral === 3, 'totalGeneral (nuevo campo de esta ronda) suma los totales de todos los clientes: 3,00 (PEDRO: 1,00 + 2,00 de Tercios -- el Remate ya no aporta)');
+  check(res3._json.totalGeneral === 4, 'totalGeneral suma los totales de todos los clientes: 4,00 (PEDRO: 1,00 + 2,00 de Tercios, más 1,00 de LEGOLAS -- el Remate ya no aporta)');
+  const legolasDevueltas = res3._json.clientes.find(c => c.nombre === 'LEGOLAS');
+  check(!!legolasDevueltas && legolasDevueltas.total === 1, '02-10-2026: LEGOLAS (toggle "incluir % en sus jugadas" ON) SÍ aparece en /comisiones-devueltas con su propio 1,00, a pesar del toggle');
+  check(legolasDevueltas.destino === 'LEGOLAS' && !legolasDevueltas.esAvalAdicional, 'La línea de LEGOLAS es su propio % (no un aval), acreditada a su propio nombre');
 
   // --- 4) y 5) GET /saldo-comisiones — pisa Date.now() para que "hoy" caiga
   // en la semana lunes 21 a domingo 27 de sept de 2026 (mismo truco que
@@ -269,12 +291,20 @@ function check(cond, msg) {
   }
   check(res4._status === 200, '4) GET /saldo-comisiones?semana=actual responde 200');
   check(res4._json.rango.desde === '2026-09-21' && res4._json.rango.hasta === '2026-09-27', 'El rango es lunes 21 a domingo 27 de sept (semana de FECHA)');
-  check(res4._json.clientes.length === 1, 'Solo aparece PEDRO (MARIA no tiene % propio configurado)');
-  const pedroSaldo = res4._json.clientes[0];
-  check(pedroSaldo.nombre === 'PEDRO' && pedroSaldo.porcentaje === 1, 'Trae a PEDRO con su 1% configurado');
+  check(res4._json.clientes.length === 2, 'Aparecen PEDRO y LEGOLAS (MARIA sigue sin % propio configurado)');
+  const pedroSaldo = res4._json.clientes.find(c => c.nombre === 'PEDRO');
+  check(!!pedroSaldo && pedroSaldo.porcentaje === 1, 'Trae a PEDRO con su 1% configurado');
   check(pedroSaldo.devueltoSemana === 3, 'PEDRO lleva 3,00 devueltos en la semana (1,00 + 2,00 de Tercios -- el Remate ya no cuenta, y la otra fecha y el otro grupo tampoco se cuelan)');
   check(pedroSaldo.destino === 'PEDRO', 'Sin aval configurado, destino es el propio cliente');
-  check(res4._json.totalGeneral === 3, 'totalGeneral de la semana: 3,00 (sin el Remate)');
+  // 02-10-2026, caso real del usuario: LEGOLAS (toggle "incluir % en sus
+  // jugadas" ON) antes NO aparecía acá -- ver la nota grande EXACTA de
+  // /comisiones-devueltas en hipismoComisionPropia.js. Ahora sí, igual
+  // que PEDRO.
+  const legolasSaldo = res4._json.clientes.find(c => c.nombre === 'LEGOLAS');
+  check(!!legolasSaldo && legolasSaldo.porcentaje === 1 && legolasSaldo.devueltoSemana === 1,
+    '02-10-2026: LEGOLAS (toggle ON) SÍ aparece en /saldo-comisiones, con 1,00 devuelto en la semana');
+  check(legolasSaldo.destino === 'LEGOLAS', 'LEGOLAS: sin aval configurado, destino es su propio nombre');
+  check(res4._json.totalGeneral === 4, 'totalGeneral de la semana: 4,00 (3,00 de PEDRO + 1,00 de LEGOLAS, sin el Remate)');
   check(res5._status === 200, '5) Sin ?semana=, usa "actual" por defecto sin explotar');
   check(res5._json.semana === 'actual', 'El default de semana es "actual"');
 })().then(() => {

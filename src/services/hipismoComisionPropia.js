@@ -75,13 +75,35 @@ const { round2 } = require('./hipismoAdelantadasCalc');
 // `cuentaNombre` pasa a ser su PROPIO nombre, para que se acumule DIRECTO
 // en su propia fila de balance (ver /cierre-final y /semana-por-dias en
 // routes/hipismo.js, que agrupan por `cuentaNombre` sin saber nada de
-// este toggle — el "merge" ocurre solo). Los reportes de auditoría
-// puramente informativos (/comisiones-devueltas,
-// /comisiones-devueltas-por-hipodromo, /saldo-comisiones) usan
-// `incluidaEnJugada` para NO repetir esa plata aparte (ya está adentro
-// de la jugada). Lo que este cliente gane por avalar a OTROS (entradas
-// 2..N, `esAvalAdicional: true`) NUNCA se ve afectado por este toggle —
-// sigue siempre yendo a su cuenta "{nombre} - PORCENTAJE" tal cual.
+// este toggle — el "merge" ocurre solo).
+//
+// REVERTIDO el 02-10-2026 para los reportes de auditoría puramente
+// informativos (/comisiones-devueltas, /comisiones-devueltas-por-
+// hipodromo, /saldo-comisiones): entre el 29-09-2026 y el 02-10-2026
+// estos 3 reportes usaban `incluidaEnJugada` para NO mostrar esa plata
+// de nuevo (ya estaba adentro de la jugada, en Balance General). El
+// usuario pidió verla de todos modos en estos reportes: "necesito me
+// muestres ese % en las comisiones para ver la sumatoria real de las
+// comisiones". La razón por la que esto NO duplica nada: estos 3
+// reportes son auditoría pura de "cuánto % se generó, a quién" — nunca
+// tocan el saldo financiero del cliente (eso sigue siendo exclusivo de
+// Balance General/Cierre Final, que NUNCA leyó `incluidaEnJugada` para
+// filtrar nada, solo para decidir el NOMBRE de la cuenta destino). Antes
+// de este cambio, el TOTAL de estos 3 reportes quedaba incompleto para
+// cualquier cliente con el toggle en ON — ahora `incluidaEnJugada` ya
+// NO filtra nada en esos 3 lugares (sigue existiendo el campo, por si
+// algún futuro reporte lo necesita, pero no se usa como filtro ahí).
+// `incluidaEnJugada` SÍ se sigue usando para filtrar en
+// calcularDevueltoPorPlanoTercios() (routes/hipismo.js) — esa función
+// calcula la comisión NETA por plano (bruta menos % devuelto) para la
+// nota "💼 Comisión por Plano" de "Cargar Planos"/Súper-admin, y ahí
+// SÍ haría falta no restarla de nuevo (el toggle ya la restó dentro del
+// resultado del cliente) — ese uso no cambió.
+//
+// Lo que este cliente gane por avalar a OTROS (entradas 2..N,
+// `esAvalAdicional: true`) NUNCA se vio afectado por este toggle — sigue
+// siempre yendo a su cuenta "{nombre} - PORCENTAJE" tal cual, con o sin
+// el cambio del 02-10-2026.
 // Colapsa espacios de más entre palabras (además de mayúscula/trim) —
 // mismo criterio que normalizarNombreJugador() en routes/jugadores.js.
 // Se usa acá SOLO para EMPAREJAR (nunca para decidir qué se guarda), ver

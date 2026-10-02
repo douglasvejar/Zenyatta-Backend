@@ -2872,11 +2872,20 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
     if (!infos || !infos.length) return; // sin % configurado, no aparece en este reporte
     infos.forEach(info => {
       if (!info || !info.pct) return;
-      // "incluir % en sus jugadas" (29-09-2026): esta plata ya está
-      // sumada/restada DENTRO de la jugada de este cliente (ver
-      // construirResumenClienteHipismo en services/hipismoResumenCliente.js)
-      // — mostrarla acá de nuevo la duplicaría.
-      if (info.incluidaEnJugada) return;
+      // "incluir % en sus jugadas" (29-09-2026, revertido el 02-10-2026
+      // para los 3 reportes de auditoría — ver la nota grande en
+      // hipismoComisionPropia.js): ANTES este % se excluía acá porque ya
+      // está sumado/restado DENTRO de la jugada del cliente (ver
+      // construirResumenClienteHipismo), para no "duplicarlo" en el saldo
+      // de Balance General/Cierre Final. Pero el usuario pidió verlo de
+      // todos modos EN ESTE reporte ("necesito me muestres ese % en las
+      // comisiones para ver la sumatoria real de las comisiones"): este
+      // reporte es de auditoría pura (cuánto % se generó, no el saldo
+      // financiero del cliente), así que mostrarlo acá no duplica nada en
+      // Balance General — simplemente hacía que el TOTAL de este reporte
+      // quedara incompleto para los clientes con el toggle en ON. Ya NO
+      // se excluye por `incluidaEnJugada` acá (si solo tiene esta entrada,
+      // destino === d.cliente, mismo criterio que cualquier otro % propio).
       // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
       // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido
       // junto a obtenerApuestasDelRango más arriba): NUNCA d.monto.
@@ -2951,9 +2960,10 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
     let devueltoTotalLinea = 0;
     infos.forEach(info => {
       if (!info || !info.pct) return;
-      // "incluir % en sus jugadas" (29-09-2026) — ver la nota grande
-      // EXACTA de /comisiones-devueltas arriba.
-      if (info.incluidaEnJugada) return;
+      // "incluir % en sus jugadas" (29-09-2026, revertido el 02-10-2026
+      // para este reporte) — ver la nota grande EXACTA de
+      // /comisiones-devueltas arriba: ya NO se excluye acá, a pedido del
+      // usuario, para que el total de este reporte sea la sumatoria REAL.
       // montoDecidido (02-10-2026) — ver la nota grande EXACTA de
       // /comisiones-devueltas arriba: NUNCA d.monto.
       devueltoTotalLinea = round2(devueltoTotalLinea + (Number(d.montoDecidido) || 0) * (info.pct / 100));
@@ -3165,9 +3175,10 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     if (!infos || !infos.length) return;
     infos.forEach(info => {
       if (!info || !info.pct) return;
-      // "incluir % en sus jugadas" (29-09-2026) — ver la nota grande
-      // EXACTA de /comisiones-devueltas arriba.
-      if (info.incluidaEnJugada) return;
+      // "incluir % en sus jugadas" (29-09-2026, revertido el 02-10-2026
+      // para este reporte) — ver la nota grande EXACTA de
+      // /comisiones-devueltas arriba: ya NO se excluye acá, a pedido del
+      // usuario, para que el total de este reporte sea la sumatoria REAL.
       const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
       if (!devuelto) return;
       const clave = nombre + '::' + info.destino + '::' + info.pct;
