@@ -2528,8 +2528,8 @@ router.get('/comisiones-por-hipodromo', asyncHandler(async (req, res) => {
 // importe. A PROPÓSITO "Montos Apostados" (más abajo) NO filtra por
 // `decidida` -- lo apostado es lo apostado, se haya decidido o no la
 // jugada; solo los reportes de COMISIÓN/% devuelto deben filtrar por esto.
-async function obtenerApuestasDelDia(grupoId, fecha) {
-  return obtenerApuestasDelRango(grupoId, fecha, fecha);
+async function obtenerApuestasDelDia(grupoId, fecha, incluirBanquero = false) {
+  return obtenerApuestasDelRango(grupoId, fecha, fecha, incluirBanquero);
 }
 
 // Normaliza una fecha de Postgres (tipo `date`, que pg puede devolver como
@@ -2554,19 +2554,44 @@ function fechaComoISO(v) {
 // SOLO lo pide GET /comisiones-devueltas más abajo) usa BETWEEN y trae
 // también `fecha` por fila, para poder distinguir en qué día puntual cayó
 // cada carrera cuando el detalle expandido mezcla varios días.
-async function obtenerApuestasDelRango(grupoId, desde, hasta) {
+// `incluirBanquero` (02-10-2026, a pedido del usuario: "los clientes que
+// tiene el 1% en su mismo codigo necesito me muestres ese %" — caso real
+// de MUJICA, que banqueó/cubrió una jugada de Tercios en Horseshoe
+// Indianapolis (verbo "Dio" en Mis Jugadas, ver textoJugadaHipismo) y esa
+// carrera NUNCA aparecía en "Comisiones Devueltas por Cliente" ni "por
+// Hipódromo" — aunque sí contaba bien en Balance General/Cierre Final Y en
+// Saldo Comisiones. BUG REAL encontrado: esta función SOLO armaba una
+// entrada por el lado JUGADOR (t.cliente_nombre/resultado_jugador,
+// j.cliente_nombre/resultado_cliente) y nunca una para el lado BANQUERO —
+// construirResumenClienteHipismo (hipismoResumenCliente.js) y
+// GET /saldo-comisiones (más abajo) sí traen `banquero_nombre`/
+// `banqueadores` desde el 29-09-2026 ("el lado BANQUERO de Tercios/de una
+// Marca también genera % devuelto"), pero esta función — que alimenta
+// /comisiones-devueltas y /comisiones-devueltas-por-hipodromo, Y TAMBIÉN
+// /montos-apostados y /traspasos/jugadas (que a propósito NO deben
+// incluir lo banqueado: ver sus notas grandes, "banquear no es
+// 'apostar'", y traspasar reasigna cliente_nombre, nunca banquero_nombre)
+// — nunca se había actualizado para traer esa info. Se agrega un
+// parámetro opcional (default false, así /montos-apostados y
+// /traspasos/jugadas NO cambian en nada) que, en true (solo los 2
+// reportes de % devuelto que lo necesitan), agrega una entrada EXTRA por
+// cada ticket/banqueador con `rol: 'banquero'`, calculada con el MISMO
+// criterio EXACTO que ya usan Saldo Comisiones/Balance General
+// (montoDecidido sobre resultado_banquero, o sobre la parte de
+// baseJugada que banqueó cada uno).
+async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = false) {
   const detalle = [];
   const mismoDia = desde === hasta;
 
   const rTickets = mismoDia
     ? await db.query(
-        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero
+        `SELECT t.id, t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero
            FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
           WHERE t.grupo_id = $1 AND p.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT t.id, t.cliente_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero, p.fecha
+        `SELECT t.id, t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero, p.fecha
            FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id
           WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
@@ -2599,8 +2624,25 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
       // en cambio.
       montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
       decidida: !sinDecidir,
-      gano: sinDecidir ? null : rj > 0
+      gano: sinDecidir ? null : rj > 0,
+      rol: 'jugador'
     });
+    // Lado BANQUERO (02-10-2026, ver la nota grande de incluirBanquero más
+    // arriba) — SOLO cuando el llamador lo pide (/comisiones-devueltas y
+    // /comisiones-devueltas-por-hipodromo); /montos-apostados y
+    // /traspasos/jugadas nunca pasan `incluirBanquero=true`, así que para
+    // ellos esta función sigue devolviendo EXACTAMENTE lo mismo que antes.
+    if (incluirBanquero) {
+      detalle.push({
+        id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
+        cliente: t.banquero_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
+        tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo}) — banqueo`, monto: Number(t.monto),
+        montoDecidido: montoDecidido(t.resultado_banquero, t.sin_comision),
+        decidida: !sinDecidir,
+        gano: sinDecidir ? null : rb > 0,
+        rol: 'banquero'
+      });
+    }
   });
 
   const rRemate = mismoDia
@@ -2640,34 +2682,64 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta) {
 
   const rAdelantadas = mismoDia
     ? await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.banqueadores, p.hipodromo_nombre
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, p.hipodromo_nombre, p.fecha
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.banqueadores, p.hipodromo_nombre, p.fecha
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
       );
-  rAdelantadas.rows.forEach(j => detalle.push({
-    id: j.id, tabla: 'hipismo_adelantadas_jugadas', fecha: mismoDia ? desde : fechaComoISO(j.fecha),
-    cliente: j.cliente_nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
-    tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
-    detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
-    monto: Number(j.monto),
-    // resultado_cliente ya es un neto DEFINITIVO sin ningún 5% embebido
-    // (ver la nota grande de montoDecidido más arriba, junto a Tercios) —
-    // montoDecidido con sinComision=true lo deja en valor absoluto.
-    montoDecidido: montoDecidido(j.resultado_cliente, true),
-    decidida: j.gano !== null,
-    // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
-    // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
-    // (Marca todavía sin pizarra — Tabla Fija siempre decide true/false, ver
-    // la nota grande de obtenerApuestasDelDia más arriba).
-    gano: j.gano
-  }));
+  rAdelantadas.rows.forEach(j => {
+    detalle.push({
+      id: j.id, tabla: 'hipismo_adelantadas_jugadas', fecha: mismoDia ? desde : fechaComoISO(j.fecha),
+      cliente: j.cliente_nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
+      tipo: j.tipo === 'tf' ? 'tabla_fija' : 'marca',
+      detalleTexto: j.tipo === 'tf' ? `Tabla fija (${j.numero_ejemplar})` : `Marca (${j.numero1}x${j.numero2})`,
+      monto: Number(j.monto),
+      // resultado_cliente ya es un neto DEFINITIVO sin ningún 5% embebido
+      // (ver la nota grande de montoDecidido más arriba, junto a Tercios) —
+      // montoDecidido con sinComision=true lo deja en valor absoluto.
+      montoDecidido: montoDecidido(j.resultado_cliente, true),
+      decidida: j.gano !== null,
+      // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
+      // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
+      // (Marca todavía sin pizarra — Tabla Fija siempre decide true/false, ver
+      // la nota grande de obtenerApuestasDelDia más arriba).
+      gano: j.gano,
+      rol: 'jugador'
+    });
+    // Lado BANQUERO de una Marca (02-10-2026, ver la nota grande de
+    // incluirBanquero más arriba) — cada banqueador solo banqueó su
+    // `porcentaje` de la base DECIDIDA de la jugada completa
+    // (|resultado_cliente|, el mismo "base" que ya usa
+    // resolverBanqueoMarca para repartir entre banqueadores — ver
+    // services/hipismoAdelantadasCalc.js), nunca de j.monto (el apostado
+    // bruto de la Marca completa). Una Tabla Fija nunca trae
+    // `banqueadores` (solo existe para Marca), y una Marca nula nunca
+    // llega a tener banqueadores (solo se banquea una Marca ya
+    // decidida) — así que este bloque no necesita ningún filtro extra de
+    // `j.gano`.
+    if (incluirBanquero && Array.isArray(j.banqueadores)) {
+      const baseJugada = montoDecidido(j.resultado_cliente, true);
+      j.banqueadores.forEach(b => {
+        const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
+        detalle.push({
+          id: j.id, tabla: 'hipismo_adelantadas_jugadas', fecha: mismoDia ? desde : fechaComoISO(j.fecha),
+          cliente: b.nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
+          tipo: 'marca', detalleTexto: `Marca (${j.numero1}x${j.numero2}) — banqueo ${Number(b.porcentaje) || 0}%`,
+          monto: Number(j.monto),
+          montoDecidido: parte,
+          decidida: j.gano !== null,
+          gano: j.gano,
+          rol: 'banquero'
+        });
+      });
+    }
+  });
 
   return detalle;
 }
@@ -2846,7 +2918,10 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
   const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
   const desde = rango ? rango.desde : fecha;
   const hasta = rango ? rango.hasta : fecha;
-  const detalle = await obtenerApuestasDelRango(req.grupoId, desde, hasta);
+  // incluirBanquero=true (02-10-2026, ver la nota grande EXACTA de
+  // obtenerApuestasDelRango: caso real MUJICA banqueando en Horseshoe
+  // Indianapolis) — el lado BANQUERO también genera % devuelto.
+  const detalle = await obtenerApuestasDelRango(req.grupoId, desde, hasta, true);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
 
   // 24-09-2026: un cliente puede tener hasta 2 entradas simultáneas (ver
@@ -2940,7 +3015,10 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
 // GET /comisiones-devueltas-por-hipodromo?fecha=YYYY-MM-DD (default: hoy en hora Venezuela).
 router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) => {
   const fecha = req.query.fecha || isoDeFechaUTC(hoyVenezuela());
-  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha);
+  // incluirBanquero=true (02-10-2026, ver la nota grande EXACTA de
+  // obtenerApuestasDelRango: caso real MUJICA banqueando en Horseshoe
+  // Indianapolis) — el lado BANQUERO también genera % devuelto.
+  const detalle = await obtenerApuestasDelDia(req.grupoId, fecha, true);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
 
   const porHipodromo = new Map();

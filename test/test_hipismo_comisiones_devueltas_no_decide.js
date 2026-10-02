@@ -107,25 +107,25 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- obtenerApuestasDelDia (Montos Apostados / Comisiones Devueltas / Traspaso de Jugadas) ----
-  if (/^SELECT t\.id, t\.cliente_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, t\.sin_comision, p\.hipodromo_nombre, p\.carrera_numero\s+FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT t\.id, t\.cliente_nombre, t\.banquero_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, t\.sin_comision, p\.hipodromo_nombre, p\.carrera_numero\s+FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id\s+WHERE t\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     const [grupoId, fecha] = params;
     const filas = TABLAS.hipismo_tickets
       .filter(t => t.grupo_id === grupoId)
       .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
       .filter(({ p }) => p && p.fecha === fecha)
-      .map(({ t, p }) => ({ id: t.id, cliente_nombre: t.cliente_nombre, modalidad: t.modalidad, caballo: t.caballo, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, sin_comision: t.sin_comision, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
+      .map(({ t, p }) => ({ id: t.id, cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre, modalidad: t.modalidad, caballo: t.caballo, monto: t.monto, resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero, sin_comision: t.sin_comision, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
     return { rows: filas };
   }
   if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.numero_ejemplar, a\.monto, r\.hipodromo_nombre, r\.carrera_numero, r\.numero_ganador, r\.hubo_ganador\s+FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id\s+WHERE a\.grupo_id = \$1 AND r\.fecha = \$2/i.test(sql)) {
     return { rows: [] };
   }
-  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, p\.hipodromo_nombre\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, j\.banqueadores, p\.hipodromo_nombre\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     const [grupoId, fecha] = params;
     const filas = TABLAS.hipismo_adelantadas_jugadas
       .filter(j => j.grupo_id === grupoId)
       .map(j => ({ j, p: TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id) }))
       .filter(({ p }) => p && p.fecha === fecha)
-      .map(({ j, p }) => ({ id: j.id, cliente_nombre: j.cliente_nombre, tipo: j.tipo, monto: j.monto, resultado_cliente: j.resultado_cliente, numero_ejemplar: j.numero_ejemplar, numero1: j.numero1, numero2: j.numero2, carrera_numero: j.carrera_numero, gano: j.gano, hipodromo_nombre: p.hipodromo_nombre }));
+      .map(({ j, p }) => ({ id: j.id, cliente_nombre: j.cliente_nombre, tipo: j.tipo, monto: j.monto, resultado_cliente: j.resultado_cliente, numero_ejemplar: j.numero_ejemplar, numero1: j.numero1, numero2: j.numero2, carrera_numero: j.carrera_numero, gano: j.gano, banqueadores: j.banqueadores, hipodromo_nombre: p.hipodromo_nombre }));
     return { rows: filas };
   }
 

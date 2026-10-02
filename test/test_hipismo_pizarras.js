@@ -204,7 +204,7 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- obtenerApuestasDelRango (usada por GET /montos-apostados) ----
-  if (/^SELECT t\.id, t\.cliente_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, t\.sin_comision, p\.hipodromo_nombre, p\.carrera_numero FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id WHERE t\.grupo_id = \$1 AND p\.fecha = \$2$/i.test(sql)) {
+  if (/^SELECT t\.id, t\.cliente_nombre, t\.banquero_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, t\.sin_comision, p\.hipodromo_nombre, p\.carrera_numero FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id WHERE t\.grupo_id = \$1 AND p\.fecha = \$2$/i.test(sql)) {
     return { rows: [] };
   }
   if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.numero_ejemplar, a\.monto, r\.hipodromo_nombre, r\.carrera_numero, r\.numero_ganador, r\.hubo_ganador FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id WHERE a\.grupo_id = \$1 AND r\.fecha = \$2$/i.test(sql)) {
@@ -218,7 +218,7 @@ function ejecutarQuery(text, params) {
       }));
     return { rows: filas };
   }
-  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, p\.hipodromo_nombre FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, j\.banqueadores, p\.hipodromo_nombre FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     return { rows: [] };
   }
   // comisiones propias / % devuelto (GET /montos-apostados las ignora para
