@@ -387,12 +387,18 @@
   /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
      más abajo) — mientras más clientes, más chico cada renglón, para que
      la imagen de WhatsApp nunca se haga gigante ni pierda nitidez. */
-  #balanceCaptura.densidad-1 .balance-lista { gap: 4px; }
-  #balanceCaptura.densidad-1 .balance-fila { padding: 6px 10px; font-size: 12.5px; }
-  #balanceCaptura.densidad-2 .balance-lista { gap: 3px; }
-  #balanceCaptura.densidad-2 .balance-fila { padding: 5px 9px; font-size: 11.5px; }
-  #balanceCaptura.densidad-3 .balance-lista { gap: 2px; }
-  #balanceCaptura.densidad-3 .balance-fila { padding: 4px 8px; font-size: 10.5px; }
+  #balanceCaptura.densidad-1 .balance-lista,
+  #comisionesSinDevolucionesCaptura.densidad-1 .balance-lista { gap: 4px; }
+  #balanceCaptura.densidad-1 .balance-fila,
+  #comisionesSinDevolucionesCaptura.densidad-1 .balance-fila { padding: 6px 10px; font-size: 12.5px; }
+  #balanceCaptura.densidad-2 .balance-lista,
+  #comisionesSinDevolucionesCaptura.densidad-2 .balance-lista { gap: 3px; }
+  #balanceCaptura.densidad-2 .balance-fila,
+  #comisionesSinDevolucionesCaptura.densidad-2 .balance-fila { padding: 5px 9px; font-size: 11.5px; }
+  #balanceCaptura.densidad-3 .balance-lista,
+  #comisionesSinDevolucionesCaptura.densidad-3 .balance-lista { gap: 2px; }
+  #balanceCaptura.densidad-3 .balance-fila,
+  #comisionesSinDevolucionesCaptura.densidad-3 .balance-fila { padding: 4px 8px; font-size: 10.5px; }
   /* 24-09-2026: renglón "{cliente} - PORCENTAJE" (% devuelto), anidado
      siempre justo debajo de su cliente base — ver la nota grande en
      pintarBalanceGeneral. Mismo fondo/borde que .balance-fila, pero más
@@ -716,11 +722,13 @@
      para una tarjeta angosta de WhatsApp), estos 3 reportes pueden traer
      listas largas de clientes, así que crecen libremente con el contenido,
      como ya hacían antes de este cambio. */
-  #balanceCaptura, #cierreFinalCaptura, #comisionesDevueltasCaptura, #montosApostadosCaptura { position: relative; overflow: hidden; }
+  #balanceCaptura, #cierreFinalCaptura, #comisionesDevueltasCaptura, #montosApostadosCaptura,
+  #comisionesSinDevolucionesCaptura { position: relative; overflow: hidden; }
   #balanceCaptura .captura-logo-fondo,
   #cierreFinalCaptura .captura-logo-fondo,
   #comisionesDevueltasCaptura .captura-logo-fondo,
-  #montosApostadosCaptura .captura-logo-fondo {
+  #montosApostadosCaptura .captura-logo-fondo,
+  #comisionesSinDevolucionesCaptura .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
     /* Opacidad subida de 0.10 a 0.14 el 01-10-2026 (el usuario reportó que
        no se notaba) — ver la nota grande junto a .balance-fila/
@@ -728,22 +736,27 @@
        clases tapaban el logo casi del todo con un fondo sólido, así que
        este cambio de opacidad por sí solo no alcanzaba; se deja un poco
        más alto que antes de todos modos porque con las filas ya
-       semi-transparentes, 0.10 quedaba demasiado tenue para notarse. */
+       semi-transparentes, 0.10 quedaba demasiado tenue para notarse.
+       02-10-2026: "Grupo sin Devoluciones" se había quedado afuera de
+       este tratamiento (el usuario mandó una captura sin logo de fondo y
+       sin ningún color entre líneas) — se suma acá al mismo escopeado. */
     background-size: 55%; opacity: 0.14; pointer-events: none; z-index: 0;
   }
   #balanceCaptura .captura-contenido,
   #cierreFinalCaptura .captura-contenido,
   #comisionesDevueltasCaptura .captura-contenido,
-  #montosApostadosCaptura .captura-contenido {
+  #montosApostadosCaptura .captura-contenido,
+  #comisionesSinDevolucionesCaptura .captura-contenido {
     position: relative; z-index: 1;
   }
-  /* Logo chico (Balance General/Comisiones Devueltas/Montos Apostados) y
-     banner grande (Cierre Final) — mismo degradado de siempre (verde
-     Ludox) como fallback de var(), así que sin tema propio configurado no
-     cambia nada. */
+  /* Logo chico (Balance General/Comisiones Devueltas/Montos Apostados/
+     Grupo sin Devoluciones) y banner grande (Cierre Final) — mismo
+     degradado de siempre (verde Ludox) como fallback de var(), así que
+     sin tema propio configurado no cambia nada. */
   #balanceCaptura .logo-grupo,
   #comisionesDevueltasCaptura .logo-grupo,
-  #montosApostadosCaptura .logo-grupo {
+  #montosApostadosCaptura .logo-grupo,
+  #comisionesSinDevolucionesCaptura .logo-grupo {
     background: linear-gradient(135deg, var(--gc-color-1, var(--accent-grass)), var(--gc-color-2, var(--accent-lime)));
   }
   #cierreFinalCaptura .logo-grupo-grande {
@@ -783,6 +796,14 @@
   #balanceCaptura .balance-fila { background: rgba(241, 248, 243, 0.55); }
   #comisionesDevueltasCaptura .fila-carrera-comision,
   #montosApostadosCaptura .fila-carrera-comision { background: rgba(255, 255, 255, 0.55); }
+
+  /* Mismo tratamiento de logo de fondo para "Grupo sin Devoluciones"
+     (02-10-2026, a pedido del usuario: "CORRIGELA EN EL SISTEMA, COLOCOALE
+     COLOR ENTRE LINEAS Y EL LOGO CLARO DE FONDO"), más franja alterna
+     (zebra) entre filas ya que ahora es una sola lista larga (antes eran
+     2 columnas cortas Pierden/Ganan y no hacía falta). */
+  #comisionesSinDevolucionesCaptura .balance-fila { background: rgba(241, 248, 243, 0.55); }
+  #comisionesSinDevolucionesCaptura .balance-fila:nth-child(even) { background: rgba(209, 231, 217, 0.65); }
 
   /* =================================================================
      LOGO DE FONDO en "Cargar Planos" — donde aparece el resultado
@@ -2406,16 +2427,13 @@
                 <div class="fecha" id="comisionesSinDevolucionesFechaCaptura"></div>
               </div>
             </div>
-            <div class="balance-cols">
-              <div class="balance-col">
-                <h3><span class="flecha flecha-roja">▼</span> Pierden</h3>
-                <div class="balance-lista" id="listaComisionesSinDevolucionesPierden"></div>
-              </div>
-              <div class="balance-col">
-                <h3><span class="flecha flecha-verde">▲</span> Ganan</h3>
-                <div class="balance-lista" id="listaComisionesSinDevolucionesGanan"></div>
-              </div>
-            </div>
+            <!-- 02-10-2026, a pedido del usuario: "COLCOME ESTA LISTA EN
+                 ORDEN ALFABETICO Y UNA SOLA LISTA UNO DEBAJO DEL OTRO" --
+                 antes eran 2 columnas (Pierden/Ganan) ordenadas por monto;
+                 ahora es 1 sola lista ordenada alfabéticamente por nombre,
+                 con el color rojo/verde de .balance-fila.perdedor/.ganador
+                 siguiendo indicando quién pierde y quién gana. -->
+            <div class="balance-lista" id="listaComisionesSinDevoluciones"></div>
             <div class="comision-caja">
               <span class="etiqueta">💼 Comisión del grupo (bruta, sin devoluciones)</span>
               <span class="monto" id="montoComisionesSinDevolucionesTotal">$ 0,00</span>
@@ -12811,10 +12829,8 @@ function buscarComisionesSinDevoluciones() {
 async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
   const inpDesde = document.getElementById('inpDesdeComisionesSinDevoluciones');
   const inpHasta = document.getElementById('inpHastaComisionesSinDevoluciones');
-  const listaPierden = document.getElementById('listaComisionesSinDevolucionesPierden');
-  const listaGanan = document.getElementById('listaComisionesSinDevolucionesGanan');
-  listaPierden.innerHTML = '<div class="placeholder-card">Cargando…</div>';
-  listaGanan.innerHTML = '';
+  const lista = document.getElementById('listaComisionesSinDevoluciones');
+  lista.innerHTML = '<div class="placeholder-card">Cargando…</div>';
 
   const params = new URLSearchParams();
   if (desdeForzado) params.set('desde', desdeForzado);
@@ -12825,8 +12841,7 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
     data = await apiHipismo(`/api/hipismo/comisiones-sin-devoluciones?${params.toString()}`);
   } catch (e) {
     COMISIONES_SIN_DEVOLUCIONES_ACTUAL = null;
-    listaPierden.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
-    listaGanan.innerHTML = '';
+    lista.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`;
     return;
   }
   // "Ver con Pozos" (01-10-2026, tercera ronda), a pedido del usuario:
@@ -12877,14 +12892,17 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
     return fila;
   }
 
-  listaPierden.innerHTML = '';
-  listaGanan.innerHTML = '';
-  const pierden = data.clientes.filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
-  const ganan = data.clientes.filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
-  pierden.forEach(c => listaPierden.appendChild(filaComisionSinDevoluciones(c.nombre, c.saldo, 'perdedor')));
-  ganan.forEach(c => listaGanan.appendChild(filaComisionSinDevoluciones(c.nombre, c.saldo, 'ganador')));
-  if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en este rango.</div>';
-  if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en este rango.</div>';
+  // 02-10-2026, a pedido del usuario: "COLCOME ESTA LISTA EN ORDEN
+  // ALFABETICO Y UNA SOLA LISTA UNO DEBAJO DEL OTRO" — antes eran 2
+  // columnas (Pierden ordenado por monto ascendente, Ganan descendente);
+  // ahora es 1 sola lista ordenada alfabéticamente por nombre
+  // (localeCompare 'es'), el rojo/verde de .perdedor/.ganador sigue
+  // marcando quién pierde y quién gana. Los saldos en 0 se siguen
+  // excluyendo, igual que antes (ni entraban en "pierden" ni en "ganan").
+  lista.innerHTML = '';
+  const todos = data.clientes.filter(c => c.saldo !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  todos.forEach(c => lista.appendChild(filaComisionSinDevoluciones(c.nombre, c.saldo, c.saldo < 0 ? 'perdedor' : 'ganador')));
+  if (!lista.children.length) lista.innerHTML = '<div class="placeholder-card">Nadie jugó en este rango.</div>';
 
   document.getElementById('montoComisionesSinDevolucionesTotal').textContent = formatMonto(Number(data.comisionGrupo));
 }
@@ -12892,22 +12910,21 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
 // Texto para copiar al grupo de WhatsApp — mismo estilo (título en
 // negrita con el rango, línea de guiones, bloques con bullets y total
 // final en negrita) que "Destinatarios de Devolución %" (ver
-// textoComisionesDevueltas más arriba), adaptado a esta pantalla: en vez
-// de agrupar por destinatario, se listan los que pierden y los que
-// ganan, y al final la comisión del grupo en vez del total devuelto.
+// textoComisionesDevueltas más arriba), adaptado a esta pantalla: la
+// comisión del grupo va al final en vez del total devuelto.
+// 02-10-2026: se pasa de 2 bloques (🔴 Pierden / 🟢 Ganan, cada uno
+// ordenado por monto) a 1 sola lista ordenada alfabéticamente por
+// nombre, igual que se hizo en la vista de captura (pintarComisiones-
+// SinDevoluciones) — mismo pedido del usuario, para que el texto que se
+// copia al WhatsApp coincida con lo que se ve/exporta como imagen.
 function textoComisionesSinDevoluciones(data) {
-  const pierden = (data.clientes || []).filter(c => c.saldo < 0).sort((a, b) => a.saldo - b.saldo);
-  const ganan = (data.clientes || []).filter(c => c.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+  const todos = (data.clientes || []).filter(c => c.saldo !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  let texto = `*Grupo sin Devoluciones${data.conPozos ? ' (con Pozos)' : ''} - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
-  if (pierden.length) {
-    texto += `\n🔴 *Pierden*\n`;
-    pierden.forEach(c => { texto += `  • ${formatNombre(c.nombre)}:  ${formatMontoTabla(c.saldo)}\n`; });
-  }
-  if (ganan.length) {
-    texto += `\n🟢 *Ganan*\n`;
-    ganan.forEach(c => { texto += `  • ${formatNombre(c.nombre)}:  +${formatMontoTabla(c.saldo)}\n`; });
-  }
+  let texto = `*Grupo sin Devoluciones${data.conPozos ? ' (con Pozos)' : ''} - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n\n`;
+  todos.forEach(c => {
+    const signo = c.saldo > 0 ? '+' : '';
+    texto += `  • ${formatNombre(c.nombre)}:  ${signo}${formatMontoTabla(c.saldo)}\n`;
+  });
   texto += `\n──────────────────────────────\n*COMISIÓN DEL GRUPO: ${formatMontoTabla(data.comisionGrupo)} USD*`;
   return texto;
 }
