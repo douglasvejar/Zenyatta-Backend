@@ -91,7 +91,7 @@ function ticketsUnidos(grupoId, desde, hasta) {
     .filter(t => t.grupo_id === grupoId)
     .map(t => ({ t, p: TABLAS.hipismo_planos.find(pl => pl.id === t.plano_id) }))
     .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-    .map(({ t, p }) => ({ ...t, cruza_jugadas: p.cruza_jugadas || false, fecha: p.fecha }));
+    .map(({ t, p }) => ({ ...t, cruza_jugadas: p.cruza_jugadas || false, fecha: p.fecha, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero }));
 }
 
 function ejecutarQuery(text, params) {
@@ -100,8 +100,8 @@ function ejecutarQuery(text, params) {
   const [grupoId, p2, p3] = params;
 
   // ---- /cierre-final ----
-  if (sql === "SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto, t.plano_id, t.sin_comision, p.cruza_jugadas FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3") {
-    return { rows: ticketsUnidos(grupoId, p2, p3).map(({ fecha, ...resto }) => resto) };
+  if (sql === "SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto, t.plano_id, t.sin_comision, p.cruza_jugadas, p.hipodromo_nombre, p.carrera_numero, p.fecha FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3") {
+    return { rows: ticketsUnidos(grupoId, p2, p3) };
   }
   if (sql === "SELECT a.cliente_nombre, a.resultado, a.monto FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3") {
     return { rows: [] };
@@ -126,7 +126,7 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- /semana-por-dias ----
-  if (sql === "SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto, t.plano_id, t.sin_comision, p.cruza_jugadas, p.fecha FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3") {
+  if (sql === "SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto, t.plano_id, t.sin_comision, p.cruza_jugadas, p.fecha, p.hipodromo_nombre, p.carrera_numero FROM hipismo_tickets t JOIN hipismo_planos p ON p.id = t.plano_id WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3") {
     return { rows: ticketsUnidos(grupoId, p2, p3) };
   }
   if (sql === "SELECT a.cliente_nombre, a.resultado, a.monto, r.fecha FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3") {

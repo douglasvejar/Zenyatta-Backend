@@ -1,3 +1,11 @@
+// round2/montoDecidido (02-10-2026, ver la nota grande de
+// netearJugadorBanqueroTercios más abajo, junto a calcularAjustesCruce):
+// se usan acá para netear jugador/banquero por carrera antes de calcular
+// "% devuelto" — misma fuente de verdad que ya usa services/
+// hipismoAdelantadasCalc.js/routes/hipismo.js para esa cuenta, nunca
+// reimplementada aparte.
+const { round2, montoDecidido } = require('./hipismoAdelantadasCalc');
+
 // =================================================================
 // Motor de cálculo de "Cargar Planos" — Módulo Hipismo (22-09-2026).
 // =================================================================
@@ -1063,6 +1071,85 @@ function calcularAjustesCruce(tickets) {
   return ajustes;
 }
 
+// =================================================================
+// netearJugadorBanqueroTercios(tickets) (02-10-2026, a pedido del
+// usuario, caso real "GG": "gg juega y banquea y queda en 0 en esa
+// carrera, alli no tienes que pagarle comision de nada porque quedo en
+// 0... supongamos que fuera jugado 30 y banqueado 20, le tienes que
+// sacar la devolucion a los 10 que queda que es lo que realmente
+// quedaria en juego... como el todos los clientes").
+//
+// Hasta esta ronda, el % devuelto de un cliente se calculaba SIEMPRE
+// sumando el lado JUGADOR y el lado BANQUERO por separado (ver la nota
+// grande de incluirBanquero en obtenerApuestasDelRango, routes/
+// hipismo.js, y la de construirCierreFinalHipismo en
+// services/hipismoResumenCliente.js): si GG jugó 30 en un ticket y
+// banqueó 30 en OTRO ticket de la MISMA carrera, se le pagaba % sobre
+// 30+30=60 — pero en la práctica esas 2 posiciones se cancelan entre sí
+// (lo que GG "banqueó" es plata que, si el jugador de ESE ticket gana,
+// sale del bolsillo de GG — no es ganancia real "generada" aparte de lo
+// que él mismo jugó). El usuario confirmó (02-10-2026): el neteo aplica
+// SIEMPRE que un cliente juegue Y banquee algo en la MISMA carrera (no
+// hace falta que sea la misma modalidad/caballo de un lado y del otro),
+// neteando por CARRERA puntual (nunca por todo el día), y SOLO para
+// Tercios (las Marcas de Jugadas Adelantadas, con sus banqueadores
+// propios, se quedan exactamente como están).
+//
+// `tickets`: array de tickets de Tercios YA DECIDIDOS o no (esta función
+// filtra los "sin decidir" ella misma, mismo criterio EXACTO de
+// siempre — ambos resultados en 0 — para que ningún llamador se olvide
+// de aplicarlo), con el shape
+// {clienteNombre, banqueroNombre, resultadoJugador, resultadoBanquero,
+//  sinComision, fecha, hipodromoNombre, carreraNumero} —ncluye `fecha`
+// porque varios reportes (ej. /comisiones-devueltas con ?desde=&hasta=)
+// pueden traer el MISMO hipódromo+número de carrera en días distintos,
+// que nunca deben netearse entre sí.
+//
+// Devuelve Map(claveCarrera -> Map(nombre -> {decididoJugador,
+// decididoBanquero, neto, dual})):
+//   - Un nombre que SOLO aparece de un lado (jugador O banquero, nunca
+//     los 2) en esa carrera da `dual:false` y `neto` exactamente igual
+//     al monto de SIEMPRE (montoDecidido de ese único lado, con el otro
+//     en 0) — 0 regresión para el caso de siempre, el de la gran
+//     mayoría de los clientes.
+//   - Un nombre que aparece de LOS 2 lados en la MISMA carrera da
+//     `dual:true` y `neto` = |decididoJugador - decididoBanquero| —
+//     nunca la suma. `decididoJugador`/`decididoBanquero` quedan en el
+//     resultado para que el llamador pueda mostrar el desglose ("Jugó
+//     $X / Banqueó $Y → Neto $Z") cuando arma el detalle visual.
+// El propio llamador decide, con este Map, a qué cuenta(s) de % propio/
+// aval aplicarle ese monto neto (vía obtenerComisionesPropias), exacto
+// igual que ya hacía con el monto de un solo lado.
+function netearJugadorBanqueroTercios(tickets) {
+  const porCarrera = new Map();
+  (tickets || []).forEach(t => {
+    const rj = Number(t.resultadoJugador) || 0;
+    const rb = Number(t.resultadoBanquero) || 0;
+    if (rj === 0 && rb === 0) return; // "no decidida" -- nunca aporta nada (ver la nota grande arriba)
+    const clave = `${t.fecha}::${t.hipodromoNombre}::${t.carreraNumero}`;
+    if (!porCarrera.has(clave)) porCarrera.set(clave, new Map());
+    const porNombre = porCarrera.get(clave);
+    if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0 });
+    porNombre.get(t.clienteNombre).decididoJugador = round2(porNombre.get(t.clienteNombre).decididoJugador + montoDecidido(t.resultadoJugador, t.sinComision));
+    if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0 });
+    porNombre.get(t.banqueroNombre).decididoBanquero = round2(porNombre.get(t.banqueroNombre).decididoBanquero + montoDecidido(t.resultadoBanquero, t.sinComision));
+  });
+  const resultado = new Map();
+  porCarrera.forEach((porNombre, clave) => {
+    const netos = new Map();
+    porNombre.forEach((v, nombre) => {
+      netos.set(nombre, {
+        decididoJugador: v.decididoJugador,
+        decididoBanquero: v.decididoBanquero,
+        neto: round2(Math.abs(v.decididoJugador - v.decididoBanquero)),
+        dual: v.decididoJugador > 0 && v.decididoBanquero > 0
+      });
+    });
+    resultado.set(clave, netos);
+  });
+  return resultado;
+}
+
 // Arma las mismas 3 líneas + línea en blanco que calcularPlano() imprime
 // por cada ticket reconocido (ver más arriba) — para poder regenerar
 // texto_resultado después de editar un ticket, sin reparsear el texto
@@ -1151,7 +1238,7 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
 module.exports = {
   calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
-  calcularAjustesCruce,
+  calcularAjustesCruce, netearJugadorBanqueroTercios,
   ordinalCarrera, limpiarEncabezadoYPie,
   // 24-09-2026 (jugadas mixtas + formato compacto "Grupo Gorila"):
   resolverModalidadCompuesta, resolverModalidadMultiCaballo, normalizarModalidadCombo,

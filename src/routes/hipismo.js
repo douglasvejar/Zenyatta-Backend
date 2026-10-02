@@ -52,6 +52,12 @@ const {
   // CRUZANDO" — ver la nota grande de esta función más abajo, junto a
   // donde se usa en GET /cierre-final).
   calcularAjustesCruce,
+  // netearJugadorBanqueroTercios (02-10-2026, a pedido del usuario, caso
+  // real "GG" — ver la nota grande junto a esta función en
+  // services/hipismoCalc.js): cuando un cliente juega Y banquea Tercios
+  // en la MISMA carrera, el % devuelto se calcula sobre el NETO de los 2
+  // lados, nunca sobre la suma.
+  netearJugadorBanqueroTercios,
   // "Cargar Winners" (26-09-2026) reusa el mismo formato de nombre/monto
   // que el resto de Hipismo, sin necesitar nada del motor de cálculo de
   // Tercios (acá no se calcula nada, ver la nota grande junto a POST /winners).
@@ -506,13 +512,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   // Adelantadas resueltas acá (r.resultadoCliente) ya es un neto
   // DEFINITIVO sin ningún 5% embebido, así que montoDecidido con
   // sinComision=true simplemente lo deja en valor absoluto.
-  const entradasApostadas = resultado.tickets
-    .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
-    .flatMap(t => [
-      { nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) },
-      { nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) }
-    ])
-    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
+  const entradasApostadas = entradasApostadasDeTickets(resultado.tickets, resueltas);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
@@ -648,13 +648,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // Ver la nota grande de montoDecidido() en /planos/calcular — NUNCA
   // t.monto (lo apostado bruto), la base del % propio/de aval es siempre
   // lo DECIDIDO en esa jugada puntual, sin sacarle el 5%.
-  const entradasApostadas = resultado.tickets
-    .filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0))
-    .flatMap(t => [
-      { nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) },
-      { nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) }
-    ])
-    .concat(resueltas.filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
+  const entradasApostadas = entradasApostadasDeTickets(resultado.tickets, resueltas);
   const nombresApostados = entradasApostadas.map(e => e.nombre);
   await asegurarCuentasComisionParaNombres(req.grupoId, nombresApostados);
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, nombresApostados);
@@ -1657,17 +1651,76 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
   // EL 5%" — ver la nota grande de montoDecidido() en
   // services/hipismoAdelantadasCalc.js): NUNCA t.monto, cada lado usa su
   // propio resultado ya decidido.
-  rTickets.rows
-    .filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
-    .forEach(t => {
-      const devuelto = round2(
-        devueltoDeNombre(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)) +
-        devueltoDeNombre(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision))
-      );
-      if (!devuelto) return;
-      porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devuelto));
+  const ticketsDecididosPorPlano = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
+  // NETEO jugador/banquero (02-10-2026, caso GG: ver la nota grande EXACTA
+  // de netearJugadorBanqueroTercios en services/hipismoCalc.js) — cada
+  // `plano_id` YA ES una sola carrera (invariante "sustituir en vez de
+  // duplicar", ver la nota grande de POST /planos más abajo: nunca hay 2
+  // planos vivos para el mismo hipódromo+carrera+fecha), así que se usa
+  // directo como clave de carrera, sin necesitar hipódromo/carrera/fecha.
+  const netoPorPlanoId = netearJugadorBanqueroTercios(ticketsDecididosPorPlano.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre,
+    resultadoJugador: t.resultado_jugador, resultadoBanquero: t.resultado_banquero,
+    sinComision: t.sin_comision, fecha: t.plano_id, hipodromoNombre: '', carreraNumero: ''
+  })));
+  const dualAgregadoPorPlanoId = new Set();
+  ticketsDecididosPorPlano.forEach(t => {
+    const claveCarrera = `${t.plano_id}::::`;
+    const infoJugador = netoPorPlanoId.get(claveCarrera)?.get(t.cliente_nombre);
+    const infoBanquero = netoPorPlanoId.get(claveCarrera)?.get(t.banquero_nombre);
+    let devuelto = 0;
+    if (!(infoJugador && infoJugador.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
+    if (!(infoBanquero && infoBanquero.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+    if (devuelto) porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devuelto));
+    [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
+      const info = netoPorPlanoId.get(claveCarrera)?.get(nombre);
+      if (!info || !info.dual) return;
+      const claveDual = `${t.plano_id}::${nombre}`;
+      if (dualAgregadoPorPlanoId.has(claveDual)) return;
+      dualAgregadoPorPlanoId.add(claveDual);
+      const devueltoNeto = devueltoDeNombre(nombre, info.neto);
+      if (devueltoNeto) porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devueltoNeto));
     });
+  });
   return porPlano;
+}
+
+// entradasApostadasDeTickets (02-10-2026, caso GG: ver la nota grande
+// EXACTA de netearJugadorBanqueroTercios en services/hipismoCalc.js) —
+// arma la lista `{nombre, monto}` que alimenta agregarPorcentajeDevuelto()
+// a partir de los tickets de ESTA carrera puntual (todos pertenecen al
+// mismo plano, recién calculado/guardado, así que una sola clave de
+// carrera constante alcanza) más las Jugadas Adelantadas resueltas con la
+// misma pizarra. Un cliente que juega Y banquea en esta MISMA carrera
+// (Tercios, única fuente que puede traer ambos roles acá) deja de generar
+// 2 entradas por separado y pasa a generar UNA sola sobre el NETO de
+// ambos lados — mismo criterio EXACTO que ya usan /comisiones-devueltas,
+// /cierre-final, /saldo-comisiones y /semana-por-dias. Compartida por
+// POST /planos/calcular (vista previa) y POST /planos (guardado real)
+// para no duplicar esta lógica 2 veces.
+function entradasApostadasDeTickets(tickets, resueltas) {
+  const ticketsDecididos = (tickets || []).filter(t => !(t.resultadoJugador === 0 && t.resultadoBanquero === 0));
+  const netoDeEstaCarrera = netearJugadorBanqueroTercios(ticketsDecididos.map(t => ({
+    clienteNombre: t.clienteNombre, banqueroNombre: t.banqueroNombre,
+    resultadoJugador: t.resultadoJugador, resultadoBanquero: t.resultadoBanquero,
+    sinComision: t.sinComision, fecha: 'x', hipodromoNombre: 'x', carreraNumero: 'x'
+  }))).get('x::x::x') || new Map();
+  const dualAgregado = new Set();
+  const entradasTickets = ticketsDecididos.flatMap(t => {
+    const entradas = [];
+    const infoJugador = netoDeEstaCarrera.get(t.clienteNombre);
+    const infoBanquero = netoDeEstaCarrera.get(t.banqueroNombre);
+    if (!(infoJugador && infoJugador.dual)) entradas.push({ nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) });
+    if (!(infoBanquero && infoBanquero.dual)) entradas.push({ nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) });
+    [t.clienteNombre, t.banqueroNombre].forEach(nombre => {
+      const info = netoDeEstaCarrera.get(nombre);
+      if (!info || !info.dual || dualAgregado.has(nombre)) return;
+      dualAgregado.add(nombre);
+      entradas.push({ nombre, monto: info.neto });
+    });
+    return entradas;
+  });
+  return entradasTickets.concat((resueltas || []).filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
 }
 
 // GET /pizarras?desde=&hasta= : lista Tercios (planos) + Remates +
@@ -2607,34 +2660,71 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
   // 0 (ganó el otro lado); y null (sin decidir) solo en el mismo caso en
   // que decidida ya daba false (los 2 en 0 — una Marca "pp"/"a premio" sin
   // ningún caballo que figurara, o una familia "Nn" empatada).
+  // netoPorCarrera (02-10-2026, "GG juega y banquea y queda en 0 en esa
+  // carrera... no tienes que pagarle comision de nada porque quedo en 0
+  // ... [si fuera] jugado 30 y banqueado 20, le tienes que sacar la
+  // devolucion a los 10 que queda" — ver la nota grande EXACTA de
+  // netearJugadorBanqueroTercios en services/hipismoCalc.js): SOLO se
+  // calcula cuando `incluirBanquero` (si no, nunca hay lado banquero que
+  // netear, y /montos-apostados / /traspasos/jugadas deben seguir
+  // devolviendo EXACTO lo mismo de siempre). Un cliente que juega Y
+  // banquea en la MISMA carrera (fecha+hipódromo+número) dentro de este
+  // rango deja de recibir 2 entradas independientes en `detalle` (una por
+  // rol) y pasa a tener UNA sola entrada sintética con `rol:'neto'` más
+  // abajo — el resto de los clientes (la gran mayoría, un solo rol por
+  // carrera) sigue exactamente igual que siempre.
+  const netoPorCarrera = incluirBanquero
+    ? netearJugadorBanqueroTercios(rTickets.rows.map(t => ({
+        clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre,
+        resultadoJugador: t.resultado_jugador, resultadoBanquero: t.resultado_banquero,
+        sinComision: t.sin_comision,
+        fecha: mismoDia ? desde : fechaComoISO(t.fecha),
+        hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero
+      })))
+    : null;
+  // Entradas sintéticas ya agregadas (clave carrera::nombre) para no
+  // duplicar la línea "neto" una vez por cada ticket del cliente dual en
+  // esa carrera — se arma una sola, con el PRIMER ticket que la dispara.
+  const dualAgregado = new Set();
+
   rTickets.rows.forEach(t => {
     const rj = Number(t.resultado_jugador), rb = Number(t.resultado_banquero);
     const sinDecidir = rj === 0 && rb === 0;
-    detalle.push({
-      id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
-      cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
-      tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
-      // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
-      // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido()
-      // en services/hipismoAdelantadasCalc.js): esta línea SIEMPRE es el
-      // lado JUGADOR (ver la nota grande de más arriba, "nunca lo que
-      // banqueó/cubrió"), así que su base es resultado_jugador. Se deja
-      // aparte de `monto` (que /montos-apostados necesita intacto, en
-      // bruto) para que los reportes de % devuelto (más abajo) usen esta
-      // en cambio.
-      montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
-      decidida: !sinDecidir,
-      gano: sinDecidir ? null : rj > 0,
-      rol: 'jugador'
-    });
+    const fechaFila = mismoDia ? desde : fechaComoISO(t.fecha);
+    const claveCarrera = `${fechaFila}::${t.hipodromo_nombre}::${t.carrera_numero}`;
+    const infoJugador = netoPorCarrera && !sinDecidir ? netoPorCarrera.get(claveCarrera)?.get(t.cliente_nombre) : null;
+    const infoBanquero = netoPorCarrera && !sinDecidir ? netoPorCarrera.get(claveCarrera)?.get(t.banquero_nombre) : null;
+
+    // Lado JUGADOR — si ESTE cliente es "dual" en esta carrera (también
+    // banquea algo acá), no se empuja su entrada de siempre: se reemplaza
+    // más abajo por la entrada sintética "neto" (una sola vez).
+    if (!(infoJugador && infoJugador.dual)) {
+      detalle.push({
+        id: t.id, tabla: 'hipismo_tickets', fecha: fechaFila,
+        cliente: t.cliente_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
+        tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo})`, monto: Number(t.monto),
+        // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
+        // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido()
+        // en services/hipismoAdelantadasCalc.js): esta línea SIEMPRE es el
+        // lado JUGADOR (ver la nota grande de más arriba, "nunca lo que
+        // banqueó/cubrió"), así que su base es resultado_jugador. Se deja
+        // aparte de `monto` (que /montos-apostados necesita intacto, en
+        // bruto) para que los reportes de % devuelto (más abajo) usen esta
+        // en cambio.
+        montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
+        decidida: !sinDecidir,
+        gano: sinDecidir ? null : rj > 0,
+        rol: 'jugador'
+      });
+    }
     // Lado BANQUERO (02-10-2026, ver la nota grande de incluirBanquero más
     // arriba) — SOLO cuando el llamador lo pide (/comisiones-devueltas y
     // /comisiones-devueltas-por-hipodromo); /montos-apostados y
     // /traspasos/jugadas nunca pasan `incluirBanquero=true`, así que para
     // ellos esta función sigue devolviendo EXACTAMENTE lo mismo que antes.
-    if (incluirBanquero) {
+    if (incluirBanquero && !(infoBanquero && infoBanquero.dual)) {
       detalle.push({
-        id: t.id, tabla: 'hipismo_tickets', fecha: mismoDia ? desde : fechaComoISO(t.fecha),
+        id: t.id, tabla: 'hipismo_tickets', fecha: fechaFila,
         cliente: t.banquero_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
         tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo}) — banqueo`, monto: Number(t.monto),
         montoDecidido: montoDecidido(t.resultado_banquero, t.sin_comision),
@@ -2643,6 +2733,28 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         rol: 'banquero'
       });
     }
+    // Entrada sintética "neto" — una por (carrera, cliente) dual, la
+    // primera vez que aparece (venga del lado jugador o del banquero de
+    // este ticket). `monto` acá es informativo (suma de lo apostado en
+    // bruto de ambos lados, para que la columna "Apostado" del detalle
+    // visual no quede vacía) — `montoDecidido` (el que de verdad usan los
+    // reportes de % devuelto más abajo) es el NETO.
+    [{ nombre: t.cliente_nombre, info: infoJugador }, { nombre: t.banquero_nombre, info: infoBanquero }].forEach(({ nombre, info }) => {
+      if (!info || !info.dual) return;
+      const claveDual = `${claveCarrera}::${nombre}`;
+      if (dualAgregado.has(claveDual)) return;
+      dualAgregado.add(claveDual);
+      detalle.push({
+        id: null, tabla: 'hipismo_tickets', fecha: fechaFila,
+        cliente: nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
+        tipo: 'tercios', neteado: true,
+        decididoJugador: info.decididoJugador, decididoBanquero: info.decididoBanquero,
+        detalleTexto: 'Jugó y banqueó en esta carrera (neto)',
+        monto: round2(info.decididoJugador + info.decididoBanquero),
+        montoDecidido: info.neto,
+        decidida: true, gano: null, rol: 'neto'
+      });
+    });
   });
 
   const rRemate = mismoDia
@@ -2983,7 +3095,13 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
       // distintos — se incluye acá para que el detalle expandido (y el
       // texto de "Destinatarios de Devolución") no las confunda entre sí.
       // Con un solo día es simplemente esa misma fecha, siempre.
-      h.carreras.push({ fecha: d.fecha, carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto });
+      // `neteado`/`decididoJugador`/`decididoBanquero` (02-10-2026, ver la
+      // nota grande EXACTA de netearJugadorBanqueroTercios en
+      // services/hipismoCalc.js — caso GG jugador+banquero en la misma
+      // carrera): se propagan tal cual vienen de `d` para que el frontend
+      // pueda mostrar "Jugó $X / Banqueó $Y → Neto $Z" en vez del texto
+      // genérico cuando esta línea es la entrada sintética neteada.
+      h.carreras.push({ fecha: d.fecha, carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto, neteado: !!d.neteado, decididoJugador: d.decididoJugador, decididoBanquero: d.decididoBanquero, neto: d.neteado ? d.montoDecidido : undefined });
     });
   });
 
@@ -3228,8 +3346,11 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   const { desde, hasta } = rangoSemana(hoyVe, offset);
   const numeroSemana = numeroSemanaISO(desde);
 
+  // `p.hipodromo_nombre, p.carrera_numero, p.fecha` (02-10-2026, agregadas
+  // SOLO para el neteo jugador/banquero de más abajo — ver la nota grande
+  // EXACTA de netearJugadorBanqueroTercios en services/hipismoCalc.js).
   const rTickets = await db.query(
-    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision
+    `SELECT t.cliente_nombre, t.banquero_nombre, t.monto, t.resultado_jugador, t.resultado_banquero, t.sin_comision, p.hipodromo_nombre, p.carrera_numero, p.fecha
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -3297,9 +3418,41 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // EL 5%" — ver la nota grande de montoDecidido() en
   // services/hipismoAdelantadasCalc.js): NUNCA t.monto/j.monto.
   const ticketsDecididos = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
-  ticketsDecididos.forEach(t => acumularSaldo(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
-  // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
-  ticketsDecididos.forEach(t => acumularSaldo(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  // NETEO jugador/banquero por carrera (02-10-2026, caso GG: ver la nota
+  // grande EXACTA de netearJugadorBanqueroTercios en hipismoCalc.js) — un
+  // cliente que juega Y banquea en la MISMA carrera (Tercios únicamente)
+  // deja de sumar % sobre cada lado por separado y pasa a sumarlo UNA sola
+  // vez sobre el NETO de ambos lados en esa carrera — mismo criterio EXACTO
+  // que ya usan /comisiones-devueltas y /cierre-final.
+  const netoPorCarreraSaldo = netearJugadorBanqueroTercios(ticketsDecididos.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre,
+    resultadoJugador: t.resultado_jugador, resultadoBanquero: t.resultado_banquero,
+    sinComision: t.sin_comision,
+    fecha: t.fecha instanceof Date ? t.fecha.toISOString().slice(0, 10) : t.fecha,
+    hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero
+  })));
+  const dualAgregadoSaldo = new Set();
+  ticketsDecididos.forEach(t => {
+    const fechaFila = t.fecha instanceof Date ? t.fecha.toISOString().slice(0, 10) : t.fecha;
+    const claveCarrera = `${fechaFila}::${t.hipodromo_nombre}::${t.carrera_numero}`;
+    const infoJugador = netoPorCarreraSaldo.get(claveCarrera)?.get(t.cliente_nombre);
+    const infoBanquero = netoPorCarreraSaldo.get(claveCarrera)?.get(t.banquero_nombre);
+    if (!(infoJugador && infoJugador.dual)) {
+      acumularSaldo(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision));
+    }
+    // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
+    if (!(infoBanquero && infoBanquero.dual)) {
+      acumularSaldo(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision));
+    }
+    [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
+      const info = netoPorCarreraSaldo.get(claveCarrera)?.get(nombre);
+      if (!info || !info.dual) return;
+      const claveDual = `${claveCarrera}::${nombre}`;
+      if (dualAgregadoSaldo.has(claveDual)) return;
+      dualAgregadoSaldo.add(claveDual);
+      acumularSaldo(nombre, info.neto);
+    });
+  });
   rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, montoDecidido(j.resultado_cliente, true)));
   // 29-09-2026 — lado BANQUERO de una Marca: cada banqueador solo banqueó
   // su `porcentaje` de la base DECIDIDA de la jugada completa
@@ -3420,9 +3573,12 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // bloques más abajo). Sin ellas, esta vista día-por-día se quedaba
   // corta contra Cierre Final/Balance General para cualquier cliente con
   // % propio, un plano cruzado, o un traspaso manual de comisión.
+  // `p.hipodromo_nombre, p.carrera_numero` (02-10-2026, agregadas SOLO
+  // para el neteo jugador/banquero de más abajo — ver la nota grande
+  // EXACTA de netearJugadorBanqueroTercios en services/hipismoCalc.js).
   const rTickets = await db.query(
     `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto,
-            t.plano_id, t.sin_comision, p.cruza_jugadas, p.fecha
+            t.plano_id, t.sin_comision, p.cruza_jugadas, p.fecha, p.hipodromo_nombre, p.carrera_numero
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -3513,8 +3669,41 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // EL 5%" — ver la nota grande de montoDecidido() en
   // services/hipismoAdelantadasCalc.js): NUNCA t.monto/j.monto.
   const ticketsDecididosDia = rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0));
-  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecidido(t.resultado_jugador, t.sin_comision)));
-  ticketsDecididosDia.forEach(t => acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  // NETEO jugador/banquero por carrera (02-10-2026, caso GG: ver la nota
+  // grande EXACTA de netearJugadorBanqueroTercios en hipismoCalc.js) — un
+  // cliente que juega Y banquea en la MISMA carrera (Tercios únicamente)
+  // deja de sumar % sobre cada lado por separado y pasa a sumarlo UNA sola
+  // vez sobre el NETO de ambos lados en esa carrera, atribuido al día de
+  // esa carrera — mismo criterio EXACTO que ya usan /comisiones-devueltas,
+  // /cierre-final y /saldo-comisiones.
+  const netoPorCarreraDia = netearJugadorBanqueroTercios(ticketsDecididosDia.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre,
+    resultadoJugador: t.resultado_jugador, resultadoBanquero: t.resultado_banquero,
+    sinComision: t.sin_comision,
+    fecha: t.fecha instanceof Date ? isoDeFechaUTC(t.fecha) : t.fecha,
+    hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero
+  })));
+  const dualAgregadoDia = new Set();
+  ticketsDecididosDia.forEach(t => {
+    const fechaIso = t.fecha instanceof Date ? isoDeFechaUTC(t.fecha) : t.fecha;
+    const claveCarrera = `${fechaIso}::${t.hipodromo_nombre}::${t.carrera_numero}`;
+    const infoJugador = netoPorCarreraDia.get(claveCarrera)?.get(t.cliente_nombre);
+    const infoBanquero = netoPorCarreraDia.get(claveCarrera)?.get(t.banquero_nombre);
+    if (!(infoJugador && infoJugador.dual)) {
+      acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecidido(t.resultado_jugador, t.sin_comision));
+    }
+    if (!(infoBanquero && infoBanquero.dual)) {
+      acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecidido(t.resultado_banquero, t.sin_comision));
+    }
+    [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
+      const info = netoPorCarreraDia.get(claveCarrera)?.get(nombre);
+      if (!info || !info.dual) return;
+      const claveDual = `${claveCarrera}::${nombre}`;
+      if (dualAgregadoDia.has(claveDual)) return;
+      dualAgregadoDia.add(claveDual);
+      acumularDevueltoDia(nombre, t.fecha, info.neto);
+    });
+  });
   rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecidido(j.resultado_cliente, true)));
   // 29-09-2026 — lado BANQUERO de una Marca (ver la nota grande de
   // /cierre-final): cada banqueador solo banqueó su `porcentaje` de la

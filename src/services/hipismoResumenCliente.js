@@ -32,7 +32,15 @@ const { obtenerComisionesPropias, obtenerAjustesComision } = require('./hipismoC
 // calcularAjustesCruce (30-09-2026, ver la nota grande de
 // construirCierreFinalHipismo más abajo) — misma función que ya usaba
 // GET /cierre-final en routes/hipismo.js.
-const { calcularAjustesCruce } = require('./hipismoCalc');
+// netearJugadorBanqueroTercios (02-10-2026, ver la nota grande EXACTA junto
+// a su definición en hipismoCalc.js — caso GG "juega y banquea y queda en
+// 0 en esa carrera"): necesaria acá porque construirCierreFinalHipismo es
+// la referencia "golden" del % devuelto para TODOS los clientes a la vez
+// (Balance General/Cierre Final) — sin este neteo, GG saldría cobrando %
+// devuelto sobre su lado jugador Y su lado banquero por separado, nunca
+// neteados, justo la inconsistencia que el usuario pidió corregir en TODOS
+// los reportes que tocan % devuelto.
+const { calcularAjustesCruce, netearJugadorBanqueroTercios } = require('./hipismoCalc');
 
 // "⚽ Deportes" se guarda como un hipódromo más dentro de "dias[].hipodromos"
 // (mismo shape que un hipódromo real), pero con tipo:'deportes' — ver la
@@ -395,6 +403,27 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // ni comisión") — mismo chequeo que construirResumenCuentaComisionHipismo
     // más arriba, ver esa nota grande para el detalle de qué casos caen
     // acá (linea.resultado en 0).
+    // NETEO jugador/banquero (02-10-2026, Task #43 del barrido de
+    // netearJugadorBanqueroTercios — ver la nota grande EXACTA de esa
+    // función en services/hipismoCalc.js, caso GG): revisado A PROPÓSITO
+    // y dejado SIN cambios acá. El neteo de "% devuelto" (comisiones-
+    // devueltas, cierre-final, saldo-comisiones, semana-por-dias, planos/
+    // pizarras) resuelve un problema de CONTABILIDAD agregada — pagarle a
+    // un cliente un ítem "{nombre} - PORCENTAJE" sobre la suma bruta de
+    // ambos lados cuando el neto real de esa carrera es menor (o cero).
+    // Esta función es otra cosa: la FICHA PERSONAL del cliente, línea por
+    // línea, con el toggle "incluir % en sus jugadas" (ON) sumando el %
+    // DIRECTO al resultado de CADA jugada individual que él mismo ve en su
+    // historial — no hay ningún ítem agregado que pueda duplicarse. Un
+    // cliente dual (juega Y banquea en la misma carrera, con el toggle ON)
+    // ya tiene un comportamiento EXPLÍCITAMENTE confirmado y cubierto por
+    // test_hipismo_incluir_porcentaje_en_jugadas.js (caso PEDRO: su línea
+    // de jugador se gana su 1% sobre SU PROPIO monto, y su línea de
+    // banquero se gana su 1% sobre SU PROPIO monto, cada una por
+    // separado) — cambiar esto a "neto por carrera" alteraría el monto
+    // que el propio cliente ve en CADA línea de su historial (no solo un
+    // total), lo cual es una decisión de producto distinta que el usuario
+    // nunca pidió ni confirmó para este caso puntual. Se deja así.
     let comisionIncluida = 0;
     if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
       const montoParaPct = montoBaseParaPct(linea);
@@ -699,9 +728,14 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
 // lista `clientes` con su saldo ya neto, tal cual el shape que devolvía
 // GET /cierre-final.
 async function construirCierreFinalHipismo(grupoId, desde, hasta) {
+  // `p.hipodromo_nombre, p.carrera_numero, p.fecha` (02-10-2026, agregadas
+  // SOLO para el neteo jugador/banquero de más abajo —
+  // netearJugadorBanqueroTercios agrupa por carrera, fecha+hipódromo+
+  // número— ningún otro uso de rTickets en esta función las necesitaba
+  // antes).
   const rTickets = await db.query(
     `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero, t.monto,
-            t.plano_id, t.sin_comision, p.cruza_jugadas
+            t.plano_id, t.sin_comision, p.cruza_jugadas, p.hipodromo_nombre, p.carrera_numero, p.fecha
        FROM hipismo_tickets t
        JOIN hipismo_planos p ON p.id = t.plano_id
       WHERE t.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
@@ -911,12 +945,55 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // que gana solo decide una fracción del monto, aunque el que pierde sí
   // suele perder el monto completo (ahí lo decidido y lo apostado
   // coinciden, por eso el bug viejo no se notaba en las pérdidas).
-  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
-    .forEach(t => acumularDevuelto(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
-  // 29-09-2026 (ver la nota grande de nombresJugadores más arriba): el
-  // lado BANQUERO de Tercios ahora también genera % devuelto.
-  rTickets.rows.filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
-    .forEach(t => acumularDevuelto(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+  // NETEO jugador/banquero por carrera (02-10-2026, caso GG: ver la nota
+  // grande EXACTA de netearJugadorBanqueroTercios en hipismoCalc.js) — un
+  // cliente que juega Y banquea en la MISMA carrera (Tercios únicamente)
+  // deja de generar % devuelto por cada lado por separado y pasa a
+  // generarlo UNA sola vez sobre el NETO de ambos lados en esa carrera. El
+  // resto de los clientes (un solo rol por carrera, la gran mayoría) sigue
+  // exactamente igual que siempre — mismo criterio EXACTO que ya usa
+  // obtenerApuestasDelRango en routes/hipismo.js para /comisiones-devueltas.
+  const netoPorCarreraCierre = netearJugadorBanqueroTercios(rTickets.rows.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre,
+    resultadoJugador: t.resultado_jugador, resultadoBanquero: t.resultado_banquero,
+    sinComision: t.sin_comision,
+    fecha: t.fecha instanceof Date ? t.fecha.toISOString().slice(0, 10) : t.fecha,
+    hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero
+  })));
+  // Pares (carrera::nombre) ya neteados — evita generar el % devuelto del
+  // neto más de una vez por cliente dual cuando tiene varios tickets en la
+  // misma carrera (mismo criterio EXACTO que `dualAgregado` en
+  // obtenerApuestasDelRango).
+  const dualAgregadoCierre = new Set();
+  rTickets.rows
+    .filter(t => !(Number(t.resultado_jugador) === 0 && Number(t.resultado_banquero) === 0))
+    .forEach(t => {
+      const fechaFila = t.fecha instanceof Date ? t.fecha.toISOString().slice(0, 10) : t.fecha;
+      const claveCarrera = `${fechaFila}::${t.hipodromo_nombre}::${t.carrera_numero}`;
+      const infoJugador = netoPorCarreraCierre.get(claveCarrera)?.get(t.cliente_nombre);
+      const infoBanquero = netoPorCarreraCierre.get(claveCarrera)?.get(t.banquero_nombre);
+      // Lado JUGADOR — se omite si este cliente es dual en esta carrera (su
+      // % devuelto sale más abajo, sobre el neto, una sola vez).
+      if (!(infoJugador && infoJugador.dual)) {
+        acumularDevuelto(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision));
+      }
+      // Lado BANQUERO (29-09-2026, ver la nota grande de nombresJugadores
+      // más arriba): el lado banquero de Tercios también genera % devuelto
+      // — mismo criterio, se omite si es dual.
+      if (!(infoBanquero && infoBanquero.dual)) {
+        acumularDevuelto(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision));
+      }
+      // % devuelto sobre el NETO — una sola vez por (carrera, cliente) dual,
+      // sin importar cuántos tickets lo disparen.
+      [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
+        const info = netoPorCarreraCierre.get(claveCarrera)?.get(nombre);
+        if (!info || !info.dual) return;
+        const claveDual = `${claveCarrera}::${nombre}`;
+        if (dualAgregadoCierre.has(claveDual)) return;
+        dualAgregadoCierre.add(claveDual);
+        acumularDevuelto(nombre, info.neto);
+      });
+    });
   // resultado_cliente de Jugadas Adelantadas ya es un neto DEFINITIVO sin
   // ningún 5% embebido (ver resolverTablaFija/resolverClienteMarca en
   // hipismoAdelantadasCalc.js) -- montoDecidido con sinComision=true lo
