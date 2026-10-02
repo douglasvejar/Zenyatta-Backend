@@ -21,7 +21,7 @@
 const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
-const { round2, montoDecidido } = require('./hipismoAdelantadasCalc');
+const { round2, montoDecididoExacto } = require('./hipismoAdelantadasCalc');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -86,15 +86,28 @@ function resultadoTicketDeportes(t) {
 //     completa) ni de linea.resultado (que además puede traer una comisión
 //     VARIABLE y opcional del propio banquero, un mecanismo totalmente
 //     aparte del 5% de Tercios -- ver resolverBanqueoMarca).
+// montoBaseParaPct devolvía SIEMPRE un valor YA redondeado (montoDecidido),
+// que sus 2 llamadores (más abajo, líneas ~246 y ~429) vuelven a multiplicar
+// por un % y a redondear OTRA VEZ — el mismo doble redondeo en cadena (ver
+// la nota grande EXACTA de montoDecididoExacto en hipismoAdelantadasCalc.js,
+// "otro programa" dio $0.01 menos) que se arregló en los 7 lugares del
+// barrido de netos. Acá aplicaba igual, tanto para construirResumenCuentaComisionHipismo
+// (totalSemana/totalHoy de una cuenta de comisión — un total agregado real,
+// SÍ dentro del alcance de este arreglo) como para el toggle "incluir % en
+// sus jugadas" de construirResumenClienteHipismo (que sigue exactamente
+// igual en cuanto a QUÉ monto usa como base — eso no cambia, solo deja de
+// redondearse 2 veces antes de aplicar el %). Devuelve el valor EXACTO, sin
+// redondear — cada llamador ya hace su propio round2() una sola vez al
+// sacar el % final.
 function montoBaseParaPct(linea) {
   if (linea.tipo === 'adelantada' && linea.rol === 'banquero') {
-    const baseJugada = montoDecidido(linea.resultadoClienteJugada, true);
-    return round2(baseJugada * (Number(linea.porcentajeBanqueado) || 0) / 100);
+    const baseJugada = montoDecididoExacto(linea.resultadoClienteJugada, true);
+    return baseJugada * (Number(linea.porcentajeBanqueado) || 0) / 100;
   }
   if (linea.tipo === 'adelantada') {
-    return montoDecidido(linea.resultado, true);
+    return montoDecididoExacto(linea.resultado, true);
   }
-  return montoDecidido(linea.resultado, linea.sinComision);
+  return montoDecididoExacto(linea.resultado, linea.sinComision);
 }
 
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -975,30 +988,33 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
       // Lado JUGADOR — se omite si este cliente es dual en esta carrera (su
       // % devuelto sale más abajo, sobre el neto, una sola vez).
       if (!(infoJugador && infoJugador.dual)) {
-        acumularDevuelto(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision));
+        acumularDevuelto(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision));
       }
       // Lado BANQUERO (29-09-2026, ver la nota grande de nombresJugadores
       // más arriba): el lado banquero de Tercios también genera % devuelto
       // — mismo criterio, se omite si es dual.
       if (!(infoBanquero && infoBanquero.dual)) {
-        acumularDevuelto(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision));
+        acumularDevuelto(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision));
       }
       // % devuelto sobre el NETO — una sola vez por (carrera, cliente) dual,
-      // sin importar cuántos tickets lo disparen.
+      // sin importar cuántos tickets lo disparen. netoExacto (02-10-2026,
+      // ver la nota grande EXACTA en hipismoAdelantadasCalc.js), no `neto`
+      // (ya redondeado) — acumularDevuelto() redondea una sola vez abajo.
       [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
         const info = netoPorCarreraCierre.get(claveCarrera)?.get(nombre);
         if (!info || !info.dual) return;
         const claveDual = `${claveCarrera}::${nombre}`;
         if (dualAgregadoCierre.has(claveDual)) return;
         dualAgregadoCierre.add(claveDual);
-        acumularDevuelto(nombre, info.neto);
+        acumularDevuelto(nombre, info.netoExacto);
       });
     });
   // resultado_cliente de Jugadas Adelantadas ya es un neto DEFINITIVO sin
   // ningún 5% embebido (ver resolverTablaFija/resolverClienteMarca en
-  // hipismoAdelantadasCalc.js) -- montoDecidido con sinComision=true lo
-  // deja tal cual, en valor absoluto.
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, montoDecidido(j.resultado_cliente, true)));
+  // hipismoAdelantadasCalc.js) -- montoDecididoExacto con sinComision=true
+  // lo deja tal cual, en valor absoluto, SIN redondear (acumularDevuelto()
+  // redondea una sola vez al sacar el % devuelto).
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true)));
   // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
   // % devuelto — cada banqueador solo banqueó su `porcentaje` de la base
   // DECIDIDA de la jugada completa (|resultado_cliente|, el mismo "base"
@@ -1011,7 +1027,10 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // lector con un filtro que acá nunca hace nada.)
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
-    const baseJugada = montoDecidido(j.resultado_cliente, true);
+    // montoDecididoExacto, no montoDecidido (02-10-2026, ver la nota
+    // grande EXACTA en hipismoAdelantadasCalc.js) — sin redondear antes de
+    // repartir entre banqueadores.
+    const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
       const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularDevuelto(b.nombre, parte);

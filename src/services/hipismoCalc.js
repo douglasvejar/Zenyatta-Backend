@@ -4,7 +4,7 @@
 // "% devuelto" — misma fuente de verdad que ya usa services/
 // hipismoAdelantadasCalc.js/routes/hipismo.js para esa cuenta, nunca
 // reimplementada aparte.
-const { round2, montoDecidido } = require('./hipismoAdelantadasCalc');
+const { round2, montoDecidido, montoDecididoExacto } = require('./hipismoAdelantadasCalc');
 
 // =================================================================
 // Motor de cálculo de "Cargar Planos" — Módulo Hipismo (22-09-2026).
@@ -1120,6 +1120,19 @@ function calcularAjustesCruce(tickets) {
 // El propio llamador decide, con este Map, a qué cuenta(s) de % propio/
 // aval aplicarle ese monto neto (vía obtenerComisionesPropias), exacto
 // igual que ya hacía con el monto de un solo lado.
+// netoExacto / redondeo único (02-10-2026, ver la nota grande EXACTA de
+// montoDecididoExacto en hipismoAdelantadasCalc.js: "otro programa" daba
+// $0.01 menos en una carrera real por el doble redondeo). Acá pasaba lo
+// mismo por partida doble: se acumulaba con montoDecidido (ya redondeado)
+// Y ENCIMA se redondeaba la suma parcial en cada ticket (round2 dentro del
+// forEach) — dos rondas de redondeo antes siquiera de llegar al `neto`.
+// Ahora se acumula con montoDecididoExacto, sin ningún round2 intermedio;
+// decididoJugador/decididoBanquero (lo que el llamador MUESTRA, ej. "Jugó
+// $X / Banqueó $Y") se redondean una sola vez al armar el resultado, y se
+// agrega `netoExacto` (sin redondear) para que el cálculo de % devuelto
+// más abajo (routes/hipismo.js, hipismoResumenCliente.js) multiplique
+// sobre el valor exacto y redondee él mismo una sola vez — `neto` (ya
+// redondeado) se deja también, para quien solo necesite mostrarlo.
 function netearJugadorBanqueroTercios(tickets) {
   const porCarrera = new Map();
   (tickets || []).forEach(t => {
@@ -1130,18 +1143,20 @@ function netearJugadorBanqueroTercios(tickets) {
     if (!porCarrera.has(clave)) porCarrera.set(clave, new Map());
     const porNombre = porCarrera.get(clave);
     if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0 });
-    porNombre.get(t.clienteNombre).decididoJugador = round2(porNombre.get(t.clienteNombre).decididoJugador + montoDecidido(t.resultadoJugador, t.sinComision));
+    porNombre.get(t.clienteNombre).decididoJugador += montoDecididoExacto(t.resultadoJugador, t.sinComision);
     if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0 });
-    porNombre.get(t.banqueroNombre).decididoBanquero = round2(porNombre.get(t.banqueroNombre).decididoBanquero + montoDecidido(t.resultadoBanquero, t.sinComision));
+    porNombre.get(t.banqueroNombre).decididoBanquero += montoDecididoExacto(t.resultadoBanquero, t.sinComision);
   });
   const resultado = new Map();
   porCarrera.forEach((porNombre, clave) => {
     const netos = new Map();
     porNombre.forEach((v, nombre) => {
+      const netoExacto = Math.abs(v.decididoJugador - v.decididoBanquero);
       netos.set(nombre, {
-        decididoJugador: v.decididoJugador,
-        decididoBanquero: v.decididoBanquero,
-        neto: round2(Math.abs(v.decididoJugador - v.decididoBanquero)),
+        decididoJugador: round2(v.decididoJugador),
+        decididoBanquero: round2(v.decididoBanquero),
+        neto: round2(netoExacto),
+        netoExacto,
         dual: v.decididoJugador > 0 && v.decididoBanquero > 0
       });
     });

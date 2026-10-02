@@ -84,7 +84,7 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2,
-  montoDecidido
+  montoDecidido, montoDecididoExacto
 } = require('../services/hipismoAdelantadasCalc');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
@@ -1640,12 +1640,15 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
   function devueltoDeNombre(nombre, monto) {
     const infos = comisionesPropias[nombre];
     if (!infos || !infos.length) return 0;
+    // Acumula exacto (sin redondear cada entrada por separado, 02-10-2026
+    // — ver la nota grande EXACTA de montoDecididoExacto en
+    // hipismoAdelantadasCalc.js) y redondea UNA sola vez al devolver.
     let total = 0;
     infos.forEach(info => {
       if (!info || !info.pct || info.incluidaEnJugada) return;
-      total = round2(total + round2(Math.abs(Number(monto) || 0) * (info.pct / 100)));
+      total += Math.abs(Number(monto) || 0) * (info.pct / 100);
     });
-    return total;
+    return round2(total);
   }
   // montoDecidido (02-10-2026, "SIEMPRE ES BASE A LO DECIDIDO SIN SACARLE
   // EL 5%" — ver la nota grande de montoDecidido() en
@@ -1669,16 +1672,19 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
     const infoJugador = netoPorPlanoId.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorPlanoId.get(claveCarrera)?.get(t.banquero_nombre);
     let devuelto = 0;
-    if (!(infoJugador && infoJugador.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision)));
-    if (!(infoBanquero && infoBanquero.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision)));
+    if (!(infoJugador && infoJugador.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision)));
+    if (!(infoBanquero && infoBanquero.dual)) devuelto = round2(devuelto + devueltoDeNombre(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision)));
     if (devuelto) porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devuelto));
+    // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
+    // montoDecididoExacto en hipismoAdelantadasCalc.js) — devueltoDeNombre()
+    // ya redondea una sola vez.
     [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
       const info = netoPorPlanoId.get(claveCarrera)?.get(nombre);
       if (!info || !info.dual) return;
       const claveDual = `${t.plano_id}::${nombre}`;
       if (dualAgregadoPorPlanoId.has(claveDual)) return;
       dualAgregadoPorPlanoId.add(claveDual);
-      const devueltoNeto = devueltoDeNombre(nombre, info.neto);
+      const devueltoNeto = devueltoDeNombre(nombre, info.netoExacto);
       if (devueltoNeto) porPlano.set(t.plano_id, round2((porPlano.get(t.plano_id) || 0) + devueltoNeto));
     });
   });
@@ -1710,17 +1716,20 @@ function entradasApostadasDeTickets(tickets, resueltas) {
     const entradas = [];
     const infoJugador = netoDeEstaCarrera.get(t.clienteNombre);
     const infoBanquero = netoDeEstaCarrera.get(t.banqueroNombre);
-    if (!(infoJugador && infoJugador.dual)) entradas.push({ nombre: t.clienteNombre, monto: montoDecidido(t.resultadoJugador, t.sinComision) });
-    if (!(infoBanquero && infoBanquero.dual)) entradas.push({ nombre: t.banqueroNombre, monto: montoDecidido(t.resultadoBanquero, t.sinComision) });
+    if (!(infoJugador && infoJugador.dual)) entradas.push({ nombre: t.clienteNombre, monto: montoDecididoExacto(t.resultadoJugador, t.sinComision) });
+    if (!(infoBanquero && infoBanquero.dual)) entradas.push({ nombre: t.banqueroNombre, monto: montoDecididoExacto(t.resultadoBanquero, t.sinComision) });
+    // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
+    // montoDecididoExacto en hipismoAdelantadasCalc.js) — agregarPorcentajeDevuelto()
+    // (hipismoComisionPropia.js) ya redondea una sola vez.
     [t.clienteNombre, t.banqueroNombre].forEach(nombre => {
       const info = netoDeEstaCarrera.get(nombre);
       if (!info || !info.dual || dualAgregado.has(nombre)) return;
       dualAgregado.add(nombre);
-      entradas.push({ nombre, monto: info.neto });
+      entradas.push({ nombre, monto: info.netoExacto });
     });
     return entradas;
   });
-  return entradasTickets.concat((resueltas || []).filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecidido(r.resultadoCliente, true) })));
+  return entradasTickets.concat((resueltas || []).filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecididoExacto(r.resultadoCliente, true) })));
 }
 
 // GET /pizarras?desde=&hasta= : lista Tercios (planos) + Remates +
@@ -2710,8 +2719,12 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         // banqueó/cubrió"), así que su base es resultado_jugador. Se deja
         // aparte de `monto` (que /montos-apostados necesita intacto, en
         // bruto) para que los reportes de % devuelto (más abajo) usen esta
-        // en cambio.
+        // en cambio. `montoDecididoExacto` (sin redondear, ver la nota
+        // grande EXACTA en hipismoAdelantadasCalc.js) es lo que esos
+        // reportes deben usar para el % devuelto — `montoDecidido` (ya
+        // redondeado) queda solo para mostrar.
         montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
+        montoDecididoExacto: montoDecididoExacto(t.resultado_jugador, t.sin_comision),
         decidida: !sinDecidir,
         gano: sinDecidir ? null : rj > 0,
         rol: 'jugador'
@@ -2728,6 +2741,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         cliente: t.banquero_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
         tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo}) — banqueo`, monto: Number(t.monto),
         montoDecidido: montoDecidido(t.resultado_banquero, t.sin_comision),
+        montoDecididoExacto: montoDecididoExacto(t.resultado_banquero, t.sin_comision),
         decidida: !sinDecidir,
         gano: sinDecidir ? null : rb > 0,
         rol: 'banquero'
@@ -2752,6 +2766,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         detalleTexto: 'Jugó y banqueó en esta carrera (neto)',
         monto: round2(info.decididoJugador + info.decididoBanquero),
         montoDecidido: info.neto,
+        montoDecididoExacto: info.netoExacto,
         decidida: true, gano: null, rol: 'neto'
       });
     });
@@ -2816,6 +2831,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
       // (ver la nota grande de montoDecidido más arriba, junto a Tercios) —
       // montoDecidido con sinComision=true lo deja en valor absoluto.
       montoDecidido: montoDecidido(j.resultado_cliente, true),
+      montoDecididoExacto: montoDecididoExacto(j.resultado_cliente, true),
       decidida: j.gano !== null,
       // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
       // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
@@ -2836,7 +2852,12 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
     // decidida) — así que este bloque no necesita ningún filtro extra de
     // `j.gano`.
     if (incluirBanquero && Array.isArray(j.banqueadores)) {
-      const baseJugada = montoDecidido(j.resultado_cliente, true);
+      // baseJugada (02-10-2026, ver la nota grande EXACTA de
+      // montoDecididoExacto en hipismoAdelantadasCalc.js) — exacta, SIN
+      // redondear: antes se partía de montoDecidido (ya redondeado) y
+      // encima se multiplicaba por el % de cada banqueador, doble
+      // redondeo en cadena antes de llegar siquiera a `parte`.
+      const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
       j.banqueadores.forEach(b => {
         const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
         detalle.push({
@@ -2844,7 +2865,8 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
           cliente: b.nombre, hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero,
           tipo: 'marca', detalleTexto: `Marca (${j.numero1}x${j.numero2}) — banqueo ${Number(b.porcentaje) || 0}%`,
           monto: Number(j.monto),
-          montoDecidido: parte,
+          montoDecidido: round2(parte),
+          montoDecididoExacto: parte,
           decidida: j.gano !== null,
           gano: j.gano,
           rol: 'banquero'
@@ -3076,7 +3098,13 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
       // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
       // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido
       // junto a obtenerApuestasDelRango más arriba): NUNCA d.monto.
-      const devuelto = round2((Number(d.montoDecidido) || 0) * (info.pct / 100));
+      // montoDecididoExacto, no montoDecidido (02-10-2026, ver la nota
+      // grande EXACTA en hipismoAdelantadasCalc.js: "otro programa" daba
+      // $0.01 menos — doble redondeo en cadena). `d.montoDecidido` ya
+      // venía redondeado a centavos; multiplicarlo por el % y redondear
+      // OTRA VEZ podía mover el resultado 1 centavo contra calcularlo
+      // directo sobre el valor exacto y redondear una sola vez, acá.
+      const devuelto = round2((Number(d.montoDecididoExacto) || 0) * (info.pct / 100));
       if (!devuelto) return;
       // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
       // destino — este reporte audita "quién generó cuánto %"; `destino` se
@@ -3140,21 +3168,29 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, detalle.map(d => d.cliente));
 
   const porHipodromo = new Map();
-  let totalGeneral = 0;
   // "código" por carrera (02-10-2026, a pedido del usuario: "colocale
   // pestaña para que si yo despliego la pestaña a cada carrera me diga
   // que codigo y cuanto fue lo que dejaron para que de ese total en la
   // carrera") — antes acá se sumaban de una vez las hasta 2 entradas de
   // obtenerComisionesPropias (% propio + % de aval) por jugada ANTES de
   // redondear, perdiendo de vista a quién se le acreditaba cada parte.
-  // Ahora cada entrada se redondea y acumula POR SEPARADO, bajo su propio
-  // `info.destino` ("código"), dentro de un Map(carreraNumero ->
-  // {total, porCodigoMap}) — mismo criterio EXACTO de redondeo que ya usa
-  // GET /comisiones-devueltas (round2 por entrada individual, línea
-  // ~2967 más arriba), así que esta ronda de más PRECISO también deja a
-  // esta ruta consistente centavo a centavo con "Comisiones Devueltas por
-  // Cliente" para los mismos datos (antes podía diferir por el redondeo
-  // combinado de 2 entradas antes de sumar).
+  // Cada entrada se acumula POR SEPARADO bajo su propio `info.destino`
+  // ("código"), dentro de un Map(carreraNumero -> {porCodigoMap}).
+  //
+  // montoDecididoExacto + acumulado SIN redondear (02-10-2026, "otro
+  // programa" dio $0.01 menos en una carrera real — ver la nota grande
+  // EXACTA de montoDecididoExacto en hipismoAdelantadasCalc.js). Acá había
+  // DOS redondeos en cadena: (1) d.montoDecidido ya venía redondeado antes
+  // de multiplicarlo por el %, y (2) la suma corrida de cada Map
+  // (porCodigoMap/carrera.total/hip.totalDevuelto/totalGeneral) se
+  // redondeaba otra vez en CADA entrada que se le sumaba. Ahora se
+  // acumula la plata exacta (sin redondear ni la base ni las sumas
+  // parciales) por código, y solo se redondea UNA VEZ por código al armar
+  // la respuesta; carrera/hipódromo/total general se arman sumando esos
+  // montos de código YA redondeados (nunca recalculando desde el
+  // acumulado exacto), así la pestaña sigue sumando EXACTO el total que
+  // se muestra arriba — la regla de siempre, solo que ahora sin el
+  // sesgo de redondear de más en el camino.
   detalle.forEach(d => {
     // 26-09-2026, ver la nota grande EXACTA de /comisiones-devueltas
     // arriba: Remate a propósito no genera % devuelto.
@@ -3170,40 +3206,42 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
       // para este reporte) — ver la nota grande EXACTA de
       // /comisiones-devueltas arriba: ya NO se excluye acá, a pedido del
       // usuario, para que el total de este reporte sea la sumatoria REAL.
-      // montoDecidido (02-10-2026) — ver la nota grande EXACTA de
-      // /comisiones-devueltas arriba: NUNCA d.monto.
-      const devuelto = round2((Number(d.montoDecidido) || 0) * (info.pct / 100));
-      if (!devuelto) return;
+      // montoDecididoExacto, no montoDecidido (02-10-2026) — ver la nota
+      // grande de más arriba, NUNCA d.monto.
+      const devueltoExacto = (Number(d.montoDecididoExacto) || 0) * (info.pct / 100);
+      if (!devueltoExacto) return;
       if (!porHipodromo.has(d.hipodromoNombre)) {
-        porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, totalDevuelto: 0, carrerasMap: new Map() });
+        porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, carrerasMap: new Map() });
       }
       const hip = porHipodromo.get(d.hipodromoNombre);
-      hip.totalDevuelto = round2(hip.totalDevuelto + devuelto);
-      totalGeneral = round2(totalGeneral + devuelto);
       if (!hip.carrerasMap.has(d.carreraNumero)) {
-        hip.carrerasMap.set(d.carreraNumero, { total: 0, porCodigoMap: new Map() });
+        hip.carrerasMap.set(d.carreraNumero, new Map());
       }
-      const carrera = hip.carrerasMap.get(d.carreraNumero);
-      carrera.total = round2(carrera.total + devuelto);
-      carrera.porCodigoMap.set(info.destino, round2((carrera.porCodigoMap.get(info.destino) || 0) + devuelto));
+      const porCodigoMap = hip.carrerasMap.get(d.carreraNumero);
+      porCodigoMap.set(info.destino, (porCodigoMap.get(info.destino) || 0) + devueltoExacto);
     });
   });
 
   const hipodromos = Array.from(porHipodromo.values())
-    .map(h => ({
-      nombre: h.nombre,
-      totalDevuelto: h.totalDevuelto,
-      carreras: Array.from(h.carrerasMap.entries())
-        .map(([carreraNumero, c]) => ({
-          carreraNumero,
-          devuelto: c.total,
-          porCodigo: Array.from(c.porCodigoMap.entries())
-            .map(([codigo, monto]) => ({ codigo, monto }))
-            .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es'))
-        }))
-        .sort((a, b) => a.carreraNumero - b.carreraNumero)
-    }))
+    .map(h => {
+      const carreras = Array.from(h.carrerasMap.entries())
+        .map(([carreraNumero, porCodigoMap]) => {
+          const porCodigo = Array.from(porCodigoMap.entries())
+            .map(([codigo, exacto]) => ({ codigo, monto: round2(exacto) }))
+            .filter(c => c.monto)
+            .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es'));
+          const devuelto = round2(porCodigo.reduce((s, c) => s + c.monto, 0));
+          return { carreraNumero, devuelto, porCodigo };
+        })
+        .filter(c => c.devuelto)
+        .sort((a, b) => a.carreraNumero - b.carreraNumero);
+      const totalDevuelto = round2(carreras.reduce((s, c) => s + c.devuelto, 0));
+      return { nombre: h.nombre, totalDevuelto, carreras };
+    })
+    .filter(h => h.totalDevuelto)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  const totalGeneral = round2(hipodromos.reduce((s, h) => s + h.totalDevuelto, 0));
 
   res.json({ fecha, hipodromos, totalGeneral });
 }));
@@ -3438,22 +3476,25 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     const infoJugador = netoPorCarreraSaldo.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorCarreraSaldo.get(claveCarrera)?.get(t.banquero_nombre);
     if (!(infoJugador && infoJugador.dual)) {
-      acumularSaldo(t.cliente_nombre, montoDecidido(t.resultado_jugador, t.sin_comision));
+      acumularSaldo(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision));
     }
     // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
     if (!(infoBanquero && infoBanquero.dual)) {
-      acumularSaldo(t.banquero_nombre, montoDecidido(t.resultado_banquero, t.sin_comision));
+      acumularSaldo(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision));
     }
+    // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
+    // montoDecididoExacto en hipismoAdelantadasCalc.js) — acumularSaldo()
+    // redondea una sola vez al sacar el % devuelto.
     [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
       const info = netoPorCarreraSaldo.get(claveCarrera)?.get(nombre);
       if (!info || !info.dual) return;
       const claveDual = `${claveCarrera}::${nombre}`;
       if (dualAgregadoSaldo.has(claveDual)) return;
       dualAgregadoSaldo.add(claveDual);
-      acumularSaldo(nombre, info.neto);
+      acumularSaldo(nombre, info.netoExacto);
     });
   });
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, montoDecidido(j.resultado_cliente, true)));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularSaldo(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true)));
   // 29-09-2026 — lado BANQUERO de una Marca: cada banqueador solo banqueó
   // su `porcentaje` de la base DECIDIDA de la jugada completa
   // (|resultado_cliente|, el mismo "base" que ya usa resolverBanqueoMarca
@@ -3461,7 +3502,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // nunca de j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
-    const baseJugada = montoDecidido(j.resultado_cliente, true);
+    const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
       const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularSaldo(b.nombre, parte);
@@ -3690,28 +3731,31 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     const infoJugador = netoPorCarreraDia.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorCarreraDia.get(claveCarrera)?.get(t.banquero_nombre);
     if (!(infoJugador && infoJugador.dual)) {
-      acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecidido(t.resultado_jugador, t.sin_comision));
+      acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecididoExacto(t.resultado_jugador, t.sin_comision));
     }
     if (!(infoBanquero && infoBanquero.dual)) {
-      acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecidido(t.resultado_banquero, t.sin_comision));
+      acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecididoExacto(t.resultado_banquero, t.sin_comision));
     }
+    // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
+    // montoDecididoExacto en hipismoAdelantadasCalc.js) — acumularDevueltoDia()
+    // redondea una sola vez al sacar el % devuelto.
     [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
       const info = netoPorCarreraDia.get(claveCarrera)?.get(nombre);
       if (!info || !info.dual) return;
       const claveDual = `${claveCarrera}::${nombre}`;
       if (dualAgregadoDia.has(claveDual)) return;
       dualAgregadoDia.add(claveDual);
-      acumularDevueltoDia(nombre, t.fecha, info.neto);
+      acumularDevueltoDia(nombre, t.fecha, info.netoExacto);
     });
   });
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecidido(j.resultado_cliente, true)));
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecididoExacto(j.resultado_cliente, true)));
   // 29-09-2026 — lado BANQUERO de una Marca (ver la nota grande de
   // /cierre-final): cada banqueador solo banqueó su `porcentaje` de la
   // base DECIDIDA de la jugada completa (|resultado_cliente|), nunca de
   // j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
     if (!Array.isArray(j.banqueadores)) return;
-    const baseJugada = montoDecidido(j.resultado_cliente, true);
+    const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     j.banqueadores.forEach(b => {
       const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularDevueltoDia(b.nombre, j.fecha, parte);

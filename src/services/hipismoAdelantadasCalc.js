@@ -130,10 +130,32 @@ function round2(n) {
 // -- montoMostrado() nunca le resta nada a una pérdida -- así que el
 // "decidido" es directamente su valor absoluto (sea una pérdida completa,
 // -monto, o una pérdida parcial de la familia "AyB", ej. -0.5*monto).
-function montoDecidido(resultadoMostrado, sinComision) {
+//
+// montoDecididoExacto (02-10-2026, a pedido del usuario: comparó un
+// hipódromo/carrera puntual contra "otro programa" y encontró diferencias
+// de centavos que en la semana suman $10-20 — "quiero saber xq". La causa:
+// esta función SIEMPRE redondeaba a centavos (round2(r/0.95) para una
+// ganancia), y todo lugar que luego usa ese valor para sacar el % devuelto
+// (routes/hipismo.js, hipismoResumenCliente.js, netearJugadorBanqueroTercios
+// en hipismoCalc.js) lo volvía a multiplicar por el % y a redondear OTRA
+// VEZ — doble redondeo en cadena. Cuando r/0.95 no cae justo en un centavo
+// cerrado (pasa seguido con los dividendos reales de una carrera, a
+// diferencia de un monto apostado "redondo" como 75,00), ese primer
+// redondeo ya mueve el valor un pelín, y el segundo redondeo sobre ese
+// valor movido a veces da $0.01 de más o de menos que calcular todo en un
+// solo paso. Se separa la cuenta en 2: montoDecididoExacto (sin redondear,
+// para CUALQUIER cálculo que todavía vaya a multiplicarse/sumarse con algo
+// más — el % propio/de aval, el neteo jugador/banquero, etc.) y
+// montoDecidido (la de siempre, = round2(montoDecididoExacto(...)), que
+// sigue usándose tal cual donde el "decidido" se muestra directo en
+// pantalla como un monto limpio — ej. "Jugó $X / Banqueó $Y" del neteo).
+function montoDecididoExacto(resultadoMostrado, sinComision) {
   const r = Number(resultadoMostrado) || 0;
-  if (r > 0 && !sinComision) return round2(r / 0.95);
-  return round2(Math.abs(r));
+  if (r > 0 && !sinComision) return r / 0.95;
+  return Math.abs(r);
+}
+function montoDecidido(resultadoMostrado, sinComision) {
+  return round2(montoDecididoExacto(resultadoMostrado, sinComision));
 }
 
 // Mismo criterio de parseo de montos que ya usa hipismoCalc.js/
@@ -367,5 +389,6 @@ module.exports = {
   formatMontoTabla,
   formatNombre,
   round2,
-  montoDecidido
+  montoDecidido,
+  montoDecididoExacto
 };
