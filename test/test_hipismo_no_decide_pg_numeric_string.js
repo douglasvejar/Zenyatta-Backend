@@ -124,6 +124,10 @@ function ejecutarQuery(text, params) {
   if (/^SELECT cliente_nombre, monto, fecha FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
   if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [] };
   if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_remates/i.test(sql)) return { rows: [] };
+  // 02-10-2026 ("COMISIÓN GRUPO" = TODO, no solo Tercios): nueva consulta
+  // de /semana-por-dias para sumar también la comisión de Tablas
+  // Fijas/Marcas por día — esta prueba no tiene ninguna, siempre vacío.
+  if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) return { rows: [] };
 
   throw new Error('La base de datos falsa de esta prueba (pg-numeric-string) no sabe responder: ' + sql);
 }

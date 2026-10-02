@@ -775,33 +775,43 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   rAdelantadas.rows.forEach(j => {
     acumular(j.cliente_nombre, j.resultado_cliente);
     if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
-    // "TABLAS FIJAS" / "% DE TABLAS FIJAS" (28-09-2026, a pedido del
-    // usuario: "el item tabla fijas no me sale en los balances... todos
-    // los item deben verse reflejado con su saldo en balances", y
-    // corregido el mismo día tras ver Halland -36 convertirse en "Tablas
-    // fijas +36" en vez de "+35,10 / % de tablas fijas +0,90") — el
-    // espejo de Tablas Fijas tiene que salir NETO de su propia comisión
-    // (mismo invariante que resolverTablaFija: cliente + tablasFijas +
-    // comisión = 0 exacto). Restar solo resultado_cliente (bruto) y
-    // ADEMÁS mostrar "% DE TABLAS FIJAS" aparte deja ese monto "de más"
-    // en el balance, sin ningún renglón que lo compense — por eso
-    // comisionAdelantadasSemana (abajo) YA NO se suma al total de
-    // "Comisión" del pie (ver la nota de comisionRemateSemana más abajo,
-    // mismo criterio: un ítem que ya se ve solo en el balance no se
-    // vuelve a sumar aparte).
+    // "TABLAS FIJAS" (28-09-2026, a pedido del usuario: "el item tabla
+    // fijas no me sale en los balances... todos los item deben verse
+    // reflejado con su saldo en balances", y corregido el mismo día tras
+    // ver Halland -36 convertirse en "Tablas fijas +36" en vez de
+    // "+35,10 / % de tablas fijas +0,90") — el espejo de Tablas Fijas
+    // sale NETO de su propia comisión (mismo invariante que
+    // resolverTablaFija: cliente + tablasFijas + comisión = 0 exacto).
+    //
+    // 02-10-2026 (a pedido explícito del usuario, verificando contra OTRO
+    // sistema: "106,02 es la comisión que queda en el grupo... eso debe
+    // salir en Balance General donde dice COMISIÓN GRUPO... se hicieron
+    // de comisión 183,55 [bruta, con el 5%]... la devolución fue de
+    // 77,52... restando eso le queda al grupo 106,02"): "% DE TABLAS
+    // FIJAS" y "PORCENTAJE MARCAS" (antes acá abajo) DEJAN de armarse
+    // como su propio renglón de "cliente" — esa comisión ahora se suma
+    // directo a `comisionAdelantadasSemana`, que a su vez se pliega
+    // dentro de "COMISIÓN GRUPO" (comisionSemana, más abajo) junto con la
+    // de Tercios, para que COMISIÓN GRUPO sea de una vez el total REAL
+    // que le queda al grupo (Tercios + Tablas Fijas + Marcas, ya neto de
+    // TODO lo devuelto) en vez de solo la parte de Tercios. "TABLAS
+    // FIJAS" sigue exactamente igual (NETO de su comisión) — de dónde
+    // sale esa comisión (acá adentro, o en el pie) no cambia la cuenta:
+    // cliente + TABLAS FIJAS ya no suma 0 solos, el "hueco" que queda
+    // (justo la comisionTf) es la misma plata que ahora aparece en
+    // COMISIÓN GRUPO.
     if (j.tipo === 'tf') {
       const comisionTf = j.comision != null ? Number(j.comision) : 0;
       acumular('TABLAS FIJAS', -(Number(j.resultado_cliente) + comisionTf));
-      if (comisionTf) acumular('% DE TABLAS FIJAS', comisionTf);
     }
-    // "PORCENTAJE MARCAS" (28-09-2026, a pedido del usuario: "ese item
-    // que también es como un cliente, me vas a ir sumando siempre ese
-    // 2.5% que deja [el banquero] en marcas") — la comisión de cada
-    // Marca ya banqueada (j.comision, armada por resolverBanqueoMarca)
-    // se suma acá como un "cliente" más, igual que "{cliente} -
-    // PORCENTAJE" para el % devuelto — mismo criterio de
-    // "TABLAS FIJAS"/"% DE TABLAS FIJAS" pero del lado de Marcas.
-    if (j.tipo === 'marca' && j.comision) acumular('PORCENTAJE MARCAS', Number(j.comision));
+    // "PORCENTAJE MARCAS" (28-09-2026, "ese item que también es como un
+    // cliente, me vas a ir sumando siempre ese 2.5% que deja [el
+    // banquero] en marcas" — 02-10-2026, ver la nota grande de arriba:
+    // ya NO se arma como su propio renglón de "cliente"; esa comisión
+    // (j.comision, armada por resolverBanqueoMarca) ya quedó sumada en
+    // comisionAdelantadasSemana arriba, que ahora se pliega en COMISIÓN
+    // GRUPO) — los banqueadores (abajo) siguen apareciendo cada uno con
+    // su propio monto, ya neto de la comisión que paguen.
     if (Array.isArray(j.banqueadores)) {
       j.banqueadores.forEach(b => acumular(b.nombre, b.monto));
     }
@@ -1017,20 +1027,29 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
        FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
     [grupoId, desde, hasta]
   );
-  // "COMISIÓN REAL" (29-09-2026, ver la nota grande de totalDevueltoSemana
-  // más arriba, a pedido explícito del usuario: "de la comisión que queda
-  // en el grupo debes restar todos los % que se le devuelven a los
-  // clientes para ver la comisión real de cuánto queda en el grupo" —
-  // confirmado con un ejemplo numérico exacto, "CASO A PARA TODOS LOS
-  // RENGLONES"). comisionSemana pasa de ser la comisión BRUTA de Tercios
-  // a ser la comisión REAL: bruta menos todo lo devuelto — matemáticamente
-  // idéntico a voltear el signo de la suma de TODOS los saldos de
-  // "clientes" (ya que TABLAS FIJAS/% DE TABLAS FIJAS, PORCENTAJE
-  // MARCAS+banqueadores+cliente, REMATE+sus apuestas y WINNERS+sus
-  // clientes siempre suman $0 exacto entre sí — ver esos bloques más
-  // arriba — así que la única plata que "sobra" sin repartir en toda la
-  // lista es justo comisión de Tercios menos lo devuelto).
-  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana);
+  // "COMISIÓN REAL" (29-09-2026, "de la comisión que queda en el grupo
+  // debes restar todos los % que se le devuelven a los clientes para ver
+  // la comisión real de cuánto queda en el grupo" — confirmado con un
+  // ejemplo numérico exacto, "CASO A PARA TODOS LOS RENGLONES").
+  //
+  // "COMISIÓN GRUPO" = TODO, no solo Tercios (02-10-2026, a pedido
+  // explícito del usuario verificando contra otro sistema — ver la nota
+  // grande de comisionAdelantadasSemana más arriba): antes, comisionSemana
+  // era SOLO la comisión de Tercios menos lo devuelto, porque "% DE
+  // TABLAS FIJAS"/"PORCENTAJE MARCAS" ya aparecían como su propio renglón
+  // de "cliente" (sumarlos acá también habría sido pagarlos 2 veces). Ya
+  // que esos 2 renglones dejaron de armarse (ver arriba), ahora SÍ hace
+  // falta sumarlos acá para que no se pierda esa plata — por eso se le
+  // suma comisionAdelantadasSemana (Tablas Fijas + Marcas, ya con su
+  // propio % devuelto restado adentro de totalDevueltoSemana). El
+  // resultado es exactamente la fórmula que confirmó el usuario con el
+  // otro sistema: "se hicieron de comisión 183,55 [bruta, de TODOS los
+  // tipos de jugada, con el 5%]... la devolución fue de 77,52... restando
+  // eso le queda al grupo 106,02" — comisión BRUTA (Tercios+TF+Marcas)
+  // menos TODO lo devuelto (Tercios+TF+Marcas). Remate NUNCA entra acá —
+  // sigue siendo su propio ítem "REMATE" aparte, nunca "comisión" del
+  // grupo (ver la nota grande de comisionRemateSemana más abajo).
+  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana);
 
   return {
     clientes,
@@ -1041,14 +1060,10 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // "REMATE" arriba, dentro de "clientes", que es donde se muestra de
     // verdad ahora).
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
-    // comisionAdelantadasSemana (23-09-2026, ya no sumado al total de
-    // "Comisión" del pie desde el 28-09-2026): mismo criterio que
-    // comisionRemateSemana arriba — desde que "% DE TABLAS FIJAS" y
-    // "PORCENTAJE MARCAS" son ítems propios dentro de "clientes" (ver la
-    // nota grande más arriba), este número ya está 100% representado ahí
-    // adentro (con su contraparte exacta, no como un residuo suelto) —
-    // volver a sumarlo acá sería pagar la misma comisión dos veces. Se
-    // sigue devolviendo el dato crudo por compatibilidad.
+    // comisionAdelantadasSemana (23-09-2026): comisión cruda de Tablas
+    // Fijas + Marcas de la semana. 02-10-2026: ahora SÍ está sumada
+    // dentro de comisionSemana ("COMISIÓN GRUPO", ver la nota grande de
+    // arriba) — se sigue devolviendo también suelta por compatibilidad.
     comisionAdelantadasSemana
   };
 }

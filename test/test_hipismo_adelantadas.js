@@ -720,52 +720,60 @@ function reqBase(grupoId) {
 
   // (28-09-2026, a pedido del usuario: "ese 2.5% que deja Sammy en marcas,
   // debe verse reflejado en un código llamado PORCENTAJE MARCAS ... me vas
-  // a ir sumando siempre ese 2.5%") — como FECHA_PRUEBA se calcula como
-  // "hoy" (ver más arriba), la marca ya banqueada de Halland (comisión
-  // 1,2, ver el punto 7) SÍ cae dentro de la semana "actual" que usa este
-  // reporte, así que esta parte sí se puede verificar contra la respuesta
-  // HTTP real (no hace falta recalcular aparte, como con Linares arriba).
-  const itemPorcentajeMarcas = resCierre._json.clientes.find(c => c.nombre === 'PORCENTAJE MARCAS');
-  check(!!itemPorcentajeMarcas && itemPorcentajeMarcas.saldo === 1.2, 'GET /cierre-final trae el ítem "PORCENTAJE MARCAS" con +1,2 (la comisión de Marcas Sammy en la marca ya banqueada de Halland)');
-  check(!resCierre._json.clientes.some(c => c.nombre === 'PORCENTAJE MARCAS' && c.perdio > 0), '"PORCENTAJE MARCAS" solo acumula del lado "gano" (siempre es comisión a favor, nunca en contra)');
+  // a ir sumando siempre ese 2.5%") — 02-10-2026, a pedido explícito del
+  // usuario verificando contra otro sistema (ver la nota grande de
+  // comisionAdelantadasSemana en GET /cierre-final): "PORCENTAJE MARCAS"
+  // deja de armarse como su propio renglón de "cliente" — esa comisión
+  // (1,2, de Marcas Sammy en la marca ya banqueada de Halland) ya queda
+  // sumada dentro de "COMISIÓN GRUPO" (comisionSemana).
+  check(!resCierre._json.clientes.some(c => c.nombre === 'PORCENTAJE MARCAS'), 'GET /cierre-final ya NO trae un renglón "PORCENTAJE MARCAS" aparte (esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
 
   // (28-09-2026, a pedido del usuario: "el item tabla fijas no me sale en
   // los balances... todos los item deben verse reflejado con su saldo en
-  // balances") — "TABLAS FIJAS" y "% DE TABLAS FIJAS" ya salían en el
-  // Balance INMEDIATO de "Cargar Planos" (punto 9 más arriba), pero nunca
-  // se armaban para la semana completa en /cierre-final. Se recalcula el
-  // total esperado directo contra la tabla falsa (mismo criterio que
-  // Linares arriba) en vez de hardcodear un número, porque son varias TF
-  // (carrera 12 y carrera 2) sumadas.
+  // balances") — "TABLAS FIJAS" ya salía en el Balance INMEDIATO de
+  // "Cargar Planos" (punto 9 más arriba), pero nunca se armaba para la
+  // semana completa en /cierre-final. Se recalcula el total esperado
+  // directo contra la tabla falsa (mismo criterio que Linares arriba) en
+  // vez de hardcodear un número, porque son varias TF (carrera 12 y
+  // carrera 2) sumadas.
   //
   // 28-09-2026 (corregido el mismo día): la primera versión de este
   // arreglo calculaba "TABLAS FIJAS" BRUTO (-resultado_cliente, igual que
   // el Balance INMEDIATO de "Cargar Planos"), lo que dejaba la comisión
   // "de más" sin contraparte en la semana (el usuario lo agarró viendo a
   // Halland -36 convertirse en "Tablas fijas +36" en vez de "+35,10 / %
-  // de tablas fijas +0,90"). Acá, a diferencia del Balance inmediato,
-  // "TABLAS FIJAS" tiene que salir NETO (mismo invariante de
-  // resolverTablaFija: cliente + tablasFijas + comisión = 0 exacto), para
-  // que cliente + "TABLAS FIJAS" + "% DE TABLAS FIJAS" sí sumen 0 exacto
-  // y la comisión no haya que sumarla una segunda vez en el pie.
+  // de tablas fijas +0,90"). Acá "TABLAS FIJAS" tiene que salir NETO
+  // (mismo invariante de resolverTablaFija: cliente + tablasFijas +
+  // comisión = 0 exacto).
+  //
+  // 02-10-2026, a pedido explícito del usuario verificando contra otro
+  // sistema (ver la nota grande de comisionAdelantadasSemana en GET
+  // /cierre-final): "% DE TABLAS FIJAS" deja de armarse como su propio
+  // renglón de "cliente" — esa comisión ya queda sumada dentro de
+  // "COMISIÓN GRUPO" (comisionSemana), así que cliente + "TABLAS FIJAS"
+  // YA NO suman 0 solos — el "hueco" que queda es justo esa comisión, que
+  // ahora vive en el pie en vez de en su propio renglón (ver el test
+  // dedicado test_hipismo_comision_real_menos_devuelto.js para la
+  // verificación numérica completa de "COMISIÓN GRUPO").
   const tfResueltas = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.tipo === 'tf' && j.estado !== 'pendiente');
   check(tfResueltas.length >= 3, 'Confirmado en la base: hay varias Tablas Fijas ya resueltas esta semana (carrera 12 y carrera 2), listas para que Cierre Final las sume');
   const totalTablasFijasEsperado = Math.round(tfResueltas.reduce((acc, j) => acc - (Number(j.resultado_cliente) + (j.comision ? Number(j.comision) : 0)), 0) * 100) / 100;
   const totalPorcentajeTfEsperado = Math.round(tfResueltas.reduce((acc, j) => acc + (j.comision ? Number(j.comision) : 0), 0) * 100) / 100;
   const itemTablasFijas = resCierre._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
-  const itemPorcentajeTf = resCierre._json.clientes.find(c => c.nombre === '% DE TABLAS FIJAS');
   check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo NETO de su propia comisión, de TODAS las Tablas Fijas resueltas esta semana) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
-  check(!!itemPorcentajeTf && itemPorcentajeTf.saldo === totalPorcentajeTfEsperado, `GET /cierre-final trae el ítem "% DE TABLAS FIJAS" (la comisión de TODAS las Tablas Fijas resueltas esta semana, aparte) — esperado ${totalPorcentajeTfEsperado}, salió ${itemPorcentajeTf && itemPorcentajeTf.saldo}`);
+  check(!resCierre._json.clientes.some(c => c.nombre === '% DE TABLAS FIJAS'), 'GET /cierre-final ya NO trae un renglón "% DE TABLAS FIJAS" aparte (esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
 
-  // El punto concreto que reportó el usuario: sumando el resultado_cliente
-  // real de CADA Tabla Fija más "TABLAS FIJAS" más "% DE TABLAS FIJAS",
-  // no debe quedar NADA sin contraparte (antes del arreglo, esta suma
-  // daba +10,77 de más — exactamente el total de comisión "fantasma" que
-  // aparecía sumada 2 veces: una dentro de "TABLAS FIJAS" bruto, otra en
-  // "% DE TABLAS FIJAS").
+  // El punto concreto que reportó el usuario originalmente (28-09-2026):
+  // sumando el resultado_cliente real de CADA Tabla Fija más "TABLAS
+  // FIJAS", lo que falta para llegar a 0 exacto tiene que ser EXACTAMENTE
+  // la comisión total de esas Tablas Fijas (totalPorcentajeTfEsperado) —
+  // ni un centavo de más ni de menos — porque esa comisión es justo la
+  // que ahora se pliega en "COMISIÓN GRUPO" en vez de tener su propio
+  // renglón.
   const sumaResultadoClienteTf = Math.round(tfResueltas.reduce((acc, j) => acc + Number(j.resultado_cliente), 0) * 100) / 100;
-  const sumaTotalCuadrada = Math.round((sumaResultadoClienteTf + itemTablasFijas.saldo + itemPorcentajeTf.saldo) * 100) / 100;
-  check(sumaTotalCuadrada === 0, `Cliente(s) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto, sin comisión "de más" sin contraparte — dio ${sumaTotalCuadrada}`);
+  const huecoQueDejaLaComision = Math.round((sumaResultadoClienteTf + itemTablasFijas.saldo) * 100) / 100;
+  check(huecoQueDejaLaComision === -totalPorcentajeTfEsperado,
+    `Cliente(s) + "TABLAS FIJAS" dejan un hueco de exactamente -${totalPorcentajeTfEsperado} (la comisión de Tablas Fijas, que ahora se suma en "COMISIÓN GRUPO" en vez de en su propio renglón) — dio ${huecoQueDejaLaComision}`);
 
   // =================================================================
   // 10) PUT/DELETE /adelantadas/jugadas/:id (duodécima-tercera ronda, a

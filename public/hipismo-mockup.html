@@ -9102,13 +9102,13 @@ async function pintarBalanceGeneral() {
   // ítem, sino que lo estás sumando en la comisión"): comisionRemateSemana
   // YA NO se suma acá — el resultado de Remate ahora es su propio ítem
   // "REMATE" dentro de data.clientes (se pinta solo, como cualquier otro
-  // cliente, arriba en este mismo render). 28-09-2026, mismo criterio:
-  // comisionAdelantadasSemana (Tablas Fijas + Marcas) TAMPOCO se suma
-  // acá — desde que "% DE TABLAS FIJAS" y "PORCENTAJE MARCAS" son ítems
-  // propios dentro de data.clientes, sumarla aparte pagaba la misma
-  // comisión 2 veces (reportado por el usuario: "Halland -36" pero
-  // "Tablas fijas +36" en vez de "+35,10", con el 0,90 de comisión
-  // sobrando sin contraparte en el balance).
+  // cliente, arriba en este mismo render). 02-10-2026, a pedido explícito
+  // del usuario verificando contra otro sistema: data.comisionSemana
+  // ("Comisión"/"COMISIÓN GRUPO") ahora SÍ trae sumada la comisión de
+  // Tablas Fijas + Marcas (comisionAdelantadasSemana) — "% DE TABLAS
+  // FIJAS" y "PORCENTAJE MARCAS" dejaron de armarse como su propio
+  // renglón en data.clientes (esa comisión se pliega acá en vez de tener
+  // su fila aparte), así que ya no hay doble conteo.
   const comisionTotal = Number(data.comisionSemana);
   document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
 }
@@ -10006,7 +10006,7 @@ function descargarBalanceExcel() {
   }
   const entradas = BALANCE_GENERAL_ACTUAL.clientes.map(c => [c.nombre, c.saldo]).sort((a, b) => a[1] - b[1]);
   // 26-09-2026: ya sin comisionRemateSemana (ver la nota grande de pintarBalanceGeneral) -- el ítem "REMATE" ya va incluido en "entradas" arriba, como cualquier otro cliente.
-  // 28-09-2026: mismo criterio, ya sin comisionAdelantadasSemana -- "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" ya van incluidos en "entradas" arriba.
+  // 02-10-2026: comisionSemana ("Comisión") ahora SÍ trae sumada la comisión de Tablas Fijas + Marcas -- "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" ya no son renglones propios en data.clientes (ver pintarBalanceGeneral).
   const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana);
   const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(comisionTotal.toFixed(2))]];
   const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
@@ -10110,15 +10110,15 @@ async function pintarCierreFinal(semana) {
   }
 
   // 24-09-2026: el backend siempre devolvió comisionSemana (solo
-  // Tercios) y comisionAdelantadasSemana por separado — hubo una ronda
-  // donde acá se sumaban las 2 (comisionSemana + comisionAdelantadasSemana)
-  // para que "Comisión de la semana" no quedara incompleta. 26-09-2026:
-  // comisionRemateSemana YA NO entra acá -- el resultado de Remate es su
-  // propio ítem "REMATE" en data.clientes. 28-09-2026, mismo criterio:
-  // comisionAdelantadasSemana TAMPOCO entra acá desde que "% DE TABLAS
-  // FIJAS" y "PORCENTAJE MARCAS" son ítems propios en data.clientes --
-  // sumarla aparte pagaba la misma comisión de Tablas Fijas/Marcas 2
-  // veces (una vez como ítem visible, otra vez metida en este total).
+  // Tercios) y comisionAdelantadasSemana por separado. 26-09-2026:
+  // comisionRemateSemana sigue sin entrar acá -- el resultado de Remate
+  // es su propio ítem "REMATE" en data.clientes (nunca "comisión").
+  // 02-10-2026, a pedido explícito del usuario verificando contra otro
+  // sistema: data.comisionSemana ("Comisión de la semana") ahora SÍ trae
+  // sumada la comisión de Tablas Fijas + Marcas -- "% DE TABLAS FIJAS" y
+  // "PORCENTAJE MARCAS" dejaron de armarse como su propio renglón en
+  // data.clientes, así que esa plata ya no se contaría en ningún lado si
+  // no se suma acá.
   const comisionTotal = Number(data.comisionSemana);
   document.getElementById('montoComisionCierre').textContent = formatMonto(comisionTotal);
 }
@@ -10416,7 +10416,7 @@ function descargarCierreExcel() {
   const filaComision = ['Comisión de la semana'];
   for (let i = 1; i < encabezados.length - 1; i++) filaComision.push('');
   // 26-09-2026: sin comisionRemateSemana -- el ítem "REMATE" ya va como una fila más de data.clientes, arriba en "filas".
-  // 28-09-2026: sin comisionAdelantadasSemana -- "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" ya van como filas más de data.clientes.
+  // 02-10-2026: comisionSemana ya trae sumada la comisión de Tablas Fijas + Marcas -- "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" ya no son filas propias de data.clientes.
   const comisionTotalExport = Number(data.comisionSemana);
   filaComision.push(Number(comisionTotalExport.toFixed(2)));
 

@@ -8,22 +8,25 @@
 // BALANCES, CIERRE FINAL, SALDO POR DIA, SALDO POR SEMANA... TODOS LOS
 // SALDOS CASO A").
 //
-// "Caso A" (el que el usuario confirmó): comisionSemana = comisión de
-// Tercios del rango, MENOS todo lo devuelto ("{cliente/avalador} -
-// PORCENTAJE"). A PROPÓSITO no se suma "% DE TABLAS FIJAS" ni
-// "PORCENTAJE MARCAS" ni la comisión de Remate — esos 3 ya tienen su
-// contraparte EXACTA dentro de la misma lista de "clientes" (TABLAS
-// FIJAS, cliente+banqueadores de la Marca, REMATE), así que sumarlos
-// aparte pagaría esa comisión 2 veces (ver la nota grande de
-// comisionAdelantadasSemana en GET /cierre-final, de una ronda
-// anterior).
+// 02-10-2026 — "COMISIÓN GRUPO" = TODO, no solo Tercios: el usuario
+// verificó contra OTRO sistema con un ejemplo real ("se hicieron de
+// comisión 183,55 [bruta, de TODOS los tipos de jugada, con el 5%]...
+// la devolución fue de 77,52... restando eso le queda al grupo
+// 106,02") y pidió que "COMISIÓN GRUPO" sea justo eso: bruta de TODOS
+// los tipos de jugada (Tercios + Tablas Fijas + Marcas) menos TODO lo
+// devuelto. Esta prueba se actualiza para ese nuevo "Caso B": ahora SÍ
+// se suma "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" (que dejaron de
+// armarse como su propio renglón de "cliente" — ver la nota grande de
+// comisionAdelantadasSemana en GET /cierre-final) — la comisión de
+// Remate sigue siendo la ÚNICA que nunca entra, porque Remate no es
+// "comisión del grupo" en ningún sistema, tiene su propio ítem aparte.
 //
 // Este caso arma, en el MISMO día, las 3 fuentes de comisión (Tercios,
 // Tabla Fija de Adelantadas, Remate) más el % propio de un cliente, y
 // confirma que "comisionSemana" en GET /cierre-final Y en GET
-// /semana-por-dias dan EXACTAMENTE el mismo número: solo la comisión de
-// Tercios (5,00) menos el % devuelto (2,00) = 3,00 — nunca 5,00+5,00
-// (TF) - 2,00, ni +12,50 (Remate) de más.
+// /semana-por-dias dan EXACTAMENTE el mismo número: Tercios (5,00) +
+// Tabla Fija (5,00) menos el % devuelto (2,00) = 8,00 — nunca sumando
+// los +12,50 de Remate (ese nunca es "comisión del grupo").
 const Module = require('module');
 const path = require('path');
 const originalLoad = Module._load;
@@ -161,6 +164,19 @@ function ejecutarQuery(text, params) {
     filas.forEach(p => porFecha.set(p.fecha, (porFecha.get(p.fecha) || 0) + p.comision_total));
     return { rows: Array.from(porFecha.entries()).map(([fecha, total]) => ({ fecha, total })) };
   }
+  // 02-10-2026 ("COMISIÓN GRUPO" = TODO, no solo Tercios — ver la nota
+  // grande de comisionAdelantadasSemana en GET /cierre-final): nueva
+  // consulta de /semana-por-dias para sumar también la comisión de
+  // Tablas Fijas/Marcas por día.
+  if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
+    const [grupoId] = params;
+    return {
+      rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId).map(j => {
+        const p = TABLAS.hipismo_adelantadas_planos.find(x => x.id === j.plano_id);
+        return { fecha: p.fecha, comision: j.comision };
+      })
+    };
+  }
 
   throw new Error('La base de datos falsa de esta prueba (comision-real-menos-devuelto) no sabe responder: ' + sql);
 }
@@ -217,13 +233,13 @@ async function invocarRuta(handler, req) {
 
   check(Number(salidaCierre.comisionRemateSemana) === 12.50, '1b) comisionRemateSemana (dato crudo) sigue trayendo 12,50, sin cambios');
 
-  check(Number(salidaCierre.comisionSemana) === 3.00,
-    `1c) ARREGLO: comisionSemana = 5,00 (Tercios) - 2,00 (PEDRO - porcentaje) = 3,00 -- NUNCA +5,00 de la Tabla Fija ni +12,50 del Remate -- dio ${salidaCierre.comisionSemana}`);
+  check(Number(salidaCierre.comisionSemana) === 8.00,
+    `1c) ARREGLO (02-10-2026): comisionSemana = 5,00 (Tercios) + 5,00 (Tabla Fija) - 2,00 (PEDRO - porcentaje) = 8,00 -- NUNCA sumando los +12,50 del Remate -- dio ${salidaCierre.comisionSemana}`);
 
   const filaPedroPct = salidaCierre.clientes.find(c => c.nombre === 'PEDRO - PORCENTAJE');
   check(!!filaPedroPct && Math.abs(filaPedroPct.saldo - 2.00) < 0.001, '1d) "PEDRO - PORCENTAJE" sigue apareciendo con 2,00 (sin cambios, esto ya funcionaba)');
   const filaTfPct = salidaCierre.clientes.find(c => c.nombre === '% DE TABLAS FIJAS');
-  check(!!filaTfPct && Math.abs(filaTfPct.saldo - 5.00) < 0.001, '1e) "% DE TABLAS FIJAS" sigue apareciendo con 5,00 en la tabla (no desapareció, solo no se suma a comisionSemana)');
+  check(!filaTfPct, '1e) "% DE TABLAS FIJAS" ya NO aparece como su propio renglón de cliente (02-10-2026: esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
   const filaRemate = salidaCierre.clientes.find(c => c.nombre === 'REMATE');
   check(!!filaRemate && Math.abs(filaRemate.saldo - 12.50) < 0.001, '1f) El ítem "REMATE" sigue apareciendo con 12,50 (no desapareció, solo no se suma a comisionSemana)');
 
@@ -231,10 +247,10 @@ async function invocarRuta(handler, req) {
   const reqDias = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: {} };
   const salidaDias = await invocarRuta(handlerDe('get', '/semana-por-dias'), reqDias);
   check(!!salidaDias, '2a) GET /semana-por-dias respondió algo');
-  check(Number(salidaDias.comisionSemana) === 3.00,
-    `2b) ARREGLO: comisionSemana de Semana por Días TAMBIÉN da 3,00 -- ahora igualado a Cierre Final (antes de este arreglo sumaba Remate/Adelantadas y no restaba lo devuelto) -- dio ${salidaDias.comisionSemana}`);
-  check(salidaDias.dias.length === 1 && JSON.stringify(salidaDias.comisionPorDia) === JSON.stringify([3.00]),
-    `2c) comisionPorDia trae un solo día (${FECHA}) con 3,00 -- dio ${JSON.stringify(salidaDias.comisionPorDia)}`);
+  check(Number(salidaDias.comisionSemana) === 8.00,
+    `2b) ARREGLO: comisionSemana de Semana por Días TAMBIÉN da 8,00 -- igualado a Cierre Final -- dio ${salidaDias.comisionSemana}`);
+  check(salidaDias.dias.length === 1 && JSON.stringify(salidaDias.comisionPorDia) === JSON.stringify([8.00]),
+    `2c) comisionPorDia trae un solo día (${FECHA}) con 8,00 -- dio ${JSON.stringify(salidaDias.comisionPorDia)}`);
 
   global.Date = OriginalDate;
 
