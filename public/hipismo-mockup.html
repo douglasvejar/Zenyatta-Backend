@@ -2266,6 +2266,35 @@
               <span class="etiqueta">↩️ Total devuelto del día</span>
               <span class="monto" id="montoComisionesDevueltasTotal">$0.00</span>
             </div>
+
+            <!-- "Totales por Código" (02-10-2026, a pedido del usuario:
+                 "muestrame aqui si algun codigo tiene suma por % ya sea
+                 propio o de algun cliente... trae para aca los codigos que
+                 tengan %, muestra solo los % devueltos de dicho codigo,
+                 verifica que si este sumado" — seguido de "haz esa lista
+                 mas reducida cambia ese formato, para tener mayor vision y
+                 poder revisar mas rapido"). La lista de abajo
+                 (#listaComisionesDevueltas) agrupa por quien GENERÓ el %
+                 (quien apostó) — un código/cuenta de comisión que nunca
+                 aposta nada (ej. "Agregados Ferrocarril") nunca aparece ahí
+                 con su propio renglón, aunque SÍ está sumado dentro del
+                 total general de arriba y dentro de cada cliente que se lo
+                 generó (ej. "Cuti — 0.5% ADICIONAL para su aval Agregados
+                 ferrocarril"). Esta caja reagrupa los MISMOS datos por
+                 DESTINO (mismo criterio EXACTO que ya usa
+                 textoComisionesDevueltas() para "Destinatarios de
+                 Devolución", ver la nota grande de esa función más abajo),
+                 en el formato COMPACTO que ya usa "Comisión por Carrera de
+                 Clientes" (.fila-cliente-comision, ver
+                 filaClienteComisionHtml()) en vez del formato grande de
+                 tarjetas de abajo — pedido explícito de "mas reducida" —
+                 para poder repasar todos los códigos de un vistazo y
+                 expandir uno puntual para ver quién se lo generó. -->
+            <div style="margin:14px 0 18px;">
+              <div style="font-weight:700; font-size:13px; color:var(--text-dim); margin-bottom:6px; letter-spacing:.2px;">🔀 Totales por Código</div>
+              <div id="listaCodigosComisionesDevueltas" style="border:1px solid var(--card-border); border-radius:10px; padding:2px 10px; background:#fff;"></div>
+            </div>
+
             <div id="listaComisionesDevueltas"><div class="placeholder-card">Elige una fecha y dale Buscar.</div></div>
           </div>
         </div>
@@ -11218,6 +11247,8 @@ async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
   } catch (e) {
     COMISIONES_DEVUELTAS_ACTUAL = null;
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${e.message}</div>`;
+    const contCodigosErr = document.getElementById('listaCodigosComisionesDevueltas');
+    if (contCodigosErr) contCodigosErr.innerHTML = '';
     return;
   }
   COMISIONES_DEVUELTAS_ACTUAL = data;
@@ -11225,6 +11256,11 @@ async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
   // total devolucion") — el backend ya lo trae calculado (data.totalGeneral).
   const montoTotalEl = document.getElementById('montoComisionesDevueltasTotal');
   if (montoTotalEl) montoTotalEl.textContent = '$' + formatMontoTabla(Number(data.totalGeneral || 0));
+  // "Totales por Código" (02-10-2026, ver la nota grande EXACTA junto a
+  // #listaCodigosComisionesDevueltas en el HTML de arriba) — se pinta
+  // siempre, con el mismo `data` recién llegado, independientemente de si
+  // el rango trae clientes o no (en ese caso simplemente queda vacía).
+  pintarCodigosComisionesDevueltas(data);
   if (!data.clientes.length) {
     cont.innerHTML = '<div class="placeholder-card">Ningún cliente con % propio configurado apostó en ese rango.</div>';
     return;
@@ -11333,7 +11369,18 @@ async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
 // pasar por formatNombre() (que pondría "Boss" en vez de "BOSS"), porque
 // el ejemplo del usuario los quiere en mayúsculas igual que Balance
 // General/Cierre Final.
-function textoComisionesDevueltas(data) {
+// agruparComisionesDevueltasPorDestino (02-10-2026, sacada de adentro de
+// textoComisionesDevueltas() de más abajo para poder reusarla también en
+// la caja visual "Totales por Código" — ver pintarCodigosComisionesDevueltas()
+// un poco más abajo y la nota grande junto a #listaCodigosComisionesDevueltas
+// en el HTML) — agrupa `data.clientes` (que vienen agrupados por quien
+// GENERÓ el %, ver la nota grande de obtenerComisionesPropias en
+// services/hipismoComisionPropia.js) al revés, por DESTINO (a quién se le
+// acredita — él mismo, o su aval/código), sumando el total de cada
+// destinatario y llevando aparte quién se lo generó y cuánto aportó cada
+// uno. Mismo resultado EXACTO que antes, 0 cambios de comportamiento en
+// textoComisionesDevueltas().
+function agruparComisionesDevueltasPorDestino(data) {
   // redondeo2 local: este archivo es frontend puro, no tiene el round2()
   // de services/hipismoAdelantadasCalc.js (ese vive solo en el backend) —
   // mismo criterio que ya usa este archivo en otros lados (ver
@@ -11346,9 +11393,66 @@ function textoComisionesDevueltas(data) {
     d.total = redondeo2(d.total + c.total);
     d.generadores.set(c.nombre, redondeo2((d.generadores.get(c.nombre) || 0) + c.total));
   });
+  return Array.from(porDestino.values()).sort((a, b) => a.destino.localeCompare(b.destino, 'es'));
+}
 
-  const destinatarios = Array.from(porDestino.values()).sort((a, b) => a.destino.localeCompare(b.destino, 'es'));
+// "Totales por Código" (02-10-2026, a pedido del usuario: "muestrame aqui
+// si algun codigo tiene suma por % ya sea propio o de algun cliente...
+// trae para aca los codigos que tengan %, muestra solo los % devueltos de
+// dicho codigo, verifica que si este sumado... haz esa lista mas reducida
+// cambia ese formato, para tener mayor vision y poder revisar mas
+// rapido") — caja compacta en la pantalla "Comisiones Devueltas por
+// Cliente" (ver #listaCodigosComisionesDevueltas en el HTML) con un
+// renglón por código/destino (mismo agrupado que textoComisionesDevueltas,
+// vía agruparComisionesDevueltasPorDestino() de arriba), en el formato
+// COMPACTO que ya usa "Comisión por Carrera de Clientes"
+// (.fila-cliente-comision/filaClienteComisionHtml(), ver más arriba) en
+// vez del formato grande de tarjetas (.fila-carrera-comision) que usa la
+// lista principal de abajo — así un código como "Agregados Ferrocarril",
+// que nunca aparece con su propio renglón en esa lista principal (porque
+// nunca GENERA % — solo lo recibe), ahora sí se ve acá con su total
+// sumado, y se puede expandir (cuando más de un cliente le aporta) para
+// verificar quién se lo generó y cuánto.
+let idComisionCodigoSeq = 0;
+function filaCodigoComisionHtml(d) {
+  const generadores = Array.from(d.generadores.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'));
+  if (generadores.length <= 1) {
+    return `
+      <div class="fila-cliente-comision sin-expandir">
+        <span class="nombre-cliente">🔀 ${formatNombre(d.destino)}</span>
+        <span class="monto-cliente">+${formatMontoTabla(d.total)}</span>
+      </div>`;
+  }
+  const idCodigo = 'comCodigo' + (idComisionCodigoSeq++);
+  const filasGeneradores = generadores.map(([nombre, monto]) => `<tr><td>${formatNombre(nombre)}</td><td class="num pos">+${formatMontoTabla(monto)}</td></tr>`).join('');
+  return `
+    <div class="fila-cliente-comision" id="${idCodigo}">
+      <div class="cabecera-cliente" onclick="toggleFilaCarrera('${idCodigo}')">
+        <span class="flecha-expandir-mini">▶</span>
+        <span class="nombre-cliente">🔀 ${formatNombre(d.destino)}</span>
+        <span class="monto-cliente">+${formatMontoTabla(d.total)}</span>
+      </div>
+      <div class="detalle-cliente-jugadas">
+        <table>
+          <thead><tr><th>Cliente</th><th class="num">Aportó</th></tr></thead>
+          <tbody>${filasGeneradores}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+function pintarCodigosComisionesDevueltas(data) {
+  const cont = document.getElementById('listaCodigosComisionesDevueltas');
+  if (!cont) return;
+  const destinos = agruparComisionesDevueltasPorDestino(data);
+  if (!destinos.length) {
+    cont.innerHTML = '<div class="resultado-vacio" style="margin:0; padding:10px 4px;">Nada que mostrar en este rango.</div>';
+    return;
+  }
+  cont.innerHTML = destinos.map(filaCodigoComisionHtml).join('');
+}
 
+function textoComisionesDevueltas(data) {
+  const destinatarios = agruparComisionesDevueltasPorDestino(data);
   let texto = `*Destinatarios de Devolucion - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
   destinatarios.forEach(d => {
     texto += `\n🔀 *${d.destino}* — Total: *${formatMontoTabla(d.total)}*\n`;
