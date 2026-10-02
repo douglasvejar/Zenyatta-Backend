@@ -3062,6 +3062,26 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
   // la nota grande de obtenerComisionesPropias) — así que ahora se agrupa
   // por (cliente + destino + %), no solo por cliente, para que las 2 se
   // muestren como 2 renglones separados en vez de mezclarse en uno solo.
+  //
+  // Acumular EXACTO por carrera, redondear 1 sola vez por carrera
+  // (02-10-2026, el usuario comparó esta pantalla contra "Comisiones
+  // Devueltas por Hipódromo/Carrera" el mismo día y dieron $77,60 vs
+  // $77,52 -- "deben dar lo mismo... el que está perfecto es por
+  // Hipódromo/Carrera"). Causa real: cuando un cliente juega MÁS DE UNA
+  // línea en la MISMA carrera (ej. Codino jugando "2/2 (7)" Y "2p (7)" en
+  // la 5ta de Belmont -- un caso de lo más común, no una rareza), esta
+  // ruta empujaba un `devuelto` YA redondeado POR CADA TICKET por
+  // separado y sumaba esos redondeados -- mientras que
+  // /comisiones-devueltas-por-hipodromo (arreglada antes, en el commit
+  // del doble redondeo) junta primero el EXACTO de todos los tickets de
+  // esa carrera bajo el mismo código y redondea una sola vez. Sumar
+  // redondeados de a uno vs. redondear la suma exacta una sola vez no
+  // siempre da el mismo centavo -- por eso las 2 pantallas, viendo
+  // exactamente los mismos datos, terminaban mostrando totales distintos.
+  // Se cambia esta ruta al MISMO criterio (acumular exacto por carrera,
+  // redondear una sola vez), para que ambas pantallas vuelvan a coincidir
+  // centavo a centavo siempre, sin importar cuántas líneas tenga un
+  // cliente en una misma carrera.
   const porCliente = new Map();
   detalle.forEach(d => {
     // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
@@ -3095,46 +3115,61 @@ router.get('/comisiones-devueltas', asyncHandler(async (req, res) => {
       // quedara incompleto para los clientes con el toggle en ON. Ya NO
       // se excluye por `incluidaEnJugada` acá (si solo tiene esta entrada,
       // destino === d.cliente, mismo criterio que cualquier otro % propio).
-      // montoDecidido (02-10-2026, "LOS % QUE SE DEVUELVEN ES DE LO
-      // DECIDIDO NO DE LO APOSTADO" — ver la nota grande de montoDecidido
-      // junto a obtenerApuestasDelRango más arriba): NUNCA d.monto.
       // montoDecididoExacto, no montoDecidido (02-10-2026, ver la nota
       // grande EXACTA en hipismoAdelantadasCalc.js: "otro programa" daba
-      // $0.01 menos — doble redondeo en cadena). `d.montoDecidido` ya
-      // venía redondeado a centavos; multiplicarlo por el % y redondear
-      // OTRA VEZ podía mover el resultado 1 centavo contra calcularlo
-      // directo sobre el valor exacto y redondear una sola vez, acá.
-      const devuelto = round2((Number(d.montoDecididoExacto) || 0) * (info.pct / 100));
-      if (!devuelto) return;
+      // $0.01 menos — doble redondeo en cadena). NUNCA d.monto (lo
+      // apostado bruto) ni d.montoDecidido (ya redondeado).
+      const devueltoExacto = (Number(d.montoDecididoExacto) || 0) * (info.pct / 100);
+      if (!devueltoExacto) return;
       // A propósito SIGUE agrupado por quien APOSTÓ (d.cliente), no por el
       // destino — este reporte audita "quién generó cuánto %"; `destino` se
       // agrega aparte para que el frontend pueda avisar "va acreditado a
       // {destino}" cuando el cliente tiene un aval configurado (ver la nota
       // grande de obtenerComisionesPropias más arriba).
       const clave = d.cliente + '::' + info.destino + '::' + info.pct;
-      if (!porCliente.has(clave)) porCliente.set(clave, { nombre: d.cliente, porcentaje: info.pct, destino: info.destino, esAvalAdicional: !!info.esAvalAdicional, total: 0, hipodromos: new Map() });
+      if (!porCliente.has(clave)) porCliente.set(clave, { nombre: d.cliente, porcentaje: info.pct, destino: info.destino, esAvalAdicional: !!info.esAvalAdicional, hipodromos: new Map() });
       const c = porCliente.get(clave);
-      c.total = round2(c.total + devuelto);
-      if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, total: 0, carreras: [] });
+      if (!c.hipodromos.has(d.hipodromoNombre)) c.hipodromos.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, carrerasMap: new Map() });
       const h = c.hipodromos.get(d.hipodromoNombre);
-      h.total = round2(h.total + devuelto);
-      // `fecha` por carrera (01-10-2026): con un rango de varios días, el
-      // mismo hipódromo+número de carrera puede repetirse en días
-      // distintos — se incluye acá para que el detalle expandido (y el
-      // texto de "Destinatarios de Devolución") no las confunda entre sí.
-      // Con un solo día es simplemente esa misma fecha, siempre.
-      // `neteado`/`decididoJugador`/`decididoBanquero` (02-10-2026, ver la
-      // nota grande EXACTA de netearJugadorBanqueroTercios en
-      // services/hipismoCalc.js — caso GG jugador+banquero en la misma
-      // carrera): se propagan tal cual vienen de `d` para que el frontend
-      // pueda mostrar "Jugó $X / Banqueó $Y → Neto $Z" en vez del texto
-      // genérico cuando esta línea es la entrada sintética neteada.
-      h.carreras.push({ fecha: d.fecha, carreraNumero: d.carreraNumero, tipo: d.tipo, detalleTexto: d.detalleTexto, monto: d.monto, devuelto, neteado: !!d.neteado, decididoJugador: d.decididoJugador, decididoBanquero: d.decididoBanquero, neto: d.neteado ? d.montoDecidido : undefined });
+      // `fecha` en la clave de carrera (01-10-2026): con un rango de
+      // varios días, el mismo hipódromo+número de carrera puede repetirse
+      // en días distintos — nunca deben juntarse entre sí.
+      const claveCarreraLinea = d.fecha + '::' + d.carreraNumero;
+      if (!h.carrerasMap.has(claveCarreraLinea)) {
+        h.carrerasMap.set(claveCarreraLinea, {
+          fecha: d.fecha, carreraNumero: d.carreraNumero, tipo: d.tipo,
+          detalleTextos: [], monto: 0, exacto: 0,
+          neteado: !!d.neteado, decididoJugador: d.decididoJugador, decididoBanquero: d.decididoBanquero,
+          neto: d.neteado ? d.montoDecidido : undefined
+        });
+      }
+      const entrada = h.carrerasMap.get(claveCarreraLinea);
+      entrada.detalleTextos.push(d.detalleTexto);
+      entrada.monto = round2(entrada.monto + (Number(d.monto) || 0));
+      entrada.exacto += devueltoExacto;
     });
   });
 
   const clientes = Array.from(porCliente.values())
-    .map(c => ({ nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, esAvalAdicional: c.esAvalAdicional, total: c.total, hipodromos: Array.from(c.hipodromos.values()) }))
+    .map(c => {
+      const hipodromos = Array.from(c.hipodromos.values()).map(h => {
+        const carreras = Array.from(h.carrerasMap.values()).map(entrada => ({
+          fecha: entrada.fecha, carreraNumero: entrada.carreraNumero, tipo: entrada.tipo,
+          // Varias líneas del mismo cliente en la MISMA carrera (ej. "2/2
+          // (7)" y "2p (7)" del mismo caballo) se funden en un solo
+          // renglón -- mismo criterio que ya usa /comisiones-devueltas-
+          // por-hipodromo para que ambas pantallas den el mismo centavo.
+          detalleTexto: entrada.detalleTextos.join(' + '),
+          monto: entrada.monto,
+          devuelto: round2(entrada.exacto),
+          neteado: entrada.neteado, decididoJugador: entrada.decididoJugador, decididoBanquero: entrada.decididoBanquero, neto: entrada.neto
+        }));
+        const total = round2(carreras.reduce((s, cr) => s + cr.devuelto, 0));
+        return { nombre: h.nombre, total, carreras };
+      });
+      const total = round2(hipodromos.reduce((s, h) => s + h.total, 0));
+      return { nombre: c.nombre, porcentaje: c.porcentaje, destino: c.destino, esAvalAdicional: c.esAvalAdicional, total, hipodromos };
+    })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.esAvalAdicional - b.esAvalAdicional);
 
   const totalGeneralDevueltas = round2(clientes.reduce((s, c) => s + c.total, 0));
