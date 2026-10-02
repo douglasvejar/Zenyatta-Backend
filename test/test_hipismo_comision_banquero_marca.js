@@ -55,7 +55,7 @@ const TABLAS = {
   ],
   hipismo_tickets: [], hipismo_planos: [],
   hipismo_remates: [], hipismo_remate_apuestas: [],
-  hipismo_adelantadas_planos: [{ id: 'ap1', grupo_id: GRUPO_ID, fecha: FECHA }],
+  hipismo_adelantadas_planos: [{ id: 'ap1', grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Belmont Park' }],
   // La Marca: $600 apostados en total, JOSUE (cliente) acertó, y
   // resolverClienteMarca() decide resultado_cliente = round2(600/1.2) =
   // 500 (la jugada NETA, sin el 5%). MRINCREIBLE banqueó el 50% de esa
@@ -65,7 +65,7 @@ const TABLAS = {
   // que banqueó.
   hipismo_adelantadas_jugadas: [
     {
-      id: 'ad1', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true,
+      id: 'ad1', plano_id: 'ap1', grupo_id: GRUPO_ID, tipo: 'marca', estado: 'resuelto', gano: true, carrera_numero: 5,
       cliente_nombre: 'JOSUE', monto: 600, resultado_cliente: 500, comision: 0,
       banqueadores: [{ nombre: 'MRINCREIBLE', porcentaje: 50, monto: -250, pagaComision: false, comisionPorcentaje: 0 }]
     }
@@ -102,10 +102,14 @@ function ejecutarQuery(text, params) {
   if (/^SELECT j\.cliente_nombre, j\.tipo, j\.resultado_cliente, j\.comision, j\.banqueadores, j\.monto/i.test(sql)) {
     const [grupoId] = params;
     return {
-      rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId).map(j => ({
-        cliente_nombre: j.cliente_nombre, tipo: j.tipo, resultado_cliente: j.resultado_cliente,
-        comision: j.comision, banqueadores: j.banqueadores, monto: j.monto, gano: j.gano
-      }))
+      rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId).map(j => {
+        const p = TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id);
+        return {
+          cliente_nombre: j.cliente_nombre, tipo: j.tipo, resultado_cliente: j.resultado_cliente,
+          comision: j.comision, banqueadores: j.banqueadores, monto: j.monto, gano: j.gano,
+          fecha: p ? p.fecha : null, hipodromo_nombre: p ? p.hipodromo_nombre : null, carrera_numero: j.carrera_numero
+        };
+      })
     };
   }
   if (/^SELECT cliente_nombre, monto FROM hipismo_winners/i.test(sql)) return { rows: [] };
@@ -118,14 +122,14 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?(, p\.fecha, p\.hipodromo_nombre, j\.carrera_numero)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     return {
       rows: TABLAS.hipismo_adelantadas_jugadas
         .filter(j => j.grupo_id === grupoId)
         .map(j => ({ j, p: TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id) }))
         .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-        .map(({ j }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, banqueadores: j.banqueadores, gano: j.gano, resultado_cliente: j.resultado_cliente }))
+        .map(({ j, p }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, banqueadores: j.banqueadores, gano: j.gano, resultado_cliente: j.resultado_cliente, fecha: p.fecha, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: j.carrera_numero }))
     };
   }
 

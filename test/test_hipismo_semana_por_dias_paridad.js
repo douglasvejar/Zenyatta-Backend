@@ -106,7 +106,7 @@ function ejecutarQuery(text, params) {
   if (sql === "SELECT a.cliente_nombre, a.resultado, a.monto FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3") {
     return { rows: [] };
   }
-  if (sql === "SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
+  if (sql === "SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano, p.fecha, p.hipodromo_nombre, j.carrera_numero FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
     return { rows: [] };
   }
   if (sql === "SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
@@ -132,7 +132,7 @@ function ejecutarQuery(text, params) {
   if (sql === "SELECT a.cliente_nombre, a.resultado, a.monto, r.fecha FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3") {
     return { rows: [] };
   }
-  if (sql === "SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, p.fecha FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
+  if (sql === "SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, p.fecha, p.hipodromo_nombre, j.carrera_numero FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
     return { rows: [] };
   }
   if (sql === "SELECT cliente_nombre, monto, fecha FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {

@@ -75,7 +75,7 @@ function ejecutarQuery(text, params) {
     const filas = TABLAS.hipismo_remate_apuestas.filter(a => a.grupo_id === grupoId && a.fecha >= desde && a.fecha <= hasta);
     return { rows: filas.map(a => ({ cliente_nombre: a.cliente_nombre, resultado: a.resultado, monto: a.monto, fecha: a.fecha })) };
   }
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, j\.monto(, j\.gano)?, p\.fecha\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, j\.monto(, j\.gano)?, p\.fecha(, p\.hipodromo_nombre, j\.carrera_numero)?\s+FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
     return { rows: [] };
   }
   // "% DEVUELTO" (28-09-2026): esta prueba no configura ningún jugador

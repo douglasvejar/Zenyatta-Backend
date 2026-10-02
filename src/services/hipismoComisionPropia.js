@@ -374,23 +374,43 @@ async function asegurarCuentasComisionParaNombres(grupoId, nombres) {
 // distintos a la vez para el mismo cliente (ver la nota grande de
 // obtenerComisionesPropias). Muta `totales` en el lugar (mismo criterio
 // que el resto de los merges de Balance General de este archivo).
+// FUSIONAR POR CARRERA ANTES DE REDONDEAR (02-10-2026, mismo bug y mismo
+// arreglo YA probado en /comisiones-devueltas, /cierre-final,
+// /saldo-comisiones, /semana-por-dias y Pizarras — caso real: Balance
+// General daba $379,65 y debía dar $379,78): `entradas` ya pertenece a UNA
+// sola carrera (ver la nota grande de entradasApostadasDeTickets en
+// routes/hipismo.js), pero puede traer 2+ entradas del MISMO cliente (ej.
+// 2 líneas de Tercios en esa carrera) — antes cada una se redondeaba por
+// separado antes de sumarla a `totales`, y sumar esos redondeos parciales
+// no siempre da lo mismo que sumar los montos EXACTOS de esa carrera y
+// redondear una sola vez. Ahora se acumula la plata exacta por (cliente,
+// destino, %) en `exactoPorClave` y recién se redondea UNA vez por grupo
+// antes de sumarlo a `totales`.
 function agregarPorcentajeDevuelto(totales, comisionesPropias, entradas) {
+  const exactoPorClave = new Map();
   (entradas || []).forEach(({ nombre, monto }) => {
     const infos = comisionesPropias[nombre];
     if (!infos || !infos.length) return;
     infos.forEach(info => {
       if (!info || !info.pct) return;
-      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
-      if (!devuelto) return;
+      const exacto = Math.abs(Number(monto) || 0) * (info.pct / 100);
+      if (!exacto) return;
       // 26-09-2026: info.cuentaNombre YA es el nombre final a mostrar
       // (el de la cuenta de comisión real si ya existe, o el texto de
       // siempre como vista previa — ver la nota grande de
       // obtenerComisionesPropias más arriba); info.destino en cambio es
       // el nombre "pelado" del cliente/aval, usado solo para AUDITAR
       // quién generó el % en los otros reportes.
-      const clave = info.cuentaNombre;
-      totales[clave] = round2((totales[clave] || 0) + devuelto);
+      const claveGrupo = info.cuentaNombre + '::' + info.destino + '::' + info.pct;
+      const existente = exactoPorClave.get(claveGrupo);
+      if (existente) existente.exacto += exacto;
+      else exactoPorClave.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto });
     });
+  });
+  exactoPorClave.forEach(({ cuentaNombre, exacto }) => {
+    const devuelto = round2(exacto);
+    if (!devuelto) return;
+    totales[cuentaNombre] = round2((totales[cuentaNombre] || 0) + devuelto);
   });
 }
 

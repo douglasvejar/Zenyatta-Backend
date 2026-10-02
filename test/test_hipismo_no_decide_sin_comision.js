@@ -126,14 +126,14 @@ function ejecutarQuery(text, params) {
     };
   }
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?(, p\.fecha, p\.hipodromo_nombre, j\.carrera_numero)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     return {
       rows: TABLAS.hipismo_adelantadas_jugadas
         .filter(j => j.grupo_id === grupoId)
         .map(j => ({ j, p: TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id) }))
         .filter(({ p }) => p && p.fecha >= desde && p.fecha <= hasta)
-        .map(({ j }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, resultado_cliente: j.resultado_cliente, banqueadores: j.banqueadores, gano: j.gano }))
+        .map(({ j, p }) => ({ cliente_nombre: j.cliente_nombre, monto: j.monto, resultado_cliente: j.resultado_cliente, banqueadores: j.banqueadores, gano: j.gano, fecha: p.fecha, hipodromo_nombre: p.hipodromo_nombre, carrera_numero: j.carrera_numero }))
     };
   }
 

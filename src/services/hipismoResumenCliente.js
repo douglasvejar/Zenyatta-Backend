@@ -769,8 +769,14 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // BANQUEADORES de una Marca solo existe una vez 'resuelto' (adentro
   // del jsonb banqueadores) — cada banquero es, para efectos de saldo,
   // un cliente más (ej. "MARCAS ZENYATTA").
+  // p.fecha, p.hipodromo_nombre, j.carrera_numero (02-10-2026, ver la nota
+  // grande EXACTA de acumularDevuelto más abajo: hacen falta para poder
+  // fusionar por carrera las jugadas de un mismo cliente antes de
+  // redondear — antes esta consulta no las traía porque nada en esta
+  // función las necesitaba).
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano
+    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano,
+            p.fecha, p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
@@ -906,26 +912,45 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // de la suma de TODOS los saldos de la lista" (por eso, para no
   // duplicar lógica, `comisionSemana` se termina de calcular más abajo
   // restando `totalDevueltoSemana` de la comisión de Tercios).
-  let totalDevueltoSemana = 0;
-  function acumularDevuelto(nombre, monto) {
+  // FUSIONAR POR CARRERA ANTES DE REDONDEAR (02-10-2026, caso real: Balance
+  // General mostraba Comisión $379,65 y el usuario esperaba $379,78 — "SI
+  // NO ESTAS REDONDEANDO ALGO" — mismo bug, mismo arreglo YA probado en
+  // /comisiones-devueltas, ver la nota grande EXACTA ahí: cuando un cliente
+  // tiene 2+ tickets/jugadas en la MISMA carrera, redondear el % devuelto
+  // de cada uno por separado y sumar esos redondeos NO siempre da lo mismo
+  // que sumar los montos EXACTOS de esa carrera y redondear una sola vez
+  // ("suma de redondeos" vs "redondeo de la suma"). Antes, acumularDevuelto
+  // redondeaba y sumaba de una vez cada vez que se llamaba — ahora solo
+  // acumula el monto EXACTO (sin redondear) agrupado por
+  // (carrera, cliente, destino, %) en `porGrupoCarrera`; recién al final
+  // (justo antes de armar `clientes`) se redondea UNA vez por grupo y ESE
+  // valor ya redondeado es el que se suma a la cuenta destino y a
+  // totalDevueltoSemana.
+  const porGrupoCarrera = new Map();
+  function acumularDevuelto(nombre, monto, claveCarrera) {
     const infos = comisionesPropias[nombre];
     if (!infos || !infos.length) return;
     // 24-09-2026: hasta 2 entradas simultáneas por cliente (ver la nota
     // grande de obtenerComisionesPropias) — cada una con su propio
     // destino, así que cada una suma su propio ítem "{destino} -
     // PORCENTAJE" aparte (pueden ser 2 ítems distintos para el mismo
-    // cliente en la misma semana).
+    // cliente en la misma semana) — por eso el grupo incluye destino y %,
+    // no solo nombre+carrera.
     infos.forEach(info => {
       if (!info || !info.pct) return;
-      const devuelto = round2(Math.abs(Number(monto) || 0) * (info.pct / 100));
-      if (!devuelto) return;
-      // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
-      // info.cuentaNombre ya es el nombre final, no hace falta pegarle
-      // el sufijo de nuevo.
-      acumular(info.cuentaNombre, devuelto);
-      totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
+      const exacto = Math.abs(Number(monto) || 0) * (info.pct / 100);
+      if (!exacto) return;
+      const claveGrupo = `${claveCarrera}::${nombre}::${info.destino}::${info.pct}`;
+      if (!porGrupoCarrera.has(claveGrupo)) {
+        // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
+        // info.cuentaNombre ya es el nombre final, no hace falta pegarle
+        // el sufijo de nuevo.
+        porGrupoCarrera.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto: 0 });
+      }
+      porGrupoCarrera.get(claveGrupo).exacto += exacto;
     });
   }
+  let totalDevueltoSemana = 0;
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
   // DEVOLUCION A LOS CLIENTES"): Remate SÍ suma al saldo normal (arriba,
   // acumular()) pero NUNCA genera % devuelto — a propósito no se llama
@@ -988,13 +1013,13 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
       // Lado JUGADOR — se omite si este cliente es dual en esta carrera (su
       // % devuelto sale más abajo, sobre el neto, una sola vez).
       if (!(infoJugador && infoJugador.dual)) {
-        acumularDevuelto(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision));
+        acumularDevuelto(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
       }
       // Lado BANQUERO (29-09-2026, ver la nota grande de nombresJugadores
       // más arriba): el lado banquero de Tercios también genera % devuelto
       // — mismo criterio, se omite si es dual.
       if (!(infoBanquero && infoBanquero.dual)) {
-        acumularDevuelto(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision));
+        acumularDevuelto(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
       }
       // % devuelto sobre el NETO — una sola vez por (carrera, cliente) dual,
       // sin importar cuántos tickets lo disparen. netoExacto (02-10-2026,
@@ -1006,15 +1031,23 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
         const claveDual = `${claveCarrera}::${nombre}`;
         if (dualAgregadoCierre.has(claveDual)) return;
         dualAgregadoCierre.add(claveDual);
-        acumularDevuelto(nombre, info.netoExacto);
+        acumularDevuelto(nombre, info.netoExacto, claveCarrera);
       });
     });
   // resultado_cliente de Jugadas Adelantadas ya es un neto DEFINITIVO sin
   // ningún 5% embebido (ver resolverTablaFija/resolverClienteMarca en
   // hipismoAdelantadasCalc.js) -- montoDecididoExacto con sinComision=true
   // lo deja tal cual, en valor absoluto, SIN redondear (acumularDevuelto()
-  // redondea una sola vez al sacar el % devuelto).
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => acumularDevuelto(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true)));
+  // ya no redondea acá -- solo fusiona por carrera; se redondea una vez
+  // por grupo al armar `clientes`, más abajo). La clave de carrera usa
+  // p.fecha/p.hipodromo_nombre/j.carrera_numero (agregadas arriba a
+  // rAdelantadas) para poder fusionar con tickets de Tercios de la misma
+  // carrera, igual que ya hace obtenerApuestasDelRango.
+  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => {
+    const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+    const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
+    acumularDevuelto(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true), claveCarrera);
+  });
   // 29-09-2026 (misma nota): el lado BANQUERO de una Marca también genera
   // % devuelto — cada banqueador solo banqueó su `porcentaje` de la base
   // DECIDIDA de la jugada completa (|resultado_cliente|, el mismo "base"
@@ -1031,10 +1064,23 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // grande EXACTA en hipismoAdelantadasCalc.js) — sin redondear antes de
     // repartir entre banqueadores.
     const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
+    const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+    const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     j.banqueadores.forEach(b => {
       const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
-      acumularDevuelto(b.nombre, parte);
+      acumularDevuelto(b.nombre, parte, claveCarrera);
     });
+  });
+
+  // Recién ahora se redondea UNA vez por (carrera, cliente, destino, %) —
+  // ver la nota grande EXACTA de acumularDevuelto más arriba — y ese valor
+  // ya redondeado es el que se suma a la cuenta destino y a
+  // totalDevueltoSemana (nunca al revés).
+  porGrupoCarrera.forEach(({ cuentaNombre, exacto }) => {
+    const devuelto = round2(exacto);
+    if (!devuelto) return;
+    acumular(cuentaNombre, devuelto);
+    totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
   });
 
   const clientes = Array.from(porCliente.values())
