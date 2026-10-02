@@ -339,6 +339,27 @@
   .fila-carrera-hipodromo { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13.5px; font-variant-numeric: tabular-nums; }
   .bloque-hipodromo .subtotal-hipodromo { display: flex; justify-content: space-between; font-weight: 800; font-size: 13.5px; color: var(--accent-grass); padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--card-border); }
 
+  /* "Comisiones Devueltas por Hipódromo" — fila de carrera desplegable
+     (02-10-2026, a pedido del usuario: "colocale pestaña para que si yo
+     despliego la pestaña a cada carrera me diga que codigo y cuanto fue
+     lo que dejaron para que de ese total en la carrera") — mismo patrón
+     de flechita + toggleFilaCarrera(id) que ya usa .fila-cliente-comision
+     más arriba, pero clase PROPIA (no se reusa esa) para no afectar
+     "Comisiones Totales por Hipódromo" (arriba, misma .fila-carrera-
+     hipodromo sin desglose — esa es comisión GANADA del grupo, no tiene
+     "códigos" que desglosar). Al desplegar, debajo aparece cada código
+     (a quién se le acredita ese %) con cuánto aportó — nunca cambia el
+     total de la carrera, solo lo desglosa. */
+  .fila-carrera-hipodromo-dev { border-top: 1px dashed var(--card-border); }
+  .fila-carrera-hipodromo-dev:first-child { border-top: none; }
+  .fila-carrera-hipodromo-dev .cabecera-carrera-hipodromo-dev { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .fila-carrera-hipodromo-dev .cabecera-carrera-hipodromo-dev:hover { background: rgba(15,60,35,0.05); }
+  .fila-carrera-hipodromo-dev .cabecera-carrera-hipodromo-dev .fila-carrera-hipodromo { flex: 1; }
+  .fila-carrera-hipodromo-dev.expandida .flecha-expandir-mini { transform: rotate(90deg); }
+  .detalle-carrera-hipodromo-codigos { display: none; padding: 0 0 6px 18px; }
+  .fila-carrera-hipodromo-dev.expandida .detalle-carrera-hipodromo-codigos { display: block; }
+  .fila-codigo-carrera-hipodromo { display: flex; justify-content: space-between; padding: 2px 0; font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--card-border); }
   th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -11530,6 +11551,33 @@ function copiarComisionesDevueltasTexto() {
 // más arriba), solo que acá el monto es lo DEVUELTO, no lo ganado.
 // ------------------------------------------------------------------
 let COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL = null;
+let idCarreraDevHipSeq = 0; // ids únicos para la flechita de cada carrera (ver filaCarreraDevueltaHipodromoHtml más abajo)
+
+// filaCarreraDevueltaHipodromoHtml (02-10-2026, a pedido del usuario:
+// "colocale pestaña para que si yo despliego la pestaña a cada carrera me
+// diga que codigo y cuanto fue lo que dejaron para que de ese total en la
+// carrera") — cada carrera ahora se puede desplegar (mismo patrón de
+// flechita + toggleFilaCarrera(id) que ya usa .fila-cliente-comision en
+// "Comisión por Carrera de Clientes"/"Totales por Código" más arriba) para
+// ver, código por código (a quién se le acredita ese %, ver `destino` en
+// obtenerComisionesPropias), cuánto aportó cada uno — siempre suma EXACTO
+// el total mostrado arriba de esa carrera (c.devuelto), porque el backend
+// arma c.porCodigo con el mismo c.devuelto, solo desglosado (GET
+// /comisiones-devueltas-por-hipodromo, services/routes/hipismo.js).
+function filaCarreraDevueltaHipodromoHtml(c) {
+  const idCarrera = 'comDevHipCarrera' + (idCarreraDevHipSeq++);
+  const filasCodigos = (c.porCodigo || [])
+    .map(pc => `<div class="fila-codigo-carrera-hipodromo"><span>${formatNombre(pc.codigo)}</span><span>$${formatMontoTabla(pc.monto)}</span></div>`)
+    .join('');
+  return `
+    <div class="fila-carrera-hipodromo-dev" id="${idCarrera}">
+      <div class="cabecera-carrera-hipodromo-dev" onclick="toggleFilaCarrera('${idCarrera}')">
+        <span class="flecha-expandir-mini">▶</span>
+        <div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${formatMontoTabla(c.devuelto)}</span></div>
+      </div>
+      <div class="detalle-carrera-hipodromo-codigos">${filasCodigos}</div>
+    </div>`;
+}
 
 function buscarComisionesDevueltasPorHipodromo() {
   const fecha = document.getElementById('inpFechaComisionesDevueltasHipodromo').value;
@@ -11562,7 +11610,7 @@ async function pintarComisionesDevueltasPorHipodromo(fechaForzada) {
     <div class="bloque-hipodromo">
       <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
       <div class="cabecera-columnas">Carrera | Devuelto</div>
-      ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${formatMontoTabla(c.devuelto)}</span></div>`).join('')}
+      ${hip.carreras.map(filaCarreraDevueltaHipodromoHtml).join('')}
       <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${formatMontoTabla(hip.totalDevuelto)}</span></div>
     </div>
   `).join('');

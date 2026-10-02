@@ -3023,6 +3023,20 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
 
   const porHipodromo = new Map();
   let totalGeneral = 0;
+  // "código" por carrera (02-10-2026, a pedido del usuario: "colocale
+  // pestaña para que si yo despliego la pestaña a cada carrera me diga
+  // que codigo y cuanto fue lo que dejaron para que de ese total en la
+  // carrera") — antes acá se sumaban de una vez las hasta 2 entradas de
+  // obtenerComisionesPropias (% propio + % de aval) por jugada ANTES de
+  // redondear, perdiendo de vista a quién se le acreditaba cada parte.
+  // Ahora cada entrada se redondea y acumula POR SEPARADO, bajo su propio
+  // `info.destino` ("código"), dentro de un Map(carreraNumero ->
+  // {total, porCodigoMap}) — mismo criterio EXACTO de redondeo que ya usa
+  // GET /comisiones-devueltas (round2 por entrada individual, línea
+  // ~2967 más arriba), así que esta ronda de más PRECISO también deja a
+  // esta ruta consistente centavo a centavo con "Comisiones Devueltas por
+  // Cliente" para los mismos datos (antes podía diferir por el redondeo
+  // combinado de 2 entradas antes de sumar).
   detalle.forEach(d => {
     // 26-09-2026, ver la nota grande EXACTA de /comisiones-devueltas
     // arriba: Remate a propósito no genera % devuelto.
@@ -3032,10 +3046,6 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
     if (!d.decidida) return;
     const infos = comisionesPropias[d.cliente];
     if (!infos || !infos.length) return;
-    // Este reporte solo suma TOTALES por hipódromo/carrera (no distingue
-    // destino) — con hasta 2 entradas por cliente (ver la nota grande de
-    // obtenerComisionesPropias), simplemente se suman las 2 acá.
-    let devueltoTotalLinea = 0;
     infos.forEach(info => {
       if (!info || !info.pct) return;
       // "incluir % en sus jugadas" (29-09-2026, revertido el 02-10-2026
@@ -3044,17 +3054,21 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
       // usuario, para que el total de este reporte sea la sumatoria REAL.
       // montoDecidido (02-10-2026) — ver la nota grande EXACTA de
       // /comisiones-devueltas arriba: NUNCA d.monto.
-      devueltoTotalLinea = round2(devueltoTotalLinea + (Number(d.montoDecidido) || 0) * (info.pct / 100));
+      const devuelto = round2((Number(d.montoDecidido) || 0) * (info.pct / 100));
+      if (!devuelto) return;
+      if (!porHipodromo.has(d.hipodromoNombre)) {
+        porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, totalDevuelto: 0, carrerasMap: new Map() });
+      }
+      const hip = porHipodromo.get(d.hipodromoNombre);
+      hip.totalDevuelto = round2(hip.totalDevuelto + devuelto);
+      totalGeneral = round2(totalGeneral + devuelto);
+      if (!hip.carrerasMap.has(d.carreraNumero)) {
+        hip.carrerasMap.set(d.carreraNumero, { total: 0, porCodigoMap: new Map() });
+      }
+      const carrera = hip.carrerasMap.get(d.carreraNumero);
+      carrera.total = round2(carrera.total + devuelto);
+      carrera.porCodigoMap.set(info.destino, round2((carrera.porCodigoMap.get(info.destino) || 0) + devuelto));
     });
-    if (!devueltoTotalLinea) return;
-    const devuelto = devueltoTotalLinea;
-    if (!porHipodromo.has(d.hipodromoNombre)) {
-      porHipodromo.set(d.hipodromoNombre, { nombre: d.hipodromoNombre, totalDevuelto: 0, carrerasMap: new Map() });
-    }
-    const hip = porHipodromo.get(d.hipodromoNombre);
-    hip.totalDevuelto = round2(hip.totalDevuelto + devuelto);
-    totalGeneral = round2(totalGeneral + devuelto);
-    hip.carrerasMap.set(d.carreraNumero, round2((hip.carrerasMap.get(d.carreraNumero) || 0) + devuelto));
   });
 
   const hipodromos = Array.from(porHipodromo.values())
@@ -3062,7 +3076,13 @@ router.get('/comisiones-devueltas-por-hipodromo', asyncHandler(async (req, res) 
       nombre: h.nombre,
       totalDevuelto: h.totalDevuelto,
       carreras: Array.from(h.carrerasMap.entries())
-        .map(([carreraNumero, devuelto]) => ({ carreraNumero, devuelto }))
+        .map(([carreraNumero, c]) => ({
+          carreraNumero,
+          devuelto: c.total,
+          porCodigo: Array.from(c.porCodigoMap.entries())
+            .map(([codigo, monto]) => ({ codigo, monto }))
+            .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es'))
+        }))
         .sort((a, b) => a.carreraNumero - b.carreraNumero)
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));

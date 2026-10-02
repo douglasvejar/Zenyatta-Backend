@@ -270,6 +270,32 @@ function check(cond, msg) {
   check(rinconada.carreras[0].devuelto === 15, 'La carrera 1 suma los 5 % (propios + de avales, de los 3 clientes) = 15,00');
   check(resHip._json.totalGeneral === 15, 'Total general del día: 15,00 — MARIA (sin % configurado) no aporta nada');
 
+  // 02-10-2026, a pedido del usuario ("colocale pestaña para que si yo
+  // despliego la pestaña a cada carrera me diga que codigo y cuanto fue
+  // lo que dejaron para que de ese total en la carrera"): cada carrera
+  // ahora trae también `porCodigo`, el desglose de ESE total por destino
+  // — con 6 entradas distintas de obtenerComisionesPropias en la MISMA
+  // carrera (PEDRO, JUAN, ANA->CARLOS, LUIS, ROSA, SOFIA), deben salir 6
+  // códigos separados (nunca mezclados, ni siquiera cuando 2 entradas del
+  // MISMO ticket -- PEDRO propio y PEDRO->JUAN -- caen en la misma
+  // carrera) y sumar EXACTO el mismo total de la carrera (15,00).
+  const porCodigo = rinconada.carreras[0].porCodigo;
+  check(Array.isArray(porCodigo) && porCodigo.length === 6, 'La carrera 1 desglosa en 6 códigos separados: PEDRO, JUAN, CARLOS, LUIS, ROSA, SOFIA');
+  const sumaPorCodigo = porCodigo.reduce((s, pc) => s + pc.monto, 0);
+  check(Math.abs(sumaPorCodigo - 15) < 1e-9, 'La suma de porCodigo da EXACTO el mismo total de la carrera (15,00) — nunca duplica ni pierde nada');
+  const codigoPedro = porCodigo.find(pc => pc.codigo === 'PEDRO');
+  const codigoJuan = porCodigo.find(pc => pc.codigo === 'JUAN');
+  const codigoCarlos = porCodigo.find(pc => pc.codigo === 'CARLOS');
+  const codigoLuis = porCodigo.find(pc => pc.codigo === 'LUIS');
+  const codigoRosa = porCodigo.find(pc => pc.codigo === 'ROSA');
+  const codigoSofia = porCodigo.find(pc => pc.codigo === 'SOFIA');
+  check(!!codigoPedro && codigoPedro.monto === 1, 'Código PEDRO: 1,00 (su % propio)');
+  check(!!codigoJuan && codigoJuan.monto === 2, 'Código JUAN: 2,00 (el % adicional que le genera PEDRO como avalador)');
+  check(!!codigoCarlos && codigoCarlos.monto === 3, 'Código CARLOS: 3,00 (lo que le genera ANA como avalador)');
+  check(!!codigoLuis && codigoLuis.monto === 2, 'Código LUIS: 2,00 (su % propio)');
+  check(!!codigoRosa && codigoRosa.monto === 3, 'Código ROSA: 3,00 (avaladora de LUIS)');
+  check(!!codigoSofia && codigoSofia.monto === 4, 'Código SOFIA: 4,00 (avaladora de LUIS)');
+
   // --- 2) /comisiones-devueltas: cada cliente aparece como 1, 2 o 3
   // renglones según cuántos avaladores tenga configurados. ---
   const resDev = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
