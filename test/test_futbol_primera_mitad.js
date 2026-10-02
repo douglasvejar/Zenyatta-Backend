@@ -169,6 +169,8 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
   const resD = await obtenerResultadosSoccer('2026-08-31');
   check(resD['barcelona'] && resD['barcelona'].motivoSinPrimeraMitad === 'sin-clave',
     'Caso real (La Liga, sin FOOTBALL_DATA_API_KEY en el servidor): se marca "sin-clave", no el genérico de "liga no cubierta" — La Liga SÍ está en la lista');
+  check(resD['barcelona'].fuentePrimeraMitad === 'football-data.org' && resD['barcelona'].variableEntornoPrimeraMitad === 'FOOTBALL_DATA_API_KEY',
+    '02-10-2026: el juego queda marcado con la fuente real (football-data.org/FOOTBALL_DATA_API_KEY) para que evaluador.js arme el mensaje correcto, en vez de uno fijo');
 
   // Caso E: liga SÍ cubierta (Serie A), clave configurada, pero
   // football-data.org devuelve un error (401/429/etc.) en el pedido a
@@ -193,6 +195,8 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
   const resE = await obtenerResultadosSoccer('2026-08-31');
   check(resE['roma'] && resE['roma'].motivoSinPrimeraMitad === 'error-api',
     'Caso real (Serie A, football-data.org responde 429 en /v4/matches): se marca "error-api", no "liga no cubierta" — Serie A SÍ está en la lista y la clave SÍ está puesta');
+  check(resE['roma'].fuentePrimeraMitad === 'football-data.org' && resE['roma'].variableEntornoPrimeraMitad === 'FOOTBALL_DATA_API_KEY',
+    '02-10-2026: también en "error-api" queda marcada la fuente real (football-data.org/FOOTBALL_DATA_API_KEY)');
 
   // Caso F: liga SÍ cubierta, clave OK, la consulta responde 200, pero
   // este partido puntual no aparece ese día (o no cruzó por nombre) —
@@ -211,6 +215,8 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
   const resF = await obtenerResultadosSoccer('2026-08-31');
   check(resF['chelsea'] && resF['chelsea'].motivoSinPrimeraMitad === 'sin-cruce',
     'Liga cubierta + clave OK + respuesta 200 pero sin este partido puntual: se marca "sin-cruce" (el caso más específico, para revisar el club puntual)');
+  check(resF['chelsea'].fuentePrimeraMitad === 'football-data.org' && resF['chelsea'].variableEntornoPrimeraMitad === 'FOOTBALL_DATA_API_KEY',
+    '02-10-2026: también en "sin-cruce" queda marcada la fuente real (football-data.org/FOOTBALL_DATA_API_KEY)');
 
   // Caso G: liga que GENUINAMENTE no está cubierta (Europa League) —
   // sigue siendo 'liga-no-cubierta', el único caso donde el mensaje

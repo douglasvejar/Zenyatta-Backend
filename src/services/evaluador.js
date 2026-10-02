@@ -462,14 +462,30 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
       // fútbol, ahora se usa `juego.motivoSinPrimeraMitad` (armado en
       // soccerApi.js/agregarPrimeraMitad) para decir la causa real en vez
       // de un mensaje único que sirve para cualquier motivo.
+      //
+      // CORREGIDO DE NUEVO (02-10-2026, caso real: tickets de "Alemania"/
+      // "Noruega" — selecciones, cubiertas por api-football.com desde el
+      // 25-09-2026 — seguían mostrando "football-data.org
+      // (FOOTBALL_DATA_API_KEY)" a pesar de que la fuente real para
+      // selecciones es OTRA. Este mensaje se escribió cuando football-
+      // data.org era la ÚNICA fuente y nunca se actualizó al agregar la
+      // segunda — el usuario llegó a confirmar que la clave de
+      // football-data.org SÍ estaba bien puesta en Railway, así que el
+      // mensaje le estaba mintiendo sobre cuál variable revisar. Ahora usa
+      // `juego.fuentePrimeraMitad`/`juego.variableEntornoPrimeraMitad`
+      // (armados en soccerApi.js/agregarPrimeraMitad, a partir de la
+      // fuente que de verdad corresponda a la liga del partido) en vez de
+      // un nombre/variable fijos.
       const segmento = esSegundaMitad ? 'la segunda mitad' : 'la primera mitad';
+      const fuente1H = juego.fuentePrimeraMitad || 'football-data.org';
+      const variable1H = juego.variableEntornoPrimeraMitad || 'FOOTBALL_DATA_API_KEY';
       let razon;
       if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'sin-clave') {
-        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta, pero el servidor no tiene configurada la clave de football-data.org (FOOTBALL_DATA_API_KEY). Esto es un problema de configuración, no de la liga: revisar esa variable de entorno en Railway.';
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta, pero el servidor no tiene configurada la clave de ' + fuente1H + ' (' + variable1H + '). Esto es un problema de configuración, no de la liga: revisar esa variable de entorno en Railway.';
       } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'error-api') {
-        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta y la clave está puesta, pero football-data.org devolvió un error al pedir esta competencia (clave inválida o límite de pedidos superado). Revisar el log del servidor; si sigue así, resolver a mano.';
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta y la clave está puesta, pero ' + fuente1H + ' devolvió un error al pedir esta competencia (clave inválida o límite de pedidos superado). Revisar el log del servidor; si sigue así, resolver a mano.';
       } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'sin-cruce') {
-        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para este partido puntual — la liga SÍ está cubierta y la clave funciona, pero football-data.org no tiene (o no se pudo cruzar por nombre de equipo) este partido en particular. Revisar este caso puntual; si sigue así, resolver a mano.';
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para este partido puntual — la liga SÍ está cubierta y la clave funciona, pero ' + fuente1H + ' no tiene (o no se pudo cruzar por nombre de equipo) este partido en particular. Revisar este caso puntual; si sigue así, resolver a mano.';
       } else {
         // Deporte sin fuente de 1h/2h separada (ej. NBA, donde el dato sale
         // de la MISMA API que el marcador final), o fútbol de una liga

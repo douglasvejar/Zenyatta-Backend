@@ -125,6 +125,8 @@ function limpiarClaves() {
   check(!sePidioApiFootball, 'Sin API_FOOTBALL_KEY configurada, NUNCA se le pega a api-football.com');
   check(resB['argentina'] && resB['argentina'].final1H === undefined && resB['argentina'].motivoSinPrimeraMitad === 'sin-clave',
     'Copa América (cubierta por api-football.com) sin la clave puesta: se marca "sin-clave" y el juego sigue resolviéndose normal, solo sin "1h"');
+  check(resB['argentina'].fuentePrimeraMitad === 'api-football.com' && resB['argentina'].variableEntornoPrimeraMitad === 'API_FOOTBALL_KEY',
+    '02-10-2026 (caso real: "Alemania"/"Noruega" — evaluador.js decía SIEMPRE "football-data.org" aunque la fuente real fuera esta): el juego queda marcado con la fuente real (api-football.com/API_FOOTBALL_KEY)');
 
   // -----------------------------------------------------------------
   // Caso C: liga cubierta (Eliminatorias Conmebol), clave puesta, pero
@@ -150,6 +152,8 @@ function limpiarClaves() {
   const resC = await obtenerResultadosSoccer('2026-09-25');
   check(resC['venezuela'] && resC['venezuela'].motivoSinPrimeraMitad === 'error-api',
     'api-football.com responde 200 con un error DENTRO del cuerpo (plan restringido): se marca "error-api", no "sin-cruce" — el error se detecta aunque el HTTP status sea 200');
+  check(resC['venezuela'].fuentePrimeraMitad === 'api-football.com' && resC['venezuela'].variableEntornoPrimeraMitad === 'API_FOOTBALL_KEY',
+    '02-10-2026: también en "error-api" queda marcada la fuente real (api-football.com/API_FOOTBALL_KEY)');
 
   // -----------------------------------------------------------------
   // Caso D: liga cubierta, clave OK, respuesta 200 limpia, pero ESTE
@@ -171,6 +175,8 @@ function limpiarClaves() {
   const resD = await obtenerResultadosSoccer('2026-09-25');
   check(resD['spain'] && resD['spain'].motivoSinPrimeraMitad === 'sin-cruce',
     'Amistoso Internacional cubierto + clave OK + respuesta limpia pero sin este partido puntual: se marca "sin-cruce"');
+  check(resD['spain'].fuentePrimeraMitad === 'api-football.com' && resD['spain'].variableEntornoPrimeraMitad === 'API_FOOTBALL_KEY',
+    '02-10-2026: también en "sin-cruce" queda marcada la fuente real (api-football.com/API_FOOTBALL_KEY)');
 
   // -----------------------------------------------------------------
   // Caso E: regresión — una liga que NINGUNA de las 2 fuentes cubre
@@ -302,6 +308,38 @@ function limpiarClaves() {
     'Caso J — "North Macedonia" (ESPN) cruza bien contra "Macedonia" (api-football.com) gracias al alias de selecciones, en vez de quedar en "sin-cruce"');
   check(resJ['switzerland'] && resJ['switzerland'].motivoSinPrimeraMitad === undefined,
     'Caso J — del lado de Switzerland tampoco queda ningún motivoSinPrimeraMitad (el cruce se completó del todo)');
+
+  // -----------------------------------------------------------------
+  // Caso K (02-10-2026, caso real reportado por el usuario: tickets de
+  // "Alemania alta 1h 1.5" y "Noruega 1h" quedaron PENDIENTE con el
+  // mensaje "...no tiene configurada la clave de football-data.org
+  // (FOOTBALL_DATA_API_KEY)...", a pesar de que el usuario confirmó con
+  // capturas de Railway que ESA clave SÍ estaba bien puesta — porque
+  // Alemania/Noruega es un partido de UEFA Nations League (selecciones),
+  // cuya fuente real es api-football.com/API_FOOTBALL_KEY, no
+  // football-data.org. De punta a punta (igual que test_selecciones_
+  // soccer.js, pero hasta evaluarJugada()): sin API_FOOTBALL_KEY
+  // configurada, el mensaje de PENDIENTE debe mencionar la fuente/
+  // variable REALES, nunca las de football-data.org.
+  // -----------------------------------------------------------------
+  const { evaluarJugada } = require('../src/services/evaluador');
+  const { DICCIONARIO_EQUIPOS_BASE } = require('../src/services/diccionarioEquipos');
+  resetFootballData(); resetApiFootball(); limpiarClaves();
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/uefa.nations/')) {
+      return { ok: true, json: async () => fixtureESPN('Germany', 'Norway', 2, 0) };
+    }
+    if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+    return { ok: true, json: async () => ({ errors: [], response: [] }) };
+  };
+  const datosSoccerK = await obtenerResultadosSoccer('2026-10-01');
+  const rAlemania = evaluarJugada('Alemania alta 1.5 1h -122', { soccer: datosSoccerK }, DICCIONARIO_EQUIPOS_BASE, {});
+  check(rAlemania.estado === 'PENDIENTE', 'Caso K — "Alemania alta 1.5 1h" (Nations League, sin API_FOOTBALL_KEY) queda PENDIENTE');
+  check(rAlemania.razon.includes('api-football.com') && rAlemania.razon.includes('API_FOOTBALL_KEY'),
+    'Caso K — el mensaje de PENDIENTE menciona la fuente/variable REALES (api-football.com/API_FOOTBALL_KEY)');
+  check(!rAlemania.razon.includes('football-data.org') && !rAlemania.razon.includes('FOOTBALL_DATA_API_KEY'),
+    'Caso K — regresión del bug real: el mensaje YA NO menciona football-data.org/FOOTBALL_DATA_API_KEY para un partido de selecciones');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

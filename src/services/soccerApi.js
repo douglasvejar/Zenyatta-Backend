@@ -327,6 +327,21 @@ function nombresDeEquipoCoinciden(nombreA, nombreB) {
 //     revisar el club/selección puntual en vez de la configuración del
 //     servidor.
 // Un juego que SÍ cruzó bien no lleva este campo (queda `undefined`).
+//
+// CORREGIDO (02-10-2026, caso real: tickets de "Alemania"/"Noruega" —
+// selecciones, cubiertas por api-football.com — mostraban "sin-clave"
+// pero el mensaje de evaluador.js decía SIEMPRE "football-data.org
+// (FOOTBALL_DATA_API_KEY)", sin importar cuál de las 2 fuentes era la
+// responsable de verdad: el mensaje quedó escrito el 20-09-2026, ANTES
+// de que existiera una segunda fuente (api-football.com se agregó el
+// 25-09-2026), y nunca se actualizó para el caso de selecciones. Ahora
+// cada `fuente` trae también su propio `nombreFuente` ('football-data.org'
+// / 'api-football.com') y `variableEntorno` ('FOOTBALL_DATA_API_KEY' /
+// 'API_FOOTBALL_KEY') — ver obtenerResultadosSoccer más abajo — y, cada
+// vez que se marca 'sin-clave'/'error-api'/'sin-cruce', se guardan como
+// `juego.fuentePrimeraMitad`/`juego.variableEntornoPrimeraMitad` para que
+// evaluador.js arme el mensaje con el nombre/variable REAL en vez de uno
+// fijo.
 function agregarPrimeraMitad(mapaCombinado, fuentes) {
   const listaFuentes = fuentes || [];
 
@@ -339,6 +354,8 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
     }
     if (!fuente.claveConfigurada) {
       juego.motivoSinPrimeraMitad = 'sin-clave';
+      juego.fuentePrimeraMitad = fuente.nombreFuente;
+      juego.variableEntornoPrimeraMitad = fuente.variableEntorno;
       return;
     }
     const primeraMitadPorPartido = fuente.partidos || [];
@@ -350,10 +367,16 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
       juego.homeScore1H = match.homeScore1H;
       juego.awayScore1H = match.awayScore1H;
       juego.final1H = match.final1H;
-      if (!match.final1H) juego.motivoSinPrimeraMitad = 'sin-cruce'; // el partido cruzó, pero la fuente todavía no tiene el dato del entretiempo — no es lo mismo que no haber cruzado nunca
+      if (!match.final1H) {
+        juego.motivoSinPrimeraMitad = 'sin-cruce'; // el partido cruzó, pero la fuente todavía no tiene el dato del entretiempo — no es lo mismo que no haber cruzado nunca
+        juego.fuentePrimeraMitad = fuente.nombreFuente;
+        juego.variableEntornoPrimeraMitad = fuente.variableEntorno;
+      }
       return;
     }
     juego.motivoSinPrimeraMitad = fuente.huboError ? 'error-api' : 'sin-cruce';
+    juego.fuentePrimeraMitad = fuente.nombreFuente;
+    juego.variableEntornoPrimeraMitad = fuente.variableEntorno;
   });
 }
 
@@ -375,9 +398,13 @@ async function obtenerResultadosSoccer(fechaISO) {
     obtenerPrimeraMitadApiFootball(fechaISO).catch(() => ({ partidos: [], claveConfigurada: false, huboError: true }))
   ]);
   const mapaCombinado = Object.assign({}, ...mapasPorLiga);
+  // nombreFuente/variableEntorno (02-10-2026): identifican a CADA fuente
+  // para que agregarPrimeraMitad() pueda guardar cuál de las 2 es la
+  // responsable real cuando falta el dato de "1h" — ver el comentario
+  // grande sobre agregarPrimeraMitad más arriba.
   agregarPrimeraMitad(mapaCombinado, [
-    { nombresLigas: LIGAS_CON_PRIMERA_MITAD.map(l => l.nombre), ...primeraMitadFootballData },
-    { nombresLigas: COMPETENCIAS_API_FOOTBALL.map(c => c.nombre), ...primeraMitadApiFootball }
+    { nombresLigas: LIGAS_CON_PRIMERA_MITAD.map(l => l.nombre), nombreFuente: 'football-data.org', variableEntorno: 'FOOTBALL_DATA_API_KEY', ...primeraMitadFootballData },
+    { nombresLigas: COMPETENCIAS_API_FOOTBALL.map(c => c.nombre), nombreFuente: 'api-football.com', variableEntorno: 'API_FOOTBALL_KEY', ...primeraMitadApiFootball }
   ]);
   return mapaCombinado;
 }
