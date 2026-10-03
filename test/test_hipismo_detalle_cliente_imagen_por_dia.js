@@ -32,9 +32,9 @@ function check(cond, msg) {
 const html = fs.readFileSync(path.join(__dirname, '../public/hipismo-mockup.html'), 'utf8');
 
 function extraerFuncion(nombre) {
-  const regexAsync = new RegExp(`async function ${nombre}\\([^)]*\\) \\{`);
+  const regexAsync = new RegExp(`(?:async )?function ${nombre}\\([^)]*\\) \\{`);
   const m = regexAsync.exec(html);
-  if (!m) throw new Error(`No se encontró "async function ${nombre}" en hipismo-mockup.html`);
+  if (!m) throw new Error(`No se encontró "function ${nombre}" en hipismo-mockup.html`);
   const inicio = m.index;
   // Recorta por conteo de llaves hasta cerrar la función (mismo truco
   // simple que alcanza para código bien formado sin llaves dentro de
@@ -53,8 +53,17 @@ function extraerFuncion(nombre) {
 
 const srcGenerar = extraerFuncion('generarYEntregarUnaImagenDetalle');
 const srcCopiar = extraerFuncion('copiarDetalleClienteImagen');
+// Carpeta "Semana NOMBRE (del día al día, semana X del año)" (03-10-2026,
+// a pedido del usuario: "cuando se le de click en copiar imagen y sea mas
+// de 1 imagen, descargalo en una carpeta llamada..." -- ver
+// construirNombreCarpetaDetalleCliente en public/hipismo-mockup.html).
+const srcLimpiar = extraerFuncion('limpiarParaNombreArchivo');
+const srcFechaCarpeta = extraerFuncion('formatFechaCortaParaCarpeta');
+const srcCarpeta = extraerFuncion('construirNombreCarpetaDetalleCliente');
+const srcFormatNombre = extraerFuncion('formatNombre');
 check(srcGenerar.includes('generarYEntregarUnaImagenDetalle'), 'Se pudo extraer generarYEntregarUnaImagenDetalle() tal cual del archivo real');
 check(srcCopiar.includes('copiarDetalleClienteImagen'), 'Se pudo extraer copiarDetalleClienteImagen() tal cual del archivo real');
+check(srcCarpeta.includes('construirNombreCarpetaDetalleCliente'), 'Se pudo extraer construirNombreCarpetaDetalleCliente() tal cual del archivo real');
 
 // ---- DOM falso mínimo ----
 function crearElemento(tag) {
@@ -89,7 +98,7 @@ function crearDiaFalso(claseExtra) {
   return el;
 }
 
-function armarEntorno(cantidadDias) {
+function armarEntorno(cantidadDias, dataActual) {
   const contenido = crearElemento('div'); // #detalleClienteCaptura
   const contenedorDias = crearElemento('div'); // #detalleClienteDias
   const dias = [];
@@ -142,6 +151,8 @@ function armarEntorno(cantidadDias) {
     console,
     Promise,
     setTimeout,
+    String,
+    DETALLE_CLIENTE_DATA_ACTUAL: dataActual || null,
     mostrarToastDetalleCliente: (msg) => { toastEl.textContent = msg; }
   };
   // Parchar createElement('a') para registrar las "descargas" (el click
@@ -156,7 +167,7 @@ function armarEntorno(cantidadDias) {
   };
 
   vm.createContext(sandbox);
-  vm.runInContext(srcGenerar + '\n' + srcCopiar, sandbox);
+  vm.runInContext(srcFormatNombre + '\n' + srcLimpiar + '\n' + srcFechaCarpeta + '\n' + srcCarpeta + '\n' + srcGenerar + '\n' + srcCopiar, sandbox);
 
   return { sandbox, contenido, contenedorDias, dias, descargas, getCopias: () => copiasPortapapeles, getLlamadas: () => llamadasHtml2canvas };
 }
@@ -172,16 +183,34 @@ function armarEntorno(cantidadDias) {
     check(env.dias[0].style.display === '', 'Con 1 solo día: el único bloque de día queda visible (nunca se tocó su display)');
   }
 
-  // --- Caso 2: VARIOS días (caso Sammy: 4 días) -> 1 imagen por día, todas descargadas ---
+  // --- Caso 2: VARIOS días (caso Sammy: 4 días) -> 1 imagen por día, todas
+  //     descargadas DENTRO de la carpeta "Semana NOMBRE (...)" ---
   {
-    const env = armarEntorno(4);
+    const dataSammy = {
+      jugador: { nombre: 'SAMMY' },
+      rango: { desde: '2026-10-01', hasta: '2026-10-03' },
+      numeroSemana: { semana: 40, anio: 2026 }
+    };
+    const env = armarEntorno(4, dataSammy);
     await env.sandbox.copiarDetalleClienteImagen();
     check(env.getLlamadas().length === 4, 'Con 4 días: html2canvas se llama 4 veces (1 imagen por día, en vez de 1 imagen gigante con los 4 juntos)');
     check(env.getCopias() === 0, 'Con varios días: NUNCA se usa el portapapeles (no tiene sentido pisarlo 4 veces seguidas en el mismo click)');
     check(env.descargas.length === 4, 'Con 4 días: se disparan 4 descargas, una por cada imagen');
-    check(env.descargas.every((nombre, i) => nombre === `detalle_cliente_${i + 1}de4.png`),
-      `Cada descarga lleva un nombre que identifica su día dentro de la tanda (1de4..4de4): obtenido ${JSON.stringify(env.descargas)}`);
+    const carpetaEsperada = 'Semana Sammy (01-10-2026 al 03-10-2026, semana 40 del 2026)';
+    check(env.descargas.every((nombre, i) => nombre === `${carpetaEsperada}/detalle_cliente_${i + 1}de4.png`),
+      `Cada descarga cae DENTRO de la carpeta "${carpetaEsperada}" (el "/" en el nombre hace que Chrome/Edge creen esa subcarpeta en Descargas), con un nombre que identifica su día dentro de la tanda (1de4..4de4): obtenido ${JSON.stringify(env.descargas)}`);
     check(env.dias.every(d => d.style.display === ''), 'Al terminar, TODOS los días vuelven a quedar visibles (se restauró el display original de cada uno)');
+  }
+
+  // --- Caso 2b: varios días pero SIN datos para armar la carpeta (no
+  //     debería pasar nunca en la app real, el botón espera a que cargue)
+  //     -> cae de vuelta a descargar suelto, sin reventar. ---
+  {
+    const env = armarEntorno(2, null);
+    await env.sandbox.copiarDetalleClienteImagen();
+    check(env.descargas.length === 2, 'Sin datos de cliente/rango: igual se descargan las 2 imágenes (no revienta)');
+    check(env.descargas.every((nombre, i) => nombre === `detalle_cliente_${i + 1}de2.png`),
+      `Sin datos para armar la carpeta, el nombre de archivo queda suelto (sin "/"), igual que antes de este cambio: obtenido ${JSON.stringify(env.descargas)}`);
   }
 
   // --- Caso 3: durante la tanda, en cada captura solo 1 día está visible a la vez ---

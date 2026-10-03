@@ -41,6 +41,15 @@ const { obtenerComisionesPropias, obtenerAjustesComision } = require('./hipismoC
 // neteados, justo la inconsistencia que el usuario pidió corregir en TODOS
 // los reportes que tocan % devuelto.
 const { calcularAjustesCruce, netearJugadorBanqueroTercios } = require('./hipismoCalc');
+// numeroSemanaISO (03-10-2026, a pedido del usuario: nombrar la carpeta
+// de "Copiar Imagen HD" como "Semana (cliente), (del día al día, semana
+// X del año)" -- mismo cálculo EXACTO que ya usan Cierre Final/Balance
+// General/Semana por Días para mostrar "Semana X de YYYY" en pantalla
+// (ver routes/hipismo.js), ahora expuesto también acá para que el link
+// propio del cliente (y el Detallado por Cliente del Administrador, que
+// reusa esta misma función) lo tenga disponible sin tener que
+// recalcularlo en el frontend.
+const { numeroSemanaISO } = require('./fechaSemana');
 
 // "⚽ Deportes" se guarda como un hipódromo más dentro de "dias[].hipodromos"
 // (mismo shape que un hipódromo real), pero con tipo:'deportes' — ver la
@@ -456,6 +465,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
+    numeroSemana: numeroSemanaISO(desde),
     rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
     esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
@@ -509,30 +519,55 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   const pctPropioIncluido = jugador.incluir_porcentaje_en_jugadas ? (Number(jugador.comision_propia) || 0) : 0;
   let comisionPropiaIncluidaSemana = 0;
 
-  // NETEO EN CARRERA DUAL CON EL TOGGLE ON (03-10-2026, caso real
-  // "Legolas": Balance General y su propio link nunca cuadraban, aun
-  // después del arreglo de Traspasos -- la causa real era otra: cuando
-  // este cliente juega Y banquea en la MISMA carrera (ej. Keeneland 1ra,
-  // "Jugó 2/2 del 1" + "Dio 2p del 1"), el bloque de abajo ANTES le
-  // sumaba su % sobre CADA lado por separado (como confirmó el caso
-  // PEDRO el 29-09-2026), mientras que Cierre Final -- que SÍ aplica
-  // netearJugadorBanqueroTercios -- cobraba sobre el NETO de esa carrera
-  // (más chico cuando un lado ganó y el otro perdió). 2 reglas ya
-  // confirmadas por separado que nadie había cruzado, y que nunca iban a
-  // cuadrar entre sí para un cliente con las 2 cosas a la vez. El usuario
-  // confirmó: acá también se netea iguel que Balance General -- una SOLA
-  // comisión por carrera dual, asignada a la PRIMERA línea de esa carrera
-  // (en el mismo orden en que ya vienen: fecha DESC, creado_en ASC), con
-  // $0 adicional en las demás líneas de esa misma carrera para este
-  // cliente, en vez de la suma de las 2 por separado. Para el resto de
-  // los clientes (un solo rol por carrera, la gran mayoría) esto no
-  // cambia nada -- idéntico a como funcionaba antes.
+  // COMISIÓN EXACTA POR CARRERA, REDONDEADA 1 SOLA VEZ (03-10-2026, casos
+  // reales "Legolas" Y "Sammy": Balance General y el propio link nunca
+  // cuadraban, aun después del arreglo de Traspasos). 2 causas DISTINTAS
+  // que terminan necesitando la MISMA solución:
+  //
+  // 1) "Legolas" (carrera dual): cuando el cliente juega Y banquea en la
+  //    MISMA carrera (ej. Keeneland 1ra, "Jugó 2/2 del 1" + "Dio 2p del
+  //    1"), el bloque de abajo ANTES le sumaba su % sobre CADA lado por
+  //    separado (como confirmó el caso PEDRO el 29-09-2026), mientras que
+  //    Cierre Final -- que SÍ aplica netearJugadorBanqueroTercios --
+  //    cobraba sobre el NETO de esa carrera (más chico cuando un lado
+  //    ganó y el otro perdió).
+  // 2) "Sammy" (sin ninguna carrera dual, solo $0,60 de diferencia): un
+  //    cliente con MUCHAS jugadas en la MISMA carrera (ej. Keeneland 5ta,
+  //    4 líneas "Jugó" seguidas) -- Cierre Final (acumularDevuelto en
+  //    construirCierreFinalHipismo más abajo en este archivo) agrupa TODA
+  //    la plata de una misma carrera (mismo cliente, mismo destino, mismo
+  //    %) en un solo acumulador EXACTO y redondea 1 SOLA VEZ al final
+  //    (mismo patrón ya confirmado para el caso CODINO), pero el bloque
+  //    de abajo ANTES redondeaba el % de CADA línea por separado y después
+  //    sumaba esos redondeos -- con una sola jugada por carrera da
+  //    exactamente lo mismo, pero con varias jugadas en la misma carrera
+  //    (lo más común con un cliente activo) el redondeo de céntimos se
+  //    va acumulando línea por línea hasta notarse (los $0,60 de Sammy en
+  //    una semana con decenas de líneas).
+  //
+  // La solución para las 2 es la MISMA: en vez de redondear el % de cada
+  // línea por separado, se suma el monto EXACTO (sin redondear) de TODAS
+  // las líneas propias de una misma carrera -- neteando jugador vs.
+  // banquero con la regla EXACTA de netearJugadorBanqueroTercios cuando
+  // de verdad hay un lado de cada uno (caso Loba: resta si un lado ganó y
+  // el otro perdió, suma completo si ganó en los 2 lados), o sumando sin
+  // más cuando -como el 99% de los casos- solo hay un rol por carrera
+  // (decididoBanquero o decididoJugador en 0, la resta/suma da lo mismo
+  // que sumar todas las líneas de ese único lado) -- y se redondea UNA
+  // SOLA VEZ el resultado de esa carrera, asignado a la PRIMERA línea de
+  // esa carrera (en el mismo orden en que ya vienen: fecha DESC, creado_en
+  // ASC), con $0 adicional en las demás líneas de esa misma carrera para
+  // este cliente. Con una sola jugada por carrera (la gran mayoría de los
+  // clientes, la mayoría de las carreras) este cálculo da EXACTAMENTE el
+  // mismo número de siempre (redondear 1 línea sola no cambia nada) --
+  // nada de esto se nota salvo cuando hay 2+ líneas propias en la misma
+  // carrera.
   //
   // SOLO Tercios puro (líneas sin `.tipo`, ver obtenerLineasHipismoCliente
   // en services/hipismoLineasCliente.js) -- Marcas/Tablas Fijas de
   // Jugadas Adelantadas se quedan exactamente como están, mismo alcance
   // EXACTO que netearJugadorBanqueroTercios en todo el resto del código.
-  const netoIncluidoPorCarrera = new Map();
+  const comisionPorCarreraPropia = new Map();
   if (pctPropioIncluido) {
     const porCarreraPropia = new Map();
     lineasHipismo.forEach(linea => {
@@ -547,17 +582,18 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // Misma regla EXACTA que netearJugadorBanqueroTercios en hipismoCalc.js
     // (ver la nota grande "Neteo real" ahí, caso Loba 03-10-2026): resta
     // cuando un lado ganó y el otro perdió, suma completo cuando ganó en
-    // los 2 lados a la vez.
+    // los 2 lados a la vez. Sin carrera dual (el caso normal) un lado
+    // queda en 0 y esto se reduce a sumar todas las líneas de ese único
+    // lado -- ver la nota grande de arriba, caso "Sammy".
     porCarreraPropia.forEach((acc, clave) => {
-      if (!(acc.decididoJugador > 0 && acc.decididoBanquero > 0)) return; // no es dual para este cliente
       const ganoLosDosLados = acc.sumaJugador > 0 && acc.sumaBanquero > 0;
       const netoExacto = ganoLosDosLados
         ? (acc.decididoJugador + acc.decididoBanquero)
         : Math.abs(acc.decididoJugador - acc.decididoBanquero);
-      netoIncluidoPorCarrera.set(clave, round2(Math.abs(netoExacto) * pctPropioIncluido / 100));
+      comisionPorCarreraPropia.set(clave, round2(Math.abs(netoExacto) * pctPropioIncluido / 100));
     });
   }
-  const carrerasDualesPropias = new Set(netoIncluidoPorCarrera.keys());
+  const carrerasConComisionPropia = new Set(comisionPorCarreraPropia.keys());
 
   lineasHipismo.forEach(linea => {
     const fechaIso = linea.fecha;
@@ -589,33 +625,30 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // ni comisión") — mismo chequeo que construirResumenCuentaComisionHipismo
     // más arriba, ver esa nota grande para el detalle de qué casos caen
     // acá (linea.resultado en 0).
-    // NETEO jugador/banquero (02-10-2026, Task #43 del barrido de
-    // netearJugadorBanqueroTercios — ver la nota grande EXACTA de esa
-    // función en services/hipismoCalc.js, caso GG) — ACTUALIZADO 03-10-2026
-    // (caso Legolas, ver la nota grande arriba de esta función con el
-    // detalle completo). Antes esta función NUNCA neteaba acá a propósito
-    // ("cada línea se gana su % sobre SU PROPIO monto por separado", caso
-    // PEDRO del 29-09-2026) porque esto es la FICHA PERSONAL del cliente,
-    // línea por línea, no un ítem agregado — pero eso hacía que un cliente
-    // con carrera dual (juega Y banquea en la misma carrera) Y el toggle ON
-    // viera en su propio link/ficha un % mayor al que realmente se le
-    // cobra/acredita en Cierre Final (que SÍ aplica
-    // netearJugadorBanqueroTercios), dejando su Balance General y su link
-    // SIN cuadrar nunca. El usuario confirmó: acá también se netea igual
-    // que Balance General para una carrera dual — una SOLA comisión neta
-    // por carrera (de netoIncluidoPorCarrera, calculado arriba con la
-    // MISMA regla exacta de netearJugadorBanqueroTercios), asignada a la
-    // PRIMERA línea de esa carrera que aparezca acá, con $0 en las demás
-    // líneas de la misma carrera para este cliente. Para el resto de los
-    // clientes (un solo rol por carrera, la gran mayoría, incluido PEDUNTO
-    // y su test) esto no cambia nada — idéntico a como funcionaba antes.
+    // COMISIÓN EXACTA POR CARRERA, REDONDEADA 1 SOLA VEZ — ACTUALIZADO
+    // 03-10-2026 (casos Legolas Y Sammy, ver la nota grande completa
+    // arriba de esta función, junto a comisionPorCarreraPropia). Para
+    // Tercios puro (sin `.tipo`), en vez de redondear el % de CADA línea
+    // por separado (lo que esta función hacía antes a propósito, caso
+    // PEDRO del 29-09-2026), se usa la comisión ya calculada EXACTA por
+    // carrera (neteando jugador/banquero cuando aplica, sumando sin más
+    // cuando no) y redondeada 1 sola vez, asignada a la PRIMERA línea de
+    // esa carrera que aparezca acá, con $0 en las demás líneas de la
+    // misma carrera para este cliente — así el total de la ficha SIEMPRE
+    // cuadra con Cierre Final (que calcula igual, agrupando por carrera),
+    // tenga el cliente una carrera dual o simplemente varias jugadas
+    // propias en la misma carrera. Las Marcas/Tablas Fijas de Jugadas
+    // Adelantadas (`linea.tipo` presente) quedan FUERA de este
+    // agrupamiento por carrera y se calculan exactamente como siempre,
+    // línea por línea.
     let comisionIncluida = 0;
     if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
-      const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
-      if (!linea.tipo && carrerasDualesPropias.has(claveCarrera)) {
-        if (netoIncluidoPorCarrera.has(claveCarrera)) {
-          comisionIncluida = netoIncluidoPorCarrera.get(claveCarrera);
-          netoIncluidoPorCarrera.delete(claveCarrera);
+      if (!linea.tipo) {
+        const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+        if (carrerasConComisionPropia.has(claveCarrera)) {
+          comisionIncluida = comisionPorCarreraPropia.get(claveCarrera);
+          comisionPorCarreraPropia.delete(claveCarrera);
+          carrerasConComisionPropia.delete(claveCarrera);
         }
       } else {
         const montoParaPct = montoBaseParaPct(linea);
@@ -767,6 +800,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     jugador: { nombre: jugador.nombre },
     semana,
     rango: { desde, hasta },
+    numeroSemana: numeroSemanaISO(desde),
     rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
     esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
@@ -870,6 +904,7 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
     jugador: { nombre: 'REMATE' },
     semana,
     rango: { desde, hasta },
+    numeroSemana: numeroSemanaISO(desde),
     rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
     esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
@@ -957,6 +992,7 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
     jugador: { nombre: 'WINNERS' },
     semana,
     rango: { desde, hasta },
+    numeroSemana: numeroSemanaISO(desde),
     rangoPersonalizado: !!rangoPersonalizado,
     hoy: hoyIso,
     esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,

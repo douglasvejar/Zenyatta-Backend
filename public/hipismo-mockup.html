@@ -9351,6 +9351,12 @@ let DETALLADO_CLIENTE_SEMANA_ACTIVA = 'actual';
 // de "semana" (ver cargarDetalleCliente más abajo).
 let DETALLE_CLIENTE_RANGO_ACTIVO = null;
 let DETALLE_CLIENTE_SEMANA_ACTIVA = 'actual';
+// Última respuesta de GET /clientes/:nombre/detalle-semana (03-10-2026,
+// a pedido del usuario: nombrar la carpeta de "Copiar Imagen HD" como
+// "Semana (cliente) (del día al día, semana X del año)" -- se guarda acá
+// en renderDetalleClienteModal() para que copiarDetalleClienteImagen()
+// pueda armar ese nombre sin tener que volver a pedirle nada al backend.
+let DETALLE_CLIENTE_DATA_ACTUAL = null;
 
 function formatMontoDet(n) {
   const neg = n < 0;
@@ -9500,6 +9506,7 @@ function cerrarPanelCuadreYAbrirCliente(nombre) {
 function cerrarDetalleCliente() {
   document.getElementById('modalDetalleCliente').style.display = 'none';
   DETALLE_CLIENTE_NOMBRE = null;
+  DETALLE_CLIENTE_DATA_ACTUAL = null;
 }
 function cambiarSemanaDetalleCliente(semana, btn) {
   document.querySelectorAll('#selectorSemanaDetalleCliente button').forEach(b => b.classList.remove('activo'));
@@ -9551,6 +9558,7 @@ async function cargarDetalleCliente() {
   renderDetalleClienteModal(data);
 }
 function renderDetalleClienteModal(data) {
+  DETALLE_CLIENTE_DATA_ACTUAL = data;
   document.getElementById('detalleClienteNombre').textContent = formatNombre(data.jugador.nombre);
   // 28-09-2026: con rango personalizado (data.rangoPersonalizado) no
   // tiene sentido "Semana actual"/"Semana cerrada" — mismo criterio que
@@ -9711,20 +9719,65 @@ function mostrarToastDetalleCliente(msg, esError) {
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
 }
+// Quita del nombre de cliente/carpeta cualquier carácter que Windows/Mac/
+// Linux no acepten en una ruta de archivo (03-10-2026, para la carpeta de
+// "Copiar Imagen HD" -- ver construirNombreCarpetaDetalleCliente más
+// abajo). Nunca debería hacer falta (los nombres de cliente son texto
+// normal), pero es gratis cubrirse acá en vez de que una descarga falle
+// en silencio por un caracter raro.
+function limpiarParaNombreArchivo(texto) {
+  return String(texto).replace(/[\\/:*?"<>|]/g, '').trim();
+}
+// "DD-MM-YYYY" (sin "/", que en una ruta de descarga se interpretaría
+// como una subcarpeta más) -- mismo criterio de fecha que
+// formatFechaCortaDMY, solo que con guiones en vez de barras.
+function formatFechaCortaParaCarpeta(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+// Nombre de la carpeta de descarga cuando "Copiar Imagen HD" genera
+// varias imágenes (03-10-2026, a pedido del usuario: "cuando se le de
+// click en copiar imagen y sea mas de 1 imagen, descargalo en una
+// carpeta llamada: Semana (nombre cliente), (del dia, al dia, numero de
+// semana del año)") -- arma algo como
+// "Semana SAMMY (01-10-2026 al 03-10-2026, semana 40 del 2026)" a partir
+// de DETALLE_CLIENTE_DATA_ACTUAL (la misma respuesta de
+// GET /clientes/:nombre/detalle-semana que ya se usa para pintar el
+// modal, con el campo `numeroSemana` agregado del lado del backend justo
+// para esto -- ver construirResumenClienteHipismo en
+// services/hipismoResumenCliente.js). Si por lo que sea no hay datos
+// todavía (no debería pasar, el botón está deshabilitado mientras carga),
+// devuelve null y el llamador cae de vuelta a descargar sin carpeta en
+// vez de reventar.
+function construirNombreCarpetaDetalleCliente() {
+  const data = DETALLE_CLIENTE_DATA_ACTUAL;
+  if (!data || !data.rango || !data.jugador) return null;
+  const nombre = limpiarParaNombreArchivo(formatNombre(data.jugador.nombre));
+  const desde = formatFechaCortaParaCarpeta(data.rango.desde);
+  const hasta = formatFechaCortaParaCarpeta(data.rango.hasta);
+  const semanaTxt = data.numeroSemana
+    ? `, semana ${data.numeroSemana.semana} del ${data.numeroSemana.anio}`
+    : '';
+  return `Semana ${nombre} (${desde} al ${hasta}${semanaTxt})`;
+}
+
 // Arma el PNG de UN contenido puntual (html2canvas) y lo entrega: al
-// portapapeles cuando `etiquetaArchivo` es null (comportamiento de
-// siempre, 1 sola imagen), o siempre como descarga con ese sufijo en el
-// nombre cuando viene un `etiquetaArchivo` (caso de varias imágenes, ver
-// copiarDetalleClienteImagen más abajo — no tiene sentido ir reemplazando
-// el portapapeles varias veces seguidas en el mismo click, el usuario no
-// alcanza a pegar cada una antes de que llegue la siguiente).
-async function generarYEntregarUnaImagenDetalle(contenido, etiquetaArchivo) {
+// portapapeles cuando `nombreArchivo` es null (comportamiento de siempre,
+// 1 sola imagen), o siempre como descarga con ese nombre cuando viene un
+// `nombreArchivo` (caso de varias imágenes, ver copiarDetalleClienteImagen
+// más abajo — no tiene sentido ir reemplazando el portapapeles varias
+// veces seguidas en el mismo click, el usuario no alcanza a pegar cada
+// una antes de que llegue la siguiente). `nombreArchivo` puede traer una
+// carpeta adelante ("Semana X (.../detalle_cliente_1de4.png") -- Chrome/
+// Edge crean esa subcarpeta sola dentro de Descargas al ver el "/" en
+// `download` (03-10-2026, ver construirNombreCarpetaDetalleCliente).
+async function generarYEntregarUnaImagenDetalle(contenido, nombreArchivo) {
   try {
     const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
     return await new Promise(resolve => {
       canvas.toBlob(async blob => {
         if (!blob) { mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen.', true); resolve(false); return; }
-        if (!etiquetaArchivo) {
+        if (!nombreArchivo) {
           try {
             if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
@@ -9737,9 +9790,9 @@ async function generarYEntregarUnaImagenDetalle(contenido, etiquetaArchivo) {
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = etiquetaArchivo ? `detalle_cliente_${etiquetaArchivo}.png` : 'detalle_cliente.png';
+        a.download = nombreArchivo || 'detalle_cliente.png';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        if (!etiquetaArchivo) mostrarToastDetalleCliente('No se pudo copiar directo — se descargó la imagen.', true);
+        if (!nombreArchivo) mostrarToastDetalleCliente('No se pudo copiar directo — se descargó la imagen.', true);
         resolve(true);
       }, 'image/png');
     });
@@ -9783,6 +9836,10 @@ async function copiarDetalleClienteImagen() {
   // (ver generarYEntregarUnaImagenDetalle) para poder mandarlas todas
   // juntas.
   mostrarToastDetalleCliente(`Generando ${diasBloques.length} imágenes (una por día)...`);
+  // Carpeta "Semana NOMBRE (del día al día, semana X del año)" (ver
+  // construirNombreCarpetaDetalleCliente) -- si por lo que sea no hay
+  // datos para armarla, caen sueltas en Descargas en vez de reventar.
+  const carpeta = construirNombreCarpetaDetalleCliente();
   const displayOriginal = diasBloques.map(d => d.style.display);
   let ok = 0;
   for (let i = 0; i < diasBloques.length; i++) {
@@ -9791,12 +9848,16 @@ async function copiarDetalleClienteImagen() {
     // de que html2canvas mida el contenedor (si no, a veces alcanza a
     // capturar con el alto viejo, todavía contando los días ocultos).
     await new Promise(r => requestAnimationFrame(r));
-    const exito = await generarYEntregarUnaImagenDetalle(contenido, `${i + 1}de${diasBloques.length}`);
+    const nombreBase = `detalle_cliente_${i + 1}de${diasBloques.length}.png`;
+    const nombreArchivo = carpeta ? `${carpeta}/${nombreBase}` : nombreBase;
+    const exito = await generarYEntregarUnaImagenDetalle(contenido, nombreArchivo);
     if (exito) ok++;
   }
   diasBloques.forEach((d, i) => { d.style.display = displayOriginal[i]; });
   if (ok === diasBloques.length) {
-    mostrarToastDetalleCliente(`✅ Se descargaron ${ok} imágenes (una por día) — mándalas todas juntas.`);
+    mostrarToastDetalleCliente(carpeta
+      ? `✅ Se descargaron ${ok} imágenes en la carpeta "${carpeta}" — mándalas todas juntas.`
+      : `✅ Se descargaron ${ok} imágenes (una por día) — mándalas todas juntas.`);
   } else {
     mostrarToastDetalleCliente(`⚠️ Se descargaron ${ok} de ${diasBloques.length} imágenes.`, true);
   }
