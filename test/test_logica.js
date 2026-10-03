@@ -785,6 +785,29 @@ const DATOS_MIAMI_NFL_JUEGA = {
   // Over/under de goles: total = 2 (Liverpool-Chelsea), over 2.5 pierde.
   const resOver = evaluarJugada(normalizarTexto('Over Chelsea 2.5 -110'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
   check(resOver.estado === 'PERDIDA', 'Fútbol: Over 2.5 con 2 goles totales -> PERDIDA');
+
+  // "RL PK" (03-10-2026, caso real reportado por el usuario con un ticket
+  // real: "HANRY, Ticket #3, Suecia rl Pk -120", MONEYLINE con el partido
+  // 1-1, marcado PERDIDA — "el rl es pk que significa handicap 0 y el
+  // juego quedo 1-1 se puede corregir" — ver la nota grande de
+  // esHandicapEnPickExplicito en evaluador.js). A diferencia de
+  // "Liverpool -150" (arriba, apuesta pura a que el equipo gana), "Liverpool
+  // rl Pk -150" SÍ trae los 2 marcadores juntos (rl + Pk) — es una línea de
+  // hándicap en 0, no una apuesta a que el equipo gane, así que el mismo
+  // empate 1-1 tiene que dar ANULADA (push), no PERDIDA.
+  const resHandicapPk = evaluarJugada(normalizarTexto('Liverpool rl Pk -150'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
+  check(resHandicapPk.estado === 'ANULADA',
+    `ARREGLO: "Liverpool rl Pk -150" (línea de hándicap en 0, caso real de HANRY) con empate 1-1 -> ANULADA (push), NUNCA PERDIDA -- dio ${resHandicapPk.estado}`);
+  check(resHandicapPk.debug && /^HÁNDICAP PK/.test(resHandicapPk.debug.tipoApuesta),
+    `El debug identifica esta jugada como "HÁNDICAP PK", no "MONEYLINE" -- dio ${resHandicapPk.debug && resHandicapPk.debug.tipoApuesta}`);
+
+  // Regresión: "Pk" SOLO (sin "rl"/"runline" al lado) NO alcanza — se
+  // exigen los 2 marcadores juntos a propósito (ver la nota grande), así
+  // que esto sigue tratándose como moneyline puro -> PERDIDA en el empate,
+  // igual que "Liverpool -150" de arriba.
+  const resSoloPk = evaluarJugada(normalizarTexto('Liverpool Pk -150'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
+  check(resSoloPk.estado === 'PERDIDA',
+    `Regresión: "Liverpool Pk -150" (sin "rl"/"runline") NO se reconoce como hándicap en pick -- sigue siendo moneyline puro, PERDIDA en el empate -- dio ${resSoloPk.estado}`);
 })();
 
 // -----------------------------------------------------------------

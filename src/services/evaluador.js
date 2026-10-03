@@ -314,6 +314,36 @@ function limpiarMarcadoresSegmento(lineaJugada) {
     .replace(/\bjuego\s*[12]\b/gi, ' '); // "juego1"/"juego 2" (mismo caso, la otra forma de escribirlo)
 }
 
+// "RL PK" / "RUNLINE PICK" (03-10-2026, caso real reportado por el
+// usuario: ticket "HANRY, Suecia rl Pk -120", MONEYLINE con el partido
+// 1-1, marcado PERDIDA — "el rl es pk que significa handicap 0 y el
+// juego quedo 1-1 se puede corregir"). "RL" ("run line") ya es, en TODO
+// este sistema, el término genérico que usan los operadores para "línea
+// de hándicap" en CUALQUIER deporte, nunca exclusivo de béisbol (ver
+// oddsApiProvider.js: "la Línea/Run Line (RL)"; y tickets reales ya
+// citados en comentarios de evaluador.js/diccionarioEquipos.js como
+// "49ers rl -7.5"/"California rl +3.5"/"Suiza rl 1h"). "PK"/"Pick"
+// ("pick'em") es la forma en que una casa de apuestas escribe una línea
+// de hándicap que cae EXACTO en 0, en vez de "+0"/"-0". Juntos ("rl Pk"),
+// significan que el cliente apostó una línea de hándicap real (como
+// "Real Madrid -1", que YA empata/anula si el resultado ajustado da 0
+// exacto) — nunca una apuesta pura "a que el equipo gana" (moneyline sin
+// ninguna línea), que es la ÚNICA que cubre empatEsPerdidaEnMoneyline
+// (ver esa bandera en CONFIG_POR_DEPORTE.soccer y la nota grande junto a
+// donde se usa, más abajo). El parser, por sí solo, no puede distinguir
+// las 2 jugadas: ninguna trae un número real de hándicap (el handicap
+// extraído da 0 en ambos casos — "Suecia" sola, o "Suecia rl Pk" — "Pk"
+// nunca es un número), así que sin este chequeo quedaban tratadas IGUAL.
+// Se exigen LOS 2 marcadores juntos (RL/runline Y Pk/pick, a pedido
+// explícito del usuario: "revisa si trae rl o runline... para que lo
+// logres identificar"), nunca uno solo, para no disparar esto con un
+// "Pk" suelto que apareciera por cualquier otra razón en el texto.
+const MARCA_RUNLINE_EN_JUGADA = /\b(?:rl|run\s*line|runline)\b/i;
+const MARCA_PICK_EN_JUGADA = /\b(?:pk|pick(?:'?em)?)\b/i;
+function esHandicapEnPickExplicito(lineaJugada) {
+  return MARCA_RUNLINE_EN_JUGADA.test(lineaJugada) && MARCA_PICK_EN_JUGADA.test(lineaJugada);
+}
+
 // Saca del texto SOLO los números "sueltos" (línea de hándicap/over-under,
 // o cuota americana) — NUNCA un número que forme parte de una palabra,
 // como el "49" de "49ers" o el "76" de "76ers" (28-09-2026, caso real: un
@@ -683,10 +713,16 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
     }
   }
 
+  // esHandicapPick (03-10-2026, ver la nota grande de esHandicapEnPickExplicito
+  // más arriba): "Suecia rl Pk -120" también da handicap=0 (ningún número
+  // real), pero NO es lo mismo que "Suecia -120" a secas — acá el cliente
+  // sí apostó una línea de hándicap (en 0), nunca una apuesta pura a que
+  // el equipo gane.
+  const esHandicapPick = handicap === 0 && esHandicapEnPickExplicito(lineaSinInning);
   const resultadoAjustado = (cMiEquipo + handicap) - cRival;
   const debugHandicap = {
     ...debugBase,
-    tipoApuesta: (handicap !== 0 ? ('HÁNDICAP ' + (handicap > 0 ? '+' : '') + handicap) : 'MONEYLINE') + textoSegmento,
+    tipoApuesta: (handicap !== 0 ? ('HÁNDICAP ' + (handicap > 0 ? '+' : '') + handicap) : (esHandicapPick ? 'HÁNDICAP PK' : 'MONEYLINE')) + textoSegmento,
     lineaUsada: handicap,
     marcadorUsado: cMiEquipo + ' (mi equipo) vs ' + cRival + ' (rival)'
   };
@@ -696,13 +732,16 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
 
   // Empate exacto. En MLB/NFL/NHL esto siempre es push (ANULADA), sin
   // importar si era moneyline o hándicap. En fútbol, SOLO cuando es
-  // moneyline puro (handicap === 0 — "gana el equipo", no una línea de
-  // hándicap específica), el empate se cuenta como PERDIDA para quien
-  // apostó a que ese equipo gana (ver config.empatEsPerdidaEnMoneyline y
-  // "Reglas de apuestas" en el doc de proyecto). Un hándicap real
-  // (ej. "Real Madrid -1") que empata la línea exacta sigue siendo push,
-  // como en cualquier otro deporte.
-  if (handicap === 0 && config.empatEsPerdidaEnMoneyline) {
+  // moneyline puro (handicap === 0 Y SIN marcador explícito de "rl Pk" —
+  // "gana el equipo", no una línea de hándicap específica), el empate se
+  // cuenta como PERDIDA para quien apostó a que ese equipo gana (ver
+  // config.empatEsPerdidaEnMoneyline y "Reglas de apuestas" en el doc de
+  // proyecto). Un hándicap real (ej. "Real Madrid -1") que empata la línea
+  // exacta sigue siendo push, como en cualquier otro deporte — y lo mismo
+  // ahora para un hándicap EN 0 explícito ("rl Pk"), que es matemáticamente
+  // la misma situación (línea que empata exacto), solo que escrita como
+  // "Pk" en vez de "+0"/"-0" (03-10-2026, ver esHandicapEnPickExplicito).
+  if (handicap === 0 && config.empatEsPerdidaEnMoneyline && !esHandicapPick) {
     return {
       estado: 'PERDIDA',
       debug: { ...debugHandicap, notaEmpate: 'Empate — en fútbol, una apuesta a que un equipo gana (moneyline) se pierde en caso de empate, no se anula.' }
