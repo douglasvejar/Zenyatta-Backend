@@ -225,6 +225,30 @@ router.delete('/hipodromos/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// PUT /hipodromos/:id (03-10-2026, a pedido del usuario: "en la pestaña
+// hipodromo puedo editar o eliminar un hipodromo" — el borrado ya existía
+// desde la segunda ronda pero nunca tuvo botón en la pantalla, y editar no
+// existía ni acá ni en el frontend). Permite corregir nombre/país/cantidad
+// de carreras de un hipódromo YA creado, sin tener que borrarlo y crearlo
+// de nuevo (lo que perdería el historial de planos que ya lo referencian
+// por hipodromo_id). Mismo manejo de nombre duplicado que el POST.
+router.put('/hipodromos/:id', asyncHandler(async (req, res) => {
+  const { nombre, pais, carrerasMax } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del hipódromo.' });
+  const paisNormalizado = pais === 'US' ? 'US' : 'VE';
+  try {
+    const r = await db.query(
+      'UPDATE hipismo_hipodromos SET nombre = $1, pais = $2, carreras_max = $3 WHERE id = $4 AND grupo_id = $5 RETURNING *',
+      [nombre.trim(), paisNormalizado, Number.isInteger(carrerasMax) ? carrerasMax : 25, req.params.id, req.grupoId]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Hipódromo no encontrado.' });
+    res.json(r.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Ya existe otro hipódromo con ese nombre.' });
+    throw e;
+  }
+}));
+
 // =================================================================
 // JUGADAS ADELANTADAS — enganche con "Cargar Planos" (23-09-2026, ver la
 // nota grande en services/hipismoAdelantadasCalc.js). En cuanto un plano

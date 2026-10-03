@@ -2582,13 +2582,44 @@
         </div>
         <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="crearHipodromo()">+ Crear hipódromo</button></div>
 
+        <!-- 03-10-2026: antes, si GET /hipodromos fallaba (ej. un hipo de
+             conexión a la base), cargarHipodromos() se tragaba el error en
+             silencio y dejaba las 2 tablas vacías — indistinguible, para el
+             usuario, de "todavía no creaste ninguno". Este aviso solo se
+             muestra cuando el problema fue un ERROR real (no cuando
+             legítimamente no hay hipódromos creados todavía), con el motivo
+             real que devolvió el servidor. -->
+        <div id="avisoErrorHipodromos" style="display:none; margin-top:14px; padding:10px 14px; border-radius:8px; background:#fdecea; color:#b3261e; font-size:13px;"></div>
+
         <div style="margin-top:22px;">
           <h3 style="font-family:'Outfit',sans-serif; font-size:14px; margin:0 0 10px;">🇻🇪 Nacionales (Venezuela)</h3>
-          <table id="tablaHipodromosVE"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th></tr></thead><tbody></tbody></table>
+          <table id="tablaHipodromosVE"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th><th></th></tr></thead><tbody></tbody></table>
         </div>
         <div style="margin-top:22px;">
           <h3 style="font-family:'Outfit',sans-serif; font-size:14px; margin:0 0 10px;">🇺🇸 Americanos (USA)</h3>
-          <table id="tablaHipodromosUS"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th></tr></thead><tbody></tbody></table>
+          <table id="tablaHipodromosUS"><thead><tr><th>Hipódromo</th><th class="num">Carreras</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <!-- Formulario de edición (03-10-2026) — oculto hasta que se pulsa
+             "✏️ Editar" en una fila; reusa los mismos 3 campos de arriba
+             pero contra PUT /hipodromos/:id en vez de POST. -->
+        <div id="formEditarHipodromo" style="display:none; margin-top:22px; padding:16px; border-radius:10px; border:1px solid var(--borde, #ddd);">
+          <h3 style="font-family:'Outfit',sans-serif; font-size:14px; margin:0 0 10px;">✏️ Editar hipódromo</h3>
+          <div class="fila">
+            <div><label>Nombre</label><input type="text" id="inpNombreHipodromoEdit"></div>
+            <div>
+              <label>País</label>
+              <select id="selPaisHipodromoEdit">
+                <option value="VE">🇻🇪 Venezuela</option>
+                <option value="US">🇺🇸 Estados Unidos</option>
+              </select>
+            </div>
+            <div><label>Cantidad de carreras</label><input type="number" id="inpCarrerasHipodromoEdit"></div>
+          </div>
+          <div class="btn-fila">
+            <button class="btn btn-primario" type="button" onclick="guardarEdicionHipodromo()">Guardar cambios</button>
+            <button class="btn" type="button" onclick="cancelarEdicionHipodromo()">Cancelar</button>
+          </div>
         </div>
       </div>
     </section>
@@ -10552,11 +10583,25 @@ const HIPODROMOS_SUGERIDOS = [
 
 let HIPODROMOS = []; // hipódromos reales de ESTE grupo, cargados de la base (cargarHipodromos())
 
+// errorCargaHipodromos (03-10-2026, caso real: el usuario veía la tabla de
+// "hipódromos creados" vacía pero, al intentar crear uno de los sugeridos
+// del datalist, el servidor respondía "ya existe" — contradicción que solo
+// tiene sentido si GET /hipodromos estaba fallando (ej. un hipo de
+// conexión a la base, exactamente el tipo de error que ya cubre el
+// middleware de errores de server.js con 503 "se perdió la conexión...")
+// y el catch de acá se TRAGABA el motivo real, dejando pantalla y datalist
+// vacíos — indistinguible de "todavía no creaste ninguno hipódromo". Ahora
+// se guarda el mensaje real del error para mostrarlo en vez de mentir.
+let errorCargaHipodromos = null;
+
 async function cargarHipodromos() {
   try {
     HIPODROMOS = await apiHipismo('/api/hipismo/hipodromos');
+    errorCargaHipodromos = null;
   } catch (e) {
     HIPODROMOS = [];
+    errorCargaHipodromos = e.message || 'Error desconocido al cargar los hipódromos.';
+    console.error('[hipodromos] No se pudo cargar la lista:', e);
   }
   pintarHipodromos();
   poblarSelectHipodromo();
@@ -10571,13 +10616,76 @@ function pintarHipodromos() {
   tbodyUS.innerHTML = '';
   HIPODROMOS.forEach(h => {
     const fila = document.createElement('tr');
-    fila.innerHTML = `<td>${banderaPorPais[h.pais]} ${h.nombre}</td><td class="num">${h.carreras_max}</td>`;
+    fila.innerHTML = `<td>${banderaPorPais[h.pais]} ${h.nombre}</td><td class="num">${h.carreras_max}</td>` +
+      `<td style="white-space:nowrap;">` +
+      `<button class="btn btn-secundario" type="button" style="padding:4px 10px; font-size:12.5px;" onclick='abrirEdicionHipodromo(${JSON.stringify(h)})'>✏️ Editar</button> ` +
+      `<button class="btn btn-secundario" type="button" style="padding:4px 10px; font-size:12.5px; color:var(--danger);" onclick="eliminarHipodromo('${h.id}','${(h.nombre || '').replace(/'/g, "\\'")}')">🗑️ Eliminar</button>` +
+      `</td>`;
     (h.pais === 'VE' ? tbodyVE : tbodyUS).appendChild(fila);
   });
 
   const datalist = document.getElementById('listaHipodromosConocidos');
   const nombres = Array.from(new Set([...HIPODROMOS.map(h => h.nombre), ...HIPODROMOS_SUGERIDOS]));
   datalist.innerHTML = nombres.map(n => `<option value="${n}">`).join('');
+
+  // Aviso de error real (ver nota de errorCargaHipodromos arriba) — solo se
+  // muestra cuando de verdad hubo un error de carga, nunca cuando
+  // legítimamente no hay hipódromos todavía (HIPODROMOS vacío sin error no
+  // activa este aviso).
+  const aviso = document.getElementById('avisoErrorHipodromos');
+  if (errorCargaHipodromos) {
+    aviso.style.display = 'block';
+    aviso.textContent = '⚠️ No se pudo cargar tu lista de hipódromos: ' + errorCargaHipodromos + ' — recarga la página; si sigue pasando, avisa.';
+  } else {
+    aviso.style.display = 'none';
+    aviso.textContent = '';
+  }
+}
+
+// Editar (03-10-2026, a pedido del usuario: "en la pestaña hipodromo puedo
+// editar o eliminar un hipodromo") — abre el formulario de abajo con los
+// datos actuales precargados; guardarEdicionHipodromo() hace el PUT real.
+let hipodromoEditandoId = null;
+
+function abrirEdicionHipodromo(h) {
+  hipodromoEditandoId = h.id;
+  document.getElementById('inpNombreHipodromoEdit').value = h.nombre;
+  document.getElementById('selPaisHipodromoEdit').value = h.pais;
+  document.getElementById('inpCarrerasHipodromoEdit').value = h.carreras_max;
+  document.getElementById('formEditarHipodromo').style.display = 'block';
+  document.getElementById('formEditarHipodromo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicionHipodromo() {
+  hipodromoEditandoId = null;
+  document.getElementById('formEditarHipodromo').style.display = 'none';
+}
+
+async function guardarEdicionHipodromo() {
+  if (!hipodromoEditandoId) return;
+  const nombre = document.getElementById('inpNombreHipodromoEdit').value.trim();
+  const pais = document.getElementById('selPaisHipodromoEdit').value;
+  const carrerasMax = parseInt(document.getElementById('inpCarrerasHipodromoEdit').value, 10) || 25;
+  if (!nombre) return;
+  try {
+    await apiHipismo('/api/hipismo/hipodromos/' + hipodromoEditandoId, { method: 'PUT', body: JSON.stringify({ nombre, pais, carrerasMax }) });
+    cancelarEdicionHipodromo();
+    await cargarHipodromos();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// Eliminar (03-10-2026) — el backend ya existía desde la segunda ronda
+// (DELETE /hipodromos/:id) pero nunca tuvo botón conectado en la pantalla.
+async function eliminarHipodromo(id, nombre) {
+  if (!confirm('¿Eliminar el hipódromo "' + nombre + '"? Los planos ya guardados que lo usaron NO se borran (quedan con el nombre tal cual estaba), pero ya no vas a poder elegirlo para jornadas nuevas.')) return;
+  try {
+    await apiHipismo('/api/hipismo/hipodromos/' + id, { method: 'DELETE' });
+    await cargarHipodromos();
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 // "Cargar Planos" solo puede elegir entre los hipódromos que el grupo YA
