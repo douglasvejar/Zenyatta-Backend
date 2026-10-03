@@ -9499,8 +9499,15 @@ function renderDetalleClienteModal(data) {
       bloqueHip.className = 'detmodal-hip';
       const esDeportes = hip.tipo === 'deportes';
       // "Traspasos de Comisión" (26-09-2026) — MISMO criterio EXACTO que
-      // ya usa hipismo-cliente-portal.html (ver la nota grande de allá):
-      // solo puede aparecer en el detalle de una cuenta de comisión.
+      // ya usa hipismo-cliente-portal.html (ver la nota grande de allá).
+      // 03-10-2026: ya NO es exclusivo de una cuenta de comisión — un
+      // cliente normal también puede tener un traspaso (POST /comisiones/
+      // traspaso siempre permitió "CUALQUIER cliente... o un cliente
+      // normal" como destino; lo que faltaba era que
+      // construirResumenClienteHipismo lo leyera para ese caso, ver la
+      // nota grande en services/hipismoResumenCliente.js) — este render
+      // ya era genérico por `hip.tipo`, así que no hizo falta tocarlo acá,
+      // solo corregir el comentario que decía lo contrario.
       const esTraspaso = hip.tipo === 'traspaso';
       const headerHip = document.createElement('div');
       headerHip.className = 'detmodal-hip-header';

@@ -174,6 +174,12 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, fecha, cliente_nombre AS cliente, ticket_label AS ticket, detalle, arriesga, gana, estado, logros\s+FROM tickets_historial/i.test(sql)) {
     return { rows: [] };
   }
+  // --- Traspasos de Comisión de un cliente normal (03-10-2026, ver la
+  // nota grande de construirResumenClienteHipismo en
+  // services/hipismoResumenCliente.js) — vacío en esta prueba. ---
+  if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) {
+    return { rows: [] };
+  }
 
   throw new Error('La base de datos falsa de esta prueba (incluir-porcentaje-en-jugadas) no sabe responder: ' + sql);
 }

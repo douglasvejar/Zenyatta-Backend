@@ -630,9 +630,15 @@
 
         const esDeportes = hip.tipo === 'deportes';
         // "Traspasos de Comisión" (26-09-2026, ver la nota grande de
-        // construirResumenCuentaComisionHipismo) — SOLO puede aparecer en
-        // el link de una cuenta de comisión, nunca en el de un cliente
-        // normal: mismo criterio de pseudo-hipódromo que ya usa "⚽ Deportes".
+        // construirResumenCuentaComisionHipismo) — mismo criterio de
+        // pseudo-hipódromo que ya usa "⚽ Deportes". 03-10-2026: ya NO es
+        // exclusivo de una cuenta de comisión — un cliente normal también
+        // puede recibir/mandar un traspaso (POST /comisiones/traspaso
+        // siempre permitió "CUALQUIER cliente" como destino; lo que
+        // faltaba era que construirResumenClienteHipismo lo leyera para
+        // ese caso, ver la nota grande en services/hipismoResumenCliente.js)
+        // — este render ya era genérico por `hip.tipo`, no hizo falta
+        // tocarlo, solo corregir el comentario que decía lo contrario.
         const esTraspaso = hip.tipo === 'traspaso';
         const headerHip = document.createElement('div');
         headerHip.className = 'hip-header';

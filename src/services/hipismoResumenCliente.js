@@ -472,6 +472,56 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     if (fechaIso === hoyIso) totalHoy += resultadoFinal;
   });
 
+  // TRASPASOS DE COMISIÓN EN UN CLIENTE NORMAL (03-10-2026, a pedido del
+  // usuario: "los saldos de los link no dan igual al de los balances...
+  // legolas por ejemplo da 3853 y en el link dice 3861,98" — BUG REAL
+  // encontrado: POST /comisiones/traspaso deja explícito que "el destino
+  // puede ser CUALQUIER cliente (otra cuenta de comisión, O UN CLIENTE
+  // NORMAL)" (ver la nota grande de esa ruta en routes/hipismo.js), y
+  // GET /cierre-final (Balance General/Cierre Final, la referencia
+  // "golden") SÍ suma esos ajustes a CUALQUIER cliente vía
+  // obtenerAjustesComision — pero esta función (el link público del
+  // cliente Y "Detallado por Cliente" del Administrador, ver la nota
+  // grande del archivo) NUNCA leía hipismo_comisiones_ajustes para un
+  // cliente normal, solo construirResumenCuentaComisionHipismo (arriba)
+  // lo hacía, y SOLO para una cuenta "{nombre} - PORCENTAJE". Un cliente
+  // normal que recibió/mandó un traspaso de comisión quedaba con ese
+  // monto en Balance General pero invisible en su propio link — y si esa
+  // semana el traspaso era su ÚNICO movimiento (sin jugadas), el link
+  // directamente daba $0 en vez del monto real ("muestran un saldo en la
+  // pantalla y al darle click sale en 0"). Mismo query y mismo bloque
+  // "Traspasos de Comisión" (tipo:'traspaso', NOMBRE_BLOQUE_TRASPASOS)
+  // que ya usa construirResumenCuentaComisionHipismo más arriba — el
+  // frontend (hipismo-mockup.html/hipismo-cliente-portal.html) ya lo
+  // sabe pintar genéricamente por `hip.tipo`, sin importar si el dueño es
+  // una cuenta de comisión o un cliente normal.
+  let cantidadTraspasos = 0;
+  const rTraspasosCliente = await db.query(
+    `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
+      ORDER BY fecha DESC, creado_en ASC`,
+    [jugador.grupo_id, jugador.nombre, desde, hasta]
+  );
+  rTraspasosCliente.rows.forEach(row => {
+    const monto = Number(row.monto);
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    if (!hipMap.has(NOMBRE_BLOQUE_TRASPASOS)) {
+      hipMap.set(NOMBRE_BLOQUE_TRASPASOS, { nombre: NOMBRE_BLOQUE_TRASPASOS, tipo: 'traspaso', carreras: [] });
+    }
+    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push({
+      tipo: 'traspaso',
+      nota: row.nota || null,
+      resultado: monto
+    });
+
+    totalSemana += monto;
+    cantidadTraspasos += 1;
+    if (fechaIso === hoyIso) totalHoy += monto;
+  });
+
   const totalHipismo = totalSemana;
   let totalDeportes = 0;
   let cantidadJugadasDeportes = 0;
@@ -519,10 +569,16 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     resumen: {
       totalSemana,
       totalHoy,
-      cantidadJugadas: lineasHipismo.length + cantidadJugadasDeportes,
+      // cantidadTraspasos (03-10-2026, ver la nota grande de arriba) — se
+      // suma a cantidadJugadas/cantidadJugadasHipismo igual que ya hace
+      // construirResumenCuentaComisionHipismo con `cantidadJugadas += 1`
+      // en su propio bloque de traspasos, para que el conteo de
+      // movimientos de la semana no se quede corto cuando el cliente
+      // tuvo un traspaso de comisión.
+      cantidadJugadas: lineasHipismo.length + cantidadTraspasos + cantidadJugadasDeportes,
       totalHipismo,
       totalDeportes,
-      cantidadJugadasHipismo: lineasHipismo.length,
+      cantidadJugadasHipismo: lineasHipismo.length + cantidadTraspasos,
       cantidadJugadasDeportes,
       // "incluir % en sus jugadas" (29-09-2026) — cuánto de totalSemana/
       // totalHipismo de arriba es comisión propia YA incluida en las

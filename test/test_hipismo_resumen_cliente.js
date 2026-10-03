@@ -36,7 +36,13 @@ const TABLAS = {
   hipismo_remates: [],
   hipismo_adelantadas_jugadas: [],
   hipismo_adelantadas_planos: [],
-  tickets_historial: []
+  tickets_historial: [],
+  // 03-10-2026, ver la nota grande de construirResumenClienteHipismo en
+  // services/hipismoResumenCliente.js (caso real: "legolas por ejemplo da
+  // 3853 y en el link dice 3861,98" — un traspaso de comisión sobre un
+  // cliente NORMAL, no una cuenta "{nombre} - PORCENTAJE", no se estaba
+  // leyendo acá).
+  hipismo_comisiones_ajustes: []
 };
 
 function ejecutarQuery(text, params) {
@@ -101,6 +107,18 @@ function ejecutarQuery(text, params) {
   // "Cargar Winners" (26-09-2026) — 4ta consulta de obtenerLineasHipismoCliente.
   if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
     return { rows: [] };
+  }
+
+  // Traspasos de Comisión de un cliente NORMAL (03-10-2026, ver la nota
+  // grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js
+  // — mismo query/shape que ya usaba construirResumenCuentaComisionHipismo
+  // para una cuenta "{nombre} - PORCENTAJE", ver test_hipismo_resumen_cuenta_comision.js).
+  if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) {
+    const [grupoId, clienteNombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_comisiones_ajustes
+      .filter(a => a.grupo_id === grupoId && a.cliente_nombre === clienteNombre && a.fecha >= desde && a.fecha <= hasta)
+      .map(a => ({ monto: a.monto, fecha: a.fecha, nota: a.nota || null }));
+    return { rows: filas };
   }
 
   throw new Error('La base de datos falsa de esta prueba (resumen-cliente) no sabe responder: ' + sql);
@@ -177,6 +195,43 @@ function check(cond, msg) {
   const diaMulti = resumenMulti.dias.find(d => d.fecha === FECHA);
   const bloqueDeportes = diaMulti.hipodromos.find(h => h.tipo === 'deportes');
   check(!!bloqueDeportes && bloqueDeportes.carreras.length === 2, 'El bloque "Deportes" aparece separado, con sus 2 tickets');
+
+  // =================================================================
+  // --- Fixture: LEGOLAS, el caso REAL reportado por el usuario (03-10-2026):
+  // "los saldos de los link no dan igual al de los balances... legolas por
+  // ejemplo da 3853 y en el link dice 3861,98". Legolas jugó normal (Tercios)
+  // Y, aparte, el Administrador le hizo un traspaso de comisión (negativo,
+  // plata que salió de su cuenta hacia otra) — Balance General/Cierre Final
+  // (construirCierreFinalHipismo) SIEMPRE sumó ese traspaso vía
+  // obtenerAjustesComision, pero el link de Legolas y "Detallado por
+  // Cliente" (construirResumenClienteHipismo) lo ignoraban por completo:
+  // antes de este arreglo, su link mostraba SOLO 500 (la jugada), nunca
+  // 500 - 8.98 = 491.02 (lo que Balance General sí mostraba).
+  // =================================================================
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLAS', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '3', monto: 500, resultado_jugador: 500, resultado_banquero: -500 });
+  TABLAS.hipismo_comisiones_ajustes.push({ grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLAS', monto: -8.98, fecha: FECHA, nota: 'Traspaso de prueba' });
+
+  const jugadorLegolas = { grupo_id: GRUPO_ID, nombre: 'LEGOLAS', modulos_anclados: false };
+  const resumenLegolas = await construirResumenClienteHipismo(jugadorLegolas, grupo, 'actual');
+
+  check(resumenLegolas.resumen.totalSemana === 491.02,
+    `ARREGLO: el link/detalle de LEGOLAS da 500 (jugada) - 8.98 (traspaso) = 491.02, igual que Balance General, nunca 500 a secas -- dio ${resumenLegolas.resumen.totalSemana}`);
+  const diaLegolas = resumenLegolas.dias.find(d => d.fecha === FECHA);
+  const bloqueTraspasoLegolas = diaLegolas.hipodromos.find(h => h.tipo === 'traspaso');
+  check(!!bloqueTraspasoLegolas && bloqueTraspasoLegolas.carreras.length === 1 && bloqueTraspasoLegolas.carreras[0].resultado === -8.98,
+    'El traspaso de LEGOLAS aparece como su propio bloque "Traspasos de Comisión" (🔄), igual que ya hacía una cuenta "{nombre} - PORCENTAJE"');
+
+  // --- Fixture: SOLOTRASPASO, un cliente que ESA semana no jugó nada —
+  // su ÚNICO movimiento es un traspaso de comisión a favor. Antes de este
+  // arreglo, su link/Detallado por Cliente daba $0 en vez del monto real
+  // (el bug exacto que describió el usuario: "hay algunos que muestran un
+  // saldo en la pantalla y al darle click sale en 0").
+  TABLAS.hipismo_comisiones_ajustes.push({ grupo_id: GRUPO_ID, cliente_nombre: 'SOLOTRASPASO', monto: 25, fecha: FECHA, nota: null });
+  const jugadorSoloTraspaso = { grupo_id: GRUPO_ID, nombre: 'SOLOTRASPASO', modulos_anclados: false };
+  const resumenSoloTraspaso = await construirResumenClienteHipismo(jugadorSoloTraspaso, grupo, 'actual');
+  check(resumenSoloTraspaso.resumen.totalSemana === 25,
+    `ARREGLO: SOLOTRASPASO (sin jugadas, solo un traspaso de +25) da 25, NUNCA 0 -- dio ${resumenSoloTraspaso.resumen.totalSemana}`);
+  check(resumenSoloTraspaso.resumen.cantidadJugadas === 1, 'El traspaso cuenta como 1 movimiento, para que "Detallado por Cliente" no diga "sin jugadas"');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

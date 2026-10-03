@@ -37,6 +37,10 @@ function ejecutarQuery(text, params) {
   if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) return { rows: [] };
   // "Cargar Winners" (26-09-2026) — 4ta consulta de obtenerLineasHipismoCliente.
   if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) return { rows: [] };
+  // Traspasos de Comisión de un cliente normal (03-10-2026, ver la nota
+  // grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js)
+  // — sin datos en esta prueba, que solo verifica el wiring de la ruta.
+  if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (detalle-cliente ruta) no sabe responder: ' + sql);
 }
 
