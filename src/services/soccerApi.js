@@ -394,9 +394,33 @@ async function obtenerResultadosSoccer(fechaISO) {
   const { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL } = require('./apiFootballApi');
   const [mapasPorLiga, primeraMitadFootballData, primeraMitadApiFootball] = await Promise.all([
     Promise.all(LIGAS_SOCCER.map(liga => obtenerResultadosDeLiga(liga.slug, liga.nombre, fechaCompacta))),
-    obtenerPrimeraMitadFutbol(fechaISO).catch(() => ({ partidos: [], claveConfigurada: false, huboError: true })),
-    obtenerPrimeraMitadApiFootball(fechaISO).catch(() => ({ partidos: [], claveConfigurada: false, huboError: true }))
+    // (03-10-2026) ANTES el .catch() descartaba el error real sin dejar
+    // rastro — si esta promesa llegaba a rechazar por algún motivo no
+    // atrapado adentro de footballDataApi.js, acá quedaba indistinguible
+    // de "no hay clave configurada" (mismo objeto de fallback). Ahora se
+    // loguea el error real antes de aplicar el mismo fallback de siempre,
+    // para poder diferenciar "nunca hubo clave" de "pasó algo raro acá".
+    obtenerPrimeraMitadFutbol(fechaISO).catch((e) => {
+      console.error('[1h] obtenerPrimeraMitadFutbol (football-data.org) rechazó la promesa — esto NO debería pasar (tiene su propio try/catch interno); revisar:', e);
+      return { partidos: [], claveConfigurada: false, huboError: true };
+    }),
+    obtenerPrimeraMitadApiFootball(fechaISO).catch((e) => {
+      console.error('[1h] obtenerPrimeraMitadApiFootball (api-football.com) rechazó la promesa — esto NO debería pasar (tiene su propio try/catch interno); revisar:', e);
+      return { partidos: [], claveConfigurada: false, huboError: true };
+    })
   ]);
+  // (03-10-2026, a pedido del usuario — caso real: ticket de HANRY,
+  // "Colombia rl 1h -0.5", seguía mostrando "sin-clave" después de
+  // confirmar con el log de arranque que API_FOOTBALL_KEY SÍ llega al
+  // proceso) — este log muestra, en el momento EXACTO de cada reproceso
+  // de sábana, el estado real de las 2 fuentes de "1h" para esa fecha:
+  // si vieron la clave, si hubo un error de la API, y cuántos partidos
+  // trajeron. Con esto se puede confirmar si claveConfigurada de verdad
+  // da false en este pedido puntual (algo no debería pasar si el log de
+  // arranque ya mostró la clave cargada) o si el problema es otro
+  // (huboError true con pocos/0 partidos = problema real de la API, no
+  // de configuración).
+  console.log('[1h] fecha=' + fechaISO + ' football-data.org: claveConfigurada=' + primeraMitadFootballData.claveConfigurada + ' huboError=' + primeraMitadFootballData.huboError + ' partidos=' + ((primeraMitadFootballData.partidos || []).length) + ' | api-football.com: claveConfigurada=' + primeraMitadApiFootball.claveConfigurada + ' huboError=' + primeraMitadApiFootball.huboError + ' partidos=' + ((primeraMitadApiFootball.partidos || []).length));
   const mapaCombinado = Object.assign({}, ...mapasPorLiga);
   // nombreFuente/variableEntorno (02-10-2026): identifican a CADA fuente
   // para que agregarPrimeraMitad() pueda guardar cuál de las 2 es la
