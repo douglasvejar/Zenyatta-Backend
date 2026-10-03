@@ -115,7 +115,7 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
   check(napoli && napoli.homeScore1H === 1 && napoli.awayScore1H === 1 && napoli.final1H === true,
     'Napoli/Inter Milan (caso difícil): el "1h" se cruza bien aunque football-data.org use "FC Internazionale Milano" (nombre MUY distinto a "Inter Milan" de ESPN) — el match funcionó por el shortName ("Inter") y por prefijo de palabra');
 
-  check(pedidosAFootballData === 1, 'Un solo pedido a football-data.org (/v4/matches) resuelve las 6 ligas cubiertas a la vez, en vez de 6 pedidos por separado — la causa real del "aun hay problemas en cualquier liga" (límite de 10 pedidos/minuto del plan gratis)');
+  check(pedidosAFootballData === 2, '2 pedidos a football-data.org (/v4/matches) — uno para la fecha de la sábana y otro para el día siguiente (03-10-2026, caso Colombia: evita que un partido archivado un día después por la API quede en "sin-cruce"), en vez de 6+6 por separado — sigue siendo 1 pedido por fecha, no 1 por liga');
 
   // -----------------------------------------------------------------
   // Caso B: SIN FOOTBALL_DATA_API_KEY configurada, el sistema sigue
@@ -250,10 +250,13 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
 
   // Caso H: 2 llamadas seguidas para la MISMA fecha (simula /pizarra
   // refrescando cada 20s mientras el caché sigue fresco) — la 2da NO debe
-  // volver a pedirle nada a football-data.org.
+  // volver a pedirle nada a football-data.org. (03-10-2026: ahora cada
+  // llamada pide 2 fechas — sábana y día siguiente — así que la primera
+  // llamada ya dispara 2 pedidos; la 2da llamada, con las 2 fechas todavía
+  // dentro del TTL, no debe sumar ninguno más.)
   await obtenerResultadosSoccer('2026-09-23');
   await obtenerResultadosSoccer('2026-09-23');
-  check(pedidosCasoH === 1, 'Caso H — 2 llamadas seguidas para la misma fecha, dentro del TTL del caché: solo 1 pedido real a football-data.org, no 2 (esto es lo que evita reventar el límite de 10/minuto cuando /pizarra refresca cada 20s)');
+  check(pedidosCasoH === 2, 'Caso H — 2 llamadas seguidas para la misma fecha, dentro del TTL del caché: solo 2 pedidos reales a football-data.org (fecha sábana + día siguiente), no 4 (esto es lo que evita reventar el límite de 10/minuto cuando /pizarra refresca cada 20s)');
 
   // Caso I: llamadas SIMULTÁNEAS (sin esperar la primera) para la misma
   // fecha — deben compartir el mismo pedido en vuelo, no disparar 2 en
@@ -265,7 +268,7 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
     obtenerResultadosSoccer('2026-09-23'),
     obtenerResultadosSoccer('2026-09-23')
   ]);
-  check(pedidosCasoH === 1, 'Caso I — 2 llamadas simultáneas (sin esperar la primera) para la misma fecha: comparten el mismo pedido en vuelo, 1 solo pedido real a football-data.org');
+  check(pedidosCasoH === 2, 'Caso I — 2 llamadas simultáneas (sin esperar la primera) para la misma fecha: comparten el mismo pedido en vuelo por cada una de las 2 fechas (sábana + día siguiente), 2 pedidos reales en total, no 4');
   check(resI1['manchester city'].final1H === true && resI2['manchester city'].final1H === true, 'Caso I — ambas llamadas simultáneas devuelven igual el dato de "1h" ya resuelto');
 
   // Caso J: tras _resetCacheParaPruebas() (equivalente a que el TTL ya
@@ -274,7 +277,7 @@ function partidoFootballData(codigoCompetencia, homeName, homeShortName, awayNam
   _resetCacheParaPruebas();
   pedidosCasoH = 0;
   await obtenerResultadosSoccer('2026-09-23');
-  check(pedidosCasoH === 1, 'Caso J — tras vencer el caché (acá simulado con _resetCacheParaPruebas), se vuelve a pedir a football-data.org en vez de quedarse con un dato viejo para siempre');
+  check(pedidosCasoH === 2, 'Caso J — tras vencer el caché (acá simulado con _resetCacheParaPruebas), se vuelve a pedir a football-data.org (las 2 fechas) en vez de quedarse con un dato viejo para siempre');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

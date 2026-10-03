@@ -380,6 +380,34 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
   });
 }
 
+// Suma 1 día calendario a una fecha ISO ("AAAA-MM-DD"), siempre en UTC
+// (usando Date.UTC explícito) para no depender de la zona horaria del
+// proceso que corre el servidor — ver el comentario grande sobre el "+1
+// día" más abajo en obtenerResultadosSoccer.
+function sumarUnDiaISO(fechaISO) {
+  const [anio, mes, dia] = (fechaISO || '').split('-').map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  fecha.setUTCDate(fecha.getUTCDate() + 1);
+  return fecha.toISOString().slice(0, 10);
+}
+
+// Combina los resultados de "1h" de UN MISMO origen (football-data.org O
+// api-football.com) pedidos para 2 fechas distintas (la de la sábana y la
+// del día siguiente — ver el comentario grande de abajo) en un solo
+// objeto, como si fuera una sola respuesta con el doble de partidos.
+function combinarPrimeraMitadDeDosDias(deHoy, deManana) {
+  return {
+    partidos: [...(deHoy.partidos || []), ...(deManana.partidos || [])],
+    claveConfigurada: !!(deHoy.claveConfigurada || deManana.claveConfigurada),
+    // OR, no AND: si cualquiera de los 2 días falló, se avisa con
+    // 'error-api' en vez de 'sin-cruce' — aunque el otro día haya traído
+    // partidos reales, un partido que de verdad faltaba en el día que
+    // falló quedaría mal diagnosticado como "no cruzó" cuando en realidad
+    // nunca se pudo revisar bien.
+    huboError: !!(deHoy.huboError || deManana.huboError)
+  };
+}
+
 // Pide TODAS las ligas configuradas en paralelo y combina el resultado en
 // un solo mapa — si una liga falla (red, endpoint caído), las demás
 // siguen funcionando igual (cada obtenerResultadosDeLiga ya atrapa su
@@ -388,27 +416,56 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
 // football-data.org (6 ligas de clubes, ver footballDataApi.js) y
 // api-football.com (4 competencias de selecciones, agregado 25-09-2026,
 // ver apiFootballApi.js) — y lo cruza por nombre de equipo.
+//
+// (03-10-2026, caso real: ticket "Colombia rl 1h -0.5" quedó PENDIENTE con
+// "sin-cruce" mientras un ticket de Bélgica el mismo día sí cruzó bien. El
+// usuario confirmó que el partido de Colombia jugó a las 8pm hora
+// Venezuela — con Venezuela en UTC-4, eso es las 00:00 UTC del día
+// SIGUIENTE. Las 2 fuentes de "1h" devuelven sus partidos agrupados por
+// fecha EN UTC (`/fixtures?date=X` de api-football.com, `/v4/matches?
+// dateFrom=X&dateTo=X` de football-data.org), mientras que `fechaISO` acá
+// es la fecha de la sábana en hora Venezuela. Un partido nocturno de
+// selecciones americanas puede entonces quedar archivado por estas APIs
+// bajo el día calendario SIGUIENTE al de la sábana — y como antes solo se
+// pedía la fecha de la sábana, ese partido nunca aparecía en la lista
+// aunque la API lo tuviera perfectamente bien, dando un falso "sin-cruce".
+// Partidos de clubes europeos casi nunca sufren esto (juegan de tarde/
+// noche hora Europa, que sigue siendo el mismo día en UTC), pero por
+// seguridad el mismo chequeo se aplica a AMBAS fuentes, no solo a la de
+// selecciones — mismo principio de "un error encontrado en un caso se
+// corrige para todo el programa" ya aplicado en otras partes del sistema.
+// Costo: el doble de pedidos a cada fuente por sábana procesada — dentro
+// de sobra del cupo de las 2 (football-data.org: 10/min; api-football.com:
+// ~100/día, con caché de 15 min por fecha en cada una).
 async function obtenerResultadosSoccer(fechaISO) {
   const fechaCompacta = (fechaISO || '').replace(/-/g, '');
+  const fechaSiguienteISO = sumarUnDiaISO(fechaISO);
   const { obtenerPrimeraMitadFutbol, LIGAS_CON_PRIMERA_MITAD } = require('./footballDataApi'); // require perezoso: evita un ciclo de módulos si algún día footballDataApi.js necesitara algo de acá
   const { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL } = require('./apiFootballApi');
-  const [mapasPorLiga, primeraMitadFootballData, primeraMitadApiFootball] = await Promise.all([
+  // (03-10-2026) ANTES el .catch() descartaba el error real sin dejar
+  // rastro — si esta promesa llegaba a rechazar por algún motivo no
+  // atrapado adentro de footballDataApi.js/apiFootballApi.js, acá quedaba
+  // indistinguible de "no hay clave configurada" (mismo objeto de
+  // fallback). Ahora se loguea el error real antes de aplicar el mismo
+  // fallback de siempre, para poder diferenciar "nunca hubo clave" de
+  // "pasó algo raro acá".
+  const atraparRechazo = (nombreFuente, promesa) => promesa.catch((e) => {
+    console.error('[1h] ' + nombreFuente + ' rechazó la promesa — esto NO debería pasar (tiene su propio try/catch interno); revisar:', e);
+    return { partidos: [], claveConfigurada: false, huboError: true };
+  });
+  const [
+    mapasPorLiga,
+    primeraMitadFootballDataHoy, primeraMitadFootballDataManana,
+    primeraMitadApiFootballHoy, primeraMitadApiFootballManana
+  ] = await Promise.all([
     Promise.all(LIGAS_SOCCER.map(liga => obtenerResultadosDeLiga(liga.slug, liga.nombre, fechaCompacta))),
-    // (03-10-2026) ANTES el .catch() descartaba el error real sin dejar
-    // rastro — si esta promesa llegaba a rechazar por algún motivo no
-    // atrapado adentro de footballDataApi.js, acá quedaba indistinguible
-    // de "no hay clave configurada" (mismo objeto de fallback). Ahora se
-    // loguea el error real antes de aplicar el mismo fallback de siempre,
-    // para poder diferenciar "nunca hubo clave" de "pasó algo raro acá".
-    obtenerPrimeraMitadFutbol(fechaISO).catch((e) => {
-      console.error('[1h] obtenerPrimeraMitadFutbol (football-data.org) rechazó la promesa — esto NO debería pasar (tiene su propio try/catch interno); revisar:', e);
-      return { partidos: [], claveConfigurada: false, huboError: true };
-    }),
-    obtenerPrimeraMitadApiFootball(fechaISO).catch((e) => {
-      console.error('[1h] obtenerPrimeraMitadApiFootball (api-football.com) rechazó la promesa — esto NO debería pasar (tiene su propio try/catch interno); revisar:', e);
-      return { partidos: [], claveConfigurada: false, huboError: true };
-    })
+    atraparRechazo('obtenerPrimeraMitadFutbol (football-data.org, fecha sábana)', obtenerPrimeraMitadFutbol(fechaISO)),
+    atraparRechazo('obtenerPrimeraMitadFutbol (football-data.org, fecha siguiente)', obtenerPrimeraMitadFutbol(fechaSiguienteISO)),
+    atraparRechazo('obtenerPrimeraMitadApiFootball (api-football.com, fecha sábana)', obtenerPrimeraMitadApiFootball(fechaISO)),
+    atraparRechazo('obtenerPrimeraMitadApiFootball (api-football.com, fecha siguiente)', obtenerPrimeraMitadApiFootball(fechaSiguienteISO))
   ]);
+  const primeraMitadFootballData = combinarPrimeraMitadDeDosDias(primeraMitadFootballDataHoy, primeraMitadFootballDataManana);
+  const primeraMitadApiFootball = combinarPrimeraMitadDeDosDias(primeraMitadApiFootballHoy, primeraMitadApiFootballManana);
   // (03-10-2026, a pedido del usuario — caso real: ticket de HANRY,
   // "Colombia rl 1h -0.5", seguía mostrando "sin-clave" después de
   // confirmar con el log de arranque que API_FOOTBALL_KEY SÍ llega al

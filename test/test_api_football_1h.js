@@ -104,7 +104,7 @@ function limpiarClaves() {
   check(!!noruega, 'Norway se resuelve bien desde ESPN (marcador final 1-2, caso real reportado por el usuario)');
   check(noruega && noruega.homeScore1H === 0 && noruega.awayScore1H === 1 && noruega.final1H === true,
     'Norway/Netherlands: el "1h" cruzado de api-football.com (0-1) se agrega bien al juego de ESPN (UEFA Nations League)');
-  check(pedidosAApiFootball === 1, 'Un solo pedido a api-football.com (/fixtures) resuelve las 4 competencias cubiertas a la vez');
+  check(pedidosAApiFootball === 2, '2 pedidos a api-football.com (/fixtures) — uno para la fecha de la sábana y otro para el día siguiente (03-10-2026, caso Colombia) — sigue siendo 1 pedido por fecha, no 1 por competencia');
 
   // -----------------------------------------------------------------
   // Caso B: SIN API_FOOTBALL_KEY configurada, el sistema sigue
@@ -256,10 +256,12 @@ function limpiarClaves() {
   };
 
   // Caso G: 2 llamadas seguidas para la misma fecha, dentro del TTL — la
-  // 2da no debe volver a pedirle nada a api-football.com.
+  // 2da no debe volver a pedirle nada a api-football.com. (03-10-2026:
+  // cada llamada ahora pide 2 fechas — sábana y día siguiente — así que la
+  // primera llamada ya dispara 2 pedidos.)
   await obtenerResultadosSoccer('2026-09-25');
   await obtenerResultadosSoccer('2026-09-25');
-  check(pedidosCasoG === 1, 'Caso G — 2 llamadas seguidas para la misma fecha, dentro del TTL del caché: solo 1 pedido real a api-football.com');
+  check(pedidosCasoG === 2, 'Caso G — 2 llamadas seguidas para la misma fecha, dentro del TTL del caché: solo 2 pedidos reales a api-football.com (fecha sábana + día siguiente), no 4');
 
   // Caso H: llamadas simultáneas para la misma fecha comparten el mismo
   // pedido en vuelo.
@@ -269,7 +271,7 @@ function limpiarClaves() {
     obtenerResultadosSoccer('2026-09-25'),
     obtenerResultadosSoccer('2026-09-25')
   ]);
-  check(pedidosCasoG === 1, 'Caso H — 2 llamadas simultáneas para la misma fecha: comparten el mismo pedido en vuelo, 1 solo pedido real');
+  check(pedidosCasoG === 2, 'Caso H — 2 llamadas simultáneas para la misma fecha: comparten el mismo pedido en vuelo por cada una de las 2 fechas, 2 pedidos reales en total, no 4');
   check(resH1['norway'].final1H === true && resH2['norway'].final1H === true, 'Caso H — ambas llamadas simultáneas devuelven igual el dato de "1h" ya resuelto');
 
   // Caso I: tras _resetCacheParaPruebas() (TTL vencido), sí se vuelve a
@@ -277,7 +279,7 @@ function limpiarClaves() {
   resetApiFootball();
   pedidosCasoG = 0;
   await obtenerResultadosSoccer('2026-09-25');
-  check(pedidosCasoG === 1, 'Caso I — tras vencer el caché, se vuelve a pedir a api-football.com en vez de quedarse con un dato viejo para siempre');
+  check(pedidosCasoG === 2, 'Caso I — tras vencer el caché, se vuelve a pedir a api-football.com (las 2 fechas) en vez de quedarse con un dato viejo para siempre');
 
   // -----------------------------------------------------------------
   // Caso J (27-09-2026, ticket real del usuario: "Suiza rl 1h" quedó
@@ -308,6 +310,58 @@ function limpiarClaves() {
     'Caso J — "North Macedonia" (ESPN) cruza bien contra "Macedonia" (api-football.com) gracias al alias de selecciones, en vez de quedar en "sin-cruce"');
   check(resJ['switzerland'] && resJ['switzerland'].motivoSinPrimeraMitad === undefined,
     'Caso J — del lado de Switzerland tampoco queda ningún motivoSinPrimeraMitad (el cruce se completó del todo)');
+
+  // -----------------------------------------------------------------
+  // Caso L (03-10-2026, caso real reportado por el usuario: ticket
+  // "Colombia rl 1h -0.5" quedó PENDIENTE con "sin-cruce" mientras que un
+  // ticket de Bélgica el mismo día sí se resolvió bien). El usuario
+  // confirmó que el partido de Colombia jugó a las 8pm hora Venezuela —
+  // con Venezuela en UTC-4, eso cae justo a las 00:00 UTC del día
+  // SIGUIENTE a la fecha de la sábana. api-football.com archiva sus
+  // partidos por fecha UTC, así que ese partido queda fichado bajo el día
+  // siguiente y no aparecía al pedir solo la fecha de la sábana. Ahora
+  // obtenerResultadosSoccer() pide TAMBIÉN el día siguiente — este caso
+  // confirma que con eso el cruce sí se completa.
+  // -----------------------------------------------------------------
+  resetFootballData(); resetApiFootball(); limpiarClaves();
+  process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/fifa.worldq.conmebol/')) {
+      // Kickoff real: 02-10-2026 8pm hora Venezuela (UTC-4) = 03-10-2026 00:00 UTC.
+      return {
+        ok: true,
+        json: async () => ({
+          events: [{
+            id: 'espn-colombia-1',
+            date: '2026-10-03T00:00Z',
+            competitions: [{
+              status: { type: { completed: true, description: 'Final', state: 'post' }, period: 2 },
+              competitors: [
+                { homeAway: 'home', team: { displayName: 'Colombia', logo: null }, score: '1', winner: true },
+                { homeAway: 'away', team: { displayName: 'Peru', logo: null }, score: '0', winner: false }
+              ]
+            }]
+          }]
+        })
+      };
+    }
+    if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+    if (u.includes('v3.football.api-sports.io')) {
+      if (u.includes('date=2026-10-02')) {
+        return { ok: true, json: async () => ({ errors: [], response: [] }) }; // nada ese día — el partido quedó archivado el día siguiente en UTC
+      }
+      if (u.includes('date=2026-10-03')) {
+        return { ok: true, json: async () => ({ errors: [], response: [partidoApiFootball(34, 'Colombia', 'Peru', 0, 0)] }) }; // Eliminatorias Conmebol (id 34)
+      }
+      throw new Error('Fecha inesperada pedida a api-football.com en esta prueba: ' + u);
+    }
+    throw new Error('URL inesperada en la prueba: ' + url);
+  };
+  const resL = await obtenerResultadosSoccer('2026-10-02');
+  check(resL['colombia'] && resL['colombia'].final1H === true && resL['colombia'].homeScore1H === 0 && resL['colombia'].awayScore1H === 0,
+    'Caso L (caso real Colombia) — un partido que jugó a las 8pm hora Venezuela (00:00 UTC del día siguiente) SÍ cruza, porque además de la fecha de la sábana (2026-10-02, donde no aparece) también se pide la fecha siguiente (2026-10-03, donde sí aparece) a api-football.com');
+  check(resL['colombia'].motivoSinPrimeraMitad === undefined, 'Caso L — el partido de Colombia ya NO queda marcado "sin-cruce"');
 
   // -----------------------------------------------------------------
   // Caso K (02-10-2026, caso real reportado por el usuario: tickets de
