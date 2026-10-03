@@ -1113,10 +1113,17 @@ function calcularAjustesCruce(tickets) {
 //     en 0) — 0 regresión para el caso de siempre, el de la gran
 //     mayoría de los clientes.
 //   - Un nombre que aparece de LOS 2 lados en la MISMA carrera da
-//     `dual:true` y `neto` = |decididoJugador - decididoBanquero| —
-//     nunca la suma. `decididoJugador`/`decididoBanquero` quedan en el
-//     resultado para que el llamador pueda mostrar el desglose ("Jugó
-//     $X / Banqueó $Y → Neto $Z") cuando arma el detalle visual.
+//     `dual:true`. Si hubo AL MENOS UNA pérdida de un lado (perdió jugando
+//     y perdió banqueando, o perdió de un lado y ganó del otro), `neto` =
+//     |decididoJugador - decididoBanquero| (se restan, igual que siempre
+//     desde el 02-10-2026). Si GANÓ en los 2 lados a la vez (ver la nota
+//     grande "Neteo real" más abajo, junto a la función, caso real de
+//     "Loba" 03-10-2026), `neto` = decididoJugador + decididoBanquero (se
+//     suman completos -- ahí no hay ninguna pérdida que compartan, son 2
+//     ganancias reales e independientes). `decididoJugador`/
+//     `decididoBanquero` quedan en el resultado para que el llamador
+//     pueda mostrar el desglose ("Jugó $X / Banqueó $Y → Neto $Z") cuando
+//     arma el detalle visual.
 // El propio llamador decide, con este Map, a qué cuenta(s) de % propio/
 // aval aplicarle ese monto neto (vía obtenerComisionesPropias), exacto
 // igual que ya hacía con el monto de un solo lado.
@@ -1142,22 +1149,48 @@ function netearJugadorBanqueroTercios(tickets) {
     const clave = `${t.fecha}::${t.hipodromoNombre}::${t.carreraNumero}`;
     if (!porCarrera.has(clave)) porCarrera.set(clave, new Map());
     const porNombre = porCarrera.get(clave);
-    if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0 });
+    if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
     porNombre.get(t.clienteNombre).decididoJugador += montoDecididoExacto(t.resultadoJugador, t.sinComision);
-    if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0 });
+    porNombre.get(t.clienteNombre).sumaJugador += rj;
+    if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
     porNombre.get(t.banqueroNombre).decididoBanquero += montoDecididoExacto(t.resultadoBanquero, t.sinComision);
+    porNombre.get(t.banqueroNombre).sumaBanquero += rb;
   });
   const resultado = new Map();
   porCarrera.forEach((porNombre, clave) => {
     const netos = new Map();
     porNombre.forEach((v, nombre) => {
-      const netoExacto = Math.abs(v.decididoJugador - v.decididoBanquero);
+      const dual = v.decididoJugador > 0 && v.decididoBanquero > 0;
+      // Neteo real (03-10-2026, a pedido del usuario, caso real de "Loba" --
+      // ver la nota grande EXACTA más arriba). La regla de SIEMPRE restar
+      // (02-10-2026) se queda igual para los casos ya confirmados y
+      // probados -- jugó y perdió / banqueó y perdió (ej. GG en
+      // test_hipismo_resumen_cuenta_comision.js: pierde 100 jugando Y
+      // pierde 60 banqueando -- sigue neteando a 40, NUNCA sumando a 160),
+      // y jugó y perdió / banqueó y ganó (el caso GG original) -- en
+      // cualquiera de esos 2, al menos un lado es una pérdida real, y esa
+      // plata perdida de un lado puede salir del mismo bolsillo que lo
+      // banqueado del otro, así que restar sigue teniendo sentido. La
+      // ÚNICA excepción nueva es cuando GANÓ en los 2 lados a la vez (jugó
+      // Y ganó, banqueó Y ganó -- caso real de Loba, Belmont 3ra, llegada
+      // 7.1.9.11: ganó $475 jugando el 7 en "2/3" y ganó $475 banqueando a
+      // Legolas que perdió el 4 en "3N"): ahí NO hay ninguna pérdida de
+      // ningún lado que explique un descuento -- son 2 ganancias reales e
+      // independientes, y restarlas le daba $0 de % en vez del % completo
+      // de las 2. El usuario confirmó: si ganó en los 2 lados, cada lado
+      // se suma completo (nunca se cancelan entre sí); en cualquier otro
+      // caso (con al menos una pérdida de por medio), se sigue restando
+      // igual que siempre.
+      const ganoLosDosLados = v.sumaJugador > 0 && v.sumaBanquero > 0;
+      const netoExacto = dual
+        ? (ganoLosDosLados ? (v.decididoJugador + v.decididoBanquero) : Math.abs(v.decididoJugador - v.decididoBanquero))
+        : (v.decididoJugador + v.decididoBanquero); // uno de los 2 es 0 -- sumar o restar da igual
       netos.set(nombre, {
         decididoJugador: round2(v.decididoJugador),
         decididoBanquero: round2(v.decididoBanquero),
         neto: round2(netoExacto),
         netoExacto,
-        dual: v.decididoJugador > 0 && v.decididoBanquero > 0
+        dual
       });
     });
     resultado.set(clave, netos);

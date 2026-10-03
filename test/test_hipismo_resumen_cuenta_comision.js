@@ -418,6 +418,42 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(comisionesGG[0] && comisionesGG[0].origenTipo === 'tercios-neto',
     'La línea neteada queda marcada como "tercios-neto" para que la UI avise que es un neto jugador+banquero');
 
+  // --- LOBA (03-10-2026, caso real que reportó el usuario: "si un cliente
+  //     juega y banquea en una misma carrera diferentes ejemplares no le
+  //     estas sacando su %" -- plano real de Belmont Park 3ra carrera,
+  //     llegada 7.1.9.11: Loba jugó 2/3 al 7 por 500 y GANÓ (decidido 500,
+  //     cobra 475) Y banqueó a otro jugador que jugó 3N al 4 por 500 y
+  //     PERDIÓ -- Loba como banquera también GANÓ (decidido 500, cobra
+  //     475). Como ganó en LOS 2 lados (nunca hay una pérdida de por
+  //     medio), el neto NO debe restarse (eso daba |500-500|=0 y $0 de %,
+  //     el bug real) -- debe SUMARSE completo: 500+500=1000, con 1% propio
+  //     el devuelto correcto es 10.00. ---
+  TABLAS.jugadores.push({
+    id: 'j-loba', grupo_id: GRUPO_ID, nombre: 'LOBA', comision_propia: 1,
+    cuenta_comision_id: 'cta-loba', es_cuenta_comision: false
+  });
+  TABLAS.jugadores.push({
+    id: 'cta-loba', grupo_id: GRUPO_ID, nombre: 'LOBA - PORCENTAJE', comision_propia: 0,
+    cuenta_comision_id: null, es_cuenta_comision: true
+  });
+  // Ticket C: Loba juega 2/3 al 7 y gana completo (decidido = 500).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'LOBA', banquero_nombre: 'TYKHE', modalidad: '2/3', caballo: '7', monto: 500, resultado_jugador: 475, resultado_banquero: -475 });
+  // Ticket D, MISMA carrera: Loba banquea a LEGOLAS2 (3N al 4), que pierde
+  // todo -- Loba como banquera gana (decidido = 500).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLAS2', banquero_nombre: 'LOBA', modalidad: '3n', caballo: '4', monto: 500, resultado_jugador: -500, resultado_banquero: 475 });
+
+  const cuentaLoba = { id: 'cta-loba', grupo_id: GRUPO_ID, nombre: 'LOBA - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
+  const resumenLoba = await construirResumenClienteHipismo(cuentaLoba, grupo, 'actual');
+
+  const esperadoLoba = round2((500 + 500) * 0.01);
+  check(resumenLoba.resumen.totalSemana === esperadoLoba,
+    `ARREGLO: Loba ganó Y jugando Y banqueando en la MISMA carrera -- el 1%% debe cobrarse sobre la SUMA de los 2 lados (500+500=1000 → 10.00), nunca sobre el neto restado (|500-500|=0, el bug real reportado): esperado ${esperadoLoba}, obtenido ${resumenLoba.resumen.totalSemana}`);
+  const diaLoba = resumenLoba.dias.find(d => d.fecha === FECHA);
+  const hipLoba = diaLoba && diaLoba.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const comisionesLoba = hipLoba ? hipLoba.carreras.filter(c => c.tipo === 'comision') : [];
+  check(comisionesLoba.length === 1 && comisionesLoba[0].origenTipo === 'tercios-neto',
+    `Las 2 posiciones ganadoras de Loba en esa carrera se funden en UNA sola línea "tercios-neto" (obtenidas: ${comisionesLoba.length}, origenTipo ${comisionesLoba[0] && comisionesLoba[0].origenTipo})`);
+
   // --- Regresión: una cuenta de comisión sin ningún cliente real
   //     apuntándole (recién creada) da saldo 0 limpio, sin explotar. ---
   TABLAS.jugadores.push({
