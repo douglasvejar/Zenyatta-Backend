@@ -30,6 +30,26 @@ pool.on('error', (err) => {
   console.error('Aviso: una conexión inactiva del pool de PostgreSQL falló (normal de vez en cuando, "pg" abre otra sola):', err.message);
 });
 
+// =================================================================
+// CHEQUEO DE CONEXIÓN AL ARRANCAR (03-10-2026) — a pedido del usuario,
+// después de un caso real de migración de base (cambio de Supabase/
+// DATABASE_URL hecho desde otra máquina) donde no había forma clara de
+// confirmar, sin tocar código, si Railway realmente estaba conectando
+// bien a la base nueva o seguía fallando. Antes esto era "silencioso":
+// sin DATABASE_URL el proceso no arrancaba (ver arriba), pero CON una
+// DATABASE_URL puesta — aunque esté mal, apunte a una base vieja, o la
+// contraseña no sea la vigente — el servidor arrancaba igual, porque
+// "pg" conecta recién en la primera consulta real. Este chequeo corre
+// una sola vez, 2 segundos después de levantar el pool (para no competir
+// con el resto del arranque), y deja bien claro en el log si la conexión
+// funciona o no — y si no, el motivo real que devuelve Postgres.
+// =================================================================
+setTimeout(() => {
+  pool.query('SELECT 1')
+    .then(() => console.log('[db] Conexión a PostgreSQL OK.'))
+    .catch((err) => console.error('[db] NO SE PUDO CONECTAR a PostgreSQL — revisar DATABASE_URL en Railway. Motivo real:', err.message));
+}, 2000);
+
 async function query(text, params) {
   return pool.query(text, params);
 }
