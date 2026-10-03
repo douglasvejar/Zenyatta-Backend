@@ -56,7 +56,23 @@ const TABLAS = {
     { id: 'j-mrmoneylike', grupo_id: GRUPO_ID, nombre: 'MRMONEYLIKE', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false },
     { id: 'j-legolaslike', grupo_id: GRUPO_ID, nombre: 'LEGOLASLIKE', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false },
     { id: 'j-deportivo', grupo_id: GRUPO_ID, nombre: 'DEPORTIVO', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: true },
-    { id: 'j-bancoz', grupo_id: GRUPO_ID, nombre: 'BANCOZ', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false }
+    { id: 'j-bancoz', grupo_id: GRUPO_ID, nombre: 'BANCOZ', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false },
+    // SEBASTIANLIKE (03-10-2026, caso real "Sebastian": BUG REAL en el
+    // propio diagnóstico, no en el dinero -- su toggle "incluir % en sus
+    // jugadas" ON hacía que el diagnóstico diera Grilla -3,00 / Link
+    // -5,00 (diferencia -2,00, justo el 1% de sus jugadas que su propia
+    // query de jugadores no traía -- ver la nota grande junto a
+    // diagnosticarSaldosHipismo en hipismoResumenCliente.js).
+    { id: 'j-sebastianlike', grupo_id: GRUPO_ID, nombre: 'SEBASTIANLIKE', comision_propia: 1, incluir_porcentaje_en_jugadas: true, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false },
+    // "WINNERS" (03-10-2026, caso real en producción: salió reportado con
+    // +$15,00 de diferencia) -- un cliente REAL que, por coincidencia,
+    // se llama exactamente igual que el renglón agregado "WINNERS" que
+    // arma Cierre Final solo (acumular('WINNERS', -monto)). No tiene
+    // ninguna jugada propia -- su propio link da $0 limpio, mientras que
+    // el renglón agregado de Cierre Final da -15 (ver hipismo_winners más
+    // abajo) -- antes del arreglo esto se reportaba como discrepancia
+    // (+15,00), aunque no tiene nada que ver con el dinero del cliente.
+    { id: 'j-winnerslike', grupo_id: GRUPO_ID, nombre: 'WINNERS', comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null, es_cuenta_comision: false, modulos_anclados: false }
   ],
   jugadores_avales_porcentaje: [
     { grupo_id: GRUPO_ID, jugador_id: 'j-fuente1', avalador_id: 'j-mrmoneylike', porcentaje: 2 }
@@ -66,7 +82,8 @@ const TABLAS = {
     { id: 'p-carrera9', grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 9, fecha: FECHA, cruza_jugadas: false, comision_total: 0 },
     { id: 'p-fuente1', grupo_id: GRUPO_ID, hipodromo_nombre: 'Gulfstream Park', carrera_numero: 11, fecha: FECHA, cruza_jugadas: false, comision_total: 0 },
     { id: 'p-legolas', grupo_id: GRUPO_ID, hipodromo_nombre: 'Belmont Park', carrera_numero: 1, fecha: FECHA, cruza_jugadas: false, comision_total: 0 },
-    { id: 'p-deportivo', grupo_id: GRUPO_ID, hipodromo_nombre: 'Belmont Park', carrera_numero: 2, fecha: FECHA, cruza_jugadas: false, comision_total: 0 }
+    { id: 'p-deportivo', grupo_id: GRUPO_ID, hipodromo_nombre: 'Belmont Park', carrera_numero: 2, fecha: FECHA, cruza_jugadas: false, comision_total: 0 },
+    { id: 'p-sebastian', grupo_id: GRUPO_ID, hipodromo_nombre: 'Keeneland', carrera_numero: 1, fecha: FECHA, cruza_jugadas: false, comision_total: 0 }
   ],
   hipismo_tickets: [
     // GG: dual jugador/banquero en 2 carreras distintas (caso "GG" ya probado en test_hipismo_neteo_cierre_final.js)
@@ -79,14 +96,21 @@ const TABLAS = {
     // LEGOLASLIKE: gana 500 completo (reproduce el caso real "Legolas")
     { plano_id: 'p-legolas', grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLASLIKE', banquero_nombre: 'BANCOZ', monto: 500, resultado_jugador: 500, resultado_banquero: -500, sin_comision: true },
     // DEPORTIVO: juega y pierde 100 en Hipismo (aparte de su Deportes anclado)
-    { plano_id: 'p-deportivo', grupo_id: GRUPO_ID, cliente_nombre: 'DEPORTIVO', banquero_nombre: 'BANCOZ', monto: 100, resultado_jugador: -100, resultado_banquero: 95, sin_comision: false }
+    { plano_id: 'p-deportivo', grupo_id: GRUPO_ID, cliente_nombre: 'DEPORTIVO', banquero_nombre: 'BANCOZ', monto: 100, resultado_jugador: -100, resultado_banquero: 95, sin_comision: false },
+    // SEBASTIANLIKE: gana 100 completo (1p, caballo 1) con el toggle
+    // "incluir % en sus jugadas" ON -- su 1% debe quedar DENTRO de su
+    // propia línea Y de su propio saldo de Cierre Final, nunca aparte.
+    { plano_id: 'p-sebastian', grupo_id: GRUPO_ID, cliente_nombre: 'SEBASTIANLIKE', banquero_nombre: 'BANCOZ', modalidad: '1p', caballo: '1', monto: 100, resultado_jugador: 95, resultado_banquero: -95, sin_comision: false }
   ],
   // Remate de HANRY (26-09-2026, ítem pseudo "REMATE" -- sin fila propia
   // en "jugadores", tiene que saltarse solo en el diagnóstico).
   hipismo_remates: [{ id: 'r-1', grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'La Rinconada', carrera_numero: 7, pizarra: '1.2.3', numero_ganador: 5, comision_total: -50 }],
   hipismo_remate_apuestas: [{ id: 'ra-1', grupo_id: GRUPO_ID, remate_id: 'r-1', cliente_nombre: 'HANRY', caballo: '5', numero_ejemplar: 1, monto: 50, resultado: -50 }],
   hipismo_adelantadas_planos: [], hipismo_adelantadas_jugadas: [],
-  hipismo_winners: [],
+  // HANRY ganó 15 por "Cargar Winners" -- su contraparte agregada es el
+  // renglón "WINNERS" (-15), que choca de nombre con el jugador real
+  // "WINNERS" de arriba.
+  hipismo_winners: [{ grupo_id: GRUPO_ID, fecha: FECHA, cliente_nombre: 'HANRY', monto: 15, hipodromo_nombre: 'La Rinconada', carrera_numero: 3, caballo: '2' }],
   hipismo_comisiones_ajustes: [
     { grupo_id: GRUPO_ID, cliente_nombre: 'LEGOLASLIKE', monto: -8.00, fecha: FECHA, nota: 'Traspaso de prueba' }
   ],
@@ -122,7 +146,11 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (/^SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) {
-    return { rows: [] };
+    const [grupoId, desde, hasta] = params;
+    const filas = TABLAS.hipismo_winners
+      .filter(w => w.grupo_id === grupoId && w.fecha >= desde && w.fecha <= hasta)
+      .map(w => ({ cliente_nombre: w.cliente_nombre, monto: w.monto }));
+    return { rows: filas };
   }
   if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total\s+FROM hipismo_comisiones_ajustes\s+WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3\s+GROUP BY cliente_nombre/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
@@ -142,9 +170,12 @@ function ejecutarQuery(text, params) {
   }
 
   // ---- diagnosticarSaldosHipismo: lista plana de jugadores del grupo ----
-  if (/^SELECT id, grupo_id, nombre, modulos_anclados, es_cuenta_comision FROM jugadores WHERE grupo_id = \$1$/i.test(sql)) {
+  if (/^SELECT id, grupo_id, nombre, modulos_anclados, es_cuenta_comision, comision_propia, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = \$1$/i.test(sql)) {
     const [grupoId] = params;
-    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId).map(j => ({ id: j.id, grupo_id: j.grupo_id, nombre: j.nombre, modulos_anclados: j.modulos_anclados, es_cuenta_comision: j.es_cuenta_comision })) };
+    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupoId).map(j => ({
+      id: j.id, grupo_id: j.grupo_id, nombre: j.nombre, modulos_anclados: j.modulos_anclados, es_cuenta_comision: j.es_cuenta_comision,
+      comision_propia: j.comision_propia, incluir_porcentaje_en_jugadas: j.incluir_porcentaje_en_jugadas
+    })) };
   }
 
   // ---- calcularDevueltoDestinoHipismo: candidatos cuyo % resuelve a esta ficha ----
@@ -233,7 +264,11 @@ function ejecutarQuery(text, params) {
   }
   // ---- obtenerLineasHipismoCliente: Winners ----
   if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
-    return { rows: [] };
+    const [grupoId, nombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_winners
+      .filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre && w.fecha >= desde && w.fecha <= hasta)
+      .map(w => ({ caballo: w.caballo, monto: w.monto, fecha: w.fecha, hipodromo_nombre: w.hipodromo_nombre, carrera_numero: w.carrera_numero, pais: 'VE' }));
+    return { rows: filas };
   }
   // ---- Traspasos de Comisión de un cliente normal/cuenta de comisión ----
   if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) {
@@ -313,6 +348,14 @@ async function invocarRuta(handler, req) {
   // el diagnóstico lo saltó solo, sin reventar y sin reportarlo como
   // discrepancia (no tiene link propio con el que comparar).
   check(!nombresConDiscrepancia.includes('REMATE'), '5) El ítem pseudo "REMATE" se salta (no tiene ficha real que comparar), sin romper el diagnóstico');
+
+  // ARREGLO (caso real "Winners" en producción): "WINNERS" se salta
+  // SIEMPRE por nombre, aunque exista un jugador real llamado igual
+  // (j-winnerslike, sin jugadas propias) -- antes de este arreglo salía
+  // reportado con +15,00 de diferencia (el renglón agregado de Cierre
+  // Final vs. el link vacío de ese cliente real).
+  check(!nombresConDiscrepancia.includes('WINNERS'),
+    `6) ARREGLO: "WINNERS" se salta SIEMPRE (choca de nombre con un cliente real sin jugadas), nunca se reporta como discrepancia -- discrepancias encontradas: ${JSON.stringify(salida ? salida.discrepancias : null)}`);
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

@@ -1440,8 +1440,19 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
 // =================================================================
 async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
   const resultadoCierre = await construirCierreFinalHipismo(grupoId, desde, hasta);
+  // 03-10-2026 -- BUG REAL encontrado con el caso real de "Sebastian"
+  // (toggle "incluir % en sus jugadas" ON): esta query solo traía
+  // id/grupo_id/nombre/modulos_anclados/es_cuenta_comision, SIN
+  // comision_propia NI incluir_porcentaje_en_jugadas -- construirResumen
+  // ClienteHipismo lee esos 2 campos directo del objeto `jugador` que le
+  // pasamos (ver pctPropioIncluido más abajo en este archivo) para sumarle
+  // el % incluido a cada jugada. Faltando esos campos, pctPropioIncluido
+  // siempre daba 0 acá (aunque el cliente SÍ tuviera el toggle ON), y el
+  // diagnóstico comparaba el total SIN el % incluido contra la grilla
+  // (que sí lo trae bien, por otro camino) -- un FALSO POSITIVO de este
+  // propio diagnóstico, no una discrepancia real de dinero.
   const rJugadores = await db.query(
-    'SELECT id, grupo_id, nombre, modulos_anclados, es_cuenta_comision FROM jugadores WHERE grupo_id = $1',
+    'SELECT id, grupo_id, nombre, modulos_anclados, es_cuenta_comision, comision_propia, incluir_porcentaje_en_jugadas FROM jugadores WHERE grupo_id = $1',
     [grupoId]
   );
   const porNombre = new Map(rJugadores.rows.map(j => [j.nombre, j]));
@@ -1451,8 +1462,21 @@ async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
   // a hoyVenezuela() (nunca debería diferir, pero esto lo deja imposible).
   const rangoPersonalizado = { desde, hasta };
 
+  // ÍTEMS PSEUDO SIEMPRE SE SALTAN POR NOMBRE, no solo cuando no hay
+  // jugador que calce (03-10-2026, caso real "Winners" en producción:
+  // salió reportado como discrepancia con +$15,00 de diferencia). Estos 3
+  // nombres (acumular('WINNERS', ...), acumular('TABLAS FIJAS', ...) y
+  // NOMBRE_ITEM_REMATE más arriba en este archivo) son renglones
+  // AGREGADOS que arma Cierre Final solo, nunca la ficha de un cliente
+  // real -- si por coincidencia existe un jugador real con ese mismo
+  // nombre exacto en el grupo (ej. un cliente literal llamado "Winners"),
+  // comparar su propio link contra el renglón agregado de Cierre Final
+  // compara 2 cosas completamente distintas y siempre va a dar "distinto"
+  // sin que sea un bug de dinero.
+  const NOMBRES_PSEUDO_ITEM = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE']);
   const discrepancias = [];
   for (const c of resultadoCierre.clientes) {
+    if (NOMBRES_PSEUDO_ITEM.has(c.nombre)) continue;
     const jugador = porNombre.get(c.nombre);
     if (!jugador) continue;
     const resumen = await construirResumenClienteHipismo(jugador, grupo, 'actual', rangoPersonalizado);
