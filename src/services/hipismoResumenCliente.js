@@ -219,6 +219,54 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
       if (!entradas.length) continue;
 
       const lineas = await obtenerLineasHipismoCliente(jugador.grupo_id, nombreFuente, desde, hasta);
+
+      // Neteo jugador/banquero por carrera (03-10-2026, a pedido del
+      // usuario: "al abrir el cliente me da un saldo completamente
+      // distinto , xq esta pasando eso" — la cuenta de comisión "Agregados
+      // soy ganador" mostraba un total DISTINTO en el modal de detalle
+      // (esta función) que en la grilla "Detallado por Cliente"
+      // (construirCierreFinalHipismo, más abajo), que SÍ aplica el neteo
+      // de netearJugadorBanqueroTercios desde el 02-10-2026 (caso real
+      // "GG": juega y banquea en la MISMA carrera, y el % debe cobrarse
+      // sobre el NETO de las 2 posiciones, nunca sobre la suma de ambas
+      // por separado — ver la nota grande EXACTA junto a esa función en
+      // hipismoCalc.js). Acá, como obtenerLineasHipismoCliente devuelve UN
+      // renglón POR TICKET (nunca ya neteado por carrera), el bucle de
+      // abajo le cobraba % a "GG" sobre su lado jugador Y su lado
+      // banquero por separado cuando coincidían en la misma carrera — este
+      // era el "8vo lugar" que el barrido del 02-10-2026 ("los 7 lugares")
+      // no había cubierto todavía, porque esta función no existía como tal
+      // en ese momento.
+      //
+      // Se arma acá, por cada nombreFuente, el mismo neteo a partir de sus
+      // propios tickets crudos de Tercios (el neteo NUNCA aplica a
+      // Remate/Adelantadas/Winners — ver esa misma nota grande), con el
+      // mismo patrón ya usado en GET /saldo-comisiones (routes/hipismo.js).
+      const rTicketsFuente = await db.query(
+        `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero,
+                t.sin_comision, p.fecha, p.hipodromo_nombre, p.carrera_numero
+           FROM hipismo_tickets t
+           JOIN hipismo_planos p ON p.id = t.plano_id
+          WHERE t.grupo_id = $1 AND (t.cliente_nombre = $2 OR t.banquero_nombre = $2)
+            AND p.fecha BETWEEN $3 AND $4`,
+        [jugador.grupo_id, nombreFuente, desde, hasta]
+      );
+      const netoPorCarreraFuente = netearJugadorBanqueroTercios(rTicketsFuente.rows.map(t => ({
+        clienteNombre: t.cliente_nombre,
+        banqueroNombre: t.banquero_nombre,
+        resultadoJugador: t.resultado_jugador,
+        resultadoBanquero: t.resultado_banquero,
+        sinComision: t.sin_comision,
+        fecha: t.fecha instanceof Date ? t.fecha.toISOString().slice(0, 10) : t.fecha,
+        hipodromoNombre: t.hipodromo_nombre,
+        carreraNumero: t.carrera_numero
+      })));
+      // claveCarrera ya cobrada por el neto -- para que, si el lado
+      // jugador y el lado banquero caen en renglones distintos de
+      // `lineas` (lo normal: son tickets distintos), el % solo se cobre
+      // UNA vez sobre el neto de esa carrera, no una vez por renglón.
+      const dualYaAgregado = new Set();
+
       lineas.forEach(linea => {
         // Winners nunca genera % devuelto — no tiene "monto apostado"
         // (ver la nota grande de agregarPorcentajeDevuelto). Remate
@@ -256,7 +304,24 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         // linea.monto (lo apostado bruto) salvo que coincida con lo
         // decidido — para una Marca banqueada, además, hay que escalar a
         // la PARTE real de ESTE banquero (`porcentajeBanqueado`).
-        const montoParaPct = montoBaseParaPct(linea);
+        //
+        // Dual jugador+banquero en la MISMA carrera (ver la nota grande de
+        // arriba): solo existe para Tercios (linea.tipo ausente, igual que
+        // netearJugadorBanqueroTercios) -- las Marcas de Jugadas
+        // Adelantadas se quedan exactamente como estaban.
+        let montoParaPct;
+        let origenTipoNeto = null;
+        if (!linea.tipo) {
+          const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+          const infoNeto = netoPorCarreraFuente.get(claveCarrera)?.get(nombreFuente);
+          if (infoNeto && infoNeto.dual) {
+            if (dualYaAgregado.has(claveCarrera)) return; // el neto de esta carrera ya se cobró con otro renglón
+            dualYaAgregado.add(claveCarrera);
+            montoParaPct = infoNeto.netoExacto;
+            origenTipoNeto = 'tercios-neto';
+          }
+        }
+        if (montoParaPct === undefined) montoParaPct = montoBaseParaPct(linea);
 
         entradas.forEach(info => {
           const devuelto = round2(Math.abs(Number(montoParaPct) || 0) * (info.pct / 100));
@@ -270,7 +335,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
 
           hipMap.get(hipNombre).carreras.push({
             tipo: 'comision',
-            origenTipo: linea.tipo || 'tercios',
+            origenTipo: origenTipoNeto || linea.tipo || 'tercios',
             carrera: linea.carreraNumero,
             pizarra: linea.pizarra,
             modalidad: linea.modalidad,
@@ -281,7 +346,8 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
             // sobre la que se calculó el %, no el monto completo de la
             // jugada — para que el detalle ("X% de $monto = $resultado")
             // cuadre también cuando montoParaPct viene escalado (banqueo
-            // de una Marca).
+            // de una Marca, o neteado por jugar y banquear en la misma
+            // carrera).
             monto: Math.abs(Number(montoParaPct) || 0),
             resultado: devuelto
           });

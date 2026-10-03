@@ -126,6 +126,26 @@ function ejecutarQuery(text, params) {
       })
     };
   }
+  // --- Tickets crudos para el neteo jugador/banquero por carrera
+  //     (03-10-2026, netearJugadorBanqueroTercios -- ver la nota grande de
+  //     construirResumenCuentaComisionHipismo en
+  //     services/hipismoResumenCliente.js, caso "GG juega y banquea en la
+  //     MISMA carrera") ---
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero,\s*t\.sin_comision, p\.fecha, p\.hipodromo_nombre, p\.carrera_numero/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_tickets
+      .filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre))
+      .map(t => ({ t, plano: TABLAS.hipismo_planos.find(p => p.id === t.plano_id) }))
+      .filter(({ plano }) => plano && plano.fecha >= desde && plano.fecha <= hasta);
+    return {
+      rows: filas.map(({ t, plano }) => ({
+        cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre,
+        resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero,
+        sin_comision: t.sin_comision, fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre,
+        carrera_numero: plano.carrera_numero
+      }))
+    };
+  }
   // --- Remate ---
   if (/^SELECT a\.caballo, a\.numero_ejemplar, a\.monto, a\.resultado/i.test(sql)) {
     const [grupoId, nombre, desde, hasta] = params;
@@ -227,15 +247,21 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
     cuenta_comision_id: null, es_cuenta_comision: true
   });
 
-  // Tercios: PEDRO pierde 100 → 1% de 100 = 1.00 (SIEMPRE positivo, aunque
-  // PEDRO pierda su jugada — ver la nota grande de agregarPorcentajeDevuelto).
+  // Tercios: PEDRO pierde 100 (decidido 100) — SIEMPRE positivo, aunque
+  // PEDRO pierda su jugada (ver la nota grande de agregarPorcentajeDevuelto).
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '3', monto: 100, resultado_jugador: -100, resultado_banquero: 95 });
-  // Tercios: PEDRO gana 80 → 1% de 80 = 0.80 (también positivo, gane o pierda).
+  // Tercios: PEDRO gana 76 (decidido 76/0.95 = 80) — también cuenta, gane o
+  // pierda.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '9x2', caballo: '9', monto: 80, resultado_jugador: 76, resultado_banquero: -76 });
-  // Tercios: PEDRO como BANQUERO de OTRO — 29-09-2026 (caso real
-  // "Mrincreible", ver la nota grande en construirResumenCuentaComisionHipismo):
-  // esto AHORA SÍ genera % (1% de 30 = 0.30), a diferencia de antes de esta
-  // ronda ("nunca lo que banqueó").
+  // Tercios: PEDRO como BANQUERO de OTRO, EN LA MISMA CARRERA (carrera 5,
+  // plano-1) — 29-09-2026 (caso real "Mrincreible"): esto AHORA SÍ genera %
+  // (a diferencia de antes de esa ronda, "nunca lo que banqueó"). Y, desde
+  // el 03-10-2026 (ver la nota grande de construirResumenCuentaComisionHipismo
+  // en services/hipismoResumenCliente.js), como PEDRO juega (2 tickets) Y
+  // banquea (este ticket) en la MISMA carrera, las 3 posiciones se NETEAN
+  // en una sola: decididoJugador = 100+80 = 180, decididoBanquero = 28.5/0.95
+  // = 30, neto = |180-30| = 150 → 1% = 1.50 (nunca 1.00+0.80+0.30=2.10 por
+  // separado, la misma regla del caso "GG" aplicada acá).
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '5', monto: 30, resultado_jugador: -30, resultado_banquero: 28.5 });
 
   // Remate: PEDRO apuesta 60 → 1% de 60 = 0.60.
@@ -254,11 +280,13 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
   // 26-09-2026, a pedido del usuario ("LOS REMATES NO LE PRODUCEN % DE
   // DEVOLUCION A LOS CLIENTES"): el 0.60 de Remate YA NO entra acá. Winners
-  // tampoco (no tiene "monto apostado"). 29-09-2026: el banqueo de Tercios
-  // (0.30, 1% de los 30 que PEDRO le banqueó a OTRO) AHORA SÍ entra.
-  const esperadoPedro = round2(1.00 + 0.80 + 0.30 - 0.50);
+  // tampoco (no tiene "monto apostado"). 03-10-2026: las 3 posiciones de
+  // Tercios de PEDRO en la carrera 5 (jugó 2 tickets, banqueó 1) quedan
+  // NETEADAS en una sola comisión de 1.50 (ver la nota grande junto a esos
+  // tickets, arriba) en vez de sumarse por separado (1.00+0.80+0.30=2.10).
+  const esperadoPedro = round2(1.50 - 0.50);
   check(resumenPedro.resumen.totalSemana === esperadoPedro,
-    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — suma 1%% de lo que PEDRO jugó Y banqueó por Tercios (nunca Remate ni Winners) más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
+    `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — 1%% sobre el NETO de lo que PEDRO jugó Y banqueó en la carrera 5 (nunca sobre la suma de las 2 posiciones por separado), más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
   check(resumenPedro.modulos.hipismo === true && resumenPedro.modulos.deportes === false,
     'Una cuenta de comisión nunca trae Deportes anclado');
   check(resumenPedro.jugador.nombre === 'PEDRO - PORCENTAJE', 'El resumen trae el nombre de la cuenta, no el del cliente real');
@@ -266,8 +294,9 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const diaPedro = resumenPedro.dias.find(d => d.fecha === FECHA);
   check(!!diaPedro, 'Trae el día agrupado');
   const hipPedro = diaPedro.hipodromos.find(h => h.nombre === 'La Rinconada');
-  check(!!hipPedro && hipPedro.carreras.filter(c => c.tipo === 'comision').length === 3,
-    'Las 2 jugadas de Tercios de PEDRO Y su banqueo generan % (3 líneas) -- el Remate (60 apostado) sigue sin contar para la cuenta de comisión');
+  const comisionesPedro = hipPedro ? hipPedro.carreras.filter(c => c.tipo === 'comision') : [];
+  check(comisionesPedro.length === 1 && comisionesPedro[0].origenTipo === 'tercios-neto',
+    `Las 3 posiciones de Tercios de PEDRO en la carrera 5 (jugó+jugó+banqueó) se netean en UNA sola línea "tercios-neto" -- el Remate (60 apostado) sigue sin contar para la cuenta de comisión (líneas obtenidas: ${comisionesPedro.length})`);
   check(hipPedro.carreras.every(c => c.tipo !== 'comision' || c.clienteOrigen === 'PEDRO'),
     'Cada línea de comisión trae quién la generó (clienteOrigen)');
   const bloqueTraspasos = diaPedro.hipodromos.find(h => h.tipo === 'traspaso');
@@ -319,6 +348,43 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const resumenLuis = await construirResumenClienteHipismo(cuentaLuis, grupo, 'actual');
   check(resumenLuis.resumen.totalSemana === round2(2.00),
     `El saldo de "LUIS - PORCENTAJE" trae su propio 2%% (comision_propia SIEMPRE es para el propio cliente): esperado 2, obtenido ${resumenLuis.resumen.totalSemana}`);
+
+  // --- GG (03-10-2026, caso real que reportó el usuario: "al abrir el
+  //     cliente me da un saldo completamente distinto" -- la cuenta de
+  //     comisión "Agregados soy ganador" cobraba % por separado sobre el
+  //     lado jugador Y el lado banquero de GG cuando coincidían en la
+  //     MISMA carrera, en vez de sobre el neto. GG juega y pierde 100 en
+  //     la carrera 5 (plano-1) -- decidido 100 -- Y banquea a OTRO2 en esa
+  //     MISMA carrera, perdiendo 60 como banquero -- decidido 60. Neto =
+  //     |100 - 60| = 40. Con 1%% propio, el devuelto correcto es 0.40, NUNCA
+  //     1.00 + 0.60 = 1.60 (que es lo que daba antes de este arreglo). ---
+  TABLAS.jugadores.push({
+    id: 'j-gg', grupo_id: GRUPO_ID, nombre: 'GG', comision_propia: 1,
+    cuenta_comision_id: 'cta-gg', es_cuenta_comision: false
+  });
+  TABLAS.jugadores.push({
+    id: 'cta-gg', grupo_id: GRUPO_ID, nombre: 'GG - PORCENTAJE', comision_propia: 0,
+    cuenta_comision_id: null, es_cuenta_comision: true
+  });
+  // Ticket A: GG juega y pierde 100 (decidido = 100).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'GG', banquero_nombre: 'BANCOX', modalidad: '1/2', caballo: '4', monto: 100, resultado_jugador: -100, resultado_banquero: 95 });
+  // Ticket B, MISMA carrera: GG banquea a OTRO2, que gana -- GG pierde 60
+  // como banquero (decidido = 60).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO2', banquero_nombre: 'GG', modalidad: '9x2', caballo: '6', monto: 60, resultado_jugador: 60, resultado_banquero: -60 });
+
+  const cuentaGG = { id: 'cta-gg', grupo_id: GRUPO_ID, nombre: 'GG - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
+  const resumenGG = await construirResumenClienteHipismo(cuentaGG, grupo, 'actual');
+
+  const esperadoGG = round2(Math.abs(100 - 60) * 0.01);
+  check(resumenGG.resumen.totalSemana === esperadoGG,
+    `GG jugó Y banqueó en la MISMA carrera -- el 1%% debe cobrarse sobre el NETO (|100-60|=40 → 0.40), nunca sobre la suma de las 2 posiciones por separado (1.60): esperado ${esperadoGG}, obtenido ${resumenGG.resumen.totalSemana}`);
+  const diaGG = resumenGG.dias.find(d => d.fecha === FECHA);
+  const hipGG = diaGG.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const comisionesGG = hipGG.carreras.filter(c => c.tipo === 'comision');
+  check(comisionesGG.length === 1,
+    `El neteo colapsa las 2 posiciones de GG en esa carrera en UNA sola línea de comisión, no 2 (obtenidas: ${comisionesGG.length})`);
+  check(comisionesGG[0] && comisionesGG[0].origenTipo === 'tercios-neto',
+    'La línea neteada queda marcada como "tercios-neto" para que la UI avise que es un neto jugador+banquero');
 
   // --- Regresión: una cuenta de comisión sin ningún cliente real
   //     apuntándole (recién creada) da saldo 0 limpio, sin explotar. ---

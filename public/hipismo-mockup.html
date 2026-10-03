@@ -9368,7 +9368,12 @@ function armarJugadaTextoDetallado(c) {
   // SALDO DICEN 0") — MISMO texto EXACTO que armarJugadaTexto() en
   // hipismo-cliente-portal.html (ver la nota grande de allá).
   if (c.tipo === 'comision') {
-    const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : '';
+    // 'tercios-neto' (03-10-2026, ver la nota grande de
+    // construirResumenCuentaComisionHipismo en services/hipismoResumenCliente.js):
+    // el cliente origen jugó Y banqueó en esta MISMA carrera -- el monto ya
+    // viene neteado entre las 2 posiciones, se avisa para que no se vea
+    // como una jugada más de Tercios cualquiera.
+    const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : c.origenTipo === 'tercios-neto' ? ' (Neto — jugó y banqueó)' : '';
     return `💰 ${c.porcentaje}% de ${c.clienteOrigen}${origen}`;
   }
   // Ajuste por cruce (26-09-2026, ver la nota grande EXACTA de
