@@ -349,6 +349,38 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(resumenLuis.resumen.totalSemana === round2(2.00),
     `El saldo de "LUIS - PORCENTAJE" trae su propio 2%% (comision_propia SIEMPRE es para el propio cliente): esperado 2, obtenido ${resumenLuis.resumen.totalSemana}`);
 
+  // --- FERROCARRIL (03-10-2026, 2da vuelta del mismo reporte del usuario:
+  //     "Agregados ferrocarril" daba $43,92 en la grilla y $43,98 en el
+  //     modal, SIN que el cliente origen jugara y banqueara la misma
+  //     carrera -- solo tenía 2 jugadas de Tercios distintas EN LA MISMA
+  //     carrera, cada una perdiendo 12,50 (decidido 12,50 exacto cada
+  //     una). El % (1%%) se redondeaba ANTES por ticket (0,125 -> 0,13 cada
+  //     una -> suma 0,26) en vez de sumar el monto exacto de la carrera
+  //     (25,00) y redondear una sola vez (0,25) -- mismo patrón "CODINO"
+  //     ya corregido en otras pantallas (ver GET /comisiones-devueltas). ---
+  TABLAS.hipismo_planos.push({ id: 'plano-2', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 8, fecha: FECHA, pizarra: '1.2.3' });
+  TABLAS.jugadores.push({
+    id: 'j-mrcamino', grupo_id: GRUPO_ID, nombre: 'MRCAMINO', comision_propia: 1,
+    cuenta_comision_id: 'cta-ferrocarril', es_cuenta_comision: false
+  });
+  TABLAS.jugadores.push({
+    id: 'cta-ferrocarril', grupo_id: GRUPO_ID, nombre: 'FERROCARRIL - PORCENTAJE', comision_propia: 0,
+    cuenta_comision_id: null, es_cuenta_comision: true
+  });
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-2', grupo_id: GRUPO_ID, cliente_nombre: 'MRCAMINO', banquero_nombre: 'BANCOY', modalidad: '1/2', caballo: '2', monto: 12.5, resultado_jugador: -12.5, resultado_banquero: 11.875 });
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-2', grupo_id: GRUPO_ID, cliente_nombre: 'MRCAMINO', banquero_nombre: 'BANCOY', modalidad: '9x2', caballo: '9', monto: 12.5, resultado_jugador: -12.5, resultado_banquero: 11.875 });
+
+  const cuentaFerrocarril = { id: 'cta-ferrocarril', grupo_id: GRUPO_ID, nombre: 'FERROCARRIL - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
+  const resumenFerrocarril = await construirResumenClienteHipismo(cuentaFerrocarril, grupo, 'actual');
+
+  check(resumenFerrocarril.resumen.totalSemana === 0.25,
+    `MRCAMINO perdió 2 tickets de 12,50 en la MISMA carrera -- el 1%% debe cobrarse sobre el EXACTO de la carrera (25,00 → 0,25), nunca sumando el % de cada ticket ya redondeado (0,13+0,13=0,26): obtenido ${resumenFerrocarril.resumen.totalSemana}`);
+  const diaFerro = resumenFerrocarril.dias.find(d => d.fecha === FECHA);
+  const hipFerro = diaFerro.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const comisionesFerro = hipFerro.carreras.filter(c => c.tipo === 'comision' && c.clienteOrigen === 'MRCAMINO');
+  check(comisionesFerro.length === 1 && comisionesFerro[0].origenTipo === 'tercios',
+    `Las 2 jugadas de MRCAMINO en la misma carrera se funden en UNA sola línea de comisión "tercios" (no "tercios-neto", porque no jugó Y banqueó -- solo jugó 2 veces): líneas obtenidas ${comisionesFerro.length}, origenTipo ${comisionesFerro[0] && comisionesFerro[0].origenTipo}`);
+
   // --- GG (03-10-2026, caso real que reportó el usuario: "al abrir el
   //     cliente me da un saldo completamente distinto" -- la cuenta de
   //     comisión "Agregados soy ganador" cobraba % por separado sobre el

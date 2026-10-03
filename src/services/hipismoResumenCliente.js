@@ -242,6 +242,22 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
       // propios tickets crudos de Tercios (el neteo NUNCA aplica a
       // Remate/Adelantadas/Winners — ver esa misma nota grande), con el
       // mismo patrón ya usado en GET /saldo-comisiones (routes/hipismo.js).
+      //
+      // 03-10-2026, 2da vuelta (caso real "Agregados ferrocarril": grilla
+      // $43,92 vs modal $43,98, SIN que el cliente origen jugara y
+      // banqueara la misma carrera -- solo tenía 2 jugadas de Tercios
+      // distintas en la MISMA carrera): netearJugadorBanqueroTercios ya
+      // acumula EXACTO (sin redondear) TODOS los tickets de una carrera
+      // para un nombre, sea dual o no -- así que usar SIEMPRE su
+      // `netoExacto` como base del % (no solo cuando dual:true) también
+      // resuelve, de regalo, el otro bug hermano ya conocido en este
+      // código base ("acumular EXACTO por carrera, redondear 1 sola vez",
+      // ver esa nota grande en GET /comisiones-devueltas de routes/
+      // hipismo.js, caso real "CODINO"): antes, 2 tickets de un mismo
+      // cliente en la misma carrera se redondeaban CADA UNO por separado y
+      // se sumaban esos redondeos, en vez de sumar el monto exacto de la
+      // carrera y redondear una sola vez -- la diferencia de unos
+      // centavos que mostraba "Agregados ferrocarril".
       const rTicketsFuente = await db.query(
         `SELECT t.cliente_nombre, t.banquero_nombre, t.resultado_jugador, t.resultado_banquero,
                 t.sin_comision, p.fecha, p.hipodromo_nombre, p.carrera_numero
@@ -261,11 +277,12 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         hipodromoNombre: t.hipodromo_nombre,
         carreraNumero: t.carrera_numero
       })));
-      // claveCarrera ya cobrada por el neto -- para que, si el lado
-      // jugador y el lado banquero caen en renglones distintos de
-      // `lineas` (lo normal: son tickets distintos), el % solo se cobre
-      // UNA vez sobre el neto de esa carrera, no una vez por renglón.
-      const dualYaAgregado = new Set();
+      // claveCarrera de Tercios ya cobrada (dual o no) -- para que, si el
+      // cliente origen tiene 2+ tickets de Tercios en la MISMA carrera
+      // (jugando y banqueando, o varias jugadas del mismo lado), el % se
+      // cobre UNA sola vez sobre el monto exacto acumulado de esa carrera,
+      // nunca una vez por renglón/ticket.
+      const carreraTerciosYaAgregada = new Set();
 
       lineas.forEach(linea => {
         // Winners nunca genera % devuelto — no tiene "monto apostado"
@@ -305,23 +322,26 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
         // decidido — para una Marca banqueada, además, hay que escalar a
         // la PARTE real de ESTE banquero (`porcentajeBanqueado`).
         //
-        // Dual jugador+banquero en la MISMA carrera (ver la nota grande de
-        // arriba): solo existe para Tercios (linea.tipo ausente, igual que
+        // Tercios en la MISMA carrera (ver las 2 notas grandes de arriba):
+        // SIEMPRE se cobra sobre el acumulado EXACTO de netearJugadorBanqueroTercios
+        // para esa carrera, redondeando una sola vez -- cubre a la vez el
+        // caso "GG" (dual jugador+banquero) y el caso "Agregados
+        // ferrocarril" (2+ jugadas del mismo lado en la misma carrera).
+        // Esto solo existe para Tercios (linea.tipo ausente, igual que
         // netearJugadorBanqueroTercios) -- las Marcas de Jugadas
         // Adelantadas se quedan exactamente como estaban.
         let montoParaPct;
         let origenTipoNeto = null;
         if (!linea.tipo) {
           const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+          if (carreraTerciosYaAgregada.has(claveCarrera)) return; // esta carrera ya se cobró con otro renglón/ticket
+          carreraTerciosYaAgregada.add(claveCarrera);
           const infoNeto = netoPorCarreraFuente.get(claveCarrera)?.get(nombreFuente);
-          if (infoNeto && infoNeto.dual) {
-            if (dualYaAgregado.has(claveCarrera)) return; // el neto de esta carrera ya se cobró con otro renglón
-            dualYaAgregado.add(claveCarrera);
-            montoParaPct = infoNeto.netoExacto;
-            origenTipoNeto = 'tercios-neto';
-          }
+          montoParaPct = infoNeto ? infoNeto.netoExacto : montoBaseParaPct(linea);
+          if (infoNeto && infoNeto.dual) origenTipoNeto = 'tercios-neto';
+        } else {
+          montoParaPct = montoBaseParaPct(linea);
         }
-        if (montoParaPct === undefined) montoParaPct = montoBaseParaPct(linea);
 
         entradas.forEach(info => {
           const devuelto = round2(Math.abs(Number(montoParaPct) || 0) * (info.pct / 100));
