@@ -163,6 +163,32 @@ process.on('unhandledRejection', (err) => {
   console.error('Promesa rechazada sin atrapar (revisar si falta algún asyncHandler):', err);
 });
 
+// =================================================================
+// DIAGNÓSTICO DE CLAVES DE "1H" (03-10-2026) — a pedido del usuario,
+// después de un caso real (ticket de HANRY, "Colombia rl 1h -0.5") que
+// seguía mostrando "sin-clave" (ver evaluador.js/apiFootballApi.js)
+// incluso DESPUÉS de agregar API_FOOTBALL_KEY en Railway y redeployar.
+// Antes no había forma de confirmar, sin tocar código, si el proceso
+// que está corriendo de verdad ve la variable en su process.env — el
+// dashboard de Railway solo muestra lo que está CONFIGURADO, no lo que
+// el proceso actual tiene cargado (si el redeploy no agarró, o la
+// variable quedó en el servicio/ambiente equivocado, el dashboard se ve
+// bien igual). Este log corre una sola vez al arrancar y deja bien claro,
+// en los Deployment Logs de Railway, si cada clave llegó o no — y si
+// llegó, sus primeros 4 caracteres (nunca la clave completa) para poder
+// confirmar que es la que se espera sin exponerla entera en el log.
+// =================================================================
+function logEstadoClave(nombreVariable, etiqueta) {
+  const valor = process.env[nombreVariable];
+  if (valor) {
+    console.log('[claves] ' + nombreVariable + ' configurada (empieza con "' + valor.slice(0, 4) + '...", ' + valor.length + ' caracteres) — ' + etiqueta);
+  } else {
+    console.log('[claves] ' + nombreVariable + ' NO configurada — ' + etiqueta + ' — revisar que esté puesta en el servicio/ambiente correcto en Railway y que el último deploy sea POSTERIOR a haberla agregado.');
+  }
+}
+logEstadoClave('FOOTBALL_DATA_API_KEY', 'primera mitad de fútbol, 6 ligas de clubes (football-data.org)');
+logEstadoClave('API_FOOTBALL_KEY', 'primera mitad de fútbol, selecciones: Nations League/Copa América/Amistoso Internacional/Eliminatorias Conmebol (api-football.com)');
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('Deportes Zenyatta backend corriendo en http://localhost:' + PORT);
