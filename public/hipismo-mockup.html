@@ -805,6 +805,17 @@
   #comisionesSinDevolucionesCaptura .balance-fila { background: rgba(241, 248, 243, 0.55); }
   #comisionesSinDevolucionesCaptura .balance-fila:nth-child(even) { background: rgba(209, 231, 217, 0.65); }
 
+  /* "HAZ LA TABLA MENOS ANCHA" (02-10-2026, a pedido del usuario, tras ver
+     la captura ya con la lista única: en pantallas anchas la tarjeta se
+     estiraba al ancho completo del panel). Esto es EXCEPCIÓN puntual de
+     este ID nomás — a propósito NO se toca #balanceCaptura/#cierreFinal-
+     Captura/#comisionesDevueltasCaptura/#montosApostadosCaptura, que por
+     decisión anterior del usuario ("EL CUADRO LO VAS HACIENDO GRANDE A
+     MEDIDA QUE VAYAS TENIENDO DATOS EN LA TABLA", ver comentario grande
+     más arriba) se dejan crecer libremente. 480px = tarjeta angosta tipo
+     WhatsApp, igual criterio que .gc-captura (420px) más arriba. */
+  #comisionesSinDevolucionesCaptura { max-width: 480px; margin: 0 auto; }
+
   /* =================================================================
      LOGO DE FONDO en "Cargar Planos" — donde aparece el resultado
      (01-10-2026, a pedido del usuario: "donde pego el plano y donde me
