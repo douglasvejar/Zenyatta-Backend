@@ -66,6 +66,20 @@ function ejecutarQuery(text, params) {
 
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
+  // --- calcularDevueltoDestinoHipismo (services/hipismoResumenCliente.js,
+  //     03-10-2026, caso "Mrmoney") --- mismo query/criterio que ya usa
+  //     test_hipismo_resumen_cuenta_comision.js para la misma lógica.
+  if (/^SELECT j\.nombre\s+FROM jugadores j\s+WHERE j\.grupo_id = \$1/i.test(sql)) {
+    const [grupoId, destinoId] = params;
+    const rows = TABLAS.jugadores.filter(j => {
+      if (j.grupo_id !== grupoId || j.es_cuenta_comision || j.id === destinoId) return false;
+      const cond1 = j.cuenta_comision_id === destinoId && (Number(j.comision_propia) || 0) > 0 && !j.incluir_porcentaje_en_jugadas;
+      const cond2 = TABLAS.jugadores_avales_porcentaje.some(a => a.jugador_id === j.id && (Number(a.porcentaje) || 0) > 0 && a.avalador_id === destinoId);
+      return cond1 || cond2;
+    }).map(j => ({ nombre: j.nombre }));
+    return { rows };
+  }
+
   // --- obtenerComisionesPropias (services/hipismoComisionPropia.js) ---
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre, j\.incluir_porcentaje_en_jugadas/i.test(sql)) {
     const [grupoId, nombres] = params;
@@ -169,6 +183,24 @@ function ejecutarQuery(text, params) {
   // --- Winners (vacío en esta prueba) ---
   if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) {
     return { rows: [] };
+  }
+  // --- Tickets crudos para el neteo jugador/banquero por carrera, usados
+  //     por calcularDevueltoDestinoHipismo (03-10-2026, caso "Mrmoney") —
+  //     mismo query/criterio que ya usa test_hipismo_resumen_cuenta_comision.js.
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero,\s*t\.sin_comision, p\.fecha, p\.hipodromo_nombre, p\.carrera_numero/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_tickets
+      .filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre))
+      .map(t => ({ t, plano: TABLAS.hipismo_planos.find(p => p.id === t.plano_id) }))
+      .filter(({ plano }) => plano && plano.fecha >= desde && plano.fecha <= hasta);
+    return {
+      rows: filas.map(({ t, plano }) => ({
+        cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre,
+        resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero,
+        sin_comision: t.sin_comision, fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre,
+        carrera_numero: plano.carrera_numero
+      }))
+    };
   }
   // --- Deportes anclado (no aplica en esta prueba) ---
   if (/^SELECT id, fecha, cliente_nombre AS cliente, ticket_label AS ticket, detalle, arriesga, gana, estado, logros\s+FROM tickets_historial/i.test(sql)) {
@@ -285,11 +317,18 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   // 29-09-2026: la línea de PEDRO como BANQUERO de OTRO ahora también
   // lleva su 1% incluido (1% de 50 = 0,50) — ver la nota grande de arriba.
   const esperadoBanqueoPedro = round2(47.5 + 0.5);
-  const esperadoPedroTotal = round2(esperadoPedroNeto + esperadoBanqueoPedro);
+  // 03-10-2026 (caso "Mrmoney", ver calcularDevueltoDestinoHipismo en
+  // services/hipismoResumenCliente.js): PEDRO también es el avalador real
+  // de OTRO al 2% (línea 225 de este archivo) — OTRO perdió 50 decidido
+  // esta semana, así que PEDRO ahora SÍ ve ese 2% de 50 = 1,00 en su propia
+  // ficha, algo que antes de este arreglo quedaba invisible acá (aunque
+  // Balance General/Cierre Final siempre lo sumó bien).
+  const esperadoAvalPedroSobreOtro = 1.00;
+  const esperadoPedroTotal = round2(esperadoPedroNeto + esperadoBanqueoPedro + esperadoAvalPedroSobreOtro);
   check(fichaPedro.resumen.totalSemana === esperadoPedroTotal,
-    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó bancando a OTRO ya con su 1% incluido (48,00): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
+    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó bancando a OTRO ya con su 1% incluido (48,00) más el 2% que gana avalando a OTRO (1,00): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
   check(fichaPedro.resumen.comisionPropiaIncluidaSemana === 3.5,
-    `PEDRO: resumen.comisionPropiaIncluidaSemana suma la de su jugada (3,00) más la de su banqueo (0,50) = 3,50: obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
+    `PEDRO: resumen.comisionPropiaIncluidaSemana suma la de su jugada (3,00) más la de su banqueo (0,50) = 3,50 (el % de aval sobre OTRO NO cuenta acá, es un ítem de comisión aparte, no "incluido en su jugada"): obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
   const diaPedroFicha = fichaPedro.dias.find(d => d.fecha === FECHA);
   const hipPedroFicha = diaPedroFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
   const lineaJugadorPedro = hipPedroFicha.carreras.find(c => c.rol === 'jugador');
@@ -298,6 +337,9 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
     'La línea de PEDRO como JUGADOR trae el resultado ya neteado (-297,00) y el campo comisionPropiaIncluida=3,00 para que el frontend lo pueda mostrar como referencia');
   check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && lineaBanqueroPedro.comisionPropiaIncluida === 0.5,
     'La línea de PEDRO como BANQUERO de OTRO (29-09-2026) SÍ recibe su 1% incluido (48,00 = 47,50 + 0,50), igual que su línea de jugador');
+  const lineaAvalPedro = hipPedroFicha.carreras.find(c => c.tipo === 'comision');
+  check(!!lineaAvalPedro && lineaAvalPedro.clienteOrigen === 'OTRO' && lineaAvalPedro.porcentaje === 2 && lineaAvalPedro.resultado === 1,
+    'ARREGLO "Mrmoney" (03-10-2026): aparece una línea de comisión aparte en la propia ficha de PEDRO por avalar a OTRO (2% de 50 = 1,00), antes invisible acá');
 
   const fichaMaria = await construirResumenClienteHipismo(mariaActualizada, grupo, 'actual');
   check(fichaMaria.resumen.totalSemana === -300,

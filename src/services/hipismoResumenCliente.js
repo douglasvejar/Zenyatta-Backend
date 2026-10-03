@@ -154,15 +154,30 @@ function rangoSemana(fecha, offsetSemanas) {
 // nombre de la cuenta como cliente_nombre directo, así que esos se leen
 // aparte y se muestran como su propio pseudo-hipódromo "🔄 Traspasos de
 // Comisión" (mismo criterio que ya usa el bloque "⚽ Deportes" anclado).
-async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
-  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
-  const offset = semana === 'anterior' ? -1 : 0;
-  const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
-  const hoyIso = isoDeFechaUTC(hoyVe);
-
+// =================================================================
+// % DEVUELTO QUE LLEGA A UNA FICHA COMO DESTINO (propio redirigido y/o
+// aval de otro cliente) — EXTRAÍDO tal cual (sin cambiar una sola línea
+// de la fórmula) de construirResumenCuentaComisionHipismo el 03-10-2026,
+// caso real "Mrmoney": un CLIENTE NORMAL (no una cuenta de comisión
+// dedicada "{nombre} - PORCENTAJE") mostraba +$12,10 en la grilla
+// "Detallado por Cliente" (GET /cierre-final, la referencia "golden") y
+// $0,00/"No hay jugadas cargadas" en su propio detalle/link — porque
+// buscarOCrearFicha (services/hipismoComisionPropia.js) permite que el
+// operador elija CUALQUIER ficha existente, real o dedicada, como
+// "¿Quién lo avala?" de otro cliente (o como destino de su % propio
+// redirigido) — y construirCierreFinalHipismo YA sumaba esto bien porque
+// su acumular()/acumularDevuelto() genérico no distingue el tipo de
+// ficha destino, pero esta lógica (antes solo dentro de
+// construirResumenCuentaComisionHipismo) solo se ejecutaba cuando
+// es_cuenta_comision=true. Ahora la llaman los 2 casos: una cuenta de
+// comisión dedicada Y la rama normal de un cliente real que resulta ser
+// el avalador/destino de otro (ver construirResumenClienteHipismo más
+// abajo) — mismo bug de fondo que "Traspasos de Comisión en un cliente
+// normal", arreglado unas líneas más abajo ese mismo día.
+// =================================================================
+async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre, desde, hasta, hoyIso) {
   // Candidatos: clientes reales (nunca otra cuenta de comisión) cuyo %
-  // propio y/o % de algún avalador resuelve a ESTA cuenta puntual — el
+  // propio y/o % de algún avalador resuelve a ESTA ficha puntual — el
   // destino ya quedó enlazado acá en jugadores.cuenta_comision_id la
   // primera vez que se guardó un Plano/Remate que generó comisión (ver
   // asegurarCuentasComisionParaNombres en services/hipismoComisionPropia.js),
@@ -185,12 +200,18 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   // indirección doble quedó eliminada, ver la nota grande de
   // obtenerComisionesPropias en hipismoComisionPropia.js) — ahora
   // jap.avalador_id YA ES directamente la ficha elegida por el operador,
-  // así que basta comparar avalador_id contra esta cuenta puntual.
+  // así que basta comparar avalador_id contra esta ficha puntual.
+  //
+  // 03-10-2026: "j.id <> $2" — guardia extra al generalizar esta función
+  // para una ficha que ya NO es necesariamente una cuenta de comisión
+  // dedicada (antes imposible que calzara consigo misma; ahora, defensa
+  // en profundidad para cualquier dato mal configurado).
   const rFuentes = await db.query(
     `SELECT j.nombre
        FROM jugadores j
       WHERE j.grupo_id = $1
         AND NOT COALESCE(j.es_cuenta_comision, false)
+        AND j.id <> $2
         AND (
           (j.cuenta_comision_id = $2 AND j.comision_propia > 0 AND NOT COALESCE(j.incluir_porcentaje_en_jugadas, false))
           OR EXISTS (
@@ -198,7 +219,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
              WHERE jap.jugador_id = j.id AND jap.porcentaje > 0 AND jap.avalador_id = $2
           )
         )`,
-    [jugador.grupo_id, jugador.id]
+    [grupoId, destinoId]
   );
   const nombresFuente = rFuentes.rows.map(row => row.nombre);
 
@@ -208,17 +229,17 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   let cantidadJugadas = 0;
 
   if (nombresFuente.length) {
-    const comisionesPropias = await obtenerComisionesPropias(jugador.grupo_id, nombresFuente);
+    const comisionesPropias = await obtenerComisionesPropias(grupoId, nombresFuente);
 
     for (const nombreFuente of nombresFuente) {
       // Puede haber hasta 2 entradas para este mismo cliente (% propio +
       // % de aval, ver la nota grande de obtenerComisionesPropias) — acá
-      // solo interesan las que apuntan a ESTA cuenta puntual.
+      // solo interesan las que apuntan a ESTA ficha puntual.
       const entradas = (comisionesPropias[nombreFuente] || [])
-        .filter(info => info && info.pct && info.cuentaNombre === jugador.nombre);
+        .filter(info => info && info.pct && info.cuentaNombre === destinoNombre);
       if (!entradas.length) continue;
 
-      const lineas = await obtenerLineasHipismoCliente(jugador.grupo_id, nombreFuente, desde, hasta);
+      const lineas = await obtenerLineasHipismoCliente(grupoId, nombreFuente, desde, hasta);
 
       // Neteo jugador/banquero por carrera (03-10-2026, a pedido del
       // usuario: "al abrir el cliente me da un saldo completamente
@@ -265,7 +286,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
            JOIN hipismo_planos p ON p.id = t.plano_id
           WHERE t.grupo_id = $1 AND (t.cliente_nombre = $2 OR t.banquero_nombre = $2)
             AND p.fecha BETWEEN $3 AND $4`,
-        [jugador.grupo_id, nombreFuente, desde, hasta]
+        [grupoId, nombreFuente, desde, hasta]
       );
       const netoPorCarreraFuente = netearJugadorBanqueroTercios(rTicketsFuente.rows.map(t => ({
         clienteNombre: t.cliente_nombre,
@@ -379,6 +400,22 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
       });
     }
   }
+
+  return { porDia, totalSemana, totalHoy, cantidadJugadas };
+}
+
+async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
+  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
+  const offset = semana === 'anterior' ? -1 : 0;
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const hoyIso = isoDeFechaUTC(hoyVe);
+
+  const { porDia, totalSemana: totalSemanaDestino, totalHoy: totalHoyDestino, cantidadJugadas: cantidadDestino } =
+    await calcularDevueltoDestinoHipismo(jugador.grupo_id, jugador.id, jugador.nombre, desde, hasta, hoyIso);
+  let totalSemana = totalSemanaDestino;
+  let totalHoy = totalHoyDestino;
+  let cantidadJugadas = cantidadDestino;
 
   // Traspasos de Comisión (ajustes manuales, ver POST /comisiones/traspaso
   // en routes/hipismo.js) — a diferencia de arriba, estos SÍ quedan
@@ -608,6 +645,31 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     if (fechaIso === hoyIso) totalHoy += monto;
   });
 
+  // % DEVUELTO COMO DESTINO DE OTRO CLIENTE EN UN CLIENTE NORMAL
+  // (03-10-2026, caso real "Mrmoney": mostraba +$12,10 en "Detallado por
+  // Cliente"/Balance General y "$0,00 / No hay jugadas cargadas" en su
+  // propio link — mismo bug de fondo que los Traspasos de arriba, pero
+  // con la ficha de "¿Quién lo avala?"/% propio redirigido de OTRO
+  // cliente apuntando a este cliente, en vez de a una cuenta de comisión
+  // dedicada. Ver la nota grande EXACTA de calcularDevueltoDestinoHipismo,
+  // extraída de construirResumenCuentaComisionHipismo para poder llamarse
+  // también acá. cantidadDestino se suma igual que cantidadTraspasos,
+  // más abajo en el resumen.)
+  const destinoInfo = await calcularDevueltoDestinoHipismo(jugador.grupo_id, jugador.id, jugador.nombre, desde, hasta, hoyIso);
+  destinoInfo.porDia.forEach((hipMapDestino, fechaIso) => {
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    hipMapDestino.forEach((hipodromoData, hipNombre) => {
+      if (!hipMap.has(hipNombre)) {
+        hipMap.set(hipNombre, hipodromoData);
+      } else {
+        hipMap.get(hipNombre).carreras.push(...hipodromoData.carreras);
+      }
+    });
+  });
+  totalSemana += destinoInfo.totalSemana;
+  totalHoy += destinoInfo.totalHoy;
+
   const totalHipismo = totalSemana;
   let totalDeportes = 0;
   let cantidadJugadasDeportes = 0;
@@ -655,16 +717,16 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     resumen: {
       totalSemana,
       totalHoy,
-      // cantidadTraspasos (03-10-2026, ver la nota grande de arriba) — se
-      // suma a cantidadJugadas/cantidadJugadasHipismo igual que ya hace
-      // construirResumenCuentaComisionHipismo con `cantidadJugadas += 1`
-      // en su propio bloque de traspasos, para que el conteo de
-      // movimientos de la semana no se quede corto cuando el cliente
-      // tuvo un traspaso de comisión.
-      cantidadJugadas: lineasHipismo.length + cantidadTraspasos + cantidadJugadasDeportes,
+      // cantidadTraspasos/destinoInfo.cantidadJugadas (03-10-2026, ver las
+      // 2 notas grandes de arriba) — se suman a cantidadJugadas/
+      // cantidadJugadasHipismo igual que ya hace
+      // construirResumenCuentaComisionHipismo, para que el conteo de
+      // movimientos de la semana no se quede corto cuando el cliente tuvo
+      // un traspaso de comisión y/o cobró % como destino de otro cliente.
+      cantidadJugadas: lineasHipismo.length + cantidadTraspasos + destinoInfo.cantidadJugadas + cantidadJugadasDeportes,
       totalHipismo,
       totalDeportes,
-      cantidadJugadasHipismo: lineasHipismo.length + cantidadTraspasos,
+      cantidadJugadasHipismo: lineasHipismo.length + cantidadTraspasos + destinoInfo.cantidadJugadas,
       cantidadJugadasDeportes,
       // "incluir % en sus jugadas" (29-09-2026) — cuánto de totalSemana/
       // totalHipismo de arriba es comisión propia YA incluida en las

@@ -42,7 +42,16 @@ const TABLAS = {
   // 3853 y en el link dice 3861,98" — un traspaso de comisión sobre un
   // cliente NORMAL, no una cuenta "{nombre} - PORCENTAJE", no se estaba
   // leyendo acá).
-  hipismo_comisiones_ajustes: []
+  hipismo_comisiones_ajustes: [],
+  // 03-10-2026, 2da vuelta, ver la nota grande EXACTA de
+  // calcularDevueltoDestinoHipismo en services/hipismoResumenCliente.js
+  // (caso real "Mrmoney": +$12,10 en Balance General/"Detallado por
+  // Cliente" pero "$0,00 / No hay jugadas cargadas" en su propio link —
+  // Mrmoney no es una cuenta de comisión, es el AVALADOR real de OTRO
+  // cliente, algo que esta función antes nunca leía para un cliente
+  // normal).
+  jugadores: [],
+  jugadores_avales_porcentaje: []
 };
 
 function ejecutarQuery(text, params) {
@@ -109,6 +118,25 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
+  // Tickets crudos para el neteo jugador/banquero por carrera, usados por
+  // calcularDevueltoDestinoHipismo (03-10-2026, caso "Mrmoney") — mismo
+  // query/criterio que ya usa test_hipismo_resumen_cuenta_comision.js.
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero,\s*t\.sin_comision, p\.fecha, p\.hipodromo_nombre, p\.carrera_numero/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    const filas = TABLAS.hipismo_tickets
+      .filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre))
+      .map(t => ({ t, plano: TABLAS.hipismo_planos.find(p => p.id === t.plano_id) }))
+      .filter(({ plano }) => plano && plano.fecha >= desde && plano.fecha <= hasta);
+    return {
+      rows: filas.map(({ t, plano }) => ({
+        cliente_nombre: t.cliente_nombre, banquero_nombre: t.banquero_nombre,
+        resultado_jugador: t.resultado_jugador, resultado_banquero: t.resultado_banquero,
+        sin_comision: t.sin_comision, fecha: plano.fecha, hipodromo_nombre: plano.hipodromo_nombre,
+        carrera_numero: plano.carrera_numero
+      }))
+    };
+  }
+
   // Traspasos de Comisión de un cliente NORMAL (03-10-2026, ver la nota
   // grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js
   // — mismo query/shape que ya usaba construirResumenCuentaComisionHipismo
@@ -119,6 +147,40 @@ function ejecutarQuery(text, params) {
       .filter(a => a.grupo_id === grupoId && a.cliente_nombre === clienteNombre && a.fecha >= desde && a.fecha <= hasta)
       .map(a => ({ monto: a.monto, fecha: a.fecha, nota: a.nota || null }));
     return { rows: filas };
+  }
+
+  // calcularDevueltoDestinoHipismo (03-10-2026, caso "Mrmoney", ver la
+  // nota grande de TABLAS más arriba) — mismas 3 consultas que ya usa
+  // test_hipismo_resumen_cuenta_comision.js para la misma lógica.
+  if (/^SELECT j\.nombre\s+FROM jugadores j\s+WHERE j\.grupo_id = \$1/i.test(sql)) {
+    const [grupoId, destinoId] = params;
+    const rows = TABLAS.jugadores.filter(j => {
+      if (j.grupo_id !== grupoId || j.es_cuenta_comision || j.id === destinoId) return false;
+      const cond1 = j.cuenta_comision_id === destinoId && (Number(j.comision_propia) || 0) > 0 && !j.incluir_porcentaje_en_jugadas;
+      const cond2 = TABLAS.jugadores_avales_porcentaje.some(a => a.jugador_id === j.id && (Number(a.porcentaje) || 0) > 0 && a.avalador_id === destinoId);
+      return cond1 || cond2;
+    }).map(j => ({ nombre: j.nombre }));
+    return { rows };
+  }
+  if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
+    const [grupoId, nombres] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const rows = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre)).map(j => {
+      const ccPropio = j.cuenta_comision_id ? porId.get(j.cuenta_comision_id) : null;
+      return { id: j.id, nombre: j.nombre, comision_propia: j.comision_propia, cc_propio_nombre: ccPropio ? ccPropio.nombre : null, incluir_porcentaje_en_jugadas: j.incluir_porcentaje_en_jugadas || false };
+    });
+    return { rows };
+  }
+  if (/^SELECT jap\.jugador_id, jap\.porcentaje, av\.nombre AS avalador_nombre FROM jugadores_avales_porcentaje jap/i.test(sql)) {
+    const [grupoId, idsJugadores] = params;
+    const porId = new Map(TABLAS.jugadores.map(j => [j.id, j]));
+    const rows = TABLAS.jugadores_avales_porcentaje
+      .filter(a => a.grupo_id === grupoId && idsJugadores.includes(a.jugador_id))
+      .map(a => {
+        const avalador = porId.get(a.avalador_id);
+        return { jugador_id: a.jugador_id, porcentaje: a.porcentaje, avalador_nombre: avalador ? avalador.nombre : null };
+      });
+    return { rows };
   }
 
   throw new Error('La base de datos falsa de esta prueba (resumen-cliente) no sabe responder: ' + sql);
@@ -232,6 +294,36 @@ function check(cond, msg) {
   check(resumenSoloTraspaso.resumen.totalSemana === 25,
     `ARREGLO: SOLOTRASPASO (sin jugadas, solo un traspaso de +25) da 25, NUNCA 0 -- dio ${resumenSoloTraspaso.resumen.totalSemana}`);
   check(resumenSoloTraspaso.resumen.cantidadJugadas === 1, 'El traspaso cuenta como 1 movimiento, para que "Detallado por Cliente" no diga "sin jugadas"');
+
+  // =================================================================
+  // --- Fixture: MRMONEY, el caso REAL reportado por el usuario (03-10-2026):
+  // "este cliente muestra 12,1 al darle click me dice 0....." — MRMONEY es
+  // un CLIENTE NORMAL (no una cuenta "{nombre} - PORCENTAJE") configurado
+  // como "¿Quién lo avala?" de otro cliente real (FUENTE1), que SÍ jugó
+  // esta semana. MRMONEY mismo no tiene ninguna jugada propia esta semana
+  // -- antes de este arreglo, su link/"Detallado por Cliente" daba $0 /
+  // "No hay jugadas cargadas", aunque Balance General (construirCierreFinalHipismo)
+  // SÍ sumaba bien su % de aval vía el acumular()/acumularDevuelto()
+  // genérico (que no distingue si el destino es una cuenta dedicada o un
+  // cliente real).
+  // =================================================================
+  TABLAS.jugadores.push({ id: 'j-mrmoney', grupo_id: GRUPO_ID, nombre: 'MRMONEY', es_cuenta_comision: false, comision_propia: 0, cuenta_comision_id: null, incluir_porcentaje_en_jugadas: false });
+  TABLAS.jugadores.push({ id: 'j-fuente1', grupo_id: GRUPO_ID, nombre: 'FUENTE1', es_cuenta_comision: false, comision_propia: 0, cuenta_comision_id: null, incluir_porcentaje_en_jugadas: false });
+  TABLAS.jugadores_avales_porcentaje.push({ grupo_id: GRUPO_ID, jugador_id: 'j-fuente1', avalador_id: 'j-mrmoney', porcentaje: 2 });
+  TABLAS.hipismo_planos.push({ id: 'plano-mrmoney', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada', carrera_numero: 4, fecha: FECHA, pizarra: '6.10.4' });
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-mrmoney', grupo_id: GRUPO_ID, cliente_nombre: 'FUENTE1', banquero_nombre: 'BANCOZ', modalidad: '1/2', caballo: '7', monto: 500, resultado_jugador: -500, resultado_banquero: 475 });
+
+  const jugadorMrmoney = { id: 'j-mrmoney', grupo_id: GRUPO_ID, nombre: 'MRMONEY', modulos_anclados: false };
+  const resumenMrmoney = await construirResumenClienteHipismo(jugadorMrmoney, grupo, 'actual');
+
+  check(resumenMrmoney.resumen.totalSemana === 10,
+    `ARREGLO: MRMONEY (sin jugadas propias, solo 2% de aval sobre los 500 decididos que perdió FUENTE1) da 10, NUNCA 0 -- dio ${resumenMrmoney.resumen.totalSemana}`);
+  check(resumenMrmoney.resumen.cantidadJugadas === 1, 'El % de aval cuenta como 1 movimiento, para que "Detallado por Cliente" no diga "sin jugadas"');
+  const diaMrmoney = resumenMrmoney.dias.find(d => d.fecha === FECHA);
+  check(!!diaMrmoney, 'MRMONEY trae el día agrupado aunque no haya jugado él mismo');
+  const comisionMrmoney = diaMrmoney.hipodromos.find(h => h.nombre === 'La Rinconada').carreras.find(c => c.tipo === 'comision');
+  check(!!comisionMrmoney && comisionMrmoney.clienteOrigen === 'FUENTE1' && comisionMrmoney.porcentaje === 2 && comisionMrmoney.resultado === 10,
+    'La línea de comisión de MRMONEY trae el cliente origen (FUENTE1), el % (2) y el monto devuelto (10) correctos');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

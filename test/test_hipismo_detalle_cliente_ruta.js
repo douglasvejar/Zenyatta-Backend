@@ -41,6 +41,10 @@ function ejecutarQuery(text, params) {
   // grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js)
   // — sin datos en esta prueba, que solo verifica el wiring de la ruta.
   if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
+  // calcularDevueltoDestinoHipismo (03-10-2026, caso "Mrmoney", ver la
+  // nota grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js)
+  // — sin datos en esta prueba, que solo verifica el wiring de la ruta.
+  if (/^SELECT j\.nombre\s+FROM jugadores j\s+WHERE j\.grupo_id = \$1/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (detalle-cliente ruta) no sabe responder: ' + sql);
 }
 
