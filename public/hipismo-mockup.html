@@ -9711,30 +9711,94 @@ function mostrarToastDetalleCliente(msg, esError) {
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
 }
+// Arma el PNG de UN contenido puntual (html2canvas) y lo entrega: al
+// portapapeles cuando `etiquetaArchivo` es null (comportamiento de
+// siempre, 1 sola imagen), o siempre como descarga con ese sufijo en el
+// nombre cuando viene un `etiquetaArchivo` (caso de varias imágenes, ver
+// copiarDetalleClienteImagen más abajo — no tiene sentido ir reemplazando
+// el portapapeles varias veces seguidas en el mismo click, el usuario no
+// alcanza a pegar cada una antes de que llegue la siguiente).
+async function generarYEntregarUnaImagenDetalle(contenido, etiquetaArchivo) {
+  try {
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    return await new Promise(resolve => {
+      canvas.toBlob(async blob => {
+        if (!blob) { mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen.', true); resolve(false); return; }
+        if (!etiquetaArchivo) {
+          try {
+            if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            mostrarToastDetalleCliente('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+            resolve(true);
+            return;
+          } catch (e) {
+            // Sin soporte de portapapeles -- sigue abajo y la descarga.
+          }
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = etiquetaArchivo ? `detalle_cliente_${etiquetaArchivo}.png` : 'detalle_cliente.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        if (!etiquetaArchivo) mostrarToastDetalleCliente('No se pudo copiar directo — se descargó la imagen.', true);
+        resolve(true);
+      }, 'image/png');
+    });
+  } catch (e) {
+    mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen: ' + e.message, true);
+    return false;
+  }
+}
+
 async function copiarDetalleClienteImagen() {
   if (typeof html2canvas !== 'function') {
     mostrarToastDetalleCliente('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
     return;
   }
-  try {
-    const contenido = document.getElementById('detalleClienteCaptura');
-    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
-    canvas.toBlob(async blob => {
-      if (!blob) { mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen.', true); return; }
-      try {
-        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        mostrarToastDetalleCliente('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
-      } catch (e) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'detalle_cliente.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        mostrarToastDetalleCliente('No se pudo copiar directo — se descargó la imagen.', true);
-      }
-    }, 'image/png');
-  } catch (e) {
-    mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  const contenido = document.getElementById('detalleClienteCaptura');
+  const contenedorDias = document.getElementById('detalleClienteDias');
+  const diasBloques = Array.from(contenedorDias.children).filter(el => el.classList.contains('detmodal-dia'));
+
+  // UNA sola imagen, directo al portapapeles -- el caso de siempre
+  // (cliente con 1 solo día cargado en el rango).
+  if (diasBloques.length <= 1) {
+    await generarYEntregarUnaImagenDetalle(contenido, null);
+    return;
+  }
+
+  // VARIAS imágenes, UNA POR DÍA (03-10-2026, a pedido del usuario:
+  // "cuando un cliente tenga así tantas jugadas, busca un formato que al
+  // darle click en copiar imagen, tanto tú como yo podamos apreciar todo
+  // bien" -- caso real "Sammy": con varios días cargados, html2canvas
+  // capturaba TODO #detalleClienteCaptura (todos los días apilados en una
+  // sola columna) de una sola vez -- el resultado es una imagen
+  // muchísimo más alta que ancha, y tanto WhatsApp como el chat de
+  // Claude comprimen por el lado más largo, así que ese ancho terminaba
+  // aplastado a unos pocos píxeles y los números quedaban ilegibles para
+  // los dos. En vez de 1 imagen gigante, se genera 1 imagen por cada día
+  // (se ocultan los demás días con display:none, se captura el mismo
+  // #detalleClienteCaptura -- que entonces mide el alto de 1 solo día --
+  // y se restauran al final), cada una con una proporción razonable que
+  // sobrevive cualquier compresión. Como no tiene sentido copiar varias
+  // imágenes seguidas al mismo portapapeles, acá siempre se descargan
+  // (ver generarYEntregarUnaImagenDetalle) para poder mandarlas todas
+  // juntas.
+  mostrarToastDetalleCliente(`Generando ${diasBloques.length} imágenes (una por día)...`);
+  const displayOriginal = diasBloques.map(d => d.style.display);
+  let ok = 0;
+  for (let i = 0; i < diasBloques.length; i++) {
+    diasBloques.forEach((d, j) => { d.style.display = (j === i) ? '' : 'none'; });
+    // Un frame de margen para que el navegador recalcule el layout antes
+    // de que html2canvas mida el contenedor (si no, a veces alcanza a
+    // capturar con el alto viejo, todavía contando los días ocultos).
+    await new Promise(r => requestAnimationFrame(r));
+    const exito = await generarYEntregarUnaImagenDetalle(contenido, `${i + 1}de${diasBloques.length}`);
+    if (exito) ok++;
+  }
+  diasBloques.forEach((d, i) => { d.style.display = displayOriginal[i]; });
+  if (ok === diasBloques.length) {
+    mostrarToastDetalleCliente(`✅ Se descargaron ${ok} imágenes (una por día) — mándalas todas juntas.`);
+  } else {
+    mostrarToastDetalleCliente(`⚠️ Se descargaron ${ok} de ${diasBloques.length} imágenes.`, true);
   }
 }
 
