@@ -300,23 +300,35 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
     'No se crea ninguna cuenta "PEDRO - PORCENTAJE" -- el crédito del aval ya fue directo a la ficha real de PEDRO');
 
   // =========== 3) construirResumenClienteHipismo (ficha propia) ===========
-  // PEDRO juega 300 y pierde -> con el toggle ON, su propia ficha debe
-  // mostrar -300 + 1% de 300 (3.00) = -297.00 directo en el resultado.
+  // PEDRO juega 300 y pierde, Y ADEMÁS banquea una jugada de OTRO por 50 en
+  // esta MISMA carrera (carrera_numero: 4, La Rinconada, mismo plano-1) —
+  // o sea, PEDRO es un cliente DUAL (juega Y banquea en la misma carrera),
+  // con el toggle ON a la vez. ACTUALIZADO 03-10-2026 (caso real
+  // "Legolas", ver la nota grande en construirResumenClienteHipismo en
+  // services/hipismoResumenCliente.js): antes esta prueba confirmaba que
+  // cada lado se ganaba su % por separado (3,00 + 0,50 = 3,50) -- el
+  // usuario confirmó que eso rompía el cuadre con Balance General
+  // (Cierre Final SÍ netea una carrera dual) y pidió netear también acá.
+  // Con el neteo (misma regla EXACTA de netearJugadorBanqueroTercios,
+  // caso Loba): decidido jugador = 300, decidido banquero = 50/0,95 = 50
+  // (monto ya neto de comisión, resultado positivo) -> como PEDRO perdió
+  // jugando y ganó banqueando (no ganó en los 2 lados), se RESTA:
+  // |300 - 50| = 250 decidido neto -> 1% de 250 = 2,50, UNA sola comisión
+  // asignada a la PRIMERA línea de esa carrera (la de jugador, que es la
+  // que se crea primero), con $0 en la de banquero.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '4', monto: 300, resultado_jugador: -300, resultado_banquero: 285 });
-  // PEDRO también banquea una jugada de OTRO por 50 — 29-09-2026 (caso
-  // real "Mrincreible", ver la nota grande en hipismoResumenCliente.js):
-  // el % propio AHORA SÍ se incluye también en lo que PEDRO banqueó en
-  // Tercios (1% de 50 = 0.50), a diferencia de antes de esta ronda.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '6', monto: 50, resultado_jugador: -50, resultado_banquero: 47.5 });
   // MARIA juega exactamente lo mismo (300, pierde) pero con el toggle OFF
   // -> su ficha debe seguir mostrando el -300 crudo, sin tocar.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'MARIA', banquero_nombre: 'BANCO', modalidad: '1/2', caballo: '5', monto: 300, resultado_jugador: -300, resultado_banquero: 285 });
 
   const fichaPedro = await construirResumenClienteHipismo(pedroActualizado, grupo, 'actual');
-  const esperadoPedroNeto = round2(-300 + 3.00);
-  // 29-09-2026: la línea de PEDRO como BANQUERO de OTRO ahora también
-  // lleva su 1% incluido (1% de 50 = 0,50) — ver la nota grande de arriba.
-  const esperadoBanqueoPedro = round2(47.5 + 0.5);
+  // Carrera dual neteada (ver nota grande arriba): comisión única de 2,50
+  // cae en la línea de JUGADOR (la primera en aparecer), $0 en la de
+  // BANQUERO.
+  const esperadoComisionNetaPedro = 2.50;
+  const esperadoPedroNeto = round2(-300 + esperadoComisionNetaPedro);
+  const esperadoBanqueoPedro = 47.5;
   // 03-10-2026 (caso "Mrmoney", ver calcularDevueltoDestinoHipismo en
   // services/hipismoResumenCliente.js): PEDRO también es el avalador real
   // de OTRO al 2% (línea 225 de este archivo) — OTRO perdió 50 decidido
@@ -326,17 +338,17 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const esperadoAvalPedroSobreOtro = 1.00;
   const esperadoPedroTotal = round2(esperadoPedroNeto + esperadoBanqueoPedro + esperadoAvalPedroSobreOtro);
   check(fichaPedro.resumen.totalSemana === esperadoPedroTotal,
-    `PEDRO (toggle ON): su ficha suma su línea neteada (-297,00) más lo que ganó bancando a OTRO ya con su 1% incluido (48,00) más el 2% que gana avalando a OTRO (1,00): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
-  check(fichaPedro.resumen.comisionPropiaIncluidaSemana === 3.5,
-    `PEDRO: resumen.comisionPropiaIncluidaSemana suma la de su jugada (3,00) más la de su banqueo (0,50) = 3,50 (el % de aval sobre OTRO NO cuenta acá, es un ítem de comisión aparte, no "incluido en su jugada"): obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
+    `PEDRO (toggle ON, carrera dual neteada): su ficha suma su línea de jugador con la comisión neta de la carrera (-297,50) más lo que ganó bancando a OTRO sin comisión adicional (47,50, ya consumida por la línea de jugador) más el 2% que gana avalando a OTRO (1,00): esperado ${esperadoPedroTotal}, obtenido ${fichaPedro.resumen.totalSemana}`);
+  check(fichaPedro.resumen.comisionPropiaIncluidaSemana === esperadoComisionNetaPedro,
+    `PEDRO: resumen.comisionPropiaIncluidaSemana es la comisión NETA de su carrera dual (2,50, no 3,00+0,50=3,50 por separado -- el % de aval sobre OTRO NO cuenta acá, es un ítem de comisión aparte): obtenido ${fichaPedro.resumen.comisionPropiaIncluidaSemana}`);
   const diaPedroFicha = fichaPedro.dias.find(d => d.fecha === FECHA);
   const hipPedroFicha = diaPedroFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
   const lineaJugadorPedro = hipPedroFicha.carreras.find(c => c.rol === 'jugador');
   const lineaBanqueroPedro = hipPedroFicha.carreras.find(c => c.rol === 'banquero');
-  check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoPedroNeto && lineaJugadorPedro.comisionPropiaIncluida === 3,
-    'La línea de PEDRO como JUGADOR trae el resultado ya neteado (-297,00) y el campo comisionPropiaIncluida=3,00 para que el frontend lo pueda mostrar como referencia');
-  check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && lineaBanqueroPedro.comisionPropiaIncluida === 0.5,
-    'La línea de PEDRO como BANQUERO de OTRO (29-09-2026) SÍ recibe su 1% incluido (48,00 = 47,50 + 0,50), igual que su línea de jugador');
+  check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoPedroNeto && lineaJugadorPedro.comisionPropiaIncluida === esperadoComisionNetaPedro,
+    'La línea de PEDRO como JUGADOR (primera de la carrera dual) se lleva la comisión NETA completa (-297,50) y el campo comisionPropiaIncluida=2,50');
+  check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && !lineaBanqueroPedro.comisionPropiaIncluida,
+    'La línea de PEDRO como BANQUERO de OTRO (misma carrera dual) NO recibe comisión adicional (ya se asignó completa a la línea de jugador) -- queda en 47,50 sin el campo comisionPropiaIncluida');
   const lineaAvalPedro = hipPedroFicha.carreras.find(c => c.tipo === 'comision');
   check(!!lineaAvalPedro && lineaAvalPedro.clienteOrigen === 'OTRO' && lineaAvalPedro.porcentaje === 2 && lineaAvalPedro.resultado === 1,
     'ARREGLO "Mrmoney" (03-10-2026): aparece una línea de comisión aparte en la propia ficha de PEDRO por avalar a OTRO (2% de 50 = 1,00), antes invisible acá');

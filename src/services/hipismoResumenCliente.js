@@ -509,6 +509,56 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   const pctPropioIncluido = jugador.incluir_porcentaje_en_jugadas ? (Number(jugador.comision_propia) || 0) : 0;
   let comisionPropiaIncluidaSemana = 0;
 
+  // NETEO EN CARRERA DUAL CON EL TOGGLE ON (03-10-2026, caso real
+  // "Legolas": Balance General y su propio link nunca cuadraban, aun
+  // después del arreglo de Traspasos -- la causa real era otra: cuando
+  // este cliente juega Y banquea en la MISMA carrera (ej. Keeneland 1ra,
+  // "Jugó 2/2 del 1" + "Dio 2p del 1"), el bloque de abajo ANTES le
+  // sumaba su % sobre CADA lado por separado (como confirmó el caso
+  // PEDRO el 29-09-2026), mientras que Cierre Final -- que SÍ aplica
+  // netearJugadorBanqueroTercios -- cobraba sobre el NETO de esa carrera
+  // (más chico cuando un lado ganó y el otro perdió). 2 reglas ya
+  // confirmadas por separado que nadie había cruzado, y que nunca iban a
+  // cuadrar entre sí para un cliente con las 2 cosas a la vez. El usuario
+  // confirmó: acá también se netea iguel que Balance General -- una SOLA
+  // comisión por carrera dual, asignada a la PRIMERA línea de esa carrera
+  // (en el mismo orden en que ya vienen: fecha DESC, creado_en ASC), con
+  // $0 adicional en las demás líneas de esa misma carrera para este
+  // cliente, en vez de la suma de las 2 por separado. Para el resto de
+  // los clientes (un solo rol por carrera, la gran mayoría) esto no
+  // cambia nada -- idéntico a como funcionaba antes.
+  //
+  // SOLO Tercios puro (líneas sin `.tipo`, ver obtenerLineasHipismoCliente
+  // en services/hipismoLineasCliente.js) -- Marcas/Tablas Fijas de
+  // Jugadas Adelantadas se quedan exactamente como están, mismo alcance
+  // EXACTO que netearJugadorBanqueroTercios en todo el resto del código.
+  const netoIncluidoPorCarrera = new Map();
+  if (pctPropioIncluido) {
+    const porCarreraPropia = new Map();
+    lineasHipismo.forEach(linea => {
+      if (linea.tipo || !linea.rol || Number(linea.resultado) === 0) return;
+      const clave = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+      if (!porCarreraPropia.has(clave)) porCarreraPropia.set(clave, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
+      const acc = porCarreraPropia.get(clave);
+      const decidido = montoDecididoExacto(linea.resultado, linea.sinComision);
+      if (linea.rol === 'jugador') { acc.decididoJugador += decidido; acc.sumaJugador += Number(linea.resultado); }
+      else { acc.decididoBanquero += decidido; acc.sumaBanquero += Number(linea.resultado); }
+    });
+    // Misma regla EXACTA que netearJugadorBanqueroTercios en hipismoCalc.js
+    // (ver la nota grande "Neteo real" ahí, caso Loba 03-10-2026): resta
+    // cuando un lado ganó y el otro perdió, suma completo cuando ganó en
+    // los 2 lados a la vez.
+    porCarreraPropia.forEach((acc, clave) => {
+      if (!(acc.decididoJugador > 0 && acc.decididoBanquero > 0)) return; // no es dual para este cliente
+      const ganoLosDosLados = acc.sumaJugador > 0 && acc.sumaBanquero > 0;
+      const netoExacto = ganoLosDosLados
+        ? (acc.decididoJugador + acc.decididoBanquero)
+        : Math.abs(acc.decididoJugador - acc.decididoBanquero);
+      netoIncluidoPorCarrera.set(clave, round2(Math.abs(netoExacto) * pctPropioIncluido / 100));
+    });
+  }
+  const carrerasDualesPropias = new Set(netoIncluidoPorCarrera.keys());
+
   lineasHipismo.forEach(linea => {
     const fechaIso = linea.fecha;
 
@@ -541,29 +591,36 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // acá (linea.resultado en 0).
     // NETEO jugador/banquero (02-10-2026, Task #43 del barrido de
     // netearJugadorBanqueroTercios — ver la nota grande EXACTA de esa
-    // función en services/hipismoCalc.js, caso GG): revisado A PROPÓSITO
-    // y dejado SIN cambios acá. El neteo de "% devuelto" (comisiones-
-    // devueltas, cierre-final, saldo-comisiones, semana-por-dias, planos/
-    // pizarras) resuelve un problema de CONTABILIDAD agregada — pagarle a
-    // un cliente un ítem "{nombre} - PORCENTAJE" sobre la suma bruta de
-    // ambos lados cuando el neto real de esa carrera es menor (o cero).
-    // Esta función es otra cosa: la FICHA PERSONAL del cliente, línea por
-    // línea, con el toggle "incluir % en sus jugadas" (ON) sumando el %
-    // DIRECTO al resultado de CADA jugada individual que él mismo ve en su
-    // historial — no hay ningún ítem agregado que pueda duplicarse. Un
-    // cliente dual (juega Y banquea en la misma carrera, con el toggle ON)
-    // ya tiene un comportamiento EXPLÍCITAMENTE confirmado y cubierto por
-    // test_hipismo_incluir_porcentaje_en_jugadas.js (caso PEDRO: su línea
-    // de jugador se gana su 1% sobre SU PROPIO monto, y su línea de
-    // banquero se gana su 1% sobre SU PROPIO monto, cada una por
-    // separado) — cambiar esto a "neto por carrera" alteraría el monto
-    // que el propio cliente ve en CADA línea de su historial (no solo un
-    // total), lo cual es una decisión de producto distinta que el usuario
-    // nunca pidió ni confirmó para este caso puntual. Se deja así.
+    // función en services/hipismoCalc.js, caso GG) — ACTUALIZADO 03-10-2026
+    // (caso Legolas, ver la nota grande arriba de esta función con el
+    // detalle completo). Antes esta función NUNCA neteaba acá a propósito
+    // ("cada línea se gana su % sobre SU PROPIO monto por separado", caso
+    // PEDRO del 29-09-2026) porque esto es la FICHA PERSONAL del cliente,
+    // línea por línea, no un ítem agregado — pero eso hacía que un cliente
+    // con carrera dual (juega Y banquea en la misma carrera) Y el toggle ON
+    // viera en su propio link/ficha un % mayor al que realmente se le
+    // cobra/acredita en Cierre Final (que SÍ aplica
+    // netearJugadorBanqueroTercios), dejando su Balance General y su link
+    // SIN cuadrar nunca. El usuario confirmó: acá también se netea igual
+    // que Balance General para una carrera dual — una SOLA comisión neta
+    // por carrera (de netoIncluidoPorCarrera, calculado arriba con la
+    // MISMA regla exacta de netearJugadorBanqueroTercios), asignada a la
+    // PRIMERA línea de esa carrera que aparezca acá, con $0 en las demás
+    // líneas de la misma carrera para este cliente. Para el resto de los
+    // clientes (un solo rol por carrera, la gran mayoría, incluido PEDUNTO
+    // y su test) esto no cambia nada — idéntico a como funcionaba antes.
     let comisionIncluida = 0;
     if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
-      const montoParaPct = montoBaseParaPct(linea);
-      comisionIncluida = round2(Math.abs(Number(montoParaPct) || 0) * (pctPropioIncluido / 100));
+      const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+      if (!linea.tipo && carrerasDualesPropias.has(claveCarrera)) {
+        if (netoIncluidoPorCarrera.has(claveCarrera)) {
+          comisionIncluida = netoIncluidoPorCarrera.get(claveCarrera);
+          netoIncluidoPorCarrera.delete(claveCarrera);
+        }
+      } else {
+        const montoParaPct = montoBaseParaPct(linea);
+        comisionIncluida = round2(Math.abs(Number(montoParaPct) || 0) * (pctPropioIncluido / 100));
+      }
     }
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
 
