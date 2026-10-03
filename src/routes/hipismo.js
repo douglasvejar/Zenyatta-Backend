@@ -117,7 +117,7 @@ const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 // puntual, buscado por nombre en vez de por token — ver
 // GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
 // services/hipismoResumenCliente.js.
-const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirCierreFinalHipismo } = require('../services/hipismoResumenCliente');
+const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo } = require('../services/hipismoResumenCliente');
 // "Grupo de Clientes" (30-09-2026) — CRUD de este módulo para services/
 // gruposClientes.js, siempre con modulo='hipismo' fijo (ver la nota
 // grande arriba de ese archivo y en sql/schema.sql junto a
@@ -3391,6 +3391,33 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
     rangoPersonalizado: !!rangoPersonalizado,
     numeroSemana,
     esSemanaActual,
+    ...resultado
+  });
+}));
+
+// =================================================================
+// GET /diagnostico-saldos?semana=actual|anterior|hace2 (03-10-2026, ver
+// la nota grande EXACTA de diagnosticarSaldosHipismo en
+// services/hipismoResumenCliente.js — caso real "Legolas": $2.863,98 en
+// la grilla vs $2.871,98 en su propio link, mismo bug de fondo que
+// "Mrmoney" pero detectado DESPUÉS, por captura de pantalla, en vez de
+// por una verificación sistemática). Mismo selector de semana/rango que
+// GET /cierre-final — corre ese mismo cálculo MÁS el de cada cliente, y
+// solo devuelve los que no cuadran, para poder revisar de una sola vez
+// si queda algún otro cliente con el mismo problema, en vez de esperar a
+// que cada uno llegue por separado.
+// =================================================================
+router.get('/diagnostico-saldos', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+
+  const resultado = await diagnosticarSaldosHipismo(req.grupoId, req.grupo, desde, hasta);
+  return res.json({
+    semana,
+    rangoPersonalizado: !!rangoPersonalizado,
     ...resultado
   });
 }));

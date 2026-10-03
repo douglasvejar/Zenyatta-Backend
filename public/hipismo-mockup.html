@@ -1811,6 +1811,22 @@
           <button type="button" data-semana="anterior" onclick="mostrarSemanaDetalladoCliente('anterior', this)">🗓️ Semana anterior</button>
         </div>
 
+        <!-- "Verificar Cuadre" (03-10-2026, casos reales "Mrmoney" y
+             "Legolas": un cliente mostraba un monto acá y otro distinto al
+             hacerle click -- en vez de esperar a que cada uno llegue por
+             una captura de pantalla, este botón corre GET
+             /diagnostico-saldos (ver la nota grande en
+             services/hipismoResumenCliente.js) y dice de una sola vez si
+             queda ALGÚN cliente con la grilla y su link desincronizados,
+             usando la MISMA semana que ya está eligiendo la grilla de
+             abajo. -->
+        <div class="fila" style="margin:10px 0;">
+          <button type="button" class="btn" onclick="verificarCuadreSaldos()">🔍 Verificar Cuadre de Saldos</button>
+        </div>
+        <div class="card" id="panelCuadreSaldos" style="display:none; margin-bottom:14px;">
+          <div id="cuadreSaldosContenido"></div>
+        </div>
+
         <div class="grid-clientes-detallado" id="gridClientesDetallado">
           <div class="placeholder-card" style="grid-column:1/-1;">Cargando…</div>
         </div>
@@ -9439,6 +9455,47 @@ function mostrarSemanaDetalladoCliente(semana, btn) {
   document.querySelectorAll('#selectorSemanaDetalladoCliente button').forEach(b => b.classList.remove('activo'));
   btn.classList.add('activo');
   pintarDetalladoCliente(semana);
+}
+
+// "Verificar Cuadre de Saldos" (03-10-2026, ver la nota grande del botón
+// más arriba y de diagnosticarSaldosHipismo en
+// services/hipismoResumenCliente.js) — corre GET /diagnostico-saldos con
+// la MISMA semana que ya está activa en la grilla (DETALLADO_CLIENTE_
+// SEMANA_ACTIVA, la misma variable que ya usa abrirDetalleCliente) y
+// pinta la lista de clientes que no cuadran, si los hay. Cada fila es
+// clickeable y abre el detalle de ESE cliente directo (mismo
+// abrirDetalleCliente de siempre), para no tener que buscarlo a mano en
+// la grilla de abajo.
+async function verificarCuadreSaldos() {
+  const panel = document.getElementById('panelCuadreSaldos');
+  const cont = document.getElementById('cuadreSaldosContenido');
+  panel.style.display = 'block';
+  cont.innerHTML = '<div class="placeholder-card">Verificando…</div>';
+  const semana = DETALLADO_CLIENTE_SEMANA_ACTIVA === 'anterior' ? 'anterior' : 'actual';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/diagnostico-saldos?semana=${semana}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="placeholder-card">No se pudo verificar: ${e.message}</div>`;
+    return;
+  }
+  const discrepancias = data.discrepancias || [];
+  if (!discrepancias.length) {
+    cont.innerHTML = `<div style="padding:10px 2px; color:#2a7a2a; font-weight:600;">✅ Todo cuadra: los ${data.totalClientesRevisados} clientes revisados tienen el mismo total en la grilla y en su propio link.</div>`;
+    return;
+  }
+  const filas = discrepancias.map(d => `
+    <button type="button" class="tarjeta-cliente-detallado" style="width:100%; text-align:left; margin-bottom:6px;" onclick="cerrarPanelCuadreYAbrirCliente('${d.nombre.replace(/'/g, "\\'")}')">
+      <span class="nombre-cliente">${formatNombre(d.nombre)}</span>
+      <span style="font-size:12px; color:#666;">Grilla: ${formatMonto(d.totalGrid)} &nbsp;·&nbsp; Link: ${formatMonto(d.totalLink)} &nbsp;·&nbsp; Diferencia: ${d.diferencia > 0 ? '+' : ''}${formatMonto(d.diferencia)}</span>
+    </button>`).join('');
+  cont.innerHTML = `
+    <div style="padding:6px 2px 10px; color:#b43; font-weight:600;">⚠️ ${discrepancias.length} de ${data.totalClientesRevisados} cliente(s) no cuadran -- haz click para abrir su detalle:</div>
+    ${filas}`;
+}
+function cerrarPanelCuadreYAbrirCliente(nombre) {
+  document.getElementById('panelCuadreSaldos').style.display = 'none';
+  abrirDetalleCliente(nombre);
 }
 function cerrarDetalleCliente() {
   document.getElementById('modalDetalleCliente').style.display = 'none';

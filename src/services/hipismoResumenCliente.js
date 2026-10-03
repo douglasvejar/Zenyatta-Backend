@@ -1414,7 +1414,65 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   };
 }
 
+// =================================================================
+// DIAGNÓSTICO: cuadre entre Balance General/Cierre Final y el link/
+// detalle de CADA cliente (03-10-2026, a pedido del usuario después del
+// caso "Mrmoney" y de encontrar OTRO caso igual con "Legolas", un cliente
+// normal mostrando $2.863,98 en la grilla y $2.871,98 en su propio modal:
+// "encontré otro cliente con el mismo error... necesito soluciones este
+// error de raíz para todos"). En vez de seguir arreglando un caso a la
+// vez cada vez que alguien manda una captura de pantalla, esta función
+// corre LOS 2 CÁLCULOS para cada cliente real de un grupo
+// (construirCierreFinalHipismo, la referencia "golden" de Balance
+// General/Cierre Final/"Detallado por Cliente", y
+// construirResumenClienteHipismo, lo que ve el cliente en su link propio
+// Y el Administrador al hacerle click en "Detallado por Cliente") y
+// reporta CUALQUIER cliente donde los 2 totales no cuadren, con ambos
+// montos — así deja de depender de que alguien reporte "acá me sale un
+// número y allá otro" para encontrar estos huecos: se puede correr
+// después de cualquier cambio y confirmar que TODOS los clientes de un
+// grupo cuadran, no solo el que se revisó a mano.
+//
+// Ítems que no son una ficha real de "jugadores" (WINNERS, TABLAS FIJAS,
+// REMATE, un banqueador que ya no existe como cliente, etc.) no tienen
+// link/detalle propio con el que comparar — se saltan solos (no hay
+// jugador que buscar por ese nombre).
+// =================================================================
+async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
+  const resultadoCierre = await construirCierreFinalHipismo(grupoId, desde, hasta);
+  const rJugadores = await db.query(
+    'SELECT id, grupo_id, nombre, modulos_anclados, es_cuenta_comision FROM jugadores WHERE grupo_id = $1',
+    [grupoId]
+  );
+  const porNombre = new Map(rJugadores.rows.map(j => [j.nombre, j]));
+  // rangoPersonalizado (no semanaParam) para los dos cálculos: así
+  // comparan EXACTAMENTE el mismo rango de fechas, sin depender de que
+  // "semana actual" resuelva al mismo desde/hasta en 2 llamadas separadas
+  // a hoyVenezuela() (nunca debería diferir, pero esto lo deja imposible).
+  const rangoPersonalizado = { desde, hasta };
+
+  const discrepancias = [];
+  for (const c of resultadoCierre.clientes) {
+    const jugador = porNombre.get(c.nombre);
+    if (!jugador) continue;
+    const resumen = await construirResumenClienteHipismo(jugador, grupo, 'actual', rangoPersonalizado);
+    const totalGrid = round2(c.saldo);
+    // totalHipismo, NUNCA totalSemana (03-10-2026): Cierre Final/Balance
+    // General es EXCLUSIVO de Hipismo (nunca consulta tickets_historial de
+    // Deportes) — si se comparara contra totalSemana, CUALQUIER cliente
+    // con "Deportes anclado" (modulos_anclados, una comodidad para que ese
+    // cliente vea sus 2 módulos juntos en su propio link) saldría marcado
+    // como "discrepancia" sin serlo, solo porque su link suma Deportes y
+    // Cierre Final nunca lo tuvo que sumar.
+    const totalLink = round2(resumen.resumen.totalHipismo);
+    if (Math.abs(round2(totalLink - totalGrid)) >= 0.01) {
+      discrepancias.push({ nombre: c.nombre, totalGrid, totalLink, diferencia: round2(totalLink - totalGrid) });
+    }
+  }
+  return { rango: { desde, hasta }, totalClientesRevisados: resultadoCierre.clientes.length, discrepancias };
+}
+
 module.exports = {
   construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo,
-  construirCierreFinalHipismo
+  construirCierreFinalHipismo, diagnosticarSaldosHipismo
 };
