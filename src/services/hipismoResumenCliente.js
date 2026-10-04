@@ -1217,20 +1217,36 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     }
   });
 
-  // Jugadas entre Tercios Adelantadas (04-10-2026, ver la nota grande de
-  // arriba, junto a rTerciosAdelantadas) — jugador y banquero suman
-  // exactamente igual que un ticket de Tercios ya resuelto (ambos reales,
-  // ambos definitivos apenas sale de 'pendiente'); la comisión del grupo
-  // se acumula aparte, como su PROPIO ítem "% TERCIOS ADELANTADAS" (NO
-  // dentro de comisionAdelantadasSemana — ese nombre quedó reservado para
-  // Tablas Fijas/Marcas desde el 02-10-2026, ver la nota grande de arriba
-  // — mismo criterio que mezclarTerciosAdelantadasEnBalance en
-  // routes/hipismo.js, para que este ítem se vea igual recién guardado el
-  // plano que al recargar Balance General/Cierre Final más tarde).
+  // Jugadas entre Tercios Adelantadas (04-10-2026; corregido el mismo día
+  // a pedido explícito del usuario, viendo el ítem en Balance General: "%
+  // TERCIOS ADELANTADAS, no me lo pongas asi aparte, sumamelo directo a la
+  // comision del grupo") — jugador y banquero suman exactamente igual que
+  // un ticket de Tercios ya resuelto (ambos reales, ambos definitivos
+  // apenas sale de 'pendiente'); la comisión del grupo YA NO se arma como
+  // su propio renglón de "cliente" — se acumula en
+  // comisionTerciosAdelantadasSemana y se pliega directo dentro de
+  // "COMISIÓN GRUPO" (comisionSemana, más abajo), mismo criterio que ya
+  // se usa para "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" desde el
+  // 02-10-2026 (ver la nota grande de comisionAdelantadasSemana más
+  // arriba).
+  //
+  // OJO — esto SOLO cambia esta función (GET /cierre-final, que alimenta
+  // Balance General Y Cierre Final). El Balance General EFÍMERO que se
+  // devuelve justo al guardar un plano (mezclarTerciosAdelantadasEnBalance
+  // en routes/hipismo.js) SIGUE mostrando "% TERCIOS ADELANTADAS" como su
+  // propio ítem aparte, a propósito — mismo motivo técnico por el que
+  // "% DE TABLAS FIJAS" también sigue apareciendo aparte ahí: el campo
+  // `comisionTotal` que devuelve esa respuesta no se puede inflar sin
+  // romper "Comisiones por Carrera", que lee ese mismo valor crudo
+  // guardado en hipismo_planos.comision_total (ver la nota grande junto a
+  // mezclarAdelantadasEnBalance). Si en la práctica se nota raro que ese
+  // ítem aparezca aparte justo al guardar el plano y ya no al recargar la
+  // pantalla, avisa para buscarle otra vuelta.
+  let comisionTerciosAdelantadasSemana = 0;
   rTerciosAdelantadas.rows.forEach(j => {
     acumular(j.jugador_nombre, j.resultado_jugador);
     acumular(j.banquero_nombre, j.resultado_banquero);
-    if (j.comision_grupo) acumular('% TERCIOS ADELANTADAS', j.comision_grupo);
+    if (j.comision_grupo) comisionTerciosAdelantadasSemana = round2(comisionTerciosAdelantadasSemana + Number(j.comision_grupo));
   });
 
   // "% DEVUELTO" (23-09-2026, undécima ronda, a pedido del usuario: "un
@@ -1560,7 +1576,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // menos TODO lo devuelto (Tercios+TF+Marcas). Remate NUNCA entra acá —
   // sigue siendo su propio ítem "REMATE" aparte, nunca "comisión" del
   // grupo (ver la nota grande de comisionRemateSemana más abajo).
-  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana);
+  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana + comisionTerciosAdelantadasSemana);
 
   return {
     clientes,
@@ -1575,7 +1591,12 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // Fijas + Marcas de la semana. 02-10-2026: ahora SÍ está sumada
     // dentro de comisionSemana ("COMISIÓN GRUPO", ver la nota grande de
     // arriba) — se sigue devolviendo también suelta por compatibilidad.
-    comisionAdelantadasSemana
+    comisionAdelantadasSemana,
+    // comisionTerciosAdelantadasSemana (04-10-2026): comisión cruda de
+    // Jugadas entre Tercios Adelantadas de la semana, ya sumada dentro de
+    // comisionSemana (ver la nota grande de arriba) — se devuelve también
+    // suelta por compatibilidad, mismo criterio que comisionAdelantadasSemana.
+    comisionTerciosAdelantadasSemana
   };
 }
 

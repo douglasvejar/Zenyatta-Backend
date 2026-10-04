@@ -23,11 +23,21 @@
 // Tablas Fijas/Marcas: el lado JUGADOR de una jugada 'resuelto' o
 // 'sin_decidir' (ya definitivo) se ve, una 'pendiente' no. A diferencia
 // de Tablas Fijas (que necesita la cuenta "espejo" TABLAS FIJAS), acá
-// jugador + banquero + comisión del grupo ya suman 0 solos -- por eso
-// el ítem nuevo en Cierre Final se llama "% TERCIOS ADELANTADAS", MISMO
-// nombre que ya usa mezclarTerciosAdelantadasEnBalance para que el
-// Balance General recién guardado y el recargado después se vean
-// IGUAL.
+// jugador + banquero + comisión del grupo ya suman 0 solos.
+//
+// 04-10-2026, SEGUNDA RONDA (mismo día, a pedido explícito del usuario
+// viendo el Balance General real: "% TERCIOS ADELANTADAS, no me lo
+// pongas asi aparte, sumamelo directo a la comision del grupo"): la
+// comisión del grupo YA NO se arma como su propio renglón de "cliente"
+// llamado "% TERCIOS ADELANTADAS" -- se pliega directo dentro de
+// comisionSemana ("COMISIÓN GRUPO"), mismo criterio que ya se usa para
+// "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" desde el 02-10-2026. Esto SOLO
+// afecta construirCierreFinalHipismo() (GET /cierre-final) -- el Balance
+// General EFÍMERO de "Cargar Planos" (mezclarTerciosAdelantadasEnBalance
+// en routes/hipismo.js) sigue mostrando ese ítem aparte, por el mismo
+// motivo técnico por el que "% DE TABLAS FIJAS" también sigue apareciendo
+// aparte ahí (no se puede inflar el campo comisionTotal que usa
+// "Comisiones por Carrera").
 // =================================================================
 const assert = require('assert');
 const Module = require('module');
@@ -233,10 +243,18 @@ function check(cond, msg) {
   check(!!cSammy && cSammy.saldo === 171, 'Balance General/Cierre Final ahora SÍ suma lo que ganó SAMMY en su jugada entre Tercios Adelantadas (171)');
   check(!!cMujica && cMujica.saldo === -280, 'MUJICA (banqueó las 2 jugadas resueltas: -180 y -100) queda en -280 en Balance General');
   check(!!cHanry && cHanry.saldo === 95, 'HANRY (ganó el cruce como jugador) queda en +95 en Balance General');
-  check(!!cItem && cItem.saldo === 14, 'El ítem "% TERCIOS ADELANTADAS" suma la comisión del grupo de las 2 jugadas resueltas (9 + 5 = 14) -- mismo nombre EXACTO que ya usa mezclarTerciosAdelantadasEnBalance para el Balance General efímero de "Cargar Planos"');
+  // 04-10-2026, a pedido explícito del usuario viendo este ítem en Balance
+  // General ("% TERCIOS ADELANTADAS, no me lo pongas asi aparte, sumamelo
+  // directo a la comision del grupo"): este ítem YA NO se arma como su
+  // propio "cliente" -- la comisión se pliega directo dentro de
+  // comisionSemana ("COMISIÓN GRUPO"), mismo criterio que ya se usa para
+  // "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" desde el 02-10-2026.
+  check(!cItem, 'El ítem "% TERCIOS ADELANTADAS" YA NO aparece como su propio renglón en Balance General/Cierre Final');
+  check(cierre.comisionTerciosAdelantadasSemana === 14, 'comisionTerciosAdelantadasSemana suma la comisión del grupo de las 2 jugadas resueltas (9 + 5 = 14)');
+  check(cierre.comisionSemana === 14, 'comisionSemana ("COMISIÓN GRUPO") ya trae sumados esos 14 -- no hay ninguna otra comisión en este fixture (Tercios normal/Tablas Fijas/Marcas en 0)');
 
-  const sumaTotal = round2Test(cSammy.saldo + cMujica.saldo + cHanry.saldo + cItem.saldo);
-  check(sumaTotal === 0, 'SAMMY + MUJICA + HANRY + "% TERCIOS ADELANTADAS" suman exactamente 0 (171 - 280 + 95 + 14 = 0) -- jugador+banquero+comisión siempre cuadra');
+  const sumaTotal = round2Test(cSammy.saldo + cMujica.saldo + cHanry.saldo + cierre.comisionTerciosAdelantadasSemana);
+  check(sumaTotal === 0, 'SAMMY + MUJICA + HANRY + comisionTerciosAdelantadasSemana suman exactamente 0 (171 - 280 + 95 + 14 = 0) -- jugador+banquero+comisión siguen cuadrando, ahora fuera de la lista de "clientes"');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);
