@@ -9866,8 +9866,26 @@ async function pintarDetalladoCliente(semana) {
   // grande en pintarBalanceGeneral) no es un cliente real con jugadas ni
   // con link propio — se excluye acá para no ofrecer un cuadro que al
   // hacerle click no tiene detalle-semana que mostrar.
+  //
+  // 04-10-2026, a pedido del usuario (reportó con captura: al hacerle
+  // click a "Tablas fijas" en este mismo grid sale "No se pudo cargar: No
+  // se encontró ese cliente") — mismo problema, mismo motivo: "TABLAS
+  // FIJAS", "WINNERS" y "REMATE" son renglones AGREGADOS que arma
+  // construirCierreFinalHipismo solo (ver acumular('TABLAS FIJAS', ...)/
+  // acumular('WINNERS', ...)/NOMBRE_ITEM_REMATE en
+  // services/hipismoResumenCliente.js), nunca la ficha de un cliente
+  // real -- GET /clientes/:nombre/detalle-semana busca un jugador de
+  // verdad por ese nombre y nunca lo va a encontrar para estos 3. Mismo
+  // set EXACTO (NOMBRES_PSEUDO_ITEM) que ya usa el backend para saltarlos
+  // en diagnosticarSaldosHipismo -- generalizado acá también para que no
+  // vuelva a aparecer el mismo error con otro de los 3.
+  // "MARCAS ZENYATTA"/"MARCAS SAMMY" (y cualquier otro banqueador real de
+  // una Marca) SÍ quedan -- esos SÍ son jugadores reales, autoregistrados
+  // al banquear (ver autoRegistrarJugadores en POST
+  // /adelantadas/jugadas/:id/banquear), con su propio link que sí carga.
+  const NOMBRES_PSEUDO_ITEM_DETALLADO = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE']);
   const clientes = data.clientes
-    .filter(c => !c.nombre.endsWith(' - PORCENTAJE'))
+    .filter(c => !c.nombre.endsWith(' - PORCENTAJE') && !NOMBRES_PSEUDO_ITEM_DETALLADO.has(c.nombre))
     .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   grid.innerHTML = '';
   if (!clientes.length) {
