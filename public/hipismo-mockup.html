@@ -917,13 +917,15 @@
   /* 04-10-2026 (ronda 2): el usuario pidió sumar también "Cargar Planos"
      (#zonaPlanoCargarPlanos/#txtPlano) a esta misma lista — mismo tamaño/
      opacidad, para que las 3 pantallas donde se pega un plano se vean
-     igual. */
+     igual.
+     04-10-2026 (ronda 3): "el tamaño subelo que se vea un poquito mas...
+     al menos un 10% mas" — de 65% a 75% (≈15% más grande). */
   #zonaPlanoAdelantadas, #zonaPlanoTerciosAdelantadas, #zonaPlanoCargarPlanos { position: relative; }
   #zonaPlanoAdelantadas .captura-logo-fondo,
   #zonaPlanoTerciosAdelantadas .captura-logo-fondo,
   #zonaPlanoCargarPlanos .captura-logo-fondo {
     position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
-    background-size: 65%; opacity: 0.09; pointer-events: none; z-index: 0; border-radius: 10px;
+    background-size: 75%; opacity: 0.09; pointer-events: none; z-index: 0; border-radius: 10px;
   }
   #zonaPlanoAdelantadas textarea, #zonaPlanoTerciosAdelantadas textarea, #zonaPlanoCargarPlanos textarea {
     position: relative; z-index: 1; background: rgba(255,255,255,0.72);
