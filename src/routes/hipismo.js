@@ -131,7 +131,7 @@ const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
 // puntual, buscado por nombre en vez de por token — ver
 // GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
 // services/hipismoResumenCliente.js.
-const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo } = require('../services/hipismoResumenCliente');
+const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo } = require('../services/hipismoResumenCliente');
 // "Grupo de Clientes" (30-09-2026) — CRUD de este módulo para services/
 // gruposClientes.js, siempre con modulo='hipismo' fijo (ver la nota
 // grande arriba de ese archivo y en sql/schema.sql junto a
@@ -1757,6 +1757,12 @@ const NOMBRE_ITEM_REMATE = 'REMATE';
 // ítem "WINNERS" en GET /cierre-final), nunca una fila real de
 // "jugadores", así que también se especial-casa acá en vez de 404ear.
 const NOMBRE_ITEM_WINNERS = 'WINNERS';
+// Nombre del ítem "TABLAS FIJAS" (04-10-2026, a pedido del usuario, caso
+// real: al hacerle click en Detallado por Cliente salía "No se encontró
+// ese cliente") — mismo caso EXACTO que "REMATE"/"WINNERS" arriba: es el
+// espejo sintético de Tabla Fija (ver acumular('TABLAS FIJAS', ...) en
+// construirCierreFinalHipismo), nunca una fila real de "jugadores".
+const NOMBRE_ITEM_TABLAS_FIJAS = 'TABLAS FIJAS';
 
 // POST /remates/calcular: calcula SIN guardar — para revisar el remate
 // (y, si hace falta, cargar la llegada a mano) antes de decidir guardarlo.
@@ -4098,6 +4104,12 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
   // "jugadores".
   if (req.params.nombre === NOMBRE_ITEM_WINNERS) {
     const resultado = await construirResumenWinnersHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
+    return res.json(resultado);
+  }
+  // ÍTEM "TABLAS FIJAS" (04-10-2026) — mismo caso que REMATE/WINNERS
+  // arriba.
+  if (req.params.nombre === NOMBRE_ITEM_TABLAS_FIJAS) {
+    const resultado = await construirResumenTablasFijasHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
     return res.json(resultado);
   }
 

@@ -9868,24 +9868,29 @@ async function pintarDetalladoCliente(semana) {
   // hacerle click no tiene detalle-semana que mostrar.
   //
   // 04-10-2026, a pedido del usuario (reportó con captura: al hacerle
-  // click a "Tablas fijas" en este mismo grid sale "No se pudo cargar: No
-  // se encontró ese cliente") — mismo problema, mismo motivo: "TABLAS
-  // FIJAS", "WINNERS" y "REMATE" son renglones AGREGADOS que arma
-  // construirCierreFinalHipismo solo (ver acumular('TABLAS FIJAS', ...)/
-  // acumular('WINNERS', ...)/NOMBRE_ITEM_REMATE en
-  // services/hipismoResumenCliente.js), nunca la ficha de un cliente
-  // real -- GET /clientes/:nombre/detalle-semana busca un jugador de
-  // verdad por ese nombre y nunca lo va a encontrar para estos 3. Mismo
-  // set EXACTO (NOMBRES_PSEUDO_ITEM) que ya usa el backend para saltarlos
-  // en diagnosticarSaldosHipismo -- generalizado acá también para que no
-  // vuelva a aparecer el mismo error con otro de los 3.
+  // click a "Tablas fijas" en este mismo grid salía "No se pudo cargar:
+  // No se encontró ese cliente") — "TABLAS FIJAS", "WINNERS" y "REMATE"
+  // son renglones AGREGADOS que arma construirCierreFinalHipismo solo
+  // (ver acumular('TABLAS FIJAS', ...)/acumular('WINNERS', ...)/
+  // NOMBRE_ITEM_REMATE en services/hipismoResumenCliente.js), nunca la
+  // ficha de un cliente real -- pero los 3 YA tienen su propia ruta de
+  // detalle especial-caseada en GET /clientes/:nombre/detalle-semana
+  // (NOMBRE_ITEM_REMATE/NOMBRE_ITEM_WINNERS/NOMBRE_ITEM_TABLAS_FIJAS en
+  // routes/hipismo.js, cada uno con su propio construirResumen...Hipismo
+  // en services/hipismoResumenCliente.js), así que NINGUNO de los 3 hace
+  // falta excluirlo acá ya: los 3 abren bien su modal con el detalle
+  // carrera por carrera. Antes de que existiera construirResumenTablas
+  // FijasHipismo, una primera versión de este mismo arreglo excluyó los
+  // 3 por error (copiando NOMBRES_PSEUDO_ITEM del backend sin fijarse que
+  // ese set es para un diagnóstico distinto), y ocultó de paso el click
+  // que YA funcionaba para Winners/Remate -- corregido.
   // "MARCAS ZENYATTA"/"MARCAS SAMMY" (y cualquier otro banqueador real de
-  // una Marca) SÍ quedan -- esos SÍ son jugadores reales, autoregistrados
-  // al banquear (ver autoRegistrarJugadores en POST
-  // /adelantadas/jugadas/:id/banquear), con su propio link que sí carga.
-  const NOMBRES_PSEUDO_ITEM_DETALLADO = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE']);
+  // una Marca) tampoco se excluyen -- esos SÍ son jugadores reales,
+  // autoregistrados al banquear (ver autoRegistrarJugadores en POST
+  // /adelantadas/jugadas/:id/banquear), con su propio link que ya carga
+  // bien por el camino normal (construirResumenClienteHipismo).
   const clientes = data.clientes
-    .filter(c => !c.nombre.endsWith(' - PORCENTAJE') && !NOMBRES_PSEUDO_ITEM_DETALLADO.has(c.nombre))
+    .filter(c => !c.nombre.endsWith(' - PORCENTAJE'))
     .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   grid.innerHTML = '';
   if (!clientes.length) {
@@ -9999,6 +10004,18 @@ function armarJugadaTextoDetallado(c) {
     return c.resultado < 0
       ? `🏆 Winners — ${formatNombre(c.clienteNombre)} ganó con ${gualdrapaHTML(c.caballo)}`
       : `🏆 Winners — ${formatNombre(c.clienteNombre)} perdió con ${gualdrapaHTML(c.caballo)}`;
+  }
+  // Ítem "TABLAS FIJAS" (04-10-2026, ver la nota grande de
+  // construirResumenTablasFijasHipismo en services/hipismoResumenCliente.js)
+  // — SOLO aparece en el detalle administrativo del ítem "TABLAS FIJAS",
+  // nunca en el link de un cliente real. Mismo criterio EXACTO que
+  // "WINNERS" arriba: el texto se arma desde el punto de vista del
+  // CLIENTE que jugó la Tabla Fija, para que se lea natural (si el
+  // cliente ganó, "Tablas Fijas" perdió esa plata, y viceversa).
+  if (c.tipo === 'tf_resultado') {
+    return c.ganoCliente
+      ? `🕐 Tabla fija — ${formatNombre(c.clienteNombre)} ganó con ${gualdrapaHTML(c.numeroEjemplar)}`
+      : `🕐 Tabla fija — ${formatNombre(c.clienteNombre)} perdió con ${gualdrapaHTML(c.numeroEjemplar)}`;
   }
   if (c.tipo === 'adelantada') {
     const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;

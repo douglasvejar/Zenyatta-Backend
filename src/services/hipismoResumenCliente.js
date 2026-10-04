@@ -1035,6 +1035,107 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
   };
 }
 
+// "TABLAS FIJAS", carrera por carrera (04-10-2026, a pedido del usuario,
+// caso real: al hacerle click a "Tablas fijas" en Detallado por Cliente
+// salía "No se encontró ese cliente" -- mismo motivo EXACTO por el que
+// "WINNERS" tuvo este mismo bug el 28-09-2026: "TABLAS FIJAS" tampoco es
+// una fila real de "jugadores", es el ítem AGREGADO que arma
+// construirCierreFinalHipismo con acumular('TABLAS FIJAS', ...) más
+// arriba -- GET /clientes/:nombre/detalle-semana ahora lo especial-casa
+// igual que REMATE/WINNERS, en vez de 404ear.
+//
+// Mismo invariante EXACTO que ya usa Cierre Final/mezclarAdelantadasEnBalance
+// (ver la nota grande de comisionAdelantadasSemana más arriba): el lado
+// de "TABLAS FIJAS" por cada jugada es el espejo NETO de su comisión --
+// cliente + TABLAS FIJAS + comisión (ya plegada en COMISIÓN GRUPO) = 0
+// exacto. Acá se arma esa misma cuenta por jugada, carrera por carrera,
+// para que el Administrador vea exactamente lo mismo que ya suma el
+// total de Balance General, nunca un número aparte.
+async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, rangoPersonalizado) {
+  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
+  const offset = semana === 'anterior' ? -1 : 0;
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const hoyIso = isoDeFechaUTC(hoyVe);
+
+  const rTablasFijas = await db.query(
+    `SELECT j.cliente_nombre, j.carrera_numero, j.numero_ejemplar, j.monto, j.resultado_cliente,
+            j.comision, j.gano, j.pizarra_usada,
+            p.fecha, p.hipodromo_nombre, h.pais
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+       LEFT JOIN hipismo_hipodromos h ON h.id = p.hipodromo_id
+      WHERE j.grupo_id = $1 AND j.tipo = 'tf' AND p.fecha BETWEEN $2 AND $3
+        AND j.estado IN ('resuelto', 'sin_decidir')
+      ORDER BY p.fecha DESC, j.creado_en ASC`,
+    [grupoId, desde, hasta]
+  );
+
+  const porDia = new Map();
+  let totalSemana = 0;
+  let totalHoy = 0;
+  let cantidadJugadas = 0;
+
+  rTablasFijas.rows.forEach(j => {
+    // Mismo cálculo EXACTO que acumular('TABLAS FIJAS', -(resultado_cliente
+    // + comisionTf)) en construirCierreFinalHipismo -- una jugada
+    // 'sin_decidir' siempre da resultado_cliente=0 y comision=0, así que
+    // resultado acá da 0 y se salta sola (mismo criterio que REMATE/
+    // WINNERS arriba: una jugada sin efecto no aporta ninguna línea).
+    const comisionTf = j.comision != null ? Number(j.comision) : 0;
+    const resultado = round2(-(Number(j.resultado_cliente) + comisionTf));
+    if (!resultado) return;
+    const fechaIso = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    const hipNombre = j.hipodromo_nombre;
+    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, carreras: [] });
+
+    hipMap.get(hipNombre).carreras.push({
+      tipo: 'tf_resultado',
+      carrera: j.carrera_numero,
+      pizarra: j.pizarra_usada,
+      clienteNombre: j.cliente_nombre,
+      numeroEjemplar: j.numero_ejemplar,
+      monto: Number(j.monto),
+      comision: comisionTf,
+      ganoCliente: !!j.gano,
+      resultado
+    });
+
+    totalSemana += resultado;
+    cantidadJugadas += 1;
+    if (fechaIso === hoyIso) totalHoy += resultado;
+  });
+
+  const dias = Array.from(porDia.entries())
+    .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  return {
+    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo), ...temaColorGrupo(grupo) },
+    jugador: { nombre: 'TABLAS FIJAS' },
+    semana,
+    rango: { desde, hasta },
+    numeroSemana: numeroSemanaISO(desde),
+    rangoPersonalizado: !!rangoPersonalizado,
+    hoy: hoyIso,
+    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
+    modulos: { hipismo: true, deportes: false },
+    resumen: {
+      totalSemana: round2(totalSemana),
+      totalHoy: round2(totalHoy),
+      cantidadJugadas,
+      totalHipismo: round2(totalSemana),
+      totalDeportes: 0,
+      cantidadJugadasHipismo: cantidadJugadas,
+      cantidadJugadasDeportes: 0
+    },
+    dias
+  };
+}
+
 // =================================================================
 // CIERRE FINAL / BALANCE GENERAL DE HIPISMO (30-09-2026, a pedido del
 // usuario: "desde super admin muestrame en la pestaña balance por
@@ -1684,5 +1785,5 @@ async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
 
 module.exports = {
   construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo,
-  construirCierreFinalHipismo, diagnosticarSaldosHipismo
+  construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo
 };
