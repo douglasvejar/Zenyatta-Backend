@@ -95,17 +95,58 @@ assertEq('parseCaballosToken("10-15") -> separador explicito, NO se parte en dig
   assertEq('L6 cruce (10 queda ENTERO, no se parte en digitos)', p.cruce, { gruposA: [10], gruposB: [3] });
 }
 {
-  // "RAMBO JUEGO 2PTS 2Y3 DEL 4 180 DA MUJICA" -- prefijo decorativo
-  // "2PTS" se ignora, la modalidad real es "2y3" ("jugada mixta...se
-  // lee asi como leiste 2p/3n" -- en este caso concreto el usuario
-  // confirmó que esta jugada es simplemente "2y3", el prefijo "2PTS" es
-  // puro relleno/decorativo sin significado propio).
+  // "RAMBO JUEGO 2PTS 2Y3 DEL 4 180 DA MUJICA" -- CORRECCIÓN 04-10-2026
+  // (el usuario corrigió una suposición mía anterior, nunca confirmada,
+  // que trataba "2PTS" como puro relleno decorativo): esto es un "COMBO
+  // DOS PAGOS EN UNO" -- "2PTS" ES una modalidad real ("2PTS" = "2P" =
+  // "2 puestos"), combinada con "2Y3". Se normaliza a "2p-2y3" (mismo
+  // formato que ya usa resolverModalidadCompuesta de hipismoCalc.js
+  // para Tercios normal).
   const p = parsearLineaTerciosAdelantada('RAMBO JUEGO 2PTS 2Y3 DEL 4 180 DA MUJICA');
   assertEq('L7 jugador', p.jugadorNombre, 'RAMBO');
   assertEq('L7 banquero', p.banqueroNombre, 'MUJICA');
   assertEq('L7 monto', p.monto, 180);
   assertEq('L7 grupo (DEL 4)', p.grupo, [4]);
-  assertEq('L7 modalidad (2PTS se ignora, queda 2y3)', p.modalidad, '2y3');
+  assertEq('L7 modalidad (combo "2PTS 2Y3" -> "2p-2y3")', p.modalidad, '2p-2y3');
+}
+{
+  // Mismo combo, pero escrito directo "2P" en vez de "2PTS" (confirmado
+  // que ambas formas son la misma modalidad "Np").
+  const p = parsearLineaTerciosAdelantada('AMBO JUEGO 2P 2Y3 DEL 4 180 DA MUJICA');
+  assertEq('Combo "2P 2Y3" (sin TS) -> misma modalidad', p.modalidad, '2p-2y3');
+}
+{
+  // Resolución del combo "2P 2Y3 DEL 4 CON 180" -- confirmado verbatim
+  // por el usuario: "DIVIDES LA MITAD EL MONTO PARA CADA JUGADA SERIA
+  // 90 2P Y 90 2Y3 .... DESPUES RESUELVES". Se prueban las 3 zonas de
+  // la carrera para el caballo 4 (pizarra "8-1-4-7-2"):
+  const rank478 = parsearPizarra('8-1-4-7-2');
+  const linea478 = { cruce: null, grupo: [4], modalidad: '2p-2y3', monto: 180 };
+
+  // El 4 llega 1ro o 2do -> las 2 mitades (90 en "2p", 90 en "2y3")
+  // ganan completas -> +180/-180 en bruto.
+  const rank1ro = parsearPizarra('4-1-8-7-2');
+  const r1 = resolverLineaTerciosAdelantada({ ...linea478 }, rank1ro, 0);
+  assertEq('Combo, 4 llega 1ro -> jugador +180 bruto', r1.montoJugadorMostrado, 180);
+  assertEq('Combo, 4 llega 1ro -> banquero -180 bruto', r1.montoBanqueroMostrado, -180);
+
+  // El 4 llega 3ro -> la mitad de "2p" (90) pierde COMPLETA (pos=3>2),
+  // la mitad de "2y3" (90) pierde SOLO LA MITAD (pos=3=B) -> jugador
+  // pierde 90 + 45 = 135; banquero gana esos 135 brutos.
+  const r3 = resolverLineaTerciosAdelantada({ ...linea478 }, rank478, 0);
+  assertEq('Combo, 4 llega 3ro -> jugador -135 bruto (90 completo + 45 mitad)', r3.montoJugadorMostrado, -135);
+  assertEq('Combo, 4 llega 3ro -> banquero +135 bruto', r3.montoBanqueroMostrado, 135);
+  // Con 5% de comisión, el banquero se queda con 135 menos el 5%.
+  const r3con5 = resolverLineaTerciosAdelantada({ ...linea478 }, rank478, 5);
+  assertEq('Combo, 4 llega 3ro, con 5% -> banquero 128.25', r3con5.montoBanqueroMostrado, 128.25);
+  assertEq('Combo, 4 llega 3ro, con 5% -> comisión del grupo 6.75', r3con5.comisionGrupo, 6.75);
+
+  // El 4 llega 4to (peor que las 2 modalidades) -> pierde completo en
+  // las 2 mitades -> jugador -180, banquero +180 bruto.
+  const rank4to = parsearPizarra('8-1-7-4-2');
+  const r4 = resolverLineaTerciosAdelantada({ ...linea478 }, rank4to, 0);
+  assertEq('Combo, 4 llega 4to -> jugador -180 bruto (pierde las 2 mitades)', r4.montoJugadorMostrado, -180);
+  assertEq('Combo, 4 llega 4to -> banquero +180 bruto', r4.montoBanqueroMostrado, 180);
 }
 
 // ================= Fragmentos de aclaración (Raul/Hanry) =================

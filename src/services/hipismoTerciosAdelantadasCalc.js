@@ -20,9 +20,8 @@
 // GRAMÁTICA CONFIRMADA por el usuario (04-10-2026, 3 rondas de preguntas):
 //
 // Cada línea: <JUGADOR> [verbo opcional, relleno: JUEGA/JUEGO/JUGAR/
-// JUGANDO/JUUGAR(typo)/PUEDE] [prefijo decorativo opcional, ej. "2PTS"]
-// <especificación de apuesta> [CON] [<monto>] [LO|LOS] DA <BANQUERO>
-// [<monto>]
+// JUGANDO/JUUGAR(typo)/PUEDE] <especificación de apuesta, 1 o 2
+// modalidades> [CON] [<monto>] [LO|LOS] DA <BANQUERO> [<monto>]
 //
 // - El jugador SIEMPRE va primero, el banquero después de "DA" -- aunque
 //   no diga "juega"/"jugando" ("a pesar de que no diga la palabra juega
@@ -57,9 +56,26 @@
 //   * Puede ir ANTES o DESPUÉS de la especificación de caballo(s)
 //     ("raul juega 1p 47 con 300" vs "raul puede juugar 47 10a8 con
 //     400").
-//   * Un prefijo decorativo como "2PTS" antes de la modalidad real se
-//     ignora -- la modalidad que cuenta es la que sigue ("2PTS 2Y3" se
-//     calcula como "2y3").
+//   * "COMBO DOS PAGOS EN UNO" (corrección 04-10-2026 -- ver mensaje de
+//     aclaración del usuario, que reemplaza una suposición MÍA anterior
+//     y nunca confirmada, que trataba "2PTS" como puro relleno
+//     decorativo a ignorar): una línea puede traer DOS modalidades
+//     seguidas, ej. "2P 2Y3" o "2PTS 2Y3" ("PTS" es solo otra forma de
+//     escribir la familia "Np" -- "2PTS" = "2P" = "2 puestos"). Esto NO
+//     es lo mismo que una sola modalidad "2y3": es un combo donde el
+//     monto se reparte en 2 mitades iguales, cada mitad juega su propia
+//     modalidad por separado, y después se suman los resultados
+//     (confirmado verbatim: "SE RESUELVE ASI 2P 2Y3 DEL 4 CON 180...
+//     DIVIDES LA MITAD EL MONTO PARA CADA JUGADA SERIA 90 2P Y 90 2Y3
+//     .... DESPUES RESUELVES"). Se implementa reusando
+//     resolverModalidadCompuesta() de hipismoCalc.js tal cual ya existe
+//     para Tercios normal (modalidad combinada "2p-2y3" con guion): su
+//     promedio de fracciones j/b de las 2 modalidades, multiplicado por
+//     el monto TOTAL, da EXACTO lo mismo que repartir el monto a la
+//     mitad y sumar cada mitad por separado (confirmado numéricamente
+//     con el ejemplo real de abajo). Nunca más de 2 modalidades en una
+//     misma línea (mismo límite que ya tiene resolverModalidadCompuesta
+//     para Tercios normal).
 //   * En un cruce SIN modalidad adjunta, es "pelo a pelo" -- gana el
 //     lado cuyo MEJOR caballo (de los suyos) esté más cerca del primer
 //     lugar (acotado a los primeros puestos que traiga la pizarra que
@@ -111,7 +127,6 @@ const {
 // Tokens de relleno / decorativos
 // -----------------------------------------------------------------
 const FILLER_VERBO_RE = /^(?:JUEGA|JUEGO|JUGAR|JUGANDO|JUUGAR|PUEDE)$/i;
-const DECORATIVO_RE = /^\d+PTS$/i;
 const DEL_RE = /^DEL$/i;
 const LO_LOS_RE = /^(?:LO|LOS)$/i;
 const CON_RE = /^CON$/i;
@@ -152,9 +167,13 @@ function parseMonto(txt) {
 // que no cumpla eso (ej. "4y7", "4/7") NUNCA es una modalidad válida,
 // así que queda libre para leerse como grupo de caballos (ver
 // SEP_CABALLO arriba).
+//
+// La familia "Np" ("N puestos") también se puede escribir "NPTS" (ej.
+// "2PTS" = "2P" = "2 puestos") -- corrección 04-10-2026, ver la nota
+// grande de "COMBO DOS PAGOS EN UNO" más arriba.
 function tokenEsModalidadValida(tokCrudo) {
   const t = tokCrudo.toLowerCase().trim();
-  if (/^\d{1,2}p$/.test(t)) return true;
+  if (/^\d{1,2}p(?:ts)?$/.test(t)) return true;
   if (decimosN(t) !== null) return true;
   if (/^\d{1,2}n(?:ini)?$/.test(t) || /^\d{1,2}nn$/.test(t)) return true;
   if (t === 'pp') return true;
@@ -164,6 +183,16 @@ function tokenEsModalidadValida(tokCrudo) {
     return B === A || B === A + 1;
   }
   return false;
+}
+
+// normalizarTokenModalidad(): pasa un token de modalidad ya validado
+// (ver arriba) a la forma canónica que entiende resolverModalidad() de
+// hipismoCalc.js -- hoy en día lo único que cambia es "NPTS" -> "Np".
+function normalizarTokenModalidad(tokCrudo) {
+  const t = tokCrudo.toLowerCase().trim().replace(/\s+/g, '');
+  const mPts = t.match(/^(\d{1,2})pts$/);
+  if (mPts) return mPts[1] + 'p';
+  return t;
 }
 
 // parseCaballosToken(): convierte un token numérico (sin separador "x")
@@ -235,22 +264,25 @@ function parsearLineaTerciosAdelantada(lineaCruda) {
     return { ok: false };
   }
 
-  // 2) Especificación de apuesta: modalidad y/o caballo(s)/cruce, en
-  //    cualquier orden, cada uno como máximo una vez.
+  // 2) Especificación de apuesta: modalidad (1 o 2 -- "combo dos pagos
+  //    en uno", ver la nota grande de arriba) y/o caballo(s)/cruce, en
+  //    cualquier orden.
   let modalidad = null;
+  let modalidadesVistas = 0;
   let gruposCruce = null; // { gruposA, gruposB }
   let grupo = null;       // caballos (sin cruce)
 
   let avanzo = true;
   while (avanzo && i < tokens.length) {
     avanzo = false;
-    if (DECORATIVO_RE.test(tokens[i])) { i++; avanzo = true; continue; }
     if (!grupo && !gruposCruce && DEL_RE.test(tokens[i]) && i + 1 < tokens.length && /^\d{1,2}$/.test(tokens[i + 1])) {
       grupo = [parseInt(tokens[i + 1], 10)];
       i += 2; avanzo = true; continue;
     }
-    if (!modalidad && tokenEsModalidadValida(tokens[i])) {
-      modalidad = tokens[i].toLowerCase().replace(/\s+/g, '');
+    if (modalidadesVistas < 2 && tokenEsModalidadValida(tokens[i])) {
+      const tokNormalizado = normalizarTokenModalidad(tokens[i]);
+      modalidad = modalidad ? (modalidad + '-' + tokNormalizado) : tokNormalizado;
+      modalidadesVistas++;
       i++; avanzo = true; continue;
     }
     if (!grupo && !gruposCruce) {
