@@ -896,6 +896,39 @@
      logo de la capa de atrás se note tenue detrás del texto. */
   #zonaResultadoLogoFondo #resultadoCaja { background: transparent; }
 
+  /* =================================================================
+     LOGO DE FONDO en el CUADRO donde se PEGA el plano, pero SOLO en
+     "Tablas Fijas y Marcas" y "Jugadas entre Tercios Adelantadas"
+     (04-10-2026, a pedido explícito del usuario: "quiero que en la
+     pantalla de texto donde coloco el plano para ser calculado, igual
+     en estas dos pestañas... se vea el logo del grupo en grande que
+     ocupe lo mas que pueda el cuadro donde va el texto... el logo claro
+     para que se note el texto"). Mismo mecanismo de siempre (capa
+     .captura-logo-fondo detrás + textarea con fondo transparente
+     encima, igual que #zonaResultadoLogoFondo) pero OJO: esto es la
+     excepción puntual que el 01-10-2026 se había sacado de "Cargar
+     Planos" (#txtPlano) porque con el cuadro vacío se veía como "un
+     pedazo de imagen suelto" — acá el usuario lo pidió de nuevo, a
+     propósito, puntualmente para estas 2 pestañas, más grande (65% en
+     vez del 38-55% que usan las otras zonas) y bien tenue (0.09) para
+     que el texto que se vaya escribiendo siga notándose encima sin
+     pelear con la imagen. Solo decorativo — nunca viaja al guardar ni
+     al "Revisar"/"Guardar", es puramente visual para el operador. */
+  /* 04-10-2026 (ronda 2): el usuario pidió sumar también "Cargar Planos"
+     (#zonaPlanoCargarPlanos/#txtPlano) a esta misma lista — mismo tamaño/
+     opacidad, para que las 3 pantallas donde se pega un plano se vean
+     igual. */
+  #zonaPlanoAdelantadas, #zonaPlanoTerciosAdelantadas, #zonaPlanoCargarPlanos { position: relative; }
+  #zonaPlanoAdelantadas .captura-logo-fondo,
+  #zonaPlanoTerciosAdelantadas .captura-logo-fondo,
+  #zonaPlanoCargarPlanos .captura-logo-fondo {
+    position: absolute; inset: 0; background-repeat: no-repeat; background-position: center;
+    background-size: 65%; opacity: 0.09; pointer-events: none; z-index: 0; border-radius: 10px;
+  }
+  #zonaPlanoAdelantadas textarea, #zonaPlanoTerciosAdelantadas textarea, #zonaPlanoCargarPlanos textarea {
+    position: relative; z-index: 1; background: rgba(255,255,255,0.72);
+  }
+
   /* Buscador de miembros (30-09-2026, a pedido del usuario — reemplaza la
      grilla fija de checkboxes de antes). .gc-editor-miembros arranca
      oculto: solo se ve al tocar "✏️ Editar miembros". */
@@ -1361,15 +1394,20 @@
           </div>
         </div>
 
-        <!-- 01-10-2026: acá hubo un logo del grupo de fondo (igual que el
-             del resultado, más abajo), pero se sacó el mismo día — con el
-             cuadro vacío antes de pegar el plano se veía como "un pedazo
-             de imagen" suelto adentro, sin texto que lo disimulara (ver
-             la nota grande junto a #zonaResultadoLogoFondo en el <style>
-             de arriba). Queda solo en el resultado. -->
+        <!-- 01-10-2026: acá se había sacado el logo de fondo porque con el
+             cuadro vacío se veía como "un pedazo de imagen" suelto (ver la
+             nota grande junto a #zonaResultadoLogoFondo en el <style> de
+             arriba). 04-10-2026, a pedido del usuario: se vuelve a poner,
+             igual de grande y tenue que en "Tablas Fijas y Marcas"/
+             "Jugadas entre Tercios Adelantadas" (mismas reglas de
+             #zonaPlanoAdelantadas en el <style> — reusadas acá también vía
+             #zonaPlanoCargarPlanos). -->
         <div>
           <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
-          <textarea id="txtPlano" rows="14"></textarea>
+          <div id="zonaPlanoCargarPlanos">
+            <div class="captura-logo-fondo" id="logoFondoCargarPlanos"></div>
+            <textarea id="txtPlano" rows="14"></textarea>
+          </div>
         </div>
 
         <div class="btn-fila">
@@ -1637,7 +1675,16 @@
         </div>
 
         <label for="txtAdelantadas">Plano de jugadas adelantadas (pega aquí el mensaje completo)</label>
-        <textarea id="txtAdelantadas" rows="14" placeholder="Pega acá el plano, con cada bloque &quot;JUGANDO &lt;cliente&gt;&quot; y sus líneas numeradas por carrera"></textarea>
+        <!-- Logo del grupo de fondo, grande y tenue, SOLO en el cuadro
+             donde se pega el plano (04-10-2026, a pedido del usuario — ver
+             la nota grande junto a #zonaPlanoAdelantadas en el <style>).
+             Puramente decorativo: pintarLogosGrupo() le pone el
+             background-image; si el grupo no tiene logo, queda vacío sin
+             ningún cambio visual. -->
+        <div id="zonaPlanoAdelantadas">
+          <div class="captura-logo-fondo" id="logoFondoAdelantadas"></div>
+          <textarea id="txtAdelantadas" rows="14" placeholder="Pega acá el plano, con cada bloque &quot;JUGANDO &lt;cliente&gt;&quot; y sus líneas numeradas por carrera"></textarea>
+        </div>
 
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" onclick="calcularAdelantadas()">🧮 Revisar</button>
@@ -1706,7 +1753,13 @@
         </div>
 
         <label for="txtTerciosAdelantadas">Plano de jugadas entre tercios adelantadas (pega aquí el mensaje completo)</label>
-        <textarea id="txtTerciosAdelantadas" rows="14" placeholder="Pega acá el plano, con cada línea ya con su jugador y su banquero (ej. &quot;HANRY 2x7 LO DA RAUL 100&quot;)"></textarea>
+        <!-- Mismo logo de fondo grande y tenue que en "Tablas Fijas y
+             Marcas" arriba (04-10-2026, a pedido del usuario), SOLO en el
+             cuadro donde se pega el plano. -->
+        <div id="zonaPlanoTerciosAdelantadas">
+          <div class="captura-logo-fondo" id="logoFondoTerciosAdelantadas"></div>
+          <textarea id="txtTerciosAdelantadas" rows="14" placeholder="Pega acá el plano, con cada línea ya con su jugador y su banquero (ej. &quot;HANRY 2x7 LO DA RAUL 100&quot;)"></textarea>
+        </div>
 
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" onclick="calcularTerciosAdelantadas()">🧮 Revisar</button>
@@ -5790,7 +5843,13 @@ function pintarLogosGrupo() {
   // logo pero donde se PEGA el plano) estuvo acá mismo el mismo día,
   // pero se sacó: con el cuadro vacío se veía como un pedazo de imagen
   // suelto — queda solo en el resultado.
-  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'montosApostadosLogoFondo', 'resultadoLogoFondo', 'comisionesSinDevolucionesLogoFondo'].forEach(id => {
+  ['balanceLogoFondo', 'cierreLogoFondo', 'comisionesDevueltasLogoFondo', 'montosApostadosLogoFondo', 'resultadoLogoFondo', 'comisionesSinDevolucionesLogoFondo',
+    // 04-10-2026: logo de fondo en el cuadro donde se pega el plano, en
+    // "Tablas Fijas y Marcas", "Jugadas entre Tercios Adelantadas" y
+    // "Cargar Planos" (ver la nota grande junto a #zonaPlanoAdelantadas
+    // en el <style>).
+    'logoFondoAdelantadas', 'logoFondoTerciosAdelantadas', 'logoFondoCargarPlanos'
+  ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.backgroundImage = logoUrl ? `url('${logoUrl}')` : '';
