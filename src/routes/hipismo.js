@@ -352,7 +352,27 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
     return {
       id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo', monto: Number(j.monto),
       gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null,
-      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente }]
+      // "MARCAS" espejo genérico en el TEXTO del plano (04-10-2026, a
+      // pedido del usuario: "esos 120 que pierde falta quien los gana...
+      // las marcas las banquea 2 clientes que debes crear en balances...
+      // esos dos clientes son MARCAS ZENYATTA Y MARCAS SAMMY... ASI YA
+      // QUE QUIENES BANQUEAN ES INFORMACIÓN PERSONAL DEL GRUPO LOS
+      // CLIENTES NO DEBEN VERLO"). El banqueo REAL (con los banqueadores
+      // reales, su %, y quién paga comisión -- ver resolverBanqueoMarca)
+      // siempre pasa DESPUÉS, como un paso manual aparte (POST
+      // /adelantadas/jugadas/:id/banquear) — en el momento en que se
+      // genera ESTE texto (justo al cargar la pizarra) todavía no se
+      // sabe quién banquea, así que mostrar los nombres reales acá no
+      // es posible, y además el usuario no quiere que el cliente los
+      // vea. Mismo patrón EXACTO que ya usa Tabla Fija más arriba
+      // (movimientos: [cliente, 'TABLAS FIJAS']) — "MARCAS" es un
+      // nombre fijo y genérico, nunca cambia aunque después se banquee
+      // entre 1, 2 o más personas reales, y el texto del plano YA
+      // enviado nunca se reconstruye con el banqueo real (ver la nota
+      // grande de armarBloqueAdelantadas). SIN descontar ningún % ("LAS
+      // MARCAS NO SE LE DESCUENTA % X ESO SALE ASI NETO EN EL PLANO") —
+      // exactamente lo opuesto a resultadoCliente, nunca más ni menos.
+      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente) }]
     };
   });
 

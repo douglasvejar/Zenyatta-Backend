@@ -591,6 +591,15 @@ function reqBase(grupoId) {
   check(resPlanos12._json.plano.texto_resultado.includes('PARADA ADELANTADAS'), 'El texto del plano de la carrera 12 incluye el bloque "PARADA ADELANTADAS"');
   check(resPlanos12._json.plano.texto_resultado.includes('Linares +225'), 'El bloque de adelantadas muestra a Linares ganando +225');
   check(resPlanos12._json.plano.texto_resultado.includes('Tablas fijas'), 'El bloque de adelantadas también muestra el neto de "Tablas Fijas" (la banca)');
+  // "MARCAS" espejo genérico en el TEXTO del plano (04-10-2026, a pedido
+  // del usuario: "esos 120 que pierde falta quien los gana... eso se
+  // ve asi MARCAS +120 ... ya que quienes banquean es información
+  // personal del grupo, los clientes no deben verlo"). Esto pasa ANTES
+  // de que el operador banquee de verdad (la marca de Halland todavía
+  // está "falta_banqueo" en este punto de la prueba) — mismo mecanismo
+  // EXACTO que ya usa "TABLAS FIJAS" (un nombre fijo, sin %, nunca los
+  // nombres reales de quien banquea después).
+  check(resPlanos12._json.plano.texto_resultado.includes('Marcas +120'), 'El bloque de adelantadas YA muestra "Marcas +120" (espejo genérico, SIN nombres reales) aunque la marca de Halland todavía no tenga banqueo asignado');
   // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
   // "PLANO REFERENCIAL" quedaba en el MEDIO del mensaje, arriba de
   // "PARADA ADELANTADAS", en vez de al final de todo): el pie tiene que
@@ -773,6 +782,31 @@ function reqBase(grupoId) {
   const itemTablasFijas = resCierre._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
   check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo NETO de su propia comisión, de TODAS las Tablas Fijas resueltas esta semana) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
   check(!resCierre._json.clientes.some(c => c.nombre === '% DE TABLAS FIJAS'), 'GET /cierre-final ya NO trae un renglón "% DE TABLAS FIJAS" aparte (esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
+
+  // "MARCAS ZENYATTA"/"MARCAS SAMMY" como CLIENTES reales propios en
+  // Balance General/Cierre Final (04-10-2026, a pedido del usuario: "las
+  // marcas las banquea 2 clientes que debes crear en balance general, en
+  // cierre final y sus saldos carrera por carrera... esos dos clientes
+  // son marcas zenyatta y marcas sammy"). El banqueo de la marca de
+  // Halland (punto 7 más arriba, ya "resuelto") tiene que verse reflejado
+  // acá con el monto EXACTO que ya devolvió POST /adelantadas/.../banquear
+  // (72 y 46,8) — confirma que acumular(b.nombre, b.monto) en
+  // construirCierreFinalHipismo (services/hipismoResumenCliente.js) suma
+  // cada banqueador real como su propio cliente, no solo al nivel de la
+  // ruta de banqueo (ya probado arriba) sino también al nivel del
+  // resumen semanal agregado.
+  const itemMarcasZenyatta = resCierre._json.clientes.find(c => c.nombre === 'MARCAS ZENYATTA');
+  const itemMarcasSammy = resCierre._json.clientes.find(c => c.nombre === 'MARCAS SAMMY');
+  check(!!itemMarcasZenyatta && itemMarcasZenyatta.saldo === 72, 'GET /cierre-final trae "MARCAS ZENYATTA" +72 (su 60% de la marca de Halland, sin comisión)');
+  check(!!itemMarcasSammy && itemMarcasSammy.saldo === 46.8, 'GET /cierre-final trae "MARCAS SAMMY" +46,8 (su 40%, neto de la comisión 2,5% que paga)');
+  // La comisión de esta marca (1,2, ver resBanqueo._json.comisionMarcas
+  // arriba) tiene que quedar sumada dentro de "COMISIÓN GRUPO" (mismo
+  // criterio EXACTO que ya confirma el check de "PORCENTAJE MARCAS"
+  // arriba) y Halland + Zenyatta + Sammy + esa comisión suman 0 exacto
+  // también a nivel del resumen semanal, no solo en la respuesta directa
+  // del banqueo.
+  const sumaMarcaHallandEnCierre = Number(halland12Marca.resultado_cliente) + itemMarcasZenyatta.saldo + itemMarcasSammy.saldo + resBanqueo._json.comisionMarcas;
+  check(Math.round(sumaMarcaHallandEnCierre * 100) === 0, 'En GET /cierre-final, Halland + Marcas Zenyatta + Marcas Sammy + su Comisión Marcas también suman 0 exacto');
 
   // El punto concreto que reportó el usuario originalmente (28-09-2026):
   // sumando el resultado_cliente real de CADA Tabla Fija más "TABLAS
