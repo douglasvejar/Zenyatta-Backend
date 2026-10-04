@@ -142,7 +142,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
   // exactamente igual que una línea de Tercios sin ningún ajuste extra.
   const rRemate = await db.query(
     `SELECT a.caballo, a.numero_ejemplar, a.monto, a.resultado,
-            rm.fecha, rm.hipodromo_nombre, rm.carrera_numero, rm.pizarra, rm.numero_ganador,
+            rm.fecha, rm.hipodromo_nombre, rm.carrera_numero, rm.pizarra, rm.numero_ganador, rm.modo,
             h.pais
        FROM hipismo_remate_apuestas a
        JOIN hipismo_remates rm ON rm.id = a.remate_id
@@ -166,7 +166,12 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
       numeroEjemplar: row.numero_ejemplar,
       monto: Number(row.monto),
       resultado: Number(row.resultado),
-      ganoRemate: row.numero_ejemplar === row.numero_ganador
+      // "manual" (04-10-2026, ver la nota grande de POST
+      // /remates/manual): no hay numero_ganador (siempre NULL en este
+      // modo) — acá "ganó" se decide por el signo del monto neto que
+      // escribió el operador (positivo = ganó), nunca comparando contra
+      // un número ganador que no existe.
+      ganoRemate: row.modo === 'manual' ? Number(row.monto) > 0 : row.numero_ejemplar === row.numero_ganador
     };
   });
 

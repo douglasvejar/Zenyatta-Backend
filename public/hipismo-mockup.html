@@ -1537,20 +1537,25 @@
     </section>
 
     <!-- ============ CARGAR REMATE MANUAL (25-09-2026) ============ -->
-    <!-- A pedido del usuario: mismo remate de siempre, pero armado en la
-         pantalla (Hipódromo/Carrera/Fecha + una fila por N° de Ejemplar
-         con su Jugador y su Precio), en vez de pegar el mensaje de
-         WhatsApp completo como en "Cargar Remate Automático desde Chat".
-         calcularRemateManual() más abajo arma un "texto" de remate
-         equivalente al que se pega a mano en el otro flujo y lo manda al
-         MISMO POST /api/hipismo/remates (services/hipismoRemateCalc.js)
-         — no hizo falta tocar nada del backend. No se pide el nombre del
-         caballo (la tabla de referencia que mandó el usuario tampoco lo
-         pide) — se usa "EJEMPLAR N" como marcador en el texto guardado. -->
+    <!-- REDISEÑADO 04-10-2026 a pedido del usuario: "no quiero colcoar
+         pizarra ni comision ni anda solo sleccionar el dia el hipodromo
+         y la carrerra, elegir caballo el jugador y te voy a colocar el
+         monto neto de cuanto se gana cada uno o cuanto pierde" — ya NO
+         arma un remate de pool con % comisión/pizarra/garantía/pago fijo
+         (eso lo sigue haciendo "Cargar Remate Automático desde Chat").
+         Mismo criterio EXACTO que "Cargar Winners": el operador ya sabe
+         cuánto ganó o perdió cada cliente y lo escribe directo — un solo
+         botón "Guardar Remate", sin "Calcular" previo (confirmado con el
+         usuario, AskUserQuestion 04-10-2026). guardarRemateManual() más
+         abajo manda esos netos a POST /api/hipismo/remates/manual, que
+         arma el ítem "REMATE" como el ESPEJO exacto de la suma de todos
+         los netos: si falta dinero para pagarle al que gana, el Remate
+         queda NEGATIVO (lo puso la banca); si sobra, queda POSITIVO (se
+         lo ganó la banca) — exactamente lo que pidió el usuario. -->
     <section class="vista" id="vista-cargarRemateManual">
       <div class="card">
         <h2>✍️ Cargar Remate Manual</h2>
-        <p class="desc">Arma el remate directo acá: elige el Hipódromo, Carrera y Fecha, y por cada número de ejemplar que se jugó elige el cliente y el precio que le puso — no hace falta pegar ningún mensaje. El cálculo y el guardado son EXACTOS al de "Cargar Remate Automático desde Chat" (mismo % de comisión, misma llegada, misma garantía si aplica).</p>
+        <p class="desc">Elige el Hipódromo, Carrera y Fecha, y por cada ejemplar que se jugó elige el cliente y escribe el monto NETO que ganó (sin signo) o que perdió (con "-" adelante) — tú ya sabes cuánto es cada uno, no hace falta pizarra, % de comisión, "Remate Paga" ni "Remate Garantiza". El ítem "REMATE" del balance sale solo, como el espejo de la suma de esos montos.</p>
 
         <div class="fila">
           <div>
@@ -1569,51 +1574,32 @@
           </div>
         </div>
 
-        <div class="fila">
-          <div>
-            <label for="inpComisionRemateManual">% Comisión de este remate</label>
-            <input type="text" id="inpComisionRemateManual" value="20" placeholder="Ej: 20">
-          </div>
-          <div>
-            <label for="inpPizarraRemateManual">Llegada (opcional si ya cargaste el plano de esta carrera)</label>
-            <input type="text" id="inpPizarraRemateManual" placeholder="Ej: 2.5.1 — solo hace falta el 1er lugar" title="Aceptado con punto, guion, coma o barra: 2.5.1 / 2-5-1 / 2,5,1 / 2/5/1">
-          </div>
-        </div>
-
-        <!-- "Remate Paga" / "Remate Garantiza" (26-09-2026) — mismos 2
-             modos EXACTOS que "Cargar Remate Automático desde Chat" (ver
-             la nota grande de allá), nunca los 2 juntos. -->
-        <div class="fila">
-          <div>
-            <label for="inpPagoFijoRemateManual">Remate Paga (monto EXACTO, sin %) — opcional</label>
-            <input type="text" id="inpPagoFijoRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no paga un monto fijo)">
-          </div>
-          <div>
-            <label for="inpGarantizaRemateManual">Remate Garantiza (piso + el % de arriba) — opcional</label>
-            <input type="text" id="inpGarantizaRemateManual" placeholder="Ej: 500 (déjalo vacío si este remate no tiene garantía)">
-          </div>
-        </div>
-
-        <label>Ejemplares — elige jugador y precio SOLO en los que se jugaron</label>
+        <label>Ejemplares — elige jugador y monto neto SOLO en los que se jugaron</label>
         <table id="tablaRemateManualWrap">
-          <thead><tr><th>N° Ejemplar</th><th>Jugador</th><th>Precio Ejemplar</th></tr></thead>
+          <thead><tr><th>N° Ejemplar</th><th>Jugador</th><th>Monto Neto (+gana / -pierde)</th></tr></thead>
           <tbody id="tablaRemateManual"></tbody>
         </table>
 
         <div class="btn-fila" style="margin-top:16px;">
-          <button class="btn btn-primario" type="button" id="btnCalcularRemateManual" onclick="calcularRemateManual()">🧮 Calcular</button>
-          <button class="btn btn-primario" type="button" id="btnConfirmarRemateManual" style="display:none;" onclick="confirmarRemateManual()">✔️ Confirmar Remate</button>
+          <button class="btn btn-primario" type="button" id="btnGuardarRemateManual" onclick="guardarRemateManual()">💾 Guardar Remate</button>
           <button class="btn btn-secundario" type="button" onclick="limpiarRemateManual()">🧹 Limpiar</button>
           <button class="btn btn-secundario" type="button" onclick="copiarResultadoRemateManual()">📋 Copiar Resultado</button>
           <span class="toast-copiado" id="toastCopiadoRemateManual">Copiado ✅</span>
         </div>
 
-        <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate resuelto va a aparecer acá cuando le des Calcular.</div>
+        <div id="resultadoVacioRemateManual" class="resultado-vacio">El remate guardado va a aparecer acá.</div>
         <div id="avisoResultadoRemateManual" class="aviso-resultado" style="display:none;"></div>
         <pre class="resultado-caja" id="resultadoCajaRemateManual" style="display:none;"></pre>
         <!-- SOLO administrativo — ver la nota grande junto a #infoAdminRemate
              en "Cargar Remate Automático desde Chat". -->
         <div id="infoAdminRemateManual" class="info-admin-remate" style="display:none;"></div>
+
+        <!-- Remates Manuales recientes (04-10-2026) — un Remate Manual no
+             tiene "editar" (no hay pizarra que corregir, ver la nota
+             grande de PUT /pizarras/remate/:id): si el operador se
+             equivocó en los montos, lo borra acá y lo vuelve a cargar. -->
+        <h3 style="margin-top:24px;">Remates Manuales recientes</h3>
+        <div id="listaRematesManualesRecientes"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
 
@@ -5959,7 +5945,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // "Cargar Remate Manual" (25-09-2026) — refresca el <select> de
   // Jugador de cada fila cada vez que se entra a la pestaña, para que
   // un cliente recién creado en otra pantalla ya aparezca sin recargar.
-  cargarRemateManual: () => poblarJugadoresRemateManual(),
+  // 04-10-2026: también refresca la lista de "Remates Manuales
+  // recientes" (puede haber cambiado desde otra pestaña/sesión).
+  cargarRemateManual: () => { poblarJugadoresRemateManual(); pintarListaRematesManualesRecientes(); },
   // "Cargar Winners" (26-09-2026) — mismo criterio que "Cargar Remate
   // Manual": refresca el <select> de Cliente de cada fila al entrar.
   cargarWinners: () => poblarJugadoresWinners(),
@@ -6854,10 +6842,13 @@ function gualdrapaHTML(numeroCrudo) {
 }
 
 // ------------------------------------------------------------------
-// "Cargar Remate Manual" (25-09-2026) — ver la nota grande en el HTML
-// de vista-cargarRemateManual: arma un texto de remate equivalente al
-// que se pega a mano y lo manda al MISMO POST /api/hipismo/remates,
-// sin backend nuevo.
+// "Cargar Remate Manual" — REDISEÑADO 04-10-2026 (ver la nota grande en
+// el HTML de vista-cargarRemateManual y en POST /remates/manual,
+// routes/hipismo.js): ya NO arma un texto de remate de pool — el
+// operador escribe DIRECTO el monto neto que ganó o perdió cada cliente
+// (mismo criterio EXACTO que "Cargar Winners") y guardarRemateManual()
+// lo manda tal cual a POST /api/hipismo/remates/manual, sin "Calcular"
+// previo (1 solo paso, confirmado con el usuario).
 // ------------------------------------------------------------------
 function construirFilasRemateManual() {
   const tbody = document.getElementById('tablaRemateManual');
@@ -6867,7 +6858,7 @@ function construirFilasRemateManual() {
     html += `<tr>
       <td>${gualdrapaHTML(n)}</td>
       <td><select id="selJugadorRemateManual_${n}"><option value="">Seleccione</option></select></td>
-      <td><input type="text" id="inpPrecioRemateManual_${n}" placeholder="0" inputmode="decimal"></td>
+      <td><input type="text" id="inpMontoRemateManual_${n}" placeholder="0" inputmode="decimal"></td>
     </tr>`;
   }
   tbody.innerHTML = html;
@@ -6900,40 +6891,40 @@ async function poblarJugadoresRemateManual() {
   }
 }
 
-// Mismo patrón de "Calcular" (vista previa) / "Confirmar Remate" (guarda
-// de verdad) que en "Cargar Remate Automático desde Chat" — ver la nota
-// grande arriba de calcularRemate() — 26-09-2026, a pedido del usuario.
-let rematePendienteDeConfirmarManual = null;
-let calculandoRemateManual = false;
-let confirmandoRemateManual = false;
+// Solo para la cajita administrativa de este remate (nunca lo ve un
+// cliente) — distinta de pintarInfoAdminRemate() de más arriba porque
+// acá NO hay pool/pago/garantía que mostrar, solo el resultado del ítem
+// "REMATE" (espejo de la suma de los netos).
+function pintarInfoAdminRemateManual(elId, resultadoRemate) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (resultadoRemate == null) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const r = Number(resultadoRemate);
+  const clase = r >= 0 ? 'resultado-remate-pos' : 'resultado-remate-neg';
+  const signo = r >= 0 ? '+' : '-';
+  const explicacion = r >= 0
+    ? 'sobró dinero después de pagarle a los que ganaron — se lo ganó la banca'
+    : 'faltó dinero para pagarle a los que ganaron — lo puso la banca';
+  el.innerHTML = `📊 <b>Solo para ti — esto NO aparece en el plano que ven los clientes:</b> ítem "REMATE" de esta carrera: <span class="${clase}">${signo}${formatMontoTabla(Math.abs(r))}$</span> (${explicacion}). Ya entra al balance.`;
+  el.style.display = 'block';
+}
 
-async function calcularRemateManual() {
-  if (calculandoRemateManual) return;
+let guardandoRemateManual = false;
+
+async function guardarRemateManual() {
+  if (guardandoRemateManual) return;
 
   const hipodromoNombre = document.getElementById('selHipodromoRemateManual').value;
   const carreraNumero = document.getElementById('selCarreraRemateManual').value;
   const fecha = document.getElementById('inpFechaRemateManual').value;
-  const comisionPorcentaje = document.getElementById('inpComisionRemateManual').value;
-  const pizarra = document.getElementById('inpPizarraRemateManual').value.trim();
-  // "Remate Paga" / "Remate Garantiza" (26-09-2026) — mismos 2 modos
-  // EXACTOS que "Cargar Remate Automático desde Chat" (ver la nota
-  // grande de calcularRemate() más arriba), enviados como parámetros
-  // reales del POST en vez de incrustados en el texto.
-  const pagoFijoTxt = document.getElementById('inpPagoFijoRemateManual').value.trim();
-  const garantizaTxt = document.getElementById('inpGarantizaRemateManual').value.trim();
-  const pagoFijoValido = pagoFijoTxt !== '' && !isNaN(Number(pagoFijoTxt));
-  const garantizaValida = garantizaTxt !== '' && !isNaN(Number(garantizaTxt));
 
   const vacio = document.getElementById('resultadoVacioRemateManual');
   const caja = document.getElementById('resultadoCajaRemateManual');
   const aviso = document.getElementById('avisoResultadoRemateManual');
-  const btnCalcular = document.getElementById('btnCalcularRemateManual');
-  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
+  const btnGuardar = document.getElementById('btnGuardarRemateManual');
 
-  rematePendienteDeConfirmarManual = null;
   aviso.style.display = 'none';
-  btnConfirmar.style.display = 'none';
-  pintarInfoAdminRemate('infoAdminRemateManual', null);
+  pintarInfoAdminRemateManual('infoAdminRemateManual', null);
 
   if (!hipodromoNombre) {
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
@@ -6941,176 +6932,126 @@ async function calcularRemateManual() {
     caja.style.display = 'none';
     return;
   }
-  if (pagoFijoValido && garantizaValida) {
-    vacio.textContent = 'No puedes usar "Remate Paga" y "Remate Garantiza" al mismo tiempo — deja uno de los dos vacío.';
-    vacio.style.display = 'block';
-    caja.style.display = 'none';
-    return;
-  }
-  if (!pagoFijoValido && (comisionPorcentaje === '' || isNaN(Number(comisionPorcentaje)))) {
-    vacio.textContent = 'Falta el % de comisión de este remate.';
-    vacio.style.display = 'block';
-    caja.style.display = 'none';
-    return;
-  }
 
-  // Arma un "texto" de remate equivalente al que se pega a mano en
-  // "Cargar Remate Automático desde Chat" — mismo motor
-  // (services/hipismoRemateCalc.js: parsearRemate() ya soporta números
-  // en formato "N-" además de los emojis 1️⃣..🔟, ver la nota grande de
-  // ahí). "EJEMPLAR N" es el marcador que se usa como nombre del
-  // caballo — esta pantalla no pide el nombre real (la tabla de
-  // referencia tampoco lo pedía).
+  // El operador escribe el neto directo de cada cliente — positivo si
+  // ganó, negativo si perdió (mismo criterio EXACTO que "Cargar
+  // Winners"). "EJEMPLAR N" (el número de fila) es el marcador que se
+  // usa como nombre del caballo — esta pantalla no pide el nombre real
+  // (mismo criterio que la versión anterior de esta pantalla).
   const lineas = [];
   for (let n = 1; n <= 20; n++) {
     const sel = document.getElementById('selJugadorRemateManual_' + n);
-    const inp = document.getElementById('inpPrecioRemateManual_' + n);
+    const inp = document.getElementById('inpMontoRemateManual_' + n);
     if (!sel || !inp) continue;
-    const jugador = sel.value;
+    const cliente = sel.value;
     const montoTxt = inp.value.trim();
-    if (!jugador || !montoTxt) continue;
+    if (!cliente || !montoTxt) continue;
     const monto = parseFloat(montoTxt.replace(',', '.'));
-    if (!isFinite(monto) || monto <= 0) continue;
-    lineas.push(`${n}- EJEMPLAR ${n} ${monto}$ ${jugador}`);
+    if (!isFinite(monto) || monto === 0) continue;
+    lineas.push({ cliente, numeroEjemplar: n, monto });
   }
   if (!lineas.length) {
-    vacio.textContent = 'Elige jugador y precio en al menos un ejemplar.';
+    vacio.textContent = 'Elige jugador y monto neto en al menos un ejemplar (el monto no puede quedar en 0).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
   }
-  const texto = lineas.join('\n');
 
-  calculandoRemateManual = true;
-  btnCalcular.disabled = true;
-  vacio.textContent = 'Calculando (todavía NO se guarda nada)…';
-  vacio.style.display = 'block';
+  guardandoRemateManual = true;
+  btnGuardar.disabled = true;
+  btnGuardar.textContent = 'Guardando…';
+  vacio.style.display = 'none';
   caja.style.display = 'none';
 
-  // 26-09-2026: "Remate Paga"/"Remate Garantiza" van como parámetros
-  // reales del POST (pagoFijo/garantia) — ya NO se incrustan como texto
-  // "PAGANDO $X" (ese truco quedaba obsoleto ahora que son 2 modos
-  // distintos, no un solo sinónimo).
-  const payload = { texto, hipodromoNombre, carreraNumero, fecha, comisionPorcentaje, pizarra, pagoFijo: pagoFijoTxt, garantia: garantizaTxt };
-
   let data;
   try {
-    data = await apiHipismo('/api/hipismo/remates/calcular', {
+    data = await apiHipismo('/api/hipismo/remates/manual', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ hipodromoNombre, carreraNumero, fecha, lineas })
     });
   } catch (e) {
-    vacio.textContent = e.message;
-    vacio.style.display = 'block';
-    caja.style.display = 'none';
-    calculandoRemateManual = false;
-    btnCalcular.disabled = false;
-    return;
-  }
-
-  if (data.necesitaLlegada) {
-    vacio.style.display = 'none';
+    caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Guardar Remate" de nuevo.';
     caja.style.display = 'block';
-    caja.textContent = '⚠️ Todavía no hay llegada para esta carrera — completa "Llegada" a mano (o carga primero el plano de esta carrera en "Cargar Planos") y dale Calcular de nuevo. Todavía NO se guardó nada.';
-    calculandoRemateManual = false;
-    btnCalcular.disabled = false;
-    return;
-  }
-
-  let salida = data.textoResultado;
-  if (data.sinReconocer && data.sinReconocer.length) {
-    salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
-  }
-  aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Remate" para guardarlo de verdad.';
-  aviso.className = 'aviso-resultado';
-  aviso.style.display = 'block';
-
-  vacio.style.display = 'none';
-  caja.style.display = 'block';
-  caja.textContent = salida;
-  pintarInfoAdminRemate('infoAdminRemateManual', data);
-
-  rematePendienteDeConfirmarManual = payload;
-  btnConfirmar.style.display = '';
-  calculandoRemateManual = false;
-  btnCalcular.disabled = false;
-}
-
-async function confirmarRemateManual() {
-  if (confirmandoRemateManual) return;
-  if (!rematePendienteDeConfirmarManual) return;
-
-  const vacio = document.getElementById('resultadoVacioRemateManual');
-  const caja = document.getElementById('resultadoCajaRemateManual');
-  const aviso = document.getElementById('avisoResultadoRemateManual');
-  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
-
-  confirmandoRemateManual = true;
-  btnConfirmar.disabled = true;
-  btnConfirmar.textContent = 'Guardando…';
-
-  let data;
-  try {
-    data = await apiHipismo('/api/hipismo/remates', {
-      method: 'POST',
-      body: JSON.stringify(rematePendienteDeConfirmarManual)
-    });
-  } catch (e) {
-    caja.textContent = '❌ ' + e.message + '\n\nEl remate NO se guardó — corrige lo que haga falta y dale "Confirmar Remate" de nuevo (o "Calcular" si necesitas cambiar algo).';
-    aviso.style.display = 'none';
-    confirmandoRemateManual = false;
-    btnConfirmar.disabled = false;
-    btnConfirmar.textContent = '✔️ Confirmar Remate';
+    guardandoRemateManual = false;
+    btnGuardar.disabled = false;
+    btnGuardar.textContent = '💾 Guardar Remate';
     return;
   }
 
   cargarClientesReales();
 
-  let salida2 = data.textoResultado;
-  if (data.sinReconocer && data.sinReconocer.length) {
-    salida2 = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida2;
-  }
-  aviso.textContent = '✅ Remate CONFIRMADO y guardado — ya se aplicó a los saldos.';
+  aviso.textContent = '✅ Remate guardado — ya se aplicó a los saldos.';
   aviso.className = 'aviso-resultado aviso-confirmado';
   aviso.style.display = 'block';
 
-  vacio.style.display = 'none';
   caja.style.display = 'block';
-  caja.textContent = salida2;
-  pintarInfoAdminRemate('infoAdminRemateManual', {
-    poolTotal: data.remate.pool_total, pagoGanador: data.remate.pago_ganador,
-    resultadoRemate: data.remate.comision_total, advertenciaGarantiaNoAlcanza: data.advertenciaGarantiaNoAlcanza
-  });
+  caja.textContent = data.textoResultado;
+  pintarInfoAdminRemateManual('infoAdminRemateManual', data.remate.comision_total);
 
-  rematePendienteDeConfirmarManual = null;
-  confirmandoRemateManual = false;
-  btnConfirmar.style.display = 'none';
-  btnConfirmar.disabled = false;
-  btnConfirmar.textContent = '✔️ Confirmar Remate';
+  pintarListaRematesManualesRecientes();
+
+  // Deja todo listo para la SIGUIENTE carrera de la misma jornada (mismo
+  // criterio que ya usa "Cargar Winners" — ver confirmarWinners() más
+  // abajo): la tabla vuelve a quedar vacía y la Carrera avanza sola.
+  // Hipódromo y Fecha NO se tocan — sigue siendo la misma jornada.
+  construirFilasRemateManual();
+  poblarJugadoresRemateManual();
+  avanzarASiguienteCarrera('selCarreraRemateManual');
+
+  guardandoRemateManual = false;
+  btnGuardar.disabled = false;
+  btnGuardar.textContent = '💾 Guardar Remate';
 }
 
 function limpiarRemateManual() {
-  for (let n = 1; n <= 20; n++) {
-    const sel = document.getElementById('selJugadorRemateManual_' + n);
-    const inp = document.getElementById('inpPrecioRemateManual_' + n);
-    if (sel) sel.value = '';
-    if (inp) inp.value = '';
-  }
-  document.getElementById('inpPagoFijoRemateManual').value = '';
-  document.getElementById('inpGarantizaRemateManual').value = '';
-  document.getElementById('inpPizarraRemateManual').value = '';
+  construirFilasRemateManual();
+  poblarJugadoresRemateManual();
   document.getElementById('resultadoCajaRemateManual').style.display = 'none';
   document.getElementById('resultadoVacioRemateManual').style.display = 'block';
-  document.getElementById('resultadoVacioRemateManual').textContent = 'El remate resuelto va a aparecer acá cuando le des Calcular.';
+  document.getElementById('resultadoVacioRemateManual').textContent = 'El remate guardado va a aparecer acá.';
   document.getElementById('avisoResultadoRemateManual').style.display = 'none';
-  pintarInfoAdminRemate('infoAdminRemateManual', null);
-  rematePendienteDeConfirmarManual = null;
-  const btnConfirmar = document.getElementById('btnConfirmarRemateManual');
-  if (btnConfirmar) {
-    btnConfirmar.style.display = 'none';
-    btnConfirmar.disabled = false;
-    btnConfirmar.textContent = '✔️ Confirmar Remate';
+  pintarInfoAdminRemateManual('infoAdminRemateManual', null);
+}
+
+// Remates Manuales recientes (04-10-2026) — lista corta (últimos 10) para
+// poder borrar uno si el operador se equivocó en los montos; no hay
+// "editar" (ver la nota grande de PUT /pizarras/remate/:id: ese motor de
+// pool no aplica acá) — se borra y se vuelve a cargar.
+async function pintarListaRematesManualesRecientes() {
+  const cont = document.getElementById('listaRematesManualesRecientes');
+  if (!cont) return;
+  let remates;
+  try {
+    remates = await apiHipismo('/api/hipismo/remates?modo=manual&limite=10');
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudieron cargar: ${e.message}</div>`;
+    return;
   }
+  if (!remates.length) {
+    cont.innerHTML = '<div class="placeholder-card">Todavía no has cargado ningún Remate Manual.</div>';
+    return;
+  }
+  cont.innerHTML = remates.map(r => {
+    const resultado = Number(r.comision_total);
+    return `
+      <div class="balance-fila" style="margin-bottom:4px;">
+        <span class="nombre">🏇 ${formatFechaCortaDMY(r.fecha)} — ${r.hipodromo_nombre}, ${ordinalCarrera(r.carrera_numero)} <span class="${resultado >= 0 ? 'pos' : 'neg'}">${resultado >= 0 ? '+' : '-'}${formatMontoTabla(Math.abs(resultado))}</span></span>
+        <span class="btn-fila" style="gap:6px;">
+          <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRemateManual('${r.id}')">🗑️ Eliminar</button>
+        </span>
+      </div>`;
+  }).join('');
+}
+
+async function eliminarRemateManual(id) {
+  if (!confirm('¿Eliminar este Remate Manual? No se puede deshacer.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/remates/manual/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  pintarListaRematesManualesRecientes();
 }
 
 function copiarResultadoRemateManual() {
@@ -9991,6 +9932,15 @@ function armarJugadaTextoDetallado(c) {
   // en el link de un cliente real (ver la nota grande de POST /remates:
   // esto es justo lo que el usuario pidió que NO saliera en el plano).
   if (c.tipo === 'remate_resultado') {
+    // "manual" (04-10-2026, ver la nota grande de POST /remates/manual
+    // en routes/hipismo.js) — monto neto directo, sin pool/comisión: acá
+    // no hay "pagó $X" ni "quedó para la banca" (eso es pool), el texto
+    // es directo sobre si faltó o sobró plata al cuadrar los netos.
+    if (c.modo === 'manual') {
+      return c.resultado < 0
+        ? '🏇 Remate manual — faltó dinero para pagarle a los que ganaron'
+        : '🏇 Remate manual — sobró dinero después de pagarle a los que ganaron';
+    }
     const modoTxt = c.modo === 'paga' ? 'REMATE PAGA' : (c.modo === 'garantiza' ? 'REMATE GARANTIZA' : 'REMATE (%)');
     return c.huboGanador ? `🏆 ${modoTxt} — pagó ${formatMontoDet(c.pagoGanador)}` : `🏆 ${modoTxt} — quedó todo para la banca`;
   }
@@ -10285,7 +10235,10 @@ function renderDetalleClienteModal(data) {
             fila.className = 'detmodal-carrera-fila';
             // Ítem "REMATE" (26-09-2026): no tiene "monto apostado" propio
             // como una jugada normal -- se muestra el pool total del
-            // remate en su lugar ("pool $X").
+            // remate en su lugar ("pool $X"). 04-10-2026: un Remate
+            // Manual no tiene pool (siempre 0) -- se oculta esa etiqueta
+            // acá, mismo criterio que "cruce_ajuste" más abajo.
+            const esRemateManual = c.tipo === 'remate_resultado' && c.modo === 'manual';
             const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
             const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : (c.tipo === 'winner_contraparte' ? 'de' : 'con'));
             // "incluir % en sus jugadas" (29-09-2026) — cuando esta jugada
@@ -10299,7 +10252,7 @@ function renderDetalleClienteModal(data) {
             fila.innerHTML = `
               <span class="num-carrera">${c.carrera}ª</span>
               <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
+              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${(c.tipo === 'cruce_ajuste' || esRemateManual) ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
               <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyCarrera.appendChild(fila);

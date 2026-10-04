@@ -207,7 +207,7 @@ function ejecutarQuery(text, params) {
   if (/^SELECT t\.id, t\.cliente_nombre, t\.banquero_nombre, t\.modalidad, t\.caballo, t\.monto, t\.resultado_jugador, t\.resultado_banquero, t\.sin_comision, p\.hipodromo_nombre, p\.carrera_numero FROM hipismo_tickets t JOIN hipismo_planos p ON p\.id = t\.plano_id WHERE t\.grupo_id = \$1 AND p\.fecha = \$2$/i.test(sql)) {
     return { rows: [] };
   }
-  if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.numero_ejemplar, a\.monto, r\.hipodromo_nombre, r\.carrera_numero, r\.numero_ganador, r\.hubo_ganador FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id WHERE a\.grupo_id = \$1 AND r\.fecha = \$2$/i.test(sql)) {
+  if (/^SELECT a\.id, a\.cliente_nombre, a\.caballo, a\.numero_ejemplar, a\.monto, r\.hipodromo_nombre, r\.carrera_numero, r\.numero_ganador, r\.hubo_ganador FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r\.id = a\.remate_id WHERE a\.grupo_id = \$1 AND r\.fecha = \$2 AND r\.modo <> 'manual'$/i.test(sql)) {
     const [grupoId, fecha] = params;
     const filas = TABLAS.hipismo_remate_apuestas
       .map(a => ({ a, r: TABLAS.hipismo_remates.find(rr => rr.id === a.remate_id) }))

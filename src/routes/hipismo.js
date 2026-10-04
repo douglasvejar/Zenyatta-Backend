@@ -1908,16 +1908,143 @@ router.post('/remates', asyncHandler(async (req, res) => {
   });
 }));
 
-// GET /remates?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
+// =================================================================
+// "REMATE MANUAL" EN MODO NETO DIRECTO (04-10-2026, a pedido del
+// usuario: "aqui en remate manual, no quiero colcoar pizarra ni comision
+// ni anda solo sleccionar el dia el hipodromo y la carrerra, elegir
+// caballo el jugador y te voy a colocar el monto neto de cuanto se gana
+// cada uno o cuanto pierde ... si la lista el cliente que gana contra
+// los clientes que pierden falta dinero para pagarle al que gana el
+// item remate en esa carrera saldria - lo faltante .... si es al revez
+// todo lo que los tercios pierdan sobra dinero o no hay que pagarle a a
+// nadie eso se lo ganaria el remate"). Mismo criterio EXACTO de "Cargar
+// Winners" (ver POST /winners más abajo): el operador ya sabe cuánto
+// ganó o perdió cada cliente y lo escribe directo — nada de
+// parsearRemate, calcularRemate, % de comisión, pizarra, pago fijo ni
+// garantía (confirmado con el usuario, AskUserQuestion 04-10-2026: 1
+// solo paso, sin "Calcular" previo).
+//
+// Se guarda en las MISMAS hipismo_remates/hipismo_remate_apuestas de
+// siempre (nunca una tabla aparte) para que el ítem "REMATE" de Balance
+// General/Cierre Final y su detalle carrera-a-carrera
+// (construirResumenRemateHipismo) sigan funcionando sin tocarlos: acá
+// comision_total es el ESPEJO exacto de la suma de todos los netos
+// entrados — si falta plata para pagarle al que gana, el Remate queda
+// NEGATIVO (lo puso la banca); si sobra, queda POSITIVO (se lo ganó la
+// banca) — exactamente lo que pidió el usuario. La columna "modo" =
+// 'manual' (ver sql/schema.sql) es lo único que distingue esta fila de
+// un remate de pool — GET /pizarras, PUT/DELETE /pizarras/remate/:id y
+// obtenerApuestasDelRango (Montos Apostados/Comisiones Devueltas) ya la
+// ignoran a propósito: no tiene pizarra ni pool real que recalcular ni
+// "lo apostado" que mostrar (mismo criterio que Winners, que tampoco
+// aparece en esos reportes).
+router.post('/remates/manual', asyncHandler(async (req, res) => {
+  const { hipodromoId, hipodromoNombre, carreraNumero, fecha, lineas } = req.body;
+  if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
+  if (!Array.isArray(lineas) || !lineas.length) {
+    return res.status(400).json({ error: 'Agrega al menos un ejemplar con su jugador y su monto neto.' });
+  }
+
+  let nombreHipodromoFinal = hipodromoNombre;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromoFinal = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  const lineasValidas = [];
+  for (const l of (lineas || [])) {
+    const cliente = ((l && l.cliente) || '').toString().trim();
+    const numeroEjemplar = parseInt(l && l.numeroEjemplar, 10);
+    const monto = Number(l && l.monto);
+    if (!cliente || !isFinite(numeroEjemplar) || numeroEjemplar <= 0 || !isFinite(monto) || monto === 0) continue;
+    lineasValidas.push({ cliente, numeroEjemplar, caballo: `EJEMPLAR ${numeroEjemplar}`, monto });
+  }
+  if (!lineasValidas.length) {
+    return res.status(400).json({ error: 'Ninguna línea tiene jugador, ejemplar y monto neto válidos (el monto no puede quedar en 0).' });
+  }
+
+  const fechaFinal = fecha || fechaHoyVenezuela();
+  // round2(-suma) -- mismo invariante ESPEJO ya usado en todo el sistema
+  // (cliente + contraparte = 0, ver TABLAS FIJAS/WINNERS más arriba).
+  const resultadoRemate = round2(-lineasValidas.reduce((acc, l) => acc + l.monto, 0));
+
+  const nombresDelRemate = new Set(lineasValidas.map(l => l.cliente));
+  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
+  await asegurarCuentasComisionParaNombres(req.grupoId, Array.from(nombresDelRemate));
+
+  const totalesPorCliente = {};
+  lineasValidas.forEach(l => { totalesPorCliente[l.cliente] = round2((totalesPorCliente[l.cliente] || 0) + l.monto); });
+
+  const encabezado = `*🏇 REMATE ${(req.grupo.nombre || '').toUpperCase()}*\n${nombreHipodromoFinal}, ${carreraNumero}ta Carrera — ${fechaFinal}`;
+  const lineasTexto = lineasValidas.map(l =>
+    `🐎 ${l.numeroEjemplar} — *${formatNombre(l.cliente)}*: ${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}`
+  );
+  const lineasTotales = Object.keys(totalesPorCliente).sort((a, b) => a.localeCompare(b, 'es')).map(nombre =>
+    `${formatNombre(nombre)} ${totalesPorCliente[nombre] >= 0 ? '+' : '-'}${formatMontoTabla(totalesPorCliente[nombre])}`
+  );
+  const textoResultado = [encabezado, '', ...lineasTexto, '', 'TOTALES:', ...lineasTotales].join('\n');
+  const textoOriginal = lineasValidas.map(l => `${l.numeroEjemplar}- EJEMPLAR ${l.numeroEjemplar} ${l.monto}$ ${l.cliente}`).join('\n');
+
+  const remate = await db.transaccion(async (client) => {
+    const rRemate = await client.query(
+      `INSERT INTO hipismo_remates (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, texto_original, comision_porcentaje, garantia, pago_fijo, pool_total, pizarra, numero_ganador, hubo_ganador, caballo_ganador, cliente_ganador, pago_ganador, comision_total, texto_resultado, modo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, carreraNumero, fechaFinal, textoOriginal, 0, null, null,
+        0, null, null, false, null, null, 0, resultadoRemate, textoResultado, 'manual']
+    );
+    const remateCreado = rRemate.rows[0];
+    for (const l of lineasValidas) {
+      await client.query(
+        `INSERT INTO hipismo_remate_apuestas (remate_id, grupo_id, numero_ejemplar, caballo, cliente_nombre, monto, resultado)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [remateCreado.id, req.grupoId, l.numeroEjemplar, l.caballo, l.cliente, l.monto, l.monto]
+      );
+    }
+    return remateCreado;
+  });
+
+  res.status(201).json({ remate, totalesPorCliente, textoResultado });
+}));
+
+// DELETE /remates/manual/:id : borra un Remate Manual COMPLETO (cascada
+// a hipismo_remate_apuestas) — a diferencia de DELETE /pizarras/remate/:id
+// (que solo vacía la pizarra de un remate de pool y lo deja "pendiente"),
+// un Remate Manual no tiene pizarra que corregir: si el operador se
+// equivocó en los montos, lo borra entero y lo vuelve a cargar (04-10-2026,
+// lo prometido al usuario al confirmar este modo: "si te equivocas, lo
+// borras... y lo vuelves a cargar"). Por eso exige modo='manual' — nunca
+// se usa para borrar un remate de pool (eso sigue siendo "Eliminar
+// Jornada", con clave, o "Pizarras" para solo despejar la llegada).
+router.delete('/remates/manual/:id', asyncHandler(async (req, res) => {
+  const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const remate = rRemate.rows[0];
+  if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+  if (remate.modo !== 'manual') return res.status(400).json({ error: 'Este remate no es de modo manual — bórralo desde "Eliminar Jornada" o corrígelo desde "Pizarras".' });
+
+  await db.query('DELETE FROM hipismo_remates WHERE id = $1', [remate.id]);
+
+  await registrarAlerta(req, {
+    tipo: 'REMATE_MANUAL_ELIMINADO', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    fecha: fechaComoISO(remate.fecha),
+    mensaje: `Se eliminó el Remate Manual de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} (${fechaComoISO(remate.fecha)}) — borrado permanente.`
+  });
+
+  res.json({ ok: true });
+}));
+
+// GET /remates?fecha=&hipodromoId=&modo=&limite= : historial reciente (cabeceras).
 router.get('/remates', asyncHandler(async (req, res) => {
-  const { fecha, hipodromoId, limite } = req.query;
+  const { fecha, hipodromoId, modo, limite } = req.query;
   const condiciones = ['grupo_id = $1'];
   const params = [req.grupoId];
   if (fecha) { params.push(fecha); condiciones.push(`fecha = $${params.length}`); }
   if (hipodromoId) { params.push(hipodromoId); condiciones.push(`hipodromo_id = $${params.length}`); }
+  if (modo) { params.push(modo); condiciones.push(`modo = $${params.length}`); }
   params.push(Math.min(parseInt(limite, 10) || 50, 200));
   const r = await db.query(
-    `SELECT id, hipodromo_nombre, carrera_numero, fecha, comision_porcentaje, garantia, pool_total, hubo_ganador, cliente_ganador, pago_ganador, comision_total, creado_en
+    `SELECT id, hipodromo_nombre, carrera_numero, fecha, comision_porcentaje, garantia, pool_total, hubo_ganador, cliente_ganador, pago_ganador, comision_total, modo, creado_en
        FROM hipismo_remates WHERE ${condiciones.join(' AND ')} ORDER BY creado_en DESC LIMIT $${params.length}`,
     params
   );
@@ -2195,11 +2322,15 @@ router.get('/pizarras', asyncHandler(async (req, res) => {
       ORDER BY p.fecha, p.hipodromo_nombre, p.carrera_numero`,
     [req.grupoId, desde, hasta]
   );
+  // modo <> 'manual' (04-10-2026, ver la nota grande de POST
+  // /remates/manual): un Remate Manual no tiene pizarra ni pool que
+  // editar/eliminar acá — nunca debe ofrecerse como "pendiente de
+  // pizarra" (mismo criterio que ya excluye a Winners de esta pantalla).
   const rRemates = await db.query(
     `SELECT r.id, r.fecha, r.hipodromo_nombre, r.carrera_numero, r.pizarra, r.pool_total,
             (SELECT COUNT(*)::int FROM hipismo_remate_apuestas a WHERE a.remate_id = r.id) AS cantidad
        FROM hipismo_remates r
-      WHERE r.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3
+      WHERE r.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3 AND r.modo <> 'manual'
       ORDER BY r.fecha, r.hipodromo_nombre, r.carrera_numero`,
     [req.grupoId, desde, hasta]
   );
@@ -2369,6 +2500,11 @@ router.put('/pizarras/remate/:id', asyncHandler(async (req, res) => {
   const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
   const remate = rRemate.rows[0];
   if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+  // 04-10-2026, ver la nota grande de POST /remates/manual: un Remate
+  // Manual no tiene pool/comisión que recalcular con este motor.
+  if (remate.modo === 'manual') {
+    return res.status(400).json({ error: 'Este remate se cargó en modo manual (monto neto directo) — no tiene pizarra ni pool que editar acá. Si te equivocaste, bórralo desde "Cargar Remate Manual" y cárgalo de nuevo.' });
+  }
 
   const pizarraFinal = pizarra.trim();
   const numeroGanador = primerNumeroPizarra(pizarraFinal);
@@ -2433,6 +2569,11 @@ router.delete('/pizarras/remate/:id', asyncHandler(async (req, res) => {
   const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
   const remate = rRemate.rows[0];
   if (!remate) return res.status(404).json({ error: 'Remate no encontrado.' });
+  // 04-10-2026, ver la nota grande de POST /remates/manual: un Remate
+  // Manual no tiene pizarra que vaciar — use DELETE /remates/manual/:id.
+  if (remate.modo === 'manual') {
+    return res.status(400).json({ error: 'Este remate se cargó en modo manual (monto neto directo) — no tiene pizarra que eliminar acá. Si te equivocaste, bórralo desde "Cargar Remate Manual".' });
+  }
 
   const textoPendiente = textoPizarraPendiente({ hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero });
 
@@ -3226,17 +3367,23 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
     });
   });
 
+  // r.modo <> 'manual' (04-10-2026, ver la nota grande de POST
+  // /remates/manual): un Remate Manual no tiene "monto apostado" real
+  // (solo el neto que escribió el operador) ni número ganador -- se
+  // excluye de Montos Apostados/Comisiones Devueltas con el MISMO
+  // criterio que ya excluye a Winners de este reporte (nunca se unen
+  // acá).
   const rRemate = mismoDia
     ? await db.query(
         `SELECT a.id, a.cliente_nombre, a.caballo, a.numero_ejemplar, a.monto, r.hipodromo_nombre, r.carrera_numero, r.numero_ganador, r.hubo_ganador
            FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
-          WHERE a.grupo_id = $1 AND r.fecha = $2`,
+          WHERE a.grupo_id = $1 AND r.fecha = $2 AND r.modo <> 'manual'`,
         [grupoId, desde]
       )
     : await db.query(
         `SELECT a.id, a.cliente_nombre, a.caballo, a.numero_ejemplar, a.monto, r.hipodromo_nombre, r.carrera_numero, r.numero_ganador, r.hubo_ganador, r.fecha
            FROM hipismo_remate_apuestas a JOIN hipismo_remates r ON r.id = a.remate_id
-          WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3`,
+          WHERE a.grupo_id = $1 AND r.fecha BETWEEN $2 AND $3 AND r.modo <> 'manual'`,
         [grupoId, desde, hasta]
       );
   // Remate `gano` (01-10-2026): mismo criterio EXACTO que ya usa POST

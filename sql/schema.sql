@@ -707,9 +707,15 @@ create index if not exists idx_hipismo_alertas_grupo on hipismo_alertas(grupo_id
 -- routes/hipismo.js, PUT/DELETE /tercios-adelantadas/jugadas/:id) —
 -- mismo criterio de auditoría que ADELANTADA_EDITADA/ADELANTADA_ELIMINADA
 -- de arriba, tabla aparte porque es una pestaña distinta.
+--
+-- REMATE_MANUAL_ELIMINADO (04-10-2026) — 1 tipo más, para el borrado
+-- permanente de un Remate Manual (ver DELETE /remates/manual/:id en
+-- routes/hipismo.js) — a diferencia de PIZARRA_ELIMINADA (que solo deja
+-- la carrera pendiente), esto SÍ borra la fila entera, así que queda su
+-- propio tipo de alerta.
 alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
 alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
-  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA'));
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO'));
 
 -- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo
@@ -1901,3 +1907,24 @@ alter table parley_juegos add column if not exists logo_visitante text;
 alter table hipismo_planos alter column pizarra drop not null;
 alter table hipismo_remates alter column pizarra drop not null;
 alter table hipismo_remates alter column numero_ganador drop not null;
+
+-- =================================================================
+-- "REMATE MANUAL" EN MODO NETO DIRECTO (04-10-2026, a pedido del
+-- usuario: "aqui en remate manual, no quiero colcoar pizarra ni comision
+-- ni anda solo sleccionar el dia el hipodromo y la carrerra, elegir
+-- caballo el jugador y te voy a colocar el monto neto de cuanto se gana
+-- cada uno o cuanto pierde"). Esta columna distingue un remate armado
+-- con el motor de pool/comisión/garantía/pago-fijo de siempre ('pool',
+-- el default — no rompe ningún remate ya guardado) de uno cargado con
+-- el monto neto de cada cliente escrito directo por el operador
+-- ('manual', ver POST /remates/manual en routes/hipismo.js). Se sigue
+-- guardando en estas mismas 2 tablas (nunca una tabla aparte) para que
+-- el ítem "REMATE" de Balance General/Cierre Final y su detalle
+-- carrera-a-carrera (construirResumenRemateHipismo) sigan funcionando
+-- igual sin tocarlos — un remate manual no tiene pizarra, garantía, pago
+-- fijo, pool ni número ganador (todos quedan NULL/0/false), así que
+-- "modo" es la única forma de saber que a este remate NO hay que
+-- recalcularlo con PUT /pizarras/remate/:id (ese motor asume un pool con
+-- comisión, que acá no existe) y que no debe ofrecerse como "pendiente
+-- de pizarra" en la pantalla "Pizarras" (ver GET /pizarras más arriba).
+alter table hipismo_remates add column if not exists modo text not null default 'pool';

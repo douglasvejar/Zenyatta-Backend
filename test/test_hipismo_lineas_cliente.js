@@ -78,7 +78,12 @@ function ejecutarQuery(text, params) {
         return {
           caballo: a.caballo, numero_ejemplar: a.numero_ejemplar, monto: a.monto, resultado: a.resultado,
           fecha: remate.fecha, hipodromo_nombre: remate.hipodromo_nombre, carrera_numero: remate.carrera_numero,
-          pizarra: remate.pizarra, numero_ganador: remate.numero_ganador, pais: hip ? hip.pais : null
+          pizarra: remate.pizarra, numero_ganador: remate.numero_ganador,
+          // "modo" (04-10-2026, ver la nota grande de POST /remates/manual
+          // en routes/hipismo.js) -- 'pool' por default para los remates
+          // de siempre de esta prueba, salvo que el fixture diga lo contrario.
+          modo: remate.modo || 'pool',
+          pais: hip ? hip.pais : null
         };
       })
     };
@@ -272,6 +277,48 @@ function check(cond, msg) {
 
   check(textoJugadaHipismo(lineaTf) === '🕐 Adelantada — Tabla fija (5)', 'textoJugadaHipismo de una Tabla Fija jugada dice "Adelantada" y el número de ejemplar');
   check(textoJugadaHipismo(lineaBanquero) === '🕐 Adelantada — Banqueó Marca (6x10)', 'textoJugadaHipismo de un banqueo de Marca dice "Banqueó" y los 2 números de la marca');
+
+  // =================================================================
+  // "Remate Manual" en modo neto directo (04-10-2026, ver la nota grande
+  // de POST /remates/manual en routes/hipismo.js) -- un remate manual
+  // NUNCA tiene numero_ganador (siempre queda NULL), así que "ganoRemate"
+  // ya NO puede decidirse comparando numero_ejemplar contra numero_ganador
+  // (siempre daría false, aunque el cliente haya ganado plata de verdad)
+  // -- se decide por el SIGNO del monto neto que escribió el operador.
+  // Caso real que motivó este arreglo: un cliente que ganó su Remate
+  // Manual aparecía en su propio link diciendo "jugó" en vez de "ganó".
+  // =================================================================
+  TABLAS.hipismo_remates.push({
+    id: 'remate-manual-1', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada',
+    carrera_numero: 7, fecha: '2026-09-25', pizarra: null, numero_ganador: null, modo: 'manual'
+  });
+  TABLAS.hipismo_remate_apuestas.push({
+    remate_id: 'remate-manual-1', grupo_id: GRUPO_ID, cliente_nombre: 'JUNKO', caballo: 'EJEMPLAR 3', numero_ejemplar: 3,
+    monto: 250, resultado: 250
+  });
+  TABLAS.hipismo_remates.push({
+    id: 'remate-manual-2', grupo_id: GRUPO_ID, hipodromo_id: 'hip-1', hipodromo_nombre: 'La Rinconada',
+    carrera_numero: 8, fecha: '2026-09-25', pizarra: null, numero_ganador: null, modo: 'manual'
+  });
+  TABLAS.hipismo_remate_apuestas.push({
+    remate_id: 'remate-manual-2', grupo_id: GRUPO_ID, cliente_nombre: 'JUNKO', caballo: 'EJEMPLAR 5', numero_ejemplar: 5,
+    monto: -80, resultado: -80
+  });
+
+  const lineasJunkoManual = await obtenerLineasHipismoCliente(GRUPO_ID, 'JUNKO', '2026-09-25', '2026-09-25');
+  check(lineasJunkoManual.length === 2, 'JUNKO ve sus 2 líneas de Remate Manual de ese día');
+
+  const manualGanado = lineasJunkoManual.find(l => l.resultado === 250);
+  check(!!manualGanado && manualGanado.ganoRemate === true,
+    'Remate Manual con neto positivo (+250): ganoRemate=true por el SIGNO del monto, aunque numero_ganador sea null (antes del arreglo daba false siempre)');
+  check(textoJugadaHipismo(manualGanado) === '🏆 Remate — ganó con EJEMPLAR 3',
+    'textoJugadaHipismo de un Remate Manual ganado dice "ganó" (mismo texto que un remate de pool)');
+
+  const manualPerdido = lineasJunkoManual.find(l => l.resultado === -80);
+  check(!!manualPerdido && manualPerdido.ganoRemate === false,
+    'Remate Manual con neto negativo (-80): ganoRemate=false por el signo del monto');
+  check(textoJugadaHipismo(manualPerdido) === '🏆 Remate — jugó EJEMPLAR 5',
+    'textoJugadaHipismo de un Remate Manual perdido dice "jugó", nunca "ganó"');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

@@ -876,7 +876,7 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
 
   const rRemates = await db.query(
     `SELECT hipodromo_nombre, carrera_numero, fecha, pizarra, pool_total, pago_ganador,
-            comision_total, comision_porcentaje, garantia, pago_fijo, hubo_ganador
+            comision_total, comision_porcentaje, garantia, pago_fijo, hubo_ganador, modo
        FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3
        ORDER BY fecha DESC, creado_en ASC`,
     [grupoId, desde, hasta]
@@ -905,10 +905,12 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
       tipo: 'remate_resultado',
       carrera: r.carrera_numero,
       pizarra: r.pizarra,
-      // "paga" = REMATE PAGA (monto fijo, sin %); "garantiza" = REMATE
-      // GARANTIZA (piso + %); "porcentaje" = ni una ni otra, solo el %
-      // de siempre — ver la nota grande de calcularRemate.
-      modo: r.pago_fijo != null ? 'paga' : (r.garantia != null ? 'garantiza' : 'porcentaje'),
+      // "manual" (04-10-2026, ver la nota grande de POST
+      // /remates/manual) = monto neto directo, sin pool/comisión; "paga"
+      // = REMATE PAGA (monto fijo, sin %); "garantiza" = REMATE GARANTIZA
+      // (piso + %); "porcentaje" = ni una ni otra, solo el % de siempre
+      // — ver la nota grande de calcularRemate.
+      modo: r.modo === 'manual' ? 'manual' : (r.pago_fijo != null ? 'paga' : (r.garantia != null ? 'garantiza' : 'porcentaje')),
       poolTotal: Number(r.pool_total),
       pagoGanador: Number(r.pago_ganador),
       huboGanador: r.hubo_ganador,

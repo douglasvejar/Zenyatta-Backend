@@ -197,7 +197,7 @@ function ejecutarQuery(text, params) {
 
   // GET /clientes/REMATE/detalle-semana: detalle carrera-por-carrera-e-
   // hipódromo (construirResumenRemateHipismo, services/hipismoResumenCliente.js).
-  if (/^SELECT hipodromo_nombre, carrera_numero, fecha, pizarra, pool_total, pago_ganador, comision_total, comision_porcentaje, garantia, pago_fijo, hubo_ganador FROM hipismo_remates WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3 ORDER BY fecha DESC, creado_en ASC/i.test(sql)) {
+  if (/^SELECT hipodromo_nombre, carrera_numero, fecha, pizarra, pool_total, pago_ganador, comision_total, comision_porcentaje, garantia, pago_fijo, hubo_ganador, modo FROM hipismo_remates WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3 ORDER BY fecha DESC, creado_en ASC/i.test(sql)) {
     const [grupoId, desde, hasta] = params;
     const filas = TABLAS.hipismo_remates
       .filter(r => r.grupo_id === grupoId && r.fecha >= desde && r.fecha <= hasta)
@@ -206,7 +206,11 @@ function ejecutarQuery(text, params) {
       rows: filas.map(r => ({
         hipodromo_nombre: r.hipodromo_nombre, carrera_numero: r.carrera_numero, fecha: r.fecha, pizarra: r.pizarra,
         pool_total: r.pool_total, pago_ganador: r.pago_ganador, comision_total: r.comision_total,
-        comision_porcentaje: r.comision_porcentaje, garantia: r.garantia, pago_fijo: r.pago_fijo, hubo_ganador: r.hubo_ganador
+        comision_porcentaje: r.comision_porcentaje, garantia: r.garantia, pago_fijo: r.pago_fijo, hubo_ganador: r.hubo_ganador,
+        // "modo" (04-10-2026, ver la nota grande de POST /remates/manual)
+        // -- ningún remate de esta prueba es manual, así que 'pool' (el
+        // default de la columna real) para todos.
+        modo: r.modo || 'pool'
       }))
     };
   }
