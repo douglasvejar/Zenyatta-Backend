@@ -120,6 +120,16 @@ function ejecutarQuery(text, params) {
   if (/^SELECT a\.cliente_nombre, a\.monto\s*FROM hipismo_remate_apuestas/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.cliente_nombre, j\.monto(, j\.resultado_cliente)?(, j\.banqueadores)?(, j\.gano)?(, p\.fecha, p\.hipodromo_nombre, j\.carrera_numero)?\s*FROM hipismo_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba (comision-banquero-tercios) no sabe responder: ' + sql);
 }
 

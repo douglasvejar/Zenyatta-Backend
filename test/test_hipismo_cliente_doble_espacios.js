@@ -157,6 +157,16 @@ function ejecutarQuery(text, params) {
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_remates/i.test(sql)) return { rows: [{ total: 0 }] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s*FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
 
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba (cliente-doble-espacios) no sabe responder: ' + sql);
 }
 

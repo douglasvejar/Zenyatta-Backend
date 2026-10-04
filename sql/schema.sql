@@ -534,6 +534,66 @@ create index if not exists idx_hipismo_adelantadas_jugadas_grupo_cliente on hipi
 create index if not exists idx_hipismo_adelantadas_jugadas_pendientes on hipismo_adelantadas_jugadas(grupo_id, estado);
 
 -- =================================================================
+-- HIPISMO_TERCIOS_ADELANTADAS_* (04-10-2026) — nueva pestaña "Jugadas
+-- entre Tercios Adelantadas", arquitectura hermana de
+-- hipismo_adelantadas_planos/jugadas de arriba (ahora renombrada en la
+-- UI a "Tablas Fijas y Marcas") pero con la gramática de Tercios en vez
+-- de Tablas Fijas/Marcas (ver services/hipismoTerciosAdelantadasCalc.js
+-- para el motor de cálculo puro). A pedido del usuario: "crea una
+-- pestaña nueva que diga jugadas entre tercios adelantadas, y la
+-- pestaña que tenemos como jugadas adelantadas actualmente ponle el
+-- nombre de tablas fijas y marcas, asi no chocan... ambas pestañas se
+-- jalan al plano cuando los calcule y le ponga su pizarra y saldran en
+-- el apartado de jugadas adelantadas con su configuracion".
+--
+-- A diferencia de Tablas Fijas/Marcas (cliente contra "la banca"), acá
+-- CADA jugada tiene un jugador Y un banquero explícitos (igual que
+-- Tercios en vivo) -- por eso no hace falta una cuenta "espejo" como
+-- "TABLAS FIJAS": jugador + banquero + comisión del grupo ya suman 0
+-- solos (ver mezclarTerciosAdelantadasEnBalance en routes/hipismo.js).
+create table if not exists hipismo_tercios_adelantadas_planos (
+  id                  uuid primary key default gen_random_uuid(),
+  grupo_id            uuid not null references grupos(id) on delete cascade,
+  hipodromo_id        uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre    text not null,
+  fecha               date not null, -- el día que se JUEGAN las carreras
+  comision_porcentaje numeric not null default 5, -- configurable al cargar el plano (reemplaza el 5% fijo de Tercios normal)
+  texto_original      text not null,
+  creado_en           timestamptz not null default now()
+);
+create index if not exists idx_hipismo_tercios_adelantadas_planos_grupo_fecha on hipismo_tercios_adelantadas_planos(grupo_id, fecha);
+
+create table if not exists hipismo_tercios_adelantadas_jugadas (
+  id                    uuid primary key default gen_random_uuid(),
+  plano_id              uuid not null references hipismo_tercios_adelantadas_planos(id) on delete cascade,
+  grupo_id              uuid not null references grupos(id) on delete cascade,
+  jugador_nombre        text not null default '',
+  banquero_nombre       text not null default '',
+  carrera_numero        integer,
+  es_cruce              boolean not null default false,
+  grupo_caballos        jsonb, -- [n,...] cuando NO es cruce (resolverModalidadMultiCaballo)
+  cruce_grupo_a         jsonb, -- [n,...] caballo(s) del lado jugador, cuando es_cruce
+  cruce_grupo_b         jsonb, -- [n,...] caballo(s) del lado banquero, cuando es_cruce
+  modalidad             text,  -- tal cual ("1p","10a8",...); NULL = default ("1p" en grupo, "pelo a pelo" en cruce)
+  monto                 numeric,
+  comision_porcentaje   numeric not null default 5,
+  texto_original        text not null,
+  falta_monto           boolean not null default false,
+  falta_jugador         boolean not null default false,
+  falta_banquero        boolean not null default false,
+  estado                text not null default 'pendiente' check (estado in ('pendiente','resuelto','sin_decidir')),
+  resultado_jugador     numeric, -- ya con el % aplicado (montoJugadorMostrado)
+  resultado_banquero    numeric, -- ya con el % aplicado (montoBanqueroMostrado)
+  comision_grupo        numeric,
+  pizarra_usada         text,
+  resuelto_en           timestamptz,
+  creado_en             timestamptz not null default now()
+);
+create index if not exists idx_hipismo_tercios_adelantadas_jugadas_plano on hipismo_tercios_adelantadas_jugadas(plano_id);
+create index if not exists idx_hipismo_tercios_adelantadas_jugadas_pendientes on hipismo_tercios_adelantadas_jugadas(grupo_id, estado);
+create index if not exists idx_hipismo_tercios_adelantadas_jugadas_errores on hipismo_tercios_adelantadas_jugadas(grupo_id) where (falta_monto or falta_jugador or falta_banquero);
+
+-- =================================================================
 -- HIPISMO_PLANOS_PAPELERA — "papelera recuperable" para "Eliminar Planos"
 -- (23-09-2026, a pedido del usuario: "en apuestas crea un boton de
 -- eliminar planos, alli me saldran todos los planos, yo seleccionare la
@@ -641,9 +701,15 @@ create index if not exists idx_hipismo_alertas_grupo on hipismo_alertas(grupo_id
 -- usuario ("crea un boton debajo de hipodromos que diga pizarras...
 -- alli puedo ver, editar, eliminar... las llegadas de las carreras").
 -- Mismo criterio de UN SOLO DROP+ADD consolidado explicado arriba.
+--
+-- TERCIOS_ADELANTADA_EDITADA / TERCIOS_ADELANTADA_ELIMINADA (04-10-2026)
+-- — 2 tipos más, para "Jugadas entre Tercios Adelantadas" (ver
+-- routes/hipismo.js, PUT/DELETE /tercios-adelantadas/jugadas/:id) —
+-- mismo criterio de auditoría que ADELANTADA_EDITADA/ADELANTADA_ELIMINADA
+-- de arriba, tabla aparte porque es una pestaña distinta.
 alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
 alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
-  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA'));
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA'));
 
 -- =================================================================
 -- (18-09-2026) Acá vivió un tiempo corto el interruptor por-grupo

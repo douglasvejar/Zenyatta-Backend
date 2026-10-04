@@ -178,6 +178,16 @@ function ejecutarQuery(text, params) {
     };
   }
 
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba (comision-real-menos-devuelto) no sabe responder: ' + sql);
 }
 

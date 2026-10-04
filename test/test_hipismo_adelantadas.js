@@ -453,6 +453,16 @@ function ejecutarQuery(text, params) {
   // hipismo_winners; esta prueba no crea ninguno, siempre vacío.
   if (/^SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3$/i.test(sql)) return { rows: [] };
 
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

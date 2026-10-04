@@ -129,6 +129,16 @@ function ejecutarQuery(text, params) {
   // Fijas/Marcas por día — esta prueba no tiene ninguna, siempre vacío.
   if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) return { rows: [] };
 
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
   throw new Error('La base de datos falsa de esta prueba (pg-numeric-string) no sabe responder: ' + sql);
 }
 

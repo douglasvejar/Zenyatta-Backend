@@ -134,6 +134,16 @@ async function probarLineasCliente() {
     if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) return { rows: [] };
     if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) return { rows: [] };
 
+    // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+    // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+    // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+    // siempre debe dar vacio.
+
+    if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+
     throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
   }
 
@@ -237,6 +247,16 @@ function ejecutarQueryCierreFinal(TABLAS, text, params) {
   if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total\s+FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_planos/i.test(sql)) return { rows: [{ total: 0 }] };
   if (/^SELECT COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_remates/i.test(sql)) return { rows: [{ total: 0 }] };
+
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+
+  // siempre debe dar vacio.
+
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }

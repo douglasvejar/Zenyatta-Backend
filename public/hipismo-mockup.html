@@ -170,6 +170,17 @@
   @media (max-width: 860px) {
     .alerta-flotante { top: auto; bottom: 18px; right: 18px; left: 18px; text-align: center; }
   }
+  /* Tercera alerta flotante, para Jugadas entre Tercios Adelantadas
+     (04-10-2026) — se apila debajo de Pozo y de Tablas Fijas/Marcas.
+     Mismo estilo, color propio (morado) para distinguirla de las otras 2. */
+  .alerta-flotante.alerta-tercios-adelantadas {
+    top: 216px;
+    background: #6d28d9;
+    box-shadow: 0 6px 18px rgba(109,40,217,0.4);
+  }
+  @media (max-width: 860px) {
+    .alerta-flotante.alerta-tercios-adelantadas { top: auto; bottom: 130px; }
+  }
 
   .main { flex: 1; min-width: 0; }
   .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
@@ -1076,6 +1087,15 @@
   <span class="alerta-cerrar" onclick="cerrarAlertaAdelantadas(event)" title="Cerrar">✕</span>
 </button>
 
+<!-- 04-10-2026: misma lógica de la alerta de arriba, propia de "Jugadas
+     entre Tercios Adelantadas" (ver irATerciosAdelantadasDesdeAlerta(),
+     cerrarAlertaTerciosAdelantadas() y el setInterval propio al final
+     del archivo). -->
+<button type="button" id="alertaFlotanteTerciosAdelantadas" class="alerta-flotante alerta-tercios-adelantadas" style="display:none;" onclick="irATerciosAdelantadasDesdeAlerta()">
+  🎯 <span id="alertaFlotanteTerciosAdelantadasTexto">1 jugada entre tercios adelantada pendiente</span>
+  <span class="alerta-cerrar" onclick="cerrarAlertaTerciosAdelantadas(event)" title="Cerrar">✕</span>
+</button>
+
 <div class="topbar">
   <div class="marca">
     <span class="logo-emoji">🏇</span>
@@ -1115,7 +1135,19 @@
            vista-cargarRemateManual más abajo. -->
       <button type="button" class="nav-item nav-child" data-vista="cargarRemateManual" onclick="mostrarVista('cargarRemateManual', this)">✍️<span class="nav-lbl"> Cargar Remate Manual</span></button>
       <button type="button" class="nav-item nav-child" data-vista="traspasosJugadas" onclick="mostrarVista('traspasosJugadas', this)">🔁<span class="nav-lbl"> Traspasos de Jugadas</span></button>
-      <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Jugadas Adelantadas</span></button>
+      <!-- 04-10-2026, a pedido del usuario: "la pestaña que tenemos como
+           jugadas adelantadas actualmente ponle el nombre de tablas fijas
+           y marcas, asi no chocan" con la pestaña nueva de abajo — solo
+           cambia la ETIQUETA visible; data-vista/id/funciones JS siguen
+           siendo "jugadasAdelantadas" tal cual, para no arriesgar nada ya
+           probado. -->
+      <button type="button" class="nav-item nav-child" data-vista="jugadasAdelantadas" onclick="mostrarVista('jugadasAdelantadas', this)">🚀<span class="nav-lbl"> Tablas Fijas y Marcas</span></button>
+      <!-- "Jugadas entre Tercios Adelantadas" (04-10-2026) — pestaña
+           hermana de la de arriba, misma idea (se pega ANTES de la
+           carrera y se resuelve sola al cargar el plano con la pizarra)
+           pero con la gramática de Tercios normal en vez de Tablas
+           Fijas/Marcas — ver vista-terciosAdelantadas más abajo. -->
+      <button type="button" class="nav-item nav-child" data-vista="terciosAdelantadas" onclick="mostrarVista('terciosAdelantadas', this)">🎯<span class="nav-lbl"> Jugadas entre Tercios Adelantadas</span></button>
       <!-- 23-09-2026 (duodécima ronda), a pedido del usuario: "un boton en
            apuestas llamado montos apostados". "Eliminar Planos" vivía acá
            mismo desde esa ronda; el 28-09-2026 se movió justo debajo de
@@ -1633,6 +1665,67 @@
              listaHipodromosConocidos: <input list="..."> + <datalist>
              vacío que se llena solo (ver cargarBanqueadoresConocidos). -->
         <datalist id="listaBanqueadoresConocidos"></datalist>
+      </div>
+    </section>
+
+    <!-- ============ JUGADAS ENTRE TERCIOS ADELANTADAS (04-10-2026) ============
+         Hermana de "Tablas Fijas y Marcas" de arriba, pero acá cada línea
+         YA trae jugador Y banquero puestos de una vez (ej. "HANRY 2x7
+         LO DA RAUL 100") — no hace falta asignar quién banquea después:
+         en cuanto cargues la pizarra de esa carrera en "Cargar Planos" se
+         resuelve sola y reparte entre jugador y banquero, igual que un
+         Tercios en vivo normal, pero con el "cruce" nuevo (jugador contra
+         banquero, "pelo a pelo" o con décimos) sumado a la gramática de
+         Tercios de siempre. Si falta el monto, el jugador o el banquero
+         en una línea, esa línea se guarda igual marcada con su error (no
+         bloquea el resto del plano) y aparece abajo en "Pendientes de
+         resolver" para corregirla ahí mismo. -->
+    <section class="vista" id="vista-terciosAdelantadas">
+      <div class="card">
+        <h2>🎯 Jugadas entre Tercios Adelantadas</h2>
+        <p class="desc">
+          Pega el plano con jugador y banquero ya puestos en cada línea (ej. "HANRY 2x7 LO DA RAUL 100", o un grupo normal de Tercios como "MR INCREIBLE 2Y2 DEL 2 LO DA RAUL 100"), elige el hipódromo y el día en que se van a correr esas carreras, y guárdalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra — ahí se resuelve sola entre jugador y banquero.
+          <span class="badge-pendiente">Usa la misma gramática de Tercios, más el cruce "x" jugador-contra-banquero</span>
+        </p>
+
+        <div class="fila">
+          <div>
+            <label for="selHipodromoTerciosAdelantadas">Hipódromo</label>
+            <select id="selHipodromoTerciosAdelantadas">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="inpFechaTerciosAdelantadas">Día en que se corren estas carreras</label>
+            <input type="date" id="inpFechaTerciosAdelantadas">
+          </div>
+          <div>
+            <label for="inpComisionTerciosAdelantadas">% Comisión (jugador y grupo)</label>
+            <input type="text" id="inpComisionTerciosAdelantadas" placeholder="Ej: 3 — se autocompleta si el plano trae NOTA=-3%">
+          </div>
+        </div>
+
+        <label for="txtTerciosAdelantadas">Plano de jugadas entre tercios adelantadas (pega aquí el mensaje completo)</label>
+        <textarea id="txtTerciosAdelantadas" rows="14" placeholder="Pega acá el plano, con cada línea ya con su jugador y su banquero (ej. &quot;HANRY 2x7 LO DA RAUL 100&quot;)"></textarea>
+
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" onclick="calcularTerciosAdelantadas()">🧮 Revisar</button>
+          <button class="btn btn-primario" type="button" onclick="guardarTerciosAdelantadas()">💾 Guardar</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarTerciosAdelantadas()">🧹 Limpiar</button>
+          <span class="toast-copiado" id="toastTerciosAdelantadas"></span>
+        </div>
+
+        <div id="resultadoVacioTerciosAdelantadas" class="resultado-vacio">Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.</div>
+        <div id="previewTerciosAdelantadas" style="display:none; margin-top:8px;">
+          <table>
+            <thead><tr><th>Jugador</th><th>Banquero</th><th>Carrera</th><th>Jugada</th><th class="num">Monto</th><th></th></tr></thead>
+            <tbody id="tbodyPreviewTerciosAdelantadas"></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:26px;">🚀 Pendientes de resolver</h3>
+        <p class="desc">Todo lo que todavía está esperando la pizarra de su carrera, o tiene algún dato faltante (monto, jugador o banquero) que haga falta corregir.</p>
+        <div id="listaPendientesTerciosAdelantadas"><div class="placeholder-card">Sin jugadas pendientes por ahora.</div></div>
       </div>
     </section>
 
@@ -6234,6 +6327,11 @@ async function confirmarPlano() {
   pintarBalanceGeneral();
   cargarClientesReales();
   if (data.adelantadasResueltas && data.adelantadasResueltas.length) cargarPendientesAdelantadas();
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" se resuelve con la
+  // misma pizarra de Cargar Planos — si quedó alguna resuelta, refresca
+  // también su propia lista de pendientes (ver terciosAdelantadasResueltas
+  // en POST /planos, routes/hipismo.js).
+  if (data.terciosAdelantadasResueltas && data.terciosAdelantadasResueltas.length) cargarPendientesTerciosAdelantadas();
 
   let salida = data.plano.texto_resultado;
   if (data.sinReconocer && data.sinReconocer.length) {
@@ -7647,6 +7745,273 @@ setInterval(() => {
   if (totalAdelantadasPendientesActual > 0) {
     alertaAdelantadasCerrada = false;
     actualizarAlertaAdelantadas(totalAdelantadasPendientesActual);
+  }
+}, 60 * 60 * 1000);
+
+// ------------------------------------------------------------------
+// "Jugadas entre Tercios Adelantadas" (04-10-2026) — hermana de "Tablas
+// Fijas y Marcas" de arriba, pero cada línea ya trae jugador Y banquero
+// puestos desde el plano (ver la nota grande en
+// services/hipismoTerciosAdelantadasCalc.js y en routes/hipismo.js para
+// la gramática completa y los 5 endpoints nuevos). Como el banquero ya
+// viene en la línea, acá NO hay paso de "asignar quién banquea" — la
+// única corrección posible desde Pendientes es editar jugador/banquero/
+// monto/modalidad cuando falta algo, o eliminar la línea.
+// ------------------------------------------------------------------
+function textoJugadaTerciosAdelantada(l) {
+  const modTxt = l.modalidad ? ` ${String(l.modalidad).toUpperCase()}` : '';
+  if (l.esCruce || l.cruceGrupoA) {
+    const a = (l.cruceGrupoA || (l.cruce && l.cruce.gruposA) || []).join('y');
+    const b = (l.cruceGrupoB || (l.cruce && l.cruce.gruposB) || []).join('y');
+    return `${a} x ${b}${modTxt}`;
+  }
+  const grupo = l.grupoCaballos || l.grupo || [];
+  return `${grupo.join('y')}${modTxt}`;
+}
+
+function pintarPreviewTerciosAdelantadas(lineas) {
+  const tbody = document.getElementById('tbodyPreviewTerciosAdelantadas');
+  tbody.innerHTML = lineas.map(l => {
+    const tieneError = l.errores && (l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero);
+    const detalleError = tieneError
+      ? ['faltaJugador', 'faltaBanquero', 'faltaMonto'].filter(k => l.errores[k]).map(k => ({ faltaJugador: 'falta jugador', faltaBanquero: 'falta banquero', faltaMonto: 'falta monto' }[k])).join(', ')
+      : '';
+    return `
+    <tr style="${tieneError ? 'background:rgba(220,38,38,0.10);' : ''}">
+      <td>${l.jugadorNombre || '—'}</td>
+      <td>${l.banqueroNombre || '—'}</td>
+      <td>${l.carreraNumero}</td>
+      <td>${textoJugadaTerciosAdelantada(l)}</td>
+      <td class="num">${l.monto != null ? formatMontoTabla(Number(l.monto)) : '—'}</td>
+      <td>${tieneError ? `⚠️ ${detalleError}` : ''}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('resultadoVacioTerciosAdelantadas').style.display = 'none';
+  document.getElementById('previewTerciosAdelantadas').style.display = 'block';
+}
+
+function mostrarVacioTerciosAdelantadas(texto) {
+  document.getElementById('previewTerciosAdelantadas').style.display = 'none';
+  const vacio = document.getElementById('resultadoVacioTerciosAdelantadas');
+  vacio.style.display = 'block';
+  vacio.textContent = texto;
+}
+
+async function calcularTerciosAdelantadas() {
+  const texto = document.getElementById('txtTerciosAdelantadas').value;
+  if (!texto.trim()) { mostrarVacioTerciosAdelantadas('Pega el plano primero.'); return; }
+  mostrarVacioTerciosAdelantadas('Revisando…');
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/tercios-adelantadas/calcular', { method: 'POST', body: JSON.stringify({ texto }) });
+  } catch (e) {
+    mostrarVacioTerciosAdelantadas(e.message);
+    return;
+  }
+  pintarPreviewTerciosAdelantadas(data.lineas);
+  // El % sugerido leído del plano (ej. "NOTA= ... -3%") autocompleta el
+  // campo si el operador todavía no escribió nada — el mismo criterio
+  // confirmado para Tablas Fijas/Marcas ("el % se elije arriba, pero si
+  // el plano indica cuanto es el %, colocamelo automatico, sin embargo
+  // lo puedo cambiar").
+  const inpPct = document.getElementById('inpComisionTerciosAdelantadas');
+  if (data.pctSugerido !== null && data.pctSugerido !== undefined && !inpPct.value.trim()) {
+    inpPct.value = data.pctSugerido;
+  }
+  if (data.cantidadErrores) {
+    alert('⚠️ Hay ' + data.cantidadErrores + ' línea(s) con algún dato faltante (marcadas en rojo abajo) — se pueden guardar igual y corregir después desde "Pendientes de resolver".');
+  }
+}
+
+async function guardarTerciosAdelantadas() {
+  const texto = document.getElementById('txtTerciosAdelantadas').value;
+  const hipodromoNombre = document.getElementById('selHipodromoTerciosAdelantadas').value;
+  const fecha = document.getElementById('inpFechaTerciosAdelantadas').value;
+  const comisionPorcentaje = document.getElementById('inpComisionTerciosAdelantadas').value;
+  if (!texto.trim()) { mostrarVacioTerciosAdelantadas('Pega el plano primero.'); return; }
+  if (!hipodromoNombre) { mostrarVacioTerciosAdelantadas('Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).'); return; }
+  if (!fecha) { mostrarVacioTerciosAdelantadas('Falta el día en que se corren estas carreras.'); return; }
+
+  mostrarVacioTerciosAdelantadas('Guardando…');
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/tercios-adelantadas', {
+      method: 'POST',
+      body: JSON.stringify({ texto, hipodromoNombre, fecha, comisionPorcentaje })
+    });
+  } catch (e) {
+    mostrarVacioTerciosAdelantadas(e.message);
+    return;
+  }
+  const t = document.getElementById('toastTerciosAdelantadas');
+  t.textContent = `✅ Guardado — ${data.cantidadJugadas} jugada(s)` + (data.cantidadErrores ? ` (${data.cantidadErrores} con algo pendiente de corregir)` : '');
+  t.style.color = 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+  document.getElementById('txtTerciosAdelantadas').value = '';
+  mostrarVacioTerciosAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
+  cargarPendientesTerciosAdelantadas();
+}
+
+function limpiarTerciosAdelantadas() {
+  document.getElementById('txtTerciosAdelantadas').value = '';
+  mostrarVacioTerciosAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
+}
+
+// Pendientes: a diferencia de Tablas Fijas/Marcas, acá NUNCA hace falta
+// asignar quién banquea (ya viene en la línea desde el plano) — lo único
+// que se puede corregir inline es un dato faltante (jugador/banquero/
+// monto) o la modalidad, vía PUT /tercios-adelantadas/jugadas/:id.
+let JUGADA_TERCIOS_ADELANTADA_EN_EDICION = null;
+
+function abrirEdicionTerciosAdelantada(jugadaId) {
+  JUGADA_TERCIOS_ADELANTADA_EN_EDICION = jugadaId;
+  cargarPendientesTerciosAdelantadas();
+}
+
+function cerrarEdicionTerciosAdelantada() {
+  JUGADA_TERCIOS_ADELANTADA_EN_EDICION = null;
+  cargarPendientesTerciosAdelantadas();
+}
+
+function filaEdicionTerciosAdelantadaHtml(j) {
+  const jugadorVal = (j.jugador || '').replace(/"/g, '&quot;');
+  const banqueroVal = (j.banquero || '').replace(/"/g, '&quot;');
+  const modalidadVal = (j.modalidad || '').replace(/"/g, '&quot;');
+  return `
+    <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div style="font-size:13px; margin-bottom:6px;">✏️ Editando esta jugada:</div>
+      <div class="fila" style="margin-bottom:6px;">
+        <input type="text" id="editTerciosJugador_${j.id}" placeholder="Jugador" value="${jugadorVal}">
+        <input type="text" id="editTerciosBanquero_${j.id}" placeholder="Banquero" value="${banqueroVal}">
+        <input type="number" id="editTerciosMonto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto != null ? j.monto : ''}">
+        <input type="text" id="editTerciosModalidad_${j.id}" placeholder="Modalidad (ej: 1p, 10a8)" value="${modalidadVal}">
+      </div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="guardarEdicionTerciosAdelantada('${j.id}')">💾 Guardar</button>
+        <button class="btn btn-secundario" type="button" onclick="cerrarEdicionTerciosAdelantada()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function guardarEdicionTerciosAdelantada(jugadaId) {
+  const body = {
+    jugador: document.getElementById(`editTerciosJugador_${jugadaId}`).value.trim(),
+    banquero: document.getElementById(`editTerciosBanquero_${jugadaId}`).value.trim(),
+    monto: document.getElementById(`editTerciosMonto_${jugadaId}`).value,
+    modalidad: document.getElementById(`editTerciosModalidad_${jugadaId}`).value.trim()
+  };
+  try {
+    await apiHipismo(`/api/hipismo/tercios-adelantadas/jugadas/${jugadaId}`, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  JUGADA_TERCIOS_ADELANTADA_EN_EDICION = null;
+  cargarPendientesTerciosAdelantadas();
+  cargarClientesReales();
+}
+
+async function eliminarJugadaTerciosAdelantada(jugadaId, jugadorNombre) {
+  if (!confirm(`¿Eliminar esta jugada entre tercios adelantada de ${jugadorNombre || 'este jugador'}? No se puede deshacer.`)) return;
+  try {
+    await apiHipismo(`/api/hipismo/tercios-adelantadas/jugadas/${jugadaId}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  if (JUGADA_TERCIOS_ADELANTADA_EN_EDICION === jugadaId) JUGADA_TERCIOS_ADELANTADA_EN_EDICION = null;
+  cargarPendientesTerciosAdelantadas();
+  cargarClientesReales();
+}
+
+function filaJugadaPendienteTerciosHtml(carrera, j) {
+  const tieneError = j.faltaMonto || j.faltaJugador || j.faltaBanquero;
+  const etiquetaEstado = tieneError
+    ? '<span class="badge-pendiente" style="background:#fde0e0; color:#7a0606;">falta dato</span>'
+    : '<span class="badge-pendiente">esperando pizarra</span>';
+  let detalleError = '';
+  if (tieneError) {
+    const faltantes = [];
+    if (j.faltaJugador) faltantes.push('jugador');
+    if (j.faltaBanquero) faltantes.push('banquero');
+    if (j.faltaMonto) faltantes.push('monto');
+    detalleError = `<div style="font-size:13px; margin-top:4px; color:var(--danger);">⚠️ Falta: ${faltantes.join(', ')} — línea original: "${(j.textoOriginal || '').replace(/</g, '&lt;')}"</div>`;
+  }
+  const jugadorJsBtn = (j.jugador || '').replace(/'/g, "\\'");
+  const botonesAccion = `<span style="display:inline-flex; gap:6px; margin-left:10px;">
+      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="abrirEdicionTerciosAdelantada('${j.id}')">✏️ Editar</button>
+      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="eliminarJugadaTerciosAdelantada('${j.id}', '${jugadorJsBtn}')">🗑️ Eliminar</button>
+    </span>`;
+  const edicion = JUGADA_TERCIOS_ADELANTADA_EN_EDICION === j.id ? filaEdicionTerciosAdelantadaHtml(j) : '';
+  return `<div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
+    <b>${j.jugador || '(sin jugador)'}</b> vs <b>${j.banquero || '(sin banquero)'}</b> — Carrera ${j.carreraNumero} — ${textoJugadaTerciosAdelantada(j)} ${etiquetaEstado}${botonesAccion}
+    ${detalleError}
+    ${edicion}
+  </div>`;
+}
+
+async function cargarPendientesTerciosAdelantadas() {
+  let data;
+  try {
+    data = await apiHipismo('/api/hipismo/tercios-adelantadas/pendientes');
+  } catch (e) {
+    return;
+  }
+  const cont = document.getElementById('listaPendientesTerciosAdelantadas');
+  if (cont) {
+    if (!data.carreras.length) {
+      cont.innerHTML = '<div class="placeholder-card">Sin jugadas pendientes por ahora.</div>';
+    } else {
+      cont.innerHTML = data.carreras.map(c => `
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700; margin-bottom:4px;">🏟️ ${c.hipodromoNombre} — Carrera ${c.carreraNumero} — ${c.fecha}</div>
+          ${c.jugadas.map(j => filaJugadaPendienteTerciosHtml(c, j)).join('')}
+        </div>`).join('');
+    }
+  }
+  actualizarAlertaTerciosAdelantadas(data.total);
+}
+
+// Misma idea de "×" para cerrar sin navegar + recordatorio cada 1 hora
+// que ya usa la alerta de Tablas Fijas/Marcas (ver actualizarAlertaAdelantadas).
+let alertaTerciosAdelantadasCerrada = false;
+let totalTerciosAdelantadasPendientesActual = 0;
+
+function actualizarAlertaTerciosAdelantadas(total) {
+  const flotante = document.getElementById('alertaFlotanteTerciosAdelantadas');
+  const texto = document.getElementById('alertaFlotanteTerciosAdelantadasTexto');
+  if (!flotante) return;
+  totalTerciosAdelantadasPendientesActual = total;
+  if (total === 0) {
+    alertaTerciosAdelantadasCerrada = false;
+    flotante.style.display = 'none';
+    return;
+  }
+  texto.textContent = total + (total === 1 ? ' jugada entre tercios adelantada pendiente' : ' jugadas entre tercios adelantadas pendientes');
+  flotante.style.display = alertaTerciosAdelantadasCerrada ? 'none' : 'block';
+}
+
+function cerrarAlertaTerciosAdelantadasSilencioso() {
+  alertaTerciosAdelantadasCerrada = true;
+  const flotante = document.getElementById('alertaFlotanteTerciosAdelantadas');
+  if (flotante) flotante.style.display = 'none';
+}
+
+function cerrarAlertaTerciosAdelantadas(ev) {
+  ev.stopPropagation();
+  cerrarAlertaTerciosAdelantadasSilencioso();
+}
+
+function irATerciosAdelantadasDesdeAlerta() {
+  cerrarAlertaTerciosAdelantadasSilencioso();
+  mostrarVista('terciosAdelantadas', document.querySelector('[data-vista="terciosAdelantadas"]'));
+}
+
+setInterval(() => {
+  if (totalTerciosAdelantadasPendientesActual > 0) {
+    alertaTerciosAdelantadasCerrada = false;
+    actualizarAlertaTerciosAdelantadas(totalTerciosAdelantadasPendientesActual);
   }
 }, 60 * 60 * 1000);
 
@@ -11022,6 +11387,7 @@ function poblarSelectHipodromo() {
   poblarSelectHipodromoRemate();
   poblarSelectHipodromoRemateManual();
   poblarSelectHipodromoAdelantadas();
+  poblarSelectHipodromoTerciosAdelantadas();
   poblarSelectHipodromoWinners();
 }
 
@@ -11029,6 +11395,21 @@ function poblarSelectHipodromo() {
 // hipódromos del grupo — select propio para no interferir con los otros.
 function poblarSelectHipodromoAdelantadas() {
   const sel = document.getElementById('selHipodromoAdelantadas');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+
+// "Jugadas entre Tercios Adelantadas" (04-10-2026) — select propio, mismo
+// listado real de hipódromos del grupo.
+function poblarSelectHipodromoTerciosAdelantadas() {
+  const sel = document.getElementById('selHipodromoTerciosAdelantadas');
   if (!sel) return;
   const valorPrevio = sel.value;
   if (HIPODROMOS.length === 0) {
@@ -13497,6 +13878,7 @@ pintarLogosGrupo();
 actualizarAlertaPozos();
 cargarHipodromos();
 cargarPendientesAdelantadas();
+cargarPendientesTerciosAdelantadas();
 cargarBanqueadoresConocidos();
 cargarClientesReales();
 actualizarPreviewSemana();

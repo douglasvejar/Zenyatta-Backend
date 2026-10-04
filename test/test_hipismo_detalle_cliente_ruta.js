@@ -45,6 +45,11 @@ function ejecutarQuery(text, params) {
   // nota grande de construirResumenClienteHipismo en services/hipismoResumenCliente.js)
   // — sin datos en esta prueba, que solo verifica el wiring de la ruta.
   if (/^SELECT j\.nombre\s+FROM jugadores j\s+WHERE j\.grupo_id = \$1/i.test(sql)) return { rows: [] };
+  // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
+  // este archivo crea jugadas de esta pestana nueva, asi que la consulta
+  // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
+  // siempre debe dar vacio.
+  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (detalle-cliente ruta) no sabe responder: ' + sql);
 }
 

@@ -1311,5 +1311,9 @@ module.exports = {
   LINEA_REGEX, LINEA_REGEX_COMPACTA, LINEA_REGEX_MODALIDAD_PRIMERO,
   // 24-09-2026 (segunda ronda — jugadas "a premio" con notación extendida
   // y función de "sin comisión"):
-  decimosN, esModalidadSinComision, parsearValoresSinComision, DECIMOS_RE
+  decimosN, esModalidadSinComision, parsearValoresSinComision, DECIMOS_RE,
+  // 04-10-2026 (Jugadas entre Tercios Adelantadas — nuevo motor en
+  // hipismoTerciosAdelantadasCalc.js, reusa esta misma función para el
+  // cruce "pelo a pelo"/décimos en vez de reimplementarla aparte):
+  resolverCruzado, RANK_NO_COLOCO
 };

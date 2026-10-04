@@ -86,6 +86,20 @@ const {
   resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto
 } = require('../services/hipismoAdelantadasCalc');
+// "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
+// de "Jugadas Adelantadas"/Tablas Fijas y Marcas de arriba, ver la nota
+// grande en services/hipismoTerciosAdelantadasCalc.js y en sql/schema.sql,
+// tablas hipismo_tercios_adelantadas_planos/jugadas). Misma idea: el
+// cliente pega estas jugadas de Tercios ANTES de la carrera, y se
+// resuelven solas cuando llega el plano de "Cargar Planos" con la
+// pizarra de esa misma carrera — a diferencia de Tablas Fijas/Marcas,
+// acá CADA jugada ya trae jugador Y banquero explícitos (como Tercios en
+// vivo), así que nunca queda "falta_banqueo" — o se resuelve de una
+// ('resuelto'/'sin_decidir') o le falta un dato (falta_monto/
+// falta_jugador/falta_banquero, ver más abajo), nunca las dos cosas.
+const {
+  parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto
+} = require('../services/hipismoTerciosAdelantadasCalc');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
 // obtenerAjustesComision (26-09-2026) — extraídas a su propio archivo
@@ -373,6 +387,127 @@ async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
   }
 }
 
+// =================================================================
+// "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo patrón de
+// buscar/calcular/guardar que Tablas Fijas/Marcas arriba, pero usando
+// el motor de services/hipismoTerciosAdelantadasCalc.js. Nunca se
+// intenta resolver una jugada con falta_monto/falta_jugador/
+// falta_banquero (filtro en la consulta) — esas quedan 'pendiente' con
+// su error hasta que el operador las corrija (PUT /tercios-adelantadas/
+// jugadas/:id).
+async function buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }) {
+  const r = await db.query(
+    `SELECT j.* FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.hipodromo_nombre = $2 AND j.carrera_numero = $3 AND p.fecha = $4
+        AND j.estado = 'pendiente' AND j.falta_monto = false AND j.falta_jugador = false AND j.falta_banquero = false
+      ORDER BY j.creado_en`,
+    [req.grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  return r.rows;
+}
+
+// Calcula (SIN guardar nada) cómo quedarían las jugadas de esta nueva
+// pestaña pendientes de una carrera contra una pizarra — usado tanto
+// por la vista previa (POST /planos/calcular) como, con persistencia
+// aparte, por POST /planos (guardar). movimientos ya viene en el MISMO
+// formato [{nombre,monto}] que usa armarBloqueAdelantadas — a pedido
+// del usuario ("ambas pestañas... saldran en el apartado de jugadas
+// adelantadas"), estas jugadas se mezclan en el MISMO bloque "PARADA
+// ADELANTADAS" del texto, en vez de tener un bloque aparte.
+async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra }) {
+  const pendientes = await buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha });
+  if (!pendientes.length) return { resueltas: [], movimientos: [] };
+
+  const rank = parsearPizarraRank(pizarra);
+  const resueltas = pendientes.map(j => {
+    const linea = {
+      cruce: j.es_cruce ? { gruposA: j.cruce_grupo_a, gruposB: j.cruce_grupo_b } : null,
+      grupo: j.es_cruce ? null : j.grupo_caballos,
+      modalidad: j.modalidad,
+      monto: Number(j.monto)
+    };
+    const r = resolverLineaTerciosAdelantada(linea, rank, Number(j.comision_porcentaje));
+    if (!r.decidida) {
+      return {
+        id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'sin_decidir',
+        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, movimientos: []
+      };
+    }
+    return {
+      id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'resuelto',
+      resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado), comisionGrupo: round2(r.comisionGrupo),
+      movimientos: [{ nombre: j.jugador_nombre, monto: r.montoJugadorMostrado }, { nombre: j.banquero_nombre, monto: r.montoBanqueroMostrado }]
+    };
+  });
+
+  const movimientos = [];
+  resueltas.forEach(r => movimientos.push(...r.movimientos));
+  return { resueltas, movimientos };
+}
+
+// Persiste la resolución ya calculada arriba — SOLO la llama POST
+// /planos (guardar de verdad), nunca /planos/calcular (vista previa).
+async function guardarResolucionTerciosAdelantadas(client, req, resueltas, pizarra) {
+  for (const r of resueltas) {
+    await client.query(
+      `UPDATE hipismo_tercios_adelantadas_jugadas
+          SET estado = $1, resultado_jugador = $2, resultado_banquero = $3, comision_grupo = $4, pizarra_usada = $5, resuelto_en = now()
+        WHERE id = $6 AND grupo_id = $7`,
+      [r.estadoNuevo, r.resultadoJugador, r.resultadoBanquero, r.comisionGrupo, pizarra, r.id, req.grupoId]
+    );
+  }
+}
+
+// Mezcla las jugadas de esta pestaña ya resueltas en el mismo Balance
+// General que arma hipismoCalc.js — a diferencia de Tablas Fijas (que
+// necesita la cuenta "espejo" TABLAS FIJAS porque el cliente juega
+// contra "la banca"), acá jugador y banquero ya son 2 clientes reales
+// que suman 0 entre ellos solos menos la comisión del grupo — por eso
+// el ítem "% TERCIOS ADELANTADAS" (mismo criterio que "% DE TABLAS
+// FIJAS": NO se vuelve a sumar al total "Comisión" del pie, para no
+// contarla 2 veces — queda representada solo en este ítem).
+function mezclarTerciosAdelantadasEnBalance(totalesFinales, resueltasTercios) {
+  const totales = Object.assign({}, totalesFinales);
+  resueltasTercios.forEach(r => {
+    if (r.estadoNuevo !== 'resuelto') return;
+    totales[r.jugador] = round2((totales[r.jugador] || 0) + r.resultadoJugador);
+    totales[r.banquero] = round2((totales[r.banquero] || 0) + r.resultadoBanquero);
+    if (r.comisionGrupo) {
+      totales['% TERCIOS ADELANTADAS'] = round2((totales['% TERCIOS ADELANTADAS'] || 0) + r.comisionGrupo);
+    }
+  });
+  return totales;
+}
+
+function filaJugadaTerciosAdelantadaPublica(j) {
+  return {
+    id: j.id,
+    jugador: j.jugador_nombre,
+    banquero: j.banquero_nombre,
+    carreraNumero: j.carrera_numero,
+    esCruce: j.es_cruce,
+    grupoCaballos: j.grupo_caballos,
+    cruceGrupoA: j.cruce_grupo_a,
+    cruceGrupoB: j.cruce_grupo_b,
+    modalidad: j.modalidad,
+    monto: j.monto != null ? Number(j.monto) : null,
+    comisionPorcentaje: Number(j.comision_porcentaje),
+    textoOriginal: j.texto_original,
+    faltaMonto: j.falta_monto,
+    faltaJugador: j.falta_jugador,
+    faltaBanquero: j.falta_banquero,
+    estado: j.estado,
+    resultadoJugador: j.resultado_jugador != null ? Number(j.resultado_jugador) : null,
+    resultadoBanquero: j.resultado_banquero != null ? Number(j.resultado_banquero) : null,
+    comisionGrupo: j.comision_grupo != null ? Number(j.comision_grupo) : null,
+    pizarraUsada: j.pizarra_usada,
+    hipodromoNombre: j.hipodromo_nombre,
+    fecha: j.fecha,
+    creadoEn: j.creado_en
+  };
+}
+
 // 23-09-2026, a pedido del usuario ("en balance no me estas cargando los
 // saldos de las jugadas adelantadas.... debes sumarle en la carrera
 // correspondiente si el cliente gana o pierde... y se va colocando
@@ -454,9 +589,18 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   const { resueltas, movimientosParaTexto } = (hipodromoNombre && carreraNumero)
     ? await calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
     : { resueltas: [], movimientosParaTexto: [] };
+  // "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo gancho que
+  // Tablas Fijas/Marcas arriba, resuelve sus pendientes de ESTA MISMA
+  // carrera contra la pizarra que se está calculando. Sus movimientos se
+  // mezclan en el MISMO array que alimenta "PARADA ADELANTADAS" (a
+  // pedido del usuario: "saldran en el apartado de jugadas adelantadas").
+  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = (hipodromoNombre && carreraNumero)
+    ? await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
+    : { resueltas: [], movimientos: [] };
+  movimientosParaTexto.push(...movimientosTercios);
 
   const huboTexto = !!(texto && texto.trim());
-  if (!huboTexto && resueltas.length === 0) {
+  if (!huboTexto && resueltas.length === 0 && resueltasTercios.length === 0) {
     return res.status(400).json({ error: 'Falta el texto del plano.' });
   }
 
@@ -495,6 +639,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   }
 
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
+  balance.totales = mezclarTerciosAdelantadasEnBalance(balance.totales, resueltasTercios);
 
   // 23-09-2026, a pedido del usuario ("un item llama pedro - porcentaje
   // alli es donde vas a colocar ese porcentaje que se va ganando el
@@ -546,7 +691,8 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     comisionTotal: balance.comision,
     sinReconocer: resultado.sinReconocer,
     cantidadTickets: resultado.tickets.length,
-    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
+    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
+    terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
 }));
 
@@ -591,6 +737,10 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // grande arriba) — se resuelven con la pizarra que se está por guardar
   // acá, existan o no líneas normales de Tercios en este plano.
   const { resueltas, movimientosParaTexto } = await calcularResolucionAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra });
+  // "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo gancho, ver
+  // la nota grande en POST /planos/calcular.
+  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra });
+  movimientosParaTexto.push(...movimientosTercios);
 
   // 23-09-2026, a pedido del usuario ("si llega a quedar alguna jugada
   // adelantada... sin nada... en darle a cargar así no pegue nada, jale
@@ -598,7 +748,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // adelantadas pendientes de esa carrera — sirve para resolverlas solas
   // aunque nadie haya jugado nada "en vivo" en esa carrera puntual.
   const huboTexto = !!(texto && texto.trim());
-  if (!huboTexto && resueltas.length === 0) {
+  if (!huboTexto && resueltas.length === 0 && resueltasTercios.length === 0) {
     return res.status(400).json({ error: 'Falta el texto del plano.' });
   }
   const resultado = huboTexto
@@ -655,10 +805,12 @@ router.post('/planos', asyncHandler(async (req, res) => {
       );
     }
     if (resueltas.length) await guardarResolucionAdelantadas(client, req, resueltas, pizarra);
+    if (resueltasTercios.length) await guardarResolucionTerciosAdelantadas(client, req, resueltasTercios, pizarra);
     return planoCreado;
   });
 
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
+  balance.totales = mezclarTerciosAdelantadasEnBalance(balance.totales, resueltasTercios);
 
   // Ver la nota grande en POST /planos/calcular — mismo cálculo de "%
   // devuelto" acá, sobre lo que de verdad se guardó en este plano
@@ -697,7 +849,8 @@ router.post('/planos', asyncHandler(async (req, res) => {
     // frontend lo puede usar para avisar "se sustituyó el plano anterior
     // de esta carrera" en vez de un simple "plano guardado".
     sustituyoAnterior: rPlanosExistentes.rows.length > 0,
-    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente }))
+    adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
+    terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
 }));
 
@@ -1313,6 +1466,220 @@ router.delete('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   await registrarAlerta(req, {
     tipo: 'ADELANTADA_ELIMINADA', hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaTexto,
     mensaje: `Se eliminó la jugada adelantada de ${jugada.cliente_nombre} (carrera ${jugada.carrera_numero}, ${jugada.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json({ ok: true });
+}));
+
+// =================================================================
+// "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo patrón de
+// endpoints que "Jugadas Adelantadas" arriba, usando
+// services/hipismoTerciosAdelantadasCalc.js como motor.
+// =================================================================
+
+// POST /tercios-adelantadas/calcular: parsea SIN guardar — vista previa
+// para revisar las líneas con error (falta monto/jugador/banquero)
+// antes de decidir si se guarda de verdad.
+router.post('/tercios-adelantadas/calcular', asyncHandler(async (req, res) => {
+  const { texto } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
+
+  const { hipodromo, pctSugerido, lineas } = parsearPlanoTerciosAdelantadas(texto);
+  if (!lineas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto.' });
+
+  res.json({
+    hipodromo,
+    pctSugerido,
+    lineas,
+    cantidadErrores: lineas.filter(l => l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero).length
+  });
+}));
+
+// POST /tercios-adelantadas: parsea Y guarda de verdad, todas en estado
+// 'pendiente'. A diferencia de Tablas Fijas/Marcas, una línea con datos
+// faltantes NO bloquea el guardado del resto del plano (confirmado por
+// el usuario: "no bloquea... la pestaña que corresponda titila
+// indicando alerta") — se guarda igual, marcada con su error, para
+// poder mostrarla en la pantalla de pendientes/alertas.
+router.post('/tercios-adelantadas', asyncHandler(async (req, res) => {
+  const { texto, hipodromoId, hipodromoNombre, fecha, comisionPorcentaje } = req.body;
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Falta el texto del plano.' });
+  if (!fecha) return res.status(400).json({ error: 'Falta el día en que se corren estas carreras.' });
+
+  const { hipodromo: hipodromoDelTexto, pctSugerido, lineas } = parsearPlanoTerciosAdelantadas(texto);
+  if (!lineas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto.' });
+
+  let nombreHipodromoFinal = hipodromoNombre || hipodromoDelTexto;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromoFinal = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromoFinal) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  // El % de la pantalla manda; si el operador no puso ninguno, se usa el
+  // leído del texto ("NOTA= ... -3%"); si tampoco hay, 5% por defecto
+  // (mismo criterio confirmado: "el % se elije arriba, pero si el plano
+  // indica cuanto es el %, colocamelo automatico, sin embargo lo puedo
+  // cambiar").
+  const comisionPct = (comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje)))
+    ? Number(comisionPorcentaje) : (pctSugerido !== null ? pctSugerido : 5);
+
+  const nombres = new Set();
+  lineas.forEach(l => { if (l.jugadorNombre) nombres.add(l.jugadorNombre); if (l.banqueroNombre) nombres.add(l.banqueroNombre); });
+  await autoRegistrarJugadores(req.grupoId, Array.from(nombres), {});
+
+  const plano = await db.transaccion(async (client) => {
+    const rPlano = await client.query(
+      `INSERT INTO hipismo_tercios_adelantadas_planos (grupo_id, hipodromo_id, hipodromo_nombre, fecha, comision_porcentaje, texto_original)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.grupoId, hipodromoId || null, nombreHipodromoFinal, fecha, comisionPct, texto]
+    );
+    const planoCreado = rPlano.rows[0];
+
+    for (const l of lineas) {
+      await client.query(
+        `INSERT INTO hipismo_tercios_adelantadas_jugadas
+           (plano_id, grupo_id, jugador_nombre, banquero_nombre, carrera_numero, es_cruce, grupo_caballos, cruce_grupo_a, cruce_grupo_b, modalidad, monto, comision_porcentaje, texto_original, falta_monto, falta_jugador, falta_banquero)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [planoCreado.id, req.grupoId, l.jugadorNombre || '', l.banqueroNombre || '', l.carreraNumero,
+          !!l.cruce, l.cruce ? null : JSON.stringify(l.grupo || null), l.cruce ? JSON.stringify(l.cruce.gruposA) : null, l.cruce ? JSON.stringify(l.cruce.gruposB) : null,
+          l.modalidad, l.monto, comisionPct, l.lineaOriginal, l.errores.faltaMonto, l.errores.faltaJugador, l.errores.faltaBanquero]
+      );
+    }
+    return planoCreado;
+  });
+
+  res.status(201).json({
+    plano,
+    cantidadJugadas: lineas.length,
+    cantidadErrores: lineas.filter(l => l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero).length
+  });
+}));
+
+// GET /tercios-adelantadas/pendientes : todas las jugadas que todavía
+// esperan la pizarra de su carrera, O que tienen algún dato faltante —
+// alimenta la alerta titilante de la pestaña y la pantalla de errores
+// ("al abrir saldra una pantalla indicando cual es el error, indicando
+// jugada, carrera e hipodromo"). OJO: va ANTES de cualquier ruta con
+// ":id" de esta familia, mismo motivo que /adelantadas/pendientes.
+router.get('/tercios-adelantadas/pendientes', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND j.estado = 'pendiente'
+      ORDER BY p.fecha, p.hipodromo_nombre, j.carrera_numero, j.creado_en`,
+    [req.grupoId]
+  );
+
+  const porCarrera = new Map();
+  r.rows.forEach(j => {
+    const fechaIso = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+    const clave = `${j.hipodromo_nombre}|${j.carrera_numero}|${fechaIso}`;
+    if (!porCarrera.has(clave)) {
+      porCarrera.set(clave, { hipodromoNombre: j.hipodromo_nombre, carreraNumero: j.carrera_numero, fecha: fechaIso, jugadas: [] });
+    }
+    porCarrera.get(clave).jugadas.push(filaJugadaTerciosAdelantadaPublica(j));
+  });
+
+  const carreras = Array.from(porCarrera.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const conError = r.rows.filter(j => j.falta_monto || j.falta_jugador || j.falta_banquero);
+  res.json({
+    total: r.rows.length,
+    esperandoPizarra: r.rows.length - conError.length,
+    conError: conError.length,
+    carreras
+  });
+}));
+
+router.put('/tercios-adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
+  const { jugador, banquero, monto, modalidad } = req.body;
+
+  const rJugada = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.id = $1 AND j.grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
+  const jugada = rJugada.rows[0];
+  if (!jugada) return res.status(404).json({ error: 'Jugada no encontrada.' });
+
+  const jugadorFinal = ((jugador !== undefined && jugador !== null && jugador !== '') ? jugador : jugada.jugador_nombre).toString().trim().toUpperCase().replace(/\s+/g, ' ');
+  const banqueroFinal = ((banquero !== undefined && banquero !== null && banquero !== '') ? banquero : jugada.banquero_nombre).toString().trim().toUpperCase().replace(/\s+/g, ' ');
+  const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : (jugada.monto != null ? Number(jugada.monto) : null);
+  const modalidadFinal = (modalidad !== undefined && modalidad !== null && modalidad !== '') ? String(modalidad).toLowerCase().trim() : jugada.modalidad;
+
+  if (montoFinal != null && (isNaN(montoFinal) || montoFinal <= 0)) {
+    return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
+  }
+
+  const faltaMonto = montoFinal == null;
+  const faltaJugador = !jugadorFinal;
+  const faltaBanquero = !banqueroFinal;
+
+  if (jugadorFinal && jugadorFinal !== jugada.jugador_nombre) await autoRegistrarJugadores(req.grupoId, [jugadorFinal], {});
+  if (banqueroFinal && banqueroFinal !== jugada.banquero_nombre) await autoRegistrarJugadores(req.grupoId, [banqueroFinal], {});
+
+  // Si ya tenía una pizarra usada (la carrera ya se había resuelto antes
+  // de corregir el dato faltante), se recalcula de una con la pizarra
+  // que ya tenía guardada — mismo criterio de "editar recalcula todo"
+  // que usa el resto del sistema.
+  let recalculo = { estado: jugada.estado, resultadoJugador: jugada.resultado_jugador, resultadoBanquero: jugada.resultado_banquero, comisionGrupo: jugada.comision_grupo };
+  if (jugada.pizarra_usada && !faltaMonto && !faltaJugador && !faltaBanquero) {
+    const rank = parsearPizarraRank(jugada.pizarra_usada);
+    const linea = {
+      cruce: jugada.es_cruce ? { gruposA: jugada.cruce_grupo_a, gruposB: jugada.cruce_grupo_b } : null,
+      grupo: jugada.es_cruce ? null : jugada.grupo_caballos,
+      modalidad: modalidadFinal,
+      monto: montoFinal
+    };
+    const r = resolverLineaTerciosAdelantada(linea, rank, Number(jugada.comision_porcentaje));
+    recalculo = r.decidida
+      ? { estado: 'resuelto', resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado), comisionGrupo: round2(r.comisionGrupo) }
+      : { estado: 'sin_decidir', resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0 };
+  } else if (faltaMonto || faltaJugador || faltaBanquero) {
+    recalculo = { estado: 'pendiente', resultadoJugador: null, resultadoBanquero: null, comisionGrupo: null };
+  }
+
+  const r = await db.query(
+    `UPDATE hipismo_tercios_adelantadas_jugadas
+        SET jugador_nombre = $1, banquero_nombre = $2, monto = $3, modalidad = $4,
+            falta_monto = $5, falta_jugador = $6, falta_banquero = $7,
+            estado = $8, resultado_jugador = $9, resultado_banquero = $10, comision_grupo = $11
+      WHERE id = $12 AND grupo_id = $13 RETURNING *`,
+    [jugadorFinal, banqueroFinal, montoFinal, modalidadFinal, faltaMonto, faltaJugador, faltaBanquero,
+      recalculo.estado, recalculo.resultadoJugador, recalculo.resultadoBanquero, recalculo.comisionGrupo,
+      jugada.id, req.grupoId]
+  );
+
+  const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
+  await registrarAlerta(req, {
+    tipo: 'TERCIOS_ADELANTADA_EDITADA', hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se editó la jugada entre Tercios Adelantadas de ${jugadorFinal || '(sin jugador)'} contra ${banqueroFinal || '(sin banquero)'} (carrera ${jugada.carrera_numero}, ${jugada.hipodromo_nombre}, ${fechaTexto}).`
+  });
+
+  res.json(filaJugadaTerciosAdelantadaPublica(r.rows[0]));
+}));
+
+router.delete('/tercios-adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
+  const rJugada = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.id = $1 AND j.grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
+  const jugada = rJugada.rows[0];
+  if (!jugada) return res.status(404).json({ error: 'Jugada no encontrada.' });
+
+  await db.query('DELETE FROM hipismo_tercios_adelantadas_jugadas WHERE id = $1 AND grupo_id = $2', [jugada.id, req.grupoId]);
+
+  const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
+  await registrarAlerta(req, {
+    tipo: 'TERCIOS_ADELANTADA_ELIMINADA', hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se eliminó la jugada entre Tercios Adelantadas de ${jugada.jugador_nombre || '(sin jugador)'} contra ${jugada.banquero_nombre || '(sin banquero)'} (carrera ${jugada.carrera_numero}, ${jugada.hipodromo_nombre}, ${fechaTexto}).`
   });
 
   res.json({ ok: true });
