@@ -204,6 +204,30 @@
   .burbuja-pizarra-anterior-cerrar { flex: none; width: auto; background: transparent; border: none; color: var(--text-dim); font-size: 15px; line-height: 1; padding: 0 2px; cursor: pointer; }
   .burbuja-pizarra-anterior-cerrar:hover { color: var(--text); }
 
+  /* Lista pegable de "Valores a premio SIN comisión" (04-10-2026, a
+     pedido del usuario: "creame una lista pegable desde 10a5 hasta 10a1
+     ... para seleccionar que valores del plano van sin %, puedo elegir
+     varias opciones"). Mismo patrón flotante que .burbuja-pizarra-anterior
+     (position:absolute, pegada debajo del input, no empuja el resto del
+     formulario) -- ver toggleListaSinComision()/pintarListaSinComision()
+     más abajo en el JavaScript. El input de texto de siempre (#inpSinComision)
+     sigue siendo la fuente real de verdad (lo que se manda al servidor):
+     esta lista solo lo rellena, nunca lo reemplaza, así que un valor
+     fuera de la escala (ej. 10a6, 10a1.6) escrito a mano sigue
+     funcionando igual que siempre. */
+  .btn-lista-sin-comision { display: block; margin-top: 4px; background: none; border: none; padding: 0; color: var(--accent-grass); font-size: 11px; font-weight: 700; cursor: pointer; text-align: left; font-family: 'Inter', sans-serif; }
+  .btn-lista-sin-comision:hover { text-decoration: underline; }
+  .panel-sin-comision { display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 7; width: 272px; max-width: calc(100vw - 40px); background: var(--card-2); border: 1px solid var(--border-light); border-radius: 10px; padding: 10px; box-shadow: 0 8px 18px rgba(0,0,0,0.3); }
+  .panel-sin-comision.panel-visible { display: block; }
+  .panel-sin-comision-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 210px; overflow-y: auto; }
+  .chip-sin-comision { background: var(--card); border: 1px solid var(--border-light); border-radius: 16px; padding: 5px 11px; font-size: 12px; font-weight: 700; color: var(--text-dim); cursor: pointer; font-family: 'Inter', sans-serif; user-select: none; }
+  .chip-sin-comision:hover { border-color: var(--accent-grass); color: var(--text); }
+  .chip-sin-comision.chip-activo { background: var(--accent-grass); border-color: var(--accent-grass); color: #ffffff; }
+  .panel-sin-comision-pie { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; border-top: 1px solid var(--border-light); padding-top: 8px; }
+  .panel-sin-comision-accion { background: none; border: none; color: var(--text-dim); font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 4px 6px; font-family: 'Inter', sans-serif; }
+  .panel-sin-comision-accion:hover { color: var(--text); }
+  .panel-sin-comision-accion.panel-sin-comision-listo { color: var(--accent-grass); }
+
   label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 5px; }
   input, select, textarea { width: 100%; background: var(--card-2); border: 1px solid var(--border-light); border-radius: 8px; color: var(--text); padding: 9px 11px; font-size: 14px; font-family: 'Inter', sans-serif; }
   textarea { resize: vertical; font-family: 'ui-monospace', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
@@ -1291,9 +1315,17 @@
                reemplaza al checkbox de arriba para que quede claro que no
                es una casilla que el operador se olvidó de tildar. -->
           <p id="notaCruzarDesactivado" style="display:none; grid-column: 1 / -1; margin:0; font-size:12px; color:var(--text-dim);">🔀 Cruzar jugadas: <b>desactivado por Súper-admin</b> para este grupo — cada jugada de este plano se paga sola.</p>
-          <div>
+          <div style="position:relative;">
             <label for="inpSinComision" title="Jugadas 'a premio' (10a1...10a9, con o sin decimales) — a las que elijas acá el ganador se le paga NETO, SIN el 5% de comisión, solo para las jugadas de ESTA carrera. Elige mínimo 3 valores separados por coma, ej: 2, 3, 1.75">Valores "a premio" SIN comisión</label>
             <input type="text" id="inpSinComision" placeholder="Ej: 2, 3, 1.75 (déjalo vacío si ninguno aplica)">
+            <button type="button" class="btn-lista-sin-comision" onclick="toggleListaSinComision()">📋 Elegir de la lista (10a5 al 10a1)</button>
+            <div id="panelSinComision" class="panel-sin-comision">
+              <div class="panel-sin-comision-grid" id="gridSinComision"></div>
+              <div class="panel-sin-comision-pie">
+                <button type="button" class="panel-sin-comision-accion" onclick="limpiarListaSinComision()">Limpiar selección</button>
+                <button type="button" class="panel-sin-comision-accion panel-sin-comision-listo" onclick="toggleListaSinComision(false)">Listo ✓</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -6232,6 +6264,7 @@ async function confirmarPlano() {
   document.getElementById('txtPlano').value = '';
   document.getElementById('inpRet').value = '';
   document.getElementById('inpSinComision').value = '';
+  limpiarListaSinComision(); // 04-10-2026: también destilda los chips de la lista (son por carrera, igual que el input)
   avanzarASiguienteCarrera();
   // avanzarASiguienteCarrera() mueve el <select> con selectedIndex (no
   // dispara "change"), así que hay que revisar la pizarra anterior de la
@@ -6249,9 +6282,107 @@ async function confirmarPlano() {
   btnConfirmar.textContent = '✔️ Confirmar Plano';
 }
 
+// ------------------------------------------------------------------
+// Lista pegable de "Valores a premio SIN comisión" (04-10-2026, a pedido
+// del usuario: "creame una lista pegable desde 10a5 hasta 10a1... para
+// seleccionar que valores del plano van sin %, puedo elegir varias
+// opciones ya que en el plano pueden haber 10a4 10a3.5"). Escala fija, de
+// 0.25 en 0.25, de 10a5 a 10a1 (17 valores, los más comunes en la
+// práctica). El input de texto de siempre (#inpSinComision) sigue siendo
+// la fuente real que se manda al servidor (ver parsearValoresSinComision
+// en hipismoCalc.js, que separa por COMA y cada valor con PUNTO decimal)
+// — esta lista solo lo rellena, nunca lo reemplaza, así que un valor
+// fuera de la escala (10a6, 10a1.6, etc. — el tooltip del campo menciona
+// hasta 10a9) que el operador escriba a mano sigue funcionando igual que
+// siempre.
+const ESCALA_SIN_COMISION = (() => {
+  const valores = [];
+  for (let n = 5; n >= 1; n -= 0.25) valores.push(Math.round(n * 100) / 100); // evita basura de punto flotante (4.75 en vez de 4.7499999...)
+  return valores;
+})();
+
+// Mismo parseo que parsearValoresSinComision() del servidor
+// (hipismoCalc.js) — reimplementado acá liviano (sin pegarle al
+// servidor) solo para saber, del lado del cliente, qué chips pintar
+// activos según lo que ya haya en el input.
+function parsearValoresSinComisionCliente(raw) {
+  return String(raw || '').split(',').map(v => parseFloat(v.trim().replace(',', '.'))).filter(Number.isFinite);
+}
+
+// Solo para el TEXTO del chip ("10a4,75") — estilo venezolano con coma.
+// El valor que de verdad viaja al input/servidor sigue siendo con punto.
+function formatValorSinComisionEs(n) {
+  return String(n).replace('.', ',');
+}
+
+function construirGridSinComisionSiHaceFalta() {
+  const grid = document.getElementById('gridSinComision');
+  if (!grid || grid.childElementCount) return; // ya construida (una sola vez por carga de página)
+  ESCALA_SIN_COMISION.forEach(valor => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-sin-comision';
+    chip.textContent = '10a' + formatValorSinComisionEs(valor);
+    chip.dataset.valor = String(valor);
+    chip.onclick = () => toggleValorSinComision(valor, chip);
+    grid.appendChild(chip);
+  });
+}
+
+// Lee el input de texto actual y marca (chip-activo) los chips de la
+// escala que ya estén presentes ahí — así la lista abre siempre
+// reflejando lo que de verdad se va a mandar, aunque el operador haya
+// escrito o borrado algo a mano desde la última vez que la abrió.
+function sincronizarGridSinComisionConInput() {
+  const actuales = parsearValoresSinComisionCliente(document.getElementById('inpSinComision').value);
+  document.querySelectorAll('#gridSinComision .chip-sin-comision').forEach(chip => {
+    const valorChip = parseFloat(chip.dataset.valor);
+    chip.classList.toggle('chip-activo', actuales.some(v => Math.abs(v - valorChip) < 0.001));
+  });
+}
+
+function toggleValorSinComision(valor, chip) {
+  const input = document.getElementById('inpSinComision');
+  const actuales = parsearValoresSinComisionCliente(input.value);
+  const yaEstaba = actuales.some(v => Math.abs(v - valor) < 0.001);
+  const nuevos = yaEstaba
+    ? actuales.filter(v => Math.abs(v - valor) >= 0.001)
+    : [...actuales, valor];
+  // Orden descendente (10a5 primero) para que el texto del input quede
+  // legible, igual que la lista — un valor que el operador haya escrito
+  // a mano fuera de la escala no se toca, solo cambia de posición.
+  nuevos.sort((a, b) => b - a);
+  input.value = nuevos.map(v => String(v)).join(', ');
+  chip.classList.toggle('chip-activo', !yaEstaba);
+}
+
+function limpiarListaSinComision() {
+  document.getElementById('inpSinComision').value = '';
+  document.querySelectorAll('#gridSinComision .chip-sin-comision').forEach(chip => chip.classList.remove('chip-activo'));
+}
+
+function toggleListaSinComision(forzarAbrir) {
+  const panel = document.getElementById('panelSinComision');
+  if (!panel) return;
+  construirGridSinComisionSiHaceFalta();
+  const abrir = (typeof forzarAbrir === 'boolean') ? forzarAbrir : !panel.classList.contains('panel-visible');
+  if (abrir) sincronizarGridSinComisionConInput();
+  panel.classList.toggle('panel-visible', abrir);
+}
+
+// Cierra el panel si el operador hace clic afuera de él (sin esto,
+// quedaría flotando hasta que alguien le diera "Listo" a mano).
+document.addEventListener('click', (ev) => {
+  const panel = document.getElementById('panelSinComision');
+  if (!panel || !panel.classList.contains('panel-visible')) return;
+  const wrap = panel.parentElement;
+  if (wrap && !wrap.contains(ev.target)) panel.classList.remove('panel-visible');
+});
+
 function limpiarPlano() {
   document.getElementById('txtPlano').value = '';
   document.getElementById('inpSinComision').value = '';
+  limpiarListaSinComision(); // 04-10-2026: también destilda los chips de la lista
   document.getElementById('resultadoCaja').style.display = 'none';
   document.getElementById('resultadoVacio').style.display = 'block';
   document.getElementById('resultadoVacio').textContent = 'El plano resuelto va a aparecer acá cuando le des Calcular.';
