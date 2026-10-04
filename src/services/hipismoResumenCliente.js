@@ -682,13 +682,25 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       subtipo: linea.subtipo,
       numeroEjemplar: linea.numeroEjemplar,
       numero1: linea.numero1,
-      numero2: linea.numero2
+      numero2: linea.numero2,
+      // esCruce/grupoCaballos/cruceGrupoA/cruceGrupoB (04-10-2026, ver la
+      // nota grande de obtenerLineasHipismoCliente en
+      // services/hipismoLineasCliente.js) — SOLO los trae una línea
+      // `tipo: 'tercios_adelantada'` (undefined para cualquier otro tipo,
+      // igual que numeroEjemplar/numero1/numero2 de arriba ya quedan
+      // undefined para lo que no es Adelantada), hacen falta para que
+      // armarJugadaTextoDetallado()/armarJugadaTexto() puedan armar el
+      // texto de esa jugada sin un `.caballo` (que esta jugada no tiene).
+      esCruce: linea.esCruce,
+      grupoCaballos: linea.grupoCaballos,
+      cruceGrupoA: linea.cruceGrupoA,
+      cruceGrupoB: linea.cruceGrupoB
     };
     if (comisionIncluida) carrera.comisionPropiaIncluida = comisionIncluida;
     if (linea.modalidad === 'pp') {
       carrera.caballoA = linea.caballoA;
       carrera.caballoB = linea.caballoB;
-    } else if (linea.tipo !== 'adelantada') {
+    } else if (linea.tipo !== 'adelantada' && linea.tipo !== 'tercios_adelantada') {
       carrera.caballo = linea.caballo;
     }
     hipMap.get(hipNombre).carreras.push(carrera);
@@ -1092,6 +1104,31 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
     [grupoId, desde, hasta]
   );
+  // "Jugadas entre Tercios Adelantadas" (04-10-2026, a pedido del
+  // usuario, caso real "Rambo": "LA JUGADA QUE NO SALE LA CARGA POR
+  // JUGADAS ADELANTDAS ENTRE TERCIOS" — Balance General/Cierre Final
+  // (esta función) nunca había leído hipismo_tercios_adelantadas_jugadas:
+  // el único lugar donde esa plata se veía era, UNA SOLA VEZ y sin
+  // persistir, en la respuesta de POST /planos justo al guardar el plano
+  // que la resolvió (mezclarTerciosAdelantadasEnBalance en
+  // routes/hipismo.js) — recargar Balance General después (GET
+  // /cierre-final, esta misma función) perdía esa plata por completo.
+  // A diferencia de Tablas Fijas/Marcas, acá NO hace falta ninguna
+  // cuenta "espejo": jugador y banquero ya son 2 clientes reales que
+  // suman 0 entre ellos solos (menos la comisión del grupo) — mismo
+  // criterio EXACTO, mismo nombre de ítem ("% TERCIOS ADELANTADAS"), que
+  // ya usa mezclarTerciosAdelantadasEnBalance para el Balance General
+  // efímero de "Cargar Planos", para que el ítem se vea IGUAL recién
+  // guardado el plano que al recargar la pantalla más tarde.
+  const rTerciosAdelantadas = await db.query(
+    `SELECT j.jugador_nombre, j.banquero_nombre, j.resultado_jugador, j.resultado_banquero, j.comision_grupo,
+            p.fecha, p.hipodromo_nombre, j.carrera_numero
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto', 'sin_decidir')`,
+    [grupoId, desde, hasta]
+  );
+
   // "Cargar Winners" (26-09-2026, ver la nota grande junto a POST /winners):
   // cada fila ya es el resultado NETO de ese cliente, así que se suma
   // exactamente igual que un ticket ya resuelto — sin comisión ni "monto
@@ -1178,6 +1215,22 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     if (Array.isArray(j.banqueadores)) {
       j.banqueadores.forEach(b => acumular(b.nombre, b.monto));
     }
+  });
+
+  // Jugadas entre Tercios Adelantadas (04-10-2026, ver la nota grande de
+  // arriba, junto a rTerciosAdelantadas) — jugador y banquero suman
+  // exactamente igual que un ticket de Tercios ya resuelto (ambos reales,
+  // ambos definitivos apenas sale de 'pendiente'); la comisión del grupo
+  // se acumula aparte, como su PROPIO ítem "% TERCIOS ADELANTADAS" (NO
+  // dentro de comisionAdelantadasSemana — ese nombre quedó reservado para
+  // Tablas Fijas/Marcas desde el 02-10-2026, ver la nota grande de arriba
+  // — mismo criterio que mezclarTerciosAdelantadasEnBalance en
+  // routes/hipismo.js, para que este ítem se vea igual recién guardado el
+  // plano que al recargar Balance General/Cierre Final más tarde).
+  rTerciosAdelantadas.rows.forEach(j => {
+    acumular(j.jugador_nombre, j.resultado_jugador);
+    acumular(j.banquero_nombre, j.resultado_banquero);
+    if (j.comision_grupo) acumular('% TERCIOS ADELANTADAS', j.comision_grupo);
   });
 
   // "% DEVUELTO" (23-09-2026, undécima ronda, a pedido del usuario: "un

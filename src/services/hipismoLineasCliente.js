@@ -254,6 +254,63 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     }
   });
 
+  // "Jugadas entre Tercios Adelantadas" (04-10-2026, a pedido del
+  // usuario: "NO CARGA NI LAS JUGADAS ADEALNTADAS ENTRE TERCIO NI LAS
+  // TABLAS O MARCAS" -> "LA JUGADA QUE NO SALE LA CARGA POR JUGADAS
+  // ADELANTDAS ENTRE TERCIOS" — este archivo nunca había leído
+  // hipismo_tercios_adelantadas_jugadas: un cliente que jugó o banqueó
+  // una de estas jugadas no la veía reflejada en su propio link ni en
+  // "Detallado por Cliente", aunque el saldo ya se mostrara una vez (y
+  // de forma efímera, sin persistir) en el Balance General de "Cargar
+  // Planos" justo al guardar el plano que la resolvió (ver
+  // mezclarTerciosAdelantadasEnBalance en routes/hipismo.js). A
+  // diferencia de Tablas Fijas/Marcas, acá jugador Y banquero son 2
+  // nombres de texto planos en la misma fila (más parecido a
+  // hipismo_tickets que a hipismo_adelantadas_jugadas) — no hace falta
+  // revisar un jsonb de banqueadores aparte, cada fila ya le pertenece a
+  // los 2. 'sin_decidir' (jugada resuelta pero neta en 0 para los 2
+  // lados) entra igual que en Tablas Fijas/Marcas, con resultado 0 de
+  // los 2 lados — no afecta el saldo pero sí cuenta como "jugada" ya
+  // decidida. No existe estado 'falta_banqueo' acá (jugador Y banquero
+  // ya vienen puestos desde el texto original, nunca falta uno de los 2
+  // para que la jugada se resuelva).
+  const rTerciosAdelantadas = await db.query(
+    `SELECT j.jugador_nombre, j.banquero_nombre, j.carrera_numero, j.es_cruce,
+            j.grupo_caballos, j.cruce_grupo_a, j.cruce_grupo_b, j.modalidad, j.monto,
+            j.resultado_jugador, j.resultado_banquero, j.comision_grupo, j.pizarra_usada,
+            p.fecha, p.hipodromo_nombre, h.pais
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+       LEFT JOIN hipismo_hipodromos h ON h.id = p.hipodromo_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $3 AND $4
+        AND j.estado IN ('resuelto', 'sin_decidir')
+        AND (j.jugador_nombre = $2 OR j.banquero_nombre = $2)
+      ORDER BY p.fecha DESC, j.creado_en ASC`,
+    [grupoId, nombreJugador, desde, hasta]
+  );
+  const lineasTerciosAdelantadas = rTerciosAdelantadas.rows.map(row => {
+    const esJugador = row.jugador_nombre === nombreJugador;
+    const rol = esJugador ? 'jugador' : 'banquero';
+    const resultado = Number(esJugador ? row.resultado_jugador : row.resultado_banquero);
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+    return {
+      tipo: 'tercios_adelantada',
+      fecha: fechaIso,
+      hipodromoNombre: row.hipodromo_nombre,
+      pais: row.pais || 'VE',
+      carreraNumero: row.carrera_numero,
+      pizarra: row.pizarra_usada,
+      esCruce: row.es_cruce,
+      grupoCaballos: row.grupo_caballos,
+      cruceGrupoA: row.cruce_grupo_a,
+      cruceGrupoB: row.cruce_grupo_b,
+      modalidad: row.modalidad,
+      monto: Number(row.monto),
+      rol,
+      resultado
+    };
+  });
+
   // "Cargar Winners" (26-09-2026, a pedido del usuario: "es como si
   // fuera una jugada mas... eso mueve su balance y su pozo") — cada fila
   // ya es el resultado NETO de este cliente (monto con signo), sin
@@ -282,7 +339,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
     };
   });
 
-  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas, ...lineasWinners, ...lineasCruce];
+  return [...lineasTercios, ...lineasRemate, ...lineasAdelantadas, ...lineasTerciosAdelantadas, ...lineasWinners, ...lineasCruce];
 }
 
 // Mismo texto en primera persona que ya usan hipismo-mockup.html y
@@ -323,6 +380,18 @@ function textoJugadaHipismo(linea) {
       ? `Tabla fija (${linea.numeroEjemplar})`
       : `Marca (${linea.numero1}x${linea.numero2})`;
     return linea.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
+  }
+  // Jugadas entre Tercios Adelantadas (04-10-2026, ver la nota grande de
+  // obtenerLineasHipismoCliente arriba): mismo texto EXACTO que ya arma
+  // textoJugadaTerciosAdelantada() en hipismo-mockup.html para el
+  // operador, con el prefijo 🎯 (mismo emoji del nav de esa pestaña) en
+  // vez del 🕐 de Tablas Fijas/Marcas, para no confundir las 2.
+  if (linea.tipo === 'tercios_adelantada') {
+    const modTxt = linea.modalidad ? ` ${String(linea.modalidad).toUpperCase()}` : '';
+    const detalle = linea.esCruce
+      ? `${(linea.cruceGrupoA || []).join('y')} x ${(linea.cruceGrupoB || []).join('y')}${modTxt}`
+      : `${(linea.grupoCaballos || []).join('y')}${modTxt}`;
+    return linea.rol === 'banquero' ? `🎯 Adelantada entre tercios — Dio ${detalle}` : `🎯 Adelantada entre tercios — Jugó ${detalle}`;
   }
   const verbo = linea.rol === 'banquero' ? 'Dio' : 'Jugó';
   if ((linea.modalidad || '').toLowerCase() === 'pp') {

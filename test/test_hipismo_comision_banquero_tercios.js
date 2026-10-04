@@ -129,6 +129,7 @@ function ejecutarQuery(text, params) {
   // siempre debe dar vacio.
 
   if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.jugador_nombre, j\.banquero_nombre/i.test(sql)) return { rows: [] };
 
   throw new Error('La base de datos falsa de esta prueba (comision-banquero-tercios) no sabe responder: ' + sql);
 }

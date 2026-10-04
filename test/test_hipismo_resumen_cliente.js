@@ -89,6 +89,7 @@ function ejecutarQuery(text, params) {
       }))
     };
   }
+  if (/^SELECT j\.jugador_nombre, j\.banquero_nombre/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.tipo, j\.cliente_nombre, j\.carrera_numero, j\.cantidad_tf, j\.numero_ejemplar/i.test(sql)) {
     const [grupoId, nombre, desde, hasta] = params;
     const estadosValidos = ['resuelto', 'falta_banqueo', 'sin_decidir'];

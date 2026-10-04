@@ -50,6 +50,7 @@ function ejecutarQuery(text, params) {
   // de pendientes (calcularResolucionTerciosAdelantadas en routes/hipismo.js)
   // siempre debe dar vacio.
   if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.jugador_nombre, j\.banquero_nombre/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (detalle-cliente ruta) no sabe responder: ' + sql);
 }
 

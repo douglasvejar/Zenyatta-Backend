@@ -9986,6 +9986,19 @@ function armarJugadaTextoDetallado(c) {
     const detalle = c.subtipo === 'tf' ? `Tabla fija ${gualdrapaHTML(c.numeroEjemplar)}` : `Marca ${gualdrapaHTML(c.numero1)}x${gualdrapaHTML(c.numero2)}`;
     return c.rol === 'banquero' ? `🕐 Adelantada — Banqueó ${detalle}` : `🕐 Adelantada — ${detalle}`;
   }
+  // Jugadas entre Tercios Adelantadas (04-10-2026, caso real "Rambo": "LA
+  // JUGADA QUE NO SALE LA CARGA POR JUGADAS ADELANTDAS ENTRE TERCIOS") —
+  // mismo texto EXACTO que armarJugadaTexto() en hipismo-cliente-portal.html
+  // (ver la nota grande de allá) y que textoJugadaTerciosAdelantada() (la
+  // pestaña de carga), con el mismo prefijo 🎯 para distinguirla de
+  // Tablas Fijas/Marcas (🕐).
+  if (c.tipo === 'tercios_adelantada') {
+    const modTxt = c.modalidad ? ` ${String(c.modalidad).toUpperCase()}` : '';
+    const detalle = c.esCruce
+      ? `${(c.cruceGrupoA || []).map(gualdrapaHTML).join('y')} x ${(c.cruceGrupoB || []).map(gualdrapaHTML).join('y')}${modTxt}`
+      : `${(c.grupoCaballos || []).map(gualdrapaHTML).join('y')}${modTxt}`;
+    return c.rol === 'banquero' ? `🎯 Adelantada entre tercios — Dio ${detalle}` : `🎯 Adelantada entre tercios — Jugó ${detalle}`;
+  }
   const verbo = c.rol === 'banquero' ? 'Dio' : 'Jugó';
   if ((c.modalidad || '').toLowerCase() === 'pp') {
     return `${verbo} ${gualdrapaHTML(c.caballoA)}x${gualdrapaHTML(c.caballoB)} PP`;
