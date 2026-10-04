@@ -1150,11 +1150,29 @@ function netearJugadorBanqueroTercios(tickets) {
     if (!porCarrera.has(clave)) porCarrera.set(clave, new Map());
     const porNombre = porCarrera.get(clave);
     if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
-    porNombre.get(t.clienteNombre).decididoJugador += montoDecididoExacto(t.resultadoJugador, t.sinComision);
-    porNombre.get(t.clienteNombre).sumaJugador += rj;
+    // sinComision (04-10-2026, a pedido EXPLÍCITO del usuario -- ver la
+    // nota grande de montoBaseComisionExacto en hipismoAdelantadasCalc.js):
+    // un ticket "a premio SIN comisión" no aporta NADA a la base de %
+    // devuelto, ni ganancia ni pérdida -- se deja afuera del todo (ni
+    // decididoJugador/decididoBanquero NI sumaJugador/sumaBanquero, este
+    // último para que tampoco pueda contaminar la detección de "ganó en
+    // los 2 lados" un poco más abajo). El Map.set de arriba SÍ se deja
+    // incondicional a propósito: aunque TODOS los tickets de este nombre
+    // en esta carrera sean sinComision, debe quedar una entrada con todo
+    // en 0 (neto:0, dual:false) -- así cualquier llamador que haga
+    // `netoPorCarrera.get(clave)?.get(nombre)` la encuentra definida y usa
+    // ese 0 directo, en vez de caer en un fallback que vuelva a calcular
+    // la base SIN excluir sinComision (ver esos fallbacks en
+    // hipismoResumenCliente.js, ya protegidos aparte por la misma razón).
+    if (!t.sinComision) {
+      porNombre.get(t.clienteNombre).decididoJugador += montoDecididoExacto(t.resultadoJugador, t.sinComision);
+      porNombre.get(t.clienteNombre).sumaJugador += rj;
+    }
     if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
-    porNombre.get(t.banqueroNombre).decididoBanquero += montoDecididoExacto(t.resultadoBanquero, t.sinComision);
-    porNombre.get(t.banqueroNombre).sumaBanquero += rb;
+    if (!t.sinComision) {
+      porNombre.get(t.banqueroNombre).decididoBanquero += montoDecididoExacto(t.resultadoBanquero, t.sinComision);
+      porNombre.get(t.banqueroNombre).sumaBanquero += rb;
+    }
   });
   const resultado = new Map();
   porCarrera.forEach((porNombre, clave) => {

@@ -158,6 +158,48 @@ function montoDecidido(resultadoMostrado, sinComision) {
   return round2(montoDecididoExacto(resultadoMostrado, sinComision));
 }
 
+// montoBaseComisionExacto(resultadoMostrado, sinComision) (04-10-2026, a
+// pedido EXPLÍCITO del usuario: "estas jugadas a premio no dejan
+// comision, ni % de devolucion para los clientes... ya que como bien dice
+// la jugada son sin %.... solo se deciden las jugadas de los clientes
+// netas pero ni generan comsion para el grupo ni % de devolcion para
+// ellos mismo ni para sus avalados" — tras agregar la lista pegable de
+// "Valores a premio SIN comisión" en Cargar Planos).
+//
+// La comisión del GRUPO ya excluía bien estas jugadas desde el 24-09-2026
+// (ver comisionDeLado en routes/hipismo.js y los chequeos `if
+// (t.sinComision) return;`/`if (t.sinComision) {...}` en hipismoCalc.js) —
+// lo que faltaba era el % DEVUELTO (propio y de aval): TODO lugar que
+// usaba montoDecididoExacto(resultado, <bandera REAL del ticket>) como
+// BASE de un % (routes/hipismo.js: sumarBaseCarrera, entradasApostadasDeTickets,
+// acumularSaldo, acumularDevueltoDia, el detalle de /comisiones-devueltas;
+// hipismoResumenCliente.js: montoBaseParaPct, el toggle "incluir % en sus
+// jugadas", acumularDevuelto de Cierre Final; hipismoCalc.js:
+// netearJugadorBanqueroTercios) seguía usando el monto DECIDIDO real de
+// la línea como base — sinComision solo evitaba dividir entre 0.95 (no
+// inventar una comisión que nunca se cobró), pero el monto seguía
+// contando como "volumen" para calcular el % propio/de aval. Esta función
+// es exactamente montoDecididoExacto(), salvo que cuando sinComision es
+// true devuelve 0 en vez del monto — una jugada "a premio" marcada sin
+// comisión no debe aportar NADA a ninguna base de %, ni como ganancia ni
+// como pérdida, para NINGÚN cálculo de comisión o % devuelto (propio o de
+// aval, de la cuenta misma o de cualquiera que la avale).
+//
+// OJO: esto es SOLO para los llamadores que pasan la bandera REAL
+// `t.sin_comision`/`linea.sinComision` del ticket (el toggle "a premio"
+// de Tercios). Las líneas de Jugadas Adelantadas llaman a
+// montoDecididoExacto con `sinComision` HARDCODEADO a `true` (un
+// significado totalmente distinto: "este valor ya viene neto, sin ningún
+// 5% embebido que deshacer" — nunca el toggle "a premio" de Tercios, que
+// ni siquiera existe en Jugadas Adelantadas) — esos llamadores NO deben
+// cambiar a esta función, o su base de % devuelto se volvería $0 SIEMPRE
+// por error. Ver la nota grande de montoDecididoExacto más arriba para el
+// detalle completo de esta doble bandera.
+function montoBaseComisionExacto(resultadoMostrado, sinComision) {
+  if (sinComision) return 0;
+  return montoDecididoExacto(resultadoMostrado, false);
+}
+
 // Mismo criterio de parseo de montos que ya usa hipismoCalc.js/
 // hipismoRemateCalc.js en el resto del módulo ("." = separador de miles,
 // "," = decimal) — en la práctica los planos de ejemplo no traen
@@ -390,5 +432,6 @@ module.exports = {
   formatNombre,
   round2,
   montoDecidido,
-  montoDecididoExacto
+  montoDecididoExacto,
+  montoBaseComisionExacto
 };

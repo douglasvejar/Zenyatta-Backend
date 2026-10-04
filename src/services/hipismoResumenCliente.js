@@ -21,7 +21,7 @@
 const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
-const { round2, montoDecididoExacto } = require('./hipismoAdelantadasCalc');
+const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -116,7 +116,15 @@ function montoBaseParaPct(linea) {
   if (linea.tipo === 'adelantada') {
     return montoDecididoExacto(linea.resultado, true);
   }
-  return montoDecididoExacto(linea.resultado, linea.sinComision);
+  // 04-10-2026, a pedido explícito del usuario ("estas jugadas a premio
+  // no dejan comision, ni % de devolucion... ni para el grupo ni para
+  // ellos mismo ni para sus avalados") -- ver la nota grande de
+  // montoBaseComisionExacto en hipismoAdelantadasCalc.js: esta rama es
+  // SOLO Tercios (linea.tipo ausente), así que linea.sinComision acá
+  // SIEMPRE es la bandera REAL del ticket ("a premio"), nunca el `true`
+  // hardcodeado de Adelantadas de arriba -- cambiar a la versión que
+  // devuelve 0 es seguro acá.
+  return montoBaseComisionExacto(linea.resultado, linea.sinComision);
 }
 
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
@@ -571,7 +579,12 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   if (pctPropioIncluido) {
     const porCarreraPropia = new Map();
     lineasHipismo.forEach(linea => {
-      if (linea.tipo || !linea.rol || Number(linea.resultado) === 0) return;
+      // 04-10-2026: + linea.sinComision -- las jugadas "a premio" SIN
+      // comisión no generan % propio incluido tampoco (mismo pedido
+      // explícito del usuario, ver la nota grande de montoBaseComisionExacto
+      // en hipismoAdelantadasCalc.js). Antes esto solo excluía Adelantadas
+      // (`linea.tipo`), sin rol, o resultado 0.
+      if (linea.tipo || !linea.rol || Number(linea.resultado) === 0 || linea.sinComision) return;
       const clave = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
       if (!porCarreraPropia.has(clave)) porCarreraPropia.set(clave, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
       const acc = porCarreraPropia.get(clave);
@@ -1309,14 +1322,20 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
       const infoBanquero = netoPorCarreraCierre.get(claveCarrera)?.get(t.banquero_nombre);
       // Lado JUGADOR — se omite si este cliente es dual en esta carrera (su
       // % devuelto sale más abajo, sobre el neto, una sola vez).
+      // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto -- una
+      // jugada "a premio" SIN comisión (t.sin_comision, bandera REAL del
+      // ticket, NUNCA el `true` hardcodeado de Adelantadas) no debe generar
+      // % devuelto, ni ganando ni perdiendo (pedido explícito del usuario,
+      // ver la nota grande de montoBaseComisionExacto en
+      // hipismoAdelantadasCalc.js).
       if (!(infoJugador && infoJugador.dual)) {
-        acumularDevuelto(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
+        acumularDevuelto(t.cliente_nombre, montoBaseComisionExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
       }
       // Lado BANQUERO (29-09-2026, ver la nota grande de nombresJugadores
       // más arriba): el lado banquero de Tercios también genera % devuelto
       // — mismo criterio, se omite si es dual.
       if (!(infoBanquero && infoBanquero.dual)) {
-        acumularDevuelto(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
+        acumularDevuelto(t.banquero_nombre, montoBaseComisionExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
       }
       // % devuelto sobre el NETO — una sola vez por (carrera, cliente) dual,
       // sin importar cuántos tickets lo disparen. netoExacto (02-10-2026,

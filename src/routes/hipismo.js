@@ -84,7 +84,7 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2,
-  montoDecidido, montoDecididoExacto
+  montoDecidido, montoDecididoExacto, montoBaseComisionExacto
 } = require('../services/hipismoAdelantadasCalc');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
@@ -1711,8 +1711,12 @@ async function calcularDevueltoPorPlanoTercios(req, planoIds) {
     const claveCarrera = `${t.plano_id}::::`;
     const infoJugador = netoPorPlanoId.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorPlanoId.get(claveCarrera)?.get(t.banquero_nombre);
-    if (!(infoJugador && infoJugador.dual)) sumarBaseCarrera(t.plano_id, t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision));
-    if (!(infoBanquero && infoBanquero.dual)) sumarBaseCarrera(t.plano_id, t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision));
+    // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto -- "a
+    // premio" SIN comisión (t.sin_comision, bandera REAL del ticket) no
+    // genera % devuelto (ver la nota grande de montoBaseComisionExacto en
+    // hipismoAdelantadasCalc.js).
+    if (!(infoJugador && infoJugador.dual)) sumarBaseCarrera(t.plano_id, t.cliente_nombre, montoBaseComisionExacto(t.resultado_jugador, t.sin_comision));
+    if (!(infoBanquero && infoBanquero.dual)) sumarBaseCarrera(t.plano_id, t.banquero_nombre, montoBaseComisionExacto(t.resultado_banquero, t.sin_comision));
     // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
     // montoDecididoExacto en hipismoAdelantadasCalc.js).
     [t.cliente_nombre, t.banquero_nombre].forEach(nombre => {
@@ -1762,8 +1766,11 @@ function entradasApostadasDeTickets(tickets, resueltas) {
     const entradas = [];
     const infoJugador = netoDeEstaCarrera.get(t.clienteNombre);
     const infoBanquero = netoDeEstaCarrera.get(t.banqueroNombre);
-    if (!(infoJugador && infoJugador.dual)) entradas.push({ nombre: t.clienteNombre, monto: montoDecididoExacto(t.resultadoJugador, t.sinComision) });
-    if (!(infoBanquero && infoBanquero.dual)) entradas.push({ nombre: t.banqueroNombre, monto: montoDecididoExacto(t.resultadoBanquero, t.sinComision) });
+    // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto -- misma
+    // razón que en sumarBaseCarrera más arriba (t.sinComision acá es
+    // SIEMPRE la bandera REAL del ticket, esto es puro Tercios).
+    if (!(infoJugador && infoJugador.dual)) entradas.push({ nombre: t.clienteNombre, monto: montoBaseComisionExacto(t.resultadoJugador, t.sinComision) });
+    if (!(infoBanquero && infoBanquero.dual)) entradas.push({ nombre: t.banqueroNombre, monto: montoBaseComisionExacto(t.resultadoBanquero, t.sinComision) });
     // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
     // montoDecididoExacto en hipismoAdelantadasCalc.js) — agregarPorcentajeDevuelto()
     // (hipismoComisionPropia.js) ya redondea una sola vez.
@@ -2769,8 +2776,15 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         // grande EXACTA en hipismoAdelantadasCalc.js) es lo que esos
         // reportes deben usar para el % devuelto — `montoDecidido` (ya
         // redondeado) queda solo para mostrar.
+        // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto en este
+        // campo (el que SÍ consumen los reportes de % devuelto, ver
+        // devueltoExacto más abajo) -- una jugada "a premio" SIN comisión
+        // (t.sin_comision, bandera REAL del ticket) no debe generar %
+        // devuelto (pedido explícito del usuario, ver la nota grande de
+        // montoBaseComisionExacto en hipismoAdelantadasCalc.js). `montoDecidido`
+        // se deja igual, es solo para mostrar "lo decidido" en el detalle.
         montoDecidido: montoDecidido(t.resultado_jugador, t.sin_comision),
-        montoDecididoExacto: montoDecididoExacto(t.resultado_jugador, t.sin_comision),
+        montoDecididoExacto: montoBaseComisionExacto(t.resultado_jugador, t.sin_comision),
         decidida: !sinDecidir,
         gano: sinDecidir ? null : rj > 0,
         rol: 'jugador'
@@ -2786,8 +2800,9 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
         id: t.id, tabla: 'hipismo_tickets', fecha: fechaFila,
         cliente: t.banquero_nombre, hipodromoNombre: t.hipodromo_nombre, carreraNumero: t.carrera_numero,
         tipo: 'tercios', detalleTexto: `${t.modalidad} (${t.caballo}) — banqueo`, monto: Number(t.monto),
+        // 04-10-2026: misma razón que el lado jugador más arriba.
         montoDecidido: montoDecidido(t.resultado_banquero, t.sin_comision),
-        montoDecididoExacto: montoDecididoExacto(t.resultado_banquero, t.sin_comision),
+        montoDecididoExacto: montoBaseComisionExacto(t.resultado_banquero, t.sin_comision),
         decidida: !sinDecidir,
         gano: sinDecidir ? null : rb > 0,
         rol: 'banquero'
@@ -3598,12 +3613,16 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
     const claveCarrera = `${fechaFila}::${t.hipodromo_nombre}::${t.carrera_numero}`;
     const infoJugador = netoPorCarreraSaldo.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorCarreraSaldo.get(claveCarrera)?.get(t.banquero_nombre);
+    // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto -- "a
+    // premio" SIN comisión (t.sin_comision, bandera REAL del ticket) no
+    // genera % devuelto (ver la nota grande de montoBaseComisionExacto en
+    // hipismoAdelantadasCalc.js).
     if (!(infoJugador && infoJugador.dual)) {
-      acumularSaldo(t.cliente_nombre, montoDecididoExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
+      acumularSaldo(t.cliente_nombre, montoBaseComisionExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
     }
     // 29-09-2026 — lado BANQUERO de Tercios (ver la nota grande de arriba).
     if (!(infoBanquero && infoBanquero.dual)) {
-      acumularSaldo(t.banquero_nombre, montoDecididoExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
+      acumularSaldo(t.banquero_nombre, montoBaseComisionExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
     }
     // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
     // montoDecididoExacto en hipismoAdelantadasCalc.js) — acumularSaldo()
@@ -3887,11 +3906,15 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     const claveCarrera = `${fechaIso}::${t.hipodromo_nombre}::${t.carrera_numero}`;
     const infoJugador = netoPorCarreraDia.get(claveCarrera)?.get(t.cliente_nombre);
     const infoBanquero = netoPorCarreraDia.get(claveCarrera)?.get(t.banquero_nombre);
+    // 04-10-2026: montoDecididoExacto -> montoBaseComisionExacto -- "a
+    // premio" SIN comisión (t.sin_comision, bandera REAL del ticket) no
+    // genera % devuelto (ver la nota grande de montoBaseComisionExacto en
+    // hipismoAdelantadasCalc.js).
     if (!(infoJugador && infoJugador.dual)) {
-      acumularDevueltoDia(t.cliente_nombre, t.fecha, montoDecididoExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
+      acumularDevueltoDia(t.cliente_nombre, t.fecha, montoBaseComisionExacto(t.resultado_jugador, t.sin_comision), claveCarrera);
     }
     if (!(infoBanquero && infoBanquero.dual)) {
-      acumularDevueltoDia(t.banquero_nombre, t.fecha, montoDecididoExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
+      acumularDevueltoDia(t.banquero_nombre, t.fecha, montoBaseComisionExacto(t.resultado_banquero, t.sin_comision), claveCarrera);
     }
     // netoExacto, no `neto` (02-10-2026, ver la nota grande EXACTA de
     // montoDecididoExacto en hipismoAdelantadasCalc.js) — acumularDevueltoDia()
