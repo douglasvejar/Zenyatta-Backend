@@ -1928,3 +1928,51 @@ alter table hipismo_remates alter column numero_ganador drop not null;
 -- comisión, que acá no existe) y que no debe ofrecerse como "pendiente
 -- de pizarra" en la pantalla "Pizarras" (ver GET /pizarras más arriba).
 alter table hipismo_remates add column if not exists modo text not null default 'pool';
+
+-- =================================================================
+-- "CARGA MASIVA ESPECIAL" (05-10-2026, a pedido del usuario: una pestaña
+-- debajo de Cargar Planos donde se pegan líneas "CLIENTE +monto" /
+-- "CLIENTE -monto" con una fecha, un número de carrera y un "código
+-- especial" (ej. DEPORTE) que hace de contrapartida — la suma de TODAS
+-- las líneas, incluido el código especial, debe dar 0). Cada línea es un
+-- movimiento de saldo directo (como un Winner, pero sin hipódromo ni
+-- caballo): Balance General, Cierre Final, Semana por Días y el link de
+-- cada cliente la suman tal cual.
+--   hipismo_codigos_especiales: los códigos que el operador ha creado
+--     ("Crear nuevo código"); cada uno también se registra como ficha de
+--     cliente (jugadores) para que aparezca en los balances.
+--   hipismo_cargas_especiales: la cabecera de cada carga (fecha, carrera,
+--     código usado).
+--   hipismo_cargas_especiales_lineas: una fila por cliente con su monto
+--     con signo (positivo = gana, negativo = pierde).
+-- Empiezan vacías: no afectan ningún dato ya guardado.
+-- =================================================================
+create table if not exists hipismo_codigos_especiales (
+  id         uuid primary key default gen_random_uuid(),
+  grupo_id   uuid not null references grupos(id) on delete cascade,
+  nombre     text not null,
+  creado_en  timestamptz not null default now(),
+  unique (grupo_id, nombre)
+);
+create table if not exists hipismo_cargas_especiales (
+  id             uuid primary key default gen_random_uuid(),
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  fecha          date not null,
+  carrera        text,
+  codigo_nombre  text not null,
+  creado_en      timestamptz not null default now()
+);
+create index if not exists idx_hipismo_cargas_especiales_grupo_fecha on hipismo_cargas_especiales(grupo_id, fecha);
+create table if not exists hipismo_cargas_especiales_lineas (
+  id              uuid primary key default gen_random_uuid(),
+  carga_id        uuid not null references hipismo_cargas_especiales(id) on delete cascade,
+  grupo_id        uuid not null references grupos(id) on delete cascade,
+  cliente_nombre  text not null,
+  monto           numeric(12,2) not null,
+  orden           integer not null default 0
+);
+create index if not exists idx_hipismo_cargas_especiales_lineas_carga on hipismo_cargas_especiales_lineas(carga_id);
+create index if not exists idx_hipismo_cargas_especiales_lineas_grupo_cliente on hipismo_cargas_especiales_lineas(grupo_id, cliente_nombre);
+alter table hipismo_codigos_especiales enable row level security;
+alter table hipismo_cargas_especiales enable row level security;
+alter table hipismo_cargas_especiales_lineas enable row level security;

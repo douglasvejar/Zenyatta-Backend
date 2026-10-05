@@ -154,6 +154,7 @@ function ejecutarQuery(text, params) {
   }
   if (/^INSERT INTO hipismo_tickets/i.test(sql)) return { rows: [] };
 
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (tercios-adelantadas-rutas) no sabe responder: ' + sql);
 }
 

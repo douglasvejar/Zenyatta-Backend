@@ -131,6 +131,7 @@ function ejecutarQuery(text, params) {
   if (/^UPDATE whatsapp_dia_estado SET ultima_verificacion_en = now\(\)/i.test(sql)) return { rows: [] };
   if (/^UPDATE whatsapp_dia_estado SET ultimo_envio_resumen_en = now\(\), ultimo_hash_resumen = \$3/i.test(sql)) return { rows: [] };
 
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

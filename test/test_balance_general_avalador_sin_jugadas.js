@@ -59,6 +59,7 @@ function ejecutarQuery(text, params) {
     const filas = TABLAS.transferencias.filter(t => t.grupo_id === grupoId && enRango(t, desde, hasta));
     return { rows: filas.map(t => ({ cliente_origen: t.cliente_origen, cliente_destino: t.cliente_destino, monto: t.monto })) };
   }
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

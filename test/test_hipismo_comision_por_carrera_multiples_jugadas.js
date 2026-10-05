@@ -84,6 +84,7 @@ function ejecutarQuery(text, params) {
   if (/^SELECT w\.caballo, w\.monto, w\.fecha, w\.hipodromo_nombre, w\.carrera_numero, h\.pais/i.test(sql)) return { rows: [] };
   if (/^SELECT id, fecha, cliente_nombre AS cliente, ticket_label AS ticket, detalle, arriesga, gana, estado, logros\s+FROM tickets_historial/i.test(sql)) return { rows: [] };
   if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (comision-por-carrera-multiples-jugadas) no sabe responder: ' + sql);
 }
 

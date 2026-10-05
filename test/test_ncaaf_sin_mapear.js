@@ -86,6 +86,7 @@ function ejecutarQuery(text) {
   if (/FROM polla_historial/i.test(sql)) return { rows: [] };
   if (/SELECT pata_texto, deporte_elegido FROM resoluciones_ambiguas/i.test(sql)) return { rows: [] };
   if (/^INSERT INTO alertas/i.test(sql)) return { rows: [{ id: 'alerta-' + Math.random().toString(36).slice(2) }] };
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

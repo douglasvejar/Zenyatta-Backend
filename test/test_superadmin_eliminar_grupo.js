@@ -37,6 +37,7 @@ function ejecutarQuery(text, params) {
     TABLAS.tickets_historial = TABLAS.tickets_historial.filter(t => t.grupo_id !== id);
     return { rows: [{ id: borrado.id, nombre: borrado.nombre }] };
   }
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

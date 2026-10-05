@@ -116,6 +116,7 @@ function ejecutarQuery(text, params) {
     return { rows: fila ? [{ confirmado_en: 'x' }] : [] };
   }
 
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 

@@ -100,6 +100,7 @@ const {
 const {
   parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto, montoBaseTerciosAdelantadaExacto
 } = require('../services/hipismoTerciosAdelantadasCalc');
+const { validarCargaEspecial, normalizarNombre: normalizarNombreCargaEspecial, obtenerCargasEspecialesRango } = require('../services/hipismoCargasEspeciales');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
 // obtenerAjustesComision (26-09-2026) — extraídas a su propio archivo
@@ -4117,6 +4118,157 @@ router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// =================================================================
+// "CARGA MASIVA ESPECIAL" (05-10-2026, a pedido del usuario — ver la nota
+// grande de services/hipismoCargasEspeciales.js y de sql/schema.sql):
+// pegar líneas "CLIENTE +monto" / "CLIENTE -monto" con fecha, carrera y un
+// "código especial" que hace de contrapartida (la suma debe dar 0).
+//   GET    /cargas-especiales               códigos (con saldo) + últimas cargas
+//   POST   /cargas-especiales/codigos       "Crear nuevo código"
+//   POST   /cargas-especiales/previsualizar valida y muestra el resumen
+//   POST   /cargas-especiales               aplica (guarda)
+//   PUT    /cargas-especiales/:id           reemplaza una carga (editar)
+//   DELETE /cargas-especiales/:id           elimina una carga
+// =================================================================
+async function leerCodigosEspeciales(grupoId) {
+  const rCodigos = await db.query(
+    'SELECT id, nombre FROM hipismo_codigos_especiales WHERE grupo_id = $1 ORDER BY nombre',
+    [grupoId]
+  );
+  const rSaldos = await db.query(
+    'SELECT cliente_nombre, COALESCE(SUM(monto), 0) AS total FROM hipismo_cargas_especiales_lineas WHERE grupo_id = $1 GROUP BY cliente_nombre',
+    [grupoId]
+  );
+  const saldos = new Map(rSaldos.rows.map(r => [r.cliente_nombre, round2(Number(r.total))]));
+  return rCodigos.rows.map(c => ({ id: c.id, nombre: c.nombre, saldo: saldos.get(c.nombre) || 0 }));
+}
+
+async function marcarClientesNuevos(grupoId, lineas, codigo) {
+  const nombres = Array.from(new Set(lineas.map(l => l.cliente).concat(codigo ? [codigo] : [])));
+  if (!nombres.length) return new Set();
+  const r = await db.query('SELECT nombre FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])', [grupoId, nombres]);
+  const existentes = new Set(r.rows.map(x => x.nombre));
+  return new Set(nombres.filter(n => !existentes.has(n)));
+}
+
+router.get('/cargas-especiales', asyncHandler(async (req, res) => {
+  const codigos = await leerCodigosEspeciales(req.grupoId);
+  const rCargas = await db.query(
+    `SELECT id, fecha, carrera, codigo_nombre, creado_en
+       FROM hipismo_cargas_especiales WHERE grupo_id = $1
+      ORDER BY fecha DESC, creado_en DESC LIMIT 50`,
+    [req.grupoId]
+  );
+  const ids = rCargas.rows.map(c => c.id);
+  const rLineas = ids.length
+    ? await db.query(
+        `SELECT carga_id, cliente_nombre, monto, orden FROM hipismo_cargas_especiales_lineas
+          WHERE grupo_id = $1 AND carga_id = ANY($2::uuid[]) ORDER BY orden ASC`,
+        [req.grupoId, ids]
+      )
+    : { rows: [] };
+  const porCarga = new Map();
+  rLineas.rows.forEach(l => {
+    if (!porCarga.has(l.carga_id)) porCarga.set(l.carga_id, []);
+    porCarga.get(l.carga_id).push({ cliente: l.cliente_nombre, monto: Number(l.monto) });
+  });
+  const cargas = rCargas.rows.map(c => {
+    const lineas = porCarga.get(c.id) || [];
+    return {
+      id: c.id, fecha: fechaComoISO(c.fecha), carrera: c.carrera || '', codigo: c.codigo_nombre, lineas,
+      ganan: round2(lineas.filter(l => l.monto > 0).reduce((t, l) => t + l.monto, 0)),
+      pierden: round2(lineas.filter(l => l.monto < 0).reduce((t, l) => t + l.monto, 0))
+    };
+  });
+  res.json({ codigos, cargas });
+}));
+
+router.post('/cargas-especiales/codigos', asyncHandler(async (req, res) => {
+  const nombre = normalizarNombreCargaEspecial(req.body && req.body.nombre);
+  if (!nombre) return res.status(400).json({ error: 'Escribe el nombre del código.' });
+  await db.query(
+    'INSERT INTO hipismo_codigos_especiales (grupo_id, nombre) VALUES ($1, $2) ON CONFLICT (grupo_id, nombre) DO NOTHING',
+    [req.grupoId, nombre]
+  );
+  // El código también es una ficha de cliente, para que aparezca en los balances.
+  await autoRegistrarJugadores(req.grupoId, [nombre], {});
+  res.status(201).json({ codigos: await leerCodigosEspeciales(req.grupoId), nombre });
+}));
+
+router.post('/cargas-especiales/previsualizar', asyncHandler(async (req, res) => {
+  const { texto, codigo, fecha } = req.body || {};
+  const v = validarCargaEspecial({ texto, codigo, fecha });
+  const nuevos = await marcarClientesNuevos(req.grupoId, v.lineas, normalizarNombreCargaEspecial(codigo));
+  res.json({
+    ok: v.ok, suma: v.suma, errores: v.errores, avisos: v.avisos.concat(
+      nuevos.size ? [`Clientes que todavía no existen y se crearán al aplicar: ${Array.from(nuevos).join(', ')}.`] : []
+    ),
+    resumen: v.resumen,
+    lineas: v.lineas.map(l => ({ cliente: l.cliente, monto: l.monto, nuevo: nuevos.has(l.cliente) }))
+  });
+}));
+
+// Valida el cuerpo, comprueba que el código exista y devuelve lo necesario
+// para guardar (o responde el error ya armado).
+async function prepararCargaEspecial(req, res) {
+  const { texto, codigo, fecha, carrera } = req.body || {};
+  const v = validarCargaEspecial({ texto, codigo, fecha });
+  if (!v.ok) { res.status(400).json({ error: v.errores[0], errores: v.errores }); return null; }
+  const codigoNorm = normalizarNombreCargaEspecial(codigo);
+  const rCodigo = await db.query('SELECT id FROM hipismo_codigos_especiales WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, codigoNorm]);
+  if (!rCodigo.rows.length) { res.status(400).json({ error: 'Ese código especial no existe. Créalo con "Crear nuevo código".' }); return null; }
+  // Una línea en 0 no mueve nada: no se guarda.
+  const lineas = v.lineas.filter(l => l.monto !== 0);
+  if (!lineas.length) { res.status(400).json({ error: 'Todas las líneas están en 0, no hay nada que cargar.' }); return null; }
+  return { lineas, codigoNorm, fecha, carrera: (carrera == null ? '' : String(carrera)).trim() || null };
+}
+
+async function guardarLineasCargaEspecial(client, req, cargaId, lineas) {
+  let orden = 0;
+  for (const l of lineas) {
+    await client.query(
+      'INSERT INTO hipismo_cargas_especiales_lineas (carga_id, grupo_id, cliente_nombre, monto, orden) VALUES ($1,$2,$3,$4,$5)',
+      [cargaId, req.grupoId, l.cliente, l.monto, orden++]
+    );
+  }
+}
+
+router.post('/cargas-especiales', asyncHandler(async (req, res) => {
+  const datos = await prepararCargaEspecial(req, res);
+  if (!datos) return;
+  const id = await db.transaccion(async (client) => {
+    const r = await client.query(
+      'INSERT INTO hipismo_cargas_especiales (grupo_id, fecha, carrera, codigo_nombre) VALUES ($1,$2,$3,$4) RETURNING id',
+      [req.grupoId, datos.fecha, datos.carrera, datos.codigoNorm]
+    );
+    await guardarLineasCargaEspecial(client, req, r.rows[0].id, datos.lineas);
+    return r.rows[0].id;
+  });
+  await autoRegistrarJugadores(req.grupoId, datos.lineas.map(l => l.cliente), {});
+  res.status(201).json({ ok: true, id, lineas: datos.lineas.length });
+}));
+
+router.put('/cargas-especiales/:id', asyncHandler(async (req, res) => {
+  const rExiste = await db.query('SELECT id FROM hipismo_cargas_especiales WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  if (!rExiste.rows.length) return res.status(404).json({ error: 'Esa carga no existe.' });
+  const datos = await prepararCargaEspecial(req, res);
+  if (!datos) return;
+  await db.transaccion(async (client) => {
+    await client.query('UPDATE hipismo_cargas_especiales SET fecha = $1, carrera = $2, codigo_nombre = $3 WHERE id = $4 AND grupo_id = $5',
+      [datos.fecha, datos.carrera, datos.codigoNorm, req.params.id, req.grupoId]);
+    await client.query('DELETE FROM hipismo_cargas_especiales_lineas WHERE carga_id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+    await guardarLineasCargaEspecial(client, req, req.params.id, datos.lineas);
+  });
+  await autoRegistrarJugadores(req.grupoId, datos.lineas.map(l => l.cliente), {});
+  res.json({ ok: true, id: req.params.id, lineas: datos.lineas.length });
+}));
+
+router.delete('/cargas-especiales/:id', asyncHandler(async (req, res) => {
+  const r = await db.query('DELETE FROM hipismo_cargas_especiales WHERE id = $1 AND grupo_id = $2 RETURNING id', [req.params.id, req.grupoId]);
+  if (!r.rows.length) return res.status(404).json({ error: 'Esa carga no existe.' });
+  res.json({ ok: true });
+}));
+
 // obtenerAjustesComision (suma neta de ajustes de traspaso de comisión
 // por cliente, en un rango de fechas — ver la nota grande de POST
 // /comisiones/traspaso más arriba) se movió a
@@ -5115,6 +5267,9 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     [req.grupoId, desde, hasta]
   );
   rAjustesComisionDia.rows.forEach(r => acumularDia(r.cliente_nombre, r.fecha, r.monto));
+  // CARGA MASIVA ESPECIAL (05-10-2026): cada línea es un movimiento de saldo
+  // directo, atribuido al día de su carga.
+  (await obtenerCargasEspecialesRango(req.grupoId, desde, hasta)).forEach(l => acumularDia(l.clienteNombre, l.fecha, l.monto));
 
   // "la tabla va mostrando los dias a medida que vayan cargando y
   // teniendo informacion... si estamos a jueves, no muestres viernes

@@ -23,6 +23,7 @@ const { leerHistorial } = require('./historial');
 const db = require('../db');
 const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
+const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -62,6 +63,7 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // "dias[].hipodromos", con tipo:'traspaso', SOLO puede aparecer en el
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
 const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos de Comisión';
+const NOMBRE_BLOQUE_CARGA_ESPECIAL = 'Carga Masiva Especial';
 // Mismo nombre de ítem que ya usaba GET /cierre-final en routes/hipismo.js
 // (NOMBRE_ITEM_REMATE) — ver la nota grande de construirCierreFinalHipismo
 // más abajo.
@@ -804,6 +806,28 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     totalSemana += monto;
     cantidadTraspasos += 1;
     if (fechaIso === hoyIso) totalHoy += monto;
+  });
+
+  // CARGA MASIVA ESPECIAL (05-10-2026): mismas líneas que suma Cierre Final
+  // (obtenerCargasEspecialesRango), mostradas como un pseudo-hipódromo
+  // "Carga Masiva Especial" con el mismo render que los Traspasos
+  // (`tipo: 'traspaso'`, una nota y el monto) — así el link/Detallado por
+  // Cliente siempre cuadran con la grilla.
+  const cargasEspecialesCliente = await obtenerCargasEspecialesRango(jugador.grupo_id, desde, hasta, jugador.nombre);
+  cargasEspecialesCliente.forEach(l => {
+    if (!porDia.has(l.fecha)) porDia.set(l.fecha, new Map());
+    const hipMap = porDia.get(l.fecha);
+    if (!hipMap.has(NOMBRE_BLOQUE_CARGA_ESPECIAL)) {
+      hipMap.set(NOMBRE_BLOQUE_CARGA_ESPECIAL, { nombre: NOMBRE_BLOQUE_CARGA_ESPECIAL, tipo: 'traspaso', carreras: [] });
+    }
+    hipMap.get(NOMBRE_BLOQUE_CARGA_ESPECIAL).carreras.push({
+      tipo: 'traspaso',
+      nota: (l.carrera ? `Carrera ${l.carrera} — ` : '') + `Carga especial ${l.codigoNombre}`,
+      resultado: l.monto
+    });
+    totalSemana += l.monto;
+    cantidadTraspasos += 1;
+    if (l.fecha === hoyIso) totalHoy += l.monto;
   });
 
   // % DEVUELTO COMO DESTINO DE OTRO CLIENTE EN UN CLIENTE NORMAL
@@ -1697,6 +1721,19 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     let c = clientes.find(x => x.nombre === nombre);
     if (!c) { c = { nombre, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(c); }
     c.saldo = round2(c.saldo + monto);
+  });
+
+  // CARGA MASIVA ESPECIAL (05-10-2026, ver la nota grande de
+  // services/hipismoCargasEspeciales.js): cada línea es un movimiento de
+  // saldo directo (positivo gana, negativo pierde) que se suma encima, igual
+  // que un traspaso; la suma de cada carga es 0 por construcción, así que los
+  // totales siguen cuadrando. Si el cliente no tenía nada esta semana, se
+  // agrega como una fila nueva.
+  const cargasEspeciales = await obtenerCargasEspecialesRango(grupoId, desde, hasta);
+  cargasEspeciales.forEach(l => {
+    let c = clientes.find(x => x.nombre === l.clienteNombre);
+    if (!c) { c = { nombre: l.clienteNombre, jugadas: 0, gano: 0, perdio: 0, saldo: 0 }; clientes.push(c); }
+    c.saldo = round2(c.saldo + l.monto);
   });
 
   // ÍTEM "REMATE" (26-09-2026, a pedido del usuario: "esos 2000 negativos

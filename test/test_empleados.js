@@ -145,6 +145,7 @@ function ejecutarQueryAuth(text, params) {
     };
   }
   if (/^UPDATE empleados SET ultimo_login_en/i.test(sql)) return { rows: [] };
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (auth) no sabe responder: ' + sql);
 }
 const fakePoolAuth = function () {

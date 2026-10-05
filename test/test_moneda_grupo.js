@@ -73,6 +73,7 @@ function ejecutarQueryJugadores(text, params) {
     TABLAS_J.jugadores.push(fila);
     return { rows: [fila] };
   }
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
 const fakePoolJugadores = function () {
