@@ -175,6 +175,32 @@ const fecha = iso => new Date(iso + 'T00:00:00Z');
   check(/function calSemElegir/.test(html) && /function guardarRangoSemana/.test(html) && /body: JSON\.stringify\(\{ desde, hasta \}\)/.test(html), '14b) el calendario elige Desde/Hasta y los manda al servidor');
   check(/if \(cfg\.hasta\)/.test(html), '14c) el cálculo de la semana de la pantalla también respeta el "Hasta" personalizado');
 
+
+  // ---------- 7) Cambiar la semana NO deja jugadas viejas afuera ----------
+  // Las jugadas se guardan con su fecha (no con una semana): todos los
+  // reportes filtran por fecha dentro del rango de la semana actual, así que
+  // al cambiar el rango, las jugadas ya cargadas en esos días entran solas.
+  const jugadas = ['2026-09-29', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-11', '2026-10-12', '2026-10-13'];
+  const enSemana = (w) => jugadas.filter(f => f >= w.desde && f <= w.hasta);
+  const hoyMi = fecha('2026-10-07'); // miércoles
+  const viejo = sem.rangoSemanaConfig({ inicio: null, cierre: null, desde: null }, hoyMi, 0); // Lunes-Domingo
+  check(enSemana(viejo).join() === '2026-10-05,2026-10-06,2026-10-11', '15a) antes del cambio (cierra el domingo): la semana 05/10-11/10 trae las jugadas de esos días');
+  // Ahora: empieza martes, cierra LUNES. La jugada que ya existía el lunes 05/10 y la del lunes 12/10 entran en las semanas que cierran ese lunes
+  const nuevaAncla = sem.anclaParaInicio(2, '2026-10-07'); // martes 06/10
+  const cfgNueva = { inicio: 2, cierre: 1, desde: nuevaAncla, hasta: null };
+  const wAnt = sem.rangoSemanaConfig(cfgNueva, hoyMi, -1);
+  const wAct = sem.rangoSemanaConfig(cfgNueva, hoyMi, 0);
+  check(wAnt.hasta === '2026-10-05' && enSemana(wAnt).includes('2026-10-05'), '15b) la jugada que ya existía el lunes 05/10 ahora cae en la semana que cierra ese lunes (' + wAnt.desde + ' al ' + wAnt.hasta + ')');
+  check(wAct.desde === '2026-10-06' && wAct.hasta === '2026-10-12' && enSemana(wAct).join() === '2026-10-06,2026-10-11,2026-10-12', '15c) y la semana actual (06/10-12/10) incluye también las del lunes 12/10');
+  check(jugadas.every(f => [sem.rangoSemanaConfig(cfgNueva, fecha(f), 0)].filter(w => f >= w.desde && f <= w.hasta).length === 1), '15d) ninguna jugada queda sin semana');
+  // Rango personalizado con calendario que abarca días que ya tenían jugadas
+  const cfgCal = { inicio: 1, cierre: 1, desde: '2026-10-05', hasta: '2026-10-12' };
+  check(enSemana(sem.rangoSemanaConfig(cfgCal, hoyMi, 0)).join() === '2026-10-05,2026-10-06,2026-10-11,2026-10-12', '15e) con el calendario 05/10 al 12/10 entran todas las jugadas de esos días, incluidas las ya cargadas');
+  // En el servidor: ningún reporte filtra por la fecha en que se cargó la jugada
+  const fsx = require('fs');
+  const fuentes = ['routes/hipismo.js', 'services/hipismoResumenCliente.js', 'services/hipismoLineasCliente.js'].map(f => fsx.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
+  check(!/created_at\s*(BETWEEN|>=|<=)/i.test(fuentes), '15f) ningún reporte de Hipismo filtra la semana por created_at (siempre por la fecha de la jugada)');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   process.exit(fallaron ? 1 : 0);
 })();
