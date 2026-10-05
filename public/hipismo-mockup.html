@@ -2709,16 +2709,40 @@
     </section>
 
     <!-- ============ ADMINISTRACIÓN: TRASPASO DE SALDO ============ -->
+    <!-- 05-10-2026, a pedido del usuario: "la pestaña traspaso de saldos no
+         esta activa... alli debes desplegarme la lista de clientes activos
+         para seleccionar a quien quiero traspasarle". Antes era una maqueta
+         deshabilitada. Registra un AJUSTE en los 2 clientes (POST
+         /comisiones/traspaso: resta al origen, suma al destino) y lista el
+         historial con botón para anular (GET/DELETE /traspasos-saldo). -->
     <section class="vista" id="vista-traspasos">
       <div class="card">
         <h2>🔄 Traspaso de Saldo</h2>
-        <p class="desc">Pasar saldo de un cliente a otro.</p>
+        <p class="desc">Pasa saldo de un cliente a otro. Se resta al cliente de origen y se suma al de destino, y queda reflejado en Balance General, Cierre Final y en el link de cada uno.</p>
         <div class="fila">
-          <div><label>De (cliente)</label><input type="text" placeholder="Ej: Mrincreible"></div>
-          <div><label>A (cliente)</label><input type="text" placeholder="Ej: Puertolacruz"></div>
-          <div><label>Monto</label><input type="text" placeholder="Ej: 50,00"></div>
+          <div>
+            <label for="inpBuscarTraspasoSaldo">Buscar cliente</label>
+            <input type="text" id="inpBuscarTraspasoSaldo" placeholder="Escribe para filtrar las 2 listas…" autocomplete="off" oninput="poblarSelectsTraspasoSaldo()">
+          </div>
         </div>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Traspasar</button></div>
+        <div class="fila">
+          <div><label for="selTraspasoSaldoOrigen">De (cliente) *</label><select id="selTraspasoSaldoOrigen"></select></div>
+          <div><label for="selTraspasoSaldoDestino">A (cliente) *</label><select id="selTraspasoSaldoDestino"></select></div>
+          <div><label for="inpTraspasoSaldoMonto">Monto *</label><input type="number" id="inpTraspasoSaldoMonto" step="0.01" min="0" placeholder="Ej: 50,00"></div>
+          <div><label for="inpTraspasoSaldoFecha">Fecha</label><input type="date" id="inpTraspasoSaldoFecha"></div>
+        </div>
+        <div class="fila">
+          <div style="flex:1 1 100%;"><label for="inpTraspasoSaldoNota">Nota (opcional)</label><input type="text" id="inpTraspasoSaldoNota" placeholder="Ej: acuerdo con el cliente"></div>
+        </div>
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" id="btnTraspasarSaldo" onclick="confirmarTraspasoSaldo()">🔄 Traspasar</button>
+        </div>
+        <div id="msgTraspasoSaldo" class="desc" style="margin-top:10px;"></div>
+      </div>
+      <div class="card">
+        <h2>Historial de traspasos</h2>
+        <p class="desc">Los más recientes primero. Anular un traspaso borra las 2 mitades (se devuelve el saldo a como estaba).</p>
+        <div id="listaTraspasosSaldo"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
 
@@ -5980,6 +6004,8 @@ function mostrarVista(id, btn) {
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
+  // "Traspaso de Saldo" (05-10-2026) — lista de clientes activos + historial.
+  traspasos: () => entrarTraspasoSaldo(),
   // "Cargar Remate Manual" (25-09-2026) — refresca el <select> de
   // Jugador de cada fila cada vez que se entra a la pestaña, para que
   // un cliente recién creado en otra pantalla ya aparezca sin recargar.
@@ -14271,6 +14297,111 @@ async function revGuardarPizarraRemate(remateId) {
   }
   await cargarRevisarJugadas();
   cargarClientesReales();
+}
+
+// ------------------------------------------------------------------
+// TRASPASO DE SALDO (Administración, 05-10-2026) — ver la nota grande del
+// HTML de #vista-traspasos y de GET/DELETE /traspasos-saldo en
+// routes/hipismo.js. Las listas De/A salen de los clientes ACTIVOS de la
+// caché de /api/jugadores (CLIENTES_HIPISMO_CACHE, incluidas las fichas
+// "- PORCENTAJE"), filtradas por el buscador.
+// ------------------------------------------------------------------
+function escapeHtmlTraspaso(t) {
+  return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function poblarSelectsTraspasoSaldo() {
+  const selO = document.getElementById('selTraspasoSaldoOrigen');
+  const selD = document.getElementById('selTraspasoSaldoDestino');
+  if (!selO || !selD) return;
+  const filtro = (document.getElementById('inpBuscarTraspasoSaldo').value || '').trim().toLowerCase();
+  const prevO = selO.value, prevD = selD.value;
+  const activos = (CLIENTES_HIPISMO_CACHE || [])
+    .filter(j => j.activo !== false)
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // Lo que ya estaba elegido se conserva visible aunque no coincida con el filtro.
+  const visibles = activos.filter(j => !filtro || j.nombre.toLowerCase().includes(filtro) || j.nombre === prevO || j.nombre === prevD);
+  const opciones = '<option value="">— Elige un cliente —</option>' +
+    visibles.map(j => `<option value="${escapeHtmlTraspaso(j.nombre)}">${escapeHtmlTraspaso(formatNombre(j.nombre))}</option>`).join('');
+  selO.innerHTML = opciones;
+  selD.innerHTML = opciones;
+  if (prevO && visibles.some(j => j.nombre === prevO)) selO.value = prevO;
+  if (prevD && visibles.some(j => j.nombre === prevD)) selD.value = prevD;
+}
+
+async function entrarTraspasoSaldo() {
+  const f = document.getElementById('inpTraspasoSaldoFecha');
+  if (f && !f.value) f.value = fechaLocalHoy();
+  poblarSelectsTraspasoSaldo(); // pinta de una vez con lo que ya hay en caché
+  await cargarClientesReales(); // y refresca por si hay clientes nuevos
+  poblarSelectsTraspasoSaldo();
+  pintarHistorialTraspasosSaldo();
+}
+
+async function pintarHistorialTraspasosSaldo() {
+  const cont = document.getElementById('listaTraspasosSaldo');
+  if (!cont) return;
+  let traspasos;
+  try {
+    traspasos = (await apiHipismo('/api/hipismo/traspasos-saldo')).traspasos;
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar el historial: ${escapeHtmlTraspaso(e.message)}</div>`;
+    return;
+  }
+  if (!traspasos.length) {
+    cont.innerHTML = '<div class="placeholder-card">Todavía no se ha hecho ningún traspaso.</div>';
+    return;
+  }
+  cont.innerHTML = traspasos.map(t => `
+    <div class="balance-fila" style="margin-bottom:4px;">
+      <span class="nombre">🔄 ${formatFechaCortaDMY(t.fecha)} — ${escapeHtmlTraspaso(formatNombre(t.origen))} → ${escapeHtmlTraspaso(formatNombre(t.destino))}: <b>${formatMonto(t.monto)}</b>${t.nota ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(t.nota)})</span>` : ''}</span>
+      <span class="btn-fila" style="gap:6px;">
+        <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="anularTraspasoSaldo('${t.id}')">🗑️ Anular</button>
+      </span>
+    </div>`).join('');
+}
+
+async function confirmarTraspasoSaldo() {
+  const msg = document.getElementById('msgTraspasoSaldo');
+  const origen = document.getElementById('selTraspasoSaldoOrigen').value;
+  const destino = document.getElementById('selTraspasoSaldoDestino').value;
+  const monto = Number(document.getElementById('inpTraspasoSaldoMonto').value);
+  const fecha = document.getElementById('inpTraspasoSaldoFecha').value || fechaLocalHoy();
+  const nota = document.getElementById('inpTraspasoSaldoNota').value.trim();
+  msg.style.color = 'var(--danger)';
+  if (!origen || !destino) { msg.textContent = 'Elige el cliente de origen y el de destino.'; return; }
+  if (origen === destino) { msg.textContent = 'El origen y el destino no pueden ser el mismo cliente.'; return; }
+  if (!monto || monto <= 0) { msg.textContent = 'Escribe un monto mayor a 0.'; return; }
+  if (!confirm(`¿Traspasar ${formatMonto(monto)} de ${formatNombre(origen)} a ${formatNombre(destino)}?`)) return;
+  const btn = document.getElementById('btnTraspasarSaldo');
+  btn.disabled = true;
+  try {
+    await apiHipismo('/api/hipismo/comisiones/traspaso', {
+      method: 'POST',
+      body: JSON.stringify({ clienteOrigen: origen, clienteDestino: destino, monto, fecha, nota: nota || 'Traspaso de saldo' })
+    });
+  } catch (e) {
+    msg.textContent = 'No se pudo traspasar: ' + e.message;
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  msg.style.color = 'var(--accent-grass)';
+  msg.textContent = `✅ Listo: ${formatMonto(monto)} de ${formatNombre(origen)} a ${formatNombre(destino)}.`;
+  document.getElementById('inpTraspasoSaldoMonto').value = '';
+  document.getElementById('inpTraspasoSaldoNota').value = '';
+  pintarHistorialTraspasosSaldo();
+}
+
+async function anularTraspasoSaldo(id) {
+  if (!confirm('¿Anular este traspaso? Se borran las 2 mitades y los saldos vuelven a como estaban.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/traspasos-saldo/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo anular: ' + e.message);
+    return;
+  }
+  pintarHistorialTraspasosSaldo();
 }
 
 // ------------------------------------------------------------------

@@ -4042,6 +4042,81 @@ router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// =================================================================
+// PESTAÑA "TRASPASO DE SALDO" (Administración, 05-10-2026, a pedido del
+// usuario: "la pestaña traspaso de saldos no esta activa... alli debes
+// desplegarme la lista de clientes activos para seleccionar a quien quiero
+// traspasarle" -- era solo una maqueta deshabilitada). Decisiones
+// confirmadas con el usuario (AskUserQuestion): (1) se registra como AJUSTE
+// en los 2 clientes -- el mismo mecanismo exacto de POST /comisiones/
+// traspaso de arriba (resta al origen, suma al destino, misma fecha, así
+// Balance General/Cierre Final/links siguen cuadrando); (2) las listas
+// muestran los clientes ACTIVOS (incluidas las fichas "- PORCENTAJE") con
+// buscador; (3) historial con botón para anular.
+//
+// Los 2 renglones de un traspaso se insertan en la MISMA transacción, así
+// que comparten `creado_en` exacto (now() es constante dentro de una
+// transacción) -- así se vuelven a emparejar sin necesitar ninguna columna
+// nueva (sin cambio de schema): mismo creado_en + misma fecha + montos
+// opuestos. Esto también incluye los traspasos de comisión hechos desde la
+// ficha de una cuenta de "%" (mismo mecanismo, misma tabla).
+// =================================================================
+function emparejarTraspasosSaldo(filas) {
+  const usadas = new Set();
+  const pares = [];
+  const clave = f => `${new Date(f.creado_en).getTime()}::${fechaComoISO(f.fecha)}`;
+  filas.forEach(neg => {
+    if (usadas.has(neg.id) || Number(neg.monto) >= 0) return;
+    const pos = filas.find(f => !usadas.has(f.id) && f.id !== neg.id && Number(f.monto) > 0
+      && clave(f) === clave(neg) && Math.abs(Number(f.monto) + Number(neg.monto)) < 0.005);
+    if (!pos) return;
+    usadas.add(neg.id); usadas.add(pos.id);
+    pares.push({
+      id: neg.id, idDestino: pos.id,
+      origen: neg.cliente_nombre, destino: pos.cliente_nombre,
+      monto: round2(Math.abs(Number(neg.monto))),
+      fecha: fechaComoISO(neg.fecha), nota: neg.nota || null, creadoEn: neg.creado_en
+    });
+  });
+  return pares.sort((a, b) => new Date(b.creadoEn) - new Date(a.creadoEn));
+}
+
+router.get('/traspasos-saldo', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
+       FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1
+      ORDER BY creado_en DESC
+      LIMIT 400`,
+    [req.grupoId]
+  );
+  res.json({ traspasos: emparejarTraspasosSaldo(r.rows).slice(0, 100) });
+}));
+
+// Anula un traspaso completo (las 2 patas). `:id` puede ser el id de
+// cualquiera de las 2 filas del par.
+router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
+  const rFila = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
+       FROM hipismo_comisiones_ajustes WHERE id = $1 AND grupo_id = $2`,
+    [req.params.id, req.grupoId]
+  );
+  if (!rFila.rows.length) return res.status(404).json({ error: 'Ese traspaso no existe.' });
+  const fila = rFila.rows[0];
+  const rMismoMomento = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
+       FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND creado_en = $2`,
+    [req.grupoId, fila.creado_en]
+  );
+  const par = emparejarTraspasosSaldo(rMismoMomento.rows).find(p => p.id === fila.id || p.idDestino === fila.id);
+  if (!par) return res.status(409).json({ error: 'No se encontró la otra mitad de este traspaso, así que no se anuló nada.' });
+  await db.transaccion(async (client) => {
+    await client.query('DELETE FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [req.grupoId, [par.id, par.idDestino]]);
+  });
+  res.json({ ok: true });
+}));
+
 // obtenerAjustesComision (suma neta de ajustes de traspaso de comisión
 // por cliente, en un rango de fechas — ver la nota grande de POST
 // /comisiones/traspaso más arriba) se movió a
