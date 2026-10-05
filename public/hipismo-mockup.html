@@ -1279,6 +1279,8 @@
            plano/remate — eso ya lo hace "Planos Eliminados"/"Eliminar
            Winners"). -->
       <button type="button" class="nav-item nav-child" data-vista="pizarras" onclick="mostrarVista('pizarras', this)">🏁<span class="nav-lbl"> Pizarras</span></button>
+      <!-- "Revisar Jugadas" (05-10-2026) — ver la nota grande junto a #vista-revisarJugadas. -->
+      <button type="button" class="nav-item nav-child" data-vista="revisarJugadas" onclick="mostrarVista('revisarJugadas', this)">🔎<span class="nav-lbl"> Revisar Jugadas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅<span class="nav-lbl"> Fecha de Semana</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝<span class="nav-lbl"> Cabeza y Pie de Plano</span></button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️<span class="nav-lbl"> Planos Eliminados</span></button>
@@ -3095,6 +3097,42 @@ Pizarra: [se llena al calcular]
           </div>
         </div>
         <div id="listaPizarras" style="margin-top:14px;"><div class="resultado-vacio">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- "Revisar Jugadas" (05-10-2026, a pedido del usuario: "en
+         administración necesito una pestaña que se llame revisar
+         jugadas... al seleccionar el día, el hipódromo y la carrera me
+         despliegue todo absolutamente todo lo que tiene esa carrera,
+         tanto jugadas adelantadas, tablas, remate, todo, no puedes dejar
+         nada afuera ni winners... allí podré editar, eliminar jugadas").
+         Lee GET /api/hipismo/revisar-jugadas y reusa las rutas de editar/
+         eliminar que ya existían para cada tipo — ver la nota grande en
+         routes/hipismo.js (sección "REVISAR JUGADAS"). -->
+    <section class="vista" id="vista-revisarJugadas">
+      <div class="card">
+        <h2>🔎 Revisar Jugadas</h2>
+        <p class="desc">Elige el día, el hipódromo y la carrera para ver TODO lo que tiene esa carrera: planos (Tercios), Tablas Fijas y Marcas, Jugadas entre Tercios Adelantadas, Remates (de pool y manuales) y Winners. Desde aquí puedes editar o eliminar cada jugada — los saldos de los clientes se recalculan solos.</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div>
+            <label for="inpFechaRevisar">Día</label>
+            <input type="date" id="inpFechaRevisar" onchange="cargarRevisarJugadas()">
+          </div>
+          <div>
+            <label for="selHipodromoRevisar">Hipódromo</label>
+            <select id="selHipodromoRevisar" onchange="cargarRevisarJugadas()">
+              <option value="">(cargando…)</option>
+            </select>
+          </div>
+          <div>
+            <label for="selCarreraRevisar">Carrera</label>
+            <select id="selCarreraRevisar" onchange="cargarRevisarJugadas()"></select>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secundario" onclick="cargarRevisarJugadas()">🔄 Actualizar</button>
+          </div>
+        </div>
+        <div id="listaRevisarJugadas" style="margin-top:14px;"><div class="resultado-vacio">Elige día, hipódromo y carrera.</div></div>
       </div>
     </section>
 
@@ -5985,6 +6023,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   montosApostados: () => pintarMontosApostados(),
   // "Pizarras" (01-10-2026) — ver pintarPizarras() más abajo.
   pizarras: () => pintarPizarras(),
+  // "Revisar Jugadas" (05-10-2026) — vuelve a pedir la carrera elegida cada
+  // vez que se entra (puede haber cambiado desde otra pestaña/sesión).
+  revisarJugadas: () => cargarRevisarJugadas(),
   usuarios: () => cargarEmpleadosHip(),
   // Filtro de Pozos (27-09-2026): los filtros "Saldos + Pozos" y "Solo
   // Saldos" necesitan el saldo de la semana (GET /cierre-final) — se
@@ -11451,6 +11492,7 @@ function poblarSelectHipodromo() {
   poblarSelectHipodromoAdelantadas();
   poblarSelectHipodromoTerciosAdelantadas();
   poblarSelectHipodromoWinners();
+  poblarSelectHipodromoRevisar();
 }
 
 // "Jugadas Adelantadas" (23-09-2026) usa el mismo listado real de
@@ -13884,17 +13926,367 @@ document.addEventListener('change', function (e) {
 });
 
 // ------------------------------------------------------------------
+// "REVISAR JUGADAS" (05-10-2026, a pedido del usuario: "en administración
+// necesito una pestaña que se llame revisar jugadas... al seleccionar el
+// día, el hipódromo y la carrera me despliegue todo absolutamente todo lo
+// que tiene esa carrera... no puedes dejar nada afuera ni winners... allí
+// podré editar, eliminar jugadas"). GET /api/hipismo/revisar-jugadas trae
+// todo junto; editar/eliminar usa las rutas de siempre de cada tipo (ver
+// la nota grande en routes/hipismo.js, sección "REVISAR JUGADAS").
+// ------------------------------------------------------------------
+let REVISAR_EDICION = null;  // { tipo, id } de la fila que se está editando (una a la vez)
+let REVISAR_INDICE = {};     // id -> { etiqueta, esUltimo } para los mensajes de confirmar
+
+function escRev(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function poblarSelectHipodromoRevisar() {
+  const sel = document.getElementById('selHipodromoRevisar');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${escRev(h.nombre)}">${banderaPorPais[h.pais]} ${escRev(h.nombre)}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+
+function revMontoConSigno(v) {
+  const n = Number(v) || 0;
+  return `${n >= 0 ? '+' : '-'}${formatMontoTabla(n)}`;
+}
+
+function revColorMonto(v) {
+  return Number(v) >= 0 ? 'var(--ok, #27ae60)' : 'var(--danger, #c0392b)';
+}
+
+function revBotonesFila(tipo, id) {
+  return `<span style="display:inline-flex; gap:6px; margin-left:10px;">
+    <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="revAbrirEdicion('${tipo}', '${id}')">✏️ Editar</button>
+    <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px; color:var(--danger);" onclick="revEliminar('${tipo}', '${id}')">🗑️ Eliminar</button>
+  </span>`;
+}
+
+function revFormEdicion(tipo, id, camposHtml) {
+  return `
+    <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+      <div class="fila" style="margin-bottom:6px;">${camposHtml}</div>
+      <div class="btn-fila">
+        <button class="btn btn-primario" type="button" onclick="revGuardar('${tipo}', '${id}')">💾 Guardar</button>
+        <button class="btn btn-secundario" type="button" onclick="revCerrarEdicion()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function revEnEdicion(tipo, id) {
+  return REVISAR_EDICION && REVISAR_EDICION.tipo === tipo && REVISAR_EDICION.id === id;
+}
+
+function revFilaWrap(contenido) {
+  return `<div style="padding:8px 0; border-bottom:1px solid var(--card-border);">${contenido}</div>`;
+}
+
+function revSeccion(titulo, cantidad, cuerpoHtml, ayuda) {
+  return `
+    <div class="card" style="padding:14px; margin-bottom:12px;">
+      <div style="font-weight:700; margin-bottom:4px;">${titulo} <span style="color:var(--text-dim); font-weight:400; font-size:13px;">(${cantidad})</span></div>
+      ${ayuda ? `<div style="color:var(--text-dim); font-size:12px; margin-bottom:6px;">${ayuda}</div>` : ''}
+      ${cantidad ? cuerpoHtml : '<div class="placeholder-card" style="margin:6px 0;">Nada cargado aquí para esta carrera.</div>'}
+    </div>`;
+}
+
+function revHtmlPlanos(planos) {
+  return planos.map(p => {
+    const filas = p.tickets.map(t => {
+      REVISAR_INDICE[t.id] = { etiqueta: `el ticket de ${t.cliente}${t.banquero ? ' vs ' + t.banquero : ''}`, esUltimo: p.tickets.length === 1 };
+      const detalle = `<b>${escRev(t.cliente)}</b>${t.banquero ? ` vs ${escRev(t.banquero)}` : ''} — ${escRev(t.modalidad)}${t.caballo ? ' ' + escRev(t.caballo) : ''} — $${formatMontoTabla(t.monto)}
+        <span style="color:var(--text-dim); font-size:12px;"> (jugador ${revMontoConSigno(t.resultadoJugador)}${t.banquero ? `, banquero ${revMontoConSigno(t.resultadoBanquero)}` : ''}${t.sinComision ? ', sin comisión' : ''})</span>`;
+      const form = revEnEdicion('ticket', t.id) ? revFormEdicion('ticket:' + p.id, t.id, `
+        <input type="text" id="rev_cliente_${t.id}" placeholder="Cliente" value="${escRev(t.cliente)}">
+        <input type="text" id="rev_banquero_${t.id}" placeholder="Banquero" value="${escRev(t.banquero)}">
+        <input type="number" id="rev_monto_${t.id}" placeholder="Monto" step="0.01" value="${t.monto}">`) : '';
+      return revFilaWrap(detalle + revBotonesFila('ticket:' + p.id, t.id) + form);
+    }).join('');
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:13px; margin-bottom:4px;">📋 Plano — llegada <b>${escRev(p.pizarra)}</b>${p.ret ? ` (ret ${escRev(p.ret)})` : ''}${p.cruzaJugadas ? ' — cruza jugadas' : ''} — comisión ${formatMontoTabla(p.comisionTotal)}</div>
+        ${filas}
+        <div class="btn-fila" style="margin-top:6px;">
+          <button class="btn btn-secundario" type="button" style="color:var(--danger); font-size:12px; padding:2px 8px;" onclick="revEliminarPlano('${p.id}')">🗑️ Eliminar este plano completo</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function revHtmlAdelantadas(lista) {
+  return lista.map(j => {
+    REVISAR_INDICE[j.id] = { etiqueta: `la jugada adelantada de ${j.cliente}`, esUltimo: false };
+    const descr = j.tipo === 'tf'
+      ? `TF — ${j.cantidadTf != null ? j.cantidadTf + ' TF' : ''} ejemplar ${j.numeroEjemplar != null ? j.numeroEjemplar : '?'}${j.gananciaPotencial != null ? ' (paga $' + formatMontoTabla(j.gananciaPotencial) + ')' : ''}`
+      : `Marca — ${j.numero1 != null ? j.numero1 : '?'} x ${j.numero2 != null ? j.numero2 : '?'}`;
+    const estado = j.estado === 'resuelto'
+      ? `${j.gano ? '✅ ganó' : '❌ perdió'}${j.resultadoCliente != null ? ' ' + revMontoConSigno(j.gano ? j.resultadoCliente : -j.monto) : ''}`
+      : (j.estado === 'sin_decidir' ? '⚪ sin decidir' : '⏳ ' + escRev(j.estado));
+    const detalle = `<b>${escRev(j.cliente)}</b> — ${descr} — $${formatMontoTabla(j.monto)} <span style="color:var(--text-dim); font-size:12px;">(${estado}${j.errorCalculo ? ' — ⚠ ' + escRev(j.detalleError || 'error de cálculo') : ''})</span>`;
+    const campoNumeros = j.tipo === 'tf'
+      ? `<input type="number" id="rev_ejemplar_${j.id}" placeholder="N° ejemplar" value="${j.numeroEjemplar != null ? j.numeroEjemplar : ''}">`
+      : `<input type="number" id="rev_n1_${j.id}" placeholder="1er número" value="${j.numero1 != null ? j.numero1 : ''}">
+         <input type="number" id="rev_n2_${j.id}" placeholder="2do número" value="${j.numero2 != null ? j.numero2 : ''}">`;
+    const form = revEnEdicion('adelantada', j.id) ? revFormEdicion('adelantada', j.id, `
+        <input type="text" id="rev_cliente_${j.id}" placeholder="Cliente" value="${escRev(j.cliente)}">
+        <input type="number" id="rev_monto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto}">
+        ${campoNumeros}`) : '';
+    return revFilaWrap(detalle + revBotonesFila('adelantada', j.id) + form);
+  }).join('');
+}
+
+function revHtmlTercios(lista) {
+  return lista.map(j => {
+    REVISAR_INDICE[j.id] = { etiqueta: `la jugada entre Tercios Adelantadas de ${j.jugador || '(sin jugador)'}`, esUltimo: false };
+    const caballos = j.esCruce
+      ? `${(j.cruceGrupoA || []).join(',')} cruzado con ${(j.cruceGrupoB || []).join(',')}`
+      : (j.grupoCaballos || []).join(',');
+    const estado = j.estado === 'resuelto'
+      ? `jugador ${revMontoConSigno(j.resultadoJugador)}, banquero ${revMontoConSigno(j.resultadoBanquero)}`
+      : (j.estado === 'sin_decidir' ? '⚪ sin decidir' : '⏳ pendiente');
+    const faltas = [j.faltaMonto ? 'monto' : '', j.faltaJugador ? 'jugador' : '', j.faltaBanquero ? 'banquero' : ''].filter(Boolean);
+    const detalle = `<b>${escRev(j.jugador || '(sin jugador)')}</b> vs <b>${escRev(j.banquero || '(sin banquero)')}</b> — ${escRev(caballos)}${j.modalidad ? ' ' + escRev(j.modalidad) : ''} — ${j.monto != null ? '$' + formatMontoTabla(j.monto) : '(sin monto)'}
+      <span style="color:var(--text-dim); font-size:12px;">(${estado}${faltas.length ? ' — ⚠ falta ' + faltas.join(', ') : ''})</span>`;
+    const form = revEnEdicion('tercios', j.id) ? revFormEdicion('tercios', j.id, `
+        <input type="text" id="rev_jugador_${j.id}" placeholder="Jugador" value="${escRev(j.jugador)}">
+        <input type="text" id="rev_banquero_${j.id}" placeholder="Banquero" value="${escRev(j.banquero)}">
+        <input type="number" id="rev_monto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto != null ? j.monto : ''}">
+        <input type="text" id="rev_modalidad_${j.id}" placeholder="Modalidad (ej: 1p, 10a8)" value="${escRev(j.modalidad)}">`) : '';
+    return revFilaWrap(detalle + revBotonesFila('tercios', j.id) + form);
+  }).join('');
+}
+
+function revHtmlRemates(remates) {
+  return remates.map(r => {
+    const esManual = r.modo === 'manual';
+    const cabecera = esManual
+      ? `✍️ <b>Remate Manual</b> (monto neto directo) — resultado del REMATE: <b style="color:${revColorMonto(r.resultadoRemate)};">${revMontoConSigno(r.resultadoRemate)}</b>`
+      : `🔨 <b>Remate</b> — llegada ${r.pizarra ? '<b>' + escRev(r.pizarra) + '</b>' : '<b>(pendiente)</b>'} — pool $${formatMontoTabla(r.poolTotal)}${r.huboGanador ? ' — pagó $' + formatMontoTabla(r.pagoGanador) : ''} — resultado del REMATE: <b style="color:${revColorMonto(r.resultadoRemate)};">${revMontoConSigno(r.resultadoRemate)}</b>
+         <span style="color:var(--text-dim); font-size:12px;">(${r.pagoFijo != null ? 'paga fijo $' + formatMontoTabla(r.pagoFijo) : (r.garantia != null ? 'garantiza $' + formatMontoTabla(r.garantia) + ' + ' + r.comisionPorcentaje + '%' : r.comisionPorcentaje + '% de comisión')})</span>`;
+    const filas = r.apuestas.map(a => {
+      REVISAR_INDICE[a.id] = { etiqueta: `la apuesta de ${a.cliente} (ejemplar ${a.numeroEjemplar})`, esUltimo: r.apuestas.length === 1 };
+      const resultado = esManual
+        ? `<span style="color:${revColorMonto(a.monto)};">${revMontoConSigno(a.monto)}</span>`
+        : `$${formatMontoTabla(a.monto)} <span style="color:var(--text-dim); font-size:12px;">(${r.pizarra ? 'resultado ' + revMontoConSigno(a.resultado) : 'pendiente de llegada'})</span>`;
+      const detalle = `🐎 <b>${escRev(a.numeroEjemplar)}</b> — <b>${escRev(a.cliente)}</b> — ${resultado}`;
+      const form = revEnEdicion('apuesta', a.id) ? revFormEdicion('apuesta:' + r.id, a.id, `
+          <input type="text" id="rev_cliente_${a.id}" placeholder="Jugador" value="${escRev(a.cliente)}">
+          <input type="number" id="rev_ejemplar_${a.id}" placeholder="N° ejemplar" value="${a.numeroEjemplar}">
+          <input type="number" id="rev_monto_${a.id}" placeholder="${esManual ? 'Monto neto (+gana / -pierde)' : 'Monto'}" step="0.01" value="${a.monto}">`) : '';
+      return revFilaWrap(detalle + revBotonesFila('apuesta:' + r.id, a.id) + form);
+    }).join('');
+    const bloquePizarra = esManual ? '' : `
+        <div class="fila" style="align-items:flex-end; margin:6px 0;">
+          <div><label for="rev_pizarra_${r.id}" style="font-size:12px;">Corregir llegada (pizarra)</label>
+          <input type="text" id="rev_pizarra_${r.id}" placeholder="Ej: 6.10.4.8.2" value="${escRev(r.pizarra || '')}"></div>
+          <div><button class="btn btn-secundario" type="button" onclick="revGuardarPizarraRemate('${r.id}')">💾 Guardar llegada</button></div>
+        </div>`;
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:13px; margin-bottom:4px;">${cabecera}</div>
+        ${bloquePizarra}
+        ${filas}
+      </div>`;
+  }).join('');
+}
+
+function revHtmlWinners(lista) {
+  return lista.map(w => {
+    REVISAR_INDICE[w.id] = { etiqueta: `el Winner de ${w.cliente}`, esUltimo: false };
+    const detalle = `🏆 <b>${escRev(w.cliente)}</b> — ejemplar ${escRev(w.caballo)} — <b style="color:${revColorMonto(w.monto)};">${revMontoConSigno(w.monto)}</b>`;
+    const form = revEnEdicion('winner', w.id) ? revFormEdicion('winner', w.id, `
+        <input type="text" id="rev_cliente_${w.id}" placeholder="Cliente" value="${escRev(w.cliente)}">
+        <input type="text" id="rev_caballo_${w.id}" placeholder="Caballo / ejemplar" value="${escRev(w.caballo)}">
+        <input type="number" id="rev_monto_${w.id}" placeholder="Monto neto (+gana / -pierde)" step="0.01" value="${w.monto}">`) : '';
+    return revFilaWrap(detalle + revBotonesFila('winner', w.id) + form);
+  }).join('');
+}
+
+function pintarRevisarJugadas(data) {
+  const cont = document.getElementById('listaRevisarJugadas');
+  REVISAR_INDICE = {};
+  const cantTickets = data.planos.reduce((acc, p) => acc + p.tickets.length, 0);
+  const cantApuestas = data.remates.reduce((acc, r) => acc + r.apuestas.length, 0);
+  const total = cantTickets + data.adelantadas.length + data.tercios.length + data.terciosSinCarrera.length + cantApuestas + data.winners.length;
+
+  const resumen = `
+    <div class="card" style="padding:14px; margin-bottom:12px;">
+      <div style="font-weight:700; margin-bottom:4px;">🏟️ ${escRev(data.hipodromo)} — ${ordinalCarrera(data.carrera)} Carrera — 📅 ${formatFechaCortaDMY(data.fecha)}</div>
+      <div style="color:var(--text-dim); font-size:13px;">${total === 0
+        ? 'Esta carrera no tiene ninguna jugada cargada.'
+        : `${total} jugada${total === 1 ? '' : 's'} en total: ${cantTickets} de planos, ${data.adelantadas.length} adelantadas (tablas/marcas), ${data.tercios.length + data.terciosSinCarrera.length} entre tercios adelantadas, ${cantApuestas} de remates y ${data.winners.length} winners.`}</div>
+    </div>`;
+
+  const secciones = [
+    revSeccion('📋 Planos (Tercios)', cantTickets, revHtmlPlanos(data.planos), 'Cada línea es un ticket del plano. Al editar o borrar uno se recalculan la comisión y los saldos del plano.'),
+    revSeccion('📌 Tablas Fijas y Marcas (Jugadas Adelantadas)', data.adelantadas.length, revHtmlAdelantadas(data.adelantadas)),
+    revSeccion('🤝 Jugadas entre Tercios Adelantadas', data.tercios.length, revHtmlTercios(data.tercios)),
+    revSeccion('🔨 Remates', cantApuestas, revHtmlRemates(data.remates), 'Al editar o borrar una apuesta el remate se recalcula completo (pool, pago, comisión y resultado de cada cliente).'),
+    revSeccion('🏆 Winners', data.winners.length, revHtmlWinners(data.winners))
+  ];
+  if (data.terciosSinCarrera.length) {
+    secciones.splice(3, 0, revSeccion('🤝 Tercios Adelantadas SIN número de carrera (mismo día e hipódromo)', data.terciosSinCarrera.length, revHtmlTercios(data.terciosSinCarrera), 'Estas jugadas se pegaron sin indicar a qué carrera pertenecen, así que no aparecen en ninguna carrera puntual — se muestran aquí para que no se escape nada.'));
+  }
+  cont.innerHTML = resumen + secciones.join('');
+}
+
+async function cargarRevisarJugadas() {
+  const cont = document.getElementById('listaRevisarJugadas');
+  if (!cont) return;
+  const fecha = document.getElementById('inpFechaRevisar').value;
+  const hipodromo = document.getElementById('selHipodromoRevisar').value;
+  const carrera = document.getElementById('selCarreraRevisar').value;
+  if (!fecha || !hipodromo || !carrera) {
+    cont.innerHTML = '<div class="resultado-vacio">Elige día, hipódromo y carrera.</div>';
+    return;
+  }
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/revisar-jugadas?fecha=${encodeURIComponent(fecha)}&hipodromo=${encodeURIComponent(hipodromo)}&carrera=${encodeURIComponent(carrera)}`);
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escRev(e.message)}</div>`;
+    return;
+  }
+  pintarRevisarJugadas(data);
+}
+
+function revAbrirEdicion(tipo, id) {
+  REVISAR_EDICION = { tipo: tipo.split(':')[0], id };
+  cargarRevisarJugadas();
+}
+
+function revCerrarEdicion() {
+  REVISAR_EDICION = null;
+  cargarRevisarJugadas();
+}
+
+function revVal(campo, id) {
+  const el = document.getElementById(`rev_${campo}_${id}`);
+  return el ? el.value.trim() : undefined;
+}
+
+async function revGuardar(tipoCompleto, id) {
+  const [tipo, padreId] = tipoCompleto.split(':');
+  let ruta, body;
+  if (tipo === 'ticket') {
+    ruta = `/api/hipismo/planos/${padreId}/tickets/${id}`;
+    body = { clienteNombre: revVal('cliente', id), banqueroNombre: revVal('banquero', id), monto: revVal('monto', id) };
+  } else if (tipo === 'adelantada') {
+    ruta = `/api/hipismo/adelantadas/jugadas/${id}`;
+    body = { cliente: revVal('cliente', id), monto: revVal('monto', id) };
+    if (document.getElementById(`rev_ejemplar_${id}`)) body.numeroEjemplar = revVal('ejemplar', id);
+    if (document.getElementById(`rev_n1_${id}`)) body.numero1 = revVal('n1', id);
+    if (document.getElementById(`rev_n2_${id}`)) body.numero2 = revVal('n2', id);
+  } else if (tipo === 'tercios') {
+    ruta = `/api/hipismo/tercios-adelantadas/jugadas/${id}`;
+    body = { jugador: revVal('jugador', id), banquero: revVal('banquero', id), monto: revVal('monto', id), modalidad: revVal('modalidad', id) };
+  } else if (tipo === 'apuesta') {
+    ruta = `/api/hipismo/remates/${padreId}/apuestas/${id}`;
+    body = { cliente: revVal('cliente', id), numeroEjemplar: revVal('ejemplar', id), monto: revVal('monto', id) };
+  } else if (tipo === 'winner') {
+    ruta = `/api/hipismo/winners/${id}`;
+    body = { cliente: revVal('cliente', id), caballo: revVal('caballo', id), monto: revVal('monto', id) };
+  } else {
+    return;
+  }
+  try {
+    await apiHipismo(ruta, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+    return;
+  }
+  REVISAR_EDICION = null;
+  await cargarRevisarJugadas();
+  cargarClientesReales();
+}
+
+async function revEliminar(tipoCompleto, id) {
+  const [tipo, padreId] = tipoCompleto.split(':');
+  const info = REVISAR_INDICE[id] || { etiqueta: 'esta jugada', esUltimo: false };
+  let ruta, aviso;
+  if (tipo === 'ticket') {
+    ruta = `/api/hipismo/planos/${padreId}/tickets/${id}`;
+    aviso = info.esUltimo
+      ? `Es el ÚLTIMO ticket de ese plano: se eliminará el plano completo (se puede restaurar 30 días desde Planos Eliminados). ¿Eliminar ${info.etiqueta}?`
+      : `¿Eliminar ${info.etiqueta}? Se recalcula la comisión y los saldos del plano. No se puede deshacer.`;
+  } else if (tipo === 'adelantada') {
+    ruta = `/api/hipismo/adelantadas/jugadas/${id}`;
+    aviso = `¿Eliminar ${info.etiqueta}? No se puede deshacer.`;
+  } else if (tipo === 'tercios') {
+    ruta = `/api/hipismo/tercios-adelantadas/jugadas/${id}`;
+    aviso = `¿Eliminar ${info.etiqueta}? No se puede deshacer.`;
+  } else if (tipo === 'apuesta') {
+    ruta = `/api/hipismo/remates/${padreId}/apuestas/${id}`;
+    aviso = info.esUltimo
+      ? `Es la ÚNICA apuesta de ese remate: se borrará el remate completo, sin posibilidad de deshacer. ¿Eliminar ${info.etiqueta}?`
+      : `¿Eliminar ${info.etiqueta}? El remate se recalcula completo. No se puede deshacer.`;
+  } else if (tipo === 'winner') {
+    ruta = `/api/hipismo/winners/${id}`;
+    aviso = `¿Eliminar ${info.etiqueta}? No se puede deshacer.`;
+  } else {
+    return;
+  }
+  if (!confirm(aviso)) return;
+  try {
+    await apiHipismo(ruta, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  if (REVISAR_EDICION && REVISAR_EDICION.id === id) REVISAR_EDICION = null;
+  await cargarRevisarJugadas();
+  cargarClientesReales();
+}
+
+async function revEliminarPlano(planoId) {
+  if (!confirm('¿Eliminar este plano completo con todos sus tickets? Se puede restaurar durante 30 días desde Administración > Planos Eliminados.')) return;
+  try {
+    await apiHipismo(`/api/hipismo/planos/${planoId}`, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  REVISAR_EDICION = null;
+  await cargarRevisarJugadas();
+  cargarClientesReales();
+}
+
+async function revGuardarPizarraRemate(remateId) {
+  const pizarra = (document.getElementById(`rev_pizarra_${remateId}`).value || '').trim();
+  if (!pizarra) { alert('Escribe la llegada (pizarra) para guardarla.'); return; }
+  try {
+    await apiHipismo(`/api/hipismo/pizarras/remate/${remateId}`, { method: 'PUT', body: JSON.stringify({ pizarra }) });
+  } catch (e) {
+    alert('No se pudo guardar la llegada: ' + e.message);
+    return;
+  }
+  await cargarRevisarJugadas();
+  cargarClientesReales();
+}
+
+// ------------------------------------------------------------------
 // Init
 // ------------------------------------------------------------------
 poblarCarreras();
 poblarCarreras('selCarreraRemate');
 poblarCarreras('selCarreraRemateManual');
 poblarCarreras('selCarreraWinners');
+poblarCarreras('selCarreraRevisar');
 document.getElementById('inpFecha').value = fechaLocalHoy();
 pintarFechaGrandePlano();
 document.getElementById('inpFechaRemate').value = fechaLocalHoy();
 document.getElementById('inpFechaRemateManual').value = fechaLocalHoy();
 document.getElementById('inpFechaWinners').value = fechaLocalHoy();
+document.getElementById('inpFechaRevisar').value = fechaLocalHoy();
 construirFilasRemateManual();
 poblarJugadoresRemateManual();
 construirFilasWinners();

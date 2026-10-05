@@ -1060,6 +1060,66 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   });
 }));
 
+// DELETE /planos/:id/tickets/:ticketId : borra UN ticket suelto de un plano
+// (05-10-2026, "Revisar Jugadas" — confirmado con el usuario: "Borrar un
+// ticket suelto"). Recalcula igual que PUT (comisión del plano y texto para
+// WhatsApp, salvo que el plano traiga un bloque "PARADA ADELANTADAS"). Si
+// era el ÚLTIMO ticket, se elimina el plano completo por la papelera
+// recuperable de siempre (un plano sin tickets no tiene sentido).
+router.delete('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
+  const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+
+  const rTicket = await db.query('SELECT * FROM hipismo_tickets WHERE id = $1 AND plano_id = $2', [req.params.ticketId, plano.id]);
+  const ticket = rTicket.rows[0];
+  if (!ticket) return res.status(404).json({ error: 'Ese ticket no pertenece a este plano.' });
+
+  const fechaTexto = fechaComoISO(plano.fecha);
+  const rCuenta = await db.query('SELECT COUNT(*)::int AS n FROM hipismo_tickets WHERE plano_id = $1', [plano.id]);
+  if (rCuenta.rows[0].n <= 1) {
+    const resultado = await hipismoPlanosPapelera.eliminarPlano(req.grupoId, plano.id);
+    await registrarAlerta(req, {
+      tipo: 'PLANO_ELIMINADO', hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaTexto,
+      mensaje: `Se eliminó el último ticket (${ticket.cliente_nombre} / ${ticket.banquero_nombre}) del plano de ${plano.hipodromo_nombre}, carrera ${plano.carrera_numero} — el plano completo se movió a la papelera.`
+    });
+    return res.json({ ok: true, planoEliminado: true, ...resultado });
+  }
+
+  await db.query('DELETE FROM hipismo_tickets WHERE id = $1 AND plano_id = $2', [ticket.id, plano.id]);
+
+  const rTodosTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
+  const ticketsPlanos = rTodosTickets.rows.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre, modalidad: t.modalidad, caballo: t.caballo,
+    monto: Number(t.monto), resultadoJugador: Number(t.resultado_jugador), resultadoBanquero: Number(t.resultado_banquero),
+    sinComision: !!t.sin_comision
+  }));
+  const { totalesFinales, comisionTotal } = recalcularTotalesPlano(ticketsPlanos, plano.cruza_jugadas);
+
+  let textoResultadoFinal = plano.texto_resultado;
+  if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
+    textoResultadoFinal = armarTextoResultado({
+      nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      totalesFinales, totalJugadas: ticketsPlanos.length
+    });
+  }
+
+  await db.query('UPDATE hipismo_planos SET comision_total = $1, texto_resultado = $2 WHERE id = $3', [comisionTotal, textoResultadoFinal, plano.id]);
+
+  await registrarAlerta(req, {
+    tipo: 'PLANO_EDITADO', hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaTexto,
+    mensaje: `Se eliminó un ticket del plano de ${plano.hipodromo_nombre}, carrera ${plano.carrera_numero} (${ticket.cliente_nombre} / ${ticket.banquero_nombre}).`
+  });
+
+  res.json({
+    ok: true, planoEliminado: false,
+    plano: { ...plano, comision_total: comisionTotal, texto_resultado: textoResultadoFinal },
+    tickets: rTodosTickets.rows,
+    totalesFinales
+  });
+}));
+
 // DELETE /planos/:id : borra UN plano puntual (con papelera recuperable).
 // 23-09-2026, duodécima-tercera ronda — a diferencia de la ronda
 // anterior (ver la nota grande en services/hipismoPlanosPapelera.js),
@@ -1938,6 +1998,28 @@ router.post('/remates', asyncHandler(async (req, res) => {
 // ignoran a propósito: no tiene pizarra ni pool real que recalcular ni
 // "lo apostado" que mostrar (mismo criterio que Winners, que tampoco
 // aparece en esos reportes).
+// Arma el texto para WhatsApp + el texto "original" + los totales por
+// cliente de un Remate Manual a partir de sus líneas (cliente/ejemplar/
+// monto neto con signo). Se usa tanto al guardarlo (POST /remates/manual)
+// como al editar/borrar una línea suelta desde "Revisar Jugadas" (PUT/
+// DELETE /remates/:id/apuestas/:apuestaId), para que el texto siempre
+// quede igual al de un remate recién cargado (05-10-2026).
+function armarTextoRemateManual({ nombreGrupo, hipodromoNombre, carreraNumero, fecha, lineas }) {
+  const totalesPorCliente = {};
+  lineas.forEach(l => { totalesPorCliente[l.cliente] = round2((totalesPorCliente[l.cliente] || 0) + l.monto); });
+
+  const encabezado = `*🏇 REMATE ${(nombreGrupo || '').toUpperCase()}*\n${hipodromoNombre}, ${carreraNumero}ta Carrera — ${fecha}`;
+  const lineasTexto = lineas.map(l =>
+    `🐎 ${l.numeroEjemplar} — *${formatNombre(l.cliente)}*: ${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}`
+  );
+  const lineasTotales = Object.keys(totalesPorCliente).sort((a, b) => a.localeCompare(b, 'es')).map(nombre =>
+    `${formatNombre(nombre)} ${totalesPorCliente[nombre] >= 0 ? '+' : '-'}${formatMontoTabla(totalesPorCliente[nombre])}`
+  );
+  const textoResultado = [encabezado, '', ...lineasTexto, '', 'TOTALES:', ...lineasTotales].join('\n');
+  const textoOriginal = lineas.map(l => `${l.numeroEjemplar}- EJEMPLAR ${l.numeroEjemplar} ${l.monto}$ ${l.cliente}`).join('\n');
+  return { totalesPorCliente, textoResultado, textoOriginal };
+}
+
 router.post('/remates/manual', asyncHandler(async (req, res) => {
   const { hipodromoId, hipodromoNombre, carreraNumero, fecha, lineas } = req.body;
   if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
@@ -1974,18 +2056,9 @@ router.post('/remates/manual', asyncHandler(async (req, res) => {
   await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
   await asegurarCuentasComisionParaNombres(req.grupoId, Array.from(nombresDelRemate));
 
-  const totalesPorCliente = {};
-  lineasValidas.forEach(l => { totalesPorCliente[l.cliente] = round2((totalesPorCliente[l.cliente] || 0) + l.monto); });
-
-  const encabezado = `*🏇 REMATE ${(req.grupo.nombre || '').toUpperCase()}*\n${nombreHipodromoFinal}, ${carreraNumero}ta Carrera — ${fechaFinal}`;
-  const lineasTexto = lineasValidas.map(l =>
-    `🐎 ${l.numeroEjemplar} — *${formatNombre(l.cliente)}*: ${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}`
-  );
-  const lineasTotales = Object.keys(totalesPorCliente).sort((a, b) => a.localeCompare(b, 'es')).map(nombre =>
-    `${formatNombre(nombre)} ${totalesPorCliente[nombre] >= 0 ? '+' : '-'}${formatMontoTabla(totalesPorCliente[nombre])}`
-  );
-  const textoResultado = [encabezado, '', ...lineasTexto, '', 'TOTALES:', ...lineasTotales].join('\n');
-  const textoOriginal = lineasValidas.map(l => `${l.numeroEjemplar}- EJEMPLAR ${l.numeroEjemplar} ${l.monto}$ ${l.cliente}`).join('\n');
+  const { totalesPorCliente, textoResultado, textoOriginal } = armarTextoRemateManual({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, lineas: lineasValidas
+  });
 
   const remate = await db.transaccion(async (client) => {
     const rRemate = await client.query(
@@ -2032,6 +2105,180 @@ router.delete('/remates/manual/:id', asyncHandler(async (req, res) => {
   });
 
   res.json({ ok: true });
+}));
+
+// =================================================================
+// REVISAR JUGADAS — editar/borrar UNA apuesta suelta de un remate
+// (05-10-2026, a pedido del usuario: nueva pestaña Administración >
+// "Revisar Jugadas", donde al elegir día/hipódromo/carrera se ve TODO
+// lo de esa carrera y se puede editar o eliminar cada jugada). Confirmado
+// con el usuario (AskUserQuestion 05-10-2026): "Editar y borrar cada
+// apuesta" tanto en remates de pool como en Remates Manuales.
+//
+// Una sola ruta para los dos modos (se ramifica por hipismo_remates.modo):
+//  - 'manual': monto neto con signo (distinto de 0); el REMATE (espejo)
+//    se recalcula solo como -suma de todos los netos y se regenera el
+//    texto para WhatsApp.
+//  - 'pool': monto > 0; se recalcula el remate COMPLETO con la misma
+//    función de siempre (calcularRemate: pool, pago al ganador,
+//    comisión/garantía/pago fijo, resultado de cada cliente) usando la
+//    pizarra que ya tenía. Si ese remate está pendiente de llegada
+//    (pizarra vaciada desde "Pizarras"), solo se ajusta el pool_total y el
+//    resto queda pendiente como estaba.
+// Si se borra la ÚLTIMA apuesta de un remate, se borra el remate entero
+// (un remate sin apuestas no tiene sentido) — el frontend lo avisa antes.
+// =================================================================
+async function recalcularRemateTrasCambioDeApuestas(req, remate) {
+  const rA = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = $1 ORDER BY creado_en', [remate.id]);
+  const filas = rA.rows;
+  const fechaTexto = fechaComoISO(remate.fecha);
+
+  if (remate.modo === 'manual') {
+    const lineas = filas.map(a => ({ cliente: a.cliente_nombre, numeroEjemplar: a.numero_ejemplar, monto: Number(a.monto) }));
+    const resultadoRemate = round2(-lineas.reduce((acc, l) => acc + l.monto, 0));
+    const { totalesPorCliente, textoResultado, textoOriginal } = armarTextoRemateManual({
+      nombreGrupo: req.grupo.nombre, hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero, fecha: fechaTexto, lineas
+    });
+    await db.query(
+      'UPDATE hipismo_remates SET comision_total = $1, texto_resultado = $2, texto_original = $3 WHERE id = $4',
+      [resultadoRemate, textoResultado, textoOriginal, remate.id]
+    );
+    return { remate: { ...remate, comision_total: resultadoRemate, texto_resultado: textoResultado, texto_original: textoOriginal }, apuestas: filas, totalesPorCliente };
+  }
+
+  const apuestas = filas.map(a => ({ numeroEjemplar: a.numero_ejemplar, caballo: a.caballo, cliente: a.cliente_nombre, monto: Number(a.monto) }));
+  const poolTotal = apuestas.reduce((acc, a) => acc + a.monto, 0);
+
+  if (!remate.pizarra || remate.numero_ganador == null) {
+    await db.query('UPDATE hipismo_remates SET pool_total = $1 WHERE id = $2', [poolTotal, remate.id]);
+    return { remate: { ...remate, pool_total: poolTotal }, apuestas: filas, totalesPorCliente: null };
+  }
+
+  const numeroGanador = remate.numero_ganador;
+  const garantia = remate.garantia != null ? Number(remate.garantia) : null;
+  const pagoFijo = remate.pago_fijo != null ? Number(remate.pago_fijo) : null;
+  const resultado = calcularRemate({ apuestas, garantia, pagoFijo, comisionPorcentaje: Number(remate.comision_porcentaje), numeroGanador });
+  const textoResultado = armarTextoResultadoRemate({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    pizarra: remate.pizarra, apuestas, garantia, pagoFijo, numeroGanador, resultado
+  });
+
+  await db.transaccion(async (client) => {
+    for (const a of filas) {
+      const esGanadora = resultado.hayGanador && a.numero_ejemplar === numeroGanador;
+      const lineaResultado = esGanadora ? (resultado.pagoGanador - Number(a.monto)) : -Number(a.monto);
+      await client.query('UPDATE hipismo_remate_apuestas SET resultado = $1 WHERE id = $2', [lineaResultado, a.id]);
+    }
+    await client.query(
+      `UPDATE hipismo_remates
+          SET pool_total = $1, hubo_ganador = $2, caballo_ganador = $3, cliente_ganador = $4,
+              pago_ganador = $5, comision_total = $6, texto_resultado = $7
+        WHERE id = $8`,
+      [
+        resultado.poolTotal, resultado.hayGanador,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.caballo : null,
+        resultado.apuestaGanadora ? resultado.apuestaGanadora.cliente : null,
+        resultado.pagoGanador, resultado.resultadoRemate, textoResultado, remate.id
+      ]
+    );
+  });
+
+  const rFinal = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = $1 ORDER BY numero_ejemplar', [remate.id]);
+  return {
+    remate: {
+      ...remate, pool_total: resultado.poolTotal, hubo_ganador: resultado.hayGanador, pago_ganador: resultado.pagoGanador,
+      comision_total: resultado.resultadoRemate, texto_resultado: textoResultado
+    },
+    apuestas: rFinal.rows,
+    totalesPorCliente: resultado.totalesPorCliente
+  };
+}
+
+async function cargarRemateYApuesta(req) {
+  const rRemate = await db.query('SELECT * FROM hipismo_remates WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const remate = rRemate.rows[0];
+  if (!remate) return { error: { status: 404, mensaje: 'Remate no encontrado.' } };
+  const rApuesta = await db.query('SELECT * FROM hipismo_remate_apuestas WHERE id = $1 AND remate_id = $2', [req.params.apuestaId, remate.id]);
+  const apuesta = rApuesta.rows[0];
+  if (!apuesta) return { error: { status: 404, mensaje: 'Esa apuesta no pertenece a este remate.' } };
+  return { remate, apuesta };
+}
+
+router.put('/remates/:id/apuestas/:apuestaId', asyncHandler(async (req, res) => {
+  const { remate, apuesta, error } = await cargarRemateYApuesta(req);
+  if (error) return res.status(error.status).json({ error: error.mensaje });
+
+  const { cliente, numeroEjemplar, monto } = req.body;
+  const clienteFinal = ((cliente !== undefined && cliente !== null && cliente !== '') ? String(cliente) : apuesta.cliente_nombre).trim().toUpperCase().replace(/\s+/g, ' ');
+  const numeroFinal = (numeroEjemplar !== undefined && numeroEjemplar !== null && numeroEjemplar !== '') ? parseInt(numeroEjemplar, 10) : apuesta.numero_ejemplar;
+  const montoFinal = (monto !== undefined && monto !== null && monto !== '') ? Number(monto) : Number(apuesta.monto);
+  const esManual = remate.modo === 'manual';
+
+  if (!clienteFinal) return res.status(400).json({ error: 'Falta el jugador.' });
+  if (!isFinite(numeroFinal) || numeroFinal <= 0) return res.status(400).json({ error: 'El ejemplar tiene que ser un número mayor a 0.' });
+  if (!isFinite(montoFinal)) return res.status(400).json({ error: 'El monto tiene que ser un número.' });
+  if (esManual && montoFinal === 0) return res.status(400).json({ error: 'El monto neto no puede quedar en 0.' });
+  if (!esManual && montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
+
+  if (clienteFinal !== apuesta.cliente_nombre) {
+    await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+    await asegurarCuentasComisionParaNombres(req.grupoId, [clienteFinal]);
+  }
+
+  // El "caballo" es solo la etiqueta del ejemplar: se actualiza junto con el
+  // número cuando era la genérica "EJEMPLAR N"; si traía un nombre real, se
+  // respeta tal cual.
+  let caballoFinal = apuesta.caballo;
+  if (numeroFinal !== apuesta.numero_ejemplar && (esManual || /^EJEMPLAR \d+$/i.test(apuesta.caballo || ''))) {
+    caballoFinal = `EJEMPLAR ${numeroFinal}`;
+  }
+
+  await db.query(
+    `UPDATE hipismo_remate_apuestas
+        SET cliente_nombre = $1, numero_ejemplar = $2, caballo = $3, monto = $4, resultado = $5
+      WHERE id = $6 AND remate_id = $7`,
+    [clienteFinal, numeroFinal, caballoFinal, montoFinal, esManual ? montoFinal : Number(apuesta.resultado), apuesta.id, remate.id]
+  );
+
+  const recalculo = await recalcularRemateTrasCambioDeApuestas(req, remate);
+
+  await registrarAlerta(req, {
+    tipo: 'PIZARRA_EDITADA', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    fecha: fechaComoISO(remate.fecha),
+    mensaje: `Se editó una apuesta del ${esManual ? 'Remate Manual' : 'remate'} de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} (${clienteFinal}, ejemplar ${numeroFinal}, ${montoFinal}) y se recalculó el remate.`
+  });
+
+  res.json(recalculo);
+}));
+
+router.delete('/remates/:id/apuestas/:apuestaId', asyncHandler(async (req, res) => {
+  const { remate, apuesta, error } = await cargarRemateYApuesta(req);
+  if (error) return res.status(error.status).json({ error: error.mensaje });
+  const esManual = remate.modo === 'manual';
+
+  const rCuenta = await db.query('SELECT COUNT(*)::int AS n FROM hipismo_remate_apuestas WHERE remate_id = $1', [remate.id]);
+  const quedan = rCuenta.rows[0].n - 1;
+
+  if (quedan <= 0) {
+    await db.query('DELETE FROM hipismo_remates WHERE id = $1', [remate.id]);
+    await registrarAlerta(req, {
+      tipo: esManual ? 'REMATE_MANUAL_ELIMINADO' : 'PIZARRA_ELIMINADA', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+      fecha: fechaComoISO(remate.fecha),
+      mensaje: `Se eliminó la única apuesta que quedaba (${apuesta.cliente_nombre}, ejemplar ${apuesta.numero_ejemplar}) del ${esManual ? 'Remate Manual' : 'remate'} de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} — el remate completo se borró.`
+    });
+    return res.json({ ok: true, remateEliminado: true });
+  }
+
+  await db.query('DELETE FROM hipismo_remate_apuestas WHERE id = $1 AND remate_id = $2', [apuesta.id, remate.id]);
+  const recalculo = await recalcularRemateTrasCambioDeApuestas(req, remate);
+
+  await registrarAlerta(req, {
+    tipo: esManual ? 'REMATE_MANUAL_ELIMINADO' : 'PIZARRA_EDITADA', hipodromoNombre: remate.hipodromo_nombre, carreraNumero: remate.carrera_numero,
+    fecha: fechaComoISO(remate.fecha),
+    mensaje: `Se eliminó una apuesta (${apuesta.cliente_nombre}, ejemplar ${apuesta.numero_ejemplar}) del ${esManual ? 'Remate Manual' : 'remate'} de ${remate.hipodromo_nombre}, carrera ${remate.carrera_numero} y se recalculó el remate.`
+  });
+
+  res.json({ ok: true, remateEliminado: false, ...recalculo });
 }));
 
 // GET /remates?fecha=&hipodromoId=&modo=&limite= : historial reciente (cabeceras).
@@ -2862,6 +3109,151 @@ router.delete('/winners/:id', asyncHandler(async (req, res) => {
 // que hoy usa el mockup (el resultado de lo último que se calculó) pero
 // leído de la base — spec sección 12. Cierre Final (agregado semanal
 // real) sigue pendiente, ver nota grande arriba del archivo.
+// =================================================================
+// REVISAR JUGADAS (05-10-2026, a pedido del usuario: "en administración
+// necesito una pestaña que se llame revisar jugadas... al seleccionar el
+// día, el hipódromo y la carrera me despliegue todo absolutamente todo lo
+// que tiene esa carrera, tanto jugadas adelantadas, tablas, remate, todo,
+// no puedes dejar nada afuera ni winners... allí podré editar, eliminar
+// jugadas"). GET /revisar-jugadas?fecha=&hipodromoId=|hipodromo=&carrera=
+// junta en UNA respuesta todo lo que guarda cada tabla para esa carrera:
+// planos (Tercios) con sus tickets, Jugadas Adelantadas (Tablas Fijas y
+// Marcas), Jugadas entre Tercios Adelantadas, Remates (de pool y
+// Manuales) con sus apuestas, y Winners. Editar/eliminar se hace con las
+// rutas que ya existían para cada tipo (PUT/DELETE de cada uno) más las
+// nuevas de ticket suelto y apuesta de remate de arriba — esta ruta solo
+// LEE. Las jugadas de Tercios Adelantadas que quedaron SIN número de
+// carrera (el plano no lo traía) se devuelven aparte (terciosSinCarrera)
+// para ese mismo día/hipódromo, así "nada queda afuera".
+// =================================================================
+router.get('/revisar-jugadas', asyncHandler(async (req, res) => {
+  const { fecha, hipodromoId, hipodromo, carrera } = req.query;
+  if (!fecha) return res.status(400).json({ error: 'Falta el día.' });
+  const carreraNumero = parseInt(carrera, 10);
+  if (!isFinite(carreraNumero) || carreraNumero <= 0) return res.status(400).json({ error: 'Falta la carrera.' });
+
+  let nombreHipodromo = hipodromo;
+  if (hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    nombreHipodromo = rh.rows[0].nombre;
+  }
+  if (!nombreHipodromo) return res.status(400).json({ error: 'Falta el hipódromo.' });
+
+  // Se compara por NOMBRE (sin importar mayúsculas), no por hipodromo_id:
+  // cada fila guarda una copia del nombre justo para sobrevivir a un
+  // hipódromo renombrado/borrado (hipodromo_id queda NULL en ese caso).
+  const base = [req.grupoId, fecha, nombreHipodromo];
+  const conCarrera = [...base, carreraNumero];
+
+  const rPlanos = await db.query(
+    `SELECT * FROM hipismo_planos
+      WHERE grupo_id = $1 AND fecha = $2 AND lower(hipodromo_nombre) = lower($3) AND carrera_numero = $4
+      ORDER BY creado_en`, conCarrera
+  );
+  const idsPlanos = rPlanos.rows.map(p => p.id);
+  const rTickets = idsPlanos.length
+    ? await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = ANY($1) ORDER BY creado_en', [idsPlanos])
+    : { rows: [] };
+  const planos = rPlanos.rows.map(p => ({
+    id: p.id,
+    hipodromoNombre: p.hipodromo_nombre,
+    carreraNumero: p.carrera_numero,
+    fecha: fechaComoISO(p.fecha),
+    ret: p.ret,
+    pizarra: p.pizarra,
+    cruzaJugadas: !!p.cruza_jugadas,
+    comisionTotal: Number(p.comision_total),
+    creadoEn: p.creado_en,
+    tickets: rTickets.rows.filter(t => t.plano_id === p.id).map(t => ({
+      id: t.id,
+      cliente: t.cliente_nombre,
+      banquero: t.banquero_nombre,
+      modalidad: t.modalidad,
+      caballo: t.caballo,
+      monto: Number(t.monto),
+      resultadoJugador: Number(t.resultado_jugador),
+      resultadoBanquero: Number(t.resultado_banquero),
+      sinComision: !!t.sin_comision
+    }))
+  }));
+
+  const rAdelantadas = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha = $2 AND lower(p.hipodromo_nombre) = lower($3) AND j.carrera_numero = $4
+      ORDER BY j.creado_en`, conCarrera
+  );
+
+  const rTercios = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha = $2 AND lower(p.hipodromo_nombre) = lower($3) AND j.carrera_numero = $4
+      ORDER BY j.creado_en`, conCarrera
+  );
+  const rTerciosSinCarrera = await db.query(
+    `SELECT j.*, p.hipodromo_nombre, p.fecha
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha = $2 AND lower(p.hipodromo_nombre) = lower($3) AND j.carrera_numero IS NULL
+      ORDER BY j.creado_en`, base
+  );
+
+  const rRemates = await db.query(
+    `SELECT * FROM hipismo_remates
+      WHERE grupo_id = $1 AND fecha = $2 AND lower(hipodromo_nombre) = lower($3) AND carrera_numero = $4
+      ORDER BY creado_en`, conCarrera
+  );
+  const idsRemates = rRemates.rows.map(r => r.id);
+  const rApuestas = idsRemates.length
+    ? await db.query('SELECT * FROM hipismo_remate_apuestas WHERE remate_id = ANY($1) ORDER BY numero_ejemplar, creado_en', [idsRemates])
+    : { rows: [] };
+  const remates = rRemates.rows.map(r => ({
+    id: r.id,
+    modo: r.modo || 'pool',
+    fecha: fechaComoISO(r.fecha),
+    pizarra: r.pizarra,
+    numeroGanador: r.numero_ganador,
+    huboGanador: !!r.hubo_ganador,
+    comisionPorcentaje: Number(r.comision_porcentaje),
+    garantia: r.garantia != null ? Number(r.garantia) : null,
+    pagoFijo: r.pago_fijo != null ? Number(r.pago_fijo) : null,
+    poolTotal: Number(r.pool_total),
+    pagoGanador: Number(r.pago_ganador),
+    resultadoRemate: Number(r.comision_total),
+    creadoEn: r.creado_en,
+    apuestas: rApuestas.rows.filter(a => a.remate_id === r.id).map(a => ({
+      id: a.id,
+      numeroEjemplar: a.numero_ejemplar,
+      caballo: a.caballo,
+      cliente: a.cliente_nombre,
+      monto: Number(a.monto),
+      resultado: Number(a.resultado)
+    }))
+  }));
+
+  const rWinners = await db.query(
+    `SELECT * FROM hipismo_winners
+      WHERE grupo_id = $1 AND fecha = $2 AND lower(hipodromo_nombre) = lower($3) AND carrera_numero = $4
+      ORDER BY creado_en`, conCarrera
+  );
+  const winners = rWinners.rows.map(w => ({
+    id: w.id, cliente: w.cliente_nombre, caballo: w.caballo, monto: Number(w.monto), creadoEn: w.creado_en
+  }));
+
+  res.json({
+    fecha, hipodromo: nombreHipodromo, carrera: carreraNumero,
+    planos,
+    adelantadas: rAdelantadas.rows.map(filaJugadaAdelantadaPublica),
+    tercios: rTercios.rows.map(filaJugadaTerciosAdelantadaPublica),
+    terciosSinCarrera: rTerciosSinCarrera.rows.map(filaJugadaTerciosAdelantadaPublica),
+    remates,
+    winners
+  });
+}));
+
 router.get('/balance-general', asyncHandler(async (req, res) => {
   const { fecha } = req.query;
   const params = [req.grupoId];
