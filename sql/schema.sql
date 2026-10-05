@@ -1978,3 +1978,22 @@ create index if not exists idx_hipismo_cargas_especiales_lineas_grupo_cliente on
 alter table hipismo_codigos_especiales enable row level security;
 alter table hipismo_cargas_especiales enable row level security;
 alter table hipismo_cargas_especiales_lineas enable row level security;
+
+-- =================================================================
+-- "FECHA DE SEMANA" ACTIVA (05-10-2026, a pedido del usuario: "activame
+-- esta pantalla, no funciona"): cada grupo puede definir en qué día empieza
+-- y en qué día cierra su semana de Hipismo (ej. Lunes -> Lunes cuando el
+-- lunes hay carreras en EE.UU.). Ver la nota grande de
+-- services/hipismoSemana.js. NULL en las columnas = la semana de siempre
+-- (lunes a domingo): no afecta ningún dato ya guardado.
+--   hipismo_semana_inicio / hipismo_semana_cierre: día de la semana (0 =
+--     domingo ... 6 = sábado).
+--   hipismo_semana_desde: fecha ancla — el primer día de la primera semana
+--     con esta configuración (las semanas siguientes se encadenan desde ahí).
+--   hipismo_semana_hasta: (rango personalizado del calendario) último día de
+--     esa primera semana; NULL = se calcula con el día de cierre.
+-- =================================================================
+alter table grupos add column if not exists hipismo_semana_inicio smallint;
+alter table grupos add column if not exists hipismo_semana_cierre smallint;
+alter table grupos add column if not exists hipismo_semana_desde date;
+alter table grupos add column if not exists hipismo_semana_hasta date;

@@ -24,6 +24,7 @@ const db = require('../db');
 const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
+const { rangoSemanaGrupo } = require('./hipismoSemana');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -138,15 +139,6 @@ function montoBaseParaPct(linea) {
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 function isoDeFechaUTC(d) { return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
 function hoyVenezuela() { return new Date(Date.now() - 4 * 60 * 60 * 1000); }
-function rangoSemana(fecha, offsetSemanas) {
-  const diaSemana = fecha.getUTCDay();
-  const diffHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-  const lunes = new Date(fecha);
-  lunes.setUTCDate(lunes.getUTCDate() + diffHastaLunes + offsetSemanas * 7);
-  const domingo = new Date(lunes);
-  domingo.setUTCDate(lunes.getUTCDate() + 6);
-  return { desde: isoDeFechaUTC(lunes), hasta: isoDeFechaUTC(domingo) };
-}
 
 // =================================================================
 // RESUMEN DE UNA CUENTA DE COMISIÓN (26-09-2026, a pedido del usuario:
@@ -457,7 +449,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(jugador.grupo_id, hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const { porDia, totalSemana: totalSemanaDestino, totalHoy: totalHoyDestino, cantidadJugadas: cantidadDestino } =
@@ -540,7 +532,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(jugador.grupo_id, hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const lineasHipismo = await obtenerLineasHipismoCliente(jugador.grupo_id, jugador.nombre, desde, hasta);
@@ -946,7 +938,7 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(grupoId, hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const rRemates = await db.query(
@@ -1046,7 +1038,7 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(grupoId, hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const rWinners = await db.query(
@@ -1132,7 +1124,7 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(grupoId, hoyVe, offset);
   const hoyIso = isoDeFechaUTC(hoyVe);
 
   const rTablasFijas = await db.query(

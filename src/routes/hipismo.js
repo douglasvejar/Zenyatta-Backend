@@ -44,6 +44,10 @@ const chatService = require('../services/chat');
 // convención ISO-8601), reusado tal cual en vez de reinventarlo acá.
 const { numeroSemanaISO } = require('../services/fechaSemana');
 const {
+  rangoSemanaGrupo, obtenerConfigSemana, guardarConfigSemana, describirConfigSemana, parsearDia, diasDelRango,
+  validarRangoPersonalizado, guardarRangoPersonalizado
+} = require('../services/hipismoSemana');
+const {
   calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO,
   parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
   parsearValoresSinComision,
@@ -3344,15 +3348,10 @@ router.get('/balance-general', asyncHandler(async (req, res) => {
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 function isoDeFechaUTC(d) { return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
 function hoyVenezuela() { return new Date(Date.now() - 4 * 60 * 60 * 1000); }
-function rangoSemana(fecha, offsetSemanas) {
-  const diaSemana = fecha.getUTCDay();
-  const diffHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-  const lunes = new Date(fecha);
-  lunes.setUTCDate(lunes.getUTCDate() + diffHastaLunes + offsetSemanas * 7);
-  const domingo = new Date(lunes);
-  domingo.setUTCDate(lunes.getUTCDate() + 6);
-  return { desde: isoDeFechaUTC(lunes), hasta: isoDeFechaUTC(domingo) };
-}
+// rangoSemana() (lunes a domingo fijo) se reemplazó el 05-10-2026 por
+// rangoSemanaGrupo() de services/hipismoSemana.js, que respeta la
+// configuración de "Fecha de Semana" de cada grupo (por defecto sigue siendo
+// lunes a domingo, igual que antes).
 
 // Rango de fechas a mano (28-09-2026, a pedido del usuario: "en balance
 // general... agrega un panel donde pueda elegir el rango de fechas que
@@ -3394,6 +3393,33 @@ function textoJugadaTicket(t) {
   return `${t.modalidad} (${t.caballo}) con ${Number(t.monto).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// "FECHA DE SEMANA" ACTIVA (05-10-2026, a pedido del usuario: "activame esta
+// pantalla, no funciona") — ver services/hipismoSemana.js.
+//   GET /semana-config  configuración guardada + semanas anterior/actual/siguiente
+//   PUT /semana-config  { inicio, cierre } (nombre de día o 0-6): guarda la semana
+//                       del grupo; Lunes -> Domingo borra la configuración.
+router.get('/semana-config', asyncHandler(async (req, res) => {
+  res.json(describirConfigSemana(await obtenerConfigSemana(req.grupoId)));
+}));
+
+router.put('/semana-config', asyncHandler(async (req, res) => {
+  const { inicio, cierre, desde, hasta } = req.body || {};
+  // Rango personalizado elegido con el calendario (YYYY-MM-DD).
+  if (desde !== undefined || hasta !== undefined) {
+    const error = validarRangoPersonalizado(desde, hasta);
+    if (error) return res.status(400).json({ error });
+    const cfg = await guardarRangoPersonalizado(req.grupoId, desde, hasta);
+    return res.json(describirConfigSemana(cfg));
+  }
+  const i = parsearDia(inicio);
+  const c = parsearDia(cierre);
+  if (i === null || c === null) {
+    return res.status(400).json({ error: 'Elige el día en que empieza y el día en que cierra la semana.' });
+  }
+  const cfg = await guardarConfigSemana(req.grupoId, i, c);
+  res.json(describirConfigSemana(cfg));
+}));
+
 // GET /semana-actual?semana=actual|anterior|hace2 (23-09-2026,
 // duodécima-tercera ronda, a pedido del usuario: "en balance general al
 // ver los saldos... colocame arriba la fecha que este comprendida la
@@ -3406,14 +3432,14 @@ function textoJugadaTicket(t) {
 router.get('/semana-actual', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
-  const { desde, hasta } = rangoSemana(hoyVenezuela(), offset);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
   res.json({ rango: { desde, hasta }, numeroSemana: numeroSemanaISO(desde) });
 }));
 
 router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
-  const { desde, hasta } = rangoSemana(hoyVenezuela(), offset);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
   const numeroSemana = numeroSemanaISO(desde);
 
   const rPlanos = await db.query(
@@ -3506,12 +3532,12 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
 // rangoPersonalizadoDeQuery()/rangoSemana() de /cierre-final: si el
 // frontend manda ?desde=&hasta= con fechas válidas, GANAN sobre la
 // semana actual (rango personalizado); si no manda nada, cae en
-// rangoSemana(hoyVenezuela(), 0).
+// await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), 0).
 //
 // GET /comisiones-sin-devoluciones?desde=&hasta=
 router.get('/comisiones-sin-devoluciones', asyncHandler(async (req, res) => {
   const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVenezuela(), 0);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), 0);
 
   const rPlanos = await db.query(
     `SELECT id, comision_total FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3`,
@@ -4332,7 +4358,7 @@ router.get('/montos-apostados', asyncHandler(async (req, res) => {
   } else if (req.query.fecha) {
     desde = hasta = req.query.fecha;
   } else {
-    ({ desde, hasta } = rangoSemana(hoyVenezuela(), 0));
+    ({ desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), 0));
   }
   const detalle = await obtenerApuestasDelRango(req.grupoId, desde, hasta);
 
@@ -4653,7 +4679,7 @@ router.get('/cierre-final', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVe, offset);
   // Con rango personalizado no tiene sentido "semana actual" ni "semana
   // ISO N" (puede abarcar varias semanas o ni empezar en lunes) — el
   // frontend usa el flag rangoPersonalizado de la respuesta para mostrar
@@ -4689,7 +4715,7 @@ router.get('/diagnostico-saldos', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || rangoSemana(hoyVe, offset);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVe, offset);
 
   const resultado = await diagnosticarSaldosHipismo(req.grupoId, req.grupo, desde, hasta);
   return res.json({
@@ -4766,7 +4792,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVe, offset);
   const numeroSemana = numeroSemanaISO(desde);
 
   // `p.hipodromo_nombre, p.carrera_numero, p.fecha` (02-10-2026, agregadas
@@ -5031,30 +5057,33 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
 // Hipismo.
 const DIAS_LARGO_HIPISMO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const DIAS_CORTO_HIPISMO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-function diasDeLaSemanaHipismo(desde) {
-  const dias = [];
-  let actual = new Date(desde + 'T00:00:00Z');
-  for (let i = 0; i < 7; i++) {
-    const fecha = isoDeFechaUTC(actual);
-    dias.push({ fecha, nombre: DIAS_LARGO_HIPISMO[actual.getUTCDay()], corta: DIAS_CORTO_HIPISMO[actual.getUTCDay()] });
-    actual = new Date(actual.getTime() + 24 * 60 * 60 * 1000);
+function diasDeLaSemanaHipismo(desde, hasta) {
+  const dias = diasDelRango(desde, hasta || isoDeFechaUTC(new Date(new Date(desde + 'T00:00:00Z').getTime() + 6 * 24 * 60 * 60 * 1000))).map(fecha => {
+    const d = new Date(fecha + 'T00:00:00Z');
+    return { fecha, nombre: DIAS_LARGO_HIPISMO[d.getUTCDay()], corta: DIAS_CORTO_HIPISMO[d.getUTCDay()] };
+  });
+  // Semana de lunes a domingo (la de siempre): 24-09-2026, a pedido del
+  // usuario: "cuando hay carreras los lunes el lunes va al lado del domingo"
+  // — para MOSTRAR las columnas el lunes se corre al final, pegado al
+  // domingo, en vez de encabezar la fila.
+  if (dias.length === 7 && dias[0].nombre === 'Lunes') return [...dias.slice(1), dias[0]];
+  // Semana configurada en "Fecha de Semana" (05-10-2026): orden cronológico;
+  // si dura más de 7 días un día de la semana se repite (Lunes ... Lunes),
+  // así que el encabezado lleva también la fecha.
+  if (dias.length !== 7) {
+    dias.forEach(d => { d.corta = `${d.corta} ${d.fecha.slice(8, 10)}/${d.fecha.slice(5, 7)}`; });
   }
-  // 24-09-2026, a pedido del usuario: "cuando hay carreras los lunes el
-  // lunes va al lado del domingo" — `rangoSemana()` sigue definiendo la
-  // semana lunes-a-domingo para el CÁLCULO (eso no cambia), pero para
-  // MOSTRAR las columnas el lunes se corre al final, pegado al domingo,
-  // en vez de encabezar la fila (dias[0] es siempre el lunes acá arriba).
-  return [...dias.slice(1), dias[0]];
+  return dias;
 }
 
 router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoSemana(hoyVe, offset);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVe, offset);
   const esSemanaActual = isoDeFechaUTC(hoyVe) >= desde && isoDeFechaUTC(hoyVe) <= hasta;
   const numeroSemana = numeroSemanaISO(desde);
-  const dias = diasDeLaSemanaHipismo(desde);
+  const dias = diasDeLaSemanaHipismo(desde, hasta);
 
   // 28-09-2026, a pedido del usuario ("semana por dias no coincide con
   // el balance general"): se agregan las columnas monto/plano_id/

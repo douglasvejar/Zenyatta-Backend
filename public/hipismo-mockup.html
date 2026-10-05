@@ -1071,6 +1071,21 @@
     .chat-widget { right: 12px; bottom: 12px; }
     .chat-widget-burbuja { width: 52px; height: 52px; font-size: 22px; }
   }
+
+  /* Fecha de Semana: calendario de rango personalizado */
+  .cal-sem-bloque { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+  .cal-sem-nav { display: flex; gap: 8px; margin-bottom: 10px; }
+  .cal-sem-meses { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .cal-sem-mes h4 { margin: 0 0 6px; text-align: center; font-size: 15px; text-transform: capitalize; }
+  .cal-sem-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-sem-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-dim); padding: 4px 0; }
+  .cal-sem-dia { border: 1px solid transparent; background: var(--card-2); color: var(--text); border-radius: 6px; padding: 8px 0; font-size: 14px; font-variant-numeric: tabular-nums; cursor: pointer; font-family: inherit; }
+  .cal-sem-dia:hover { border-color: var(--accent); }
+  .cal-sem-dia.hoy { font-weight: 800; border-color: var(--text-dim); }
+  .cal-sem-dia.guardada { background: #d9efe0; }
+  .cal-sem-dia.en-rango { background: #bfe6cb; border-radius: 0; }
+  .cal-sem-dia.extremo { background: var(--accent); color: #fff; font-weight: 800; border-radius: 6px; }
+  .cal-sem-vacio { visibility: hidden; }
 </style>
 </head>
 <body>
@@ -2907,8 +2922,27 @@
             </select>
           </div>
         </div>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>Guardar configuración</button></div>
+        <div class="btn-fila"><button class="btn btn-primario" type="button" id="btnGuardarSemana" onclick="guardarFechaSemana()">Guardar configuración</button></div>
+
+        <div class="cal-sem-bloque">
+          <h3 style="margin:0 0 4px;">🗓️ Rango personalizado con calendario</h3>
+          <p class="desc" style="margin:0 0 10px;">¿Necesitas una semana distinta? Toca en el calendario el día <b>Desde</b> y luego el día <b>Hasta</b> (puede durar los días que quieras, hasta 31). Las semanas siguientes siguen de 7 en 7 días a partir del día después de tu "Hasta".</p>
+          <div class="cal-sem-nav">
+            <button class="btn" type="button" onclick="calSemMoverMes(-1)" aria-label="Mes anterior">◀</button>
+            <button class="btn" type="button" onclick="calSemIrAHoy()">Hoy</button>
+            <button class="btn" type="button" onclick="calSemMoverMes(1)" aria-label="Mes siguiente">▶</button>
+          </div>
+          <div class="cal-sem-meses" id="calSemMeses"></div>
+          <p class="desc" id="calSemResumen" style="margin:10px 0 0;"></p>
+          <div class="btn-fila">
+            <button class="btn btn-primario" type="button" id="btnGuardarRangoSemana" onclick="guardarRangoSemana()" disabled>Guardar rango elegido</button>
+            <button class="btn" type="button" onclick="calSemLimpiar()">Limpiar selección</button>
+          </div>
+        </div>
+
         <p class="desc" id="previewSemana" style="margin-top:16px; margin-bottom:0;"></p>
+        <p class="desc" id="estadoSemana" style="margin-top:8px; margin-bottom:0;"></p>
+        <p class="desc" style="margin-top:12px; margin-bottom:0;">Al guardar, <b>todos los reportes de Hipismo</b> (Cierre Final, Balance General, Semana por Días, Comisiones, Saldo Comisiones, Detallado por Cliente y el link de cada cliente) usan esta semana. Si el inicio y el cierre son el mismo día (por ejemplo Lunes y Lunes), esa primera semana dura 8 días y la siguiente arranca el día después del cierre, así ningún día se cuenta dos veces. <b>Lunes a Domingo</b> vuelve a la semana de siempre.</p>
       </div>
     </section>
 
@@ -3374,6 +3408,38 @@ function formatDiaMesCorto(d) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Misma regla que semanaQueContiene() de services/hipismoSemana.js: sin
+// configuración (o con Lunes -> Domingo) la semana es lunes-domingo; con
+// una configuración, la primera semana va de la fecha ancla al primer día de
+// cierre posterior y las siguientes se encadenan de 7 días.
+function semanaConfigDeFecha(fecha) {
+  const UN_DIA = 24 * 60 * 60 * 1000;
+  const aUTC = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const deUTC = ms => { const x = new Date(ms); return new Date(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()); };
+  const cfg = FECHA_SEMANA_GUARDADA;
+  const d = aUTC(fecha);
+  let desde, hasta;
+  if (!cfg || cfg.esDefecto || !cfg.desde) {
+    const dow = fecha.getDay();
+    desde = d + (dow === 0 ? -6 : 1 - dow) * UN_DIA;
+    hasta = desde + 6 * UN_DIA;
+  } else {
+    const [y, m, dd] = cfg.desde.split('-').map(Number);
+    const ancla = Date.UTC(y, m - 1, dd);
+    let cierre0 = ancla + (((cfg.cierre - cfg.inicio + 7) % 7) || 7) * UN_DIA;
+    if (cfg.hasta) { const [hy, hm, hd] = cfg.hasta.split('-').map(Number); cierre0 = Date.UTC(hy, hm - 1, hd); }
+    if (d >= ancla && d <= cierre0) { desde = ancla; hasta = cierre0; }
+    else if (d > cierre0) {
+      desde = cierre0 + UN_DIA + Math.floor((d - (cierre0 + UN_DIA)) / (7 * UN_DIA)) * 7 * UN_DIA;
+      hasta = desde + 6 * UN_DIA;
+    } else {
+      hasta = ancla - UN_DIA - Math.floor((ancla - UN_DIA - d) / (7 * UN_DIA)) * 7 * UN_DIA;
+      desde = hasta - 6 * UN_DIA;
+    }
+  }
+  return { inicioSemana: deUTC(desde), finSemana: deUTC(hasta) };
+}
+
 function pintarFechaGrandePlano() {
   const el = document.getElementById('fechaGrandePlano');
   const inp = document.getElementById('inpFecha');
@@ -3382,13 +3448,9 @@ function pintarFechaGrandePlano() {
   const fecha = parsearFechaLocal(fechaStr);
   const nombreDia = DIAS_SEMANA_NOMBRE[fecha.getDay()];
 
-  // Semana de lunes a domingo que contiene la fecha elegida (el default
-  // de siempre — ver "Fecha de Semana" en Administración para el caso
-  // de grupos que la corren).
-  let diffDesdeLunes = fecha.getDay() - 1;
-  if (diffDesdeLunes < 0) diffDesdeLunes += 7;
-  const inicioSemana = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - diffDesdeLunes);
-  const finSemana = new Date(inicioSemana.getFullYear(), inicioSemana.getMonth(), inicioSemana.getDate() + 6);
+  // Semana (la configurada en "Fecha de Semana"; por defecto lunes a
+  // domingo) que contiene la fecha elegida.
+  const { inicioSemana, finSemana } = semanaConfigDeFecha(fecha);
 
   el.textContent = `📅 ${nombreDia} ${formatDiaMesCorto(fecha)} — Semana del ${formatDiaMesCorto(inicioSemana)} al ${formatDiaMesCorto(finSemana)}`;
 }
@@ -6048,6 +6110,8 @@ function mostrarVista(id, btn) {
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
+  // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
+  fechaSemana: () => cargarFechaSemana(),
   // "Carga Masiva Especial" (05-10-2026) — códigos con saldo + cargas recientes.
   cargaMasivaEspecial: () => entrarCargaMasivaEspecial(),
   // "Traspaso de Saldo" (05-10-2026) — lista de clientes activos + historial.
@@ -11679,6 +11743,154 @@ function actualizarPreviewSemana() {
 
   document.getElementById('previewSemana').textContent =
     `Con esta configuración, cada semana va de ${inicio} a ${cierre} — la semana actual concretamente es del ${formatFechaDMY(fechaInicio)} al ${formatFechaDMY(fechaFin)}.`;
+  const est = document.getElementById('estadoSemana');
+  if (FECHA_SEMANA_GUARDADA && (inicio !== FECHA_SEMANA_GUARDADA.inicioNombre || cierre !== FECHA_SEMANA_GUARDADA.cierreNombre)) {
+    est.textContent = '⚠️ Todavía no está guardado: presiona "Guardar configuración" para que los reportes la usen.';
+  }
+}
+
+// "Fecha de Semana" ACTIVA (05-10-2026): lee y guarda la semana del grupo
+// (GET/PUT /api/hipismo/semana-config) — todos los reportes de Hipismo la usan.
+var FECHA_SEMANA_GUARDADA = null;
+
+function pintarFechaSemanaGuardada(cfg) {
+  FECHA_SEMANA_GUARDADA = cfg;
+  pintarFechaGrandePlano();
+  document.getElementById('selInicioSemana').value = cfg.inicioNombre;
+  document.getElementById('selCierreSemana').value = cfg.cierreNombre;
+  const f = formatFechaCortaDMY;
+  document.getElementById('previewSemana').textContent = cfg.personalizada
+    ? `Rango personalizado: la semana que elegiste va del ${f(cfg.desde)} al ${f(cfg.hasta)}; las siguientes duran 7 días. La semana actual es del ${f(cfg.actual.desde)} al ${f(cfg.actual.hasta)}.`
+    : `Con esta configuración, cada semana va de ${cfg.inicioNombre} a ${cfg.cierreNombre} — la semana actual concretamente es del ${f(cfg.actual.desde)} al ${f(cfg.actual.hasta)}.`;
+  CAL_SEM.desde = cfg.actual.desde; CAL_SEM.hasta = cfg.actual.hasta;
+  { const [yy, mm] = cfg.actual.desde.split('-').map(Number); CAL_SEM.mes = new Date(yy, mm - 1, 1); }
+  calSemPintar();
+  document.getElementById('estadoSemana').textContent =
+    `✅ Guardada${cfg.esDefecto ? ' (la semana de siempre, de lunes a domingo)' : ''}. Semana anterior: ${f(cfg.anterior.desde)} al ${f(cfg.anterior.hasta)} · Semana siguiente: ${f(cfg.siguiente.desde)} al ${f(cfg.siguiente.hasta)}.`;
+}
+
+async function cargarFechaSemana() {
+  try {
+    pintarFechaSemanaGuardada(await apiHipismo('/api/hipismo/semana-config'));
+  } catch (e) {
+    document.getElementById('estadoSemana').textContent = 'No se pudo leer la configuración guardada: ' + e.message;
+    actualizarPreviewSemana();
+  }
+}
+
+// ---- Calendario de rango personalizado (Fecha de Semana) ----
+var CAL_SEM = { mes: null, desde: null, hasta: null };
+const MESES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DOW_CORTO = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+function calSemIso(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
+function calSemMs(iso) { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); }
+function calSemDias(desde, hasta) { return Math.round((calSemMs(hasta) - calSemMs(desde)) / 86400000) + 1; }
+function calSemNombreDia(iso) { return ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date(calSemMs(iso)).getUTCDay()]; }
+
+function calSemIniciar() {
+  if (!CAL_SEM.mes) { const h = new Date(); CAL_SEM.mes = new Date(h.getFullYear(), h.getMonth(), 1); }
+  calSemPintar();
+}
+
+function calSemMoverMes(delta) {
+  CAL_SEM.mes = new Date(CAL_SEM.mes.getFullYear(), CAL_SEM.mes.getMonth() + delta, 1);
+  calSemPintar();
+}
+
+function calSemIrAHoy() {
+  const h = new Date();
+  CAL_SEM.mes = new Date(h.getFullYear(), h.getMonth(), 1);
+  calSemPintar();
+}
+
+function calSemLimpiar() {
+  CAL_SEM.desde = null; CAL_SEM.hasta = null;
+  calSemPintar();
+}
+
+function calSemElegir(iso) {
+  const c = CAL_SEM;
+  if (!c.desde || c.hasta) { c.desde = iso; c.hasta = null; }
+  else if (iso < c.desde) { c.hasta = c.desde; c.desde = iso; }
+  else { c.hasta = iso; }
+  calSemPintar();
+}
+
+function calSemPintar() {
+  const cont = document.getElementById('calSemMeses');
+  if (!cont || !CAL_SEM.mes) return;
+  const hoy = new Date();
+  const hoyIso = calSemIso(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const g = FECHA_SEMANA_GUARDADA ? FECHA_SEMANA_GUARDADA.actual : null;
+  let html = '';
+  for (let k = 0; k < 2; k++) {
+    const base = new Date(CAL_SEM.mes.getFullYear(), CAL_SEM.mes.getMonth() + k, 1);
+    const y = base.getFullYear(), m = base.getMonth();
+    const diasMes = new Date(y, m + 1, 0).getDate();
+    const offset = (base.getDay() + 6) % 7; // lunes primero
+    html += `<div class="cal-sem-mes"><h4>${MESES_NOMBRE[m]} ${y}</h4><div class="cal-sem-grid">`;
+    html += DOW_CORTO.map(x => `<div class="cal-sem-dow">${x}</div>`).join('');
+    for (let i = 0; i < offset; i++) html += '<div class="cal-sem-vacio"></div>';
+    for (let d = 1; d <= diasMes; d++) {
+      const iso = calSemIso(y, m, d);
+      const clases = ['cal-sem-dia'];
+      if (iso === hoyIso) clases.push('hoy');
+      if (g && iso >= g.desde && iso <= g.hasta) clases.push('guardada');
+      const { desde, hasta } = CAL_SEM;
+      if (desde && hasta && iso > desde && iso < hasta) clases.push('en-rango');
+      if (iso === desde || iso === hasta) clases.push('extremo');
+      html += `<button type="button" class="${clases.join(' ')}" onclick="calSemElegir('${iso}')">${d}</button>`;
+    }
+    html += '</div></div>';
+  }
+  cont.innerHTML = html;
+
+  const { desde, hasta } = CAL_SEM;
+  const r = document.getElementById('calSemResumen');
+  const btn = document.getElementById('btnGuardarRangoSemana');
+  const f = formatFechaCortaDMY;
+  if (!desde) {
+    r.textContent = 'Toca el día en que EMPIEZA la semana. (El verde clarito es la semana que está guardada ahora.)';
+  } else if (!hasta) {
+    r.textContent = `Desde: ${calSemNombreDia(desde)} ${f(desde)} — ahora toca el día en que CIERRA la semana.`;
+  } else {
+    const n = calSemDias(desde, hasta);
+    r.textContent = `Desde ${calSemNombreDia(desde)} ${f(desde)} hasta ${calSemNombreDia(hasta)} ${f(hasta)} (${n} día${n === 1 ? '' : 's'}).` + (n > 31 ? ' ⚠️ El máximo es 31 días.' : '');
+  }
+  btn.disabled = !(desde && hasta && calSemDias(desde, hasta) <= 31);
+}
+
+async function guardarRangoSemana() {
+  const { desde, hasta } = CAL_SEM;
+  if (!desde || !hasta) return;
+  const f = formatFechaCortaDMY;
+  const btn = document.getElementById('btnGuardarRangoSemana');
+  btn.disabled = true;
+  try {
+    const cfg = await apiHipismo('/api/hipismo/semana-config', { method: 'PUT', body: JSON.stringify({ desde, hasta }) });
+    pintarFechaSemanaGuardada(cfg);
+    alert(`Rango guardado: del ${f(desde)} al ${f(hasta)}.\nLas semanas siguientes siguen de 7 días desde el día después de ${f(hasta)}.`);
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+  }
+  calSemPintar();
+}
+
+async function guardarFechaSemana() {
+  const inicio = document.getElementById('selInicioSemana').value;
+  const cierre = document.getElementById('selCierreSemana').value;
+  const btn = document.getElementById('btnGuardarSemana');
+  btn.disabled = true;
+  try {
+    const cfg = await apiHipismo('/api/hipismo/semana-config', { method: 'PUT', body: JSON.stringify({ inicio, cierre }) });
+    pintarFechaSemanaGuardada(cfg);
+    alert(`Semana guardada: ${inicio} a ${cierre}.\nLa semana actual es del ${formatFechaCortaDMY(cfg.actual.desde)} al ${formatFechaCortaDMY(cfg.actual.hasta)}.`);
+  } catch (e) {
+    alert('No se pudo guardar: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ------------------------------------------------------------------
@@ -14684,6 +14896,8 @@ cargarPendientesTerciosAdelantadas();
 cargarBanqueadoresConocidos();
 cargarClientesReales();
 actualizarPreviewSemana();
+calSemIniciar();
+cargarFechaSemana();
 pintarCierreFinal('actual');
 actualizarColumnasCierre();
 pintarSemanaPorDias('actual');

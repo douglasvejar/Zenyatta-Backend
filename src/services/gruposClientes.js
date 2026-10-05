@@ -24,6 +24,7 @@
 // grupos_clientes_miembros.
 // =================================================================
 const db = require('../db');
+const { rangoSemanaGrupo } = require('./hipismoSemana');
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
 const { construirCierreFinalHipismo } = require('./hipismoResumenCliente');
@@ -201,8 +202,18 @@ async function construirTarjetaGrupoCliente(grupoClienteId, grupoId, modulo) {
   // semana anterior de respaldo" — nunca un selector para navegar
   // cualquier semana, a propósito, para que el link público quede simple).
   const hoyIso = fechaVenezuelaHoy();
-  const semanaActual = calcularSemana(hoyIso);
-  const semanaAnterior = calcularSemana(fechaSieteDiasAntes(hoyIso));
+  // Deportes: semana ISO lunes-domingo de siempre. Hipismo (05-10-2026): usa
+  // la semana configurada en "Fecha de Semana" del grupo (por defecto, la
+  // misma lunes-domingo).
+  let semanaActual, semanaAnterior;
+  if (grupoCliente.modulo === 'hipismo') {
+    const hoyFecha = new Date(hoyIso + 'T00:00:00Z');
+    semanaActual = await rangoSemanaGrupo(grupoCliente.grupo_id, hoyFecha, 0);
+    semanaAnterior = await rangoSemanaGrupo(grupoCliente.grupo_id, hoyFecha, -1);
+  } else {
+    semanaActual = calcularSemana(hoyIso);
+    semanaAnterior = calcularSemana(fechaSieteDiasAntes(hoyIso));
+  }
 
   const [saldosActual, saldosAnterior] = await Promise.all([
     saldosPorNombre(grupoCliente.grupo_id, grupoCliente.modulo, semanaActual.desde, semanaActual.hasta),
