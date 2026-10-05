@@ -225,6 +225,14 @@ const nuevoId = (prefijo) => prefijo + (seq++);
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  // Regla nueva (05-10-2026): un cliente que no existe es error, no se crea solo. Por defecto los nombres existen; global.__CLIENTES_NO_EXISTEN (opcional) lista los que no.
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+    // Los nombres "existen" (salvo los de global.__CLIENTES_NO_EXISTEN). Si la base falsa de esta prueba
+    // guarda jugadores, se los da de alta con su mismo INSERT de siempre para que el resto de la ruta los vea.
+    const existentes = (params[1] || []).filter(n => !(global.__CLIENTES_NO_EXISTEN || []).includes(n));
+    existentes.forEach(nombre => { try { ejecutarQuery("INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial) VALUES ($1, $2, true, true, 'libre', 0) ON CONFLICT (grupo_id, nombre) DO NOTHING", [params[0], nombre]); } catch (e) { /* esta base falsa no guarda jugadores */ } });
+    return { rows: existentes.map(nombre => ({ nombre })) };
+  }
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
   if (/^INSERT INTO jugadores \(grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial\)/i.test(sql)) {
@@ -551,7 +559,7 @@ function reqBase(grupoId) {
   check(resGuardar._status === 201, 'POST /adelantadas guarda el plano real (201)');
   check(resGuardar._json.cantidadJugadas === 18, 'Guardó las 18 jugadas');
   check(TABLAS.hipismo_adelantadas_jugadas.filter(j => j.estado === 'pendiente').length === 18, 'Las 18 jugadas quedan en estado "pendiente"');
-  check(TABLAS.jugadores.some(j => j.nombre === 'LINARES') && TABLAS.jugadores.some(j => j.nombre === 'HOUSTON'), 'Los clientes del plano de adelantadas quedan auto-registrados');
+  check(TABLAS.jugadores.some(j => j.nombre === 'LINARES') && TABLAS.jugadores.some(j => j.nombre === 'HOUSTON'), 'Los clientes del plano de adelantadas existen en jugadores (la prueba los da de alta antes: la ruta ya NO los crea sola, ver test_hipismo_cliente_no_existe.js)');
 
   // --- GET /adelantadas/pendientes: agrupado por carrera ---
   const resPendientes1 = await invocarRuta(handlerAdelantadasPendientes, Object.assign(reqBase(GRUPO_ID), { body: {} }));
@@ -868,7 +876,7 @@ function reqBase(grupoId) {
   const resEditarPendiente = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { body: { monto: 150, cliente: 'HOUSTON EDITADO' } }), { id: houstonPendiente.id });
   check(resEditarPendiente._status === 200 && resEditarPendiente._json.monto === 150 && resEditarPendiente._json.cliente === 'HOUSTON EDITADO', '10d) PUT edita cliente y monto de una jugada pendiente');
   check(resEditarPendiente._json.estado === 'pendiente' && resEditarPendiente._json.resultadoCliente === null, 'Sigue "pendiente" — no hay pizarra_usada todavía, nada que recalcular');
-  check(TABLAS.jugadores.some(j => j.nombre === 'HOUSTON EDITADO'), 'El nuevo nombre del cliente queda auto-registrado en jugadores');
+  check(TABLAS.jugadores.some(j => j.nombre === 'HOUSTON EDITADO'), 'El nuevo nombre del cliente existe en jugadores (la prueba lo da de alta antes: la ruta ya NO lo crea sola)');
 
   // --- Alertas: las 4 ediciones de arriba generaron su alerta ---
   check(TABLAS.hipismo_alertas.filter(a => a.tipo === 'ADELANTADA_EDITADA').length === 4, 'Cada PUT de arriba generó su alerta "ADELANTADA_EDITADA"');

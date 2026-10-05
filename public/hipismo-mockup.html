@@ -286,7 +286,7 @@
   .btn-fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 
   .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
-  .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; }
+  .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; white-space: pre-line; }
   .aviso-resultado { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: #eaf4ff; border: 1px solid #bdddfd; color: #0b3d66; }
   .aviso-resultado.aviso-confirmado { background: #e9f8ee; border-color: #b9e6c7; color: #0f5a2c; }
   /* Info admin del Remate (26-09-2026, ver la nota grande junto a
@@ -2721,27 +2721,28 @@
     <section class="vista" id="vista-cargaMasivaEspecial">
       <div class="card">
         <h2>💼 Carga Masiva Especial <span id="cmeTituloEdicion" style="font-size:14px; font-weight:500; color:var(--text-dim);"></span></h2>
-        <p class="desc">Pega líneas con el formato <code>Cliente +Monto</code> o <code>Cliente -Monto</code> (una por línea). La suma de todas las líneas, incluido el código especial, debe dar 0.</p>
+        <p class="desc">Crea saldos de varias cuentas a la vez. Elige el hipódromo y la acción, y escribe una línea por cuenta con el formato <code>NOMBRE +Monto</code> o <code>NOMBRE -Monto</code>. La suma de todas las líneas tiene que dar <b>0</b>, y cada nombre tiene que estar escrito exactamente como en Clientes (si no, te avisa y no deja confirmar). También acepta las cuentas del grupo: <code>% TABLAS Y MARCAS</code>, <code>% TERCIOS ADELANTADAS</code>, <code>REMATE</code>, <code>WINNERS</code>, <code>TABLAS FIJAS</code> y <code>MARCAS</code>.</p>
         <div class="fila">
-          <div style="flex:2 1 260px;">
-            <label for="selCmeCodigo">Código especial *</label>
-            <select id="selCmeCodigo" onchange="cmeCambioForm()"></select>
+          <div style="flex:1 1 220px;">
+            <label for="selCmeHipodromo">🏟️ Hipódromo *</label>
+            <select id="selCmeHipodromo" onchange="cmeCambioForm()"></select>
           </div>
-          <div style="flex:0 0 auto; min-width:0; align-self:flex-end;">
-            <button class="btn btn-secundario" type="button" onclick="cmeCrearCodigo()">➕ Crear nuevo código</button>
+          <div style="flex:1 1 220px;">
+            <label for="selCmeAccion">🎯 Acción *</label>
+            <select id="selCmeAccion" onchange="cmeCambioForm()"></select>
           </div>
         </div>
         <div class="fila">
           <div><label for="inpCmeFecha">📅 Fecha de carga *</label><input type="date" id="inpCmeFecha" oninput="cmeCambioForm()"></div>
-          <div><label for="inpCmeCarrera">🏁 N° de Carrera</label><input type="text" id="inpCmeCarrera" placeholder="Ej: 1" oninput="cmeCambioForm()"></div>
+          <div><label for="inpCmeCarrera">🏁 N° de Carrera</label><input type="text" id="inpCmeCarrera" placeholder="Ej: 4 (opcional)" oninput="cmeCambioForm()"></div>
         </div>
-        <label for="txtCmeLineas">Pegar líneas *</label>
-        <textarea id="txtCmeLineas" rows="10" placeholder="JOSE -23.00&#10;LIONEL -50.00&#10;RAFAEL PARLEY +100.00&#10;PARLEY FORTUNA +73.00&#10;DEPORTE +0.00" oninput="cmeCambioForm()"></textarea>
-        <div id="cmePrevia" class="resultado-vacio" style="margin-top:12px;">Presiona "Previsualizar" para validar y ver el resumen.</div>
+        <label for="txtCmeLineas">Texto libre (una línea por cuenta) *</label>
+        <textarea id="txtCmeLineas" rows="10" placeholder="HAALAND +100&#10;MARCAS ZENYATTA -50&#10;MARCAS SAMMY -51,25&#10;% TABLAS Y MARCAS +1,25" oninput="cmeCambioForm()"></textarea>
+        <div id="cmePrevia" class="resultado-vacio" style="margin-top:12px;">Presiona "Calcular" para validar que la suma dé 0 y ver el detalle.</div>
         <div class="btn-fila" style="margin-top:12px;">
           <button class="btn btn-secundario" type="button" id="btnCmeCancelar" onclick="cmeLimpiar()">Cancelar</button>
-          <button class="btn btn-secundario" type="button" onclick="cmePrevisualizar()">👁 Previsualizar</button>
-          <button class="btn btn-primario" type="button" id="btnCmeAplicar" onclick="cmeAplicar()" disabled>✅ Aplicar</button>
+          <button class="btn btn-secundario" type="button" onclick="cmePrevisualizar()">🧮 Calcular</button>
+          <button class="btn btn-primario" type="button" id="btnCmeAplicar" onclick="cmeAplicar()" disabled>✅ Confirmar carga</button>
         </div>
       </div>
       <div class="card">
@@ -14454,27 +14455,37 @@ async function anularTraspasoSaldo(id) {
 // #vista-cargaMasivaEspecial y de las rutas /cargas-especiales en
 // routes/hipismo.js.
 // ------------------------------------------------------------------
-const CME = { codigos: [], cargas: [], editandoId: null };
+const CME = { acciones: [], cargas: [], editandoId: null };
 
 function cmeEsc(t) {
   return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Cualquier cambio del formulario invalida la vista previa anterior: hay que
-// volver a previsualizar antes de aplicar.
+// Cualquier cambio del formulario invalida el cálculo anterior: hay que
+// volver a calcular antes de confirmar.
 function cmeCambioForm() {
   document.getElementById('btnCmeAplicar').disabled = true;
   const prev = document.getElementById('cmePrevia');
   prev.className = 'resultado-vacio';
-  prev.innerHTML = 'Presiona "Previsualizar" para validar y ver el resumen.';
+  prev.innerHTML = 'Presiona "Calcular" para validar que la suma dé 0 y ver el detalle.';
 }
 
-function cmePintarSelectCodigos(seleccionar) {
-  const sel = document.getElementById('selCmeCodigo');
-  const previo = seleccionar || sel.value;
-  sel.innerHTML = '<option value="">— Elige un código —</option>' + CME.codigos.map(c =>
-    `<option value="${cmeEsc(c.nombre)}">${cmeEsc(c.nombre)} (saldo: ${Number(c.saldo).toFixed(2)})</option>`).join('');
-  if (previo && CME.codigos.some(c => c.nombre === previo)) sel.value = previo;
+function cmeNombreAccion(a) {
+  const t = String(a || '').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function cmePintarSelects(hipSel, accionSel) {
+  const selH = document.getElementById('selCmeHipodromo');
+  const hPrevio = hipSel !== undefined ? hipSel : selH.value;
+  selH.innerHTML = '<option value="">Todos los hipódromos</option>' + HIPODROMOS.map(h =>
+    `<option value="${cmeEsc(h.nombre)}">${cmeEsc(h.nombre)}</option>`).join('');
+  selH.value = HIPODROMOS.some(h => h.nombre === hPrevio) ? hPrevio : '';
+  const selA = document.getElementById('selCmeAccion');
+  const aPrevio = accionSel !== undefined ? accionSel : selA.value;
+  selA.innerHTML = '<option value="">— Elige la acción —</option>' + CME.acciones.map(a =>
+    `<option value="${cmeEsc(a)}">${cmeEsc(cmeNombreAccion(a))}</option>`).join('');
+  if (aPrevio && CME.acciones.includes(aPrevio)) selA.value = aPrevio;
 }
 
 async function entrarCargaMasivaEspecial() {
@@ -14487,19 +14498,19 @@ async function cmeCargarDatos() {
   const cont = document.getElementById('listaCme');
   try {
     const d = await apiHipismo('/api/hipismo/cargas-especiales');
-    CME.codigos = d.codigos; CME.cargas = d.cargas;
+    CME.acciones = d.acciones; CME.cargas = d.cargas;
   } catch (e) {
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${cmeEsc(e.message)}</div>`;
     return;
   }
-  cmePintarSelectCodigos();
+  cmePintarSelects();
   if (!CME.cargas.length) {
     cont.innerHTML = '<div class="placeholder-card">Todavía no has hecho ninguna carga masiva especial.</div>';
     return;
   }
   cont.innerHTML = CME.cargas.map(c => `
     <div class="balance-fila" style="margin-bottom:4px; flex-wrap:wrap; gap:6px;">
-      <span class="nombre">💼 ${formatFechaCortaDMY(c.fecha)}${c.carrera ? ' · Carrera ' + cmeEsc(c.carrera) : ''} · ${cmeEsc(c.codigo)} — ${c.lineas.length} línea(s)
+      <span class="nombre">💼 ${formatFechaCortaDMY(c.fecha)} · ${cmeEsc(c.hipodromo || 'Todos los hipódromos')}${c.carrera ? ' · Carrera ' + cmeEsc(c.carrera) : ''} · ${cmeEsc(cmeNombreAccion(c.accion))} — ${c.lineas.length} línea(s)
         <span class="pos">${formatMonto(c.ganan)}</span> / <span class="neg">${formatMonto(c.pierden)}</span></span>
       <span class="btn-fila" style="gap:6px;">
         <button class="btn btn-secundario" type="button" onclick="cmeEditar('${c.id}')">✏️ Editar</button>
@@ -14514,27 +14525,15 @@ function cmeLimpiar() {
   document.getElementById('txtCmeLineas').value = '';
   document.getElementById('inpCmeCarrera').value = '';
   document.getElementById('inpCmeFecha').value = fechaLocalHoy();
-  document.getElementById('selCmeCodigo').value = '';
+  document.getElementById('selCmeAccion').value = '';
+  document.getElementById('selCmeHipodromo').value = '';
   cmeCambioForm();
-}
-
-async function cmeCrearCodigo() {
-  const nombre = (prompt('Nombre del nuevo código especial (ej: DEPORTE):') || '').trim();
-  if (!nombre) return;
-  try {
-    const d = await apiHipismo('/api/hipismo/cargas-especiales/codigos', { method: 'POST', body: JSON.stringify({ nombre }) });
-    CME.codigos = d.codigos;
-    cmePintarSelectCodigos(d.nombre);
-    cmeCambioForm();
-    cargarClientesReales();
-  } catch (e) {
-    alert('No se pudo crear el código: ' + e.message);
-  }
 }
 
 function cmeCuerpo() {
   return {
-    codigo: document.getElementById('selCmeCodigo').value,
+    hipodromo: document.getElementById('selCmeHipodromo').value,
+    accion: document.getElementById('selCmeAccion').value,
     fecha: document.getElementById('inpCmeFecha').value,
     carrera: document.getElementById('inpCmeCarrera').value.trim(),
     texto: document.getElementById('txtCmeLineas').value
@@ -14551,24 +14550,33 @@ async function cmePrevisualizar() {
     prev.textContent = 'No se pudo validar: ' + e.message;
     return;
   }
-  const errores = d.errores.length ? `<div style="color:var(--danger); margin-bottom:8px;">${d.errores.map(x => '❌ ' + cmeEsc(x)).join('<br>')}</div>` : '';
+  const errores = d.errores.length
+    ? `<div style="color:var(--danger); margin-bottom:10px; font-weight:600;">${d.errores.map(x => '⛔ ' + cmeEsc(x)).join('<br>')}</div>`
+    : '';
   const avisos = d.avisos.length ? `<div style="color:var(--text-dim); margin-bottom:8px;">${d.avisos.map(x => 'ℹ️ ' + cmeEsc(x)).join('<br>')}</div>` : '';
   const filas = d.lineas.map(l => `
-    <div class="balance-fila" style="margin-bottom:2px;">
-      <span class="nombre">${cmeEsc(formatNombre(l.cliente))}${l.nuevo ? ' <span style="color:var(--text-dim);">(nuevo)</span>' : ''}</span>
-      <span class="${l.monto >= 0 ? 'pos' : 'neg'}">${l.monto >= 0 ? '+' : '-'}${formatMontoTabla(l.monto)}</span>
-    </div>`).join('');
+    <tr>
+      <td>${cmeEsc(formatNombre(l.cliente))}${l.existe ? (l.cuentaGrupo ? ' <span style="color:var(--text-dim);">(cuenta del grupo)</span>' : '') : ' <span style="color:var(--danger); font-weight:700;">⛔ NO EXISTE</span>'}</td>
+      <td class="num ${l.saldo >= 0 ? 'pos' : 'neg'}">${l.saldo >= 0 ? '+' : '-'}${formatMontoTabla(l.saldo)}</td>
+      <td>${cmeEsc(cmeNombreAccion(l.tipoAccion))}</td>
+      <td>${cmeEsc(l.detalle)}</td>
+    </tr>`).join('');
+  const tabla = d.lineas.length
+    ? `<div style="overflow-x:auto;"><table>
+        <thead><tr><th>Cliente</th><th class="num">Saldo</th><th>Tipo de acción</th><th>Detalle</th></tr></thead>
+        <tbody>${filas}</tbody></table></div>`
+    : '';
   const resumen = d.lineas.length
-    ? `<div style="margin-top:8px;"><b>${d.resumen.cantidad}</b> línea(s) · ganan <span class="pos">${formatMonto(d.resumen.ganan)}</span> · pierden <span class="neg">${formatMonto(d.resumen.pierden)}</span> · suma <b>${formatMontoTabla(d.suma)}</b> ${d.ok ? '✅' : '⚠️'}</div>`
+    ? `<div style="margin-top:8px;"><b>${d.resumen.cantidad}</b> línea(s) · ganan <span class="pos">${formatMonto(d.resumen.ganan)}</span> · pierden <span class="neg">${formatMonto(d.resumen.pierden)}</span> · suma <b>${formatMontoTabla(d.suma)}</b> ${d.suma === 0 ? '✅' : '⚠️'}${d.ok ? ' · listo para confirmar' : ''}</div>`
     : '';
   prev.className = '';
-  prev.innerHTML = errores + avisos + filas + resumen;
+  prev.innerHTML = errores + avisos + tabla + resumen;
   document.getElementById('btnCmeAplicar').disabled = !d.ok;
 }
 
 async function cmeAplicar() {
   const editando = CME.editandoId;
-  if (!confirm(editando ? '¿Guardar los cambios de esta carga? Se reemplazan todas sus líneas.' : '¿Aplicar esta carga? Se sumará al saldo de cada cliente.')) return;
+  if (!confirm(editando ? '¿Guardar los cambios de esta carga? Se reemplazan todas sus líneas.' : '¿Confirmar esta carga? Se sumará al saldo de cada cuenta.')) return;
   const btn = document.getElementById('btnCmeAplicar');
   btn.disabled = true;
   try {
@@ -14576,13 +14584,13 @@ async function cmeAplicar() {
       method: editando ? 'PUT' : 'POST', body: JSON.stringify(cmeCuerpo())
     });
   } catch (e) {
-    alert('No se pudo aplicar: ' + e.message);
+    alert('No se pudo confirmar:\n' + e.message);
     btn.disabled = false;
     return;
   }
   cmeLimpiar();
   const prev = document.getElementById('cmePrevia');
-  prev.innerHTML = editando ? '✅ Carga actualizada.' : '✅ Carga aplicada.';
+  prev.innerHTML = editando ? '✅ Carga actualizada.' : '✅ Carga confirmada.';
   await cmeCargarDatos();
   cargarClientesReales();
 }
@@ -14594,7 +14602,7 @@ function cmeEditar(id) {
   document.getElementById('cmeTituloEdicion').textContent = '— Editando carga #' + id.slice(0, 4);
   document.getElementById('inpCmeFecha').value = c.fecha;
   document.getElementById('inpCmeCarrera').value = c.carrera || '';
-  cmePintarSelectCodigos(c.codigo);
+  cmePintarSelects(c.hipodromo || '', c.accion);
   document.getElementById('txtCmeLineas').value = c.lineas.map(l => `${l.cliente} ${l.monto >= 0 ? '+' : '-'}${Math.abs(l.monto).toFixed(2)}`).join('\n');
   cmeCambioForm();
   document.getElementById('vista-cargaMasivaEspecial').scrollIntoView({ behavior: 'smooth', block: 'start' });

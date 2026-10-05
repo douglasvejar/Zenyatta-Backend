@@ -1,13 +1,13 @@
 // =================================================================
 // PRUEBA: pestaña "Carga Masiva Especial" (05-10-2026, a pedido del
-// usuario, con la captura de otro sistema como modelo): se pegan líneas
-// "CLIENTE +monto" / "CLIENTE -monto" con fecha, N° de carrera y un código
-// especial (ej. DEPORTE) cuya contrapartida hace que TODO sume 0. Cada línea
-// es un movimiento de saldo que ven Balance General/Cierre Final, Semana por
-// Días y el link de cada cliente.
-//
-// Fixture = exactamente la captura: JOSE -23, LIONEL -50, MONCLER -100,
-// RAFAEL PARLEY +100, PARLEY FORTUNA +73, DEPORTE +0 (suma 0).
+// usuario, con sus imágenes "Carga masiva — texto libre: creación de
+// saldos" y "Regla de validación: suma cero"): se elige un HIPÓDROMO y una
+// ACCIÓN (Remate, Marcas, Winners...), se escriben líneas
+// "CLIENTE +monto" / "CLIENTE -monto" y se aprieta "Calcular": la suma debe
+// dar 0 y cada nombre debe existir EXACTAMENTE como cliente (o ser una
+// cuenta del grupo como "% TABLAS Y MARCAS"), si no no deja confirmar. Cada
+// línea es un movimiento de saldo que ven Balance General/Cierre Final,
+// Semana por Días y el link de cada cliente, con el nombre de la acción.
 // =================================================================
 const Module = require('module');
 const path = require('path');
@@ -27,10 +27,10 @@ function jug(id, nombre, extra) {
 }
 const TABLAS = {
   jugadores: [
-    jug('j-jose', 'JOSE'),
-    // LIONEL y MONCLER a propósito NO existen todavía: se crean solos al aplicar la carga.
-    jug('j-rafael', 'RAFAEL PARLEY'), jug('j-fortuna', 'PARLEY FORTUNA'), jug('j-deporte', 'DEPORTE'),
-    jug('j-banco', 'BANCOX')
+    jug('j-jose', 'JOSE'), jug('j-lionel', 'LIONEL'), jug('j-moncler', 'MONCLER'),
+    jug('j-rafael', 'RAFAEL PARLEY'), jug('j-fortuna', 'PARLEY FORTUNA'),
+    jug('j-banco', 'BANCOX'),
+    jug('j-haaland', 'HAALAND'), jug('j-mzen', 'MARCAS ZENYATTA'), jug('j-msam', 'MARCAS SAMMY')
   ],
   jugadores_avales_porcentaje: [],
   hipismo_planos: [
@@ -44,7 +44,7 @@ const TABLAS = {
   hipismo_adelantadas_planos: [], hipismo_adelantadas_jugadas: [],
   hipismo_winners: [], hipismo_comisiones_ajustes: [], tickets_historial: [],
   hipismo_tercios_adelantadas_jugadas: [],
-  hipismo_codigos_especiales: [],
+  hipismo_hipodromos: [{ id: 'h1', grupo_id: GRUPO_ID, nombre: 'LA RINCONADA' }],
   hipismo_cargas_especiales: [],
   hipismo_cargas_especiales_lineas: []
 };
@@ -261,29 +261,27 @@ function ejecutarQuery(text, params) {
   if (/^SELECT j\.(\*|id, j\.jugador_nombre|jugador_nombre)[\s\S]*?FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.jugador_nombre, j\.banquero_nombre/i.test(sql)) return { rows: [] };
 
+  // ---- GET /clientes/:nombre/detalle-semana ----
+  if (/^SELECT \* FROM jugadores WHERE grupo_id = \$1 AND nombre = \$2$/i.test(sql)) {
+    return { rows: TABLAS.jugadores.filter(j => j.grupo_id === params[0] && j.nombre === params[1]) };
+  }
+
   // ---- Carga Masiva Especial ----
-  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha, c\.carrera, c\.codigo_nombre, c\.id AS carga_id/i.test(sql)) {
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha, c\.carrera, c\.codigo_nombre, c\.id AS carga_id, c\.hipodromo_nombre/i.test(sql)) {
     const [grupoId, desde, hasta, nombre] = params;
     const rows = [];
     TABLAS.hipismo_cargas_especiales.filter(c => c.grupo_id === grupoId && c.fecha >= desde && c.fecha <= hasta).forEach(c => {
       TABLAS.hipismo_cargas_especiales_lineas.filter(l => l.carga_id === c.id && (nombre == null || l.cliente_nombre === nombre)).sort((x, y) => x.orden - y.orden)
-        .forEach(l => rows.push({ cliente_nombre: l.cliente_nombre, monto: l.monto, fecha: c.fecha, carrera: c.carrera, codigo_nombre: c.codigo_nombre, carga_id: c.id }));
+        .forEach(l => rows.push({ cliente_nombre: l.cliente_nombre, monto: l.monto, fecha: c.fecha, carrera: c.carrera, codigo_nombre: c.codigo_nombre, carga_id: c.id, hipodromo_nombre: c.hipodromo_nombre || null }));
     });
     return { rows };
   }
-  if (/^SELECT id, nombre FROM hipismo_codigos_especiales WHERE grupo_id = \$1 ORDER BY nombre/i.test(sql)) {
-    return { rows: TABLAS.hipismo_codigos_especiales.filter(c => c.grupo_id === params[0]).sort((a, b) => a.nombre.localeCompare(b.nombre)) };
-  }
-  if (/^SELECT id FROM hipismo_codigos_especiales WHERE grupo_id = \$1 AND nombre = \$2/i.test(sql)) {
-    return { rows: TABLAS.hipismo_codigos_especiales.filter(c => c.grupo_id === params[0] && c.nombre === params[1]).map(c => ({ id: c.id })) };
-  }
-  if (/^INSERT INTO hipismo_codigos_especiales/i.test(sql)) {
-    const [grupo_id, nombre] = params;
-    if (!TABLAS.hipismo_codigos_especiales.some(c => c.grupo_id === grupo_id && c.nombre === nombre)) TABLAS.hipismo_codigos_especiales.push({ id: 'cod' + (++seqId), grupo_id, nombre });
-    return { rows: [] };
+  if (/^SELECT nombre FROM hipismo_hipodromos WHERE grupo_id = \$1 AND nombre = \$2/i.test(sql)) {
+    return { rows: TABLAS.hipismo_hipodromos.filter(h => h.grupo_id === params[0] && h.nombre === params[1]).map(h => ({ nombre: h.nombre })) };
   }
   if (/^INSERT INTO jugadores/i.test(sql)) {
     const [grupo_id, nombre] = params;
+    TABLAS.insertsJugadores = (TABLAS.insertsJugadores || 0) + 1; // la regla nueva: NUNCA se crea un cliente solo
     if (!TABLAS.jugadores.some(j => j.grupo_id === grupo_id && j.nombre === nombre)) TABLAS.jugadores.push(jug('j-' + nombre, nombre, { grupo_id }));
     return { rows: [] };
   }
@@ -291,15 +289,10 @@ function ejecutarQuery(text, params) {
     const [grupo, nombres] = params;
     return { rows: TABLAS.jugadores.filter(j => j.grupo_id === grupo && nombres.includes(j.nombre)).map(j => ({ nombre: j.nombre })) };
   }
-  if (/^SELECT cliente_nombre, COALESCE\(SUM\(monto\), 0\) AS total FROM hipismo_cargas_especiales_lineas WHERE grupo_id = \$1 GROUP BY cliente_nombre/i.test(sql)) {
-    const m = new Map();
-    TABLAS.hipismo_cargas_especiales_lineas.filter(l => l.grupo_id === params[0]).forEach(l => m.set(l.cliente_nombre, (m.get(l.cliente_nombre) || 0) + Number(l.monto)));
-    return { rows: Array.from(m.entries()).map(([cliente_nombre, total]) => ({ cliente_nombre, total })) };
-  }
   if (/^INSERT INTO hipismo_cargas_especiales \(/i.test(sql)) {
-    const [grupo_id, fecha, carrera, codigo_nombre] = params;
+    const [grupo_id, fecha, carrera, codigo_nombre, hipodromo_nombre] = params;
     const id = 'carga' + (++seqId);
-    TABLAS.hipismo_cargas_especiales.push({ id, grupo_id, fecha, carrera, codigo_nombre, creado_en: new Date(2026, 9, 5, 12, 0, 0, ++reloj) });
+    TABLAS.hipismo_cargas_especiales.push({ id, grupo_id, fecha, carrera, codigo_nombre, hipodromo_nombre, creado_en: new Date(2026, 9, 5, 12, 0, 0, ++reloj) });
     return { rows: [{ id }] };
   }
   if (/^INSERT INTO hipismo_cargas_especiales_lineas/i.test(sql)) {
@@ -307,7 +300,7 @@ function ejecutarQuery(text, params) {
     TABLAS.hipismo_cargas_especiales_lineas.push({ id: 'l' + (++seqId), carga_id, grupo_id, cliente_nombre, monto: Number(monto), orden });
     return { rows: [] };
   }
-  if (/^SELECT id, fecha, carrera, codigo_nombre, creado_en FROM hipismo_cargas_especiales WHERE grupo_id = \$1/i.test(sql)) {
+  if (/^SELECT id, fecha, carrera, codigo_nombre, hipodromo_nombre, creado_en FROM hipismo_cargas_especiales WHERE grupo_id = \$1/i.test(sql)) {
     return { rows: TABLAS.hipismo_cargas_especiales.filter(c => c.grupo_id === params[0]).sort((a, b) => (b.fecha.localeCompare(a.fecha)) || (b.creado_en - a.creado_en)) };
   }
   if (/^SELECT carga_id, cliente_nombre, monto, orden FROM hipismo_cargas_especiales_lineas WHERE grupo_id = \$1 AND carga_id = ANY/i.test(sql)) {
@@ -317,9 +310,9 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id FROM hipismo_cargas_especiales WHERE id = \$1 AND grupo_id = \$2/i.test(sql)) {
     return { rows: TABLAS.hipismo_cargas_especiales.filter(c => c.id === params[0] && c.grupo_id === params[1]).map(c => ({ id: c.id })) };
   }
-  if (/^UPDATE hipismo_cargas_especiales SET fecha = \$1, carrera = \$2, codigo_nombre = \$3 WHERE id = \$4 AND grupo_id = \$5/i.test(sql)) {
-    const c = TABLAS.hipismo_cargas_especiales.find(x => x.id === params[3] && x.grupo_id === params[4]);
-    if (c) { c.fecha = params[0]; c.carrera = params[1]; c.codigo_nombre = params[2]; }
+  if (/^UPDATE hipismo_cargas_especiales SET fecha = \$1, carrera = \$2, codigo_nombre = \$3, hipodromo_nombre = \$4 WHERE id = \$5 AND grupo_id = \$6/i.test(sql)) {
+    const c = TABLAS.hipismo_cargas_especiales.find(x => x.id === params[4] && x.grupo_id === params[5]);
+    if (c) { c.fecha = params[0]; c.carrera = params[1]; c.codigo_nombre = params[2]; c.hipodromo_nombre = params[3]; }
     return { rows: [] };
   }
   if (/^DELETE FROM hipismo_cargas_especiales_lineas WHERE carga_id = \$1 AND grupo_id = \$2/i.test(sql)) {
@@ -384,48 +377,54 @@ async function invocarRuta(handler, req) {
   const { construirCierreFinalHipismo, construirResumenClienteHipismo } = require(path.join(__dirname, '..', 'src', 'services', 'hipismoResumenCliente'));
   const post = (ruta, body, extra) => invocarRuta(handlerDe('post', ruta), { ...reqBase, body, ...(extra || {}) });
 
-  const TEXTO = 'JOSE -23.00\nLIONEL -50.00\nMONCLER -100.00\nRAFAEL PARLEY +100.00\nPARLEY FORTUNA +73.00\nDEPORTE +0.00';
+  const TEXTO = 'JOSE -23.00\nLIONEL -50.00\nMONCLER -100.00\nRAFAEL PARLEY +100.00\nPARLEY FORTUNA +73.00';
+  const TEXTO_MARCAS = 'HAALAND +100\nMARCAS ZENYATTA -50\nMARCAS SAMMY -51,25\n% TABLAS Y MARCAS +1.25';
 
   // ---------- 1) Parseo y validación (puros) ----------
-  const v = svc.validarCargaEspecial({ texto: TEXTO, codigo: 'deporte', fecha: FECHA });
-  check(v.ok && v.lineas.length === 6 && v.suma === 0, '1a) la captura de ejemplo valida: 6 líneas, suma 0');
+  const v = svc.validarCargaEspecial({ texto: TEXTO, accion: 'deporte', fecha: FECHA });
+  check(v.ok && v.lineas.length === 5 && v.suma === 0, '1a) un texto que suma 0 valida: 5 líneas, suma 0');
   check(v.lineas.find(l => l.cliente === 'RAFAEL PARLEY' && l.monto === 100), '1b) un nombre con espacios ("RAFAEL PARLEY +100.00") se lee completo');
   check(v.resumen.ganan === 173 && v.resumen.pierden === -173, '1c) ganan +173 / pierden -173');
-  const vMal = svc.validarCargaEspecial({ texto: 'A +10\nDEPORTE -5', codigo: 'DEPORTE', fecha: FECHA });
-  check(!vMal.ok && vMal.errores.some(e => /debe dar 0/.test(e)), '1d) si la suma no da 0, no valida y dice cuánto falta');
-  const vFormato = svc.validarCargaEspecial({ texto: 'esto no es una linea\nA +5\nB -5', codigo: 'DEPORTE', fecha: FECHA });
+  const vMal = svc.validarCargaEspecial({ texto: 'JUGADOR A +50\nJUGADOR B -20\nJUGADOR C -10', accion: 'MARCAS', fecha: FECHA });
+  check(!vMal.ok && vMal.errores.some(e => e === 'La suma debe ser igual a cero. Diferencia: +20.00'), `1d) suma distinta de 0: "La suma debe ser igual a cero. Diferencia: +20.00" -- ${JSON.stringify(vMal.errores)}`);
+  const vFormato = svc.validarCargaEspecial({ texto: 'esto no es una linea\nA +5\nB -5', accion: 'MARCAS', fecha: FECHA });
   check(!vFormato.ok && vFormato.errores.some(e => /Línea 1/.test(e)), '1e) una línea sin formato se reporta con su número');
-  check(!svc.validarCargaEspecial({ texto: 'A +5\nB -5', codigo: '', fecha: FECHA }).ok, '1f) sin código especial no valida');
-  check(!svc.validarCargaEspecial({ texto: '', codigo: 'X', fecha: FECHA }).ok, '1g) sin líneas no valida');
+  check(!svc.validarCargaEspecial({ texto: 'A +5\nB -5', accion: '', fecha: FECHA }).ok, '1f) sin acción no valida');
+  check(!svc.validarCargaEspecial({ texto: 'A +5\nB -5', accion: 'INVENTADA', fecha: FECHA }).ok, '1f2) una acción que no está en la lista no valida');
+  check(!svc.validarCargaEspecial({ texto: '', accion: 'REMATE', fecha: FECHA }).ok, '1g) sin líneas no valida');
   check(svc.parsearMonto('1.234,56') === 1234.56 && svc.parsearMonto('23.00') === 23 && svc.parsearMonto('23,5') === 23.5, '1h) montos: 1.234,56 / 23.00 / 23,5');
-  check(svc.validarCargaEspecial({ texto: 'a +$10,50\nb - 10.5', codigo: 'X', fecha: FECHA }).ok, '1i) acepta "$" y espacios alrededor del signo');
+  check(svc.validarCargaEspecial({ texto: 'a +$10,50\nb - 10.5', accion: 'REMATE', fecha: FECHA }).ok, '1i) acepta "$" y espacios alrededor del signo');
+  check(svc.validarCargaEspecial({ texto: TEXTO_MARCAS, accion: 'MARCAS', fecha: FECHA }).ok, '1j) el ejemplo de Marcas (HAALAND +100, MARCAS ZENYATTA -50, MARCAS SAMMY -51,25, % TABLAS Y MARCAS +1.25) suma 0');
+  check(['REMATE', 'WINNERS', 'TABLAS FIJAS', 'MARCAS', 'CARRERA', 'POLLA', 'CRUCE', 'DEPORTE'].every(a => svc.ACCIONES_CARGA_ESPECIAL.includes(a)), '1k) la lista de acciones trae Remate, Winners, Tablas Fijas, Marcas, Carrera, Polla, Cruce y Deporte');
 
-  // ---------- 2) Código especial ----------
-  let r = await post('/cargas-especiales/codigos', { nombre: ' deporte ' });
-  check(r.status === 200 || r.status === 201, '2a) crear código responde ok');
-  check(TABLAS.hipismo_codigos_especiales.some(c => c.nombre === 'DEPORTE'), '2b) el código se guarda en MAYÚSCULA y sin espacios de más');
-  check(TABLAS.jugadores.some(j => j.nombre === 'DEPORTE'), '2c) el código también queda como ficha de cliente');
-  r = await post('/cargas-especiales/codigos', { nombre: '   ' });
-  check(r.status === 400, '2d) un nombre vacío da 400');
+  // ---------- 2) "Calcular" (vista previa): detalle y errores ----------
+  let r = await post('/cargas-especiales/previsualizar', { texto: TEXTO_MARCAS, accion: 'MARCAS', hipodromo: 'LA RINCONADA', fecha: FECHA, carrera: '4' });
+  check(r.salida && r.salida.ok === true && r.salida.lineas.length === 4, '2a) vista previa ok con las 4 líneas del ejemplo de Marcas');
+  const fila = n => r.salida.lineas.find(l => l.cliente === n);
+  check(fila('HAALAND').saldo === 100 && fila('HAALAND').tipoAccion === 'MARCAS' && fila('HAALAND').detalle === 'Carga Masiva', '2b) cada fila trae cliente, saldo, tipo de acción (MARCAS) y detalle "Carga Masiva"');
+  check(fila('% TABLAS Y MARCAS').cuentaGrupo === true && fila('HAALAND').cuentaGrupo === false, '2c) "% TABLAS Y MARCAS" se reconoce como cuenta del grupo');
+  r = await post('/cargas-especiales/previsualizar', { texto: 'HALAND +100\nMARCAS ZENYATTA -100', accion: 'MARCAS', fecha: FECHA });
+  check(r.salida && r.salida.ok === false && r.salida.errores[0] === 'CLIENTE HALAND NO EXISTE' && r.salida.lineas.find(l => l.cliente === 'HALAND').existe === false, '2d) un nombre mal escrito (HALAND) da "CLIENTE HALAND NO EXISTE" y no deja confirmar');
+  r = await post('/cargas-especiales/previsualizar', { texto: 'JOSE +10\nLIONEL -5', accion: 'REMATE', fecha: FECHA });
+  check(r.salida && r.salida.ok === false && r.salida.errores.some(e => /Diferencia: \+5\.00/.test(e)), '2e) vista previa de algo que no suma 0 trae el error con la diferencia');
+  r = await post('/cargas-especiales/previsualizar', { texto: 'JOSE +10\nREMATE -10', accion: 'REMATE', fecha: FECHA });
+  check(r.salida && r.salida.ok === true, '2f) la cuenta REMATE (contrapartida) se acepta aunque no sea un cliente');
 
-  // ---------- 3) Vista previa ----------
-  r = await post('/cargas-especiales/previsualizar', { texto: TEXTO, codigo: 'DEPORTE', fecha: FECHA, carrera: '1' });
-  check(r.salida && r.salida.ok === true && r.salida.lineas.length === 6, '3a) vista previa ok con las 6 líneas');
-  check(r.salida.lineas.find(l => l.cliente === 'JOSE').nuevo === false && r.salida.lineas.find(l => l.cliente === 'LIONEL').nuevo === true, '3b) marca como "nuevo" a los clientes que todavía no existen');
-  r = await post('/cargas-especiales/previsualizar', { texto: 'A +10\nDEPORTE -5', codigo: 'DEPORTE', fecha: FECHA });
-  check(r.salida && r.salida.ok === false && r.salida.errores.length > 0, '3c) vista previa de algo que no suma 0 trae el error');
-
-  // ---------- 4) Aplicar ----------
-  r = await post('/cargas-especiales', { texto: 'A +10\nDEPORTE -5', codigo: 'DEPORTE', fecha: FECHA });
-  check(r.status === 400 && TABLAS.hipismo_cargas_especiales.length === 0, '4a) no se puede aplicar si no suma 0 (400) y no se guarda nada');
-  r = await post('/cargas-especiales', { texto: TEXTO, codigo: 'NOEXISTE', fecha: FECHA });
-  check(r.status === 400 && TABLAS.hipismo_cargas_especiales.length === 0, '4b) no se puede aplicar con un código que no existe');
-  r = await post('/cargas-especiales', { texto: TEXTO, codigo: 'deporte', fecha: FECHA, carrera: ' 1 ' });
-  check(r.status === 201 && r.salida.ok, '4c) aplicar la captura responde 201');
-  check(TABLAS.hipismo_cargas_especiales.length === 1 && TABLAS.hipismo_cargas_especiales[0].carrera === '1', '4d) se guardó 1 carga con su carrera');
-  check(TABLAS.hipismo_cargas_especiales_lineas.length === 5, '4e) se guardaron 5 líneas (la de DEPORTE en 0 no mueve nada y se omite)');
-  check(Math.abs(TABLAS.hipismo_cargas_especiales_lineas.reduce((s, l) => s + l.monto, 0)) < 1e-9, '4f) lo guardado suma 0');
-  check(TABLAS.jugadores.some(j => j.nombre === 'LIONEL') && TABLAS.jugadores.some(j => j.nombre === 'MONCLER'), '4g) los clientes nuevos se crearon solos');
+  // ---------- 3) Confirmar ----------
+  r = await post('/cargas-especiales', { texto: 'JOSE +10\nLIONEL -5', accion: 'REMATE', fecha: FECHA });
+  check(r.status === 400 && TABLAS.hipismo_cargas_especiales.length === 0, '3a) no se puede confirmar si no suma 0 (400) y no se guarda nada');
+  r = await post('/cargas-especiales', { texto: 'HALAND +100\nMARCAS ZENYATTA -100', accion: 'MARCAS', fecha: FECHA });
+  check(r.status === 422 && /CLIENTE HALAND NO EXISTE/.test(r.salida.error) && TABLAS.hipismo_cargas_especiales.length === 0, '3b) un cliente inexistente da 422 "CLIENTE HALAND NO EXISTE" y no se guarda nada');
+  r = await post('/cargas-especiales', { texto: TEXTO, accion: 'NOEXISTE', fecha: FECHA });
+  check(r.status === 400 && TABLAS.hipismo_cargas_especiales.length === 0, '3c) no se puede confirmar con una acción que no está en la lista');
+  r = await post('/cargas-especiales', { texto: TEXTO, accion: 'DEPORTE', hipodromo: 'HIPODROMO FANTASMA', fecha: FECHA });
+  check(r.status === 400 && TABLAS.hipismo_cargas_especiales.length === 0, '3d) no se puede confirmar con un hipódromo que no existe');
+  r = await post('/cargas-especiales', { texto: TEXTO, accion: 'deporte', fecha: FECHA, carrera: ' 1 ' });
+  check(r.status === 201 && r.salida.ok, '3e) confirmar un texto que suma 0 responde 201');
+  check(TABLAS.hipismo_cargas_especiales.length === 1 && TABLAS.hipismo_cargas_especiales[0].carrera === '1' && TABLAS.hipismo_cargas_especiales[0].codigo_nombre === 'DEPORTE', '3f) se guardó 1 carga con su carrera y su acción en MAYÚSCULA');
+  check(TABLAS.hipismo_cargas_especiales_lineas.length === 5, '3g) se guardaron las 5 líneas');
+  check(Math.abs(TABLAS.hipismo_cargas_especiales_lineas.reduce((s, l) => s + l.monto, 0)) < 1e-9, '3h) lo guardado suma 0');
+  check(!TABLAS.insertsJugadores, '3i) NO se creó ningún cliente solo (regla nueva)');
 
   // ---------- 5) Saldos: grilla (Cierre Final) ----------
   const cierre = await construirCierreFinalHipismo(GRUPO_ID, FECHA, FECHA);
@@ -444,9 +443,9 @@ async function invocarRuta(handler, req) {
   }
   const jLionel = TABLAS.jugadores.find(x => x.nombre === 'LIONEL');
   const resLionel = await construirResumenClienteHipismo(jLionel, reqBase.grupo, 'actual', { desde: FECHA, hasta: FECHA });
-  const bloque = resLionel.dias[0] && resLionel.dias[0].hipodromos.find(h => h.nombre === 'Carga Masiva Especial');
-  check(!!bloque && bloque.tipo === 'traspaso' && bloque.carreras[0].resultado === -50 && /Carrera 1/.test(bloque.carreras[0].nota) && /DEPORTE/.test(bloque.carreras[0].nota),
-    '6b) en su link aparece el bloque "Carga Masiva Especial" con -50, la carrera y el código');
+  const bloque = resLionel.dias[0] && resLionel.dias[0].hipodromos.find(h => h.nombre === 'Deporte (Carga Masiva)');
+  check(!!bloque && bloque.tipo === 'traspaso' && bloque.carreras[0].resultado === -50 && /Carrera 1/.test(bloque.carreras[0].nota) && /Todos los hipódromos/.test(bloque.carreras[0].nota),
+    '6b) en su link aparece el bloque "Deporte (Carga Masiva)" con -50, la carrera y el hipódromo');
 
   // ---------- 7) Diagnóstico grilla vs link ----------
   const diag = await invocarRuta(handlerDe('get', '/diagnostico-saldos'), { ...reqBase, query: { desde: FECHA, hasta: FECHA } });
@@ -460,17 +459,16 @@ async function invocarRuta(handler, req) {
   // ---------- 9) Historial, editar, eliminar ----------
   let hist = await invocarRuta(handlerDe('get', '/cargas-especiales'), reqBase);
   check(hist.salida.cargas.length === 1 && hist.salida.cargas[0].lineas.length === 5 && hist.salida.cargas[0].ganan === 173 && hist.salida.cargas[0].pierden === -173, '9a) el historial trae la carga con sus líneas y totales');
-  const dep = hist.salida.codigos.find(c => c.nombre === 'DEPORTE');
-  check(!!dep && dep.saldo === 0, '9b) el código DEPORTE aparece con su saldo (0)');
+  check(hist.salida.cargas[0].accion === 'DEPORTE' && Array.isArray(hist.salida.acciones) && hist.salida.acciones.includes('MARCAS'), '9b) el historial trae la acción de la carga y la lista de acciones');
   const idCarga = hist.salida.cargas[0].id;
   // Editar: corrige LIONEL a -40 y MONCLER a -110 (sigue sumando 0)
-  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: idCarga }, body: { texto: 'JOSE -23\nLIONEL -40\nMONCLER -110\nRAFAEL PARLEY +100\nPARLEY FORTUNA +73', codigo: 'DEPORTE', fecha: FECHA, carrera: '2' } });
-  check(r.salida && r.salida.ok && TABLAS.hipismo_cargas_especiales_lineas.length === 5 && TABLAS.hipismo_cargas_especiales[0].carrera === '2', '9c) editar reemplaza las líneas (siguen 5) y actualiza la carrera');
+  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: idCarga }, body: { texto: 'JOSE -23\nLIONEL -40\nMONCLER -110\nRAFAEL PARLEY +100\nPARLEY FORTUNA +73', accion: 'DEPORTE', hipodromo: 'LA RINCONADA', fecha: FECHA, carrera: '2' } });
+  check(r.salida && r.salida.ok && TABLAS.hipismo_cargas_especiales_lineas.length === 5 && TABLAS.hipismo_cargas_especiales[0].carrera === '2' && TABLAS.hipismo_cargas_especiales[0].hipodromo_nombre === 'LA RINCONADA', '9c) editar reemplaza las líneas (siguen 5) y actualiza la carrera y el hipódromo');
   const cierre2 = await construirCierreFinalHipismo(GRUPO_ID, FECHA, FECHA);
   check(cierre2.clientes.find(x => x.nombre === 'LIONEL').saldo === -40 && cierre2.clientes.find(x => x.nombre === 'MONCLER').saldo === -110, '9d) los saldos reflejan la edición (LIONEL -40, MONCLER -110)');
-  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: idCarga }, body: { texto: 'JOSE -23\nLIONEL -40', codigo: 'DEPORTE', fecha: FECHA } });
+  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: idCarga }, body: { texto: 'JOSE -23\nLIONEL -40', accion: 'DEPORTE', fecha: FECHA } });
   check(r.status === 400 && TABLAS.hipismo_cargas_especiales_lineas.length === 5, '9e) editar con algo que no suma 0 da 400 y no cambia nada');
-  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: 'no-existe' }, body: { texto: TEXTO, codigo: 'DEPORTE', fecha: FECHA } });
+  r = await invocarRuta(handlerDe('put', '/cargas-especiales/:id'), { ...reqBase, params: { id: 'no-existe' }, body: { texto: TEXTO, accion: 'DEPORTE', fecha: FECHA } });
   check(r.status === 404, '9f) editar una carga inexistente da 404');
   r = await invocarRuta(handlerDe('delete', '/cargas-especiales/:id'), { ...reqBase, params: { id: idCarga } });
   check(r.salida && r.salida.ok && TABLAS.hipismo_cargas_especiales.length === 0 && TABLAS.hipismo_cargas_especiales_lineas.length === 0, '9g) eliminar borra la carga y todas sus líneas');
@@ -485,8 +483,28 @@ async function invocarRuta(handler, req) {
   const iCargar = html.indexOf('data-vista="cargarPlanos"');
   const iCme = html.indexOf('data-vista="cargaMasivaEspecial"');
   check(iCme > iCargar && iCme - iCargar < 700, '10a) el botón "Carga Masiva Especial" está justo debajo de "Cargar Planos" en el menú');
-  check(/id="vista-cargaMasivaEspecial"/.test(html) && /id="selCmeCodigo"/.test(html) && /id="txtCmeLineas"/.test(html) && /id="btnCmeAplicar"/.test(html), '10b) la pantalla tiene código, fecha, carrera, líneas, previsualizar y aplicar');
-  check(/cargaMasivaEspecial:\s*\(\)\s*=>\s*entrarCargaMasivaEspecial\(\)/.test(html), '10c) al entrar se cargan códigos y cargas recientes');
+  check(/id="vista-cargaMasivaEspecial"/.test(html) && /id="selCmeHipodromo"/.test(html) && /id="selCmeAccion"/.test(html) && /id="txtCmeLineas"/.test(html) && /id="btnCmeAplicar"/.test(html) && !/selCmeCodigo/.test(html), '10b) la pantalla tiene hipódromo, acción, fecha, carrera, texto libre, calcular y confirmar (y ya no el código)');
+  check(/cargaMasivaEspecial:\s*\(\)\s*=>\s*entrarCargaMasivaEspecial\(\)/.test(html), '10c) al entrar se cargan las acciones y las cargas recientes');
+  check(/NO EXISTE/.test(html) && /Tipo de acción/.test(html), '10d) la vista previa marca "NO EXISTE" y trae la columna "Tipo de acción"');
+
+  // ---------- 11) Ejemplo de Marcas completo: HAALAND / MARCAS ZENYATTA / MARCAS SAMMY / % TABLAS Y MARCAS ----------
+  r = await post('/cargas-especiales', { texto: TEXTO_MARCAS, accion: 'MARCAS', hipodromo: 'LA RINCONADA', fecha: FECHA, carrera: '4' });
+  check(r.status === 201 && TABLAS.hipismo_cargas_especiales.length === 1 && TABLAS.hipismo_cargas_especiales_lineas.length === 4, '11a) el ejemplo de Marcas se confirma (4 líneas)');
+  const cierre4 = await construirCierreFinalHipismo(GRUPO_ID, FECHA, FECHA);
+  const s4 = n => { const c = cierre4.clientes.find(x => x.nombre === n); return c ? Math.round(c.saldo * 100) / 100 : null; };
+  check(s4('HAALAND') === 100 && s4('MARCAS ZENYATTA') === -50 && s4('MARCAS SAMMY') === -51.25 && s4('% TABLAS Y MARCAS') === 1.25, `11b) cada cuenta queda en su sitio: HAALAND +100, MARCAS ZENYATTA -50, MARCAS SAMMY -51,25, % TABLAS Y MARCAS +1,25 -- dio ${s4('HAALAND')}/${s4('MARCAS ZENYATTA')}/${s4('MARCAS SAMMY')}/${s4('% TABLAS Y MARCAS')}`);
+  const jHaaland = TABLAS.jugadores.find(x => x.nombre === 'HAALAND');
+  const resH = await construirResumenClienteHipismo(jHaaland, reqBase.grupo, 'actual', { desde: FECHA, hasta: FECHA });
+  const bloqueH = resH.dias[0] && resH.dias[0].hipodromos.find(h => h.nombre === 'Marcas (Carga Masiva)');
+  check(!!bloqueH && bloqueH.carreras[0].resultado === 100 && /LA RINCONADA/.test(bloqueH.carreras[0].nota) && /Carrera 4/.test(bloqueH.carreras[0].nota), '11c) en el link de HAALAND aparece "Marcas (Carga Masiva)" con +100, LA RINCONADA y la carrera 4');
+  const diag2 = await invocarRuta(handlerDe('get', '/diagnostico-saldos'), { ...reqBase, query: { desde: FECHA, hasta: FECHA } });
+  check(diag2.salida && diag2.salida.discrepancias.length === 0, `11d) diagnóstico: 0 discrepancias también con el ejemplo de Marcas -- ${JSON.stringify(diag2.salida && diag2.salida.discrepancias)}`);
+  check(!TABLAS.insertsJugadores, '11e) todavía NO se creó ningún cliente solo');
+  const detCuenta = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { ...reqBase, params: { nombre: '% TABLAS Y MARCAS' }, query: { desde: FECHA, hasta: FECHA } });
+  const bloqueCuenta = detCuenta.salida && detCuenta.salida.dias && detCuenta.salida.dias[0] && detCuenta.salida.dias[0].hipodromos.find(h => h.nombre === 'Marcas (Carga Masiva)');
+  check(detCuenta.status === 200 && !!bloqueCuenta && bloqueCuenta.carreras[0].resultado === 1.25 && Math.abs(detCuenta.salida.resumen.totalHipismo - 1.25) < 0.001, `11f) la cuenta del grupo "% TABLAS Y MARCAS" se puede abrir en Detallado por Cliente (no da "No se encontró") con su +1,25 -- status ${detCuenta.status}`);
+  const detFantasma = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { ...reqBase, params: { nombre: 'NO EXISTE NADIE' }, query: { desde: FECHA, hasta: FECHA } });
+  check(detFantasma.status === 404, '11g) un nombre que no es cliente ni cuenta del grupo sigue dando 404');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

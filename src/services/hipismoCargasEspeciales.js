@@ -1,12 +1,12 @@
 // =================================================================
 // hipismoCargasEspeciales.js (05-10-2026) — "Carga Masiva Especial".
 //
-// El operador pega líneas "CLIENTE +monto" / "CLIENTE -monto" (una por
-// línea), elige una fecha, un número de carrera (texto libre) y un "código
-// especial" (ej. DEPORTE) que hace de contrapartida: la suma de TODAS las
-// líneas, incluida la del código especial, debe dar exactamente 0 — así un
-// movimiento masivo nunca descuadra Balance General/Cierre Final (mismo
-// principio que Winners, que tiene su ítem espejo).
+// El operador escribe líneas "CLIENTE +monto" / "CLIENTE -monto" (una por
+// línea), elige hipódromo, acción, fecha y (opcional) número de carrera: la
+// suma de TODAS las líneas debe dar exactamente 0 — así un movimiento
+// masivo nunca descuadra Balance General/Cierre Final (mismo principio que
+// Winners, que tiene su ítem espejo). Cada nombre debe existir como cliente
+// (o ser una cuenta del grupo, ver CUENTAS_GRUPO_CARGA_ESPECIAL).
 //
 // Este archivo es puro (parseo y validación, sin base de datos) salvo
 // obtenerCargasEspecialesRango(), la ÚNICA consulta que leen Cierre Final,
@@ -51,25 +51,54 @@ function parsearLineasCargaEspecial(texto) {
   return { lineas, errores };
 }
 
-// validarCargaEspecial({ texto, codigo, fecha }) -> {
+// ACCIONES (05-10-2026, a pedido del usuario, con su imagen "Carga masiva —
+// texto libre: creación de saldos"): en vez de un "código especial", la
+// ventana elige un HIPÓDROMO y una ACCIÓN (la modalidad a la que pertenecen
+// los saldos). La acción solo etiqueta: cada línea mueve el saldo de esa
+// cuenta y en su detalle aparece como "<Acción> — Carga Masiva".
+const ACCIONES_CARGA_ESPECIAL = [
+  'CARRERA', 'REMATE', 'WINNERS', 'TABLAS FIJAS', 'MARCAS',
+  'JUGADAS ENTRE TERCIOS ADELANTADAS', 'CRUCE', 'POLLA', 'DEPORTE', 'TRASPASO'
+];
+
+// Cuentas del grupo que NO son una ficha de cliente pero se aceptan en el
+// texto (por ejemplo la comisión de Marcas del ejemplo del usuario: "% TABLAS
+// Y MARCAS +1.25"). Cualquier otro nombre debe existir EXACTAMENTE como
+// cliente, si no es error.
+const CUENTAS_GRUPO_CARGA_ESPECIAL = [
+  '% TABLAS Y MARCAS', '% TERCIOS ADELANTADAS', '% DE TABLAS FIJAS', 'PORCENTAJE MARCAS',
+  'REMATE', 'WINNERS', 'TABLAS FIJAS', 'MARCAS'
+];
+
+function esAccionValida(accion) {
+  return ACCIONES_CARGA_ESPECIAL.includes(normalizarNombre(accion));
+}
+
+function esCuentaGrupo(nombre) {
+  return CUENTAS_GRUPO_CARGA_ESPECIAL.includes(normalizarNombre(nombre));
+}
+
+function conSigno(n) {
+  return (n > 0 ? '+' : '') + n.toFixed(2);
+}
+
+// validarCargaEspecial({ texto, accion, fecha }) -> {
 //   ok, lineas, suma, errores: [string...], avisos: [string...],
 //   resumen: { ganan, pierden, cantidad }
 // }
-function validarCargaEspecial({ texto, codigo, fecha }) {
+// (La existencia de cada cliente se comprueba aparte, contra la base: ver
+// rutas /cargas-especiales.)
+function validarCargaEspecial({ texto, accion, fecha }) {
   const { lineas, errores: erroresParseo } = parsearLineasCargaEspecial(texto);
   const errores = erroresParseo.map(e => `Línea ${e.numero} ("${e.linea}"): ${e.motivo}`);
   const avisos = [];
-  const codigoNorm = normalizarNombre(codigo);
-  if (!codigoNorm) errores.push('Elige o crea un código especial.');
+  if (!esAccionValida(accion)) errores.push('Elige la acción (Remate, Marcas, Winners, etc.).');
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) errores.push('Falta una fecha válida.');
-  if (!lineas.length && !erroresParseo.length) errores.push('Pega al menos una línea (CLIENTE +monto o CLIENTE -monto).');
+  if (!lineas.length && !erroresParseo.length) errores.push('Escribe al menos una línea (CLIENTE +monto o CLIENTE -monto).');
 
   const suma = round2(lineas.reduce((s, l) => s + l.monto, 0));
   if (lineas.length && suma !== 0) {
-    errores.push(`La suma de todas las líneas debe dar 0 y da ${suma > 0 ? '+' : ''}${suma.toFixed(2)}. Falta ${(-suma) > 0 ? '+' : ''}${(-suma).toFixed(2)} en alguna línea (por ejemplo en ${codigoNorm || 'el código especial'}).`);
-  }
-  if (codigoNorm && lineas.length && !lineas.some(l => l.cliente === codigoNorm)) {
-    avisos.push(`El código especial ${codigoNorm} no aparece en las líneas — se carga solo con lo que escribiste (que ya suma 0).`);
+    errores.push(`La suma debe ser igual a cero. Diferencia: ${conSigno(suma)}`);
   }
   const ganan = round2(lineas.filter(l => l.monto > 0).reduce((s, l) => s + l.monto, 0));
   const pierden = round2(lineas.filter(l => l.monto < 0).reduce((s, l) => s + l.monto, 0));
@@ -80,7 +109,7 @@ function validarCargaEspecial({ texto, codigo, fecha }) {
 // opcional para un solo cliente). Un solo SQL — ver la nota de arriba.
 async function obtenerCargasEspecialesRango(grupoId, desde, hasta, nombre) {
   const r = await db.query(
-    `SELECT l.cliente_nombre, l.monto, c.fecha, c.carrera, c.codigo_nombre, c.id AS carga_id
+    `SELECT l.cliente_nombre, l.monto, c.fecha, c.carrera, c.codigo_nombre, c.id AS carga_id, c.hipodromo_nombre
        FROM hipismo_cargas_especiales_lineas l
        JOIN hipismo_cargas_especiales c ON c.id = l.carga_id
       WHERE l.grupo_id = $1 AND c.fecha BETWEEN $2 AND $3 AND ($4::text IS NULL OR l.cliente_nombre = $4)
@@ -92,9 +121,13 @@ async function obtenerCargasEspecialesRango(grupoId, desde, hasta, nombre) {
     monto: Number(row.monto),
     fecha: row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha,
     carrera: row.carrera || null,
-    codigoNombre: row.codigo_nombre,
+    codigoNombre: row.codigo_nombre, // la ACCIÓN elegida (REMATE, MARCAS...)
+    hipodromoNombre: row.hipodromo_nombre || null,
     cargaId: row.carga_id
   }));
 }
 
-module.exports = { normalizarNombre, parsearMonto, parsearLineasCargaEspecial, validarCargaEspecial, obtenerCargasEspecialesRango };
+module.exports = {
+  normalizarNombre, parsearMonto, parsearLineasCargaEspecial, validarCargaEspecial, obtenerCargasEspecialesRango,
+  ACCIONES_CARGA_ESPECIAL, CUENTAS_GRUPO_CARGA_ESPECIAL, esAccionValida, esCuentaGrupo
+};

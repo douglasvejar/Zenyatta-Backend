@@ -97,6 +97,14 @@ const TABLAS = {
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  // Regla nueva (05-10-2026): un cliente que no existe es error, no se crea solo. Por defecto los nombres existen; global.__CLIENTES_NO_EXISTEN (opcional) lista los que no.
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+    // Los nombres "existen" (salvo los de global.__CLIENTES_NO_EXISTEN). Si la base falsa de esta prueba
+    // guarda jugadores, se los da de alta con su mismo INSERT de siempre para que el resto de la ruta los vea.
+    const existentes = (params[1] || []).filter(n => !(global.__CLIENTES_NO_EXISTEN || []).includes(n));
+    existentes.forEach(nombre => { try { ejecutarQuery("INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial) VALUES ($1, $2, true, true, 'libre', 0) ON CONFLICT (grupo_id, nombre) DO NOTHING", [params[0], nombre]); } catch (e) { /* esta base falsa no guarda jugadores */ } });
+    return { rows: existentes.map(nombre => ({ nombre })) };
+  }
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
   // ---- obtenerApuestasDelDia (Montos Apostados / Comisiones Devueltas /
@@ -545,7 +553,7 @@ function check(cond, msg) {
   const resEditarCliente = await invocarRuta(handlerPlanoTicketEditar, Object.assign(reqBase(GRUPO_ID), { body: { clienteNombre: 'CARLOS NUEVO' } }), { id: 'plano-3', ticketId: 'ticket-b' });
   check(resEditarCliente._status === 200, 'PUT también permite editar solo el nombre del cliente (200)');
   check(TABLAS.hipismo_tickets.find(t => t.id === 'ticket-b').cliente_nombre === 'CARLOS NUEVO', 'El ticket-b queda con el nuevo nombre');
-  check(TABLAS.jugadores.some(j => j.nombre === 'CARLOS NUEVO'), 'El nuevo nombre queda auto-registrado en jugadores');
+  check(TABLAS.jugadores.some(j => j.nombre === 'CARLOS NUEVO'), 'El nuevo nombre existe en jugadores (la prueba lo da de alta antes: la ruta ya NO lo crea sola)');
 
   // --- Un plano con "PARADA ADELANTADAS" en su texto NO se regenera ---
   const textoViejoPlano4 = TABLAS.hipismo_planos.find(p => p.id === 'plano-4').texto_resultado;
@@ -609,7 +617,7 @@ function check(cond, msg) {
   const resTraspasoTf = await invocarRuta(handlerTraspasoJugada, Object.assign(reqBase(GRUPO_ID), { body: { tabla: 'hipismo_adelantadas_jugadas', id: jugadaTf.id, clienteNuevo: 'JUAN NUEVO' } }));
   check(resTraspasoTf._status === 200, 'También se puede traspasar una Tabla Fija (Jugadas Adelantadas)');
   check(TABLAS.hipismo_adelantadas_jugadas[0].cliente_nombre === 'JUAN NUEVO', 'Queda a nombre del cliente nuevo');
-  check(TABLAS.jugadores.some(j => j.nombre === 'JUAN NUEVO'), 'El cliente nuevo queda auto-registrado');
+  check(TABLAS.jugadores.some(j => j.nombre === 'JUAN NUEVO'), 'El cliente destino existe en jugadores (la prueba lo da de alta antes: la ruta ya NO lo crea sola)');
 
   // --- Validaciones ---
   const resTraspasoRemate = await invocarRuta(handlerTraspasoJugada, Object.assign(reqBase(GRUPO_ID), { body: { tabla: 'hipismo_remate_apuestas', id: 'ra-1', clienteNuevo: 'MARIA' } }));

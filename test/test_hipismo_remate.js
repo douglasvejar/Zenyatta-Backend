@@ -58,6 +58,14 @@ const nuevoId = (prefijo) => prefijo + (seq++);
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  // Regla nueva (05-10-2026): un cliente que no existe es error, no se crea solo. Por defecto los nombres existen; global.__CLIENTES_NO_EXISTEN (opcional) lista los que no.
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+    // Los nombres "existen" (salvo los de global.__CLIENTES_NO_EXISTEN). Si la base falsa de esta prueba
+    // guarda jugadores, se los da de alta con su mismo INSERT de siempre para que el resto de la ruta los vea.
+    const existentes = (params[1] || []).filter(n => !(global.__CLIENTES_NO_EXISTEN || []).includes(n));
+    existentes.forEach(nombre => { try { ejecutarQuery("INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial) VALUES ($1, $2, true, true, 'libre', 0) ON CONFLICT (grupo_id, nombre) DO NOTHING", [params[0], nombre]); } catch (e) { /* esta base falsa no guarda jugadores */ } });
+    return { rows: existentes.map(nombre => ({ nombre })) };
+  }
 
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
@@ -349,8 +357,8 @@ function check(cond, msg) {
   check(apuestaJunko && Number(apuestaJunko.resultado) === 460, 'la línea de JUNKO queda en +460 (500 de pago - 40 que apostó)');
   const apuestaMujica = TABLAS.hipismo_remate_apuestas.find(a => a.cliente_nombre === 'MUJICA' && a.remate_id === res1._json.remate.id);
   check(apuestaMujica && Number(apuestaMujica.resultado) === -150, 'la línea de MUJICA (perdió) queda en -150 (lo que apostó)');
-  check(TABLAS.jugadores.some(j => j.nombre === 'JUNKO'), 'JUNKO quedó auto-registrado en "jugadores" (cliente nuevo)');
-  check(TABLAS.jugadores.some(j => j.nombre === 'TYKHE'), 'TYKHE quedó auto-registrado en "jugadores" (cliente nuevo)');
+  check(TABLAS.jugadores.some(j => j.nombre === 'JUNKO'), 'JUNKO existe en "jugadores" (la prueba lo da de alta antes: la ruta ya NO lo crea sola)');
+  check(TABLAS.jugadores.some(j => j.nombre === 'TYKHE'), 'TYKHE existe en "jugadores" (la prueba lo da de alta antes: la ruta ya NO lo crea sola)');
   check(typeof res1._json.textoResultado === 'string' && res1._json.textoResultado.includes('Junko'),
     'textoResultado menciona al ganador (Junko)');
   check(res1._json.textoResultado.includes('✅💰'), 'textoResultado marca la línea ganadora con ✅💰');

@@ -44,6 +44,14 @@ const nuevoId = (prefijo) => prefijo + (seq++);
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  // Regla nueva (05-10-2026): un cliente que no existe es error, no se crea solo. Por defecto los nombres existen; global.__CLIENTES_NO_EXISTEN (opcional) lista los que no.
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
+    // Los nombres "existen" (salvo los de global.__CLIENTES_NO_EXISTEN). Si la base falsa de esta prueba
+    // guarda jugadores, se los da de alta con su mismo INSERT de siempre para que el resto de la ruta los vea.
+    const existentes = (params[1] || []).filter(n => !(global.__CLIENTES_NO_EXISTEN || []).includes(n));
+    existentes.forEach(nombre => { try { ejecutarQuery("INSERT INTO jugadores (grupo_id, nombre, activo, auto_creado, tipo_cuenta, pozo_inicial) VALUES ($1, $2, true, true, 'libre', 0) ON CONFLICT (grupo_id, nombre) DO NOTHING", [params[0], nombre]); } catch (e) { /* esta base falsa no guarda jugadores */ } });
+    return { rows: existentes.map(nombre => ({ nombre })) };
+  }
 
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
@@ -254,7 +262,7 @@ async function main() {
     check(!!filaJunko && Number(filaJunko.monto) === -15 && filaJunko.caballo === '9', '4e) Fila de JUNKO: caballo 9, monto -15');
     check(res._json.totalesPorCliente.PEDRO === 40, '4f) totalesPorCliente.PEDRO === 40');
     check(res._json.totalesPorCliente.JUNKO === -15, '4g) totalesPorCliente.JUNKO === -15');
-    check(TABLAS.jugadores.some(j => j.nombre === 'JUNKO'), '4h) autoRegistrarJugadores creó a JUNKO');
+    check(TABLAS.jugadores.some(j => j.nombre === 'JUNKO'), '4h) JUNKO existe en jugadores (la prueba lo da de alta antes: la ruta ya NO lo crea sola, ver test_hipismo_cliente_no_existe.js)');
     check(typeof res._json.textoResultado === 'string' && res._json.textoResultado.includes('WINNERS'), '4i) textoResultado trae el encabezado WINNERS');
     check(res._json.textoResultado.includes('Pedro') && res._json.textoResultado.includes('+40'), '4j) textoResultado menciona a Pedro y +40,00');
     check(res._json.textoResultado.includes('Junko') && res._json.textoResultado.includes('-15'), '4k) textoResultado menciona a Junko y -15,00');

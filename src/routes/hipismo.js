@@ -100,7 +100,10 @@ const {
 const {
   parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto, montoBaseTerciosAdelantadaExacto
 } = require('../services/hipismoTerciosAdelantadasCalc');
-const { validarCargaEspecial, normalizarNombre: normalizarNombreCargaEspecial, obtenerCargasEspecialesRango } = require('../services/hipismoCargasEspeciales');
+const {
+  validarCargaEspecial, normalizarNombre: normalizarNombreCargaEspecial, obtenerCargasEspecialesRango,
+  ACCIONES_CARGA_ESPECIAL, CUENTAS_GRUPO_CARGA_ESPECIAL, esCuentaGrupo
+} = require('../services/hipismoCargasEspeciales');
 // obtenerComisionesPropias/crearYLinkearCuentaComision/
 // asegurarCuentasComisionParaNombres/agregarPorcentajeDevuelto/
 // obtenerAjustesComision (26-09-2026) — extraídas a su propio archivo
@@ -119,7 +122,44 @@ const {
 // tabla/pantalla compartida"). Da de alta con auto_creado=true,
 // tipo_cuenta='libre', comisión 0% — el empleado decide después, desde
 // Administración > Jugador, si le carga un % propio o lo deja así.
-const { autoRegistrarJugadores } = require('../services/procesarSabana');
+
+// CLIENTE QUE NO EXISTE = ERROR, NUNCA SE CREA SOLO (05-10-2026, a pedido
+// del usuario: "actualmente se crea el jugador automatico pero no quiero
+// eso porque me esta creando clientes dobles cuando tengo un error de una
+// letra... a partir de ahora me vas a dar un mensaje en pantalla que diga:
+// CLIENTE (NOMBRE) NO EXISTE... asi ya yo se si debo crearlo o escribir
+// bien su nombre"). Reemplaza al alta automática (autoRegistrarJugadores)
+// en TODAS las cargas de Hipismo (planos, adelantadas, tercios
+// adelantadas, remates, winners, traspasos, carga masiva, ediciones).
+// Compara por nombre normalizado (MAYÚSCULA, espacios colapsados) contra
+// la ficha de jugadores del grupo, activa o no (un cliente inactivo
+// existe: nunca se duplica).
+async function clientesInexistentes(grupoId, nombres) {
+  const limpios = Array.from(new Set((nombres || [])
+    .map(n => normalizarNombreCargaEspecial(n))
+    .filter(n => n && n !== 'GENERAL')));
+  if (!limpios.length) return [];
+  const r = await db.query('SELECT nombre FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])', [grupoId, limpios]);
+  const existen = new Set(r.rows.map(x => x.nombre));
+  return limpios.filter(n => !existen.has(n));
+}
+
+function cuerpoClientesNoExisten(faltan) {
+  const lineas = faltan.map(n => `CLIENTE ${n} NO EXISTE`);
+  return {
+    error: lineas.join('\n') + '\nEscribe bien su nombre o créalo primero en Clientes.',
+    clientesNoExisten: faltan
+  };
+}
+
+// Responde 422 y devuelve true si algún nombre no existe — el llamador
+// hace `if (await rechazarClientesInexistentes(req, res, nombres)) return;`.
+async function rechazarClientesInexistentes(req, res, nombres) {
+  const faltan = await clientesInexistentes(req.grupoId, nombres);
+  if (!faltan.length) return false;
+  res.status(422).json(cuerpoClientesNoExisten(faltan));
+  return true;
+}
 // "Eliminar Planos" — papelera recuperable (23-09-2026, a pedido del
 // usuario: "en apuestas crea un boton de eliminar planos"). Ver la nota
 // grande en services/hipismoPlanosPapelera.js — mismo criterio ya usado
@@ -632,6 +672,8 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
   }
+  // Cliente/banquero que no exista = error ya en "Calcular" (no se crea solo).
+  if (await rechazarClientesInexistentes(req, res, resultado.tickets.flatMap(t => [t.clienteNombre, t.banqueroNombre]))) return;
 
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
   // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
@@ -809,7 +851,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
   const nombresDelPlano = new Set();
   resultado.tickets.forEach(t => { nombresDelPlano.add(t.clienteNombre); nombresDelPlano.add(t.banqueroNombre); });
   resueltas.forEach(r => nombresDelPlano.add(r.cliente));
-  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelPlano), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(nombresDelPlano))) return;
 
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
@@ -1022,7 +1064,7 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   const nombresNuevos = [];
   if (clienteFinal !== ticket.cliente_nombre) nombresNuevos.push(clienteFinal);
   if (banqueroFinal !== ticket.banquero_nombre) nombresNuevos.push(banqueroFinal);
-  if (nombresNuevos.length) await autoRegistrarJugadores(req.grupoId, nombresNuevos, {});
+  if (nombresNuevos.length) if (await rechazarClientesInexistentes(req, res, nombresNuevos)) return;
 
   await db.query(
     `UPDATE hipismo_tickets SET cliente_nombre = $1, banquero_nombre = $2, monto = $3, resultado_jugador = $4, resultado_banquero = $5
@@ -1199,6 +1241,7 @@ router.post('/adelantadas/calcular', asyncHandler(async (req, res) => {
 
   const { jugadas, sinReconocer } = parsearJugadasAdelantadas(texto);
   if (!jugadas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas ("N) 5TF DEL X A Y ,monto/pago$" o "N) AxB monto$").' });
+  if (await rechazarClientesInexistentes(req, res, jugadas.map(j => j.cliente))) return;
 
   res.json({
     jugadas,
@@ -1242,7 +1285,7 @@ router.post('/adelantadas', asyncHandler(async (req, res) => {
   const comisionPct = comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje))
     ? Number(comisionPorcentaje) : 2.5;
 
-  await autoRegistrarJugadores(req.grupoId, Array.from(new Set(jugadas.map(j => j.cliente))), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(new Set(jugadas.map(j => j.cliente))))) return;
 
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
@@ -1403,7 +1446,7 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
     banqueadores, comisionPctDefecto
   );
 
-  await autoRegistrarJugadores(req.grupoId, banqueadoresResueltos.map(b => b.nombre), {});
+  if (await rechazarClientesInexistentes(req, res, banqueadoresResueltos.map(b => b.nombre))) return;
 
   const rActualizada = await db.query(
     `UPDATE hipismo_adelantadas_jugadas
@@ -1483,7 +1526,7 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
     ? ((numero2 !== undefined && numero2 !== null && numero2 !== '') ? parseInt(numero2, 10) : jugada.numero2)
     : jugada.numero2;
 
-  if (clienteFinal !== jugada.cliente_nombre) await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+  if (clienteFinal !== jugada.cliente_nombre) if (await rechazarClientesInexistentes(req, res, [clienteFinal])) return;
 
   let recalculo = { estado: jugada.estado, gano: jugada.gano, resultadoCliente: jugada.resultado_cliente, comision: jugada.comision, banqueadores: jugada.banqueadores };
   if (jugada.pizarra_usada && jugada.estado !== 'sin_decidir') {
@@ -1568,6 +1611,7 @@ router.post('/tercios-adelantadas/calcular', asyncHandler(async (req, res) => {
 
   const { hipodromo, pctSugerido, lineas } = parsearPlanoTerciosAdelantadas(texto);
   if (!lineas.length) return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto.' });
+  if (await rechazarClientesInexistentes(req, res, lineas.flatMap(l => [l.jugadorNombre, l.banqueroNombre]))) return;
 
   res.json({
     hipodromo,
@@ -1609,7 +1653,7 @@ router.post('/tercios-adelantadas', asyncHandler(async (req, res) => {
 
   const nombres = new Set();
   lineas.forEach(l => { if (l.jugadorNombre) nombres.add(l.jugadorNombre); if (l.banqueroNombre) nombres.add(l.banqueroNombre); });
-  await autoRegistrarJugadores(req.grupoId, Array.from(nombres), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(nombres))) return;
 
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
@@ -1701,8 +1745,8 @@ router.put('/tercios-adelantadas/jugadas/:id', asyncHandler(async (req, res) => 
   const faltaJugador = !jugadorFinal;
   const faltaBanquero = !banqueroFinal;
 
-  if (jugadorFinal && jugadorFinal !== jugada.jugador_nombre) await autoRegistrarJugadores(req.grupoId, [jugadorFinal], {});
-  if (banqueroFinal && banqueroFinal !== jugada.banquero_nombre) await autoRegistrarJugadores(req.grupoId, [banqueroFinal], {});
+  if (jugadorFinal && jugadorFinal !== jugada.jugador_nombre) if (await rechazarClientesInexistentes(req, res, [jugadorFinal])) return;
+  if (banqueroFinal && banqueroFinal !== jugada.banquero_nombre) if (await rechazarClientesInexistentes(req, res, [banqueroFinal])) return;
 
   // Si ya tenía una pizarra usada (la carrera ya se había resuelto antes
   // de corregir el dato faltante), se recalcula de una con la pizarra
@@ -1836,6 +1880,7 @@ router.post('/remates/calcular', asyncHandler(async (req, res) => {
 
   const { apuestas, pagoFijo: pagoFijoDetectado, garantia: garantiaDetectado, sinReconocer } = parsearRemate(texto);
   if (!apuestas.length) return res.status(400).json({ error: 'No reconocí ninguna apuesta en el texto — revisa el formato de las líneas.' });
+  if (await rechazarClientesInexistentes(req, res, apuestas.map(a => a.cliente))) return;
 
   const pagoFijoFinal = numeroOpcionalConRespaldo(pagoFijo, pagoFijoDetectado);
   const garantiaFinal = numeroOpcionalConRespaldo(garantia, garantiaDetectado);
@@ -1927,7 +1972,7 @@ router.post('/remates', asyncHandler(async (req, res) => {
   // Da de alta en "jugadores" a cualquier cliente nuevo de este remate —
   // misma tabla compartida, mismo criterio que ya usa "Cargar Planos".
   const nombresDelRemate = new Set(apuestas.map(a => a.cliente));
-  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(nombresDelRemate))) return;
   // Mismo criterio que POST /planos (26-09-2026, ver la nota grande de
   // obtenerComisionesPropias): un remate confirmado también puede
   // generar "% devuelto" (entra igual que Tercios en Cierre Final/
@@ -2055,7 +2100,7 @@ router.post('/remates/manual', asyncHandler(async (req, res) => {
   const resultadoRemate = round2(-lineasValidas.reduce((acc, l) => acc + l.monto, 0));
 
   const nombresDelRemate = new Set(lineasValidas.map(l => l.cliente));
-  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelRemate), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(nombresDelRemate))) return;
   await asegurarCuentasComisionParaNombres(req.grupoId, Array.from(nombresDelRemate));
 
   const { totalesPorCliente, textoResultado, textoOriginal } = armarTextoRemateManual({
@@ -2223,7 +2268,7 @@ router.put('/remates/:id/apuestas/:apuestaId', asyncHandler(async (req, res) => 
   if (!esManual && montoFinal <= 0) return res.status(400).json({ error: 'El monto tiene que ser un número mayor a 0.' });
 
   if (clienteFinal !== apuesta.cliente_nombre) {
-    await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+    if (await rechazarClientesInexistentes(req, res, [clienteFinal])) return;
     await asegurarCuentasComisionParaNombres(req.grupoId, [clienteFinal]);
   }
 
@@ -2977,7 +3022,7 @@ router.post('/winners', asyncHandler(async (req, res) => {
   // ELIGE de un <select> con los clientes reales, pero es la misma red
   // de seguridad que ya usan Cargar Planos/Remate/Adelantadas.
   const nombresDelWinner = new Set(lineasValidas.map(l => l.cliente));
-  await autoRegistrarJugadores(req.grupoId, Array.from(nombresDelWinner), {});
+  if (await rechazarClientesInexistentes(req, res, Array.from(nombresDelWinner))) return;
 
   const filasGuardadas = await db.transaccion(async (client) => {
     const filas = [];
@@ -3082,7 +3127,7 @@ router.put('/winners/:id', asyncHandler(async (req, res) => {
   if (!caballoFinal) return res.status(400).json({ error: 'Falta el caballo.' });
   if (!isFinite(montoFinal) || montoFinal === 0) return res.status(400).json({ error: 'El monto no puede quedar en 0.' });
 
-  if (clienteFinal !== winner.cliente_nombre) await autoRegistrarJugadores(req.grupoId, [clienteFinal], {});
+  if (clienteFinal !== winner.cliente_nombre) if (await rechazarClientesInexistentes(req, res, [clienteFinal])) return;
 
   const r = await db.query(
     `UPDATE hipismo_winners SET cliente_nombre = $1, caballo = $2, monto = $3
@@ -3992,13 +4037,14 @@ router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
   const clienteNuevoFinal = ((clienteNuevo || '') + '').trim().toUpperCase().replace(/\s+/g, ' ');
   if (!clienteNuevoFinal) return res.status(400).json({ error: 'Falta el cliente al que se le pasa la jugada.' });
 
+  // El cliente destino tiene que existir ANTES de mover nada (no se crea solo).
+  if (await rechazarClientesInexistentes(req, res, [clienteNuevoFinal])) return;
+
   const r = await db.query(
     `UPDATE ${tabla} SET cliente_nombre = $1 WHERE id = $2 AND grupo_id = $3 RETURNING *`,
     [clienteNuevoFinal, id, req.grupoId]
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Esa jugada no existe.' });
-
-  await autoRegistrarJugadores(req.grupoId, [clienteNuevoFinal], {});
   res.json({ ok: true, jugada: r.rows[0] });
 }));
 
@@ -4027,7 +4073,7 @@ router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
   if (origenFinal === destinoFinal) return res.status(400).json({ error: 'El origen y el destino no pueden ser el mismo cliente.' });
   if (!montoFinal || montoFinal <= 0 || isNaN(montoFinal)) return res.status(400).json({ error: 'Falta un monto válido a traspasar.' });
 
-  await autoRegistrarJugadores(req.grupoId, [destinoFinal], {});
+  if (await rechazarClientesInexistentes(req, res, [destinoFinal])) return;
 
   await db.transaccion(async (client) => {
     await client.query(
@@ -4121,40 +4167,31 @@ router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
 // =================================================================
 // "CARGA MASIVA ESPECIAL" (05-10-2026, a pedido del usuario — ver la nota
 // grande de services/hipismoCargasEspeciales.js y de sql/schema.sql):
-// pegar líneas "CLIENTE +monto" / "CLIENTE -monto" con fecha, carrera y un
-// "código especial" que hace de contrapartida (la suma debe dar 0).
-//   GET    /cargas-especiales               códigos (con saldo) + últimas cargas
-//   POST   /cargas-especiales/codigos       "Crear nuevo código"
-//   POST   /cargas-especiales/previsualizar valida y muestra el resumen
-//   POST   /cargas-especiales               aplica (guarda)
+// escribir líneas "CLIENTE +monto" / "CLIENTE -monto" eligiendo hipódromo,
+// acción (Remate, Marcas, Winners...), fecha y carrera; la suma debe dar 0
+// y cada nombre debe existir (si no: "CLIENTE X NO EXISTE").
+//   GET    /cargas-especiales               acciones + últimas cargas
+//   POST   /cargas-especiales/previsualizar "Calcular": valida y muestra el detalle
+//   POST   /cargas-especiales               confirma (guarda)
 //   PUT    /cargas-especiales/:id           reemplaza una carga (editar)
 //   DELETE /cargas-especiales/:id           elimina una carga
 // =================================================================
-async function leerCodigosEspeciales(grupoId) {
-  const rCodigos = await db.query(
-    'SELECT id, nombre FROM hipismo_codigos_especiales WHERE grupo_id = $1 ORDER BY nombre',
-    [grupoId]
-  );
-  const rSaldos = await db.query(
-    'SELECT cliente_nombre, COALESCE(SUM(monto), 0) AS total FROM hipismo_cargas_especiales_lineas WHERE grupo_id = $1 GROUP BY cliente_nombre',
-    [grupoId]
-  );
-  const saldos = new Map(rSaldos.rows.map(r => [r.cliente_nombre, round2(Number(r.total))]));
-  return rCodigos.rows.map(c => ({ id: c.id, nombre: c.nombre, saldo: saldos.get(c.nombre) || 0 }));
-}
-
-async function marcarClientesNuevos(grupoId, lineas, codigo) {
-  const nombres = Array.from(new Set(lineas.map(l => l.cliente).concat(codigo ? [codigo] : [])));
-  if (!nombres.length) return new Set();
-  const r = await db.query('SELECT nombre FROM jugadores WHERE grupo_id = $1 AND nombre = ANY($2::text[])', [grupoId, nombres]);
-  const existentes = new Set(r.rows.map(x => x.nombre));
-  return new Set(nombres.filter(n => !existentes.has(n)));
+// Comprueba el texto de una carga: formato, acción, fecha, suma 0 Y que cada
+// nombre exista EXACTAMENTE como cliente (o sea una cuenta del grupo, ver
+// CUENTAS_GRUPO_CARGA_ESPECIAL). Un nombre inexistente nunca se crea solo:
+// da "CLIENTE X NO EXISTE" y no deja guardar.
+async function evaluarCargaEspecial(req, body) {
+  const { texto, accion, fecha } = body || {};
+  const v = validarCargaEspecial({ texto, accion, fecha });
+  const faltan = await clientesInexistentes(req.grupoId, v.lineas.filter(l => !esCuentaGrupo(l.cliente)).map(l => l.cliente));
+  const faltanSet = new Set(faltan);
+  const errores = faltan.map(n => `CLIENTE ${n} NO EXISTE`).concat(v.errores);
+  return { v, faltan, faltanSet, errores, ok: errores.length === 0 };
 }
 
 router.get('/cargas-especiales', asyncHandler(async (req, res) => {
-  const codigos = await leerCodigosEspeciales(req.grupoId);
   const rCargas = await db.query(
-    `SELECT id, fecha, carrera, codigo_nombre, creado_en
+    `SELECT id, fecha, carrera, codigo_nombre, hipodromo_nombre, creado_en
        FROM hipismo_cargas_especiales WHERE grupo_id = $1
       ORDER BY fecha DESC, creado_en DESC LIMIT 50`,
     [req.grupoId]
@@ -4175,52 +4212,51 @@ router.get('/cargas-especiales', asyncHandler(async (req, res) => {
   const cargas = rCargas.rows.map(c => {
     const lineas = porCarga.get(c.id) || [];
     return {
-      id: c.id, fecha: fechaComoISO(c.fecha), carrera: c.carrera || '', codigo: c.codigo_nombre, lineas,
+      id: c.id, fecha: fechaComoISO(c.fecha), carrera: c.carrera || '', accion: c.codigo_nombre,
+      hipodromo: c.hipodromo_nombre || '', lineas,
       ganan: round2(lineas.filter(l => l.monto > 0).reduce((t, l) => t + l.monto, 0)),
       pierden: round2(lineas.filter(l => l.monto < 0).reduce((t, l) => t + l.monto, 0))
     };
   });
-  res.json({ codigos, cargas });
+  res.json({ acciones: ACCIONES_CARGA_ESPECIAL, cuentasGrupo: CUENTAS_GRUPO_CARGA_ESPECIAL, cargas });
 }));
 
-router.post('/cargas-especiales/codigos', asyncHandler(async (req, res) => {
-  const nombre = normalizarNombreCargaEspecial(req.body && req.body.nombre);
-  if (!nombre) return res.status(400).json({ error: 'Escribe el nombre del código.' });
-  await db.query(
-    'INSERT INTO hipismo_codigos_especiales (grupo_id, nombre) VALUES ($1, $2) ON CONFLICT (grupo_id, nombre) DO NOTHING',
-    [req.grupoId, nombre]
-  );
-  // El código también es una ficha de cliente, para que aparezca en los balances.
-  await autoRegistrarJugadores(req.grupoId, [nombre], {});
-  res.status(201).json({ codigos: await leerCodigosEspeciales(req.grupoId), nombre });
-}));
-
+// "Calcular": no guarda nada. Devuelve la vista previa (cliente, saldo, tipo
+// de acción, detalle) y los errores que impiden confirmar.
 router.post('/cargas-especiales/previsualizar', asyncHandler(async (req, res) => {
-  const { texto, codigo, fecha } = req.body || {};
-  const v = validarCargaEspecial({ texto, codigo, fecha });
-  const nuevos = await marcarClientesNuevos(req.grupoId, v.lineas, normalizarNombreCargaEspecial(codigo));
+  const { accion } = req.body || {};
+  const accionNorm = normalizarNombreCargaEspecial(accion);
+  const e = await evaluarCargaEspecial(req, req.body);
   res.json({
-    ok: v.ok, suma: v.suma, errores: v.errores, avisos: v.avisos.concat(
-      nuevos.size ? [`Clientes que todavía no existen y se crearán al aplicar: ${Array.from(nuevos).join(', ')}.`] : []
-    ),
-    resumen: v.resumen,
-    lineas: v.lineas.map(l => ({ cliente: l.cliente, monto: l.monto, nuevo: nuevos.has(l.cliente) }))
+    ok: e.ok, suma: e.v.suma, errores: e.errores, avisos: e.v.avisos, resumen: e.v.resumen,
+    clientesNoExisten: e.faltan,
+    lineas: e.v.lineas.map(l => ({
+      cliente: l.cliente, saldo: l.monto, monto: l.monto,
+      tipoAccion: accionNorm, detalle: 'Carga Masiva',
+      existe: !e.faltanSet.has(l.cliente), cuentaGrupo: esCuentaGrupo(l.cliente)
+    }))
   });
 }));
 
-// Valida el cuerpo, comprueba que el código exista y devuelve lo necesario
-// para guardar (o responde el error ya armado).
+// Valida el cuerpo (acción, suma 0, nombres exactos, hipódromo) y devuelve
+// lo necesario para guardar, o responde el error ya armado.
 async function prepararCargaEspecial(req, res) {
-  const { texto, codigo, fecha, carrera } = req.body || {};
-  const v = validarCargaEspecial({ texto, codigo, fecha });
-  if (!v.ok) { res.status(400).json({ error: v.errores[0], errores: v.errores }); return null; }
-  const codigoNorm = normalizarNombreCargaEspecial(codigo);
-  const rCodigo = await db.query('SELECT id FROM hipismo_codigos_especiales WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, codigoNorm]);
-  if (!rCodigo.rows.length) { res.status(400).json({ error: 'Ese código especial no existe. Créalo con "Crear nuevo código".' }); return null; }
+  const { accion, carrera, hipodromo } = req.body || {};
+  const e = await evaluarCargaEspecial(req, req.body);
+  if (e.faltan.length) { res.status(422).json(cuerpoClientesNoExisten(e.faltan)); return null; }
+  if (!e.ok) { res.status(400).json({ error: e.errores[0], errores: e.errores }); return null; }
+  const hipodromoNombre = ((hipodromo == null ? '' : String(hipodromo)).trim()) || null;
+  if (hipodromoNombre) {
+    const rHip = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, hipodromoNombre]);
+    if (!rHip.rows.length) { res.status(400).json({ error: 'Ese hipódromo no existe en el grupo.' }); return null; }
+  }
   // Una línea en 0 no mueve nada: no se guarda.
-  const lineas = v.lineas.filter(l => l.monto !== 0);
+  const lineas = e.v.lineas.filter(l => l.monto !== 0);
   if (!lineas.length) { res.status(400).json({ error: 'Todas las líneas están en 0, no hay nada que cargar.' }); return null; }
-  return { lineas, codigoNorm, fecha, carrera: (carrera == null ? '' : String(carrera)).trim() || null };
+  return {
+    lineas, accionNorm: normalizarNombreCargaEspecial(accion), fecha: req.body.fecha, hipodromoNombre,
+    carrera: (carrera == null ? '' : String(carrera)).trim() || null
+  };
 }
 
 async function guardarLineasCargaEspecial(client, req, cargaId, lineas) {
@@ -4238,13 +4274,12 @@ router.post('/cargas-especiales', asyncHandler(async (req, res) => {
   if (!datos) return;
   const id = await db.transaccion(async (client) => {
     const r = await client.query(
-      'INSERT INTO hipismo_cargas_especiales (grupo_id, fecha, carrera, codigo_nombre) VALUES ($1,$2,$3,$4) RETURNING id',
-      [req.grupoId, datos.fecha, datos.carrera, datos.codigoNorm]
+      'INSERT INTO hipismo_cargas_especiales (grupo_id, fecha, carrera, codigo_nombre, hipodromo_nombre) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [req.grupoId, datos.fecha, datos.carrera, datos.accionNorm, datos.hipodromoNombre]
     );
     await guardarLineasCargaEspecial(client, req, r.rows[0].id, datos.lineas);
     return r.rows[0].id;
   });
-  await autoRegistrarJugadores(req.grupoId, datos.lineas.map(l => l.cliente), {});
   res.status(201).json({ ok: true, id, lineas: datos.lineas.length });
 }));
 
@@ -4254,12 +4289,11 @@ router.put('/cargas-especiales/:id', asyncHandler(async (req, res) => {
   const datos = await prepararCargaEspecial(req, res);
   if (!datos) return;
   await db.transaccion(async (client) => {
-    await client.query('UPDATE hipismo_cargas_especiales SET fecha = $1, carrera = $2, codigo_nombre = $3 WHERE id = $4 AND grupo_id = $5',
-      [datos.fecha, datos.carrera, datos.codigoNorm, req.params.id, req.grupoId]);
+    await client.query('UPDATE hipismo_cargas_especiales SET fecha = $1, carrera = $2, codigo_nombre = $3, hipodromo_nombre = $4 WHERE id = $5 AND grupo_id = $6',
+      [datos.fecha, datos.carrera, datos.accionNorm, datos.hipodromoNombre, req.params.id, req.grupoId]);
     await client.query('DELETE FROM hipismo_cargas_especiales_lineas WHERE carga_id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
     await guardarLineasCargaEspecial(client, req, req.params.id, datos.lineas);
   });
-  await autoRegistrarJugadores(req.grupoId, datos.lineas.map(l => l.cliente), {});
   res.json({ ok: true, id: req.params.id, lineas: datos.lineas.length });
 }));
 
@@ -4964,7 +4998,17 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
     'SELECT * FROM jugadores WHERE grupo_id = $1 AND nombre = $2',
     [req.grupoId, req.params.nombre]
   );
-  const jugador = rJugador.rows[0];
+  let jugador = rJugador.rows[0];
+  // Cuentas del grupo de "Carga Masiva Especial" (% TABLAS Y MARCAS, MARCAS,
+  // etc.) que no son una ficha de cliente: igual se pueden abrir desde
+  // Cierre Final/Detallado por Cliente, con lo que se les cargó (misma
+  // ficha vacía de un cliente sin jugadas propias, solo con sus cargas).
+  if (!jugador && esCuentaGrupo(req.params.nombre)) {
+    jugador = {
+      id: null, grupo_id: req.grupoId, nombre: normalizarNombreCargaEspecial(req.params.nombre), activo: true,
+      modulos_anclados: false, es_cuenta_comision: false, comision_propia: 0, incluir_porcentaje_en_jugadas: false, cuenta_comision_id: null
+    };
+  }
   if (!jugador) return res.status(404).json({ error: 'No se encontró ese cliente.' });
 
   const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana, rangoPersonalizado);

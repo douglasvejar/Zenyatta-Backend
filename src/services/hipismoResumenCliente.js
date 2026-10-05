@@ -63,7 +63,7 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // "dias[].hipodromos", con tipo:'traspaso', SOLO puede aparecer en el
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
 const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos de Comisión';
-const NOMBRE_BLOQUE_CARGA_ESPECIAL = 'Carga Masiva Especial';
+const NOMBRE_BLOQUE_CARGA_ESPECIAL = 'Carga Masiva';
 // Mismo nombre de ítem que ya usaba GET /cierre-final en routes/hipismo.js
 // (NOMBRE_ITEM_REMATE) — ver la nota grande de construirCierreFinalHipismo
 // más abajo.
@@ -817,12 +817,17 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   cargasEspecialesCliente.forEach(l => {
     if (!porDia.has(l.fecha)) porDia.set(l.fecha, new Map());
     const hipMap = porDia.get(l.fecha);
-    if (!hipMap.has(NOMBRE_BLOQUE_CARGA_ESPECIAL)) {
-      hipMap.set(NOMBRE_BLOQUE_CARGA_ESPECIAL, { nombre: NOMBRE_BLOQUE_CARGA_ESPECIAL, tipo: 'traspaso', carreras: [] });
+    // Un bloque por acción ("Marcas (Carga Masiva)", "Remate (Carga Masiva)"...),
+    // como pidió el usuario: "el detallado debe aparecer como Deporte,
+    // Remate, etc., según la acción seleccionada".
+    const accion = (l.codigoNombre || '').toString().trim();
+    const nombreBloque = accion ? `${accion.charAt(0)}${accion.slice(1).toLowerCase()} (${NOMBRE_BLOQUE_CARGA_ESPECIAL})` : NOMBRE_BLOQUE_CARGA_ESPECIAL;
+    if (!hipMap.has(nombreBloque)) {
+      hipMap.set(nombreBloque, { nombre: nombreBloque, tipo: 'traspaso', carreras: [] });
     }
-    hipMap.get(NOMBRE_BLOQUE_CARGA_ESPECIAL).carreras.push({
+    hipMap.get(nombreBloque).carreras.push({
       tipo: 'traspaso',
-      nota: (l.carrera ? `Carrera ${l.carrera} — ` : '') + `Carga especial ${l.codigoNombre}`,
+      nota: `${l.hipodromoNombre || 'Todos los hipódromos'}${l.carrera ? ` · Carrera ${l.carrera}` : ''} · Carga Masiva`,
       resultado: l.monto
     });
     totalSemana += l.monto;

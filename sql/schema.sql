@@ -1931,18 +1931,17 @@ alter table hipismo_remates add column if not exists modo text not null default 
 
 -- =================================================================
 -- "CARGA MASIVA ESPECIAL" (05-10-2026, a pedido del usuario: una pestaña
--- debajo de Cargar Planos donde se pegan líneas "CLIENTE +monto" /
--- "CLIENTE -monto" con una fecha, un número de carrera y un "código
--- especial" (ej. DEPORTE) que hace de contrapartida — la suma de TODAS
--- las líneas, incluido el código especial, debe dar 0). Cada línea es un
--- movimiento de saldo directo (como un Winner, pero sin hipódromo ni
--- caballo): Balance General, Cierre Final, Semana por Días y el link de
--- cada cliente la suman tal cual.
---   hipismo_codigos_especiales: los códigos que el operador ha creado
---     ("Crear nuevo código"); cada uno también se registra como ficha de
---     cliente (jugadores) para que aparezca en los balances.
+-- debajo de Cargar Planos donde se escriben líneas "CLIENTE +monto" /
+-- "CLIENTE -monto" eligiendo un hipódromo, una ACCIÓN (Remate, Marcas,
+-- Winners, Tablas Fijas...), una fecha y (opcional) un número de carrera —
+-- la suma de TODAS las líneas debe dar 0 y cada nombre debe existir como
+-- cliente). Cada línea es un movimiento de saldo directo (como un Winner,
+-- pero sin caballo): Balance General, Cierre Final, Semana por Días y el
+-- link de cada cliente la suman tal cual, etiquetada con su acción.
+--   hipismo_codigos_especiales: ya no se usa (la versión inicial elegía un
+--     "código"); se deja la tabla para no tocar nada ya creado.
 --   hipismo_cargas_especiales: la cabecera de cada carga (fecha, carrera,
---     código usado).
+--     hipódromo; codigo_nombre guarda la ACCIÓN elegida).
 --   hipismo_cargas_especiales_lineas: una fila por cliente con su monto
 --     con signo (positivo = gana, negativo = pierde).
 -- Empiezan vacías: no afectan ningún dato ya guardado.
@@ -1960,8 +1959,11 @@ create table if not exists hipismo_cargas_especiales (
   fecha          date not null,
   carrera        text,
   codigo_nombre  text not null,
+  hipodromo_nombre text,
   creado_en      timestamptz not null default now()
 );
+-- Para una base que ya había creado la tabla antes de esta ronda:
+alter table hipismo_cargas_especiales add column if not exists hipodromo_nombre text;
 create index if not exists idx_hipismo_cargas_especiales_grupo_fecha on hipismo_cargas_especiales(grupo_id, fecha);
 create table if not exists hipismo_cargas_especiales_lineas (
   id              uuid primary key default gen_random_uuid(),
