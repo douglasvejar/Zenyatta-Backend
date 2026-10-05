@@ -282,7 +282,7 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
   const rTerciosAdelantadas = await db.query(
     `SELECT j.jugador_nombre, j.banquero_nombre, j.carrera_numero, j.es_cruce,
             j.grupo_caballos, j.cruce_grupo_a, j.cruce_grupo_b, j.modalidad, j.monto,
-            j.resultado_jugador, j.resultado_banquero, j.comision_grupo, j.pizarra_usada,
+            j.resultado_jugador, j.resultado_banquero, j.comision_grupo, j.comision_porcentaje, j.pizarra_usada,
             p.fecha, p.hipodromo_nombre, h.pais
        FROM hipismo_tercios_adelantadas_jugadas j
        JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
@@ -312,7 +312,12 @@ async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta)
       modalidad: row.modalidad,
       monto: Number(row.monto),
       rol,
-      resultado
+      resultado,
+      // % de comisión configurado en ESTA jugada (default 5) -- hace falta
+      // para deshacerlo y obtener la base decidida del % devuelto propio/de
+      // aval (ver montoBaseTerciosAdelantadaExacto en
+      // hipismoTerciosAdelantadasCalc.js).
+      comisionPorcentaje: row.comision_porcentaje === undefined || row.comision_porcentaje === null ? 5 : Number(row.comision_porcentaje)
     };
   });
 

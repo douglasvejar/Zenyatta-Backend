@@ -9957,7 +9957,7 @@ function armarJugadaTextoDetallado(c) {
     // el cliente origen jugó Y banqueó en esta MISMA carrera -- el monto ya
     // viene neteado entre las 2 posiciones, se avisa para que no se vea
     // como una jugada más de Tercios cualquiera.
-    const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : c.origenTipo === 'tercios-neto' ? ' (Neto — jugó y banqueó)' : '';
+    const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : c.origenTipo === 'tercios_adelantada' ? ' (Adelantada entre tercios)' : c.origenTipo === 'tercios-neto' ? ' (Neto — jugó y banqueó)' : '';
     return `💰 ${c.porcentaje}% de ${c.clienteOrigen}${origen}`;
   }
   // Ajuste por cruce (26-09-2026, ver la nota grande EXACTA de

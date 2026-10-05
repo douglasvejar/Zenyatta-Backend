@@ -458,7 +458,7 @@
       // construirResumenCuentaComisionHipismo en services/hipismoResumenCliente.js):
       // el cliente origen jugó Y banqueó en esta MISMA carrera -- el monto
       // ya viene neteado entre las 2 posiciones.
-      const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : c.origenTipo === 'tercios-neto' ? ' (Neto — jugó y banqueó)' : '';
+      const origen = c.origenTipo === 'remate' ? ' (Remate)' : c.origenTipo === 'adelantada' ? ' (Adelantada)' : c.origenTipo === 'tercios_adelantada' ? ' (Adelantada entre tercios)' : c.origenTipo === 'tercios-neto' ? ' (Neto — jugó y banqueó)' : '';
       return `💰 ${c.porcentaje}% de ${c.clienteOrigen}${origen}`;
     }
     // Ajuste por cruce (26-09-2026, a pedido del usuario: "LOS PLANOS SI

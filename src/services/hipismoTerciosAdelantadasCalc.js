@@ -359,6 +359,28 @@ function montoMostradoConPct(fraccionMonto, pctComision) {
   return (fraccionMonto > 0) ? fraccionMonto * (1 - pctComision / 100) : fraccionMonto;
 }
 
+// montoBaseTerciosAdelantadaExacto(resultadoMostrado, pctComision) ->
+// monto DECIDIDO exacto (sin redondear) de una Jugada entre Tercios
+// Adelantada, usado como BASE del % devuelto propio/de aval (05-10-2026,
+// a pedido explícito del usuario: el % propio del cliente tiene que
+// ganarse TAMBIÉN en estas jugadas, igual que en Tercios normal, "en
+// todos lados" -- grilla, links, cuentas destino y reportes).
+//
+// Es la inversa EXACTA de montoMostradoConPct() de arriba: quien ganó ve
+// fraccion*(1 - pct/100), así que la base decidida es r/(1 - pct/100); quien
+// perdió ve la fracción completa, así que la base es |r|. Tercios normal
+// usa el 5% fijo (montoDecididoExacto -> r/0.95); acá el % lo configura el
+// operador por plano (hipismo_tercios_adelantadas_jugadas.comision_porcentaje,
+// default 5), por eso NO se puede reusar montoDecididoExacto tal cual. Con
+// el 5% por defecto da EXACTAMENTE el mismo número que Tercios normal.
+function montoBaseTerciosAdelantadaExacto(resultadoMostrado, pctComision) {
+  const r = Number(resultadoMostrado) || 0;
+  let pct = Number(pctComision);
+  if (!Number.isFinite(pct)) pct = 5;
+  if (r > 0 && pct > 0 && pct < 100) return r / (1 - pct / 100);
+  return Math.abs(r);
+}
+
 function resolverLineaTerciosAdelantada(linea, rank, pctComision) {
   const monto = Number(linea.monto) || 0;
   let resultado = null;
@@ -471,5 +493,6 @@ module.exports = {
   extraerHipodromoDeTexto,
   parseCaballosToken,
   mejorPosicion,
-  montoMostradoConPct
+  montoMostradoConPct,
+  montoBaseTerciosAdelantadaExacto
 };

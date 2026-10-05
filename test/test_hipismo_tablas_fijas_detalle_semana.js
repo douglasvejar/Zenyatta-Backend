@@ -84,7 +84,7 @@ function ejecutarQuery(text, params) {
 
   // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
   // este archivo crea jugadas de esta pestaña nueva.
-  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.(\*|id, j\.jugador_nombre)[\s\S]*?FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
   throw new Error('La base de datos falsa de esta prueba (tablas fijas detalle-semana) no sabe responder: ' + sql);
 }

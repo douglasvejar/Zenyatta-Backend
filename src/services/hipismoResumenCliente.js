@@ -22,6 +22,7 @@ const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
 const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
+const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
 // construirResumenCuentaComisionHipismo más abajo) — MISMA función que ya
@@ -115,6 +116,11 @@ function montoBaseParaPct(linea) {
   }
   if (linea.tipo === 'adelantada') {
     return montoDecididoExacto(linea.resultado, true);
+  }
+  // Jugadas entre Tercios Adelantadas (05-10-2026): base decidida con el %
+  // de comisión configurado en ESA jugada (ver montoBaseTerciosAdelantadaExacto).
+  if (linea.tipo === 'tercios_adelantada') {
+    return montoBaseTerciosAdelantadaExacto(linea.resultado, linea.comisionPorcentaje);
   }
   // 04-10-2026, a pedido explícito del usuario ("estas jugadas a premio
   // no dejan comision, ni % de devolucion... ni para el grupo ni para
@@ -321,6 +327,8 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
       // cobre UNA sola vez sobre el monto exacto acumulado de esa carrera,
       // nunca una vez por renglón/ticket.
       const carreraTerciosYaAgregada = new Set();
+      // base EXACTA fusionada por carrera (05-10-2026, ver más abajo)
+      const baseFusionadaPorCarrera = new Map();
 
       lineas.forEach(linea => {
         // Winners nunca genera % devuelto — no tiene "monto apostado"
@@ -368,21 +376,43 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
         // Esto solo existe para Tercios (linea.tipo ausente, igual que
         // netearJugadorBanqueroTercios) -- las Marcas de Jugadas
         // Adelantadas se quedan exactamente como estaban.
+        // 05-10-2026 ("12 de 72 cliente(s) no cuadran", ver la nota grande de
+        // acumularDevuelto en construirCierreFinalHipismo): TODAS las
+        // líneas que generan % (Tercios, Tablas/Marcas y Jugadas entre
+        // Tercios Adelantadas) se funden por carrera -- se suma su base
+        // EXACTA y el % se redondea UNA sola vez por carrera, igual que la
+        // grilla. Antes solo Tercios se fundía (las demás redondeaban línea
+        // por línea y, además, Tercios Adelantadas no estaba conectada en
+        // la grilla, de ahí los céntimos/dólares de diferencia).
+        const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+        if (!linea.tipo) {
+          if (carreraTerciosYaAgregada.has(claveCarrera)) return; // esta carrera ya se cobró con otro renglón/ticket
+          carreraTerciosYaAgregada.add(claveCarrera);
+        }
         let montoParaPct;
         let origenTipoNeto = null;
         if (!linea.tipo) {
-          const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
-          if (carreraTerciosYaAgregada.has(claveCarrera)) return; // esta carrera ya se cobró con otro renglón/ticket
-          carreraTerciosYaAgregada.add(claveCarrera);
           const infoNeto = netoPorCarreraFuente.get(claveCarrera)?.get(nombreFuente);
           montoParaPct = infoNeto ? infoNeto.netoExacto : montoBaseParaPct(linea);
           if (infoNeto && infoNeto.dual) origenTipoNeto = 'tercios-neto';
         } else {
           montoParaPct = montoBaseParaPct(linea);
         }
+        const baseAbs = Math.abs(Number(montoParaPct) || 0);
+        if (!baseAbs) return;
+        if (!baseFusionadaPorCarrera.has(claveCarrera)) {
+          baseFusionadaPorCarrera.set(claveCarrera, { base: 0, primera: linea, origenTipo: origenTipoNeto || linea.tipo || 'tercios', tipos: new Set() });
+        }
+        const acc = baseFusionadaPorCarrera.get(claveCarrera);
+        acc.base += baseAbs;
+        acc.tipos.add(linea.tipo || 'tercios');
+        if (!linea.tipo) acc.origenTipo = origenTipoNeto || 'tercios'; // si hay Tercios en la carrera, manda su etiqueta
+      });
 
+      baseFusionadaPorCarrera.forEach(acc => {
+        const linea = acc.primera;
         entradas.forEach(info => {
-          const devuelto = round2(Math.abs(Number(montoParaPct) || 0) * (info.pct / 100));
+          const devuelto = round2(acc.base * (info.pct / 100));
           if (!devuelto) return;
 
           const fechaIso = linea.fecha;
@@ -393,7 +423,7 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
 
           hipMap.get(hipNombre).carreras.push({
             tipo: 'comision',
-            origenTipo: origenTipoNeto || linea.tipo || 'tercios',
+            origenTipo: acc.origenTipo,
             carrera: linea.carreraNumero,
             pizarra: linea.pizarra,
             modalidad: linea.modalidad,
@@ -403,10 +433,10 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
             // El monto mostrado en esta línea de comisión es la BASE real
             // sobre la que se calculó el %, no el monto completo de la
             // jugada — para que el detalle ("X% de $monto = $resultado")
-            // cuadre también cuando montoParaPct viene escalado (banqueo
-            // de una Marca, o neteado por jugar y banquear en la misma
-            // carrera).
-            monto: Math.abs(Number(montoParaPct) || 0),
+            // cuadre también cuando la base viene escalada (banqueo de una
+            // Marca), neteada (jugar y banquear en la misma carrera) o
+            // fusionada con otras jugadas de la misma carrera.
+            monto: acc.base,
             resultado: devuelto
           });
 
@@ -578,14 +608,26 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   const comisionPorCarreraPropia = new Map();
   if (pctPropioIncluido) {
     const porCarreraPropia = new Map();
+    // 05-10-2026 ("12 de 72 cliente(s) no cuadran", ver la nota grande de
+    // acumularDevuelto en construirCierreFinalHipismo): las Jugadas
+    // Adelantadas (Tablas/Marcas) y las Jugadas entre Tercios Adelantadas
+    // (`linea.tipo` presente) ahora TAMBIÉN se funden con los Tercios de la
+    // misma carrera -- se suma su base EXACTA (sin redondear) a la de la
+    // carrera y se redondea 1 sola vez, igual que la grilla (Cierre Final),
+    // en vez de redondear su % línea por línea.
+    const otrosPorCarrera = new Map();
     lineasHipismo.forEach(linea => {
+      if (!linea.rol || Number(linea.resultado) === 0) return;
+      const clave = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+      if (linea.tipo) {
+        otrosPorCarrera.set(clave, (otrosPorCarrera.get(clave) || 0) + Math.abs(Number(montoBaseParaPct(linea)) || 0));
+        return;
+      }
       // 04-10-2026: + linea.sinComision -- las jugadas "a premio" SIN
       // comisión no generan % propio incluido tampoco (mismo pedido
       // explícito del usuario, ver la nota grande de montoBaseComisionExacto
-      // en hipismoAdelantadasCalc.js). Antes esto solo excluía Adelantadas
-      // (`linea.tipo`), sin rol, o resultado 0.
-      if (linea.tipo || !linea.rol || Number(linea.resultado) === 0 || linea.sinComision) return;
-      const clave = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+      // en hipismoAdelantadasCalc.js).
+      if (linea.sinComision) return;
       if (!porCarreraPropia.has(clave)) porCarreraPropia.set(clave, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
       const acc = porCarreraPropia.get(clave);
       const decidido = montoDecididoExacto(linea.resultado, linea.sinComision);
@@ -598,12 +640,17 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // los 2 lados a la vez. Sin carrera dual (el caso normal) un lado
     // queda en 0 y esto se reduce a sumar todas las líneas de ese único
     // lado -- ver la nota grande de arriba, caso "Sammy".
+    const baseTerciosPorCarrera = new Map();
     porCarreraPropia.forEach((acc, clave) => {
       const ganoLosDosLados = acc.sumaJugador > 0 && acc.sumaBanquero > 0;
       const netoExacto = ganoLosDosLados
         ? (acc.decididoJugador + acc.decididoBanquero)
         : Math.abs(acc.decididoJugador - acc.decididoBanquero);
-      comisionPorCarreraPropia.set(clave, round2(Math.abs(netoExacto) * pctPropioIncluido / 100));
+      baseTerciosPorCarrera.set(clave, Math.abs(netoExacto));
+    });
+    new Set([...baseTerciosPorCarrera.keys(), ...otrosPorCarrera.keys()]).forEach(clave => {
+      const base = (baseTerciosPorCarrera.get(clave) || 0) + (otrosPorCarrera.get(clave) || 0);
+      comisionPorCarreraPropia.set(clave, round2(base * pctPropioIncluido / 100));
     });
   }
   const carrerasConComisionPropia = new Set(comisionPorCarreraPropia.keys());
@@ -656,16 +703,15 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // línea por línea.
     let comisionIncluida = 0;
     if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
-      if (!linea.tipo) {
-        const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
-        if (carrerasConComisionPropia.has(claveCarrera)) {
-          comisionIncluida = comisionPorCarreraPropia.get(claveCarrera);
-          comisionPorCarreraPropia.delete(claveCarrera);
-          carrerasConComisionPropia.delete(claveCarrera);
-        }
-      } else {
-        const montoParaPct = montoBaseParaPct(linea);
-        comisionIncluida = round2(Math.abs(Number(montoParaPct) || 0) * (pctPropioIncluido / 100));
+      // 05-10-2026: TODAS las líneas con rol (Tercios, Tablas/Marcas y
+      // Jugadas entre Tercios Adelantadas) comparten la misma comisión
+      // fusionada de su carrera, asignada a la PRIMERA línea de esa
+      // carrera (ver la nota grande de comisionPorCarreraPropia arriba).
+      const claveCarrera = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
+      if (carrerasConComisionPropia.has(claveCarrera)) {
+        comisionIncluida = comisionPorCarreraPropia.get(claveCarrera);
+        comisionPorCarreraPropia.delete(claveCarrera);
+        carrerasConComisionPropia.delete(claveCarrera);
       }
     }
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
@@ -1225,7 +1271,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // guardado el plano que al recargar la pantalla más tarde.
   const rTerciosAdelantadas = await db.query(
     `SELECT j.jugador_nombre, j.banquero_nombre, j.resultado_jugador, j.resultado_banquero, j.comision_grupo,
-            p.fecha, p.hipodromo_nombre, j.carrera_numero
+            j.comision_porcentaje, p.fecha, p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_tercios_adelantadas_jugadas j
        JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto', 'sin_decidir')`,
@@ -1376,6 +1422,12 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   rAdelantadas.rows.forEach(j => {
     nombresJugadores.add(j.cliente_nombre);
     if (Array.isArray(j.banqueadores)) j.banqueadores.forEach(b => nombresJugadores.add(b.nombre));
+  });
+  // 05-10-2026: Jugadas entre Tercios Adelantadas también generan el % propio/de
+  // aval de sus 2 lados (ver el bloque de acumularDevuelto más abajo).
+  rTerciosAdelantadas.rows.forEach(j => {
+    nombresJugadores.add(j.jugador_nombre);
+    nombresJugadores.add(j.banquero_nombre);
   });
   const comisionesPropias = await obtenerComisionesPropias(grupoId, Array.from(nombresJugadores));
   // "COMISIÓN REAL" (29-09-2026, a pedido del usuario: "de la comisión
@@ -1558,6 +1610,29 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
       const parte = baseJugada * (Number(b.porcentaje) || 0) / 100;
       acumularDevuelto(b.nombre, parte, claveCarrera);
     });
+  });
+
+  // Jugadas entre Tercios Adelantadas (05-10-2026, a pedido explícito del
+  // usuario, tras ver "12 de 72 cliente(s) no cuadran" en Detallado por
+  // Cliente: el link y las cuentas de comisión SÍ le cobraban al cliente su
+  // % propio/de aval sobre estas jugadas, pero esta grilla (la referencia
+  // "golden") nunca las contaba -- el usuario decidió: "que lo gane en todos
+  // lados"). Se acumula EXACTO por carrera, igual que Tercios/Adelantadas
+  // (misma claveCarrera, así fusiona con cualquier otra jugada del mismo
+  // cliente en esa carrera y se redondea una sola vez abajo). Base = lo
+  // DECIDIDO (inversa del % de comisión configurado en ESA jugada, ver
+  // montoBaseTerciosAdelantadaExacto) y jamás una jugada que no se decidió
+  // (resultado 0 -- 'sin_decidir'). Ambos lados (jugador y banquero)
+  // generan % -- mismo criterio que el lado banquero de Tercios.
+  rTerciosAdelantadas.rows.forEach(j => {
+    const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
+    const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
+    if (Number(j.resultado_jugador) !== 0) {
+      acumularDevuelto(j.jugador_nombre, montoBaseTerciosAdelantadaExacto(j.resultado_jugador, j.comision_porcentaje), claveCarrera);
+    }
+    if (Number(j.resultado_banquero) !== 0) {
+      acumularDevuelto(j.banquero_nombre, montoBaseTerciosAdelantadaExacto(j.resultado_banquero, j.comision_porcentaje), claveCarrera);
+    }
   });
 
   // Recién ahora se redondea UNA vez por (carrera, cliente, destino, %) —
