@@ -1019,8 +1019,8 @@ function recalcularTotalesPlano(tickets, cruzar) {
     });
   }
 
-  Object.keys(totalesFinales).forEach(n => { totalesFinales[n] = Math.round((totalesFinales[n] + Number.EPSILON) * 100) / 100; });
-  comisionTotal = Math.round((comisionTotal + Number.EPSILON) * 100) / 100;
+  Object.keys(totalesFinales).forEach(n => { totalesFinales[n] = round2(totalesFinales[n]); });
+  comisionTotal = round2(comisionTotal);
   return { totalesFinales, comisionTotal };
 }
 
@@ -1065,7 +1065,7 @@ function calcularAjustesCruce(tickets) {
   });
   const ajustes = {};
   Object.keys(totalesFinales).forEach(nombre => {
-    const delta = Math.round(((totalesFinales[nombre] - (sinCruzar[nombre] || 0)) + Number.EPSILON) * 100) / 100;
+    const delta = round2(totalesFinales[nombre] - (sinCruzar[nombre] || 0));
     if (delta) ajustes[nombre] = delta;
   });
   return ajustes;

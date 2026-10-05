@@ -35,9 +35,9 @@ const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 const UN_DIA_MS = 24 * 60 * 60 * 1000;
 const MODULOS_VALIDOS = ['deportes', 'hipismo'];
 
-function round2(n) {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-}
+// Mismo redondeo EXACTO (a prueba de empates de medio centavo) que usa todo
+// Hipismo -- ver round2 en hipismoAdelantadasCalc.js.
+const { round2 } = require('./hipismoAdelantadasCalc');
 
 // Cualquier fecha 'YYYY-MM-DD' que caiga 7 días antes de `fechaISO` sirve
 // como referencia para que calcularSemana() (fechaSemana.js) encuentre el

@@ -99,8 +99,21 @@
 // ahí alcanza con que la pizarra tenga los 2 primeros lugares.
 // =================================================================
 
+// round2: ÚNICO redondeo de dinero de todo Hipismo (05-10-2026, "NO QUIERO MAS
+// DIFERENCIA, UN CENTAVO A LA LARGA REPRESENTA CIENTOS DE DOLARES"). Antes era
+// Math.round((n + Number.EPSILON) * 100) / 100: cuando un % cae justo en medio
+// centavo (12,50 * 1% = 0,125) el producto en coma flotante queda un pelo
+// arriba o abajo del empate según el ORDEN en que se sumaron las bases, y la
+// Grilla (Cierre Final) y el Link del cliente -- que suman en distinto
+// orden -- terminaban con $0,01 de diferencia. Ahora el medio centavo
+// SIEMPRE sube (en valor absoluto) y el 1e-6 absorbe el ruido de coma
+// flotante (los montos reales nunca caen a menos de 0,01 centavos de un
+// empate de verdad). No uses Math.round(x * 100) / 100 suelto en ningún lado:
+// usa esta función. Ver test/test_hipismo_cuadre_aleatorio.js.
 function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+  const x = Number(n) || 0;
+  const signo = x < 0 ? -1 : 1;
+  return signo * Math.round(Math.abs(x) * 100 + 1e-6) / 100 || 0;
 }
 
 // montoDecidido (02-10-2026, a pedido del usuario: "LOS % QUE SE DEVUELVEN
