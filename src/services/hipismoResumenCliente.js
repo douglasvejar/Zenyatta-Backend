@@ -21,6 +21,7 @@
 const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
+const { asegurarBanqueoAutomaticoMarcas } = require('./hipismoMarcasBanqueoAuto');
 const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
@@ -1233,6 +1234,9 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
 // lista `clientes` con su saldo ya neto, tal cual el shape que devolvía
 // GET /cierre-final.
 async function construirCierreFinalHipismo(grupoId, desde, hasta) {
+  // 06-10-2026: las Marcas que quedaron sin banquear se banquean solas con
+  // MARCAS ZENYATTA/MARCAS SAMMY antes de leer, para que sus ítems salgan.
+  await asegurarBanqueoAutomaticoMarcas(grupoId);
   // `p.hipodromo_nombre, p.carrera_numero, p.fecha` (02-10-2026, agregadas
   // SOLO para el neteo jugador/banquero de más abajo —
   // netearJugadorBanqueroTercios agrupa por carrera, fecha+hipódromo+

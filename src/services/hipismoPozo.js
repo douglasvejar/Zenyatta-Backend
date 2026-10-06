@@ -23,8 +23,10 @@
 // no resultado de JUGAR, y el usuario no los mencionó al pedir esto. Si
 // más adelante se quiere que también muevan el pozo, se agregan acá.
 const db = require('../db');
+const { asegurarBanqueoAutomaticoMarcas } = require('./hipismoMarcasBanqueoAuto');
 
 async function calcularLiquidadoHipismo(grupoId, nombreCliente) {
+  await asegurarBanqueoAutomaticoMarcas(grupoId); // 06-10-2026
   let total = 0;
 
   // Tercios de "Cargar Planos" — el cliente puede ganar/perder como

@@ -1300,6 +1300,8 @@
       <!-- "Revisar Jugadas" (05-10-2026) — ver la nota grande junto a #vista-revisarJugadas. -->
       <button type="button" class="nav-item nav-child" data-vista="revisarJugadas" onclick="mostrarVista('revisarJugadas', this)">🔎<span class="nav-lbl"> Revisar Jugadas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="fechaSemana" onclick="mostrarVista('fechaSemana', this)">📅<span class="nav-lbl"> Fecha de Semana</span></button>
+      <!-- "Banqueo de Marcas" (06-10-2026) — quién banquea por defecto las Marcas de ESTE grupo. -->
+      <button type="button" class="nav-item nav-child" data-vista="banqueoMarcas" onclick="mostrarVista('banqueoMarcas', this)">🏦<span class="nav-lbl"> Banqueo de Marcas</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cabezaPie" onclick="mostrarVista('cabezaPie', this)">📝<span class="nav-lbl"> Cabeza y Pie de Plano</span></button>
       <button type="button" class="nav-item nav-child" data-vista="planosEliminados" onclick="mostrarVista('planosEliminados', this)">🗑️<span class="nav-lbl"> Planos Eliminados</span></button>
       <!-- 24-09-2026, a pedido del usuario: "crea un boton que diga
@@ -2943,6 +2945,24 @@
         <p class="desc" id="previewSemana" style="margin-top:16px; margin-bottom:0;"></p>
         <p class="desc" id="estadoSemana" style="margin-top:8px; margin-bottom:0;"></p>
         <p class="desc" style="margin-top:12px; margin-bottom:0;">Al guardar, <b>todos los reportes de Hipismo</b> (Cierre Final, Balance General, Semana por Días, Comisiones, Saldo Comisiones, Detallado por Cliente y el link de cada cliente) usan esta semana. Si el inicio y el cierre son el mismo día (por ejemplo Lunes y Lunes), esa primera semana dura 8 días y la siguiente arranca el día después del cierre, así ningún día se cuenta dos veces. <b>Lunes a Domingo</b> vuelve a la semana de siempre.</p>
+      </div>
+    </section>
+
+    <!-- ============ ADMINISTRACIÓN: BANQUEO DE MARCAS (06-10-2026) ============ -->
+    <section class="vista" id="vista-banqueoMarcas">
+      <div class="card">
+        <h2>🏦 Banqueo de Marcas</h2>
+        <p class="desc">Cada grupo banquea sus Marcas a su manera. Aquí defines <b>quién las banquea por defecto</b> en este grupo (hasta 4 banqueadores, con el % que cubre cada uno, que deben sumar 100, y si paga el % de comisión de la jugada). Con esto, cada Marca ya decidida se banquea sola y los renglones de esos banqueadores salen en Balance General, igual que "Tablas Fijas" cuando hay tablas. Los banqueadores tienen que estar creados antes en Clientes. Si lo dejas vacío, nada se banquea solo: cada Marca espera a que la banquees a mano en Jugadas Adelantadas.</p>
+        <div id="bmFilas"></div>
+        <div class="btn-fila">
+          <button class="btn" type="button" id="btnBmAgregar" onclick="bmAgregarFila()">+ Agregar banquero</button>
+        </div>
+        <p class="desc" id="bmSuma" style="margin:10px 0 0;"></p>
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" id="btnBmGuardar" onclick="bmGuardar()">Guardar banqueo de Marcas</button>
+          <button class="btn" type="button" onclick="bmQuitarTodo()">Quitar el banqueo automático</button>
+        </div>
+        <p class="desc" id="bmEstado" style="margin:10px 0 0;"></p>
       </div>
     </section>
 
@@ -6112,6 +6132,8 @@ function mostrarVista(id, btn) {
 const REFRESCAR_AL_ENTRAR_VISTA = {
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
+  // "Banqueo de Marcas" (06-10-2026) — configuración del grupo.
+  banqueoMarcas: () => cargarBanqueoMarcas(),
   // "Carga Masiva Especial" (05-10-2026) — códigos con saldo + cargas recientes.
   cargaMasivaEspecial: () => entrarCargaMasivaEspecial(),
   // "Traspaso de Saldo" (05-10-2026) — lista de clientes activos + historial.
@@ -11746,6 +11768,72 @@ function actualizarPreviewSemana() {
   const est = document.getElementById('estadoSemana');
   if (FECHA_SEMANA_GUARDADA && (inicio !== FECHA_SEMANA_GUARDADA.inicioNombre || cierre !== FECHA_SEMANA_GUARDADA.cierreNombre)) {
     est.textContent = '⚠️ Todavía no está guardado: presiona "Guardar configuración" para que los reportes la usen.';
+  }
+}
+
+// "Banqueo de Marcas" (06-10-2026): quién banquea por defecto las Marcas de
+// este grupo (GET/PUT /api/hipismo/marcas-banqueo-config). Cada grupo carga
+// los suyos — nada va fijo.
+var BM_FILAS = [];
+var BM_MAX = 4;
+
+function bmPintar() {
+  const cont = document.getElementById('bmFilas');
+  if (!cont) return;
+  cont.innerHTML = BM_FILAS.length ? BM_FILAS.map((b, i) => `<div class="fila" style="margin-bottom:6px;">
+    <input type="text" placeholder="Nombre del banquero (cliente)" value="${String(b.nombre || '').replace(/"/g, '&quot;')}" list="listaBanqueadoresConocidos" autocomplete="off" oninput="bmActualizar(${i},'nombre',this.value)">
+    <input type="text" inputmode="decimal" placeholder="% que banquea" value="${b.porcentaje === '' || b.porcentaje == null ? '' : b.porcentaje}" oninput="bmActualizar(${i},'porcentaje',this.value)">
+    <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
+      <input type="checkbox" ${b.pagaComision ? 'checked' : ''} onchange="bmActualizar(${i},'pagaComision',this.checked)"> Paga %
+    </label>
+    <button class="btn" type="button" onclick="bmQuitarFila(${i})" aria-label="Quitar banquero">✕</button>
+  </div>`).join('') : '<p class="desc" style="margin:0;">Sin banqueo automático: cada Marca espera a que la banquees a mano.</p>';
+  document.getElementById('btnBmAgregar').disabled = BM_FILAS.length >= BM_MAX;
+  const suma = BM_FILAS.reduce((a, b) => a + (Number(String(b.porcentaje).replace(',', '.')) || 0), 0);
+  document.getElementById('bmSuma').textContent = BM_FILAS.length ? `Suma de %: ${Math.round(suma * 100) / 100}% ${Math.abs(suma - 100) <= 0.01 ? '✅' : '(debe sumar 100)'}` : '';
+}
+function bmActualizar(i, campo, valor) { if (BM_FILAS[i]) { BM_FILAS[i][campo] = valor; if (campo !== 'nombre') bmPintarSuma(); } }
+function bmPintarSuma() {
+  const suma = BM_FILAS.reduce((a, b) => a + (Number(String(b.porcentaje).replace(',', '.')) || 0), 0);
+  document.getElementById('bmSuma').textContent = `Suma de %: ${Math.round(suma * 100) / 100}% ${Math.abs(suma - 100) <= 0.01 ? '✅' : '(debe sumar 100)'}`;
+}
+function bmAgregarFila() { if (BM_FILAS.length < BM_MAX) { BM_FILAS.push({ nombre: '', porcentaje: '', pagaComision: false }); bmPintar(); } }
+function bmQuitarFila(i) { BM_FILAS.splice(i, 1); bmPintar(); }
+function bmQuitarTodo() { BM_FILAS = []; bmPintar(); document.getElementById('bmEstado').textContent = 'Presiona "Guardar banqueo de Marcas" para dejarlo sin banqueo automático.'; }
+
+async function cargarBanqueoMarcas() {
+  const est = document.getElementById('bmEstado');
+  try {
+    const cfg = await apiHipismo('/api/hipismo/marcas-banqueo-config');
+    BM_MAX = cfg.max || 4;
+    BM_FILAS = (cfg.banqueadores || []).map(b => ({ nombre: b.nombre, porcentaje: b.porcentaje, pagaComision: !!b.pagaComision }));
+    est.textContent = BM_FILAS.length ? '✅ Guardado. Las Marcas de este grupo se banquean solas con estos banqueadores.' : 'Todavía no hay banqueo automático configurado en este grupo.';
+  } catch (e) {
+    est.textContent = 'No se pudo leer la configuración: ' + e.message;
+  }
+  bmPintar();
+}
+
+async function bmGuardar() {
+  const est = document.getElementById('bmEstado');
+  const lista = BM_FILAS.filter(b => String(b.nombre || '').trim() || String(b.porcentaje).trim()).map(b => ({
+    nombre: String(b.nombre || '').trim(), porcentaje: Number(String(b.porcentaje).replace(',', '.')), pagaComision: !!b.pagaComision
+  }));
+  const btn = document.getElementById('btnBmGuardar');
+  btn.disabled = true;
+  try {
+    const cfg = await apiHipismo('/api/hipismo/marcas-banqueo-config', { method: 'PUT', body: JSON.stringify({ banqueadores: lista }) });
+    BM_FILAS = (cfg.banqueadores || []).map(b => ({ nombre: b.nombre, porcentaje: b.porcentaje, pagaComision: !!b.pagaComision }));
+    bmPintar();
+    est.textContent = cfg.banqueadores.length
+      ? `✅ Guardado.${cfg.marcasBanqueadas ? ` Se banquearon ${cfg.marcasBanqueadas} Marca(s) que estaban esperando.` : ''} Las Marcas de este grupo se banquean solas con estos banqueadores.`
+      : '✅ Guardado: sin banqueo automático (cada Marca se banquea a mano).';
+    if (typeof cargarPendientesAdelantadas === 'function') cargarPendientesAdelantadas();
+    if (typeof cargarBanqueadoresConocidos === 'function') cargarBanqueadoresConocidos();
+  } catch (e) {
+    est.textContent = '⚠️ ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 

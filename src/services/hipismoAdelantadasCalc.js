@@ -397,6 +397,34 @@ function resolverBanqueoMarca({ acierta, base }, banqueadores, comisionPorcentaj
   return { banqueadores: resueltos, comisionMarcas };
 }
 
+// BANQUEO AUTOMÁTICO DE MARCAS (06-10-2026, a pedido del usuario, viendo
+// Balance General con Hanry -120 y Halland +100 pero SIN renglón de quién
+// banqueó esas marcas: "DEBE SALIR EL ITEM DE MARCAS SAMMY Y MARCAS
+// ZENYATTA... IGUAL QUE TABLAS AL TENER JUGADAS DE TABLAS"). La
+// plataforma se vende a varios grupos y NO todos banquean las Marcas igual
+// ("OTRO GRUPO NO NECESARIAMENTE BANQUEA LAS MARCAS ASÍ Y TAMPOCO EXISTA
+// SAMMY NI ZENYATTA PARA ELLOS"), así que NADA va fijo en el código: cada
+// grupo define en su configuración (grupos.hipismo_marcas_banqueo, pantalla
+// "Banqueo de Marcas") quién banquea por defecto -- hasta 4 nombres con su
+// % y si pagan comisión -- y recién ahí sus Marcas se banquean solas. Un
+// grupo SIN configuración sigue exactamente como antes: la Marca queda
+// 'falta_banqueo' hasta que el operador la banquea a mano.
+//
+// -> null si no hay con qué banquear (sin banqueadores previos ni
+// configuración del grupo); si no, { banqueadores: [{nombre, porcentaje,
+// pagaComision, comisionPorcentaje, monto}], comisionMarcas }.
+// `previos` (opcional): banqueadores ya asignados a mano (array o JSON
+// string del jsonb) -- si vienen, tienen prioridad sobre la configuración.
+function banqueoAutomaticoMarca({ acierta, base }, comisionPorcentaje, previos, configGrupo) {
+  let lista = null;
+  if (previos) {
+    try { lista = typeof previos === 'string' ? JSON.parse(previos) : previos; } catch (e) { lista = null; }
+  }
+  if (!Array.isArray(lista) || !lista.length) lista = Array.isArray(configGrupo) && configGrupo.length ? configGrupo : null;
+  if (!lista) return null;
+  return resolverBanqueoMarca({ acierta, base }, lista, Number(comisionPorcentaje));
+}
+
 // (30-09-2026, a pedido del usuario: separador de mil + 2 decimales
 // también en los mensajes de WhatsApp) — texto de salida únicamente.
 function formatMontoTabla(n) {
@@ -469,6 +497,7 @@ module.exports = {
   resolverTablaFija,
   resolverClienteMarca,
   resolverBanqueoMarca,
+  banqueoAutomaticoMarca,
   armarBloqueAdelantadas,
   formatMontoTabla,
   formatNombre,

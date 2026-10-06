@@ -10,6 +10,7 @@
 // de "quién es el ganador de la línea" en 2 rutas distintas.
 // =================================================================
 const db = require('../db');
+const { asegurarBanqueoAutomaticoMarcas } = require('./hipismoMarcasBanqueoAuto');
 // calcularAjustesCruce (26-09-2026, a pedido del usuario: "LOS PLANOS SI
 // ME ESTAN CRUZANDO LAS JUGADAS... PERO EN LOS BALANCES NO ME LA ESTA
 // CRUZANDO" — ver la nota grande junto a donde se usa más abajo, y la
@@ -35,6 +36,7 @@ const { calcularAjustesCruce } = require('./hipismoCalc');
 // asumía su ausencia) para que el frontend la pinte distinto y diga
 // explícitamente "Remate" en vez de tratarla como una jugada normal.
 async function obtenerLineasHipismoCliente(grupoId, nombreJugador, desde, hasta) {
+  await asegurarBanqueoAutomaticoMarcas(grupoId); // 06-10-2026: Marcas viejas sin banquear
   const r = await db.query(
     `SELECT t.cliente_nombre, t.banquero_nombre, t.modalidad, t.caballo, t.monto,
             t.resultado_jugador, t.resultado_banquero,

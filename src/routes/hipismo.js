@@ -87,7 +87,7 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 // asigna quién banquea (POST /adelantadas/jugadas/:id/banquear).
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
-  resolverClienteMarca, resolverBanqueoMarca, armarBloqueAdelantadas, round2,
+  resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto
 } = require('../services/hipismoAdelantadasCalc');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
@@ -101,6 +101,9 @@ const {
 // vivo), así que nunca queda "falta_banqueo" — o se resuelve de una
 // ('resuelto'/'sin_decidir') o le falta un dato (falta_monto/
 // falta_jugador/falta_banquero, ver más abajo), nunca las dos cosas.
+const {
+  asegurarBanqueoAutomaticoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo, validarBanqueoMarcas
+} = require('../services/hipismoMarcasBanqueoAuto');
 const {
   parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto, montoBaseTerciosAdelantadaExacto
 } = require('../services/hipismoTerciosAdelantadasCalc');
@@ -368,6 +371,8 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
   const rHip = await db.query('SELECT pais FROM hipismo_hipodromos WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, hipodromoNombre]);
   const esNacional = rHip.rows.length ? rHip.rows[0].pais !== 'US' : true;
   const rank = parsearPizarraRank(pizarra);
+  // Banqueo automático de Marcas: configuración DEL GRUPO (null = flujo manual).
+  const configBanqueoMarcas = await obtenerBanqueoMarcasGrupo(req.grupoId);
 
   const resueltas = pendientes.map(j => {
     if (j.tipo === 'tf') {
@@ -394,9 +399,17 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
     if (c.nula) {
       return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
     }
+    // BANQUEO AUTOMÁTICO (06-10-2026, "DEBE SALIR EL ITEM DE MARCAS SAMMY Y
+    // MARCAS ZENYATTA... IGUAL QUE TABLAS"): si el GRUPO configuró quién
+    // banquea sus Marcas (pantalla "Banqueo de Marcas"), la Marca ya
+    // decidida se banquea sola con esos banqueadores y queda 'resuelto' --
+    // ver banqueoAutomaticoMarca. Si la jugada ya tenía banqueadores puestos
+    // a mano (recálculo por corrección de pizarra) se conservan esos. Un
+    // grupo SIN configuración queda 'falta_banqueo' como siempre.
+    const banqueo = banqueoAutomaticoMarca({ acierta: c.acierta, base: c.acierta ? c.resultadoCliente : Number(j.monto) }, j.comision_porcentaje, j.banqueadores, configBanqueoMarcas);
     return {
-      id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'falta_banqueo', monto: Number(j.monto),
-      gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null,
+      id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: banqueo ? 'resuelto' : 'falta_banqueo', monto: Number(j.monto),
+      gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: banqueo ? banqueo.comisionMarcas : null, banqueadores: banqueo ? banqueo.banqueadores : null,
       // "MARCAS" espejo genérico en el TEXTO del plano (04-10-2026, a
       // pedido del usuario: "esos 120 que pierde falta quien los gana...
       // las marcas las banquea 2 clientes que debes crear en balances...
@@ -431,23 +444,17 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
 async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
   for (const r of resueltas) {
     await client.query(
-      // banqueadores = NULL (01-10-2026): para una jugada que SIEMPRE
-      // venía de 'pendiente' (los 4 usos de siempre de esta función)
-      // banqueadores ya era NULL, así que esto no cambia nada ahí — pero
-      // para la corrección de pizarra NUEVA (PUT /pizarras/adelantadas,
-      // soloPendientes=false más arriba) una Marca puede venir de
-      // 'resuelto' CON banqueadores ya cargados (el banqueo manual de
-      // POST /adelantadas/:id/banquear) y recalcularla acá la deja en
-      // 'falta_banqueo'/'sin_decidir' de nuevo — si no se limpia acá,
-      // quedaría un banqueadores viejo (de la pizarra ERRADA) colgado de
-      // una jugada que ya no dice estar banqueada: mismo criterio que
-      // Tercios/Remate ("editar recalcula TODO el dinero desde cero") —
-      // el operador tiene que volver a banquear esa Marca con el
-      // resultado ya corregido.
+      // banqueadores (06-10-2026): si el grupo configuró su banqueo
+      // automático (o la Marca ya tenía banqueadores manuales), la Marca
+      // decidida llega acá YA banqueada (r.banqueadores) -- se guarda de una.
+      // Para TF, 'sin_decidir' y nula r.banqueadores no existe y queda NULL
+      // (así una jugada que deja de estar decidida nunca arrastra un
+      // banqueadores viejo de la pizarra ERRADA, mismo criterio de
+      // siempre: "editar recalcula TODO el dinero desde cero").
       `UPDATE hipismo_adelantadas_jugadas
-          SET estado = $1, gano = $2, resultado_cliente = $3, comision = $4, pizarra_usada = $5, resuelto_en = now(), banqueadores = NULL
+          SET estado = $1, gano = $2, resultado_cliente = $3, comision = $4, pizarra_usada = $5, resuelto_en = now(), banqueadores = $8
         WHERE id = $6 AND grupo_id = $7`,
-      [r.estadoNuevo, r.gano, r.resultadoCliente, r.comision, pizarra, r.id, req.grupoId]
+      [r.estadoNuevo, r.gano, r.resultadoCliente, r.comision, pizarra, r.id, req.grupoId, r.banqueadores ? JSON.stringify(r.banqueadores) : null]
     );
   }
 }
@@ -606,7 +613,7 @@ function filaJugadaTerciosAdelantadaPublica(j) {
 // no un reemplazo.
 function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
   const totales = Object.assign({}, totalesFinales);
-  const comision = comisionTotal;
+  let comision = comisionTotal;
 
   resueltas.forEach(r => {
     totales[r.cliente] = round2((totales[r.cliente] || 0) + r.resultadoCliente);
@@ -626,6 +633,18 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
       if (r.comision) {
         totales['% DE TABLAS FIJAS'] = round2((totales['% DE TABLAS FIJAS'] || 0) + r.comision);
       }
+    }
+
+    // MARCAS (06-10-2026, "DEBE SALIR EL ITEM DE MARCAS SAMMY Y MARCAS
+    // ZENYATTA... IGUAL QUE TABLAS"): cada banquero de la Marca (ya sea el
+    // automático MARCAS ZENYATTA/MARCAS SAMMY o uno manual) suma su propio
+    // renglón, ya neto de la comisión que pague -- igual que
+    // construirCierreFinalHipismo. La comisión de Marcas (cliente +
+    // banqueadores + comisión = 0) se suma al footer `comision`, como ya
+    // hace Cierre Final con COMISIÓN GRUPO.
+    if (r.tipo === 'marca' && Array.isArray(r.banqueadores)) {
+      r.banqueadores.forEach(b => { totales[b.nombre] = round2((totales[b.nombre] || 0) + b.monto); });
+      if (r.comision) comision = round2(comision + r.comision);
     }
   });
 
@@ -1340,6 +1359,7 @@ router.get('/adelantadas', asyncHandler(async (req, res) => {
 // Adelantadas. OJO: va ANTES de "/adelantadas/:id" para que Express no
 // intente matchear "pendientes" como si fuera un :id.
 router.get('/adelantadas/pendientes', asyncHandler(async (req, res) => {
+  await asegurarBanqueoAutomaticoMarcas(req.grupoId);
   const r = await db.query(
     `SELECT j.*, p.hipodromo_nombre, p.fecha
        FROM hipismo_adelantadas_jugadas j
@@ -1440,7 +1460,11 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
   const jugada = rJugada.rows[0];
   if (!jugada) return res.status(404).json({ error: 'Jugada adelantada no encontrada.' });
   if (jugada.tipo !== 'marca') return res.status(400).json({ error: 'Solo las Marcas necesitan banqueo — las Tablas Fijas se resuelven solas.' });
-  if (jugada.estado !== 'falta_banqueo') return res.status(400).json({ error: `Esta jugada está en estado "${jugada.estado}", no "falta_banqueo" — no se puede banquear (dos veces) o todavía no tiene resultado.` });
+  // 06-10-2026: ahora las Marcas se banquean solas (MARCAS ZENYATTA/SAMMY),
+  // así que "cambiar quién banquea" una Marca puntual es SOBRE una ya
+  // 'resuelto' con banqueadores -- se permite re-banquear; lo que no se
+  // puede es banquear algo que todavía no tiene resultado.
+  if (jugada.estado !== 'falta_banqueo' && !(jugada.estado === 'resuelto' && jugada.banqueadores)) return res.status(400).json({ error: `Esta jugada está en estado "${jugada.estado}" — todavía no tiene resultado, no se puede banquear.` });
 
   const comisionPctDefecto = comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje))
     ? Number(comisionPorcentaje) : Number(jugada.comision_porcentaje);
@@ -1554,7 +1578,13 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
         const { banqueadores, comisionMarcas } = resolverBanqueoMarca({ acierta: c.acierta, base }, banqueadoresPrevios, Number(jugada.comision_porcentaje));
         recalculo = { estado: 'resuelto', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: comisionMarcas, banqueadores: JSON.stringify(banqueadores) };
       } else {
-        recalculo = { estado: 'falta_banqueo', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null, banqueadores: null };
+        // Sin banqueadores previos: banqueo automático SI el grupo lo
+        // configuró (06-10-2026); si no, 'falta_banqueo' como siempre.
+        const base = c.acierta ? c.resultadoCliente : montoFinal;
+        const auto = banqueoAutomaticoMarca({ acierta: c.acierta, base }, jugada.comision_porcentaje, null, await obtenerBanqueoMarcasGrupo(req.grupoId));
+        recalculo = auto
+          ? { estado: 'resuelto', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: auto.comisionMarcas, banqueadores: JSON.stringify(auto.banqueadores) }
+          : { estado: 'falta_banqueo', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null, banqueadores: null };
       }
     }
   }
@@ -2914,8 +2944,9 @@ router.delete('/pizarras/remate/:id', asyncHandler(async (req, res) => {
 // fecha+hipódromo+carrera, igual que buscarAdelantadasPendientes.
 // soloPendientes=false: re-resuelve TODAS sin importar su estado actual
 // (incluye las que ya estaban 'resuelto'/'falta_banqueo'/'sin_decidir'
-// con la pizarra VIEJA) — ver la nota grande de guardarResolucionAdelantadas
-// sobre por qué una Marca ya bancada pierde su banqueo acá a propósito.
+// con la pizarra VIEJA). Una Marca que sigue decidida conserva sus
+// banqueadores (manuales o los automáticos del grupo) con los
+// montos recalculados; si deja de estar decidida, pierde el banqueo viejo.
 router.put('/pizarras/adelantadas', asyncHandler(async (req, res) => {
   const { fecha, hipodromoNombre, carreraNumero, pizarra } = req.body;
   if (!fecha || !hipodromoNombre || !carreraNumero) return res.status(400).json({ error: 'Falta fecha, hipódromo o número de carrera.' });
@@ -3418,6 +3449,28 @@ router.put('/semana-config', asyncHandler(async (req, res) => {
   }
   const cfg = await guardarConfigSemana(req.grupoId, i, c);
   res.json(describirConfigSemana(cfg));
+}));
+
+// BANQUEO DE MARCAS por grupo (06-10-2026) — quién banquea por defecto las
+// Marcas de ESTE grupo (ver services/hipismoMarcasBanqueoAuto.js). La
+// plataforma se vende a varios grupos y cada uno banquea distinto, así que
+// no hay nombres fijos: cada grupo carga los suyos (hasta 4, % que suman
+// 100, y si pagan comisión). Lista vacía = sin banqueo automático (flujo
+// manual de siempre).
+//   GET /marcas-banqueo-config  -> { banqueadores: [{nombre,porcentaje,pagaComision}], max }
+//   PUT /marcas-banqueo-config  { banqueadores: [...] } ([] lo desactiva)
+router.get('/marcas-banqueo-config', asyncHandler(async (req, res) => {
+  res.json({ banqueadores: (await obtenerBanqueoMarcasGrupo(req.grupoId)) || [], max: 4 });
+}));
+
+router.put('/marcas-banqueo-config', asyncHandler(async (req, res) => {
+  const { lista, error } = validarBanqueoMarcas((req.body || {}).banqueadores);
+  if (error) return res.status(400).json({ error });
+  if (lista.length && await rechazarClientesInexistentes(req, res, lista.map(b => b.nombre))) return;
+  const guardada = await guardarBanqueoMarcasGrupo(req.grupoId, lista);
+  // Las Marcas que ya estaban esperando banqueo se banquean ahora mismo.
+  const aplicadas = guardada ? await asegurarBanqueoAutomaticoMarcas(req.grupoId) : 0;
+  res.json({ banqueadores: guardada || [], max: 4, marcasBanqueadas: aplicadas });
 }));
 
 // GET /semana-actual?semana=actual|anterior|hace2 (23-09-2026,
@@ -4789,6 +4842,7 @@ router.delete('/grupos-clientes/:id/miembros/:jugadorId', asyncHandler(async (re
 //
 // GET /saldo-comisiones?semana=actual|anterior|hace2
 router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
+  await asegurarBanqueoAutomaticoMarcas(req.grupoId);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();
@@ -5077,6 +5131,7 @@ function diasDeLaSemanaHipismo(desde, hasta) {
 }
 
 router.get('/semana-por-dias', asyncHandler(async (req, res) => {
+  await asegurarBanqueoAutomaticoMarcas(req.grupoId);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
   const hoyVe = hoyVenezuela();

@@ -1997,3 +1997,13 @@ alter table grupos add column if not exists hipismo_semana_inicio smallint;
 alter table grupos add column if not exists hipismo_semana_cierre smallint;
 alter table grupos add column if not exists hipismo_semana_desde date;
 alter table grupos add column if not exists hipismo_semana_hasta date;
+
+
+-- ---------------------------------------------------------------
+-- 06-10-2026 — BANQUEO DE MARCAS POR GRUPO. Quién banquea por defecto las
+-- Marcas de Jugadas Adelantadas de cada grupo (cada grupo banquea distinto,
+-- no hay nombres fijos): array jsonb de hasta 4 objetos
+-- { nombre, porcentaje, pagaComision } cuyos % suman 100. NULL = sin
+-- banqueo automático (la Marca queda 'falta_banqueo' y se banquea a mano).
+-- Seguro de re-correr.
+alter table grupos add column if not exists hipismo_marcas_banqueo jsonb;

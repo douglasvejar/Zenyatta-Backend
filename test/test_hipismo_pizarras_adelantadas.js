@@ -29,6 +29,7 @@ const path = require('path');
 const originalLoad = Module._load;
 
 const GRUPO_ID = 'grupo-pizarras-adelantadas-1';
+const CONFIG_BANQUEO_MARCAS = { valor: [{ nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }] };
 
 const TABLAS = {
   hipismo_planos: [],
@@ -100,11 +101,15 @@ function ejecutarQuery(text, params) {
     const h = TABLAS.hipismo_hipodromos.find(x => x.grupo_id === grupoId && x.nombre === nombre);
     return { rows: h ? [h] : [] };
   }
+  // Configuración de banqueo de Marcas del grupo (06-10-2026).
+  if (/^SELECT hipismo_marcas_banqueo FROM grupos WHERE id = \$1$/i.test(sql)) {
+    return { rows: [{ hipismo_marcas_banqueo: CONFIG_BANQUEO_MARCAS.valor }] };
+  }
   // ---- guardarResolucionAdelantadas ----
-  if (/^UPDATE hipismo_adelantadas_jugadas SET estado = \$1, gano = \$2, resultado_cliente = \$3, comision = \$4, pizarra_usada = \$5, resuelto_en = now\(\), banqueadores = NULL WHERE id = \$6 AND grupo_id = \$7$/i.test(sql)) {
-    const [estado, gano, resultadoCliente, comision, pizarraUsada, id, grupoId] = params;
+  if (/^UPDATE hipismo_adelantadas_jugadas SET estado = \$1, gano = \$2, resultado_cliente = \$3, comision = \$4, pizarra_usada = \$5, resuelto_en = now\(\), banqueadores = \$8 WHERE id = \$6 AND grupo_id = \$7$/i.test(sql)) {
+    const [estado, gano, resultadoCliente, comision, pizarraUsada, id, grupoId, banqueadoresJson] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
-    if (j) Object.assign(j, { estado, gano, resultado_cliente: resultadoCliente, comision, pizarra_usada: pizarraUsada, resuelto_en: Date.now(), banqueadores: null });
+    if (j) Object.assign(j, { estado, gano, resultado_cliente: resultadoCliente, comision, pizarra_usada: pizarraUsada, resuelto_en: Date.now(), banqueadores: banqueadoresJson ? JSON.parse(banqueadoresJson) : null });
     return { rows: [] };
   }
   // ---- DELETE /pizarras/adelantadas ----
@@ -240,10 +245,13 @@ function check(cond, msg) {
   check(tf1.pizarra_usada === '5.3.1', '2) pizarra_usada queda con la pizarra corregida');
   check(TABLAS.hipismo_alertas.some(a => a.tipo === 'PIZARRA_EDITADA' && a.carreraNumero === 7), '2) Se registró la alerta PIZARRA_EDITADA');
 
-  // --- 3) La Marca ya bancada pierde su banqueo al recalcularse (a propósito) ---
+  // --- 3) La Marca ya bancada, si la pizarra corregida deja de decidirla
+  // (nacional con solo 3 puestos -> 'sin_decidir'), pierde su banqueo viejo:
+  // no hay nada que banquear (el caso de que SÍ se decida y conserve a sus
+  // banqueadores se prueba en el punto 6, más abajo).
   const marca1 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-1');
-  check(marca1.banqueadores === null, '3) banqueadores queda en NULL tras recalcular con la pizarra corregida (había que rebanquear)');
-  check(marca1.estado === 'falta_banqueo' || marca1.estado === 'sin_decidir', '3) El estado vuelve a falta_banqueo/sin_decidir (ya no "resuelto" con el banqueo viejo)');
+  check(marca1.banqueadores === null, '3) banqueadores queda en NULL tras recalcular con una pizarra que no decide la Marca');
+  check(marca1.estado === 'sin_decidir', '3) El estado pasa a sin_decidir (ya no "resuelto" con el banqueo viejo)');
 
   // --- 4) DELETE /pizarras/adelantadas: NO borra las jugadas, vuelven a 'pendiente' ---
   const res4 = await invocarRuta(handlerDeleteAdelantadas, reqBase(GRUPO_ID, {
@@ -261,6 +269,36 @@ function check(cond, msg) {
     body: { fecha: '2026-09-29', hipodromoNombre: 'La Rinconada', carreraNumero: 12, pizarra: '1.2.3' }
   }));
   check(res5._status === 404, '5) PUT /pizarras/adelantadas con una carrera sin jugadas responde 404');
+
+  // --- 6) 06-10-2026: una Marca que SÍ se decide (nacional, 5 puestos)
+  // conserva a sus banqueadores manuales; una que no tenía ninguno se banquea
+  // sola con MARCAS ZENYATTA 50% / MARCAS SAMMY 50% (2,5%) ---
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'marca-2', plano_id: 'ap-1', grupo_id: GRUPO_ID, cliente_nombre: 'ROSA', carrera_numero: 9, tipo: 'marca',
+    numero1: 5, numero2: 3, monto: 120, comision_porcentaje: 2.5,
+    texto_original: 'texto', error_calculo: false, estado: 'resuelto', gano: false, resultado_cliente: -120,
+    comision: null, banqueadores: [{ nombre: 'ZENYATTA', porcentaje: 100, pagaComision: false, comisionPorcentaje: null, monto: 120 }],
+    pizarra_usada: '7.1.2.4.6', resuelto_en: 1000, creado_en: 3000
+  });
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'marca-3', plano_id: 'ap-1', grupo_id: GRUPO_ID, cliente_nombre: 'LUIS', carrera_numero: 9, tipo: 'marca',
+    numero1: 5, numero2: 3, monto: 120, comision_porcentaje: 2.5,
+    texto_original: 'texto', error_calculo: false, estado: 'pendiente', gano: null, resultado_cliente: null,
+    comision: null, banqueadores: null, pizarra_usada: null, resuelto_en: null, creado_en: 3100
+  });
+  const res6 = await invocarRuta(handlerPutAdelantadas, reqBase(GRUPO_ID, {
+    body: { fecha: '2026-09-29', hipodromoNombre: 'La Rinconada', carreraNumero: 9, pizarra: '5.3.1.2.4' }
+  }));
+  check(res6._status === 200, '6) PUT /pizarras/adelantadas con 5 puestos responde 200');
+  const marca2 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-2');
+  check(marca2.estado === 'resuelto' && marca2.banqueadores.length === 1 && marca2.banqueadores[0].nombre === 'ZENYATTA', '6) La Marca con banqueador manual conserva a ZENYATTA al corregir la pizarra');
+  check(marca2.gano === true && marca2.resultado_cliente === 100 && marca2.banqueadores[0].monto === -100, '6) Con la pizarra corregida acierta: cliente +100 (120/1,2), su banquero -100');
+  const marca3 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-3');
+  check(marca3.estado === 'resuelto', '6) La Marca sin banqueadores queda "resuelto" sola (banqueo automático), no "falta_banqueo"');
+  const bz = marca3.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA');
+  const bs = marca3.banqueadores.find(b => b.nombre === 'MARCAS SAMMY');
+  check(!!bz && !!bs && bz.monto === -50 && bs.monto === -51.25 && marca3.comision === 1.25, '6) Acierta (+100): MARCAS ZENYATTA -50, MARCAS SAMMY -51,25 (50 + 2,5%), comisión de Marcas 1,25');
+  check(Math.round((marca3.resultado_cliente + bz.monto + bs.monto + marca3.comision) * 100) === 0, '6) Cliente + banqueadores + comisión suman 0 exacto');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

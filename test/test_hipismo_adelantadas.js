@@ -206,6 +206,14 @@ const GRUPO_ID = 'grupo-adelantadas-1';
 // que hoyVenezuela()/isoDeFechaUTC() en routes/hipismo.js) en vez de una
 // fecha fija, así siempre cae dentro de la semana "actual".
 function pad2Prueba(n) { return n < 10 ? '0' + n : '' + n; }
+// Configuración "Banqueo de Marcas" del grupo de la prueba (grupos.hipismo_marcas_banqueo):
+// el caso real de Luisangel -- MARCAS ZENYATTA 50% sin comisión + MARCAS SAMMY 50% con comisión.
+const CONFIG_BANQUEO_MARCAS = {
+  valor: [
+    { nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false },
+    { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }
+  ]
+};
 const FECHA_PRUEBA = (() => {
   const hoyVe = new Date(Date.now() - 4 * 60 * 60 * 1000);
   return `${hoyVe.getUTCFullYear()}-${pad2Prueba(hoyVe.getUTCMonth() + 1)}-${pad2Prueba(hoyVe.getUTCDate())}`;
@@ -347,9 +355,9 @@ function ejecutarQuery(text, params) {
     return { rows: filas };
   }
   if (/^UPDATE hipismo_adelantadas_jugadas\s+SET estado = \$1, gano = \$2, resultado_cliente/i.test(sql)) {
-    const [estado, gano, resultadoCliente, comision, pizarraUsada, id, grupoId] = params;
+    const [estado, gano, resultadoCliente, comision, pizarraUsada, id, grupoId, banqueadoresJson] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
-    if (j) { j.estado = estado; j.gano = gano; j.resultado_cliente = resultadoCliente; j.comision = comision; j.pizarra_usada = pizarraUsada; j.resuelto_en = Date.now(); }
+    if (j) { j.estado = estado; j.gano = gano; j.resultado_cliente = resultadoCliente; j.comision = comision; j.pizarra_usada = pizarraUsada; j.resuelto_en = Date.now(); j.banqueadores = banqueadoresJson ? JSON.parse(banqueadoresJson) : null; }
     return { rows: j ? [j] : [] };
   }
   // PUT /adelantadas/jugadas/:id (duodécima-tercera ronda, editar).
@@ -403,6 +411,26 @@ function ejecutarQuery(text, params) {
   if (/^UPDATE hipismo_adelantadas_jugadas\s+SET estado = 'resuelto', comision = \$1, banqueadores = \$2/i.test(sql)) {
     const [comision, banqueadoresJson, id, grupoId] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
+    if (j) { j.estado = 'resuelto'; j.comision = comision; j.banqueadores = JSON.parse(banqueadoresJson); }
+    return { rows: j ? [j] : [] };
+  }
+  // 06-10-2026: configuración de banqueo de Marcas DEL GRUPO (cada grupo banquea
+  // distinto; sin configuración = flujo manual).
+  if (/^SELECT hipismo_marcas_banqueo FROM grupos WHERE id = \$1$/i.test(sql)) {
+    return { rows: [{ hipismo_marcas_banqueo: CONFIG_BANQUEO_MARCAS.valor }] };
+  }
+  if (/^UPDATE grupos SET hipismo_marcas_banqueo = \$1 WHERE id = \$2$/i.test(sql)) {
+    CONFIG_BANQUEO_MARCAS.valor = params[0] ? JSON.parse(params[0]) : null;
+    return { rows: [] };
+  }
+  // 06-10-2026: banqueo automático de las Marcas que ya estaban 'falta_banqueo'.
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'falta_banqueo'/i.test(sql)) {
+    const [grupoId] = params;
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'falta_banqueo') };
+  }
+  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET estado = 'resuelto', comision = \$1, banqueadores = \$2\s+WHERE id = \$3 AND grupo_id = \$4 AND estado = 'falta_banqueo'/i.test(sql)) {
+    const [comision, banqueadoresJson, id, grupoId] = params;
+    const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId && x.estado === 'falta_banqueo');
     if (j) { j.estado = 'resuelto'; j.comision = comision; j.banqueadores = JSON.parse(banqueadoresJson); }
     return { rows: j ? [j] : [] };
   }
@@ -520,6 +548,8 @@ const handlerAdelantadasEditar = handlerDe('put', '/adelantadas/jugadas/:id');
 const handlerAdelantadasEliminar = handlerDe('delete', '/adelantadas/jugadas/:id');
 const handlerPlanosGuardar = handlerDe('post', '/planos');
 const handlerCierreFinal = handlerDe('get', '/cierre-final');
+const handlerMarcasConfigGet = handlerDe('get', '/marcas-banqueo-config');
+const handlerMarcasConfigPut = handlerDe('put', '/marcas-banqueo-config');
 
 function invocarRuta(handler, req, paramsExtra) {
   return new Promise((resolve, reject) => {
@@ -593,7 +623,11 @@ function reqBase(grupoId) {
   const maturinTf12 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.cliente_nombre === 'MATURIN' && j.carrera_numero === 12 && j.tipo === 'tf');
   check(maturinTf12.estado === 'resuelto' && maturinTf12.gano === false, 'La TF de Maturin en la 12 queda "resuelto" (perdió, jugó el 7 y ganó el 3)');
   const halland12Marca = TABLAS.hipismo_adelantadas_jugadas.find(j => j.cliente_nombre === 'HALLAND' && j.carrera_numero === 12 && j.tipo === 'marca');
-  check(halland12Marca.estado === 'falta_banqueo', 'La marca de Halland en la 12 (8x4) queda "falta_banqueo" — ya se sabe si acertó, falta asignar quién banquea');
+  check(halland12Marca.estado === 'resuelto', 'La marca de Halland en la 12 (8x4) queda "resuelto" — se banquea SOLA con MARCAS ZENYATTA/MARCAS SAMMY (06-10-2026), ya no espera banqueo manual');
+  const bzAuto = halland12Marca.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA');
+  const bsAuto = halland12Marca.banqueadores.find(b => b.nombre === 'MARCAS SAMMY');
+  check(!!bzAuto && !!bsAuto && bzAuto.porcentaje === 50 && bsAuto.porcentaje === 50 && bzAuto.pagaComision === false && bsAuto.pagaComision === true, 'Banqueo automático: MARCAS ZENYATTA 50% sin comisión + MARCAS SAMMY 50% con comisión');
+  check(bzAuto.monto === 60 && bsAuto.monto === 58.5 && halland12Marca.comision === 1.5, 'Halland pierde -120: MARCAS ZENYATTA +60, MARCAS SAMMY +58,5 (60 - 2,5%), comisión de Marcas 1,5 (el ejemplo exacto del usuario)');
   check(halland12Marca.gano === false, 'La marca 8x4 de Halland no acertó (ganó 3, 2do 4 — no es 8x4)');
   check(Number(halland12Marca.resultado_cliente) === -120, 'Halland pierde el monto completo de su marca (-120)');
 
@@ -652,7 +686,7 @@ function reqBase(grupoId) {
   // el balance.
   check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -144.01, 'Balance General trae a "TABLAS FIJAS" (la banca) -144,01, NETO de su propia comisión (-140 de espejo bruto - 4,01 de comisión)');
   check(resPlanos12._json.totalesFinales['% DE TABLAS FIJAS'] === 4.01, 'Balance General trae un ítem aparte "% DE TABLAS FIJAS" +4,01 (la comisión de las 3 tablas fijas de esta carrera, separada de "TABLAS FIJAS")');
-  check(resPlanos12._json.comisionTotal === 2.5, 'La Comisión (footer) del Balance General SOLO trae la de Tercios (2,5) — la de las 3 Tablas Fijas (4,01) ya NO se suma aparte, porque ya se ve en "% DE TABLAS FIJAS"');
+  check(resPlanos12._json.comisionTotal === 4, 'La Comisión (footer) del Balance General trae la de Tercios (2,5) + la de la Marca de Halland (1,5) — la de las 3 Tablas Fijas (4,01) ya NO se suma aparte, porque ya se ve en "% DE TABLAS FIJAS"');
   check(Math.round((resPlanos12._json.totalesFinales.LINARES + resPlanos12._json.totalesFinales.MATURIN + (resPlanos12._json.totalesFinales.HALLAND - (-120)) + resPlanos12._json.totalesFinales['TABLAS FIJAS'] + resPlanos12._json.totalesFinales['% DE TABLAS FIJAS']) * 100) === 0,
     'Los 3 clientes de Tablas Fijas (aislando a Halland de su Marca, que se banquea aparte) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto — nada queda "de más" sin contraparte');
   // 23-09-2026 (undécima ronda), "% devuelto" — LINARES tiene 1% de
@@ -668,7 +702,8 @@ function reqBase(grupoId) {
   // 'falta_banqueo') — solo entra el lado del cliente por ahora, el de
   // los banqueadores se suma más adelante cuando se resuelva el banqueo
   // (ver el punto 10 más abajo).
-  check(!('MARCAS ZENYATTA' in resPlanos12._json.totalesFinales), 'Los banqueadores de la Marca de Halland todavía no aparecen (falta asignarlos)');
+  check(resPlanos12._json.totalesFinales['MARCAS ZENYATTA'] === 60 && resPlanos12._json.totalesFinales['MARCAS SAMMY'] === 58.5, 'Balance General trae los ítems MARCAS ZENYATTA +60 y MARCAS SAMMY +58,5 (igual que "TABLAS FIJAS" cuando hay tablas)');
+  check(Math.round((resPlanos12._json.totalesFinales.HALLAND + 40 + 60 + 58.5 + 1.5) * 100) === 0, 'La Marca de Halland: cliente (-120) + MARCAS ZENYATTA + MARCAS SAMMY + comisión de Marcas suman 0 exacto');
 
   // --- 6) Marca de hipódromo NACIONAL con pizarra de solo 3 puestos ->
   // 'sin_decidir' (usa la carrera 2, que tiene 2 TF de Halland/Rambo y 1
@@ -716,11 +751,18 @@ function reqBase(grupoId) {
     'El banqueo devuelve el detalle de cada banqueador (nombre y monto), no solo el estado');
   check(resBanqueo._json.comisionMarcas === 1.2, 'El banqueo devuelve la Comisión Marcas por separado');
 
-  // Doble banqueo debe rechazarse.
+  // 06-10-2026: re-banquear una Marca ya 'resuelto' (cambiar quién banquea)
+  // ahora SÍ se permite -- las Marcas se banquean solas, así que "banquear"
+  // es el paso para CAMBIAR el reparto. Se repite el mismo 60/40 (idempotente)
+  // para no mover los números del resto de la prueba.
   const resBanqueoDoble = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
-    body: { banqueadores: [{ nombre: 'MARCAS ZENYATTA', porcentaje: 100, pagaComision: false }] }
+    body: { banqueadores: [{ nombre: 'MARCAS ZENYATTA', porcentaje: 60, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 40, pagaComision: true }], comisionPorcentaje: 2.5 }
   }), { id: halland12Marca.id });
-  check(resBanqueoDoble._status === 400, 'Intentar banquear 2 veces la misma marca responde 400 (ya está "resuelto")');
+  check(resBanqueoDoble._status === 200 && resBanqueoDoble._json.comisionMarcas === 1.2, 'Se puede re-banquear una Marca ya resuelta (cambiar quién banquea): 200 y mismos montos');
+  const resBanqueoSinResultado = await invocarRuta(handlerAdelantadasBanquear, Object.assign(reqBase(GRUPO_ID), {
+    body: { banqueadores: [{ nombre: 'MARCAS ZENYATTA', porcentaje: 100, pagaComision: false }] }
+  }), { id: maturinMarca2.id });
+  check(resBanqueoSinResultado._status === 400, 'Banquear una Marca "sin_decidir" (sin resultado) responde 400');
 
   // 23-09-2026, a pedido del usuario ("colocame para agregar hasta 4
   // marqueros que banqueen la marca") — el servidor también rechaza un
@@ -908,6 +950,47 @@ function reqBase(grupoId) {
   // --- 10g) Eliminar una jugada que no existe -> 404 ---
   const resEliminarNoExiste = await invocarRuta(handlerAdelantadasEliminar, reqBase(GRUPO_ID), { id: 'jad-no-existe' });
   check(resEliminarNoExiste._status === 404, '10g) DELETE sobre una jugada que no existe responde 404');
+  // --- 10) Marcas viejas que quedaron 'falta_banqueo' (como las de Hanry -120 y
+  // Halland +100 del reporte del 06-10-2026) se banquean solas al consultar ---
+  const planoRetro = TABLAS.hipismo_adelantadas_planos[0];
+  TABLAS.hipismo_adelantadas_jugadas.push(
+    { id: 'retro-1', plano_id: planoRetro.id, grupo_id: GRUPO_ID, cliente_nombre: 'HANRY', carrera_numero: 8, tipo: 'marca', numero1: 7, numero2: 1, monto: 120, comision_porcentaje: 2.5, estado: 'falta_banqueo', gano: false, resultado_cliente: -120, comision: null, banqueadores: null, pizarra_usada: '7.1.4.8.5', resuelto_en: 1, creado_en: 9e15 },
+    { id: 'retro-2', plano_id: planoRetro.id, grupo_id: GRUPO_ID, cliente_nombre: 'HALLAND', carrera_numero: 8, tipo: 'marca', numero1: 7, numero2: 1, monto: 120, comision_porcentaje: 2.5, estado: 'falta_banqueo', gano: true, resultado_cliente: 100, comision: null, banqueadores: null, pizarra_usada: '7.1.4.8.5', resuelto_en: 1, creado_en: 9e15 + 1 }
+  );
+  const resPend10 = await invocarRuta(handlerAdelantadasPendientes, Object.assign(reqBase(GRUPO_ID), { body: {} }));
+  check(resPend10._status === 200 && resPend10._json.faltaBanqueo === 0, '10) Tras consultar, ya no queda ninguna Marca esperando banqueo');
+  const retro1 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'retro-1');
+  const retro2 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'retro-2');
+  check(retro1.estado === 'resuelto' && retro1.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === 60 && retro1.banqueadores.find(b => b.nombre === 'MARCAS SAMMY').monto === 58.5 && retro1.comision === 1.5, '10) Hanry -120: MARCAS ZENYATTA +60, MARCAS SAMMY +58,5, comisión 1,5');
+  check(retro2.estado === 'resuelto' && retro2.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === -50 && retro2.banqueadores.find(b => b.nombre === 'MARCAS SAMMY').monto === -51.25 && retro2.comision === 1.25, '10) Halland +100: MARCAS ZENYATTA -50, MARCAS SAMMY -51,25, comisión 1,25');
+
+  // --- 11) "Banqueo de Marcas" es CONFIGURACIÓN DE CADA GRUPO (06-10-2026: "otro
+  // grupo no necesariamente banquea las marcas así y tampoco existe Sammy ni
+  // Zenyatta para ellos") ---
+  const resCfg1 = await invocarRuta(handlerMarcasConfigGet, reqBase(GRUPO_ID));
+  check(resCfg1._status === 200 && resCfg1._json.banqueadores.length === 2 && resCfg1._json.banqueadores[0].nombre === 'MARCAS ZENYATTA', '11) GET /marcas-banqueo-config devuelve la configuración guardada del grupo');
+  // Un grupo SIN configuración: nada se banquea solo, la Marca espera banqueo manual.
+  CONFIG_BANQUEO_MARCAS.valor = null;
+  const resCfgVacia = await invocarRuta(handlerMarcasConfigGet, reqBase(GRUPO_ID));
+  check(resCfgVacia._json.banqueadores.length === 0, '11) Sin configuración, GET devuelve lista vacía (sin banqueo automático)');
+  TABLAS.hipismo_adelantadas_jugadas.push({ id: 'manual-1', plano_id: planoRetro.id, grupo_id: GRUPO_ID, cliente_nombre: 'PEDRO', carrera_numero: 3, tipo: 'marca', numero1: 2, numero2: 4, monto: 80, comision_porcentaje: 2.5, estado: 'falta_banqueo', gano: false, resultado_cliente: -80, comision: null, banqueadores: null, pizarra_usada: '1.2.3.5.6', resuelto_en: 1, creado_en: 9e15 + 2 });
+  const resPend11 = await invocarRuta(handlerAdelantadasPendientes, Object.assign(reqBase(GRUPO_ID), { body: {} }));
+  const manual1 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'manual-1');
+  check(manual1.estado === 'falta_banqueo' && manual1.banqueadores === null && resPend11._json.faltaBanqueo >= 1, '11) Un grupo SIN configuración NO banquea nada solo: la Marca sigue "falta_banqueo" esperando banqueo manual');
+  // Validaciones del PUT.
+  const putCfg = body => invocarRuta(handlerMarcasConfigPut, Object.assign(reqBase(GRUPO_ID), { body }));
+  check((await putCfg({ banqueadores: [{ nombre: 'JUAN', porcentaje: 60 }, { nombre: 'ANA', porcentaje: 30 }] }))._status === 400, '11) PUT rechaza % que no suman 100');
+  check((await putCfg({ banqueadores: [{ nombre: 'JUAN', porcentaje: 50 }, { nombre: 'juan', porcentaje: 50 }] }))._status === 400, '11) PUT rechaza un banqueador repetido');
+  check((await putCfg({ banqueadores: [{ nombre: '', porcentaje: 100 }] }))._status === 400, '11) PUT rechaza un banqueador sin nombre');
+  check((await putCfg({ banqueadores: [1, 2, 3, 4, 5].map(n => ({ nombre: 'B' + n, porcentaje: 20 })) }))._status === 400, '11) PUT rechaza más de 4 banqueadores');
+  // Otro grupo, otros nombres: guarda SU configuración y la Marca pendiente se banquea con ELLOS.
+  const resCfgOtro = await putCfg({ banqueadores: [{ nombre: ' juan  perez ', porcentaje: 100, pagaComision: false }] });
+  check(resCfgOtro._status === 200 && resCfgOtro._json.banqueadores[0].nombre === 'JUAN PEREZ' && resCfgOtro._json.marcasBanqueadas >= 1, '11) PUT guarda la configuración (nombre normalizado) y banquea ya las Marcas que esperaban');
+  check(manual1.estado === 'resuelto' && manual1.banqueadores.length === 1 && manual1.banqueadores[0].nombre === 'JUAN PEREZ' && manual1.banqueadores[0].monto === 80 && !manual1.banqueadores.some(b => /ZENYATTA|SAMMY/.test(b.nombre)), '11) La Marca de PEDRO (-80) la gana JUAN PEREZ (+80): ningún nombre de otro grupo aparece');
+  // Desactivar: lista vacía.
+  const resCfgOff = await putCfg({ banqueadores: [] });
+  check(resCfgOff._status === 200 && resCfgOff._json.banqueadores.length === 0 && CONFIG_BANQUEO_MARCAS.valor === null, '11) PUT con lista vacía desactiva el banqueo automático');
+
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);
