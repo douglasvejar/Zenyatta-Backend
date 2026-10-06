@@ -244,6 +244,22 @@
   textarea { resize: vertical; font-family: 'ui-monospace', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
   .fila { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
   .fila > div { flex: 1; min-width: 160px; }
+  /* Banqueo de Marcas / Tablas Fijas (06-10-2026): cada banquero en UNA sola línea compacta
+     (nombre + % + "Paga %" + ✕) — el input global es width:100% y el label display:block,
+     por eso acá se pisan a propósito. */
+  .bq-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
+  .bq-fila input[type="text"] { padding: 6px 9px; font-size: 13px; }
+  .bq-fila .bq-nombre { flex: 1 1 auto; min-width: 0; width: auto; }
+  .bq-fila .bq-pct { flex: 0 0 74px; width: 74px; text-align: right; }
+  .bq-fila label.bq-paga { display: flex; align-items: center; gap: 5px; margin: 0; white-space: nowrap; font-size: 12.5px; font-weight: 600; flex: 0 0 auto; }
+  .bq-fila label.bq-paga input { width: auto; margin: 0; }
+  .bq-fila .bq-quitar { flex: 0 0 auto; padding: 4px 9px; font-size: 13px; line-height: 1; background: transparent; border: 1px solid var(--border-light); border-radius: 6px; color: var(--text-dim); cursor: pointer; }
+  .bq-fila .bq-quitar:hover { color: var(--danger); border-color: var(--danger); }
+  .bq-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  .bq-acciones button.btn { padding: 7px 13px; font-size: 13px; }
+  .bq-acciones label.bq-check { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 500; }
+  .bq-acciones label.bq-check input { width: auto; margin: 0; }
+  .bq-nota { font-size: 12px; color: var(--text-dim); margin: 6px 0 0; }
   .check-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .check-fila input { width: auto; }
   .check-fila label { margin: 0; color: var(--text); font-size: 13.5px; }
@@ -1671,21 +1687,16 @@
              ARRIBA UNA SOLA VEZ LOS % Y NOMBRE DE QUIEN BANQUEA... Y SE LO
              APLICAS A TODAS LAS MARCAS... ASI NO DEBO RESOLVER UNA A UNA"): es la
              MISMA configuración de Administración > Banqueo (Marcas y TF). -->
-        <div id="cajaBanqueoMarcasAdel" style="border:1px solid var(--borde, #cfd6e4); border-radius:10px; padding:14px; margin-bottom:18px;">
-          <h3 style="margin:0 0 4px;">🏦 ¿Quién banquea las Marcas?</h3>
-          <p class="desc" style="margin:0 0 10px;">Escribe una sola vez quién banquea y con qué %, y se aplica a <b>todas las Marcas</b> (las que están esperando banqueo y las próximas): ya no hay que resolverlas una a una. Los banqueadores deben existir como clientes. Si cambias algo, vuelve a guardar.</p>
-          <div id="bmAdelFilas"></div>
-          <div class="btn-fila">
-            <button class="btn" type="button" id="btnbmAdelAgregar" onclick="bqAgregarFila('bmAdel')">+ Agregar banquero</button>
+        <div id="cajaBanqueoMarcasAdel" style="border:1px solid var(--border-light); border-radius:10px; padding:10px 14px; margin-bottom:14px;">
+          <div style="font-weight:700; font-size:14px;">🏦 ¿Quién banquea las Marcas? <span style="font-weight:400; font-size:12px; color:var(--text-dim);">— una sola vez; se aplica a todas las Marcas (pendientes y próximas)</span></div>
+          <div id="bmAdelFilas" style="margin-top:8px;"></div>
+          <div class="bq-acciones">
+            <button class="btn" type="button" id="btnbmAdelAgregar" onclick="bqAgregarFila('bmAdel')">+ Banquero</button>
+            <span id="bmAdelSuma" class="bq-nota" style="margin:0;"></span>
+            <label class="bq-check" title="Cambia los saldos de las Marcas que ya estaban banqueadas con otros"><input type="checkbox" id="bmAdelRebanquear"> Re-banquear también las ya banqueadas</label>
+            <button class="btn btn-primario" type="button" id="btnbmAdelGuardar" onclick="bqGuardar('bmAdel')" style="margin-left:auto;">💾 Guardar y banquear todas</button>
           </div>
-          <p class="desc" id="bmAdelSuma" style="margin:10px 0 0;"></p>
-          <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-            <input type="checkbox" id="bmAdelRebanquear"> También volver a banquear con esto las Marcas que ya estaban banqueadas con otros (cambia sus saldos)
-          </label>
-          <div class="btn-fila">
-            <button class="btn btn-primario" type="button" id="btnbmAdelGuardar" onclick="bqGuardar('bmAdel')">💾 Guardar y banquear todas las Marcas</button>
-          </div>
-          <p class="desc" id="bmAdelEstado" style="margin:10px 0 0;"></p>
+          <div id="bmAdelEstado" class="bq-nota"></div>
         </div>
 
         <div class="fila">
@@ -11832,14 +11843,12 @@ function bqPintar(pref) {
   const cont = document.getElementById(pref + 'Filas');
   if (!cont) return;
   const st = BQ[pref];
-  cont.innerHTML = st.filas.length ? st.filas.map((b, i) => `<div class="fila" style="margin-bottom:6px;">
-    <input type="text" placeholder="Nombre del banquero (cliente)" value="${String(b.nombre || '').replace(/"/g, '&quot;')}" list="listaBanqueadoresConocidos" autocomplete="off" oninput="bqActualizar('${pref}',${i},'nombre',this.value)">
-    <input type="text" inputmode="decimal" placeholder="% que banquea" value="${b.porcentaje === '' || b.porcentaje == null ? '' : b.porcentaje}" oninput="bqActualizar('${pref}',${i},'porcentaje',this.value)">
-    <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
-      <input type="checkbox" ${b.pagaComision ? 'checked' : ''} onchange="bqActualizar('${pref}',${i},'pagaComision',this.checked)"> Paga %
-    </label>
-    <button class="btn" type="button" onclick="bqQuitarFila('${pref}',${i})" aria-label="Quitar banquero">✕</button>
-  </div>`).join('') : `<p class="desc" style="margin:0;">${st.vacio}</p>`;
+  cont.innerHTML = st.filas.length ? st.filas.map((b, i) => `<div class="bq-fila">
+    <input type="text" class="bq-nombre" placeholder="Banquero (cliente)" value="${String(b.nombre || '').replace(/"/g, '&quot;')}" list="listaBanqueadoresConocidos" autocomplete="off" oninput="bqActualizar('${pref}',${i},'nombre',this.value)">
+    <input type="text" class="bq-pct" inputmode="decimal" placeholder="%" value="${b.porcentaje === '' || b.porcentaje == null ? '' : b.porcentaje}" oninput="bqActualizar('${pref}',${i},'porcentaje',this.value)">
+    <label class="bq-paga" title="Este banquero paga el % de comisión de la jugada"><input type="checkbox" ${b.pagaComision ? 'checked' : ''} onchange="bqActualizar('${pref}',${i},'pagaComision',this.checked)"> Paga %</label>
+    <button class="bq-quitar" type="button" onclick="bqQuitarFila('${pref}',${i})" aria-label="Quitar banquero" title="Quitar">✕</button>
+  </div>`).join('') : `<p class="bq-nota" style="margin:0 0 6px;">${st.vacio}</p>`;
   document.getElementById('btn' + pref + 'Agregar').disabled = st.filas.length >= st.max;
   bqPintarSuma(pref);
 }
