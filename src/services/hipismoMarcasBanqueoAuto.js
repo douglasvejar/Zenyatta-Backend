@@ -81,33 +81,50 @@ const guardarBanqueoMarcasGrupo = (grupoId, lista) => guardarConfigBanqueo(grupo
 const obtenerBanqueoTablasFijasGrupo = grupoId => leerConfigBanqueo(grupoId, COLUMNA_TF);
 const guardarBanqueoTablasFijasGrupo = (grupoId, lista) => guardarConfigBanqueo(grupoId, COLUMNA_TF, lista);
 
-async function asegurarBanqueoAutomaticoMarcas(grupoId) {
+// opciones.incluirYaBanqueadas (06-10-2026, "PREGUNTAME UNA SOLA VEZ LOS % Y
+// NOMBRE DE QUIEN BANQUEA Y SE LO APLICAS A TODAS LAS MARCAS"): además de las
+// que esperan banqueo, vuelve a banquear con la configuración del grupo las
+// Marcas ya decididas que tenían otros banqueadores (cambia sus saldos).
+// -> { pendientes, rebanqueadas } (cantidad de Marcas tocadas en cada caso).
+async function banquearMarcasConConfig(grupoId, config, estadoOrigen) {
+  const filtroExtra = estadoOrigen === 'resuelto' ? "AND banqueadores IS NOT NULL AND gano IS NOT NULL" : '';
+  const r = await db.query(
+    `SELECT id, gano, monto, resultado_cliente, comision_porcentaje
+       FROM hipismo_adelantadas_jugadas
+      WHERE grupo_id = $1 AND tipo = 'marca' AND estado = '${estadoOrigen}' ${filtroExtra}`,
+    [grupoId]
+  );
+  const filas = (r && r.rows) || [];
+  let tocadas = 0;
+  for (const j of filas) {
+    const acierta = !!j.gano;
+    const base = acierta ? Number(j.resultado_cliente) : Number(j.monto);
+    const banqueo = banqueoAutomaticoMarca({ acierta, base }, j.comision_porcentaje, null, config);
+    if (!banqueo) continue;
+    await db.query(
+      `UPDATE hipismo_adelantadas_jugadas
+          SET estado = 'resuelto', comision = $1, banqueadores = $2
+        WHERE id = $3 AND grupo_id = $4 AND estado = '${estadoOrigen}'`,
+      [banqueo.comisionMarcas, JSON.stringify(banqueo.banqueadores), j.id, grupoId]
+    );
+    tocadas += 1;
+  }
+  return tocadas;
+}
+
+async function asegurarBanqueoAutomaticoMarcas(grupoId, opciones) {
   try {
     const config = await obtenerBanqueoMarcasGrupo(grupoId);
     if (!config) return 0; // grupo sin banqueo automático: flujo manual de siempre
-    const r = await db.query(
-      `SELECT id, gano, monto, resultado_cliente, comision_porcentaje
-         FROM hipismo_adelantadas_jugadas
-        WHERE grupo_id = $1 AND tipo = 'marca' AND estado = 'falta_banqueo'`,
-      [grupoId]
-    );
-    const filas = (r && r.rows) || [];
-    for (const j of filas) {
-      const acierta = !!j.gano;
-      const base = acierta ? Number(j.resultado_cliente) : Number(j.monto);
-      const banqueo = banqueoAutomaticoMarca({ acierta, base }, j.comision_porcentaje, null, config);
-      if (!banqueo) continue;
-      await db.query(
-        `UPDATE hipismo_adelantadas_jugadas
-            SET estado = 'resuelto', comision = $1, banqueadores = $2
-          WHERE id = $3 AND grupo_id = $4 AND estado = 'falta_banqueo'`,
-        [banqueo.comisionMarcas, JSON.stringify(banqueo.banqueadores), j.id, grupoId]
-      );
+    const pendientes = await banquearMarcasConConfig(grupoId, config, 'falta_banqueo');
+    if (opciones && opciones.incluirYaBanqueadas) {
+      const rebanqueadas = await banquearMarcasConConfig(grupoId, config, 'resuelto');
+      return { pendientes, rebanqueadas };
     }
-    return filas.length;
+    return pendientes;
   } catch (e) {
     console.error('[marcas] no se pudo banquear automáticamente:', e.message);
-    return 0;
+    return (opciones && opciones.incluirYaBanqueadas) ? { pendientes: 0, rebanqueadas: 0 } : 0;
   }
 }
 

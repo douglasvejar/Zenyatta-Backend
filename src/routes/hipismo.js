@@ -3489,9 +3489,17 @@ router.put('/marcas-banqueo-config', asyncHandler(async (req, res) => {
   if (error) return res.status(400).json({ error });
   if (lista.length && await rechazarClientesInexistentes(req, res, lista.map(b => b.nombre))) return;
   const guardada = await guardarBanqueoMarcasGrupo(req.grupoId, lista);
-  // Las Marcas que ya estaban esperando banqueo se banquean ahora mismo.
-  const aplicadas = guardada ? await asegurarBanqueoAutomaticoMarcas(req.grupoId) : 0;
-  res.json({ banqueadores: guardada || [], max: 4, marcasBanqueadas: aplicadas });
+  // Las Marcas que ya estaban esperando banqueo se banquean ahora mismo (TODAS de una vez,
+  // sin resolverlas una a una). Con rebanquearTodas:true (06-10-2026) también se vuelven a
+  // banquear con esta configuración las Marcas que ya tenían otros banqueadores.
+  const rebanquearTodas = !!(req.body || {}).rebanquearTodas;
+  let marcasBanqueadas = 0;
+  let marcasRebanqueadas = 0;
+  if (guardada) {
+    const r = await asegurarBanqueoAutomaticoMarcas(req.grupoId, { incluirYaBanqueadas: rebanquearTodas });
+    if (rebanquearTodas) { marcasBanqueadas = r.pendientes; marcasRebanqueadas = r.rebanqueadas; } else { marcasBanqueadas = r; }
+  }
+  res.json({ banqueadores: guardada || [], max: 4, marcasBanqueadas, marcasRebanqueadas });
 }));
 
 // BANQUEO DE TABLAS FIJAS por grupo (06-10-2026, "HAGAMOS LA MISMA

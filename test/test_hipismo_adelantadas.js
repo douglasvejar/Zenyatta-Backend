@@ -443,6 +443,17 @@ function ejecutarQuery(text, params) {
     if (j) { j.estado = 'resuelto'; j.comision = comision; j.banqueadores = JSON.parse(banqueadoresJson); }
     return { rows: j ? [j] : [] };
   }
+  // 06-10-2026: re-banquear con la configuración del grupo las Marcas YA banqueadas.
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'resuelto' AND banqueadores IS NOT NULL AND gano IS NOT NULL/i.test(sql)) {
+    const [grupoId] = params;
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'resuelto' && j.banqueadores && j.gano !== null) };
+  }
+  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET estado = 'resuelto', comision = \$1, banqueadores = \$2\s+WHERE id = \$3 AND grupo_id = \$4 AND estado = 'resuelto'/i.test(sql)) {
+    const [comision, banqueadoresJson, id, grupoId] = params;
+    const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId && x.estado === 'resuelto');
+    if (j) { j.comision = comision; j.banqueadores = JSON.parse(banqueadoresJson); }
+    return { rows: j ? [j] : [] };
+  }
   // GET /cierre-final: saldo de Jugadas Adelantadas de la semana.
   // (28-09-2026: la consulta real ahora también trae j.tipo, para poder
   // armar el ítem "PORCENTAJE MARCAS" separado de las Tablas Fijas.)
@@ -1048,6 +1059,31 @@ function reqBase(grupoId) {
   // Sin configurar otra vez: las TF nuevas vuelven al ítem "TABLAS FIJAS".
   const resTfOff = await putTf({ banqueadores: [] });
   check(resTfOff._status === 200 && CONFIG_BANQUEO_TF.valor === null, '12) PUT con lista vacía desactiva el banqueo de TF');
+
+  // --- 13) "UNA SOLA VEZ los % y nombres de quien banquea, y se lo aplicas a TODAS las
+  // Marcas" (06-10-2026): guardar la configuración banquea de una todas las Marcas
+  // pendientes; con rebanquearTodas también las que ya tenían otros banqueadores ---
+  CONFIG_BANQUEO_MARCAS.valor = null;
+  const planoM = TABLAS.hipismo_adelantadas_planos[0];
+  const nuevaMarca = (id, cliente, gano, resultado, monto, estado, banqueadores) => TABLAS.hipismo_adelantadas_jugadas.push({ id, plano_id: planoM.id, grupo_id: GRUPO_ID, cliente_nombre: cliente, carrera_numero: 5, tipo: 'marca', numero1: 1, numero2: 2, monto, comision_porcentaje: 2.5, estado, gano, resultado_cliente: resultado, comision: null, banqueadores, pizarra_usada: '1.2.3.4.5', resuelto_en: 1, creado_en: 9e15 + 50 });
+  nuevaMarca('masiva-1', 'HANRY', false, -120, 120, 'falta_banqueo', null);
+  nuevaMarca('masiva-2', 'HALLAND', true, 100, 120, 'falta_banqueo', null);
+  nuevaMarca('masiva-3', 'ROSA', false, -120, 120, 'resuelto', [{ nombre: 'JUAN PEREZ', porcentaje: 100, pagaComision: false, comisionPorcentaje: null, monto: 120 }]);
+  const putM = body => invocarRuta(handlerMarcasConfigPut, Object.assign(reqBase(GRUPO_ID), { body }));
+  const cfgM = [{ nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }];
+  const resMasiva = await putM({ banqueadores: cfgM });
+  const m1 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'masiva-1');
+  const m2 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'masiva-2');
+  const m3 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'masiva-3');
+  check(resMasiva._status === 200 && resMasiva._json.marcasBanqueadas === 2 && resMasiva._json.marcasRebanqueadas === 0, '13) Guardar la configuración banquea de UNA SOLA VEZ las 2 Marcas que esperaban (sin resolverlas una a una)');
+  check(m1.estado === 'resuelto' && m2.estado === 'resuelto', '13) Las 2 quedan "resuelto"');
+  check(m1.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === 60 && m1.banqueadores.find(b => b.nombre === 'MARCAS SAMMY').monto === 58.5, '13) Hanry -120: MARCAS ZENYATTA +60 y MARCAS SAMMY +58,5');
+  check(m2.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === -50 && m2.banqueadores.find(b => b.nombre === 'MARCAS SAMMY').monto === -51.25, '13) Halland +100: MARCAS ZENYATTA -50 y MARCAS SAMMY -51,25');
+  check(m3.banqueadores.length === 1 && m3.banqueadores[0].nombre === 'JUAN PEREZ', '13) Sin la opción de re-banquear, una Marca YA banqueada con otros banqueadores NO se toca');
+  const resMasiva2 = await putM({ banqueadores: cfgM, rebanquearTodas: true });
+  check(resMasiva2._status === 200 && resMasiva2._json.marcasRebanqueadas >= 1, '13) Con "rebanquearTodas" también se vuelven a banquear las Marcas ya banqueadas con otros');
+  check(m3.banqueadores.length === 2 && m3.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === 60 && m3.comision === 1.5, '13) La Marca de Rosa (-120) queda con MARCAS ZENYATTA +60 / MARCAS SAMMY +58,5 y comisión 1,5');
+  CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');

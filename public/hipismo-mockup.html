@@ -1663,9 +1663,30 @@
       <div class="card">
         <h2>🎯 Tablas Fijas y Marcas</h2>
         <p class="desc">
-          Pega el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elige el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> quedan esperando que les asignes quién banquea, más abajo en "Pendientes de resolver". Si una carrera no tiene NINGÚN Tercios en vivo, igual puedes ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
+          Pega el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elige el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> se banquean solas con quien configures arriba en "¿Quién banquea las Marcas?" (si no configuras a nadie, quedan esperando que las banquees a mano, más abajo en "Pendientes de resolver"). Si una carrera no tiene NINGÚN Tercios en vivo, igual puedes ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
           <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos más adelante</span>
         </p>
+
+        <!-- "Quién banquea las Marcas" (06-10-2026, "PREGUNTAME EN ESA PESTAÑA
+             ARRIBA UNA SOLA VEZ LOS % Y NOMBRE DE QUIEN BANQUEA... Y SE LO
+             APLICAS A TODAS LAS MARCAS... ASI NO DEBO RESOLVER UNA A UNA"): es la
+             MISMA configuración de Administración > Banqueo (Marcas y TF). -->
+        <div id="cajaBanqueoMarcasAdel" style="border:1px solid var(--borde, #cfd6e4); border-radius:10px; padding:14px; margin-bottom:18px;">
+          <h3 style="margin:0 0 4px;">🏦 ¿Quién banquea las Marcas?</h3>
+          <p class="desc" style="margin:0 0 10px;">Escribe una sola vez quién banquea y con qué %, y se aplica a <b>todas las Marcas</b> (las que están esperando banqueo y las próximas): ya no hay que resolverlas una a una. Los banqueadores deben existir como clientes. Si cambias algo, vuelve a guardar.</p>
+          <div id="bmAdelFilas"></div>
+          <div class="btn-fila">
+            <button class="btn" type="button" id="btnbmAdelAgregar" onclick="bqAgregarFila('bmAdel')">+ Agregar banquero</button>
+          </div>
+          <p class="desc" id="bmAdelSuma" style="margin:10px 0 0;"></p>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+            <input type="checkbox" id="bmAdelRebanquear"> También volver a banquear con esto las Marcas que ya estaban banqueadas con otros (cambia sus saldos)
+          </label>
+          <div class="btn-fila">
+            <button class="btn btn-primario" type="button" id="btnbmAdelGuardar" onclick="bqGuardar('bmAdel')">💾 Guardar y banquear todas las Marcas</button>
+          </div>
+          <p class="desc" id="bmAdelEstado" style="margin:10px 0 0;"></p>
+        </div>
 
         <div class="fila">
           <div>
@@ -6146,6 +6167,8 @@ function mostrarVista(id, btn) {
 const REFRESCAR_AL_ENTRAR_VISTA = {
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
+  // "Tablas Fijas y Marcas" (06-10-2026) — recuerda quién banquea las Marcas.
+  jugadasAdelantadas: () => bqCargar('bmAdel'),
   // "Banqueo de Marcas" (06-10-2026) — configuración del grupo.
   banqueoMarcas: () => cargarBanqueoMarcas(),
   // "Carga Masiva Especial" (05-10-2026) — códigos con saldo + cargas recientes.
@@ -11791,6 +11814,7 @@ function actualizarPreviewSemana() {
 // los suyos — nada va fijo. Misma pantalla y mismo código para las dos.
 var BQ = {
   bmMarcas: { ruta: '/api/hipismo/marcas-banqueo-config', filas: [], max: 4, que: 'Marcas', cargado: 'Las Marcas de este grupo se banquean solas con estos banqueadores.', vacio: 'Todavía no hay banqueo automático configurado para las Marcas de este grupo.' },
+  bmAdel: { ruta: '/api/hipismo/marcas-banqueo-config', filas: [], max: 4, que: 'Marcas', cargado: 'Todas las Marcas de este grupo se banquean con estos banqueadores.', vacio: 'Todavía no hay banqueadores: agrega quién banquea las Marcas y guarda.' },
   bmTf: { ruta: '/api/hipismo/tf-banqueo-config', filas: [], max: 4, que: 'Tablas Fijas', cargado: 'Las próximas Tablas Fijas de este grupo salen con estos banqueadores en vez del ítem "TABLAS FIJAS".', vacio: 'Sin banqueadores: las Tablas Fijas juegan contra el ítem "TABLAS FIJAS" de siempre.' }
 };
 
@@ -11852,13 +11876,18 @@ async function bqGuardar(pref) {
   const btn = document.getElementById('btn' + pref + 'Guardar');
   btn.disabled = true;
   try {
-    const cfg = await apiHipismo(st.ruta, { method: 'PUT', body: JSON.stringify({ banqueadores: lista }) });
+    const chk = document.getElementById(pref + 'Rebanquear');
+    const cuerpo = { banqueadores: lista };
+    if (chk && chk.checked) cuerpo.rebanquearTodas = true;
+    const cfg = await apiHipismo(st.ruta, { method: 'PUT', body: JSON.stringify(cuerpo) });
     st.filas = (cfg.banqueadores || []).map(b => ({ nombre: b.nombre, porcentaje: b.porcentaje, pagaComision: !!b.pagaComision }));
     bqPintar(pref);
     est.textContent = cfg.banqueadores.length
-      ? `✅ Guardado.${cfg.marcasBanqueadas ? ` Se banquearon ${cfg.marcasBanqueadas} Marca(s) que estaban esperando.` : ''} ${st.cargado}`
+      ? `✅ Guardado.${cfg.marcasBanqueadas ? ` Se banquearon ${cfg.marcasBanqueadas} Marca(s) que estaban esperando.` : ''}${cfg.marcasRebanqueadas ? ` Se volvieron a banquear ${cfg.marcasRebanqueadas} Marca(s) que ya tenían otros banqueadores.` : ''} ${st.cargado}`
       : '✅ Guardado: sin banqueo automático para ' + st.que + '.';
-    if (pref === 'bmMarcas' && typeof cargarPendientesAdelantadas === 'function') cargarPendientesAdelantadas();
+    if (pref !== 'bmTf' && typeof cargarPendientesAdelantadas === 'function') cargarPendientesAdelantadas();
+    if (chk) chk.checked = false;
+    if (pref === 'bmMarcas') bqCargar('bmAdel'); else if (pref === 'bmAdel') bqCargar('bmMarcas');
     if (typeof cargarBanqueadoresConocidos === 'function') cargarBanqueadoresConocidos();
   } catch (e) {
     est.textContent = '⚠️ ' + e.message;
@@ -15010,6 +15039,7 @@ pintarLogosGrupo();
 actualizarAlertaPozos();
 cargarHipodromos();
 cargarPendientesAdelantadas();
+bqCargar('bmAdel');
 cargarPendientesTerciosAdelantadas();
 cargarBanqueadoresConocidos();
 cargarClientesReales();
