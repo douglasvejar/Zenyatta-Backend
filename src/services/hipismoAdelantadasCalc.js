@@ -419,17 +419,46 @@ function formatNombre(nombre) {
 // muestra al cliente, solo se guarda aparte para Cierre Final).
 function armarBloqueAdelantadas(movimientos) {
   if (!movimientos.length) return '';
+  // 06-10-2026, a pedido del usuario ("LAS TABLAS Y MARCAS QUE SE CARGUEN POR
+  // ESTE MODULO NO SE CRUZAN... SE CALCULA CADA JUGADA INDIVIDUAL" y "QUE EN
+  // EL PLANO SE VEA CLIENTE Y ABAJO EL ITEM YA SEA MARCAS O TABLAS... ASI
+  // TANTAS JUGADAS TENGAS"; caso: Halland +100 y Hanry -120 en la misma
+  // carrera, y el plano mostraba un solo "Marcas +20" neteado): cada Tabla
+  // Fija / Marca (movimientos con `individual: true`, de a PAR: el cliente y
+  // su espejo "MARCAS"/"TABLAS FIJAS", ligados por `grupo`) se imprime como
+  // su propio par -- el cliente y, justo abajo, el ítem -- sin sumarse con
+  // ninguna otra jugada. Un plano con 5 jugadas sale con 5 pares, y "MARCAS"
+  // o "TABLAS FIJAS" tiene tantos renglones como jugadas hubo. Los demás
+  // movimientos (Jugadas entre Tercios Adelantadas) siguen sumándose por
+  // nombre en las listas GANAN/PIERDEN de siempre. Esto es solo el TEXTO del
+  // plano; los saldos nunca cambian.
   const porNombre = new Map();
-  movimientos.forEach(({ nombre, monto }) => {
+  const pares = new Map();
+  let nIndividuales = 0;
+  movimientos.forEach(({ nombre, monto, individual, grupo }) => {
+    if (individual) {
+      const clave = grupo != null ? `g:${grupo}` : `auto:${Math.floor(nIndividuales / 2)}`;
+      nIndividuales += 1;
+      if (!pares.has(clave)) pares.set(clave, []);
+      pares.get(clave).push([nombre, round2(monto)]);
+      return;
+    }
     porNombre.set(nombre, round2((porNombre.get(nombre) || 0) + monto));
   });
   const entradas = Array.from(porNombre.entries());
   const ganan = entradas.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
   const pierden = entradas.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
+  const linea = ([n, v]) => `${formatNombre(n)} ${v < 0 ? '-' : '+'}${formatMontoTabla(v)}`;
 
   const bloques = ['------------------------------\nPARADA ADELANTADAS'];
-  if (ganan.length) bloques.push('✅ *GANAN*\n' + ganan.map(([n, v]) => `${formatNombre(n)} +${formatMontoTabla(v)}`).join('\n'));
-  if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
+  pares.forEach(par => {
+    // La primera línea del par es el cliente (con ✅ si ganó / ❌ si perdió);
+    // el espejo (MARCAS / TABLAS FIJAS) va debajo, sin marca.
+    const [cliente, ...resto] = par;
+    bloques.push([`${cliente[1] < 0 ? '❌' : '✅'} ${linea(cliente)}`, ...resto.map(linea)].join('\n'));
+  });
+  if (ganan.length) bloques.push('✅ *GANAN*\n' + ganan.map(linea).join('\n'));
+  if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(linea).join('\n'));
   return bloques.join('\n\n');
 }
 

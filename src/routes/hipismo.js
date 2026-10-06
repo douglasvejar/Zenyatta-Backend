@@ -378,7 +378,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       return {
         id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto', monto: Number(j.monto),
         gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision,
-        movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas }]
+        movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas, individual: true, grupo: j.id }]
       };
     }
     // Marca
@@ -417,7 +417,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       // grande de armarBloqueAdelantadas). SIN descontar ningún % ("LAS
       // MARCAS NO SE LE DESCUENTA % X ESO SALE ASI NETO EN EL PLANO") —
       // exactamente lo opuesto a resultadoCliente, nunca más ni menos.
-      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente) }]
+      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente), individual: true, grupo: j.id }]
     };
   });
 

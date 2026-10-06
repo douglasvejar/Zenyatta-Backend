@@ -608,6 +608,16 @@ function reqBase(grupoId) {
   // está "falta_banqueo" en este punto de la prueba) — mismo mecanismo
   // EXACTO que ya usa "TABLAS FIJAS" (un nombre fijo, sin %, nunca los
   // nombres reales de quien banquea después).
+  // 06-10-2026, a pedido del usuario ("LAS TABLAS Y MARCAS QUE SE CARGUEN POR
+  // ESTE MODULO NO SE CRUZAN... SE CALCULA CADA JUGADA INDIVIDUAL"): cada
+  // Tabla Fija/Marca sale en su propia línea, sin sumarse con las otras del
+  // mismo nombre -- Halland juega una Marca (-120) y una Tabla Fija (-40) en
+  // esta carrera y las dos se ven por separado (no "Halland -160"), igual que
+  // la banca "Tablas fijas", que sale una vez por cada TF (gana y pierde).
+  const textoCarrera12 = resPlanos12._json.plano.texto_resultado;
+  check(textoCarrera12.includes('Halland -120,00') && textoCarrera12.includes('Halland -40,00') && !textoCarrera12.includes('Halland -160,00'), 'Las jugadas de Halland salen INDIVIDUALES (-120 de la marca y -40 de la TF), sin cruzarse en un solo -160');
+  check(textoCarrera12.includes('❌ Halland -120,00\nMarcas +120,00') && textoCarrera12.includes('✅ Linares +225,00\nTablas fijas -226,88') && textoCarrera12.includes('❌ Maturin -45,00\nTablas fijas +43,87'), 'Cada jugada sale como un par: el cliente y, justo debajo, su ítem (Marcas / Tablas fijas), tantos pares como jugadas hubo en la carrera');
+  check((textoCarrera12.match(/Tablas fijas \+/g) || []).length === 2 && (textoCarrera12.match(/Tablas fijas -/g) || []).length === 1, '"Tablas fijas" sale una vez por cada TF (2 que ganan la banca y 1 que pierde), sin netearse');
   check(resPlanos12._json.plano.texto_resultado.includes('Marcas +120'), 'El bloque de adelantadas YA muestra "Marcas +120" (espejo genérico, SIN nombres reales) aunque la marca de Halland todavía no tenga banqueo asignado');
   // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
   // "PLANO REFERENCIAL" quedaba en el MEDIO del mensaje, arriba de
