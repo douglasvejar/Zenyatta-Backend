@@ -2007,3 +2007,10 @@ alter table grupos add column if not exists hipismo_semana_hasta date;
 -- banqueo automático (la Marca queda 'falta_banqueo' y se banquea a mano).
 -- Seguro de re-correr.
 alter table grupos add column if not exists hipismo_marcas_banqueo jsonb;
+
+-- ---------------------------------------------------------------
+-- 06-10-2026 — BANQUEO DE TABLAS FIJAS POR GRUPO (mismo formato que
+-- hipismo_marcas_banqueo): array jsonb de hasta 4 objetos
+-- { nombre, porcentaje, pagaComision } cuyos % suman 100. NULL = las Tablas
+-- Fijas juegan contra el ítem "TABLAS FIJAS" de siempre. Seguro de re-correr.
+alter table grupos add column if not exists hipismo_tf_banqueo jsonb;

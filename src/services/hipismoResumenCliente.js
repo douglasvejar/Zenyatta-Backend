@@ -1136,7 +1136,7 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
        LEFT JOIN hipismo_hipodromos h ON h.id = p.hipodromo_id
       WHERE j.grupo_id = $1 AND j.tipo = 'tf' AND p.fecha BETWEEN $2 AND $3
-        AND j.estado IN ('resuelto', 'sin_decidir')
+        AND j.estado IN ('resuelto', 'sin_decidir') AND j.banqueadores IS NULL
       ORDER BY p.fecha DESC, j.creado_en ASC`,
     [grupoId, desde, hasta]
   );
@@ -1374,7 +1374,10 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // cliente + TABLAS FIJAS ya no suma 0 solos, el "hueco" que queda
     // (justo la comisionTf) es la misma plata que ahora aparece en
     // COMISIÓN GRUPO.
-    if (j.tipo === 'tf') {
+    // TF con banqueadores del grupo (06-10-2026): la banca ya está repartida
+    // entre ellos (se suman más abajo, junto a los de Marcas) — no hay ítem
+    // "TABLAS FIJAS" para esa jugada.
+    if (j.tipo === 'tf' && !Array.isArray(j.banqueadores)) {
       const comisionTf = j.comision != null ? Number(j.comision) : 0;
       acumular('TABLAS FIJAS', -(Number(j.resultado_cliente) + comisionTf));
     }

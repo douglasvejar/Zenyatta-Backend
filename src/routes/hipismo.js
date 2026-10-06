@@ -87,7 +87,7 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 // asigna quién banquea (POST /adelantadas/jugadas/:id/banquear).
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
-  resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, armarBloqueAdelantadas, round2,
+  resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, banqueoAutomaticoTablaFija, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto
 } = require('../services/hipismoAdelantadasCalc');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
@@ -102,7 +102,8 @@ const {
 // ('resuelto'/'sin_decidir') o le falta un dato (falta_monto/
 // falta_jugador/falta_banquero, ver más abajo), nunca las dos cosas.
 const {
-  asegurarBanqueoAutomaticoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo, validarBanqueoMarcas
+  asegurarBanqueoAutomaticoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo, validarBanqueoMarcas,
+  obtenerBanqueoTablasFijasGrupo, guardarBanqueoTablasFijasGrupo
 } = require('../services/hipismoMarcasBanqueoAuto');
 const {
   parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto, montoBaseTerciosAdelantadaExacto
@@ -373,6 +374,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
   const rank = parsearPizarraRank(pizarra);
   // Banqueo automático de Marcas: configuración DEL GRUPO (null = flujo manual).
   const configBanqueoMarcas = await obtenerBanqueoMarcasGrupo(req.grupoId);
+  const configBanqueoTf = await obtenerBanqueoTablasFijasGrupo(req.grupoId);
 
   const resueltas = pendientes.map(j => {
     if (j.tipo === 'tf') {
@@ -380,9 +382,14 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
         { numeroEjemplar: j.numero_ejemplar, monto: Number(j.monto), gananciaPotencial: Number(j.ganancia_potencial) },
         rank, Number(j.comision_porcentaje)
       );
+      // BANQUEO DE TABLAS FIJAS por grupo (06-10-2026): si el grupo configuró
+      // quién banquea sus TF (o la jugada ya tenía banqueadores), el lado de
+      // la banca se reparte entre ellos en vez del ítem "TABLAS FIJAS".
+      // `comision` pasa a ser la que realmente pagan los banqueadores.
+      const bqTf = banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: Number(j.monto) }, j.comision_porcentaje, j.banqueadores, configBanqueoTf);
       return {
         id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto', monto: Number(j.monto),
-        gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision,
+        gano: r.gano, resultadoCliente: r.resultadoCliente, comision: bqTf ? bqTf.comision : r.comision, banqueadores: bqTf ? bqTf.banqueadores : null,
         movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas, individual: true, grupo: j.id }]
       };
     }
@@ -618,7 +625,13 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
   resueltas.forEach(r => {
     totales[r.cliente] = round2((totales[r.cliente] || 0) + r.resultadoCliente);
 
-    if (r.tipo === 'tf') {
+    if (r.tipo === 'tf' && Array.isArray(r.banqueadores)) {
+      // TF CON BANQUEADORES del grupo (06-10-2026): cada banquero suma su propio
+      // renglón (ya neto de la comisión que paga) en vez del ítem "TABLAS
+      // FIJAS"; la comisión (cliente + banqueadores + comisión = 0) va al pie.
+      r.banqueadores.forEach(b => { totales[b.nombre] = round2((totales[b.nombre] || 0) + b.monto); });
+      if (r.comision) comision = round2(comision + r.comision);
+    } else if (r.tipo === 'tf') {
       // NETO de su propia comisión (28-09-2026, mismo arreglo que
       // /cierre-final más abajo, encontrado por el usuario ahí primero):
       // antes esto restaba solo r.resultadoCliente (bruto) y además
@@ -1564,7 +1577,15 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
         { numeroEjemplar: numeroEjemplarFinal, monto: montoFinal, gananciaPotencial: Number(jugada.ganancia_potencial) },
         rank, Number(jugada.comision_porcentaje)
       );
-      recalculo = { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision, banqueadores: jugada.banqueadores };
+      // TF que YA tenía banqueadores (06-10-2026): se recalculan sus montos con
+      // los mismos nombres/%/comisión; una TF sin banqueadores sigue contra el
+      // ítem "TABLAS FIJAS" (el historial no cambia solo por editar).
+      const bqTf = jugada.banqueadores
+        ? banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: montoFinal }, jugada.comision_porcentaje, jugada.banqueadores, null)
+        : null;
+      recalculo = bqTf
+        ? { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: bqTf.comision, banqueadores: JSON.stringify(bqTf.banqueadores) }
+        : { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: r.comision, banqueadores: jugada.banqueadores };
     } else {
       const c = resolverClienteMarca({ numero1: numero1Final, numero2: numero2Final, monto: montoFinal }, rank);
       if (c.nula) {
@@ -3471,6 +3492,24 @@ router.put('/marcas-banqueo-config', asyncHandler(async (req, res) => {
   // Las Marcas que ya estaban esperando banqueo se banquean ahora mismo.
   const aplicadas = guardada ? await asegurarBanqueoAutomaticoMarcas(req.grupoId) : 0;
   res.json({ banqueadores: guardada || [], max: 4, marcasBanqueadas: aplicadas });
+}));
+
+// BANQUEO DE TABLAS FIJAS por grupo (06-10-2026, "HAGAMOS LA MISMA
+// CONFIGURACION PARA TABLAS FIJAS, CADA GRUPO ESTABLECE SU CONFIGURACION") —
+// mismo formato y mismas validaciones que /marcas-banqueo-config. Lista
+// vacía = las TF siguen jugando contra el ítem "TABLAS FIJAS" de siempre. Solo
+// aplica a las Tablas Fijas que se resuelvan DE AHORA EN ADELANTE (las ya
+// resueltas conservan su contrapartida).
+router.get('/tf-banqueo-config', asyncHandler(async (req, res) => {
+  res.json({ banqueadores: (await obtenerBanqueoTablasFijasGrupo(req.grupoId)) || [], max: 4 });
+}));
+
+router.put('/tf-banqueo-config', asyncHandler(async (req, res) => {
+  const { lista, error } = validarBanqueoMarcas((req.body || {}).banqueadores);
+  if (error) return res.status(400).json({ error });
+  if (lista.length && await rechazarClientesInexistentes(req, res, lista.map(b => b.nombre))) return;
+  const guardada = await guardarBanqueoTablasFijasGrupo(req.grupoId, lista);
+  res.json({ banqueadores: guardada || [], max: 4 });
 }));
 
 // GET /semana-actual?semana=actual|anterior|hace2 (23-09-2026,

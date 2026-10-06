@@ -214,6 +214,7 @@ const CONFIG_BANQUEO_MARCAS = {
     { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }
   ]
 };
+const CONFIG_BANQUEO_TF = { valor: null }; // Tablas Fijas: sin configurar = ítem "TABLAS FIJAS" de siempre
 const FECHA_PRUEBA = (() => {
   const hoyVe = new Date(Date.now() - 4 * 60 * 60 * 1000);
   return `${hoyVe.getUTCFullYear()}-${pad2Prueba(hoyVe.getUTCMonth() + 1)}-${pad2Prueba(hoyVe.getUTCDate())}`;
@@ -261,7 +262,7 @@ function ejecutarQuery(text, params) {
   // vacío y el comportamiento queda igual que antes.
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) {
     const [grupoId, nombres] = params;
-    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && (!nombres || nombres.includes(j.nombre)));
     return {
       rows: filas.map(j => ({
         id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
@@ -279,7 +280,7 @@ function ejecutarQuery(text, params) {
   // así que casi siempre no hace falta crear nada.
   if (/^SELECT id, nombre, comision_propia, cuenta_comision_id.*FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
     const [grupoId, nombres] = params;
-    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && nombres.includes(j.nombre));
+    const filas = TABLAS.jugadores.filter(j => j.grupo_id === grupoId && (!nombres || nombres.includes(j.nombre)));
     return {
       rows: filas.map(j => ({
         id: j.id, nombre: j.nombre, comision_propia: j.comision_propia || 0,
@@ -413,6 +414,14 @@ function ejecutarQuery(text, params) {
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
     if (j) { j.estado = 'resuelto'; j.comision = comision; j.banqueadores = JSON.parse(banqueadoresJson); }
     return { rows: j ? [j] : [] };
+  }
+  // 06-10-2026: configuración de banqueo de Tablas Fijas DEL GRUPO.
+  if (/^SELECT hipismo_tf_banqueo FROM grupos WHERE id = \$1$/i.test(sql)) {
+    return { rows: [{ hipismo_tf_banqueo: CONFIG_BANQUEO_TF.valor }] };
+  }
+  if (/^UPDATE grupos SET hipismo_tf_banqueo = \$1 WHERE id = \$2$/i.test(sql)) {
+    CONFIG_BANQUEO_TF.valor = params[0] ? JSON.parse(params[0]) : null;
+    return { rows: [] };
   }
   // 06-10-2026: configuración de banqueo de Marcas DEL GRUPO (cada grupo banquea
   // distinto; sin configuración = flujo manual).
@@ -550,6 +559,8 @@ const handlerPlanosGuardar = handlerDe('post', '/planos');
 const handlerCierreFinal = handlerDe('get', '/cierre-final');
 const handlerMarcasConfigGet = handlerDe('get', '/marcas-banqueo-config');
 const handlerMarcasConfigPut = handlerDe('put', '/marcas-banqueo-config');
+const handlerTfConfigGet = handlerDe('get', '/tf-banqueo-config');
+const handlerTfConfigPut = handlerDe('put', '/tf-banqueo-config');
 
 function invocarRuta(handler, req, paramsExtra) {
   return new Promise((resolve, reject) => {
@@ -990,6 +1001,53 @@ function reqBase(grupoId) {
   // Desactivar: lista vacía.
   const resCfgOff = await putCfg({ banqueadores: [] });
   check(resCfgOff._status === 200 && resCfgOff._json.banqueadores.length === 0 && CONFIG_BANQUEO_MARCAS.valor === null, '11) PUT con lista vacía desactiva el banqueo automático');
+
+  // --- 12) "Banqueo de Tablas Fijas" también es CONFIGURACIÓN DE CADA GRUPO
+  // (06-10-2026: "HAGAMOS LA MISMA CONFIGURACION PARA TABLAS FIJAS") ---
+  const putTf = body => invocarRuta(handlerTfConfigPut, Object.assign(reqBase(GRUPO_ID), { body }));
+  const resTf0 = await invocarRuta(handlerTfConfigGet, reqBase(GRUPO_ID));
+  check(resTf0._status === 200 && resTf0._json.banqueadores.length === 0, '12) GET /tf-banqueo-config sin configurar devuelve lista vacía (las TF siguen contra el ítem "TABLAS FIJAS")');
+  check((await putTf({ banqueadores: [{ nombre: 'JUAN', porcentaje: 70 }, { nombre: 'ANA', porcentaje: 20 }] }))._status === 400, '12) PUT /tf-banqueo-config rechaza % que no suman 100');
+  check((await putTf({ banqueadores: [1, 2, 3, 4, 5].map(n => ({ nombre: 'T' + n, porcentaje: 20 })) }))._status === 400, '12) PUT /tf-banqueo-config rechaza más de 4 banqueadores');
+  const resTf1 = await putTf({ banqueadores: [{ nombre: 'juan perez', porcentaje: 50, pagaComision: true }, { nombre: 'ana', porcentaje: 50, pagaComision: true }] });
+  check(resTf1._status === 200 && resTf1._json.banqueadores.length === 2 && resTf1._json.banqueadores[0].nombre === 'JUAN PEREZ', '12) PUT /tf-banqueo-config guarda los banqueadores de TF del grupo (nombres normalizados)');
+  check(CONFIG_BANQUEO_MARCAS.valor === null, '12) La configuración de TF NO toca la de Marcas (son independientes)');
+
+  // TF nueva (carrera 14): ahora la banca son JUAN PEREZ 50% y ANA 50%, ambos pagan comisión.
+  const resGuardarTf = await invocarRuta(handlerAdelantadasGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: '*JUGANDO LINARES*\n\n14) 3TF DEL 3 A 25 ,75/300$\n', hipodromoNombre: 'La Rinconada', fecha: FECHA_PRUEBA, comisionPorcentaje: 2.5 }
+  }));
+  check(resGuardarTf._status === 201, '12) Se guarda una TF nueva de Linares en la carrera 14 (201)');
+  const resPlanos14 = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: '', pizarra: '3.4.7.8.1', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 14, fecha: FECHA_PRUEBA }
+  }));
+  check(resPlanos14._status === 201, '12) POST /planos de la carrera 14 resuelve la TF (201)');
+  const tf14 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.cliente_nombre === 'LINARES' && j.carrera_numero === 14);
+  check(tf14.estado === 'resuelto' && tf14.resultado_cliente === 225 && Array.isArray(tf14.banqueadores) && tf14.banqueadores.length === 2, '12) La TF queda resuelta (Linares +225) CON los 2 banqueadores del grupo guardados');
+  const bj = tf14.banqueadores.find(b => b.nombre === 'JUAN PEREZ');
+  const ba = tf14.banqueadores.find(b => b.nombre === 'ANA');
+  check(bj.monto === -113.44 && ba.monto === -113.44 && tf14.comision === 1.88, '12) Linares gana 225: JUAN PEREZ -113,44, ANA -113,44 (su mitad + comisión), comisión del grupo 1,88 (la misma de siempre)');
+  check(Math.round((225 + bj.monto + ba.monto + tf14.comision) * 100) === 0, '12) Cliente + banqueadores + comisión suman 0 exacto');
+  const tot14 = resPlanos14._json.totalesFinales;
+  check(tot14.LINARES === 225 && tot14['JUAN PEREZ'] === -113.44 && tot14.ANA === -113.44, '12) Balance General trae los ítems de los banqueadores de TF (JUAN PEREZ y ANA) en vez de "TABLAS FIJAS"');
+  check(!('TABLAS FIJAS' in tot14) && !('% DE TABLAS FIJAS' in tot14), '12) Con banqueadores configurados NO sale el ítem "TABLAS FIJAS" ni "% DE TABLAS FIJAS" para esa carrera');
+  check(resPlanos14._json.comisionTotal === 1.88, '12) La comisión de la TF (1,88) va al pie de Balance General');
+  const texto14 = resPlanos14._json.plano.texto_resultado;
+  check(texto14.includes('Tablas fijas') && !/JUAN PEREZ|\bANA\b/i.test(texto14), '12) El plano que ve el cliente sigue mostrando "Tablas fijas" genérico, nunca los nombres reales de quien banquea');
+  // Cierre Final / Balance General de la semana: los banqueadores de TF salen como ítems propios
+  // y la TF de la carrera 14 NO se suma al ítem "TABLAS FIJAS".
+  const resCierreTf = await invocarRuta(handlerCierreFinal, Object.assign(reqBase(GRUPO_ID), { query: { semana: 'actual' } }));
+  const itJuan = resCierreTf._json.clientes.find(c => c.nombre === 'JUAN PEREZ');
+  const itAna = resCierreTf._json.clientes.find(c => c.nombre === 'ANA');
+  // JUAN PEREZ trae además +80 de la Marca de PEDRO (sección 11): -113,44 + 80 = -33,44.
+  check(!!itJuan && itJuan.saldo === -33.44 && !!itAna && itAna.saldo === -113.44, '12) Cierre Final / Balance General trae los ítems JUAN PEREZ y ANA (banca de la TF de la carrera 14; JUAN suma además +80 de otra Marca)');
+  const itTfCierre = resCierreTf._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
+  const tfSinBanqueo = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.tipo === 'tf' && j.estado !== 'pendiente' && !j.banqueadores);
+  const esperadoTfSinBanqueo = Math.round(tfSinBanqueo.reduce((acc, j) => acc - (Number(j.resultado_cliente) + (j.comision ? Number(j.comision) : 0)), 0) * 100) / 100;
+  check(!!itTfCierre && itTfCierre.saldo === esperadoTfSinBanqueo, '12) El ítem "TABLAS FIJAS" solo suma las TF SIN banqueadores (las anteriores a la configuración): la de la carrera 14 no entra');
+  // Sin configurar otra vez: las TF nuevas vuelven al ítem "TABLAS FIJAS".
+  const resTfOff = await putTf({ banqueadores: [] });
+  check(resTfOff._status === 200 && CONFIG_BANQUEO_TF.valor === null, '12) PUT con lista vacía desactiva el banqueo de TF');
 
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');

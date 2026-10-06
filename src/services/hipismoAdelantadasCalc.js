@@ -381,9 +381,19 @@ function resolverClienteMarca({ numero1, numero2, monto }, rank) {
 // Marcas Zenyatta -50, Marcas Sammy -51,25, Comisión Marcas +1,25.
 function resolverBanqueoMarca({ acierta, base }, banqueadores, comisionPorcentajeDefecto) {
   let comisionMarcas = 0;
-  const resueltos = (banqueadores || []).map(b => {
+  const lista = banqueadores || [];
+  const parteExacta = lista.length > 1 && Math.abs(lista.reduce((acc, b) => acc + (Number(b.porcentaje) || 0), 0) - 100) <= 0.01;
+  let acumuladoPartes = 0;
+  const resueltos = lista.map((b, idx) => {
     const porcentaje = Number(b.porcentaje) || 0;
-    const parte = round2(base * (porcentaje / 100));
+    // Cuando los % suman 100, el ÚLTIMO banquero se queda con el resto
+    // exacto de `base` (06-10-2026): 41,67 al 50/50 daba 20,84 + 20,84 =
+    // 41,68 (un centavo de más sin contraparte). Así cliente + banqueadores
+    // + comisión suman 0 siempre, sin importar los centavos.
+    const parte = (parteExacta && idx === lista.length - 1)
+      ? round2(base - acumuladoPartes)
+      : round2(base * (porcentaje / 100));
+    acumuladoPartes = round2(acumuladoPartes + parte);
     const pagaComision = !!b.pagaComision;
     const comisionPct = b.comisionPorcentaje != null ? Number(b.comisionPorcentaje) : Number(comisionPorcentajeDefecto);
     let comisionBanquero = 0;
@@ -395,6 +405,58 @@ function resolverBanqueoMarca({ acierta, base }, banqueadores, comisionPorcentaj
     return { nombre: b.nombre, porcentaje, pagaComision, comisionPorcentaje: pagaComision ? comisionPct : null, monto };
   });
   return { banqueadores: resueltos, comisionMarcas };
+}
+
+// BANQUEO DE TABLAS FIJAS (06-10-2026, a pedido del usuario: "HAGAMOS LA
+// MISMA CONFIGURACION PARA TABLAS FIJAS, CADA GRUPO ESTABLECE SU
+// CONFIGURACION"). Igual que las Marcas: en vez del ítem fijo "TABLAS
+// FIJAS" (la banca), un grupo puede definir quién banquea sus Tablas Fijas
+// (hasta 4, con % que suman 100 y si pagan comisión). Mismas reglas de
+// signo que resolverBanqueoMarca: si el cliente GANA cada banquero paga su
+// parte MÁS la comisión que le toque; si PIERDE cada banquero cobra su parte
+// MENOS esa comisión. La comisión de una TF es la de siempre sobre lo
+// apostado (monto × %): se reparte entre los banqueadores marcados "paga
+// comisión" según su % (y si todos pagan, suma exactamente la comisión
+// completa). Invariante: cliente + banqueadores + comisión = 0 exacto.
+// Con un solo banquero al 100% que paga, da lo MISMO que el ítem "TABLAS
+// FIJAS" de siempre (Linares +225 -> -226,88 / Manolo -80 -> +78).
+// -> { banqueadores: [{nombre, porcentaje, pagaComision, comisionPorcentaje, monto}], comision }
+function resolverBanqueoTablaFija({ gano, resultadoCliente, monto }, banqueadores, comisionPorcentaje) {
+  const lista = banqueadores || [];
+  const base = Math.abs(Number(resultadoCliente) || 0);
+  const comisionTotal = round2(Number(monto) * (Number(comisionPorcentaje) / 100));
+  const todosPagan = lista.length > 0 && lista.every(b => !!b.pagaComision);
+  const parteExacta = lista.length > 1 && Math.abs(lista.reduce((acc, b) => acc + (Number(b.porcentaje) || 0), 0) - 100) <= 0.01;
+  let acumuladoPartes = 0;
+  let acumuladoComision = 0;
+  const resueltos = lista.map((b, idx) => {
+    const porcentaje = Number(b.porcentaje) || 0;
+    const esUltimo = idx === lista.length - 1;
+    const parte = (parteExacta && esUltimo) ? round2(base - acumuladoPartes) : round2(base * (porcentaje / 100));
+    acumuladoPartes = round2(acumuladoPartes + parte);
+    const pagaComision = !!b.pagaComision;
+    let comisionBanquero = 0;
+    if (pagaComision) {
+      comisionBanquero = (todosPagan && parteExacta && esUltimo)
+        ? round2(comisionTotal - acumuladoComision)
+        : round2(comisionTotal * (porcentaje / 100));
+    }
+    acumuladoComision = round2(acumuladoComision + comisionBanquero);
+    const montoBanquero = gano ? round2(-(parte + comisionBanquero)) : round2(parte - comisionBanquero);
+    return { nombre: b.nombre, porcentaje, pagaComision, comisionPorcentaje: pagaComision ? Number(comisionPorcentaje) : null, monto: montoBanquero };
+  });
+  return { banqueadores: resueltos, comision: acumuladoComision };
+}
+
+// Igual que banqueoAutomaticoMarca: null si no hay con qué banquear.
+function banqueoAutomaticoTablaFija({ gano, resultadoCliente, monto }, comisionPorcentaje, previos, configGrupo) {
+  let lista = null;
+  if (previos) {
+    try { lista = typeof previos === 'string' ? JSON.parse(previos) : previos; } catch (e) { lista = null; }
+  }
+  if (!Array.isArray(lista) || !lista.length) lista = Array.isArray(configGrupo) && configGrupo.length ? configGrupo : null;
+  if (!lista) return null;
+  return resolverBanqueoTablaFija({ gano, resultadoCliente, monto }, lista, comisionPorcentaje);
 }
 
 // BANQUEO AUTOMÁTICO DE MARCAS (06-10-2026, a pedido del usuario, viendo
@@ -498,6 +560,8 @@ module.exports = {
   resolverClienteMarca,
   resolverBanqueoMarca,
   banqueoAutomaticoMarca,
+  resolverBanqueoTablaFija,
+  banqueoAutomaticoTablaFija,
   armarBloqueAdelantadas,
   formatMontoTabla,
   formatNombre,

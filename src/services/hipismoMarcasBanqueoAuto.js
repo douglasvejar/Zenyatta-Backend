@@ -1,4 +1,4 @@
-// Banqueo automático de Marcas, configurable POR GRUPO (06-10-2026).
+// Banqueo automático de Marcas y de Tablas Fijas, configurable POR GRUPO (06-10-2026).
 //
 // La plataforma se vende a varios grupos y cada uno banquea las Marcas a su
 // manera (el primero usa MARCAS ZENYATTA 50% + MARCAS SAMMY 50% con 2,5% de
@@ -19,6 +19,15 @@ const db = require('../db');
 const { banqueoAutomaticoMarca } = require('./hipismoAdelantadasCalc');
 
 const MAX_BANQUEADORES = 4;
+
+// Columnas de configuración (lista blanca: el nombre de la columna nunca viene
+// del cliente). Tablas Fijas (06-10-2026, "HAGAMOS LA MISMA CONFIGURACION
+// PARA TABLAS FIJAS, CADA GRUPO ESTABLECE SU CONFIGURACION") usa el MISMO
+// formato que Marcas: sin configurar, sus TF siguen jugando contra el ítem
+// "TABLAS FIJAS" de siempre.
+const COLUMNA_MARCAS = 'hipismo_marcas_banqueo';
+const COLUMNA_TF = 'hipismo_tf_banqueo';
+const COLUMNAS_PERMITIDAS = new Set([COLUMNA_MARCAS, COLUMNA_TF]);
 
 // Valida y normaliza lo que manda la pantalla. -> { error } | { lista }
 // (lista [] = sin banqueo automático).
@@ -45,13 +54,15 @@ function validarBanqueoMarcas(entrada) {
 }
 
 // Configuración del grupo -> array (≥1) o null si no tiene. Nunca lanza: ante
-// un error de base de datos devuelve null (el grupo queda en modo manual).
-async function obtenerBanqueoMarcasGrupo(grupoId) {
+// un error de base de datos devuelve null (el grupo queda en modo manual /
+// banca "TABLAS FIJAS" de siempre).
+async function leerConfigBanqueo(grupoId, columna) {
+  if (!COLUMNAS_PERMITIDAS.has(columna)) return null;
   try {
-    const r = await db.query('SELECT hipismo_marcas_banqueo FROM grupos WHERE id = $1', [grupoId]);
+    const r = await db.query(`SELECT ${columna} FROM grupos WHERE id = $1`, [grupoId]);
     const fila = r && r.rows && r.rows[0];
-    if (!fila || !fila.hipismo_marcas_banqueo) return null;
-    const v = typeof fila.hipismo_marcas_banqueo === 'string' ? JSON.parse(fila.hipismo_marcas_banqueo) : fila.hipismo_marcas_banqueo;
+    if (!fila || !fila[columna]) return null;
+    const v = typeof fila[columna] === 'string' ? JSON.parse(fila[columna]) : fila[columna];
     const { lista, error } = validarBanqueoMarcas(v);
     return !error && lista.length ? lista : null;
   } catch (e) {
@@ -59,10 +70,16 @@ async function obtenerBanqueoMarcasGrupo(grupoId) {
   }
 }
 
-async function guardarBanqueoMarcasGrupo(grupoId, lista) {
-  await db.query('UPDATE grupos SET hipismo_marcas_banqueo = $1 WHERE id = $2', [lista.length ? JSON.stringify(lista) : null, grupoId]);
+async function guardarConfigBanqueo(grupoId, columna, lista) {
+  if (!COLUMNAS_PERMITIDAS.has(columna)) throw new Error('Columna de configuración no permitida.');
+  await db.query(`UPDATE grupos SET ${columna} = $1 WHERE id = $2`, [lista.length ? JSON.stringify(lista) : null, grupoId]);
   return lista.length ? lista : null;
 }
+
+const obtenerBanqueoMarcasGrupo = grupoId => leerConfigBanqueo(grupoId, COLUMNA_MARCAS);
+const guardarBanqueoMarcasGrupo = (grupoId, lista) => guardarConfigBanqueo(grupoId, COLUMNA_MARCAS, lista);
+const obtenerBanqueoTablasFijasGrupo = grupoId => leerConfigBanqueo(grupoId, COLUMNA_TF);
+const guardarBanqueoTablasFijasGrupo = (grupoId, lista) => guardarConfigBanqueo(grupoId, COLUMNA_TF, lista);
 
 async function asegurarBanqueoAutomaticoMarcas(grupoId) {
   try {
@@ -95,5 +112,6 @@ async function asegurarBanqueoAutomaticoMarcas(grupoId) {
 }
 
 module.exports = {
-  MAX_BANQUEADORES, validarBanqueoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo, asegurarBanqueoAutomaticoMarcas
+  MAX_BANQUEADORES, validarBanqueoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo,
+  obtenerBanqueoTablasFijasGrupo, guardarBanqueoTablasFijasGrupo, asegurarBanqueoAutomaticoMarcas
 };
