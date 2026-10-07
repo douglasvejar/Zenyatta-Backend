@@ -14534,6 +14534,12 @@ function adelCamposEdicionHtml(j, ids) {
     const previo = yaBanqueada && b.monto != null ? b.monto : null;
     return `<div><label for="${ids.modo}_b${i}">${esc(b.nombre)}</label><input type="text" inputmode="decimal" id="${ids.modo}_b${i}" data-nombre="${esc(b.nombre)}" placeholder="${previo != null ? 'ahora: ' + adelFmtSigno(previo) : 'monto'}" value="${manual && previo != null ? String(previo).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>`;
   }).join('');
+  // Tabla Fija sin banqueadores: la contraparte es el ítem TABLAS FIJAS (en blanco = el opuesto exacto del cliente).
+  let filaTablas = '';
+  if (!contra.length && j.tipo === 'tf') {
+    const prevTf = (j.resultadoCliente != null && j.estado === 'resuelto') ? Math.round(-(Number(j.resultadoCliente) + Number(j.comision || 0)) * 100) / 100 : null;
+    filaTablas = `<div><label for="${ids.modo}_tf">Contraparte: TABLAS FIJAS</label><input type="text" inputmode="decimal" id="${ids.modo}_tf" placeholder="${prevTf != null ? 'ahora: ' + adelFmtSigno(prevTf) : 'en blanco = el opuesto del cliente'}" value="${manual && prevTf != null ? String(prevTf).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>`;
+  }
   return `
     <div><label for="${ids.cliente}">Cliente</label><input type="text" id="${ids.cliente}" value="${esc(j.cliente)}"></div>
     <div><label for="${ids.monto}">Monto apostado</label><input type="number" id="${ids.monto}" step="0.01" value="${j.monto}"></div>
@@ -14545,10 +14551,10 @@ function adelCamposEdicionHtml(j, ids) {
         <span><b>Sin comisión</b><small>Montos exactos: no se le da % a nadie, no genera comisión al grupo ni % devuelto (como un traspaso).</small></span></label>
     </div>
     <div class="rev-manual" id="${ids.modo}_manual" style="display:${j.sinComision ? 'block' : 'none'};">
-      <div class="rev-manual-tit">✍️ Montos exactos de esta apuesta (opcional) — con signo: + gana / − pierde. Tienen que sumar 0 y quedan fijos (la pizarra no los recalcula) hasta que los edites otra vez. Si lo dejas vacío, el programa calcula con la pizarra, sin comisión.</div>
+      <div class="rev-manual-tit">✍️ Montos exactos de esta apuesta (opcional) — con signo: + gana / − pierde. Quedan fijos (la pizarra no los recalcula) hasta que los edites otra vez. Si no suman 0, lo que sobre o falte se suma o se resta a la COMISIÓN GRUPO de ese día. Si lo dejas vacío, el programa calcula con la pizarra, sin comisión.</div>
       <div class="rev-grid">
         <div><label for="${ids.modo}_cli">Cliente: ${esc(j.cliente)}</label><input type="text" inputmode="decimal" id="${ids.modo}_cli" placeholder="${ahoraCli}" value="${manual && j.resultadoCliente != null ? String(j.resultadoCliente).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>
-        ${filasContra}
+        ${filasContra}${filaTablas}
       </div>
       <div class="bq-nota" id="${ids.modo}_suma" style="margin:6px 0 0;"></div>
     </div>`;
@@ -14566,16 +14572,22 @@ function adelSumaManual(modo) {
   const btn = form && form.querySelector('.btn-primario');
   if (!caja || !nota) return;
   const cli = document.getElementById(modo + '_cli');
+  const tf = document.getElementById(modo + '_tf');
   let ok = true, texto = '';
   if (adelSinComisionElegido(modo) && cli && cli.value.trim() !== '') {
     const c = adelNum(cli.value);
     const otros = Array.from(caja.querySelectorAll('input[data-nombre]')).map(el => adelNum(el.value));
+    if (tf && tf.value.trim() !== '') otros.push(adelNum(tf.value));
+    const hayContra = otros.length > 0;
     if (isNaN(c)) { ok = false; texto = '⚠ El resultado del cliente no es un número.'; }
-    else if (otros.some(n => isNaN(n))) { ok = false; texto = '⚠ Falta algún monto de la contraparte.'; }
+    else if (otros.some(n => isNaN(n))) { ok = false; texto = '⚠ Falta algún monto de la contraparte (o no es un número).'; }
+    else if (!hayContra) texto = 'La contraparte sale sola con el opuesto exacto (sin diferencia).';
     else {
       const suma = Math.round((c + otros.reduce((a, b) => a + b, 0)) * 100) / 100;
-      ok = Math.abs(suma) <= 0.005;
-      texto = ok ? `Suma: 0,00 ✅${otros.length ? '' : ' (la contraparte sale sola con el opuesto exacto)'}` : `⚠ Suma ${adelFmtSigno(suma)} — tiene que dar 0 para poder guardar.`;
+      if (Math.abs(suma) <= 0.005) texto = 'Suma: 0,00 ✅ — cuadra exacto, sin diferencia para el grupo.';
+      else texto = suma > 0
+        ? `Suma ${adelFmtSigno(suma)} — esa diferencia se RESTA a la comisión del grupo de ese día (queda ${adelFmtSigno(-suma)}).`
+        : `Suma ${adelFmtSigno(suma)} — esa diferencia se SUMA a la comisión del grupo de ese día (queda ${adelFmtSigno(-suma)}).`;
     }
   }
   nota.textContent = texto;
@@ -14590,7 +14602,8 @@ function adelMontoManualElegido(modo) {
   const caja = document.getElementById(modo + '_manual');
   return {
     resultadoCliente: adelNum(cli.value),
-    banqueadores: Array.from(caja.querySelectorAll('input[data-nombre]')).map(el => ({ nombre: el.getAttribute('data-nombre'), monto: adelNum(el.value) }))
+    banqueadores: Array.from(caja.querySelectorAll('input[data-nombre]')).map(el => ({ nombre: el.getAttribute('data-nombre'), monto: adelNum(el.value) })),
+    tablasFijas: (document.getElementById(modo + '_tf') || { value: '' }).value.trim()
   };
 }
 function adelSinComisionElegido(nombreModo) {

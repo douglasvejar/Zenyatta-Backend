@@ -1197,8 +1197,12 @@ function reqBase(grupoId) {
   check(jM('man-tf').estado === 'resuelto' && Number(jM('man-tf').resultado_cliente) === 50 && jM('man-tf').banqueadores[0].monto === -51.25, '16) Partida: la TF se resuelve normal (+50, TABLAS ZENYATTA -51,25 con su comisión)');
   const edM = (id, body) => invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { params: { id }, body }));
 
-  const mal = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [{ nombre: 'TABLAS ZENYATTA', monto: -40 }] } });
-  check(mal._status === 400 && /sumar 0/.test(mal._json.error) && Number(jM('man-tf').resultado_cliente) === 50, '16) Montos que no suman 0 (cliente +45, TABLAS ZENYATTA -40) se rechazan con 400 y no cambian nada');
+  // Si NO suman 0 ya no se rechaza: la diferencia va a la comisión del grupo (cliente + contraparte + comisión = 0).
+  const difPos = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [{ nombre: 'TABLAS ZENYATTA', monto: -40 }] } });
+  check(difPos._status === 200 && Number(jM('man-tf').resultado_cliente) === 45 && jM('man-tf').banqueadores[0].monto === -40 && Number(jM('man-tf').comision) === -5, '16) Cliente +45 y TABLAS ZENYATTA -40 (suman +5): se guarda y los 5 que sobran se RESTAN a la comisión del grupo (-5)');
+  const difNeg = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [{ nombre: 'TABLAS ZENYATTA', monto: -52.5 }] } });
+  check(difNeg._status === 200 && Number(jM('man-tf').comision) === 7.5, '16) Cliente +45 y TABLAS ZENYATTA -52,50 (suman -7,50): lo que falta se SUMA a la comisión del grupo (+7,50)');
+  check(Math.abs(Number(jM('man-tf').resultado_cliente) + jM('man-tf').banqueadores[0].monto + Number(jM('man-tf').comision)) < 0.005, '16) Invariante: cliente + contraparte + comisión = 0');
   const falta = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [] } });
   check(falta._status === 400 && /Falta el monto de TABLAS ZENYATTA/.test(falta._json.error), '16) Si falta el monto de un ítem de la contraparte se rechaza');
   const soloNormal = await edM('man-tf', { sinComision: false, montoManual: { resultadoCliente: 45, banqueadores: [] } });
@@ -1227,6 +1231,26 @@ function reqBase(grupoId) {
   nuevaMan('man-tf-sinbq', 'RAMBO', 'tf', { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100, carrera_numero: 53 });
   const okS = await edM('man-tf-sinbq', { sinComision: true, montoManual: { resultadoCliente: 30, banqueadores: [] } });
   check(okS._status === 200 && jM('man-tf-sinbq').estado === 'resuelto' && Number(jM('man-tf-sinbq').resultado_cliente) === 30 && Number(jM('man-tf-sinbq').comision) === 0 && jM('man-tf-sinbq').banqueadores === null, '16) TF sin banqueadores configurados: solo el resultado del cliente (+30); su contraparte "TABLAS FIJAS" sale sola con el opuesto exacto');
+  // TF sin banqueadores: ahora SÍ se puede escribir el ítem TABLAS FIJAS (caso HALLAND ejemplar 4: cliente +300).
+  nuevaMan('man-tf-tablas', 'HALLAND', 'tf', { numero_ejemplar: 4, monto: 200, ganancia_potencial: 500, carrera_numero: 54 });
+  const tfDif = await edM('man-tf-tablas', { sinComision: true, montoManual: { resultadoCliente: 300, banqueadores: [], tablasFijas: '-250' } });
+  const tD = jM('man-tf-tablas');
+  check(tfDif._status === 200 && tD.estado === 'resuelto' && Number(tD.resultado_cliente) === 300 && Number(tD.comision) === -50 && tD.banqueadores === null, '16) TF sin banqueadores: cliente +300 y TABLAS FIJAS -250 => la diferencia (50) se resta a la comisión del grupo (-50)');
+  check(Math.round(-(Number(tD.resultado_cliente) + Number(tD.comision))) === -250, '16) El ítem TABLAS FIJAS del Balance (-(cliente + comisión)) queda EXACTO en -250');
+  const tfDif2 = await edM('man-tf-tablas', { montoManual: { resultadoCliente: 300, banqueadores: [], tablasFijas: '-350' } });
+  check(tfDif2._status === 200 && Number(jM('man-tf-tablas').comision) === 50, '16) TABLAS FIJAS -350 (le sobra al grupo 50) => +50 de comisión del grupo');
+  const tfBlanco = await edM('man-tf-tablas', { montoManual: { resultadoCliente: 300, banqueadores: [], tablasFijas: '' } });
+  check(tfBlanco._status === 200 && Number(jM('man-tf-tablas').comision) === 0, '16) TABLAS FIJAS en blanco => el opuesto exacto del cliente, comisión 0');
+  await invocarRuta(handlerDe('put', '/pizarras/adelantadas'), Object.assign(reqBase(GRUPO_ID), { body: { fecha: FECHA_PRUEBA, hipodromoNombre: 'La Rinconada', carreraNumero: 54, pizarra: '1.2.3.4.5' } }));
+  await edM('man-tf-tablas', { montoManual: { resultadoCliente: 300, banqueadores: [], tablasFijas: '-250' } });
+  check(Number(jM('man-tf-tablas').comision) === -50 && Number(jM('man-tf-tablas').resultado_cliente) === 300, '16) Con otra pizarra, los montos a mano (y la diferencia a la comisión) se quedan como se dejaron');
+  // Balance General / Cierre Final: la diferencia llega a COMISIÓN GRUPO y TABLAS FIJAS sale EXACTO.
+  const cierreA = await invocarRuta(handlerCierreFinal, Object.assign(reqBase(GRUPO_ID), { query: { semana: 'actual' } }));
+  await edM('man-tf-tablas', { montoManual: { resultadoCliente: 300, banqueadores: [], tablasFijas: '' } });
+  const cierreB = await invocarRuta(handlerCierreFinal, Object.assign(reqBase(GRUPO_ID), { query: { semana: 'actual' } }));
+  const tfA = cierreA._json.clientes.find(c => c.nombre === 'TABLAS FIJAS').saldo;
+  const tfB = cierreB._json.clientes.find(c => c.nombre === 'TABLAS FIJAS').saldo;
+  check(Math.round((tfA - tfB) * 100) / 100 === 50 && Math.round((cierreA._json.comisionSemana - cierreB._json.comisionSemana) * 100) / 100 === -50, `16) Cierre Final: con TABLAS FIJAS -250 el ítem TABLAS FIJAS sube 50 y COMISIÓN GRUPO baja 50 respecto a dejarlo cuadrado (TF ${tfA} vs ${tfB}; comisión ${cierreA._json.comisionSemana} vs ${cierreB._json.comisionSemana})`);
   CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {

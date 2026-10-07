@@ -585,13 +585,24 @@ function banqueadoresJugada(j, volverANormal) {
 // tiempo todo, también el ítem TABLAS ZENYATTA, para decirte cómo queda todo
 // exacto en esa apuesta"). Solo en modo "Sin comisión": el usuario escribe el
 // resultado del cliente (+gana / -pierde) y el monto de CADA ítem de la
-// contraparte (banqueadores). Tiene que sumar 0 y queda FIJO (no se recalcula con
-// la pizarra) hasta que vuelva a editarlo. Sin banqueadores en la jugada, solo se
-// escribe el resultado del cliente y la contraparte (ítem TABLAS FIJAS o el
-// banqueo pendiente de una Marca) sale sola con el opuesto exacto.
-// -> { ok:false, error } | { ok:true, estado, gano, resultadoCliente, comision, banqueadores }
+// contraparte (los banqueadores de la jugada o, en una Tabla Fija sin
+// banqueadores, el ítem TABLAS FIJAS). Los montos quedan FIJOS (no se
+// recalculan con la pizarra) hasta que vuelva a editarlos.
+//
+// Si NO suman 0 (corregido el mismo día: "si hay diferencia entre los dos y no
+// da 0, lo que sobre o lo que falte se lo sumas o restas a la comisión del
+// grupo, en ese día"), la diferencia se guarda como COMISIÓN del grupo con el
+// invariante de siempre: cliente + contraparte + comisión = 0, o sea
+// comision = -(cliente + contraparte). Si sobra plata (la contraparte paga
+// menos de lo que gana el cliente) la comisión sale NEGATIVA (le resta al
+// grupo); si falta, sale POSITIVA (le suma al grupo).
+//
+// Contraparte en blanco: Tabla Fija sin banqueadores => TABLAS FIJAS sale sola con
+// el opuesto exacto del cliente (comisión 0). Marca sin banqueadores => queda
+// 'falta_banqueo' (no hay a quién escribirle monto todavía).
+// -> { ok:false, error } | { ok:true, estado, gano, resultadoCliente, comision, banqueadores, tablasFijas, diferencia }
 // `base`: banqueadores de la jugada ([{nombre, porcentaje}]) o null.
-// `manual`: { resultadoCliente, banqueadores: [{ nombre, monto }] }.
+// `manual`: { resultadoCliente, banqueadores: [{ nombre, monto }], tablasFijas }.
 // =================================================================
 function resolverMontosManuales({ tipo, manual, base }) {
   const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
@@ -599,9 +610,11 @@ function resolverMontosManuales({ tipo, manual, base }) {
   if (isNaN(r)) return { ok: false, error: 'Falta el resultado del cliente (con signo: + si gana, - si pierde).' };
   const lista = Array.isArray(base) ? base : [];
   let banqueadores = null;
+  let contraparte = null; // suma de lo escrito para la contraparte (null = sin contraparte escrita)
+  let tablasFijas = null;
   if (lista.length) {
     const enviados = (manual && Array.isArray(manual.banqueadores)) ? manual.banqueadores : [];
-    let suma = r;
+    let suma = 0;
     banqueadores = [];
     for (const b of lista) {
       const clave = String(b.nombre || '').trim().toUpperCase();
@@ -611,11 +624,19 @@ function resolverMontosManuales({ tipo, manual, base }) {
       suma = round2(suma + m);
       banqueadores.push({ nombre: b.nombre, porcentaje: Number(b.porcentaje) || 0, pagaComision: false, comisionPorcentaje: null, monto: m });
     }
-    if (Math.abs(suma) > 0.005) return { ok: false, error: `Los montos tienen que sumar 0 (cliente + contraparte = ${suma > 0 ? '+' : ''}${suma.toFixed(2).replace('.', ',')}).` };
+    contraparte = suma;
+  } else if (tipo === 'tf' && manual && manual.tablasFijas !== undefined && manual.tablasFijas !== null && String(manual.tablasFijas).trim() !== '') {
+    const t = round2(num(manual.tablasFijas));
+    if (isNaN(t)) return { ok: false, error: 'El monto de TABLAS FIJAS no es un número.' };
+    tablasFijas = t;
+    contraparte = t;
   }
-  if (r === 0) return { ok: true, estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, banqueadores: null };
+  if (r === 0) return { ok: true, estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, banqueadores: null, tablasFijas: null, diferencia: 0 };
   const estado = (tipo === 'marca' && !banqueadores) ? 'falta_banqueo' : 'resuelto';
-  return { ok: true, estado, gano: r > 0, resultadoCliente: r, comision: estado === 'falta_banqueo' ? null : 0, banqueadores };
+  // Lo que sobra o falta (cliente + contraparte) se lo sumamos o restamos a la comisión del grupo.
+  const diferencia = contraparte === null ? 0 : round2(r + contraparte);
+  const comision = estado === 'falta_banqueo' ? null : round2(-diferencia) + 0;
+  return { ok: true, estado, gano: r > 0, resultadoCliente: r, comision, banqueadores, tablasFijas, diferencia };
 }
 
 // =================================================================
