@@ -364,6 +364,29 @@ function fakeReq(body, params = {}, query = {}) {
     check(Number(mrIncreible.resultado_jugador) === round2(150 * 0.5 * 0.97), 'MR INCREIBLE cobra la mitad de 150 (2do puesto, modalidad 2y2) menos 3%');
   }
 
+  // ===== 6b) CABALLO RETIRADO => NULA (06-10-2026): una apuesta de Tercios Adelantadas que incluye
+  // un caballo de "Ret:" no se juega (0 jugador, 0 banquero, sin comisión); la que no lo incluye sí. =====
+  {
+    const planoBase = TABLAS.hipismo_tercios_adelantadas_planos[0];
+    const nueva = (id, jugador, banquero, extra) => TABLAS.hipismo_tercios_adelantadas_jugadas.push(Object.assign({
+      id, plano_id: planoBase.id, grupo_id: GRUPO_ID, jugador_nombre: jugador, banquero_nombre: banquero, carrera_numero: 8,
+      es_cruce: false, grupo_caballos: null, cruce_grupo_a: null, cruce_grupo_b: null, modalidad: '1p', monto: 100,
+      comision_porcentaje: 3, texto_original: 't', falta_monto: false, falta_jugador: false, falta_banquero: false,
+      estado: 'pendiente', resultado_jugador: null, resultado_banquero: null, comision_grupo: null, pizarra_usada: null, resuelto_en: null, creado_en: 9e15
+    }, extra));
+    nueva('ret-t1', 'HANRY', 'HOUSTON', { grupo_caballos: [6] });
+    nueva('ret-t2', 'HANRY', 'HOUSTON', { es_cruce: true, cruce_grupo_a: [6], cruce_grupo_b: [2], modalidad: null });
+    nueva('ret-t3', 'HANRY', 'HOUSTON', { grupo_caballos: [1] });
+    const res = await invocarRuta(postPlanos, fakeReq({
+      hipodromoNombre: 'La Rinconada', carreraNumero: 8, fecha: FECHA_PRUEBA, pizarra: '1-2-3', texto: '', ret: '6', cruzaJugadas: false
+    }));
+    check(res.statusCode === 201, '6b) POST /planos (carrera 8, Ret: 6) guarda');
+    const t = id => TABLAS.hipismo_tercios_adelantadas_jugadas.find(j => j.id === id);
+    check(t('ret-t1').estado === 'sin_decidir' && Number(t('ret-t1').resultado_jugador) === 0 && Number(t('ret-t1').resultado_banquero) === 0 && !Number(t('ret-t1').comision_grupo), '6b) La jugada al 6 retirado queda NULA (0 / 0 / sin comisión)');
+    check(t('ret-t2').estado === 'sin_decidir' && Number(t('ret-t2').resultado_jugador) === 0, '6b) El cruce 6x2 (incluye al retirado) también queda nulo');
+    check(t('ret-t3').estado === 'resuelto' && Number(t('ret-t3').resultado_jugador) !== 0, '6b) La jugada al 1 (sin el retirado) se resuelve normal');
+  }
+
   function round2(n) { return Math.round(n * 100) / 100; }
 
   // ===== 7) DELETE /tercios-adelantadas/jugadas/:id =====

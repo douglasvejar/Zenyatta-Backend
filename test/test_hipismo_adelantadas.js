@@ -347,7 +347,7 @@ function ejecutarQuery(text, params) {
   if (/^SELECT j\.\* FROM hipismo_adelantadas_jugadas j\s+JOIN hipismo_adelantadas_planos p/i.test(sql)) {
     const [grupoId, hipodromoNombre, carreraNumero, fecha] = params;
     const filas = TABLAS.hipismo_adelantadas_jugadas
-      .filter(j => j.grupo_id === grupoId && String(j.carrera_numero) === String(carreraNumero) && j.estado === 'pendiente')
+      .filter(j => j.grupo_id === grupoId && String(j.carrera_numero) === String(carreraNumero) && (/AND j\.estado = 'pendiente'/i.test(sql) ? j.estado === 'pendiente' : true))
       .filter(j => {
         const p = TABLAS.hipismo_adelantadas_planos.find(pl => pl.id === j.plano_id);
         return p && p.hipodromo_nombre === hipodromoNombre && p.fecha === fecha;
@@ -478,6 +478,15 @@ function ejecutarQuery(text, params) {
       p.grupo_id === grupoId && p.hipodromo_nombre === hipodromoNombre &&
       Number(p.carrera_numero) === Number(carreraNumero) && p.fecha === fecha);
     return { rows: filas.map(p => ({ id: p.id })) };
+  }
+
+  // ---- Caballos retirados ("Ret:") de la carrera (06-10-2026) ----
+  if (/^SELECT ret FROM hipismo_planos WHERE grupo_id = \$1 AND hipodromo_nombre = \$2 AND carrera_numero = \$3 AND fecha = \$4/i.test(sql)) {
+    const [grupoId, hipodromoNombre, carreraNumero, fecha] = params;
+    const filas = TABLAS.hipismo_planos.filter(p =>
+      p.grupo_id === grupoId && p.hipodromo_nombre === hipodromoNombre &&
+      Number(p.carrera_numero) === Number(carreraNumero) && p.fecha === fecha && p.ret).sort((a, b) => b.creado_en - a.creado_en);
+    return { rows: filas.slice(0, 1).map(p => ({ ret: p.ret })) };
   }
 
   // ---- Cargar Planos ----
@@ -1083,6 +1092,51 @@ function reqBase(grupoId) {
   const resMasiva2 = await putM({ banqueadores: cfgM, rebanquearTodas: true });
   check(resMasiva2._status === 200 && resMasiva2._json.marcasRebanqueadas >= 1, '13) Con "rebanquearTodas" también se vuelven a banquear las Marcas ya banqueadas con otros');
   check(m3.banqueadores.length === 2 && m3.banqueadores.find(b => b.nombre === 'MARCAS ZENYATTA').monto === 60 && m3.comision === 1.5, '13) La Marca de Rosa (-120) queda con MARCAS ZENYATTA +60 / MARCAS SAMMY +58,5 y comisión 1,5');
+  CONFIG_BANQUEO_MARCAS.valor = null;
+
+  // --- 14) CABALLO RETIRADO => APUESTA NULA (06-10-2026, caso real: La Rinconada 11ma,
+  // "Ret: 6", pizarra 3 4 8 1 7 — igual resolvía la Marca 6x3 y una Tabla Fija del 6:
+  // "SI RETIRARON UN CABALLO INCLUIDO EN LAS MARCAS, EN LAS TABLAS O EN ALGUNA APUESTA,
+  // ESA APUESTA QUEDA NULA") ---
+  const nuevaAdel = (id, cliente, tipo, extra) => TABLAS.hipismo_adelantadas_jugadas.push(Object.assign({ id, plano_id: planoM.id, grupo_id: GRUPO_ID, cliente_nombre: cliente, carrera_numero: 31, tipo, comision_porcentaje: 2.5, estado: 'pendiente', gano: null, resultado_cliente: null, comision: null, banqueadores: null, pizarra_usada: null, resuelto_en: null, creado_en: 9e15 + 200 }, extra));
+  nuevaAdel('ret-tf6', 'HALLAND', 'tf', { numero_ejemplar: 6, monto: 54, ganancia_potencial: 100 });
+  nuevaAdel('ret-m63', 'HALLAND', 'marca', { numero1: 6, numero2: 3, monto: 120 });
+  nuevaAdel('ret-m36', 'HANRY', 'marca', { numero1: 3, numero2: 6, monto: 120 });
+  nuevaAdel('ret-m43', 'HANRY', 'marca', { numero1: 4, numero2: 3, monto: 120 });
+  nuevaAdel('ret-tf3', 'LINARES', 'tf', { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100 });
+  CONFIG_BANQUEO_MARCAS.valor = [{ nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }];
+  const resRet = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: 'Juega Sebastian 1p (10) con 50,00 da Flaco', pizarra: '3.4.8.1.7', ret: '6', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 31, fecha: FECHA_PRUEBA }
+  }));
+  const jRet = id => TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === id);
+  check(resRet._status === 201, '14) POST /planos con "Ret: 6" responde 201');
+  ['ret-tf6', 'ret-m63', 'ret-m36'].forEach(id => {
+    const j = jRet(id);
+    check(j.estado === 'sin_decidir' && j.gano === null && Number(j.resultado_cliente) === 0 && !j.comision && j.banqueadores === null, '14) ' + id + ' (incluye al 6 retirado) queda NULA: sin_decidir, 0, sin comisión ni banqueo');
+  });
+  const mRet43 = jRet('ret-m43');
+  check(mRet43.estado === 'resuelto' && Number(mRet43.resultado_cliente) === -120 && Array.isArray(mRet43.banqueadores), '14) La Marca 4x3 (sin el retirado) SÍ se resuelve normal: perdió -120 y se banquea');
+  check(jRet('ret-tf3').estado === 'resuelto' && Number(jRet('ret-tf3').resultado_cliente) === 50, '14) La Tabla Fija del 3 (sin el retirado) SÍ se resuelve normal: ganó +50');
+  const textoRet = resRet._json.plano.texto_resultado;
+  check(!/Halland/.test(textoRet), '14) El plano NO muestra ninguna línea de las apuestas nulas (ni Halland, ni la Marca 3x6 de Hanry)');
+  check((textoRet.match(/Hanry -120,00/g) || []).length === 1 && textoRet.includes('Linares +50,00'), '14) El plano SÍ muestra la Marca 4x3 de Hanry (-120) una sola vez y la TF de Linares (+50)');
+  check(resRet._json.adelantadasResueltas.filter(r => r.estado === 'sin_decidir').length === 3, '14) La respuesta reporta las 3 apuestas nulas como sin_decidir');
+  const balRet = resRet._json.totalesFinales;
+  check(!('HALLAND' in balRet) || Number(balRet.HALLAND) === 0, '14) En el Balance, Halland no suma nada por las apuestas del 6 retirado');
+
+  // Corregir la pizarra DESPUÉS (sin mandar "Ret"): el "Ret: 6" ya guardado en el plano de la carrera se respeta.
+  const putAdel = handlerDe('put', '/pizarras/adelantadas');
+  const resPut1 = await invocarRuta(putAdel, Object.assign(reqBase(GRUPO_ID), { body: { fecha: FECHA_PRUEBA, hipodromoNombre: 'La Rinconada', carreraNumero: 31, pizarra: '3.4.8.1.7' } }));
+  check(resPut1._status === 200, '14) PUT /pizarras/adelantadas (sin mandar Ret) responde 200');
+  check(['ret-tf6', 'ret-m63', 'ret-m36'].every(id => jRet(id).estado === 'sin_decidir'), '14) Al corregir la pizarra de la carrera 31 las apuestas del 6 siguen nulas (se lee el Ret ya guardado)');
+  // Varios retirados ("6, 4"): con la pizarra corregida a mano mandando Ret nuevo.
+  const resPut2 = await invocarRuta(putAdel, Object.assign(reqBase(GRUPO_ID), { body: { fecha: FECHA_PRUEBA, hipodromoNombre: 'La Rinconada', carreraNumero: 31, pizarra: '3.8.1.7.2', ret: '6, 4' } }));
+  check(resPut2._status === 200, '14) PUT /pizarras/adelantadas con Ret nuevo responde 200');
+  check(jRet('ret-m43').estado === 'sin_decidir' && jRet('ret-m43').banqueadores === null, '14) Con Ret "6, 4" la Marca 4x3 también queda nula y pierde su banqueo');
+  check(jRet('ret-tf3').estado === 'resuelto', '14) La TF del 3 sigue decidida (el 3 no está retirado)');
+  // Editar una jugada ya resuelta hacia un caballo retirado la deja nula.
+  const resEd = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { params: { id: 'ret-tf3' }, body: { numeroEjemplar: 6 } }));
+  check(resEd._status === 200 && jRet('ret-tf3').estado === 'sin_decidir' && Number(jRet('ret-tf3').resultado_cliente) === 0, '14) Editar la TF para jugar al 6 retirado la deja nula (sin_decidir, 0)');
   CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {

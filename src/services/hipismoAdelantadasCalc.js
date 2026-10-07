@@ -552,8 +552,52 @@ function armarBloqueAdelantadas(movimientos) {
   return bloques.join('\n\n');
 }
 
+// =================================================================
+// CABALLO RETIRADO => APUESTA NULA (06-10-2026, a pedido del usuario, caso
+// real La Rinconada 11ma: "Ret: 6" y aun así se resolvía la Marca 6x3 y una
+// Tabla Fija del 6: "YA QUE RETIRARON UN CABALLO QUE ESTÁ INCLUIDO EN LAS
+// MARCAS O EN LAS TABLAS... O EN ALGUNA APUESTA, ESA APUESTA QUEDA NULA").
+// Regla general, igual para todos los grupos y todos los clientes: si
+// CUALQUIER caballo que forma parte de la apuesta figura en "Ret:" de esa
+// carrera, la apuesta no se juega -- 0 para el cliente y para todos, sin
+// banqueo, sin comisión, sin % devuelto y sin línea en el plano (mismo
+// tratamiento que 'sin_decidir'/nula de siempre).
+// =================================================================
+// "Ret:" puede traer varios caballos ("6", "6,8", "6 y 8", "6-8"): se toman
+// todos los números que aparezcan, sin importar el separador.
+function parsearRetirados(ret) {
+  const set = new Set();
+  String(ret === undefined || ret === null ? '' : ret).split(/[^0-9]+/).filter(Boolean).forEach(n => set.add(parseInt(n, 10)));
+  return set;
+}
+
+// Acepta un arreglo (o su JSON como texto, o anidado) de números de caballo.
+function aplanarCaballos(v) {
+  if (v === undefined || v === null || v === '') return [];
+  if (typeof v === 'string') {
+    try { return aplanarCaballos(JSON.parse(v)); } catch (e) { return parsearRetirados(v).size ? Array.from(parsearRetirados(v)) : []; }
+  }
+  if (Array.isArray(v)) return v.reduce((acc, x) => acc.concat(aplanarCaballos(x)), []);
+  const n = parseInt(v, 10);
+  return isNaN(n) ? [] : [n];
+}
+
+// true si algún caballo de la apuesta (lista de números) está retirado.
+function apuestaConRetirado(caballos, retirados) {
+  if (!retirados || !retirados.size) return false;
+  return aplanarCaballos(caballos).some(n => retirados.has(n));
+}
+
+// Jugada de Tablas Fijas / Marca (fila de hipismo_adelantadas_jugadas).
+function adelantadaConRetirado(j, retirados) {
+  return apuestaConRetirado(j.tipo === 'tf' ? [j.numero_ejemplar] : [j.numero1, j.numero2], retirados);
+}
+
 module.exports = {
   parsearJugadasAdelantadas,
+  parsearRetirados,
+  apuestaConRetirado,
+  adelantadaConRetirado,
   contarPosicionesPizarra,
   esMarcaDecidible,
   resolverTablaFija,

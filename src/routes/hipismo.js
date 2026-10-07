@@ -88,7 +88,8 @@ const { parsearRemate, primerNumeroPizarra, calcularRemate, armarTextoResultadoR
 const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, banqueoAutomaticoTablaFija, armarBloqueAdelantadas, round2,
-  montoDecidido, montoDecididoExacto, montoBaseComisionExacto
+  montoDecidido, montoDecididoExacto, montoBaseComisionExacto,
+  parsearRetirados, apuestaConRetirado, adelantadaConRetirado
 } = require('../services/hipismoAdelantadasCalc');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
 // de "Jugadas Adelantadas"/Tablas Fijas y Marcas de arriba, ver la nota
@@ -361,11 +362,32 @@ function parsearPizarraRank(pizarraTxt) {
   return h => (posiciones[h] !== undefined ? posiciones[h] : 99);
 }
 
+// Caballos retirados ("Ret:") de una carrera (06-10-2026, ver la nota grande
+// "CABALLO RETIRADO => APUESTA NULA" en hipismoAdelantadasCalc.js). Si quien
+// llama ya tiene el "Ret:" (POST /planos, /planos/calcular, o el body de
+// PUT /pizarras/adelantadas) lo pasa en `ret` y manda ese; si no (corregir
+// una pizarra, editar una jugada ya resuelta) se lee del plano más reciente
+// de esa misma carrera -- así un "Ret:" ya cargado nunca se pierde.
+async function obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret }) {
+  if (ret !== undefined && ret !== null) return parsearRetirados(ret);
+  try {
+    const r = await db.query(
+      `SELECT ret FROM hipismo_planos
+        WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4 AND ret IS NOT NULL AND ret <> ''
+        ORDER BY creado_en DESC LIMIT 1`,
+      [req.grupoId, hipodromoNombre, carreraNumero, fecha]
+    );
+    return parsearRetirados(r.rows.length ? r.rows[0].ret : '');
+  } catch (e) {
+    return parsearRetirados('');
+  }
+}
+
 // Calcula (SIN guardar nada) cómo quedarían las jugadas adelantadas
 // pendientes de una carrera contra una pizarra — lo usan tanto la vista
 // previa (POST /planos/calcular) como, con persistencia aparte (ver
 // guardarResolucionAdelantadas), POST /planos.
-async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra }, soloPendientes = true) {
+async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra, ret }, soloPendientes = true) {
   const pendientes = await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }, soloPendientes);
   if (!pendientes.length) return { resueltas: [], movimientosParaTexto: [] };
 
@@ -375,8 +397,16 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
   // Banqueo automático de Marcas: configuración DEL GRUPO (null = flujo manual).
   const configBanqueoMarcas = await obtenerBanqueoMarcasGrupo(req.grupoId);
   const configBanqueoTf = await obtenerBanqueoTablasFijasGrupo(req.grupoId);
+  const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret });
 
   const resueltas = pendientes.map(j => {
+    // CABALLO RETIRADO => NULA (06-10-2026): si algún caballo de esta Marca o
+    // Tabla Fija figura en "Ret:", la apuesta no se juega: 0 para el cliente,
+    // sin banqueo, sin comisión y sin línea en el plano. Aplica a TODAS las
+    // jugadas de la carrera, sin importar el cliente ni el grupo.
+    if (adelantadaConRetirado(j, retirados)) {
+      return { id: j.id, cliente: j.cliente_nombre, tipo: j.tipo === 'tf' ? 'tf' : 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, banqueadores: null, retirado: true, movimientos: [] };
+    }
     if (j.tipo === 'tf') {
       const r = resolverTablaFija(
         { numeroEjemplar: j.numero_ejemplar, monto: Number(j.monto), gananciaPotencial: Number(j.ganancia_potencial) },
@@ -494,12 +524,22 @@ async function buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carrer
 // del usuario ("ambas pestañas... saldran en el apartado de jugadas
 // adelantadas"), estas jugadas se mezclan en el MISMO bloque "PARADA
 // ADELANTADAS" del texto, en vez de tener un bloque aparte.
-async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra }) {
+async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra, ret }) {
   const pendientes = await buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha });
   if (!pendientes.length) return { resueltas: [], movimientos: [] };
 
   const rank = parsearPizarraRank(pizarra);
+  const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret });
   const resueltas = pendientes.map(j => {
+    // CABALLO RETIRADO => NULA (06-10-2026): misma regla que Marcas/Tablas
+    // Fijas -- si algún caballo de la apuesta (grupo o cruce) está en "Ret:",
+    // queda 'sin_decidir' (0 jugador, 0 banquero, sin comisión).
+    if (apuestaConRetirado(j.es_cruce ? [j.cruce_grupo_a, j.cruce_grupo_b] : [j.grupo_caballos], retirados)) {
+      return {
+        id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'sin_decidir',
+        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, comisionPorcentaje: Number(j.comision_porcentaje), retirado: true, movimientos: []
+      };
+    }
     const linea = {
       cruce: j.es_cruce ? { gruposA: j.cruce_grupo_a, gruposB: j.cruce_grupo_b } : null,
       grupo: j.es_cruce ? null : j.grupo_caballos,
@@ -685,7 +725,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
 
   const fechaFinal = fecha || fechaHoyVenezuela();
   const { resueltas, movimientosParaTexto } = (hipodromoNombre && carreraNumero)
-    ? await calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
+    ? await calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra, ret })
     : { resueltas: [], movimientosParaTexto: [] };
   // "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo gancho que
   // Tablas Fijas/Marcas arriba, resuelve sus pendientes de ESTA MISMA
@@ -693,7 +733,7 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
   // mezclan en el MISMO array que alimenta "PARADA ADELANTADAS" (a
   // pedido del usuario: "saldran en el apartado de jugadas adelantadas").
   const { resueltas: resueltasTercios, movimientos: movimientosTercios } = (hipodromoNombre && carreraNumero)
-    ? await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra })
+    ? await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra, ret })
     : { resueltas: [], movimientos: [] };
   movimientosParaTexto.push(...movimientosTercios);
 
@@ -836,10 +876,10 @@ router.post('/planos', asyncHandler(async (req, res) => {
   // Jugadas Adelantadas pendientes de ESTA MISMA carrera (ver la nota
   // grande arriba) — se resuelven con la pizarra que se está por guardar
   // acá, existan o no líneas normales de Tercios en este plano.
-  const { resueltas, movimientosParaTexto } = await calcularResolucionAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra });
+  const { resueltas, movimientosParaTexto } = await calcularResolucionAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra, ret });
   // "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo gancho, ver
   // la nota grande en POST /planos/calcular.
-  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra });
+  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra, ret });
   movimientosParaTexto.push(...movimientosTercios);
 
   // 23-09-2026, a pedido del usuario ("si llega a quedar alguna jugada
@@ -1572,7 +1612,13 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   let recalculo = { estado: jugada.estado, gano: jugada.gano, resultadoCliente: jugada.resultado_cliente, comision: jugada.comision, banqueadores: jugada.banqueadores };
   if (jugada.pizarra_usada && jugada.estado !== 'sin_decidir') {
     const rank = parsearPizarraRank(jugada.pizarra_usada);
-    if (jugada.tipo === 'tf') {
+    // CABALLO RETIRADO => NULA (06-10-2026): si tras la edición algún caballo
+    // de la apuesta figura en el "Ret:" de esa carrera, queda nula (0, sin
+    // banqueo ni comisión), igual que al resolverla por primera vez.
+    const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaComoISO(jugada.fecha) });
+    if (adelantadaConRetirado({ tipo: jugada.tipo, numero_ejemplar: numeroEjemplarFinal, numero1: numero1Final, numero2: numero2Final }, retirados)) {
+      recalculo = { estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, banqueadores: null };
+    } else if (jugada.tipo === 'tf') {
       const r = resolverTablaFija(
         { numeroEjemplar: numeroEjemplarFinal, monto: montoFinal, gananciaPotencial: Number(jugada.ganancia_potencial) },
         rank, Number(jugada.comision_porcentaje)
@@ -1816,8 +1862,9 @@ router.put('/tercios-adelantadas/jugadas/:id', asyncHandler(async (req, res) => 
       modalidad: modalidadFinal,
       monto: montoFinal
     };
+    const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre: jugada.hipodromo_nombre, carreraNumero: jugada.carrera_numero, fecha: fechaComoISO(jugada.fecha) });
     const r = resolverLineaTerciosAdelantada(linea, rank, Number(jugada.comision_porcentaje));
-    recalculo = r.decidida
+    recalculo = (r.decidida && !apuestaConRetirado(jugada.es_cruce ? [jugada.cruce_grupo_a, jugada.cruce_grupo_b] : [jugada.grupo_caballos], retirados))
       ? { estado: 'resuelto', resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado), comisionGrupo: round2(r.comisionGrupo) }
       : { estado: 'sin_decidir', resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0 };
   } else if (faltaMonto || faltaJugador || faltaBanquero) {
@@ -2801,7 +2848,7 @@ router.put('/pizarras/tercios/:id', asyncHandler(async (req, res) => {
   // acá — mismo mecanismo que ya usa POST /planos al guardar de verdad.
   const fechaPlano = fechaComoISO(plano.fecha);
   const { resueltas } = await calcularResolucionAdelantadas(req, {
-    hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaPlano, pizarra: pizarraFinal
+    hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha: fechaPlano, pizarra: pizarraFinal, ret: plano.ret
   });
   if (resueltas.length) {
     await db.transaccion(async (client) => { await guardarResolucionAdelantadas(client, req, resueltas, pizarraFinal); });
@@ -2969,13 +3016,13 @@ router.delete('/pizarras/remate/:id', asyncHandler(async (req, res) => {
 // banqueadores (manuales o los automáticos del grupo) con los
 // montos recalculados; si deja de estar decidida, pierde el banqueo viejo.
 router.put('/pizarras/adelantadas', asyncHandler(async (req, res) => {
-  const { fecha, hipodromoNombre, carreraNumero, pizarra } = req.body;
+  const { fecha, hipodromoNombre, carreraNumero, pizarra, ret } = req.body;
   if (!fecha || !hipodromoNombre || !carreraNumero) return res.status(400).json({ error: 'Falta fecha, hipódromo o número de carrera.' });
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
   const pizarraFinal = pizarra.trim();
 
   const { resueltas } = await calcularResolucionAdelantadas(
-    req, { hipodromoNombre, carreraNumero: Number(carreraNumero), fecha, pizarra: pizarraFinal }, false
+    req, { hipodromoNombre, carreraNumero: Number(carreraNumero), fecha, pizarra: pizarraFinal, ret }, false
   );
   if (!resueltas.length) return res.status(404).json({ error: 'No hay Jugadas Adelantadas cargadas para esa carrera.' });
 
