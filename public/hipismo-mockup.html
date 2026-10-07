@@ -1294,6 +1294,7 @@
       <button type="button" class="nav-item nav-child" data-vista="semanaPorDias" onclick="mostrarVista('semanaPorDias', this)">📅<span class="nav-lbl"> Semana por Días</span></button>
       <button type="button" class="nav-item nav-child" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="registroSaldos" onclick="mostrarVista('registroSaldos', this)">📈<span class="nav-lbl"> Registro de Saldos</span></button>
       <button type="button" class="nav-item nav-child" data-vista="grupoClientes" onclick="mostrarVista('grupoClientes', this)">🗂️<span class="nav-lbl"> Grupo de Clientes</span></button>
     </div>
 
@@ -1389,6 +1390,7 @@
     <div class="nav-children" id="grupoAjustes">
       <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
       <button type="button" class="nav-item nav-child" data-vista="seguridad" onclick="mostrarVista('seguridad', this)">🔒<span class="nav-lbl"> Seguridad</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="puestaEnMarcha" onclick="mostrarVista('puestaEnMarcha', this)">🚀<span class="nav-lbl"> Puesta en Marcha</span></button>
     </div>
 
     <hr>
@@ -3177,6 +3179,61 @@ Pizarra: [se llena al calcular]
 
         <div class="btn-fila" id="btnFilaEliminarJornada" style="display:none; margin-top:10px;">
           <button class="btn btn-primario" type="button" style="background:#b3261e; border-color:#b3261e;" onclick="confirmarEliminarJornada()">🔥 Eliminar TODO ese día</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PUESTA EN MARCHA (07-10-2026) ============
+         Lista de pasos para dejar un grupo nuevo listo + prueba piloto que
+         no guarda nada (services/hipismoPuestaEnMarcha.js). Solo el
+         administrador (todo "Ajustes" se oculta a los empleados). -->
+    <section class="vista" id="vista-puestaEnMarcha">
+      <div class="card">
+        <h2>🚀 Puesta en Marcha</h2>
+        <p class="desc">Los pasos para dejar este grupo listo antes de cargar planos de verdad: qué ya está y qué falta. La <b>prueba piloto</b> revisa que todo funcione (base de datos al día, un cálculo de ejemplo, el banqueo y el cuadre de la semana) <b>sin guardar nada</b>.</p>
+        <div class="btn-fila" style="margin-bottom:12px;">
+          <button class="btn btn-primario" type="button" id="btnPruebaPiloto" onclick="ejecutarPruebaPilotoGrupo()">🧪 Ejecutar prueba piloto</button>
+          <button class="btn btn-secundario" type="button" onclick="cargarPuestaEnMarcha()">🔄 Actualizar lista</button>
+        </div>
+        <div id="resultadoPruebaPiloto" style="margin-bottom:14px;"></div>
+        <div id="listaPuestaEnMarcha"><div class="placeholder-card">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- ============ REGISTRO DE SALDOS (07-10-2026) ============
+         A pedido del usuario: "se llevará un registro semanal del cliente,
+         mensual y anual, así puedes ver qué tan rentable es un cliente, y
+         también incluye tablas, marcas, jugadas adelantadas, comisión,
+         etc." GET /api/hipismo/registro-saldos (services/
+         hipismoRegistroSaldos.js). El saldo es el MISMO de Balance General;
+         la rentabilidad es la comisión neta (comisión que dejó menos el % que
+         se le devuelve). -->
+    <section class="vista" id="vista-registroSaldos">
+      <div class="card">
+        <h2>📈 Registro de Saldos</h2>
+        <p class="desc">Cuánto ganó o perdió cada cliente por semana, mes o año, con el detalle por tipo de jugada. <b>Comisión neta</b> = lo que ese cliente le dejó al grupo en comisiones, ya restado el % que se le devuelve: es la medida de qué tan rentable es. El <b>Saldo</b> es el mismo número de Balance General. Toca un cliente para ver su detalle período por período.</p>
+        <div class="subnav" id="selectorRegistroSaldos">
+          <button type="button" class="activo" data-g="semana" onclick="cambiarRegistroSaldos('semana', this)">Semanal</button>
+          <button type="button" data-g="mes" onclick="cambiarRegistroSaldos('mes', this)">Mensual</button>
+          <button type="button" data-g="anio" onclick="cambiarRegistroSaldos('anio', this)">Anual</button>
+        </div>
+        <div class="fila" style="align-items:flex-end; margin-bottom:12px;">
+          <div>
+            <label for="selRegistroCantidad">Cuántos períodos</label>
+            <select id="selRegistroCantidad" onchange="cargarRegistroSaldos()"></select>
+          </div>
+          <div>
+            <label for="inpRegistroBuscar">Buscar cliente</label>
+            <input type="text" id="inpRegistroBuscar" placeholder="Nombre…" oninput="pintarRegistroSaldos()">
+          </div>
+          <button class="btn btn-secundario" type="button" onclick="descargarRegistroSaldosCSV()">📊 Descargar CSV</button>
+        </div>
+        <div id="registroSaldosResumen" class="desc"></div>
+        <div style="overflow-x:auto;">
+          <table id="tablaRegistroSaldos" style="font-size:12.5px; white-space:nowrap;">
+            <thead id="theadRegistroSaldos"></thead>
+            <tbody id="tbodyRegistroSaldos"><tr><td style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -6212,6 +6269,10 @@ function mostrarVista(id, btn) {
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
+  puestaEnMarcha: () => cargarPuestaEnMarcha(),
+  // "Registro de Saldos" (07-10-2026) y "Alertas" (cuadre nocturno/errores).
+  registroSaldos: () => cargarRegistroSaldos(),
+  alertasHipismo: () => pintarAlertasHipismo(),
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
   // "Tablas Fijas y Marcas" (06-10-2026) — recuerda quién banquea las Marcas.
@@ -14163,6 +14224,157 @@ const TIPOS_ALERTA_TEXTO = {
   APUESTA_SOBRE_POZO: '⚠️ Apostó más de lo que le queda',
   CUADRE_DESCUADRADO: '🧮 Cuadre automático: algo no cuadra'
 };
+
+// ------------------------------------------------------------------
+// PUESTA EN MARCHA (07-10-2026) — GET /api/hipismo/puesta-en-marcha y
+// POST /api/hipismo/puesta-en-marcha/prueba (solo lee, no guarda nada).
+async function cargarPuestaEnMarcha() {
+  const cont = document.getElementById('listaPuestaEnMarcha');
+  let d;
+  try { d = await apiHipismo('/api/hipismo/puesta-en-marcha'); }
+  catch (e) { cont.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${e.message}</div>`; return; }
+  const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const icono = { ok: '✅', pendiente: '⚠️', opcional: '➖' };
+  const color = { ok: '#2a7a2a', pendiente: '#b43', opcional: 'var(--text-dim)' };
+  let html = d.listo
+    ? '<div style="color:#2a7a2a; font-weight:700; margin-bottom:8px;">✅ Todo lo obligatorio está listo.</div>'
+    : `<div style="color:#b43; font-weight:700; margin-bottom:8px;">⚠️ Faltan ${d.pendientes} paso(s) por hacer.</div>`;
+  if (d.esquema && !d.esquema.ok) {
+    html += `<div style="padding:10px 12px; border:2px solid #b43; border-radius:8px; margin-bottom:10px; color:#b43;"><b>La base de datos no está al día:</b> ${esc(d.esquema.faltan.join('; '))}. Corre <code>sql/schema.sql</code> completo en Supabase.</div>`;
+  }
+  html += d.items.map(i => `<div style="display:flex; gap:10px; padding:9px 2px; border-bottom:1px solid var(--border, #ddd);">
+      <div style="font-size:18px;">${icono[i.estado] || '•'}</div>
+      <div style="flex:1;"><div style="font-weight:600; color:${color[i.estado]};">${esc(i.titulo)}${i.estado === 'opcional' ? ' <span style="font-weight:400; font-size:12px;">(opcional)</span>' : ''}</div>
+      <div style="font-size:12.5px; color:var(--text-dim);">${esc(i.detalle)}</div>
+      <div style="font-size:12px; color:var(--text-dim);">Dónde: ${esc(i.donde)}</div></div>
+    </div>`).join('');
+  cont.innerHTML = html;
+}
+async function ejecutarPruebaPilotoGrupo() {
+  const btn = document.getElementById('btnPruebaPiloto');
+  const out = document.getElementById('resultadoPruebaPiloto');
+  btn.disabled = true; btn.textContent = 'Probando…';
+  out.innerHTML = '';
+  try {
+    const d = await apiHipismo('/api/hipismo/puesta-en-marcha/prueba', { method: 'POST' });
+    const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    out.innerHTML = `<div style="padding:10px 12px; border:2px solid ${d.ok ? '#2a7a2a' : '#b43'}; border-radius:8px;">
+      <div style="font-weight:700; color:${d.ok ? '#2a7a2a' : '#b43'}; margin-bottom:6px;">${d.ok ? '✅ La prueba piloto pasó completa' : '⚠️ La prueba piloto encontró cosas por revisar'}</div>` +
+      d.pasos.map(p => `<div style="font-size:13px; margin-bottom:3px;">${p.ok ? '✅' : '❌'} <b>${esc(p.titulo)}</b>: ${esc(p.detalle)}</div>`).join('') + '</div>';
+  } catch (e) {
+    out.innerHTML = `<div class="placeholder-card">No se pudo ejecutar: ${e.message}</div>`;
+  }
+  btn.disabled = false; btn.textContent = '🧪 Ejecutar prueba piloto';
+}
+
+// ------------------------------------------------------------------
+// REGISTRO DE SALDOS (07-10-2026) — GET /api/hipismo/registro-saldos.
+let REGISTRO_SALDOS_G = 'semana';
+let REGISTRO_SALDOS_DATA = null;
+let REGISTRO_SALDOS_ORDEN = { clave: 'comisionNeta', desc: true };
+let REGISTRO_SALDOS_ABIERTOS = new Set();
+const REGISTRO_COLS = [
+  ['jugadas', 'Jugadas', false], ['saldo', 'Saldo', true], ['tercios', 'Tercios', true], ['remate', 'Remate', true], ['winners', 'Winners', true],
+  ['tablasFijas', 'Tablas Fijas', true], ['marcas', 'Marcas', true], ['bancaAdelantadas', 'Banca Adel.', true], ['tercAdelantadas', 'Tercios Adel.', true],
+  ['cargas', 'Carga Masiva', true], ['traspasos', 'Traspasos', true], ['otros', 'Otros', true],
+  ['comisionGenerada', 'Comisión generada', true], ['devuelto', '% devuelto', true], ['comisionNeta', 'Comisión neta', true]
+];
+function registroCantidadOpciones(g) {
+  return g === 'semana' ? [4, 8, 12, 26] : (g === 'mes' ? [3, 6, 12, 24] : [1, 2, 3, 5]);
+}
+function cambiarRegistroSaldos(g, btn) {
+  document.querySelectorAll('#selectorRegistroSaldos button').forEach(b => b.classList.remove('activo'));
+  btn.classList.add('activo');
+  REGISTRO_SALDOS_G = g;
+  REGISTRO_SALDOS_ABIERTOS = new Set();
+  const sel = document.getElementById('selRegistroCantidad');
+  const unidad = g === 'semana' ? 'semanas' : (g === 'mes' ? 'meses' : 'años');
+  const ops = registroCantidadOpciones(g);
+  const defecto = g === 'semana' ? 8 : (g === 'mes' ? 6 : 2);
+  sel.innerHTML = ops.map(n => `<option value="${n}" ${n === defecto ? 'selected' : ''}>Últimas ${n} ${unidad}</option>`).join('');
+  cargarRegistroSaldos();
+}
+async function cargarRegistroSaldos() {
+  const sel = document.getElementById('selRegistroCantidad');
+  if (!sel.options.length) { cambiarRegistroSaldos(REGISTRO_SALDOS_G, document.querySelector('#selectorRegistroSaldos button.activo')); return; }
+  const tbody = document.getElementById('tbodyRegistroSaldos');
+  tbody.innerHTML = '<tr><td style="text-align:center; color:var(--text-dim);">Calculando…</td></tr>';
+  try {
+    REGISTRO_SALDOS_DATA = await apiHipismo(`/api/hipismo/registro-saldos?granularidad=${REGISTRO_SALDOS_G}&cantidad=${sel.value}`);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`;
+    return;
+  }
+  pintarRegistroSaldos();
+}
+function ordenarRegistroSaldos(clave) {
+  if (REGISTRO_SALDOS_ORDEN.clave === clave) REGISTRO_SALDOS_ORDEN.desc = !REGISTRO_SALDOS_ORDEN.desc;
+  else REGISTRO_SALDOS_ORDEN = { clave, desc: clave !== 'nombre' };
+  pintarRegistroSaldos();
+}
+function toggleRegistroCliente(nombre) {
+  if (REGISTRO_SALDOS_ABIERTOS.has(nombre)) REGISTRO_SALDOS_ABIERTOS.delete(nombre); else REGISTRO_SALDOS_ABIERTOS.add(nombre);
+  pintarRegistroSaldos();
+}
+function celdaRegistro(valor, esMonto, conSigno) {
+  if (!esMonto) return `<td class="num">${valor || 0}</td>`;
+  const n = Number(valor) || 0;
+  const color = !conSigno ? '' : (n > 0 ? 'color:#1a7a3a;' : (n < 0 ? 'color:#b32d2d;' : 'color:var(--text-dim);'));
+  return `<td class="num" style="${color}">${n === 0 ? '—' : (n < 0 ? '-' : '') + formatMontoTabla(Math.abs(n))}</td>`;
+}
+function pintarRegistroSaldos() {
+  const d = REGISTRO_SALDOS_DATA;
+  if (!d) return;
+  const thead = document.getElementById('theadRegistroSaldos');
+  const tbody = document.getElementById('tbodyRegistroSaldos');
+  const buscar = (document.getElementById('inpRegistroBuscar').value || '').trim().toUpperCase();
+  const flecha = c => REGISTRO_SALDOS_ORDEN.clave === c ? (REGISTRO_SALDOS_ORDEN.desc ? ' ▼' : ' ▲') : '';
+  thead.innerHTML = `<tr><th style="cursor:pointer;" onclick="ordenarRegistroSaldos('nombre')">Cliente${flecha('nombre')}</th>` +
+    REGISTRO_COLS.map(([k, t]) => `<th class="num" style="cursor:pointer;" onclick="ordenarRegistroSaldos('${k}')">${t}${flecha(k)}</th>`).join('') + '</tr>';
+  let lista = d.clientes.filter(c => !buscar || c.nombre.toUpperCase().includes(buscar));
+  const { clave, desc } = REGISTRO_SALDOS_ORDEN;
+  lista = lista.slice().sort((a, b) => {
+    const r = clave === 'nombre' ? a.nombre.localeCompare(b.nombre, 'es') : (a.total[clave] - b.total[clave]);
+    return desc ? -r : r;
+  });
+  const totalFila = (etq, fila, extra) => `<tr style="font-weight:700; background:var(--card-2);"><td>${etq}</td>` + REGISTRO_COLS.map(([k, , m]) => celdaRegistro(fila[k], m, k !== 'jugadas' && k !== 'devuelto' && k !== 'comisionGenerada')).join('') + '</tr>';
+  const filas = [];
+  lista.forEach(c => {
+    const abierto = REGISTRO_SALDOS_ABIERTOS.has(c.nombre);
+    const nom = c.nombre.replace(/'/g, "\\'");
+    filas.push(`<tr style="cursor:pointer;" onclick="toggleRegistroCliente('${nom}')"><td>${abierto ? '▾' : '▸'} ${formatNombre(c.nombre)}</td>` +
+      REGISTRO_COLS.map(([k, , m]) => celdaRegistro(c.total[k], m, k === 'saldo' || k === 'comisionNeta' || k === 'tercios' || k === 'remate' || k === 'winners' || k === 'tablasFijas' || k === 'marcas' || k === 'bancaAdelantadas' || k === 'tercAdelantadas' || k === 'cargas' || k === 'traspasos' || k === 'otros')).join('') + '</tr>');
+    if (abierto) {
+      d.periodos.forEach((p, i) => {
+        const f = c.periodos[i];
+        filas.push(`<tr style="background:var(--card-2); font-size:12px;"><td style="padding-left:28px;">${p.etiqueta}</td>` +
+          REGISTRO_COLS.map(([k, , m]) => celdaRegistro(f[k], m, k === 'saldo' || k === 'comisionNeta')).join('') + '</tr>');
+      });
+    }
+  });
+  if (!filas.length) filas.push(`<tr><td colspan="${REGISTRO_COLS.length + 1}" style="text-align:center; color:var(--text-dim);">Sin movimiento en estos períodos.</td></tr>`);
+  filas.push(totalFila('TOTAL (todos los clientes)', d.totalGeneral));
+  tbody.innerHTML = filas.join('');
+  const unidad = d.granularidad === 'semana' ? 'semanas' : (d.granularidad === 'mes' ? 'meses' : 'años');
+  document.getElementById('registroSaldosResumen').innerHTML =
+    `Período: <b>${d.periodos[0].etiqueta}</b> a <b>${d.periodos[d.periodos.length - 1].etiqueta}</b> (${d.periodos.length} ${unidad}). Comisión del grupo en Balance General en ese tiempo: <b>${formatMonto(d.totalGeneral.comisionGrupo)}</b>.`;
+}
+function descargarRegistroSaldosCSV() {
+  const d = REGISTRO_SALDOS_DATA;
+  if (!d) { alert('Todavía no hay datos cargados.'); return; }
+  const cab = ['Cliente', 'Período'].concat(REGISTRO_COLS.map(c => c[1]));
+  const lineas = [cab.join(';')];
+  d.clientes.forEach(c => {
+    d.periodos.forEach((p, i) => lineas.push([c.nombre, p.etiqueta].concat(REGISTRO_COLS.map(([k]) => String(c.periodos[i][k]).replace('.', ','))).join(';')));
+    lineas.push([c.nombre, 'TOTAL'].concat(REGISTRO_COLS.map(([k]) => String(c.total[k]).replace('.', ','))).join(';'));
+  });
+  const blob = new Blob(['﻿' + lineas.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `registro-saldos-${d.granularidad}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
 
 // "Apostó más de lo que le queda" (07-10-2026) — el servidor devuelve
 // alertasPozo al guardar un plano; el aviso queda en pantalla hasta que se

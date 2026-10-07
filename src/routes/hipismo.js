@@ -26,7 +26,7 @@
 const express = require('express');
 const db = require('../db');
 const bcrypt = require('bcryptjs');
-const { requiereGrupo, requierePermiso } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso, requiereAdministrador } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 // CHAT DE SOPORTE (26-09-2026, "activa el modulo de mensajes... para el
 // modulo de hipismo") — MISMO servicio y MISMA tabla (mensajes_chat, por
@@ -4982,6 +4982,28 @@ router.get('/diagnostico-saldos', asyncHandler(async (req, res) => {
     rangoPersonalizado: !!rangoPersonalizado,
     ...resultado
   });
+}));
+
+// PUESTA EN MARCHA (07-10-2026, ver services/hipismoPuestaEnMarcha.js):
+// GET /puesta-en-marcha = lista de pasos de un grupo nuevo + estado de la
+// base de datos; POST /puesta-en-marcha/prueba = prueba piloto (solo lee,
+// no guarda nada). Solo el administrador del grupo.
+router.get('/puesta-en-marcha', requiereAdministrador, asyncHandler(async (req, res) => {
+  const pem = require('../services/hipismoPuestaEnMarcha');
+  const [checklist, esquema] = await Promise.all([pem.construirChecklistGrupo(req.grupo), pem.verificarEsquema().catch(e => ({ ok: false, faltan: ['no se pudo revisar: ' + e.message] }))]);
+  res.json({ ...checklist, esquema });
+}));
+router.post('/puesta-en-marcha/prueba', requiereAdministrador, asyncHandler(async (req, res) => {
+  res.json(await require('../services/hipismoPuestaEnMarcha').ejecutarPruebaPiloto(req.grupo));
+}));
+
+// GET /registro-saldos?granularidad=semana|mes|anio&cantidad=N (07-10-2026,
+// ver services/hipismoRegistroSaldos.js): saldo de cada cliente por semana,
+// mes o año, con el desglose por tipo de jugada y su comisión neta (qué tan
+// rentable es). Solo lee; los números salen del mismo Cierre Final.
+router.get('/registro-saldos', asyncHandler(async (req, res) => {
+  const { construirRegistroSaldosHipismo } = require('../services/hipismoRegistroSaldos');
+  res.json(await construirRegistroSaldosHipismo(req.grupoId, { granularidad: req.query.granularidad, cantidad: req.query.cantidad }));
 }));
 
 // =================================================================
