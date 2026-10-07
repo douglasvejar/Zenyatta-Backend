@@ -362,13 +362,13 @@ function ejecutarQuery(text, params) {
     return { rows: j ? [j] : [] };
   }
   // PUT /adelantadas/jugadas/:id (duodécima-tercera ronda, editar).
-  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET cliente_nombre = \$1, monto = \$2, numero_ejemplar = \$3, numero1 = \$4, numero2 = \$5,\s*estado = \$6, gano = \$7, resultado_cliente = \$8, comision = \$9, banqueadores = \$10, sin_comision = \$13\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
-    const [cliente, monto, numeroEjemplar, numero1, numero2, estado, gano, resultadoCliente, comision, banqueadores, id, grupoId, sinComision] = params;
+  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET cliente_nombre = \$1, monto = \$2, numero_ejemplar = \$3, numero1 = \$4, numero2 = \$5,\s*estado = \$6, gano = \$7, resultado_cliente = \$8, comision = \$9, banqueadores = \$10, sin_comision = \$13, montos_manuales = \$14\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [cliente, monto, numeroEjemplar, numero1, numero2, estado, gano, resultadoCliente, comision, banqueadores, id, grupoId, sinComision, montosManuales] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
     if (j) {
       Object.assign(j, {
         cliente_nombre: cliente, monto, numero_ejemplar: numeroEjemplar, numero1, numero2,
-        estado, gano, resultado_cliente: resultadoCliente, comision, sin_comision: !!sinComision,
+        estado, gano, resultado_cliente: resultadoCliente, comision, sin_comision: !!sinComision, montos_manuales: !!montosManuales,
         banqueadores: banqueadores == null ? null : (typeof banqueadores === 'string' ? JSON.parse(banqueadores) : banqueadores)
       });
     }
@@ -433,7 +433,7 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   // 06-10-2026: banqueo automático de las Marcas que ya estaban 'falta_banqueo'.
-  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'falta_banqueo'/i.test(sql)) {
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?(, montos_manuales)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'falta_banqueo'/i.test(sql)) {
     const [grupoId] = params;
     return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'falta_banqueo') };
   }
@@ -444,7 +444,7 @@ function ejecutarQuery(text, params) {
     return { rows: j ? [j] : [] };
   }
   // 06-10-2026: re-banquear con la configuración del grupo las Marcas YA banqueadas.
-  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'resuelto' AND banqueadores IS NOT NULL AND gano IS NOT NULL/i.test(sql)) {
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?(, montos_manuales)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'resuelto' AND banqueadores IS NOT NULL AND gano IS NOT NULL/i.test(sql)) {
     const [grupoId] = params;
     return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'resuelto' && j.banqueadores && j.gano !== null) };
   }
@@ -1177,6 +1177,56 @@ function reqBase(grupoId) {
   check(bE4.find(b => b.nombre === 'MARCAS SAMMY').monto === 58.5 && Number(jSC('sc-marca-normal').comision) === 1.5, '15) Volver la Marca a "normal": SAMMY +58,5 y comisión 1,5 otra vez (sin arrastrar el 0%)');
   const e5 = await edSC('sc-marca-sin', { monto: 150 });
   check(jSC('sc-marca-sin').sin_comision === true && Number(jSC('sc-marca-sin').comision) === 0, '15) Editar otro dato de una jugada "sin comisión" no pierde la marca: sigue sin comisión');
+  CONFIG_BANQUEO_MARCAS.valor = null;
+
+  // --- 16) MONTOS EXACTOS A MANO con "Sin comisión" (07-10-2026, "debí editar al mismo tiempo todo,
+  // también el ítem TABLAS ZENYATTA, para decirte cómo queda todo exacto en esa apuesta"): cliente +
+  // cada ítem de la contraparte, suman 0 y quedan FIJOS (la pizarra no los recalcula) ---
+  CONFIG_BANQUEO_TF.valor = [{ nombre: 'TABLAS ZENYATTA', porcentaje: 100, pagaComision: true }];
+  CONFIG_BANQUEO_MARCAS.valor = [{ nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }];
+  const nuevaMan = (id, cliente, tipo, extra) => TABLAS.hipismo_adelantadas_jugadas.push(Object.assign({ id, plano_id: planoM.id, grupo_id: GRUPO_ID, cliente_nombre: cliente, carrera_numero: 51, tipo, comision_porcentaje: 2.5, sin_comision: false, montos_manuales: false, estado: 'pendiente', gano: null, resultado_cliente: null, comision: null, banqueadores: null, pizarra_usada: null, resuelto_en: null, creado_en: 9e15 + 400 }, extra));
+  nuevaMan('man-tf', 'LINARES', 'tf', { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100 });
+  nuevaMan('man-marca-pend', 'HANRY', 'marca', { numero1: 4, numero2: 3, monto: 120 });
+  const jM = id => TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === id);
+  // Se resuelve normal primero (con la pizarra), ya con los banqueadores configurados.
+  await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: 'Juega Sebastian 1p (10) con 50,00 da Flaco', pizarra: '3.4.8.1.7', ret: '', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 51, fecha: FECHA_PRUEBA }
+  }));
+  // (la Marca pendiente también se resolvió; para probar el manual sobre una PENDIENTE se crea otra en otra carrera sin pizarra)
+  nuevaMan('man-marca-sinpizarra', 'ROSA', 'marca', { numero1: 4, numero2: 3, monto: 120, carrera_numero: 52 });
+  check(jM('man-tf').estado === 'resuelto' && Number(jM('man-tf').resultado_cliente) === 50 && jM('man-tf').banqueadores[0].monto === -51.25, '16) Partida: la TF se resuelve normal (+50, TABLAS ZENYATTA -51,25 con su comisión)');
+  const edM = (id, body) => invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { params: { id }, body }));
+
+  const mal = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [{ nombre: 'TABLAS ZENYATTA', monto: -40 }] } });
+  check(mal._status === 400 && /sumar 0/.test(mal._json.error) && Number(jM('man-tf').resultado_cliente) === 50, '16) Montos que no suman 0 (cliente +45, TABLAS ZENYATTA -40) se rechazan con 400 y no cambian nada');
+  const falta = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [] } });
+  check(falta._status === 400 && /Falta el monto de TABLAS ZENYATTA/.test(falta._json.error), '16) Si falta el monto de un ítem de la contraparte se rechaza');
+  const soloNormal = await edM('man-tf', { sinComision: false, montoManual: { resultadoCliente: 45, banqueadores: [] } });
+  check(soloNormal._status === 400, '16) Los montos a mano solo se aceptan con "Sin comisión"');
+
+  const ok1 = await edM('man-tf', { sinComision: true, montoManual: { resultadoCliente: 45, banqueadores: [{ nombre: 'TABLAS ZENYATTA', monto: -45 }] } });
+  const tfM = jM('man-tf');
+  check(ok1._status === 200 && ok1._json.montosManuales === true && tfM.montos_manuales === true && tfM.sin_comision === true, '16) Guardar montos exactos: la jugada queda "sin comisión" + "montos a mano"');
+  check(Number(tfM.resultado_cliente) === 45 && tfM.banqueadores[0].monto === -45 && Number(tfM.comision) === 0 && tfM.estado === 'resuelto' && tfM.gano === true, '16) Cliente +45 y TABLAS ZENYATTA -45 EXACTOS, sin comisión de grupo');
+  await invocarRuta(handlerDe('put', '/pizarras/adelantadas'), Object.assign(reqBase(GRUPO_ID), { body: { fecha: FECHA_PRUEBA, hipodromoNombre: 'La Rinconada', carreraNumero: 51, pizarra: '3.4.8.1.7' } }));
+  check(Number(jM('man-tf').resultado_cliente) === 45 && jM('man-tf').banqueadores[0].monto === -45, '16) Corregir la pizarra de la carrera NO toca los montos a mano (quedan fijos)');
+  const edOtroDato = await edM('man-tf', { monto: 60 });
+  check(jM('man-tf').montos_manuales === true && Number(jM('man-tf').resultado_cliente) === 45, '16) Editar otro dato (monto apostado) conserva los montos a mano');
+  const aNormal = await edM('man-tf', { sinComision: false });
+  check(jM('man-tf').montos_manuales === false && jM('man-tf').sin_comision === false && Number(jM('man-tf').resultado_cliente) !== 45, '16) Volver a "Normal" quita los montos a mano y se recalcula con la pizarra');
+
+  // Marca todavía SIN pizarra: se fijan a mano cliente + los 2 banqueadores configurados.
+  const okM = await edM('man-marca-sinpizarra', { sinComision: true, montoManual: { resultadoCliente: -100, banqueadores: [{ nombre: 'MARCAS ZENYATTA', monto: 40 }, { nombre: 'MARCAS SAMMY', monto: 60 }] } });
+  const mM = jM('man-marca-sinpizarra');
+  check(okM._status === 200 && mM.estado === 'resuelto' && mM.gano === false && Number(mM.resultado_cliente) === -100 && mM.banqueadores.length === 2 && Number(mM.comision) === 0, '16) Marca pendiente (sin pizarra) con montos a mano: queda resuelta, cliente -100, MARCAS ZENYATTA +40 y MARCAS SAMMY +60');
+  const quitar = await edM('man-marca-sinpizarra', { sinComision: true, montoManual: null });
+  check(jM('man-marca-sinpizarra').montos_manuales === false && jM('man-marca-sinpizarra').estado === 'pendiente' && jM('man-marca-sinpizarra').banqueadores === null, '16) Quitar los montos a mano de una jugada que nunca tuvo pizarra la devuelve a pendiente');
+
+  // TF sin banqueadores configurados: solo se escribe el resultado del cliente.
+  CONFIG_BANQUEO_TF.valor = null;
+  nuevaMan('man-tf-sinbq', 'RAMBO', 'tf', { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100, carrera_numero: 53 });
+  const okS = await edM('man-tf-sinbq', { sinComision: true, montoManual: { resultadoCliente: 30, banqueadores: [] } });
+  check(okS._status === 200 && jM('man-tf-sinbq').estado === 'resuelto' && Number(jM('man-tf-sinbq').resultado_cliente) === 30 && Number(jM('man-tf-sinbq').comision) === 0 && jM('man-tf-sinbq').banqueadores === null, '16) TF sin banqueadores configurados: solo el resultado del cliente (+30); su contraparte "TABLAS FIJAS" sale sola con el opuesto exacto');
   CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {

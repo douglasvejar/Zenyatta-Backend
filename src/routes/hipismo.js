@@ -89,7 +89,7 @@ const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, banqueoAutomaticoTablaFija, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto,
-  parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada
+  parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada, resolverMontosManuales
 } = require('../services/hipismoAdelantadasCalc');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
 // de "Jugadas Adelantadas"/Tablas Fijas y Marcas de arriba, ver la nota
@@ -388,7 +388,8 @@ async function obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fe
 // previa (POST /planos/calcular) como, con persistencia aparte (ver
 // guardarResolucionAdelantadas), POST /planos.
 async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra, ret }, soloPendientes = true) {
-  const pendientes = await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }, soloPendientes);
+  // Las jugadas con montos exactos a mano (07-10-2026) quedan FIJAS: nunca se re-resuelven con la pizarra.
+  const pendientes = (await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }, soloPendientes)).filter(j => !j.montos_manuales);
   if (!pendientes.length) return { resueltas: [], movimientosParaTexto: [] };
 
   const rHip = await db.query('SELECT pais FROM hipismo_hipodromos WHERE grupo_id = $1 AND nombre = $2', [req.grupoId, hipodromoNombre]);
@@ -1296,6 +1297,7 @@ function filaJugadaAdelantadaPublica(j) {
     monto: Number(j.monto),
     comisionPorcentaje: Number(j.comision_porcentaje),
     sinComision: !!j.sin_comision,
+    montosManuales: !!j.montos_manuales,
     textoOriginal: j.texto_original,
     errorCalculo: j.error_calculo,
     detalleError: j.detalle_error,
@@ -1525,7 +1527,7 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
 
   // SIN COMISIÓN (07-10-2026): ningún banquero paga %, sin importar lo que traiga la petición.
   const { banqueadores: banqueadoresResueltos, comisionMarcas } = resolverBanqueoMarca(
-    { acierta: jugada.gano, base: jugada.gano ? Number(jugada.resultado_cliente) : Number(jugada.monto) },
+    { acierta: jugada.gano, base: jugada.montos_manuales ? Math.abs(Number(jugada.resultado_cliente)) : (jugada.gano ? Number(jugada.resultado_cliente) : Number(jugada.monto)) },
     jugada.sin_comision ? banqueadores.map(b => Object.assign({}, b, { comisionPorcentaje: 0 })) : banqueadores,
     jugada.sin_comision ? 0 : comisionPctDefecto
   );
@@ -1581,7 +1583,7 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
 // pizarra de esa carrera nunca llegó a los puestos necesarios) se deja
 // tal cual quedó — no depende de los datos que se estén editando.
 router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
-  const { cliente, monto, numeroEjemplar, numero1, numero2, sinComision } = req.body;
+  const { cliente, monto, numeroEjemplar, numero1, numero2, sinComision, montoManual } = req.body;
 
   const rJugada = await db.query(
     `SELECT j.*, p.hipodromo_nombre, p.fecha
@@ -1622,8 +1624,31 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   const jugadaEf = Object.assign({}, jugada, { sin_comision: sinComisionFinal });
   const pctEf = pctJugada(jugadaEf);
 
+  // MONTOS EXACTOS A MANO (07-10-2026, solo con "Sin comisión"): ver resolverMontosManuales.
+  // montoManual: objeto = fijar esos montos; null = quitar los montos a mano; sin mandar = se conserva lo que tenía.
+  if (montoManual && typeof montoManual === 'object' && !sinComisionFinal) {
+    return res.status(400).json({ error: 'Los montos exactos a mano solo se pueden usar con la opción "Sin comisión".' });
+  }
+  const manualQueda = sinComisionFinal && (montoManual === undefined ? !!jugada.montos_manuales : !!montoManual);
+  const limpiandoManual = !!jugada.montos_manuales && !manualQueda;
+
   let recalculo = { estado: jugada.estado, gano: jugada.gano, resultadoCliente: jugada.resultado_cliente, comision: jugada.comision, banqueadores: jugada.banqueadores };
-  if (jugada.pizarra_usada && jugada.estado !== 'sin_decidir') {
+  if (montoManual && typeof montoManual === 'object') {
+    // Banqueadores de la contraparte: los que ya tiene la jugada; si todavía no se resolvió, los que configuró el grupo.
+    let base = Array.isArray(jugada.banqueadores) ? jugada.banqueadores : null;
+    if (!base && (jugada.estado === 'pendiente' || jugada.estado === 'falta_banqueo')) {
+      base = jugada.tipo === 'tf' ? await obtenerBanqueoTablasFijasGrupo(req.grupoId) : await obtenerBanqueoMarcasGrupo(req.grupoId);
+    }
+    const m = resolverMontosManuales({ tipo: jugada.tipo, manual: montoManual, base });
+    if (!m.ok) return res.status(400).json({ error: m.error });
+    if (m.banqueadores && await rechazarClientesInexistentes(req, res, m.banqueadores.map(b => b.nombre))) return;
+    recalculo = { estado: m.estado, gano: m.gano, resultadoCliente: m.resultadoCliente, comision: m.comision, banqueadores: m.banqueadores ? JSON.stringify(m.banqueadores) : null };
+  } else if (manualQueda) {
+    // Ya tenía montos a mano y no se tocaron: se conservan tal cual (no se recalculan con la pizarra).
+  } else if (limpiandoManual && !jugada.pizarra_usada) {
+    // Quitó los montos a mano de una jugada que nunca se resolvió con pizarra: vuelve a esperar la pizarra.
+    recalculo = { estado: 'pendiente', gano: null, resultadoCliente: null, comision: null, banqueadores: null };
+  } else if (jugada.pizarra_usada && (jugada.estado !== 'sin_decidir' || limpiandoManual)) {
     const rank = parsearPizarraRank(jugada.pizarra_usada);
     // CABALLO RETIRADO => NULA (06-10-2026): si tras la edición algún caballo
     // de la apuesta figura en el "Ret:" de esa carrera, queda nula (0, sin
@@ -1672,11 +1697,11 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   const r = await db.query(
     `UPDATE hipismo_adelantadas_jugadas
         SET cliente_nombre = $1, monto = $2, numero_ejemplar = $3, numero1 = $4, numero2 = $5,
-            estado = $6, gano = $7, resultado_cliente = $8, comision = $9, banqueadores = $10, sin_comision = $13
+            estado = $6, gano = $7, resultado_cliente = $8, comision = $9, banqueadores = $10, sin_comision = $13, montos_manuales = $14
       WHERE id = $11 AND grupo_id = $12 RETURNING *`,
     [clienteFinal, montoFinal, numeroEjemplarFinal, numero1Final, numero2Final,
       recalculo.estado, recalculo.gano, recalculo.resultadoCliente, recalculo.comision, recalculo.banqueadores,
-      jugada.id, req.grupoId, sinComisionFinal]
+      jugada.id, req.grupoId, sinComisionFinal, manualQueda]
   );
 
   const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
@@ -3057,8 +3082,10 @@ router.delete('/pizarras/adelantadas', asyncHandler(async (req, res) => {
   const { fecha, hipodromoNombre, carreraNumero } = req.query;
   if (!fecha || !hipodromoNombre || !carreraNumero) return res.status(400).json({ error: 'Falta fecha, hipódromo o número de carrera.' });
 
-  const jugadas = await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero: Number(carreraNumero), fecha }, false);
-  if (!jugadas.length) return res.status(404).json({ error: 'No hay Jugadas Adelantadas cargadas para esa carrera.' });
+  const todasLasJugadas = await buscarAdelantadasPendientes(req, { hipodromoNombre, carreraNumero: Number(carreraNumero), fecha }, false);
+  if (!todasLasJugadas.length) return res.status(404).json({ error: 'No hay Jugadas Adelantadas cargadas para esa carrera.' });
+  // Las de montos exactos a mano (07-10-2026) no dependen de la pizarra: se quedan como están.
+  const jugadas = todasLasJugadas.filter(j => !j.montos_manuales);
 
   await db.transaccion(async (client) => {
     for (const j of jugadas) {

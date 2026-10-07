@@ -581,6 +581,44 @@ function banqueadoresJugada(j, volverANormal) {
 }
 
 // =================================================================
+// MONTOS EXACTOS A MANO (07-10-2026, a pedido del usuario: "debí editar al mismo
+// tiempo todo, también el ítem TABLAS ZENYATTA, para decirte cómo queda todo
+// exacto en esa apuesta"). Solo en modo "Sin comisión": el usuario escribe el
+// resultado del cliente (+gana / -pierde) y el monto de CADA ítem de la
+// contraparte (banqueadores). Tiene que sumar 0 y queda FIJO (no se recalcula con
+// la pizarra) hasta que vuelva a editarlo. Sin banqueadores en la jugada, solo se
+// escribe el resultado del cliente y la contraparte (ítem TABLAS FIJAS o el
+// banqueo pendiente de una Marca) sale sola con el opuesto exacto.
+// -> { ok:false, error } | { ok:true, estado, gano, resultadoCliente, comision, banqueadores }
+// `base`: banqueadores de la jugada ([{nombre, porcentaje}]) o null.
+// `manual`: { resultadoCliente, banqueadores: [{ nombre, monto }] }.
+// =================================================================
+function resolverMontosManuales({ tipo, manual, base }) {
+  const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
+  const r = round2(num(manual && manual.resultadoCliente));
+  if (isNaN(r)) return { ok: false, error: 'Falta el resultado del cliente (con signo: + si gana, - si pierde).' };
+  const lista = Array.isArray(base) ? base : [];
+  let banqueadores = null;
+  if (lista.length) {
+    const enviados = (manual && Array.isArray(manual.banqueadores)) ? manual.banqueadores : [];
+    let suma = r;
+    banqueadores = [];
+    for (const b of lista) {
+      const clave = String(b.nombre || '').trim().toUpperCase();
+      const e = enviados.find(x => String(x.nombre || '').trim().toUpperCase() === clave);
+      const m = e ? round2(num(e.monto)) : NaN;
+      if (isNaN(m)) return { ok: false, error: `Falta el monto de ${b.nombre}.` };
+      suma = round2(suma + m);
+      banqueadores.push({ nombre: b.nombre, porcentaje: Number(b.porcentaje) || 0, pagaComision: false, comisionPorcentaje: null, monto: m });
+    }
+    if (Math.abs(suma) > 0.005) return { ok: false, error: `Los montos tienen que sumar 0 (cliente + contraparte = ${suma > 0 ? '+' : ''}${suma.toFixed(2).replace('.', ',')}).` };
+  }
+  if (r === 0) return { ok: true, estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: 0, banqueadores: null };
+  const estado = (tipo === 'marca' && !banqueadores) ? 'falta_banqueo' : 'resuelto';
+  return { ok: true, estado, gano: r > 0, resultadoCliente: r, comision: estado === 'falta_banqueo' ? null : 0, banqueadores };
+}
+
+// =================================================================
 // CABALLO RETIRADO => APUESTA NULA (06-10-2026, a pedido del usuario, caso
 // real La Rinconada 11ma: "Ret: 6" y aun así se resolvía la Marca 6x3 y una
 // Tabla Fija del 6: "YA QUE RETIRARON UN CABALLO QUE ESTÁ INCLUIDO EN LAS
@@ -625,6 +663,7 @@ module.exports = {
   parsearJugadasAdelantadas,
   parsearRetirados,
   pctJugada,
+  resolverMontosManuales,
   banqueadoresJugada,
   apuestaConRetirado,
   adelantadaConRetirado,

@@ -89,7 +89,7 @@ const guardarBanqueoTablasFijasGrupo = (grupoId, lista) => guardarConfigBanqueo(
 async function banquearMarcasConConfig(grupoId, config, estadoOrigen) {
   const filtroExtra = estadoOrigen === 'resuelto' ? "AND banqueadores IS NOT NULL AND gano IS NOT NULL" : '';
   const r = await db.query(
-    `SELECT id, gano, monto, resultado_cliente, comision_porcentaje, sin_comision
+    `SELECT id, gano, monto, resultado_cliente, comision_porcentaje, sin_comision, montos_manuales
        FROM hipismo_adelantadas_jugadas
       WHERE grupo_id = $1 AND tipo = 'marca' AND estado = '${estadoOrigen}' ${filtroExtra}`,
     [grupoId]
@@ -97,8 +97,10 @@ async function banquearMarcasConConfig(grupoId, config, estadoOrigen) {
   const filas = (r && r.rows) || [];
   let tocadas = 0;
   for (const j of filas) {
+    // Montos exactos a mano (07-10-2026): fijos, no se vuelven a banquear con la configuración si ya tienen banqueadores.
+    if (j.montos_manuales && estadoOrigen === 'resuelto') continue;
     const acierta = !!j.gano;
-    const base = acierta ? Number(j.resultado_cliente) : Number(j.monto);
+    const base = j.montos_manuales ? Math.abs(Number(j.resultado_cliente)) : (acierta ? Number(j.resultado_cliente) : Number(j.monto));
     const banqueo = banqueoAutomaticoMarca({ acierta, base }, j.sin_comision ? 0 : j.comision_porcentaje, null, config);
     if (!banqueo) continue;
     await db.query(

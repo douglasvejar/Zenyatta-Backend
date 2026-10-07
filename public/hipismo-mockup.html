@@ -256,6 +256,8 @@
   .rev-modo label.rev-opcion { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: inherit; margin: 0; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; }
   .rev-modo label.rev-opcion:has(input:checked) { border-color: var(--primary); background: var(--primary-soft, rgba(34,139,34,.08)); }
   .rev-modo label.rev-opcion small { display: block; color: var(--text-dim); font-size: 11.5px; font-weight: 400; }
+  .rev-manual { grid-column: 1 / -1; border: 1px dashed var(--card-border); border-radius: 8px; padding: 8px 10px; }
+  .rev-manual-tit { font-size: 12.5px; font-weight: 500; margin-bottom: 6px; }
   .rev-modo input[type="radio"] { width: auto; flex: none; margin: 3px 0 0; padding: 0; }
   .rev-modo label.rev-opcion > span { flex: 1; }
   .bq-resumen { border:1px solid var(--border-light); border-radius:10px; padding:8px 14px; margin-bottom:14px; font-size:13px; line-height:1.5; }
@@ -1705,10 +1707,6 @@
     <section class="vista" id="vista-jugadasAdelantadas">
       <div class="card">
         <h2>🎯 Tablas Fijas y Marcas</h2>
-        <p class="desc">
-          Pega el plano de jugadas adelantadas (varios clientes, varias carreras a la vez), elige el hipódromo y el día en que se van a correr esas carreras, y guardalo. Cada línea queda <b>pendiente</b> hasta que cargues el plano de "Cargar Planos" de esa misma carrera con su pizarra: ahí las <b>Tablas Fijas</b> se resuelven solas, y las <b>Marcas</b> se banquean solas con quien configures arriba en "¿Quién banquea las Marcas?" (si no configuras a nadie, quedan esperando que las banquees a mano, más abajo en "Pendientes de resolver"). Si una carrera no tiene NINGÚN Tercios en vivo, igual puedes ir a "Cargar Planos" con el texto vacío y solo la pizarra — "jala" la jugada adelantada y la resuelve igual.
-          <span class="badge-pendiente">Primer formato confirmado — vendrán otros formatos más adelante</span>
-        </p>
 
         <!-- Resumen (SOLO LECTURA) de quién banquea las Marcas y las Tablas Fijas de
              este grupo (07-10-2026, "SI YA HAY UNA PESTAÑA DE BANQUEO DONDE CONFIGURO
@@ -7855,7 +7853,7 @@ function cerrarEdicionAdelantada() {
 
 function filaEdicionAdelantadaHtml(j) {
   return `
-    <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+    <div class="rev-form" style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
       <div style="font-size:13px; margin-bottom:6px;">✏️ Editando esta jugada:</div>
       <div class="rev-grid">${adelCamposEdicionHtml(j, {
         cliente: `editAdelantadaCliente_${j.id}`, monto: `editAdelantadaMonto_${j.id}`, ejemplar: `editAdelantadaEjemplar_${j.id}`,
@@ -7874,6 +7872,7 @@ async function guardarEdicionAdelantada(jugadaId) {
     monto: document.getElementById(`editAdelantadaMonto_${jugadaId}`).value,
     sinComision: adelSinComisionElegido(`editAdelantadaModo_${jugadaId}`)
   };
+  { const mm = adelMontoManualElegido(`editAdelantadaModo_${jugadaId}`); if (mm !== undefined) body.montoManual = mm; }
   const elEjemplar = document.getElementById(`editAdelantadaEjemplar_${jugadaId}`);
   if (elEjemplar) body.numeroEjemplar = elEjemplar.value;
   const elN1 = document.getElementById(`editAdelantadaNumero1_${jugadaId}`);
@@ -11902,6 +11901,7 @@ async function bqResumenAdelantadas() {
     const [m, t] = await Promise.all([apiHipismo('/api/hipismo/marcas-banqueo-config'), apiHipismo('/api/hipismo/tf-banqueo-config')]);
     const lm = m.banqueadores || [];
     const lt = t.banqueadores || [];
+    BQ_CFG = { marca: lm, tf: lt };
     const filaM = lm.length
       ? `<div><b>Marcas:</b> ${bqTextoBanqueadores(lm)}</div>`
       : '<div><b>Marcas:</b> sin banqueo automático — cada Marca queda "falta banqueo" hasta banquearla a mano.</div>';
@@ -14454,7 +14454,7 @@ function revBotonesFila(tipo, id) {
 
 function revFormEdicion(tipo, id, camposHtml) {
   return `
-    <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+    <div class="rev-form" style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
       <div class="rev-grid">${camposHtml}</div>
       <div class="btn-fila">
         <button class="btn btn-primario" type="button" onclick="revGuardar('${tipo}', '${id}')">💾 Guardar</button>
@@ -14508,22 +14508,90 @@ function revHtmlPlanos(planos) {
 // "Normal" (el programa calcula el % de la jugada como siempre) o "Sin comisión" (07-10-2026: la jugada se resuelve
 // igual, pero con los montos exactos: no se le cobra % a nadie, no genera comisión para el grupo ni % devuelto —
 // como un traspaso con el monto ya neto).
+var BQ_CFG = { marca: [], tf: [] }; // banqueadores configurados del grupo (para los montos exactos a mano)
+async function bqLeerCfgGlobal() {
+  try {
+    const [m, t] = await Promise.all([apiHipismo('/api/hipismo/marcas-banqueo-config'), apiHipismo('/api/hipismo/tf-banqueo-config')]);
+    BQ_CFG = { marca: m.banqueadores || [], tf: t.banqueadores || [] };
+  } catch (e) { /* sin configuración: solo se escribe el resultado del cliente */ }
+}
+function adelFmtSigno(n) { const v = Number(n); return (v > 0 ? '+' : '') + v.toFixed(2).replace('.', ','); }
+function adelNum(txt) { const t = String(txt == null ? '' : txt).trim().replace(',', '.'); return t === '' ? NaN : Number(t); }
 function adelCamposEdicionHtml(j, ids) {
   const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const campos = j.tipo === 'tf'
     ? `<div><label for="${ids.ejemplar}">N° de ejemplar</label><input type="number" id="${ids.ejemplar}" value="${j.numeroEjemplar != null ? j.numeroEjemplar : ''}"></div>`
     : `<div><label for="${ids.n1}">1er número</label><input type="number" id="${ids.n1}" value="${j.numero1 != null ? j.numero1 : ''}"></div>
        <div><label for="${ids.n2}">2do número</label><input type="number" id="${ids.n2}" value="${j.numero2 != null ? j.numero2 : ''}"></div>`;
+  // Montos exactos a mano: el cliente + cada ítem de la contraparte (los banqueadores que ya tiene la jugada o,
+  // si todavía no se resolvió, los configurados del grupo).
+  const yaBanqueada = Array.isArray(j.banqueadores) && j.banqueadores.length;
+  const sinResolver = j.estado === 'pendiente' || j.estado === 'falta_banqueo';
+  const contra = yaBanqueada ? j.banqueadores : (sinResolver ? (j.tipo === 'tf' ? BQ_CFG.tf : BQ_CFG.marca) : []);
+  const manual = !!j.montosManuales;
+  const ahoraCli = j.resultadoCliente != null ? `ahora: ${adelFmtSigno(j.resultadoCliente)}` : 'según la pizarra';
+  const filasContra = contra.map((b, i) => {
+    const previo = yaBanqueada && b.monto != null ? b.monto : null;
+    return `<div><label for="${ids.modo}_b${i}">${esc(b.nombre)}</label><input type="text" inputmode="decimal" id="${ids.modo}_b${i}" data-nombre="${esc(b.nombre)}" placeholder="${previo != null ? 'ahora: ' + adelFmtSigno(previo) : 'monto'}" value="${manual && previo != null ? String(previo).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>`;
+  }).join('');
   return `
     <div><label for="${ids.cliente}">Cliente</label><input type="text" id="${ids.cliente}" value="${esc(j.cliente)}"></div>
     <div><label for="${ids.monto}">Monto apostado</label><input type="number" id="${ids.monto}" step="0.01" value="${j.monto}"></div>
     ${campos}
     <div class="rev-modo" role="radiogroup" aria-label="Comisión de esta jugada">
-      <label class="rev-opcion"><input type="radio" name="${ids.modo}" value="normal" ${j.sinComision ? '' : 'checked'}>
+      <label class="rev-opcion"><input type="radio" name="${ids.modo}" value="normal" ${j.sinComision ? '' : 'checked'} onchange="adelAlternarModo('${ids.modo}')">
         <span><b>Normal</b><small>El programa calcula los % de la jugada como siempre.</small></span></label>
-      <label class="rev-opcion"><input type="radio" name="${ids.modo}" value="sin" ${j.sinComision ? 'checked' : ''}>
+      <label class="rev-opcion"><input type="radio" name="${ids.modo}" value="sin" ${j.sinComision ? 'checked' : ''} onchange="adelAlternarModo('${ids.modo}')">
         <span><b>Sin comisión</b><small>Montos exactos: no se le da % a nadie, no genera comisión al grupo ni % devuelto (como un traspaso).</small></span></label>
+    </div>
+    <div class="rev-manual" id="${ids.modo}_manual" style="display:${j.sinComision ? 'block' : 'none'};">
+      <div class="rev-manual-tit">✍️ Montos exactos de esta apuesta (opcional) — con signo: + gana / − pierde. Tienen que sumar 0 y quedan fijos (la pizarra no los recalcula) hasta que los edites otra vez. Si lo dejas vacío, el programa calcula con la pizarra, sin comisión.</div>
+      <div class="rev-grid">
+        <div><label for="${ids.modo}_cli">Cliente: ${esc(j.cliente)}</label><input type="text" inputmode="decimal" id="${ids.modo}_cli" placeholder="${ahoraCli}" value="${manual && j.resultadoCliente != null ? String(j.resultadoCliente).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>
+        ${filasContra}
+      </div>
+      <div class="bq-nota" id="${ids.modo}_suma" style="margin:6px 0 0;"></div>
     </div>`;
+}
+// Muestra u oculta los montos a mano según el modo, y valida que sumen 0 (bloquea Guardar si no).
+function adelAlternarModo(modo) {
+  const caja = document.getElementById(modo + '_manual');
+  if (caja) caja.style.display = adelSinComisionElegido(modo) ? 'block' : 'none';
+  adelSumaManual(modo);
+}
+function adelSumaManual(modo) {
+  const caja = document.getElementById(modo + '_manual');
+  const nota = document.getElementById(modo + '_suma');
+  const form = caja && caja.closest('.rev-form');
+  const btn = form && form.querySelector('.btn-primario');
+  if (!caja || !nota) return;
+  const cli = document.getElementById(modo + '_cli');
+  let ok = true, texto = '';
+  if (adelSinComisionElegido(modo) && cli && cli.value.trim() !== '') {
+    const c = adelNum(cli.value);
+    const otros = Array.from(caja.querySelectorAll('input[data-nombre]')).map(el => adelNum(el.value));
+    if (isNaN(c)) { ok = false; texto = '⚠ El resultado del cliente no es un número.'; }
+    else if (otros.some(n => isNaN(n))) { ok = false; texto = '⚠ Falta algún monto de la contraparte.'; }
+    else {
+      const suma = Math.round((c + otros.reduce((a, b) => a + b, 0)) * 100) / 100;
+      ok = Math.abs(suma) <= 0.005;
+      texto = ok ? `Suma: 0,00 ✅${otros.length ? '' : ' (la contraparte sale sola con el opuesto exacto)'}` : `⚠ Suma ${adelFmtSigno(suma)} — tiene que dar 0 para poder guardar.`;
+    }
+  }
+  nota.textContent = texto;
+  if (btn) btn.disabled = !ok;
+}
+// Montos a mano elegidos: undefined = modo "Normal" (no se manda nada); null = "Sin comisión" sin montos escritos
+// (quita los montos a mano si los había); objeto = montos exactos.
+function adelMontoManualElegido(modo) {
+  if (!adelSinComisionElegido(modo)) return undefined;
+  const cli = document.getElementById(modo + '_cli');
+  if (!cli || cli.value.trim() === '') return null;
+  const caja = document.getElementById(modo + '_manual');
+  return {
+    resultadoCliente: adelNum(cli.value),
+    banqueadores: Array.from(caja.querySelectorAll('input[data-nombre]')).map(el => ({ nombre: el.getAttribute('data-nombre'), monto: adelNum(el.value) }))
+  };
 }
 function adelSinComisionElegido(nombreModo) {
   const el = document.querySelector(`input[name="${nombreModo}"]:checked`);
@@ -14536,10 +14604,10 @@ function revHtmlAdelantadas(lista) {
     const descr = j.tipo === 'tf'
       ? `TF — ${j.cantidadTf != null ? j.cantidadTf + ' TF' : ''} ejemplar ${j.numeroEjemplar != null ? j.numeroEjemplar : '?'}${j.gananciaPotencial != null ? ' (paga $' + formatMontoTabla(j.gananciaPotencial) + ')' : ''}`
       : `Marca — ${j.numero1 != null ? j.numero1 : '?'} x ${j.numero2 != null ? j.numero2 : '?'}`;
-    const estado = j.estado === 'resuelto'
-      ? `${j.gano ? '✅ ganó' : '❌ perdió'}${j.resultadoCliente != null ? ' ' + revMontoConSigno(j.gano ? j.resultadoCliente : -j.monto) : ''}`
+    const estado = j.estado === 'resuelto' || (j.montosManuales && j.resultadoCliente != null && j.estado !== 'sin_decidir')
+      ? `${j.gano ? '✅ ganó' : '❌ perdió'}${j.resultadoCliente != null ? ' ' + revMontoConSigno(j.montosManuales ? j.resultadoCliente : (j.gano ? j.resultadoCliente : -j.monto)) : ''}`
       : (j.estado === 'sin_decidir' ? '⚪ sin decidir' : '⏳ ' + escRev(j.estado));
-    const detalle = `<b>${escRev(j.cliente)}</b> — ${descr} — $${formatMontoTabla(j.monto)} <span style="color:var(--text-dim); font-size:12px;">(${estado}${j.sinComision ? ' — 🚫 sin comisión' : ''}${j.errorCalculo ? ' — ⚠ ' + escRev(j.detalleError || 'error de cálculo') : ''})</span>`;
+    const detalle = `<b>${escRev(j.cliente)}</b> — ${descr} — $${formatMontoTabla(j.monto)} <span style="color:var(--text-dim); font-size:12px;">(${estado}${j.sinComision ? ' — 🚫 sin comisión' : ''}${j.montosManuales ? ' — ✍️ montos a mano' : ''}${j.errorCalculo ? ' — ⚠ ' + escRev(j.detalleError || 'error de cálculo') : ''})</span>`;
     const form = revEnEdicion('adelantada', j.id) ? revFormEdicion('adelantada', j.id, adelCamposEdicionHtml(j, {
       cliente: `rev_cliente_${j.id}`, monto: `rev_monto_${j.id}`, ejemplar: `rev_ejemplar_${j.id}`, n1: `rev_n1_${j.id}`, n2: `rev_n2_${j.id}`, modo: `rev_modo_${j.id}`
     })) : '';
@@ -14660,6 +14728,7 @@ async function cargarRevisarJugadas() {
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escRev(e.message)}</div>`;
     return;
   }
+  await bqLeerCfgGlobal();
   pintarRevisarJugadas(data);
 }
 
@@ -14691,6 +14760,7 @@ async function revGuardar(tipoCompleto, id) {
     if (document.getElementById(`rev_n1_${id}`)) body.numero1 = revVal('n1', id);
     if (document.getElementById(`rev_n2_${id}`)) body.numero2 = revVal('n2', id);
     body.sinComision = adelSinComisionElegido(`rev_modo_${id}`);
+    { const mm = adelMontoManualElegido(`rev_modo_${id}`); if (mm !== undefined) body.montoManual = mm; }
   } else if (tipo === 'tercios') {
     ruta = `/api/hipismo/tercios-adelantadas/jugadas/${id}`;
     body = { jugador: revVal('jugador', id), banquero: revVal('banquero', id), monto: revVal('monto', id), modalidad: revVal('modalidad', id) };
