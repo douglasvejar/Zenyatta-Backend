@@ -1976,7 +1976,7 @@
     <section class="vista" id="vista-pozos">
       <div class="card">
         <h2>💰 Pozos</h2>
-        <p class="desc">Cuánto pozo le queda a cada cliente "Avalado" — se le asigna un pozo y, a medida que va jugando (Tercios, Remate, Adelantadas — Deportes también si está anclado), ese pozo sube o baja solo, sin tocar Balance ni Cierre Final (esos siguen siendo 100% de las jugadas del período, sin pozo). El círculo de color avisa qué tan vivo está: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Los clientes "Libre" no tienen pozo (⚪).</p>
+        <p class="desc">Cuánto pozo le queda a cada cliente "Avalado" — se le asigna un pozo y, a medida que va jugando (Tercios, Remate, Adelantadas — Deportes también si está anclado), ese pozo sube o baja solo durante la semana y, al empezar la semana nueva, vuelve a su monto asignado; sin tocar Balance ni Cierre Final (esos siguen siendo 100% de las jugadas del período, sin pozo). El círculo de color avisa qué tan vivo está: 🟢 más de 80% para jugar, 🟡 zona media, 🔴 menos de 15% (esa fila titila y suma a la alerta). Los clientes "Libre" no tienen pozo (⚪).</p>
 
         <!-- Filtro de vista (27-09-2026), a pedido del usuario: 3 formas
              de ver la lista — "Saldos + Pozos" (saldo de la semana +
@@ -9380,7 +9380,7 @@ async function pintarFichaCliente() {
         <div id="detCtePozoWrap" style="display:${j.tipo_cuenta === 'avalado' ? 'block' : 'none'};">
           <label>Pozo actual</label>
           <div style="padding:10px 12px; background:var(--card-2); border:1px solid var(--card-border); border-radius:8px; font-weight:700;">${formatMontoTabla(j.pozo_inicial || 0)}</div>
-          <div style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Para cambiarlo usa "Ajustar pozo" ahí abajo — no se pisa directo.</div>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Es el pozo asignado: cada semana nueva el cliente vuelve a empezar en este monto. Para cambiarlo usa "Ajustar pozo" ahí abajo — no se pisa directo.</div>
         </div>
       </div>
       <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
@@ -11125,7 +11125,7 @@ async function cambiarClientePozoAjuste() {
     return;
   }
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
-  infoEl.innerHTML = j ? `Pozo actual de <b>${formatNombre(j.nombre)}</b>: ${formatMontoTabla(j.pozo_inicial || 0)}` : '';
+  infoEl.innerHTML = j ? `Pozo asignado de <b>${formatNombre(j.nombre)}</b>: ${formatMontoTabla(j.pozo_inicial || 0)} — cada semana nueva vuelve a empezar en este monto.` : '';
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
   const historial = await obtenerHistorialPozo(id);
   tbody.innerHTML = historial.length
@@ -14890,8 +14890,8 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
   // si pulso alli veo lo mismo pero ahora con el pozo que tenga cada
   // cliente ya sumado" — mismo criterio que ya usa "💰 Pozos" > "Saldos +
   // Pozos" (ver pintarTablaPozos más arriba): el pozo de cada cliente
-  // (j.pozo.pozoActual, calculado en services/pozo.js — TODO el histórico,
-  // nunca solo el rango elegido acá) se SUMA al saldo que ya trae este
+  // (j.pozo.pozoActual, calculado en services/pozo.js — la SEMANA ACTIVA,
+  // el pozo vuelve a su base cada semana nueva; nunca el rango elegido acá) se SUMA al saldo que ya trae este
   // reporte, cliente por cliente, por nombre. La lista de clientes NO
   // cambia (sigue siendo solo quien jugó/banqueó en el rango elegido) —
   // nadie nuevo se agrega por tener pozo sin haber jugado acá — y la

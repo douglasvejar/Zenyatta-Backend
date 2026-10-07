@@ -143,6 +143,12 @@ function ejecutarQuery(text, params) {
   if (/^SELECT monto FROM hipismo_winners WHERE/i.test(sql)) {
     return { rows: [] };
   }
+  // POZO SEMANAL (07-10-2026): las mismas 4 consultas, ahora CON rango de
+  // semana (JOIN a planos/remates) — también vacías en esta prueba.
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero FROM hipismo_tickets t JOIN hipismo_planos p/i.test(sql)) return { rows: [] };
+  if (/^SELECT a\.resultado FROM hipismo_remate_apuestas a JOIN hipismo_remates r/i.test(sql)) return { rows: [] };
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p/i.test(sql)) return { rows: [] };
+  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) return { rows: [] };
 
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

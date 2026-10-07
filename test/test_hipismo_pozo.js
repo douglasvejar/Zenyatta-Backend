@@ -32,6 +32,12 @@ const path = require('path');
 const originalLoad = Module._load;
 
 const GRUPO_ID = 'grupo-pozo-hip-1';
+// POZO SEMANAL (07-10-2026): calcularPozoJugador solo suma lo de la semana
+// activa, así que las jugadas de prueba van fechadas HOY (hora de Venezuela);
+// las filas de Hipismo sin fecha se toman como de hoy. El caso "semana
+// nueva" está en test_pozo_semanal.js.
+const HOY = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const enRango = (fecha, desde, hasta) => { const f = fecha || HOY; return f >= desde && f <= hasta; };
 
 const TABLAS = {
   tickets_historial: [],
@@ -83,6 +89,24 @@ function ejecutarQuery(text, params) {
   if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2/i.test(sql)) {
     const [grupoId, nombre] = params;
     return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre) };
+  }
+
+  // ---- versiones CON rango de semana (JOIN a planos/remates, ver hipismoPozo.js) ----
+  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero FROM hipismo_tickets t JOIN hipismo_planos p/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    return { rows: TABLAS.hipismo_tickets.filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre) && enRango(t.fecha, desde, hasta)) };
+  }
+  if (/^SELECT a\.resultado FROM hipismo_remate_apuestas a JOIN hipismo_remates r/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    return { rows: TABLAS.hipismo_remate_apuestas.filter(a => a.grupo_id === grupoId && a.cliente_nombre === nombre && enRango(a.fecha, desde, hasta)) };
+  }
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p/i.test(sql)) {
+    const [grupoId, desde, hasta] = params;
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado) && enRango(j.fecha, desde, hasta)) };
+  }
+  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre && enRango(w.fecha, desde, hasta)) };
   }
 
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
@@ -152,8 +176,8 @@ async function main() {
 
   // ---- 5) calcularPozoJugador combina Deportes + Hipismo ----
   TABLAS.tickets_historial.push(
-    { grupo_id: GRUPO_ID, fecha: '2026-09-01', cliente_nombre: 'PEDRO', ticket_label: 'T1', detalle: 'x', arriesga: 100, gana: 180, estado: 'GANADA', logros: null },
-    { grupo_id: GRUPO_ID, fecha: '2026-09-02', cliente_nombre: 'PEDRO', ticket_label: 'T2', detalle: 'x', arriesga: 50, gana: 90, estado: 'PERDIDA', logros: null }
+    { grupo_id: GRUPO_ID, fecha: HOY, cliente_nombre: 'PEDRO', ticket_label: 'T1', detalle: 'x', arriesga: 100, gana: 180, estado: 'GANADA', logros: null },
+    { grupo_id: GRUPO_ID, fecha: HOY, cliente_nombre: 'PEDRO', ticket_label: 'T2', detalle: 'x', arriesga: 50, gana: 90, estado: 'PERDIDA', logros: null }
   );
   const jugadorPedro = { nombre: 'PEDRO', pozo_inicial: 1000 };
   const pozoPedro = await calcularPozoJugador(GRUPO_ID, jugadorPedro);
@@ -171,7 +195,7 @@ async function main() {
   check(pozoSoloHipico.pozoActual === 245, 'calcularPozoJugador: pozoActual de un cliente solo-Hipismo = pozoInicial + Hipismo (200+45=245), dio ' + pozoSoloHipico.pozoActual);
 
   // ---- 7) Regresión: cliente que SOLO juega Deportes sigue exacto igual ----
-  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: '2026-09-03', cliente_nombre: 'SOLODEPORTES', ticket_label: 'T3', detalle: 'x', arriesga: 200, gana: 380, estado: 'GANADA', logros: null });
+  TABLAS.tickets_historial.push({ grupo_id: GRUPO_ID, fecha: HOY, cliente_nombre: 'SOLODEPORTES', ticket_label: 'T3', detalle: 'x', arriesga: 200, gana: 380, estado: 'GANADA', logros: null });
   const jugadorSoloDeportes = { nombre: 'SOLODEPORTES', pozo_inicial: 500 };
   const pozoSoloDeportes = await calcularPozoJugador(GRUPO_ID, jugadorSoloDeportes);
   check(pozoSoloDeportes.liquidadoHipismo === 0, 'calcularPozoJugador: un cliente sin NINGUNA jugada de Hipismo da liquidadoHipismo=0 (regresión: no le inventa nada), dio ' + pozoSoloDeportes.liquidadoHipismo);

@@ -3,7 +3,7 @@
 const express = require('express');
 const db = require('../db');
 const { requiereGrupo, requierePermiso, monedaModoDe } = require('../middleware/auth');
-const { calcularPozoJugador } = require('../services/pozo');
+const { calcularPozoJugador, rangoSemanaActualPozo } = require('../services/pozo');
 const { buscarOCrearFicha } = require('../services/hipismoComisionPropia');
 const asyncHandler = require('../middleware/asyncHandler');
 
@@ -71,8 +71,11 @@ router.get('/', asyncHandler(async (req, res) => {
     if (!avalesPorJugadorId[fila.jugador_id]) avalesPorJugadorId[fila.jugador_id] = [];
     avalesPorJugadorId[fila.jugador_id].push({ avaladorId: fila.avalador_id, avaladorNombre: fila.avalador_nombre, porcentaje: Number(fila.porcentaje) });
   });
+  // Semana activa una sola vez para toda la lista (POZO SEMANAL, 07-10-2026,
+  // ver la nota grande en services/pozo.js).
+  const rangoSemana = await rangoSemanaActualPozo(req.grupoId);
   const conPozo = await Promise.all(r.rows.map(async j => {
-    const pozo = j.tipo_cuenta === 'avalado' ? await calcularPozoJugador(req.grupoId, j) : null;
+    const pozo = j.tipo_cuenta === 'avalado' ? await calcularPozoJugador(req.grupoId, j, { rango: rangoSemana }) : null;
     return { ...j, pozo, avalesPorcentaje: avalesPorJugadorId[j.id] || [] };
   }));
   res.json(conPozo);
