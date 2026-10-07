@@ -443,9 +443,10 @@ async function invocarRuta(handler, req) {
   }
   const jLionel = TABLAS.jugadores.find(x => x.nombre === 'LIONEL');
   const resLionel = await construirResumenClienteHipismo(jLionel, reqBase.grupo, 'actual', { desde: FECHA, hasta: FECHA });
-  const bloque = resLionel.dias[0] && resLionel.dias[0].hipodromos.find(h => h.nombre === 'Deporte (Carga Masiva)');
-  check(!!bloque && bloque.tipo === 'traspaso' && bloque.carreras[0].resultado === -50 && /Carrera 1/.test(bloque.carreras[0].nota) && /Todos los hipódromos/.test(bloque.carreras[0].nota),
-    '6b) en su link aparece el bloque "Deporte (Carga Masiva)" con -50, la carrera y el hipódromo');
+  const bloque = resLionel.dias[0] && resLionel.dias[0].hipodromos.find(h => h.nombre === 'Deporte');
+  check(!!bloque && bloque.tipo !== 'traspaso' && bloque.carreras[0].resultado === -50 && bloque.carreras[0].carrera === 1 && bloque.carreras[0].tipo === 'carga' && /Deporte/.test(bloque.carreras[0].texto),
+    '6b) en su link aparece como una jugada normal de "Deporte" (sin hipódromo => bloque con el nombre de la acción), -50, carrera 1');
+  check(!JSON.stringify(resLionel.dias).match(/carga masiva/i), '6c) en el link del cliente NO aparece ningún mensaje de "Carga Masiva"');
 
   // ---------- 7) Diagnóstico grilla vs link ----------
   const diag = await invocarRuta(handlerDe('get', '/diagnostico-saldos'), { ...reqBase, query: { desde: FECHA, hasta: FECHA } });
@@ -495,13 +496,13 @@ async function invocarRuta(handler, req) {
   check(s4('HAALAND') === 100 && s4('MARCAS ZENYATTA') === -50 && s4('MARCAS SAMMY') === -51.25 && s4('% TABLAS Y MARCAS') === 1.25, `11b) cada cuenta queda en su sitio: HAALAND +100, MARCAS ZENYATTA -50, MARCAS SAMMY -51,25, % TABLAS Y MARCAS +1,25 -- dio ${s4('HAALAND')}/${s4('MARCAS ZENYATTA')}/${s4('MARCAS SAMMY')}/${s4('% TABLAS Y MARCAS')}`);
   const jHaaland = TABLAS.jugadores.find(x => x.nombre === 'HAALAND');
   const resH = await construirResumenClienteHipismo(jHaaland, reqBase.grupo, 'actual', { desde: FECHA, hasta: FECHA });
-  const bloqueH = resH.dias[0] && resH.dias[0].hipodromos.find(h => h.nombre === 'Marcas (Carga Masiva)');
-  check(!!bloqueH && bloqueH.carreras[0].resultado === 100 && /LA RINCONADA/.test(bloqueH.carreras[0].nota) && /Carrera 4/.test(bloqueH.carreras[0].nota), '11c) en el link de HAALAND aparece "Marcas (Carga Masiva)" con +100, LA RINCONADA y la carrera 4');
+  const bloqueH = resH.dias[0] && resH.dias[0].hipodromos.find(h => /LA RINCONADA/i.test(h.nombre));
+  check(!!bloqueH && bloqueH.carreras[0].resultado === 100 && bloqueH.carreras[0].carrera === 4 && /Marca/.test(bloqueH.carreras[0].texto) && !JSON.stringify(resH.dias).match(/carga masiva/i), '11c) en el link de HAALAND aparece como una jugada normal en el bloque de LA RINCONADA, carrera 4, +100, "Adelantada — Marca" y sin el mensaje "Carga Masiva"');
   const diag2 = await invocarRuta(handlerDe('get', '/diagnostico-saldos'), { ...reqBase, query: { desde: FECHA, hasta: FECHA } });
   check(diag2.salida && diag2.salida.discrepancias.length === 0, `11d) diagnóstico: 0 discrepancias también con el ejemplo de Marcas -- ${JSON.stringify(diag2.salida && diag2.salida.discrepancias)}`);
   check(!TABLAS.insertsJugadores, '11e) todavía NO se creó ningún cliente solo');
   const detCuenta = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { ...reqBase, params: { nombre: '% TABLAS Y MARCAS' }, query: { desde: FECHA, hasta: FECHA } });
-  const bloqueCuenta = detCuenta.salida && detCuenta.salida.dias && detCuenta.salida.dias[0] && detCuenta.salida.dias[0].hipodromos.find(h => h.nombre === 'Marcas (Carga Masiva)');
+  const bloqueCuenta = detCuenta.salida && detCuenta.salida.dias && detCuenta.salida.dias[0] && detCuenta.salida.dias[0].hipodromos.find(h => /LA RINCONADA/i.test(h.nombre) || h.nombre === 'Marca' || /Marca/.test(h.nombre));
   check(detCuenta.status === 200 && !!bloqueCuenta && bloqueCuenta.carreras[0].resultado === 1.25 && Math.abs(detCuenta.salida.resumen.totalHipismo - 1.25) < 0.001, `11f) la cuenta del grupo "% TABLAS Y MARCAS" se puede abrir en Detallado por Cliente (no da "No se encontró") con su +1,25 -- status ${detCuenta.status}`);
   const detFantasma = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { ...reqBase, params: { nombre: 'NO EXISTE NADIE' }, query: { desde: FECHA, hasta: FECHA } });
   check(detFantasma.status === 404, '11g) un nombre que no es cliente ni cuenta del grupo sigue dando 404');

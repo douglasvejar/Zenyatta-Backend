@@ -65,7 +65,20 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // "dias[].hipodromos", con tipo:'traspaso', SOLO puede aparecer en el
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
 const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos de Comisión';
-const NOMBRE_BLOQUE_CARGA_ESPECIAL = 'Carga Masiva';
+// Texto con el que el cliente ve una línea de Carga Masiva Especial: como una jugada
+// más (sin mencionar "Carga Masiva").
+const TEXTO_JUGADA_CARGA_ESPECIAL = {
+  'CARRERA': 'Jugada',
+  'REMATE': '🏆 Remate',
+  'WINNERS': 'Winners',
+  'TABLAS FIJAS': '🕐 Adelantada — Tabla fija',
+  'MARCAS': '🕐 Adelantada — Marca',
+  'JUGADAS ENTRE TERCIOS ADELANTADAS': '🎯 Adelantada entre tercios',
+  'CRUCE': '🔀 Cruce',
+  'POLLA': 'Polla',
+  'DEPORTE': '⚽ Deporte',
+  'TRASPASO': 'Traspaso'
+};
 // Mismo nombre de ítem que ya usaba GET /cierre-final en routes/hipismo.js
 // (NOMBRE_ITEM_REMATE) — ver la nota grande de construirCierreFinalHipismo
 // más abajo.
@@ -802,25 +815,30 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   });
 
   // CARGA MASIVA ESPECIAL (05-10-2026): mismas líneas que suma Cierre Final
-  // (obtenerCargasEspecialesRango), mostradas como un pseudo-hipódromo
-  // "Carga Masiva Especial" con el mismo render que los Traspasos
-  // (`tipo: 'traspaso'`, una nota y el monto) — así el link/Detallado por
-  // Cliente siempre cuadran con la grilla.
+  // (obtenerCargasEspecialesRango), así el link/Detallado por Cliente siempre
+  // cuadran con la grilla.
+  // 07-10-2026, a pedido del usuario ("en los reportes elimina el mensaje de
+  // carga masiva... que los clientes lo vean como si fuera una jugada
+  // normal"): ya NO se muestra ningún texto "Carga Masiva". La línea sale como
+  // una jugada más, dentro del bloque de su hipódromo (el mismo bloque donde
+  // están sus demás jugadas) y de su carrera, con el nombre de la acción
+  // ("Marca", "Remate"...). Sin carrera => carrera 0 ("Otras jugadas"); sin
+  // hipódromo ("Todos") => bloque con el nombre de la acción.
   const cargasEspecialesCliente = await obtenerCargasEspecialesRango(jugador.grupo_id, desde, hasta, jugador.nombre);
   cargasEspecialesCliente.forEach(l => {
     if (!porDia.has(l.fecha)) porDia.set(l.fecha, new Map());
     const hipMap = porDia.get(l.fecha);
-    // Un bloque por acción ("Marcas (Carga Masiva)", "Remate (Carga Masiva)"...),
-    // como pidió el usuario: "el detallado debe aparecer como Deporte,
-    // Remate, etc., según la acción seleccionada".
-    const accion = (l.codigoNombre || '').toString().trim();
-    const nombreBloque = accion ? `${accion.charAt(0)}${accion.slice(1).toLowerCase()} (${NOMBRE_BLOQUE_CARGA_ESPECIAL})` : NOMBRE_BLOQUE_CARGA_ESPECIAL;
-    if (!hipMap.has(nombreBloque)) {
-      hipMap.set(nombreBloque, { nombre: nombreBloque, tipo: 'traspaso', carreras: [] });
-    }
-    hipMap.get(nombreBloque).carreras.push({
-      tipo: 'traspaso',
-      nota: `${l.hipodromoNombre || 'Todos los hipódromos'}${l.carrera ? ` · Carrera ${l.carrera}` : ''} · Carga Masiva`,
+    const accion = (l.codigoNombre || '').toString().trim().toUpperCase();
+    const textoJugada = TEXTO_JUGADA_CARGA_ESPECIAL[accion] || (accion ? `${accion.charAt(0)}${accion.slice(1).toLowerCase()}` : 'Jugada');
+    const nombreBloque = l.hipodromoNombre || textoJugada.replace(/^[^A-Za-zÁÉÍÓÚáéíóú]+/, '');
+    const existente = Array.from(hipMap.keys()).find(k => String(k).trim().toUpperCase() === nombreBloque.trim().toUpperCase());
+    const claveBloque = existente !== undefined ? existente : nombreBloque;
+    if (!hipMap.has(claveBloque)) hipMap.set(claveBloque, { nombre: claveBloque, carreras: [] });
+    hipMap.get(claveBloque).carreras.push({
+      carrera: l.carrera ? Number(l.carrera) : 0,
+      tipo: 'carga',
+      texto: textoJugada,
+      monto: null,
       resultado: l.monto
     });
     totalSemana += l.monto;

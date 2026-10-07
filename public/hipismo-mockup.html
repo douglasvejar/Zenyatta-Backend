@@ -10160,6 +10160,8 @@ function totalCarrerasDet(carreras) { return carreras.reduce((acc, c) => acc + c
 
 // Mismo texto EXACTO que armarJugadaTexto() en hipismo-cliente-portal.html.
 function armarJugadaTextoDetallado(c) {
+  // Línea de Carga Masiva Especial: se ve como una jugada normal (07-10-2026), solo con el nombre de la acción.
+  if (c.tipo === 'carga') return c.texto;
   // 25-09-2026, a pedido del usuario: el número de ejemplar se muestra
   // con su gualdrapa (mismo criterio EXACTO que armarJugadaTexto() en
   // hipismo-cliente-portal.html — ver la nota grande de gualdrapaHTML()
@@ -10486,7 +10488,7 @@ function renderDetalleClienteModal(data) {
           headerCarrera.onclick = (ev) => { ev.stopPropagation(); bloqueCarrera.classList.toggle('colapsado'); };
           headerCarrera.innerHTML = `
             <span class="detmodal-flecha">▾</span>
-            <span class="nombre-carrera">${numCarrera}ª Carrera</span>
+            <span class="nombre-carrera">${numCarrera ? numCarrera + 'ª Carrera' : 'Otras jugadas'}</span>
             <span class="total-carrera ${claseMontoDet(totalCarrera)}">Total carrera: ${conSignoDet(totalCarrera)}</span>`;
           bloqueCarrera.appendChild(headerCarrera);
 
@@ -10512,9 +10514,9 @@ function renderDetalleClienteModal(data) {
               ? `<span class="monto-jugado">incluye % = ${conSignoDet(c.comisionPropiaIncluida)}</span>`
               : '';
             fila.innerHTML = `
-              <span class="num-carrera">${c.carrera}ª</span>
+              <span class="num-carrera">${c.carrera ? c.carrera + 'ª' : ''}</span>
               <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${(c.tipo === 'cruce_ajuste' || esRemateManual) ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
+              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga' || esRemateManual) ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
               <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyCarrera.appendChild(fila);

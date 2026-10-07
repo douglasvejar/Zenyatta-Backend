@@ -431,6 +431,8 @@
   //   banquero, modalidad normal → "Dio 3P del 1"
   //   pp (dos caballos cruzados)  → "Jugó 2x6 PP" / "Dio 2x6 PP"
   function armarJugadaTexto(c) {
+  // Línea de Carga Masiva Especial: se ve como una jugada normal (07-10-2026), solo con el nombre de la acción.
+  if (c.tipo === 'carga') return c.texto;
     // Remate (23-09-2026, a pedido del usuario: "que le indique que
     // remate y cuanto") — no tiene rol jugador/banquero ni modalidad, es
     // una apuesta directa a un caballo puntual del remate. La carrera
@@ -716,7 +718,7 @@
             headerCarrera.onclick = (ev) => { ev.stopPropagation(); bloqueCarrera.classList.toggle('colapsado'); };
             headerCarrera.innerHTML = `
               <span class="flecha-toggle">▾</span>
-              <span class="nombre-carrera">${numCarrera}ª Carrera</span>
+              <span class="nombre-carrera">${numCarrera ? numCarrera + 'ª Carrera' : 'Otras jugadas'}</span>
               <span class="total-carrera ${claseMonto(totalCarrera)}">Total carrera: ${conSigno(totalCarrera)}</span>`;
             bloqueCarrera.appendChild(headerCarrera);
 
@@ -731,9 +733,9 @@
                 ? `<span class="monto-jugado">incluye % = ${conSigno(c.comisionPropiaIncluida)}</span>`
                 : '';
               filaCarrera.innerHTML = `
-                <span class="num-carrera">${c.carrera}ª</span>
+                <span class="num-carrera">${c.carrera ? c.carrera + 'ª' : ''}</span>
                 <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${c.tipo === 'cruce_ajuste' ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}${notaComisionIncluida}</span>
+                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga') ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}${notaComisionIncluida}</span>
                 <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
                 <span></span>`;
               bodyCarrera.appendChild(filaCarrera);
