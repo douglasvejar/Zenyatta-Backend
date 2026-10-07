@@ -68,8 +68,21 @@ async function verificarEsquema() {
   return { ok: faltan.length === 0, faltan };
 }
 
+// req.grupo (sesión) NO trae las columnas de banqueo, así que se leen siempre
+// de la base: sin esto el banqueo salía "sin configurar" aunque estuviera.
+async function leerBanqueoGrupo(grupoId) {
+  try {
+    const r = await db.query('SELECT hipismo_marcas_banqueo, hipismo_tf_banqueo FROM grupos WHERE id = $1', [grupoId]);
+    const f = r.rows[0] || {};
+    return { marcas: f.hipismo_marcas_banqueo || null, tf: f.hipismo_tf_banqueo || null };
+  } catch (e) {
+    return { marcas: null, tf: null };
+  }
+}
+
 async function construirChecklistGrupo(grupo) {
   const gid = grupo.id;
+  const banqueo = await leerBanqueoGrupo(gid);
   const [hipodromos, clientes, conPct, empleados, planos] = await Promise.all([
     contar('SELECT COUNT(*)::int AS n FROM hipismo_hipodromos WHERE grupo_id = $1', [gid]),
     contar(`SELECT COUNT(*)::int AS n FROM jugadores WHERE grupo_id = $1 AND COALESCE(es_cuenta_comision, false) = false AND COALESCE(activo, true) = true`, [gid]),
@@ -85,8 +98,8 @@ async function construirChecklistGrupo(grupo) {
   let semana = null;
   try { semana = await obtenerConfigSemana(gid); } catch (e) { /* defecto */ }
 
-  const marcas = evaluarBanqueo(grupo.hipismo_marcas_banqueo);
-  const tf = evaluarBanqueo(grupo.hipismo_tf_banqueo);
+  const marcas = evaluarBanqueo(banqueo.marcas);
+  const tf = evaluarBanqueo(banqueo.tf);
   const items = [];
   const add = (clave, titulo, estado, detalle, donde) => items.push({ clave, titulo, estado, detalle, donde });
 
@@ -114,6 +127,7 @@ async function construirChecklistGrupo(grupo) {
 }
 
 async function ejecutarPruebaPiloto(grupo) {
+  const banqueo = await leerBanqueoGrupo(grupo.id);
   const pasos = [];
   const paso = (clave, titulo, ok, detalle) => pasos.push({ clave, titulo, ok, detalle });
 
@@ -130,7 +144,7 @@ async function ejecutarPruebaPiloto(grupo) {
       t ? (suma === 0 ? `Jugador ${t.resultadoJugador}, banquero ${t.resultadoBanquero}, comisión ${r.comisionTotal}: suma 0.` : `El ejemplo no suma 0 (diferencia ${suma}).`) : 'El plano de ejemplo no se reconoció.');
   } catch (e) { paso('calculo', 'Cálculo de un plano de ejemplo', false, 'Falló: ' + e.message); }
 
-  [['banqueoMarcas', 'Banqueo de Marcas', grupo.hipismo_marcas_banqueo, true], ['banqueoTf', 'Banqueo de Tablas Fijas', grupo.hipismo_tf_banqueo, false]].forEach(([clave, titulo, valor, obligatorio]) => {
+  [['banqueoMarcas', 'Banqueo de Marcas', banqueo.marcas, true], ['banqueoTf', 'Banqueo de Tablas Fijas', banqueo.tf, false]].forEach(([clave, titulo, valor, obligatorio]) => {
     const b = evaluarBanqueo(valor);
     if (!b.configurado) paso(clave, titulo, !obligatorio, obligatorio ? 'Sin configurar: las Marcas quedarán pendientes de banqueo manual.' : 'Sin banqueo propio (juegan contra TABLAS FIJAS).');
     else paso(clave, titulo, b.valido, b.valido ? 'Los % suman 100.' : `Los % suman ${b.suma}; tienen que sumar 100.`);
@@ -144,4 +158,4 @@ async function ejecutarPruebaPiloto(grupo) {
   return { ok: pasos.every(p => p.ok), pasos };
 }
 
-module.exports = { construirChecklistGrupo, verificarEsquema, ejecutarPruebaPiloto, evaluarBanqueo, ESQUEMA_ESPERADO };
+module.exports = { leerBanqueoGrupo, construirChecklistGrupo, verificarEsquema, ejecutarPruebaPiloto, evaluarBanqueo, ESQUEMA_ESPERADO };

@@ -76,8 +76,27 @@ function firmarSesionEmpleado(empleado) {
 // grupo fue desactivado por el súper-admin, o el empleado fue
 // desactivado/borrado por su Administrador, el token deja de servir
 // aunque todavía no haya expirado.
+const SELECT_GRUPO_SESION = 'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1';
+
 async function requiereGrupo(req, res, next) {
   try {
+    // SÚPER-ADMIN OPERANDO SOBRE UN GRUPO (07-10-2026, "Puesta en Marcha" en
+    // Super Admin: el cliente se arma desde ahí). routes/superadmin.js monta
+    // las rutas del grupo bajo /grupos/:id/... DESPUÉS de exigir el secreto de
+    // súper-admin (requiereSuperadmin) y marca req.superadminGrupoId del lado
+    // del servidor (nunca viene de un header ni del cuerpo). Con esa marca se
+    // actúa como el administrador de ese grupo, aunque esté desactivado.
+    if (req.superadminGrupoId) {
+      const rs = await db.query(SELECT_GRUPO_SESION, [req.superadminGrupoId]);
+      const g = rs.rows[0];
+      if (!g) return res.status(404).json({ error: 'Grupo no encontrado.' });
+      req.grupoId = g.id;
+      req.grupo = g;
+      req.rol = 'administrador';
+      req.permisos = null;
+      req.nombreActor = 'SÚPER-ADMIN';
+      return next();
+    }
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Falta el token de sesión (inicia sesión primero).' });
@@ -103,7 +122,7 @@ async function requiereGrupo(req, res, next) {
       // armar la URL del logo (GET /api/imagenes/logo-grupo/:grupoId) sin
       // otra consulta aparte, sea que el grupo tenga el archivo nuevo o
       // una logo_url legacy.
-      'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1',
+      SELECT_GRUPO_SESION,
       [payload.grupoId]
     );
     const grupo = res2.rows[0];

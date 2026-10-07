@@ -10,12 +10,14 @@ const GRUPO_ID = 'g-registro-1';
 const TABLAS = {};
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  if (/SELECT MIN\(f\) AS minimo/i.test(sql)) return { rows: [{ minimo: TABLAS.primeraFecha }] };
   if (/FROM jugadores WHERE grupo_id/i.test(sql)) return { rows: TABLAS.jugadores };
   if (/FROM hipismo_tickets t JOIN hipismo_planos/i.test(sql)) return { rows: TABLAS.tickets };
   if (/FROM hipismo_remate_apuestas a JOIN hipismo_remates/i.test(sql)) return { rows: TABLAS.remate };
   if (/FROM hipismo_winners/i.test(sql)) return { rows: TABLAS.winners };
   if (/FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos/i.test(sql)) return { rows: TABLAS.adelantadas };
   if (/FROM hipismo_tercios_adelantadas_jugadas j JOIN/i.test(sql)) return { rows: TABLAS.tercAdel };
+  if (/FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: TABLAS.ajustesFilas };
   return { rows: [] };
 }
 const fakePool = function () { this.query = async (t, p) => ejecutarQuery(t, p); this.on = () => {}; };
@@ -23,10 +25,9 @@ let periodosPedidos = [];
 const CIERRES = {};
 Module._load = function (request) {
   if (request === 'pg') return { Pool: fakePool };
-  if (request === './hipismoSemana') return { rangoSemanaGrupo: async (g, hoy, off) => { const d = new Date(Date.UTC(2026, 9, 5 + 7 * off)); const h = new Date(d.getTime() + 6 * 86400000); return { desde: d.toISOString().slice(0, 10), hasta: h.toISOString().slice(0, 10) }; } };
+  if (request === './hipismoSemana') return { rangoSemanaGrupo: async (g, fecha, off) => { const x = new Date(fecha.getTime() + off * 7 * 86400000); const dow = (x.getUTCDay() + 6) % 7; const d = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate() - dow)); const h = new Date(d.getTime() + 6 * 86400000); return { desde: d.toISOString().slice(0, 10), hasta: h.toISOString().slice(0, 10) }; } };
   if (request === './hipismoResumenCliente') return { construirCierreFinalHipismo: async (g, desde, hasta) => { periodosPedidos.push([desde, hasta]); return CIERRES[desde] || { clientes: [], comisionSemana: 0 }; } };
   if (request === './hipismoCargasEspeciales') return { obtenerCargasEspecialesRango: async () => TABLAS.cargas };
-  if (request === './hipismoComisionPropia') return { obtenerAjustesComision: async (g, desde) => TABLAS.ajustes[desde] || {} };
   return originalLoad.apply(this, arguments);
 };
 process.env.DATABASE_URL = 'postgresql://fake/fake';
@@ -66,7 +67,8 @@ const por = (d, n) => d.clientes.find(c => c.nombre === n);
   ];
   TABLAS.tercAdel = [];
   TABLAS.cargas = [{ clienteNombre: 'ANA', monto: 5, fecha: '2026-10-06' }];
-  TABLAS.ajustes = { '2026-10-01': { ANA: -3 } };
+  TABLAS.ajustesFilas = [{ cliente_nombre: 'ANA', fecha: '2026-10-02', total: '-3' }];
+  TABLAS.primeraFecha = '2025-03-14';
   CIERRES['2026-10-01'] = { comisionSemana: 2.5, // ya neta del % devuelto (6,5 - 4), como en Balance General
    clientes: [
     { nombre: 'ANA', jugadas: 3, saldo: 139 }, { nombre: 'BETO', jugadas: 2, saldo: -120 },
@@ -108,6 +110,27 @@ const por = (d, n) => d.clientes.find(c => c.nombre === n);
   check(/^21\/09 al 27\/09$/.test(s.periodos[0].etiqueta), `4b) etiqueta de semana "21/09 al 27/09" (${s.periodos[0].etiqueta})`);
   const a = await reg.construirRegistroSaldosHipismo(GRUPO_ID, { granularidad: 'anio', cantidad: 2 }, hoy);
   check(a.periodos.length === 2 && a.periodos[1].desde === '2026-01-01' && a.periodos[1].hasta === '2026-12-31' && a.periodos[0].etiqueta === '2025', '4c) 2 años: 2025 y 2026');
+
+  // ---- vista anual: períodos de UN año, recortados, y sin consultar los que no tienen movimiento
+  check(JSON.stringify(d.anios) === '[2026,2025]', `5a) años con datos: del actual hasta el primero con movimiento (${JSON.stringify(d.anios)})`);
+  periodosPedidos = [];
+  const m = await reg.construirRegistroSaldosHipismo(GRUPO_ID, { granularidad: 'mes', anio: 2026 }, hoy);
+  check(m.anio === 2026 && m.periodos.length === 10 && m.periodos[0].desde === '2026-01-01' && m.periodos[9].etiqueta === 'Oct 2026', `5b) año 2026 por mes: de enero a octubre (${m.periodos.length} meses)`);
+  check(m.periodos[9].hasta === '2026-10-07' && m.periodos[8].hasta === '2026-09-30', '5c) el mes en curso se recorta a hoy (07-10); septiembre llega al 30');
+  check(periodosPedidos.length === 2 && periodosPedidos.every(([desde]) => desde === '2026-09-01' || desde === '2026-10-01'), `5d) solo se consulta Cierre Final de los meses con movimiento (septiembre y octubre): ${JSON.stringify(periodosPedidos)}`);
+  const anaM = por(m, 'ANA');
+  check(anaM.periodos.length === 10 && anaM.periodos[0].saldo === 0 && anaM.periodos[9].saldo === 139 && anaM.periodos[8].saldo === -50, '5e) los meses sin movimiento quedan en 0 y los otros conservan su saldo');
+  check(anaM.total.saldo === 89 && m.totalGeneral.comisionGrupo === 6, '5f) el total del año = suma de sus meses');
+  periodosPedidos = [];
+  CIERRES['2026-09-28'] = { comisionSemana: 3.5, clientes: [{ nombre: 'ANA', jugadas: 1, saldo: -50 }] };
+  const w = await reg.construirRegistroSaldosHipismo(GRUPO_ID, { granularidad: 'semana', anio: 2026 }, hoy);
+  check(w.periodos[0].desde === '2026-01-01' && w.periodos[0].hasta === '2026-01-04' && /^01\/01 al 04\/01$/.test(w.periodos[0].etiqueta), `5g) la primera semana del año se recorta al 1 de enero (${w.periodos[0].etiqueta})`);
+  check(w.periodos[w.periodos.length - 1].hasta === '2026-10-07' && w.periodos[w.periodos.length - 1].desde === '2026-10-05', '5h) la última semana llega hasta hoy');
+  check(w.periodos.every((p, i) => i === 0 || p.desde > w.periodos[i - 1].hasta) && w.periodos.length >= 40 && w.periodos.length <= 42, `5i) semanas consecutivas sin solaparse (${w.periodos.length} semanas)`);
+  check(periodosPedidos.length <= 4, `5j) en semanas tampoco consulta las vacías (consultas: ${periodosPedidos.length})`);
+  const futuro = await reg.construirRegistroSaldosHipismo(GRUPO_ID, { granularidad: 'mes', anio: 2027 }, hoy);
+  check(futuro.periodos.length === 0 && futuro.clientes.length === 0, '5k) un año futuro responde vacío sin fallar');
+  check(reg.normalizarParametros({ anio: '1800' }).anio === null && reg.normalizarParametros({ anio: '2026' }).anio === 2026, '5l) el año inválido se descarta');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   process.exit(fallaron ? 1 : 0);

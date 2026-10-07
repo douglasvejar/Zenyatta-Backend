@@ -16,6 +16,7 @@ let gruposHipismo = [];
 let cierre = { clientes: [], comisionSemana: 0 };
 let diagnostico = { totalClientesRevisados: 3, discrepancias: [] };
 let diagnosticoLanza = false;
+let semanasPedidas = [];
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
@@ -52,7 +53,7 @@ Module._load = function (request) {
   if (request === 'bcryptjs') return { hash: async () => 'h', compare: async () => true };
   if (request === 'jsonwebtoken') return { sign: () => 't', verify: () => ({ grupoId: GRUPO_ID }) };
   if (request === './pozo') return { calcularPozoJugador: async (g, j) => ({ pozoDisponible: pozos[j.nombre] }) };
-  if (request === './hipismoSemana') return { rangoSemanaGrupo: async (g, hoy, off) => off === 0 ? { desde: '2026-10-05', hasta: '2026-10-11' } : { desde: '2026-09-28', hasta: '2026-10-04' } };
+  if (request === './hipismoSemana') return { rangoSemanaGrupo: async (g, hoy, off) => (semanasPedidas.push(off), off === 0) ? { desde: '2026-10-05', hasta: '2026-10-11' } : { desde: '2026-09-28', hasta: '2026-10-04' } };
   if (request === './hipismoResumenCliente') return {
     construirCierreFinalHipismo: async () => cierre,
     diagnosticarSaldosHipismo: async () => { if (diagnosticoLanza) throw new Error('boom'); return diagnostico; }
@@ -150,6 +151,8 @@ const jug = (nombre, extra) => ({ id: 'j-' + nombre, grupo_id: GRUPO_ID, nombre,
   const al = escrituras.find(x => /INSERT INTO hipismo_alertas/.test(x.sql));
   check(e.estado === 'descuadre' && al && /CUADRE_DESCUADRADO/.test(al.sql) && al.params[1] === 'SISTEMA', '4d) con diferencias -> estado descuadre + alerta CUADRE_DESCUADRADO del usuario SISTEMA');
   check(al && /A \(grilla 10,00 vs link 10,50\)/.test(al.params[3]) && /no suma 0/.test(al.params[3]), `4e) el mensaje nombra al cliente y la suma del balance (${al && al.params[3]})`);
+  check(semanasPedidas.length > 0 && semanasPedidas.every(o => o === 0), `4e2) la revisión nocturna mira SOLO la semana actual (semanas pedidas: ${JSON.stringify(semanasPedidas)})`);
+  check(e.detalle.semanas.length === 1 && e.detalle.sumaBalance.length === 1 && /1 cliente\(s\)/.test(al.params[3]), '4e3) el detalle guardado trae una sola semana y el aviso cuenta 1 cliente (sin duplicados de la semana anterior)');
 
   diagnosticoLanza = true;
   escrituras = [];

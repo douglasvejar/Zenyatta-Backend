@@ -4,8 +4,9 @@
 // y avise si algo no suma, en vez de esperar a que alguien lo note).
 //
 // Cada noche (a partir de las 3:00 a. m. hora de Venezuela, una sola vez por
-// día y por grupo) revisa la semana actual y la anterior de cada grupo con
-// el módulo de Hipismo activo:
+// día y por grupo) revisa SOLO LA SEMANA ACTUAL de cada grupo con el módulo
+// de Hipismo activo (a pedido del usuario: "el cuadre nocturno solo me
+// revisa la semana actual"; las semanas cerradas ya no se vuelven a tocar):
 //   1) diagnosticarSaldosHipismo: que el total de CADA cliente en la grilla
 //      (Cierre Final/Balance General) sea el mismo que ve en su link.
 //   2) Que el balance sume 0: todos los saldos (incluidos ítems como
@@ -38,9 +39,9 @@ async function revisarSumaBalance(grupoId, desde, hasta) {
   return { desde, hasta, sumaClientes: round2(sumaClientes), comisionGrupo: round2(cierre.comisionSemana || 0), diferencia, cuadra: Math.abs(diferencia) <= TOLERANCIA_SUMA };
 }
 
-// Revisa UN grupo en las semanas indicadas (por defecto: actual y anterior).
+// Revisa UN grupo en las semanas indicadas (por defecto: SOLO la actual, 0).
 // No guarda nada: devuelve { ok, semanas: [...], discrepancias: [...], sumaBalance: [...] }.
-async function revisarCuadreGrupo(grupo, { semanas = [0, -1], hoy } = {}) {
+async function revisarCuadreGrupo(grupo, { semanas = [0], hoy } = {}) {
   const hoyVe = hoy || hoyVenezuela();
   const rangos = [];
   for (const off of semanas) {

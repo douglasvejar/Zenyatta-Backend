@@ -36,9 +36,30 @@ const { urlLogoGrupo } = require('../services/logoGrupo');
 const router = express.Router();
 router.use(requiereSuperadmin);
 
+// =================================================================
+// SÚPER-ADMIN OPERANDO SOBRE UN GRUPO (07-10-2026, "Puesta en Marcha" en
+// Super Admin: "al seleccionar el grupo armarlo como quiere el cliente").
+// Se montan las MISMAS rutas del módulo Hipismo y de Clientes bajo
+// /api/superadmin/grupos/:id/hipismo/... y .../jugadores/..., así Super Admin
+// configura hipódromos, banqueo, semana, clientes y % de un grupo con la misma
+// lógica y las mismas validaciones que usa el propio grupo — sin duplicar
+// código. requiereSuperadmin (arriba) ya exigió el secreto; esta marca la
+// pone el servidor (req.superadminGrupoId) y requiereGrupo la usa para actuar
+// como administrador de ESE grupo (ver middleware/auth.js). Lo que se cambie
+// queda a nombre de "SÚPER-ADMIN".
+// =================================================================
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function comoGrupo(req, res, next) {
+  if (!RE_UUID.test(req.params.id || '')) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  req.superadminGrupoId = req.params.id;
+  next();
+}
+router.use('/grupos/:id/hipismo', comoGrupo, require('./hipismo'));
+router.use('/grupos/:id/jugadores', comoGrupo, require('./jugadores'));
+
 // Lista todos los grupos (para ver cuáles están activos/inactivos).
 router.get('/grupos', asyncHandler(async (req, res) => {
-  const r = await db.query('SELECT id, nombre, email, activo, creado_en FROM grupos ORDER BY creado_en DESC');
+  const r = await db.query('SELECT id, nombre, email, activo, creado_en, modulo_hipismo_habilitado FROM grupos ORDER BY creado_en DESC');
   res.json(r.rows);
 }));
 

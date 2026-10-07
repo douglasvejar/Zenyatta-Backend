@@ -4997,13 +4997,14 @@ router.post('/puesta-en-marcha/prueba', requiereAdministrador, asyncHandler(asyn
   res.json(await require('../services/hipismoPuestaEnMarcha').ejecutarPruebaPiloto(req.grupo));
 }));
 
-// GET /registro-saldos?granularidad=semana|mes|anio&cantidad=N (07-10-2026,
+// GET /registro-saldos?granularidad=anio&cantidad=N (resumen por año) o
+// ?granularidad=semana|mes&anio=2026 (detalle de ese año) (07-10-2026,
 // ver services/hipismoRegistroSaldos.js): saldo de cada cliente por semana,
 // mes o año, con el desglose por tipo de jugada y su comisión neta (qué tan
 // rentable es). Solo lee; los números salen del mismo Cierre Final.
 router.get('/registro-saldos', asyncHandler(async (req, res) => {
   const { construirRegistroSaldosHipismo } = require('../services/hipismoRegistroSaldos');
-  res.json(await construirRegistroSaldosHipismo(req.grupoId, { granularidad: req.query.granularidad, cantidad: req.query.cantidad }));
+  res.json(await construirRegistroSaldosHipismo(req.grupoId, { granularidad: req.query.granularidad, cantidad: req.query.cantidad, anio: req.query.anio }));
 }));
 
 // =================================================================

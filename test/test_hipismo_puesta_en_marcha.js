@@ -13,11 +13,13 @@ let conteos = {};
 let ultimoCuadre = null;
 let cuadreResultado = { ok: true, clientesRevisados: 4, discrepancias: [], sumaBalance: [] };
 let escrituras = [];
+let banqueoDB = { marcas: null, tf: null }; // lo que dice la tabla grupos
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (/information_schema\.columns/i.test(sql)) return { rows: cols };
   if (/pg_get_constraintdef/i.test(sql)) return { rows: [{ def: defAlertas }] };
+  if (/SELECT hipismo_marcas_banqueo, hipismo_tf_banqueo FROM grupos/i.test(sql)) return { rows: [{ hipismo_marcas_banqueo: banqueoDB.marcas, hipismo_tf_banqueo: banqueoDB.tf }] };
   if (/FROM hipismo_hipodromos/i.test(sql)) return { rows: [{ n: conteos.hipodromos }] };
   if (/FROM empleados/i.test(sql)) return { rows: [{ n: conteos.empleados }] };
   if (/FROM hipismo_planos/i.test(sql)) return { rows: [{ n: conteos.planos }] };
@@ -71,7 +73,8 @@ const item = (d, k) => d.items.find(i => i.clave === k);
 
   // ---- checklist de un grupo nuevo vacío
   conteos = { hipodromos: 0, clientes: 0, conPct: 0, empleados: 0, planos: 0 };
-  let c = await pem.construirChecklistGrupo({ id: GRUPO_ID, hipismo_marcas_banqueo: null, hipismo_tf_banqueo: null });
+  banqueoDB = { marcas: null, tf: null };
+  let c = await pem.construirChecklistGrupo({ id: GRUPO_ID });
   check(!c.listo && item(c, 'hipodromos').estado === 'pendiente' && item(c, 'clientes').estado === 'pendiente' && item(c, 'banqueoMarcas').estado === 'pendiente' && item(c, 'primerPlano').estado === 'pendiente', '3a) grupo nuevo: faltan hipódromos, clientes, banqueo de Marcas y el primer plano');
   check(item(c, 'banqueoTf').estado === 'opcional' && item(c, 'porcentajes').estado === 'opcional' && item(c, 'usuarios').estado === 'opcional', '3b) Tablas Fijas sin banqueo, % devueltos y usuarios son opcionales');
   check(c.pendientes === 4, `3c) 4 pasos pendientes (dio ${c.pendientes})`);
@@ -79,27 +82,34 @@ const item = (d, k) => d.items.find(i => i.clave === k);
   // ---- grupo configurado
   conteos = { hipodromos: 3, clientes: 25, conPct: 5, empleados: 2, planos: 40 };
   ultimoCuadre = { fecha: '2026-10-07', estado: 'ok' };
-  c = await pem.construirChecklistGrupo({ id: GRUPO_ID, hipismo_marcas_banqueo: [{ nombre: 'MARCAS X', porcentaje: 100 }], hipismo_tf_banqueo: [{ nombre: 'TF X', porcentaje: 50 }, { nombre: 'TF Y', porcentaje: 50 }] });
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 100 }], tf: [{ nombre: 'TF X', porcentaje: 50 }, { nombre: 'TF Y', porcentaje: 50 }] };
+  c = await pem.construirChecklistGrupo({ id: GRUPO_ID });
   check(c.listo && c.pendientes === 0 && c.items.every(i => i.estado === 'ok'), '3d) grupo configurado: todo en ok');
-  c = await pem.construirChecklistGrupo({ id: GRUPO_ID, hipismo_marcas_banqueo: [{ nombre: 'MARCAS X', porcentaje: 70 }], hipismo_tf_banqueo: null });
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 70 }], tf: null };
+  c = await pem.construirChecklistGrupo({ id: GRUPO_ID });
   check(!c.listo && item(c, 'banqueoMarcas').estado === 'pendiente' && /suman 70/.test(item(c, 'banqueoMarcas').detalle), '3e) banqueo que no suma 100 queda pendiente y explica por qué');
   ultimoCuadre = { fecha: '2026-10-07', estado: 'descuadre' };
-  c = await pem.construirChecklistGrupo({ id: GRUPO_ID, hipismo_marcas_banqueo: [{ nombre: 'MARCAS X', porcentaje: 100 }] });
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 100 }], tf: null };
+  c = await pem.construirChecklistGrupo({ id: GRUPO_ID });
   check(item(c, 'cuadre').estado === 'pendiente', '3f) si la última revisión nocturna no cuadró, el paso queda pendiente');
   semanaCfg = { inicio: 1, cierre: 1, desde: '2026-10-05', hasta: null };
-  c = await pem.construirChecklistGrupo({ id: GRUPO_ID, hipismo_marcas_banqueo: null });
+  banqueoDB = { marcas: null, tf: null };
+  c = await pem.construirChecklistGrupo({ id: GRUPO_ID });
   check(/personalizada/.test(item(c, 'semana').detalle), '3g) semana personalizada se nota en el paso de Fecha de semana');
   semanaCfg = { inicio: null, cierre: null, desde: null, hasta: null };
 
   // ---- prueba piloto
   escrituras = [];
-  const grupoOk = { id: GRUPO_ID, hipismo_marcas_banqueo: [{ nombre: 'MARCAS X', porcentaje: 100 }], hipismo_tf_banqueo: null };
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 100 }], tf: null };
+  const grupoOk = { id: GRUPO_ID }; // como req.grupo: SIN columnas de banqueo
   let p = await pem.ejecutarPruebaPiloto(grupoOk);
   check(p.ok && p.pasos.every(x => x.ok), `4a) prueba piloto completa en verde (${JSON.stringify(p.pasos.filter(x => !x.ok))})`);
   const calc = p.pasos.find(x => x.clave === 'calculo');
   check(calc && /suma 0/.test(calc.detalle), `4b) el plano de ejemplo se calcula y suma 0 (${calc && calc.detalle})`);
   check(escrituras.length === 0, '4c) la prueba piloto NO escribe nada en la base');
-  p = await pem.ejecutarPruebaPiloto({ id: GRUPO_ID, hipismo_marcas_banqueo: null });
+  banqueoDB = { marcas: null, tf: null };
+  p = await pem.ejecutarPruebaPiloto({ id: GRUPO_ID });
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 100 }], tf: null };
   check(!p.ok && p.pasos.find(x => x.clave === 'banqueoMarcas').ok === false, '4d) sin banqueo de Marcas la prueba lo marca');
   cuadreResultado = { ok: false, clientesRevisados: 4, discrepancias: [{ nombre: 'ANA' }], sumaBalance: [] };
   p = await pem.ejecutarPruebaPiloto(grupoOk);
@@ -111,6 +121,11 @@ const item = (d, k) => d.items.find(i => i.clave === k);
   cuadreResultado = { ok: true, clientesRevisados: 1, discrepancias: [], sumaBalance: [] };
   p = await pem.ejecutarPruebaPiloto(grupoOk);
   check(!p.ok && p.pasos.find(x => x.clave === 'esquema').ok === false && /schema\.sql/.test(p.pasos.find(x => x.clave === 'esquema').detalle), '4g) base de datos desactualizada: manda a correr schema.sql');
+
+  // regresión: el grupo de la sesión (req.grupo) no trae las columnas de banqueo; igual se leen de la base
+  banqueoDB = { marcas: [{ nombre: 'MARCAS X', porcentaje: 100 }], tf: null };
+  c = await pem.construirChecklistGrupo({ id: GRUPO_ID, nombre: 'Sin columnas de banqueo' });
+  check(item(c, 'banqueoMarcas').estado === 'ok', '5) el banqueo configurado se lee de la base aunque el grupo de la sesión no traiga esas columnas');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   process.exit(fallaron ? 1 : 0);

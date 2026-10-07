@@ -718,6 +718,7 @@
     <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerAlertas" onclick="mostrarSeccionSuperadmin('alertas')">🔔 Alertas<span id="alertasBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
     <button type="button" class="btn-secundario" id="btnVerWhatsappQr" onclick="mostrarSeccionSuperadmin('whatsappqr')">📶 Vincular WhatsApp</button>
     <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerMensajesContacto" onclick="mostrarSeccionSuperadmin('contacto')">✉️ Contacto<span id="contactoBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
+    <button type="button" class="btn-secundario" id="btnVerPuestaEnMarcha" onclick="mostrarSeccionSuperadmin('puestaenmarcha')">🚀 Puesta en Marcha</button>
     <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerPagos" onclick="mostrarSeccionSuperadmin('pagos')">💳 Pagos<span id="pagosBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
     <button type="button" class="btn-secundario" onclick="salir()">Cerrar sesión</button>
   </div>
@@ -865,6 +866,116 @@
 
     <div id="listaPagosSuperadmin"></div>
     <div id="vacioPagosSuperadmin" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">Todavía no hay ningún pago reportado.</div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- 🚀 PUESTA EN MARCHA (07-10-2026, a pedido del usuario: "la pestaña  -->
+  <!-- puesta en marcha debe ir en súper admin... al seleccionar el grupo  -->
+  <!-- armarlo a como quiere el cliente"). El Súper-admin elige un Grupo y -->
+  <!-- lo deja listo: hipódromos, clientes, banqueo de Marcas/Tablas      -->
+  <!-- Fijas, fecha de semana, lista de pasos y prueba piloto. Usa las    -->
+  <!-- MISMAS rutas del panel del Grupo, montadas en                      -->
+  <!-- /api/superadmin/grupos/:id/hipismo/... y .../jugadores/... (ver    -->
+  <!-- routes/superadmin.js, comoGrupo). Cada grupo se arma a su manera:  -->
+  <!-- nada de esto es fijo para un grupo en particular.                  -->
+  <!-- ================================================================= -->
+  <div class="container" id="vistaPuestaEnMarchaSuperadmin" style="display:none;">
+    <style>
+      #vistaPuestaEnMarchaSuperadmin .pm-card { border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; margin-top: 16px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-card h2 { margin: 0 0 4px 0; font-size: 17px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-ayuda { font-size: 12.5px; color: var(--text-dim); margin: 0 0 12px 0; }
+      #vistaPuestaEnMarchaSuperadmin .pm-fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-fila label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-dim); }
+      #vistaPuestaEnMarchaSuperadmin .pm-fila input[type="text"], #vistaPuestaEnMarchaSuperadmin .pm-fila input[type="number"], #vistaPuestaEnMarchaSuperadmin .pm-fila select { padding: 8px 10px; font-size: 13px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-item { display: flex; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--card-border); }
+      #vistaPuestaEnMarchaSuperadmin .pm-lista { max-height: 260px; overflow-y: auto; font-size: 13px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-msg { font-size: 13px; margin-top: 6px; min-height: 16px; }
+      #vistaPuestaEnMarchaSuperadmin textarea { width: 100%; box-sizing: border-box; min-height: 90px; padding: 8px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--card-border); background: transparent; color: inherit; font-family: inherit; }
+    </style>
+    <h1>🚀 Puesta en Marcha</h1>
+    <p class="subtitulo">Elige el Grupo y déjalo armado como lo quiere el cliente. Cada Grupo tiene su propia configuración: nada de lo que cargues acá afecta a otros Grupos.</p>
+
+    <div class="pm-fila">
+      <label style="flex:1; min-width:220px;">Grupo
+        <select id="pmSelectGrupo" onchange="pmSeleccionarGrupo(this.value)"><option value="">Cargando grupos…</option></select>
+      </label>
+      <button type="button" class="btn-chico btn-secundario" onclick="pmRecargarTodo()">↻ Actualizar</button>
+    </div>
+
+    <div id="pmSinGrupo" style="text-align:center; color:var(--text-dim); padding:24px;">Elige un Grupo para empezar.</div>
+
+    <div id="pmModuloApagado" style="display:none; padding:14px; border:2px solid var(--danger); border-radius:10px; margin-top:12px;">
+      <b>Este Grupo no tiene el módulo de Hipismo activado.</b>
+      <div style="font-size:13px; color:var(--text-dim); margin:4px 0 10px 0;">Actívalo para poder configurarlo desde acá.</div>
+      <button type="button" class="btn-chico" onclick="pmActivarHipismo()">Activar Hipismo para este Grupo</button>
+      <div id="pmModuloMsg" class="pm-msg"></div>
+    </div>
+
+    <div id="pmPaneles" style="display:none;">
+      <div class="pm-card">
+        <h2>✅ Estado del Grupo</h2>
+        <p class="pm-ayuda">Pasos para dejarlo listo. Lo que falta se configura en las secciones de abajo.</p>
+        <div id="pmChecklist">Cargando…</div>
+        <div style="margin-top:12px;"><button type="button" id="pmBtnPrueba" onclick="pmEjecutarPrueba()">🧪 Ejecutar prueba piloto</button>
+        <span style="font-size:12px; color:var(--text-dim); margin-left:8px;">Solo lee: no crea clientes, planos ni alertas.</span></div>
+        <div id="pmResultadoPrueba" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="pm-card">
+        <h2>🏇 1. Hipódromos</h2>
+        <p class="pm-ayuda">Los hipódromos donde juega este Grupo.</p>
+        <div id="pmListaHipodromos" class="pm-lista"></div>
+        <div class="pm-fila" style="margin-top:10px;">
+          <label style="flex:1; min-width:160px;">Nombre<input type="text" id="pmHipNombre" placeholder="Ej: LA RINCONADA"></label>
+          <label>País<select id="pmHipPais"><option value="VE">Venezuela</option><option value="US">EE. UU.</option></select></label>
+          <label>Carreras máx.<input type="number" id="pmHipCarreras" value="25" min="1" max="40" style="width:90px;"></label>
+          <button type="button" class="btn-chico" onclick="pmAgregarHipodromo()">+ Agregar</button>
+        </div>
+        <div id="pmHipMsg" class="pm-msg"></div>
+      </div>
+
+      <div class="pm-card">
+        <h2>👥 2. Clientes</h2>
+        <p class="pm-ayuda">Los clientes del Grupo y el % propio de cada uno. Los banqueadores del paso 3 tienen que existir acá primero.</p>
+        <div id="pmListaClientes" class="pm-lista"></div>
+        <div class="pm-fila" style="margin-top:10px;">
+          <label style="flex:1; min-width:160px;">Nombre<input type="text" id="pmCliNombre" placeholder="Ej: JUAN PEREZ"></label>
+          <label>Tipo<select id="pmCliTipo"><option value="libre">Libre</option><option value="avalado">Avalado (con pozo)</option></select></label>
+          <label>Pozo inicial<input type="number" id="pmCliPozo" value="0" min="0" step="0.01" style="width:100px;"></label>
+          <label>% propio<input type="number" id="pmCliPct" value="0" min="0" max="100" step="0.01" style="width:80px;"></label>
+          <button type="button" class="btn-chico" onclick="pmAgregarCliente()">+ Agregar</button>
+        </div>
+        <details style="margin-top:8px;">
+          <summary style="cursor:pointer; font-size:13px;">Carga masiva (uno por línea)</summary>
+          <p class="pm-ayuda" style="margin-top:8px;">Formato: <code>NOMBRE</code>, <code>NOMBRE, 5</code> o <code>NOMBRE 5%</code> (el número es el % propio). Todos se crean con el tipo elegido abajo.</p>
+          <textarea id="pmCliMasivo" placeholder="JUAN PEREZ, 5&#10;MARIA 10%&#10;PEDRO"></textarea>
+          <div class="pm-fila" style="margin-top:6px;">
+            <label>Tipo<select id="pmCliMasivoTipo"><option value="libre">Libre</option><option value="avalado">Avalado (con pozo)</option></select></label>
+            <button type="button" class="btn-chico" onclick="pmCargaMasivaClientes()">Crear clientes</button>
+          </div>
+        </details>
+        <div id="pmCliMsg" class="pm-msg"></div>
+      </div>
+
+      <div class="pm-card">
+        <h2>🏦 3. Banqueo de Marcas y Tablas Fijas</h2>
+        <p class="pm-ayuda">Quién banquea por defecto en este Grupo (hasta 4 banqueadores, los % deben sumar 100). Sin banqueadores, las Marcas se banquean a mano y las Tablas Fijas juegan contra el ítem TABLAS FIJAS.</p>
+        <div id="pmBanqMarcas"></div>
+        <div id="pmBanqTf"></div>
+      </div>
+
+      <div class="pm-card">
+        <h2>📅 4. Fecha de semana</h2>
+        <p class="pm-ayuda">Día en que empieza y día en que cierra la semana de este Grupo. Lunes → Domingo es lo normal.</p>
+        <div class="pm-fila">
+          <label>Empieza<select id="pmSemInicio"></select></label>
+          <label>Cierra<select id="pmSemCierre"></select></label>
+          <button type="button" class="btn-chico" onclick="pmGuardarSemana()">Guardar</button>
+        </div>
+        <div id="pmSemInfo" style="font-size:13px; color:var(--text-dim);"></div>
+        <div id="pmSemMsg" class="pm-msg"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ================================================================= -->
@@ -1699,6 +1810,7 @@ function mostrarSeccionSuperadmin(nombre) {
   document.getElementById('vistaMensajesContacto').style.display = nombre === 'contacto' ? 'block' : 'none';
   document.getElementById('vistaPagosSuperadmin').style.display = nombre === 'pagos' ? 'block' : 'none';
   document.getElementById('vistaWhatsappQr').style.display = nombre === 'whatsappqr' ? 'block' : 'none';
+  document.getElementById('vistaPuestaEnMarchaSuperadmin').style.display = nombre === 'puestaenmarcha' ? 'block' : 'none';
   document.getElementById('btnVerGrupos').style.background = nombre === 'grupos' ? '' : '#7f8c8d';
   if (nombre === 'alertas') {
     cargarAlertasSuperadmin();
@@ -1710,6 +1822,9 @@ function mostrarSeccionSuperadmin(nombre) {
   if (nombre === 'pagos') {
     cargarPagosSuperadmin();
   }
+  if (nombre === 'puestaenmarcha') {
+    cargarPuestaEnMarchaSuperadmin();
+  }
   if (nombre === 'whatsappqr') {
     actualizarVinculoWhatsapp();
     if (!WHATSAPP_QR_INTERVALO) WHATSAPP_QR_INTERVALO = setInterval(actualizarVinculoWhatsapp, 20000);
@@ -1717,6 +1832,282 @@ function mostrarSeccionSuperadmin(nombre) {
     clearInterval(WHATSAPP_QR_INTERVALO);
     WHATSAPP_QR_INTERVALO = null;
   }
+}
+
+// =================================================================
+// 🚀 PUESTA EN MARCHA del Súper-admin (07-10-2026) — configura un Grupo
+// elegido desde acá con las mismas rutas del panel del Grupo, montadas en
+// /api/superadmin/grupos/:id/hipismo/... y .../jugadores (ver comoGrupo en
+// routes/superadmin.js). Nada es fijo de un Grupo: cada uno se arma a su
+// manera.
+// =================================================================
+let PM_GRUPO_ID = '';
+let PM_GRUPOS = [];
+let PM_JUGADORES = [];
+let PM_BANQ = { marcas: [], tf: [] };
+const PM_DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const PM_BANQ_DEF = {
+  marcas: { ruta: '/hipismo/marcas-banqueo-config', titulo: 'Marcas', cont: 'pmBanqMarcas' },
+  tf: { ruta: '/hipismo/tf-banqueo-config', titulo: 'Tablas Fijas', cont: 'pmBanqTf' }
+};
+
+function pmEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function pmApi(sub, options) { return apiSuperadmin('/api/superadmin/grupos/' + PM_GRUPO_ID + sub, options); }
+function pmMsg(id, texto, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.color = ok ? 'var(--ok)' : 'var(--danger)';
+  el.textContent = texto || '';
+}
+
+async function cargarPuestaEnMarchaSuperadmin() {
+  const sel = document.getElementById('pmSelectGrupo');
+  try {
+    PM_GRUPOS = await apiSuperadmin('/api/superadmin/grupos');
+  } catch (e) {
+    sel.innerHTML = '<option value="">No se pudieron cargar los grupos</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— Elige un grupo —</option>' +
+    PM_GRUPOS.map(g => '<option value="' + pmEsc(g.id) + '">' + pmEsc(g.nombre) + (g.activo ? '' : ' (inactivo)') + '</option>').join('');
+  if (PM_GRUPO_ID && PM_GRUPOS.some(g => g.id === PM_GRUPO_ID)) sel.value = PM_GRUPO_ID; else PM_GRUPO_ID = '';
+  pmSeleccionarGrupo(PM_GRUPO_ID);
+}
+
+function pmSeleccionarGrupo(id) {
+  PM_GRUPO_ID = id || '';
+  document.getElementById('pmSinGrupo').style.display = PM_GRUPO_ID ? 'none' : 'block';
+  document.getElementById('pmModuloApagado').style.display = 'none';
+  document.getElementById('pmPaneles').style.display = 'none';
+  if (!PM_GRUPO_ID) return;
+  const g = PM_GRUPOS.find(x => x.id === PM_GRUPO_ID);
+  if (g && g.modulo_hipismo_habilitado === false) {
+    document.getElementById('pmModuloApagado').style.display = 'block';
+    pmMsg('pmModuloMsg', '', true);
+    return;
+  }
+  document.getElementById('pmPaneles').style.display = 'block';
+  pmRecargarTodo();
+}
+
+async function pmActivarHipismo() {
+  if (!PM_GRUPO_ID) return;
+  try {
+    await apiSuperadmin('/api/superadmin/grupos/' + PM_GRUPO_ID + '/modulo-hipismo', { method: 'PATCH', body: JSON.stringify({ habilitado: true }) });
+    const g = PM_GRUPOS.find(x => x.id === PM_GRUPO_ID);
+    if (g) g.modulo_hipismo_habilitado = true;
+    pmSeleccionarGrupo(PM_GRUPO_ID);
+  } catch (e) { pmMsg('pmModuloMsg', e.message, false); }
+}
+
+async function pmRecargarTodo() {
+  if (!PM_GRUPO_ID) return;
+  await Promise.all([pmCargarHipodromos(), pmCargarClientes()]);
+  // Los banqueadores se eligen entre los clientes ya cargados.
+  await Promise.all([pmCargarBanqueo('marcas'), pmCargarBanqueo('tf'), pmCargarSemana()]);
+  pmCargarChecklist();
+}
+
+// ---- Checklist y prueba piloto ----
+async function pmCargarChecklist() {
+  const cont = document.getElementById('pmChecklist');
+  let d;
+  try { d = await pmApi('/hipismo/puesta-en-marcha'); }
+  catch (e) { cont.innerHTML = '<div style="color:var(--danger);">No se pudo cargar: ' + pmEsc(e.message) + '</div>'; return; }
+  const icono = { ok: '✅', pendiente: '⚠️', opcional: '➖' };
+  const color = { ok: 'var(--ok)', pendiente: 'var(--danger)', opcional: 'var(--text-dim)' };
+  let html = d.listo
+    ? '<div style="color:var(--ok); font-weight:700; margin-bottom:8px;">✅ Todo lo obligatorio está listo.</div>'
+    : '<div style="color:var(--danger); font-weight:700; margin-bottom:8px;">⚠️ Faltan ' + pmEsc(d.pendientes) + ' paso(s) por hacer.</div>';
+  if (d.esquema && !d.esquema.ok) {
+    html += '<div style="padding:10px 12px; border:2px solid var(--danger); border-radius:8px; margin-bottom:10px; color:var(--danger);"><b>La base de datos no está al día:</b> ' + pmEsc(d.esquema.faltan.join('; ')) + '. Corre <code>sql/schema.sql</code> completo en Supabase.</div>';
+  }
+  html += d.items.map(i =>
+    '<div class="pm-item"><div style="font-size:18px;">' + (icono[i.estado] || '•') + '</div><div style="flex:1;">' +
+    '<div style="font-weight:600; color:' + (color[i.estado] || 'inherit') + ';">' + pmEsc(i.titulo) + (i.estado === 'opcional' ? ' <span style="font-weight:400; font-size:12px;">(opcional)</span>' : '') + '</div>' +
+    '<div style="font-size:12.5px; color:var(--text-dim);">' + pmEsc(i.detalle) + '</div></div></div>').join('');
+  cont.innerHTML = html;
+}
+
+async function pmEjecutarPrueba() {
+  const btn = document.getElementById('pmBtnPrueba');
+  const out = document.getElementById('pmResultadoPrueba');
+  btn.disabled = true; btn.textContent = 'Probando…'; out.innerHTML = '';
+  try {
+    const d = await pmApi('/hipismo/puesta-en-marcha/prueba', { method: 'POST' });
+    const col = d.ok ? 'var(--ok)' : 'var(--danger)';
+    out.innerHTML = '<div style="padding:10px 12px; border:2px solid ' + col + '; border-radius:8px;">' +
+      '<div style="font-weight:700; color:' + col + '; margin-bottom:6px;">' + (d.ok ? '✅ La prueba piloto pasó completa' : '⚠️ La prueba piloto encontró cosas por revisar') + '</div>' +
+      d.pasos.map(p => '<div style="font-size:13px; margin-bottom:3px;">' + (p.ok ? '✅' : '❌') + ' <b>' + pmEsc(p.titulo) + '</b>: ' + pmEsc(p.detalle) + '</div>').join('') + '</div>';
+  } catch (e) {
+    out.innerHTML = '<div style="color:var(--danger);">No se pudo ejecutar: ' + pmEsc(e.message) + '</div>';
+  }
+  btn.disabled = false; btn.textContent = '🧪 Ejecutar prueba piloto';
+}
+
+// ---- Hipódromos ----
+async function pmCargarHipodromos() {
+  const cont = document.getElementById('pmListaHipodromos');
+  try {
+    const lista = await pmApi('/hipismo/hipodromos');
+    cont.innerHTML = lista.length
+      ? lista.map(h => '<div class="pm-item" style="align-items:center;"><div style="flex:1;"><b>' + pmEsc(h.nombre) + '</b> <span style="color:var(--text-dim);">· ' + (h.pais === 'US' ? 'EE. UU.' : 'Venezuela') + ' · ' + pmEsc(h.carreras_max) + ' carreras</span></div>' +
+          '<button type="button" class="btn-chico btn-peligro" data-id="' + pmEsc(h.id) + '" onclick="pmEliminarHipodromo(this.dataset.id)">Quitar</button></div>').join('')
+      : '<div style="color:var(--text-dim);">Todavía no hay hipódromos.</div>';
+  } catch (e) { cont.innerHTML = '<div style="color:var(--danger);">' + pmEsc(e.message) + '</div>'; }
+}
+
+async function pmAgregarHipodromo() {
+  const nombre = document.getElementById('pmHipNombre').value.trim();
+  if (!nombre) return pmMsg('pmHipMsg', 'Escribe el nombre del hipódromo.', false);
+  try {
+    await pmApi('/hipismo/hipodromos', { method: 'POST', body: JSON.stringify({
+      nombre, pais: document.getElementById('pmHipPais').value, carrerasMax: parseInt(document.getElementById('pmHipCarreras').value, 10) || 25 }) });
+    document.getElementById('pmHipNombre').value = '';
+    pmMsg('pmHipMsg', 'Hipódromo agregado.', true);
+    await pmCargarHipodromos(); pmCargarChecklist();
+  } catch (e) { pmMsg('pmHipMsg', e.message, false); }
+}
+
+async function pmEliminarHipodromo(id) {
+  if (!confirm('¿Quitar este hipódromo del Grupo?')) return;
+  try {
+    await pmApi('/hipismo/hipodromos/' + id, { method: 'DELETE' });
+    await pmCargarHipodromos(); pmCargarChecklist();
+  } catch (e) { pmMsg('pmHipMsg', e.message, false); }
+}
+
+// ---- Clientes ----
+async function pmCargarClientes() {
+  const cont = document.getElementById('pmListaClientes');
+  try {
+    PM_JUGADORES = await pmApi('/jugadores');
+    cont.innerHTML = PM_JUGADORES.length
+      ? PM_JUGADORES.map(j => '<div class="pm-item"><div style="flex:1;"><b>' + pmEsc(j.nombre) + '</b> <span style="color:var(--text-dim);">· ' + (j.tipo_cuenta === 'avalado' ? 'avalado' : 'libre') + (Number(j.comision_propia) ? ' · ' + pmEsc(j.comision_propia) + '% propio' : '') + '</span></div></div>').join('')
+      : '<div style="color:var(--text-dim);">Todavía no hay clientes.</div>';
+  } catch (e) { PM_JUGADORES = []; cont.innerHTML = '<div style="color:var(--danger);">' + pmEsc(e.message) + '</div>'; }
+}
+
+function pmCuerpoCliente(nombre, tipo, pozo, pct) {
+  return { nombre, tipoCuenta: tipo, pozoInicial: tipo === 'avalado' ? pozo : 0, comisionPropia: pct };
+}
+
+async function pmAgregarCliente() {
+  const nombre = document.getElementById('pmCliNombre').value.trim();
+  if (!nombre) return pmMsg('pmCliMsg', 'Escribe el nombre del cliente.', false);
+  const tipo = document.getElementById('pmCliTipo').value;
+  try {
+    await pmApi('/jugadores', { method: 'POST', body: JSON.stringify(pmCuerpoCliente(nombre, tipo, Number(document.getElementById('pmCliPozo').value) || 0, Number(document.getElementById('pmCliPct').value) || 0)) });
+    document.getElementById('pmCliNombre').value = '';
+    pmMsg('pmCliMsg', 'Cliente agregado.', true);
+    await pmCargarClientes(); pmPintarBanqueos(); pmCargarChecklist();
+  } catch (e) { pmMsg('pmCliMsg', e.message, false); }
+}
+
+// Una línea: "NOMBRE", "NOMBRE, 5" o "NOMBRE 5%". Un número SIN % y sin coma
+// forma parte del nombre (ej. "CLIENTE 2"), para no confundirlo con un porcentaje.
+function pmParsearLineaCliente(linea) {
+  const t = linea.trim();
+  if (!t) return null;
+  let m = t.match(/^(.*?)\s*[,;\t]\s*(\d+(?:[.,]\d+)?)\s*%?$/);
+  if (!m) m = t.match(/^(.*?)\s+(\d+(?:[.,]\d+)?)\s*%$/);
+  if (m && m[1].trim()) return { nombre: m[1].trim(), pct: Number(m[2].replace(',', '.')) || 0 };
+  return { nombre: t.replace(/[,;]+$/, '').trim(), pct: 0 };
+}
+
+async function pmCargaMasivaClientes() {
+  const lineas = document.getElementById('pmCliMasivo').value.split(/\r?\n/).map(pmParsearLineaCliente).filter(Boolean);
+  if (!lineas.length) return pmMsg('pmCliMsg', 'Escribe al menos un cliente, uno por línea.', false);
+  const tipo = document.getElementById('pmCliMasivoTipo').value;
+  let creados = 0; const problemas = [];
+  for (const l of lineas) {
+    try { await pmApi('/jugadores', { method: 'POST', body: JSON.stringify(pmCuerpoCliente(l.nombre, tipo, 0, l.pct)) }); creados++; }
+    catch (e) { problemas.push(l.nombre + ': ' + e.message); }
+  }
+  if (!problemas.length) document.getElementById('pmCliMasivo').value = '';
+  pmMsg('pmCliMsg', 'Creados: ' + creados + (problemas.length ? ' · Con problemas (' + problemas.length + '): ' + problemas.join(' | ') : '.'), problemas.length === 0);
+  await pmCargarClientes(); pmPintarBanqueos(); pmCargarChecklist();
+}
+
+// ---- Banqueo de Marcas / Tablas Fijas ----
+async function pmCargarBanqueo(clave) {
+  try {
+    const d = await pmApi(PM_BANQ_DEF[clave].ruta);
+    PM_BANQ[clave] = (d.banqueadores || []).map(b => ({ nombre: b.nombre, porcentaje: b.porcentaje, pagaComision: !!b.pagaComision }));
+  } catch (e) { PM_BANQ[clave] = []; }
+  pmPintarBanqueo(clave);
+}
+function pmPintarBanqueos() { pmPintarBanqueo('marcas'); pmPintarBanqueo('tf'); }
+
+function pmPintarBanqueo(clave) {
+  const def = PM_BANQ_DEF[clave];
+  const filas = PM_BANQ[clave];
+  const opciones = nombre => '<option value="">— cliente —</option>' +
+    PM_JUGADORES.map(j => '<option value="' + pmEsc(j.nombre) + '"' + (j.nombre === nombre ? ' selected' : '') + '>' + pmEsc(j.nombre) + '</option>').join('') +
+    (nombre && !PM_JUGADORES.some(j => j.nombre === nombre) ? '<option value="' + pmEsc(nombre) + '" selected>' + pmEsc(nombre) + ' (no existe)</option>' : '');
+  const suma = Math.round(filas.reduce((a, b) => a + (Number(b.porcentaje) || 0), 0) * 100) / 100;
+  document.getElementById(def.cont).innerHTML =
+    '<div style="margin-top:10px;"><b>' + def.titulo + '</b></div>' +
+    (filas.length ? filas.map((b, i) =>
+      '<div class="pm-fila" style="margin-top:6px;">' +
+      '<label style="flex:1; min-width:150px;">Banquea<select onchange="PM_BANQ.' + clave + '[' + i + '].nombre=this.value">' + opciones(b.nombre) + '</select></label>' +
+      '<label>%<input type="number" min="0" max="100" step="0.01" value="' + pmEsc(b.porcentaje) + '" style="width:80px;" oninput="PM_BANQ.' + clave + '[' + i + '].porcentaje=Number(this.value); pmActualizarSuma(\'' + clave + '\')"></label>' +
+      '<label style="flex-direction:row; align-items:center; gap:5px;"><input type="checkbox"' + (b.pagaComision ? ' checked' : '') + ' onchange="PM_BANQ.' + clave + '[' + i + '].pagaComision=this.checked"> Paga comisión</label>' +
+      '<button type="button" class="btn-chico btn-peligro" onclick="pmQuitarBanquero(\'' + clave + '\',' + i + ')">Quitar</button></div>').join('')
+      : '<div style="font-size:13px; color:var(--text-dim); margin-top:4px;">Sin banqueadores configurados.</div>') +
+    '<div class="pm-fila" style="margin-top:8px;">' +
+    (filas.length < 4 ? '<button type="button" class="btn-chico btn-secundario" onclick="pmAgregarBanquero(\'' + clave + '\')">+ Banqueador</button>' : '') +
+    '<button type="button" class="btn-chico" onclick="pmGuardarBanqueo(\'' + clave + '\')">Guardar ' + def.titulo + '</button>' +
+    '<span id="pmSuma_' + clave + '" style="font-size:13px;"></span></div>' +
+    '<div id="pmBanqMsg_' + clave + '" class="pm-msg"></div>';
+  pmActualizarSuma(clave);
+}
+
+function pmActualizarSuma(clave) {
+  const el = document.getElementById('pmSuma_' + clave);
+  if (!el) return;
+  const filas = PM_BANQ[clave];
+  if (!filas.length) { el.textContent = ''; return; }
+  const suma = Math.round(filas.reduce((a, b) => a + (Number(b.porcentaje) || 0), 0) * 100) / 100;
+  el.style.color = Math.abs(suma - 100) < 0.005 ? 'var(--ok)' : 'var(--danger)';
+  el.textContent = 'Suma: ' + suma + '%' + (Math.abs(suma - 100) < 0.005 ? '' : ' (debe dar 100)');
+}
+function pmAgregarBanquero(clave) { if (PM_BANQ[clave].length < 4) PM_BANQ[clave].push({ nombre: '', porcentaje: 0, pagaComision: false }); pmPintarBanqueo(clave); }
+function pmQuitarBanquero(clave, i) { PM_BANQ[clave].splice(i, 1); pmPintarBanqueo(clave); }
+
+async function pmGuardarBanqueo(clave) {
+  const filas = PM_BANQ[clave];
+  const msg = 'pmBanqMsg_' + clave;
+  if (filas.some(b => !b.nombre)) return pmMsg(msg, 'Elige el cliente de cada banqueador (o quita la fila vacía).', false);
+  try {
+    const d = await pmApi(PM_BANQ_DEF[clave].ruta, { method: 'PUT', body: JSON.stringify({ banqueadores: filas }) });
+    PM_BANQ[clave] = (d.banqueadores || []).map(b => ({ nombre: b.nombre, porcentaje: b.porcentaje, pagaComision: !!b.pagaComision }));
+    pmPintarBanqueo(clave);
+    pmMsg(msg, filas.length ? 'Banqueo de ' + PM_BANQ_DEF[clave].titulo + ' guardado.' : 'Banqueo automático de ' + PM_BANQ_DEF[clave].titulo + ' desactivado.', true);
+    pmCargarChecklist();
+  } catch (e) { pmMsg(msg, e.message, false); }
+}
+
+// ---- Fecha de semana ----
+async function pmCargarSemana() {
+  const opts = PM_DIAS.map((n, i) => '<option value="' + i + '">' + n + '</option>').join('');
+  const si = document.getElementById('pmSemInicio'), sc = document.getElementById('pmSemCierre');
+  si.innerHTML = opts; sc.innerHTML = opts;
+  try {
+    const d = await pmApi('/hipismo/semana-config');
+    si.value = String(d.inicio); sc.value = String(d.cierre);
+    document.getElementById('pmSemInfo').textContent = d.personalizada
+      ? 'Semana personalizada: ' + d.desde + ' al ' + d.hasta + '.'
+      : 'Semana actual: ' + d.actual.desde + ' al ' + d.actual.hasta + (d.esDefecto ? ' (Lunes → Domingo, por defecto).' : '.');
+  } catch (e) { document.getElementById('pmSemInfo').textContent = e.message; }
+}
+
+async function pmGuardarSemana() {
+  try {
+    await pmApi('/hipismo/semana-config', { method: 'PUT', body: JSON.stringify({ inicio: Number(document.getElementById('pmSemInicio').value), cierre: Number(document.getElementById('pmSemCierre').value) }) });
+    pmMsg('pmSemMsg', 'Semana guardada.', true);
+    await pmCargarSemana(); pmCargarChecklist();
+  } catch (e) { pmMsg('pmSemMsg', e.message, false); }
 }
 
 // =================================================================
