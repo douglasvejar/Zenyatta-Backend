@@ -143,6 +143,11 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 
 app.use((err, req, res, next) => {
   console.error(err);
+  // Registro de errores (07-10-2026, ver services/erroresServidor.js): queda
+  // guardado con ruta/grupo/usuario para verlo en el panel sin que nadie lo
+  // reporte. No espera ni puede romper la respuesta.
+  const esCaidaDeRedLog = ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE'].includes(err && err.code);
+  require('./services/erroresServidor').registrarError(req, err, esCaidaDeRedLog ? 503 : 500);
   // ECONNRESET/ETIMEDOUT/etc contra la base de datos: no es culpa de lo
   // que mandó el usuario, es un hipo de red hacia Supabase. Se distingue
   // del 500 genérico para que en el panel se vea un mensaje que invita a
@@ -188,6 +193,13 @@ function logEstadoClave(nombreVariable, etiqueta) {
 }
 logEstadoClave('FOOTBALL_DATA_API_KEY', 'primera mitad de fútbol, 6 ligas de clubes (football-data.org)');
 logEstadoClave('API_FOOTBALL_KEY', 'primera mitad de fútbol, selecciones: Nations League/Copa América/Amistoso Internacional/Eliminatorias Conmebol (api-football.com)');
+
+// Revisión automática de cuadre cada noche (07-10-2026, ver
+// services/hipismoCuadreNocturno.js): un setInterval alcanza, igual que el
+// refresco de Odds API de arriba. Solo corre si hay base de datos.
+if (process.env.DATABASE_URL) {
+  require('./services/hipismoCuadreNocturno').iniciarCuadreNocturno();
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

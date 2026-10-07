@@ -175,6 +175,7 @@ async function rechazarClientesInexistentes(req, res, nombres) {
 // para la sábana de Deportes (papelera recuperable, nunca borrado
 // definitivo, para un sistema contable).
 const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
+const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo } = require('../services/hipismoAlertaPozo');
 // construirResumenClienteHipismo (24-09-2026) — la nueva pestaña "Saldos >
 // Detallado por Cliente" pide EXACTAMENTE la misma respuesta que ya arma
 // GET /api/hipismo-cliente/:token (el portal público) para un cliente
@@ -246,6 +247,27 @@ async function registrarAlerta(req, { tipo, hipodromoNombre, carreraNumero, fech
   );
 }
 
+// APUESTA MÁS DE LO QUE LE QUEDA (07-10-2026, ver hipismoAlertaPozo.js):
+// avisa en Administración > Alertas cuando un cliente con pozo apostó, en
+// esta carga, más que su pozo disponible. Solo AVISA: nunca bloquea ni
+// cambia montos, y cualquier error al revisar se ignora para que jamás
+// impida guardar un plano. Devuelve la lista para mostrarla en pantalla.
+async function alertarApuestasSobrePozo(req, { apuestas, hipodromoNombre, carreraNumero, fecha, etiqueta }) {
+  try {
+    const sobre = await detectarApuestasSobrePozo(req.grupoId, apuestas);
+    for (const s of sobre) {
+      await registrarAlerta(req, {
+        tipo: 'APUESTA_SOBRE_POZO', hipodromoNombre, carreraNumero, fecha,
+        mensaje: mensajeApuestaSobrePozo(s, etiqueta)
+      });
+    }
+    return sobre;
+  } catch (e) {
+    console.warn('[alerta pozo] no se pudo revisar el pozo (se guarda igual):', e.message);
+    return [];
+  }
+}
+
 // GET /alertas : lista completa para la pestaña "Alertas" bajo
 // Administración, más reciente primero. Sin filtro de fecha por ahora
 // (el volumen esperado es bajo — ediciones/borrados son la excepción,
@@ -257,6 +279,28 @@ router.get('/alertas', asyncHandler(async (req, res) => {
     [req.grupoId]
   );
   res.json(r.rows);
+}));
+
+// Cuadre nocturno y errores del servidor (07-10-2026). GET /cuadre-nocturno:
+// bitácora de las últimas revisiones automáticas de este grupo (ver
+// services/hipismoCuadreNocturno.js). POST /cuadre-nocturno/ejecutar: la
+// misma revisión, a mano, guardada igual. GET /errores: errores del
+// servidor de ESTE grupo (services/erroresServidor.js).
+router.get('/cuadre-nocturno', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    'SELECT fecha, estado, detalle, creado_en FROM hipismo_cuadre_nocturno WHERE grupo_id = $1 ORDER BY fecha DESC LIMIT 14',
+    [req.grupoId]
+  );
+  res.json(r.rows);
+}));
+
+router.post('/cuadre-nocturno/ejecutar', asyncHandler(async (req, res) => {
+  const resultado = await require('../services/hipismoCuadreNocturno').ejecutarCuadreGrupo(req.grupo, { usuario: req.nombreActor });
+  res.json(resultado);
+}));
+
+router.get('/errores', asyncHandler(async (req, res) => {
+  res.json(await require('../services/erroresServidor').listarErrores({ grupoId: req.grupoId, limite: req.query.limite }));
 }));
 
 // =================================================================
@@ -930,6 +974,16 @@ router.post('/planos', asyncHandler(async (req, res) => {
   resueltas.forEach(r => nombresDelPlano.add(r.cliente));
   if (await rechazarClientesInexistentes(req, res, Array.from(nombresDelPlano))) return;
 
+  // Alerta de pozo (07-10-2026): lo apostado por cada cliente en los Tercios
+  // de esta carga, medido ANTES de guardar para no contar dos veces el
+  // resultado de este mismo plano. (Las Adelantadas se revisan cuando se
+  // cargan, no al resolverse, para no avisar dos veces la misma apuesta.)
+  const alertasPozo = await alertarApuestasSobrePozo(req, {
+    apuestas: resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto })),
+    hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal,
+    etiqueta: `${nombreHipodromoFinal} carrera ${carreraNumero}`
+  });
+
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
       `INSERT INTO hipismo_planos (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, ret, pizarra, cruza_jugadas, texto_original, texto_resultado, comision_total)
@@ -990,6 +1044,7 @@ router.post('/planos', asyncHandler(async (req, res) => {
     // frontend lo puede usar para avisar "se sustituyó el plano anterior
     // de esta carrera" en vez de un simple "plano guardado".
     sustituyoAnterior: rPlanosExistentes.rows.length > 0,
+    alertasPozo,
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
     terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
@@ -1366,6 +1421,14 @@ router.post('/adelantadas', asyncHandler(async (req, res) => {
 
   if (await rechazarClientesInexistentes(req, res, Array.from(new Set(jugadas.map(j => j.cliente))))) return;
 
+  // Alerta de pozo (07-10-2026): lo que cada cliente jugó en este plano de
+  // Tablas Fijas/Marcas contra lo que le queda (ver hipismoAlertaPozo.js).
+  const alertasPozo = await alertarApuestasSobrePozo(req, {
+    apuestas: jugadas.map(j => ({ nombre: j.cliente, monto: j.monto })),
+    hipodromoNombre: nombreHipodromoFinal, fecha,
+    etiqueta: `jugadas adelantadas de ${nombreHipodromoFinal}`
+  });
+
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
       `INSERT INTO hipismo_adelantadas_planos (grupo_id, hipodromo_id, hipodromo_nombre, fecha, texto_original)
@@ -1389,7 +1452,7 @@ router.post('/adelantadas', asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
-  res.status(201).json({ plano, cantidadJugadas: jugadas.length, sinReconocer });
+  res.status(201).json({ plano, cantidadJugadas: jugadas.length, sinReconocer, alertasPozo });
 }));
 
 // GET /adelantadas?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
@@ -1794,6 +1857,14 @@ router.post('/tercios-adelantadas', asyncHandler(async (req, res) => {
   lineas.forEach(l => { if (l.jugadorNombre) nombres.add(l.jugadorNombre); if (l.banqueroNombre) nombres.add(l.banqueroNombre); });
   if (await rechazarClientesInexistentes(req, res, Array.from(nombres))) return;
 
+  // Alerta de pozo (07-10-2026): lo que cada JUGADOR apostó en este plano
+  // (el banquero pone la banca, no apuesta) contra lo que le queda.
+  const alertasPozo = await alertarApuestasSobrePozo(req, {
+    apuestas: lineas.map(l => ({ nombre: l.jugadorNombre, monto: l.monto })),
+    hipodromoNombre: nombreHipodromoFinal, fecha,
+    etiqueta: `tercios adelantadas de ${nombreHipodromoFinal}`
+  });
+
   const plano = await db.transaccion(async (client) => {
     const rPlano = await client.query(
       `INSERT INTO hipismo_tercios_adelantadas_planos (grupo_id, hipodromo_id, hipodromo_nombre, fecha, comision_porcentaje, texto_original)
@@ -1818,7 +1889,8 @@ router.post('/tercios-adelantadas', asyncHandler(async (req, res) => {
   res.status(201).json({
     plano,
     cantidadJugadas: lineas.length,
-    cantidadErrores: lineas.filter(l => l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero).length
+    cantidadErrores: lineas.filter(l => l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero).length,
+    alertasPozo
   });
 }));
 

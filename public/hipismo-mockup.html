@@ -3185,10 +3185,24 @@ Pizarra: [se llena al calcular]
     <section class="vista" id="vista-alertasHipismo">
       <div class="card">
         <h2>🔔 Alertas</h2>
-        <p class="desc">Cada vez que se edita o se elimina un plano (o una jugada de "Jugadas Adelantadas"), queda registrado acá: qué se hizo, en qué carrera y quién lo hizo.</p>
+        <p class="desc">Cada vez que se edita o se elimina un plano (o una jugada de "Jugadas Adelantadas"), queda registrado acá: qué se hizo, en qué carrera y quién lo hizo. También avisa cuando un cliente apuesta más de lo que le queda y cuando la revisión automática de cada noche encuentra algo que no cuadra.</p>
+        <div id="panelCuadreNocturno" style="margin:10px 0 14px; padding:10px 12px; border:1px solid var(--border, #ddd); border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <b>🧮 Revisión automática de cuadre</b>
+            <span id="estadoCuadreNocturno" style="color:var(--text-dim);">Cargando…</span>
+            <button type="button" class="btn-secundario" id="btnCuadreAhora" onclick="ejecutarCuadreAhora()">Revisar ahora</button>
+          </div>
+          <div id="detalleCuadreNocturno" style="margin-top:6px; font-size:12px; color:var(--text-dim);"></div>
+        </div>
         <table>
           <thead><tr><th>Cuándo</th><th>Tipo</th><th>Hipódromo / Carrera</th><th>Detalle</th><th>Usuario</th></tr></thead>
           <tbody id="tablaAlertasHipismo"><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+        </table>
+        <h3 style="margin-top:22px;">🛠️ Errores del servidor</h3>
+        <p class="desc">Fallas internas que le pasaron a este grupo (se borran solas a los 30 días). Si ves una repetida, avísale a soporte con la fecha y la ruta.</p>
+        <table>
+          <thead><tr><th>Cuándo</th><th>Ruta</th><th>Usuario</th><th>Error</th></tr></thead>
+          <tbody id="tablaErroresServidor"><tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -6670,6 +6684,7 @@ async function confirmarPlano() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+  mostrarAvisoPozo(data.alertasPozo);
 
   // Deja todo listo para la SIGUIENTE carrera de la misma jornada
   // (28-09-2026, a pedido del usuario): pizarra en blanco, plano vacío,
@@ -7727,6 +7742,7 @@ async function guardarAdelantadas() {
   t.style.color = 'var(--ok)';
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
+  mostrarAvisoPozo(data.alertasPozo);
   document.getElementById('txtAdelantadas').value = '';
   mostrarVacioAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
   cargarPendientesAdelantadas();
@@ -8118,6 +8134,7 @@ async function guardarTerciosAdelantadas() {
   t.style.color = 'var(--ok)';
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
+  mostrarAvisoPozo(data.alertasPozo);
   document.getElementById('txtTerciosAdelantadas').value = '';
   mostrarVacioTerciosAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
   cargarPendientesTerciosAdelantadas();
@@ -14138,9 +14155,75 @@ async function confirmarEliminarJornada() {
 const TIPOS_ALERTA_TEXTO = {
   PLANO_EDITADO: '✏️ Plano editado', PLANO_ELIMINADO: '🗑️ Plano eliminado',
   ADELANTADA_EDITADA: '✏️ Adelantada editada', ADELANTADA_ELIMINADA: '🗑️ Adelantada eliminada',
-  JORNADA_ELIMINADA: '🔥 Jornada eliminada (TODO el día)'
+  JORNADA_ELIMINADA: '🔥 Jornada eliminada (TODO el día)',
+  WINNER_EDITADO: '✏️ Winner editado', WINNER_ELIMINADO: '🗑️ Winner eliminado',
+  PIZARRA_EDITADA: '✏️ Pizarra editada', PIZARRA_ELIMINADA: '🗑️ Pizarra eliminada',
+  TERCIOS_ADELANTADA_EDITADA: '✏️ Tercios adelantada editada', TERCIOS_ADELANTADA_ELIMINADA: '🗑️ Tercios adelantada eliminada',
+  REMATE_MANUAL_ELIMINADO: '🗑️ Remate manual eliminado',
+  APUESTA_SOBRE_POZO: '⚠️ Apostó más de lo que le queda',
+  CUADRE_DESCUADRADO: '🧮 Cuadre automático: algo no cuadra'
 };
+
+// "Apostó más de lo que le queda" (07-10-2026) — el servidor devuelve
+// alertasPozo al guardar un plano; el aviso queda en pantalla hasta que se
+// cierra (el toast normal desaparece en 2 segundos y es fácil perdérselo).
+// Solo avisa: la jugada ya quedó guardada igual.
+function mostrarAvisoPozo(lista) {
+  if (!Array.isArray(lista) || !lista.length) return;
+  let caja = document.getElementById('avisoPozoFlotante');
+  if (!caja) {
+    caja = document.createElement('div');
+    caja.id = 'avisoPozoFlotante';
+    caja.style.cssText = 'position:fixed; top:14px; right:14px; z-index:9999; max-width:420px; background:#fff4e5; border:2px solid #e08a00; border-radius:10px; padding:12px 14px; box-shadow:0 6px 24px rgba(0,0,0,.25); color:#5a3a00; font-size:13px;';
+    document.body.appendChild(caja);
+  }
+  const fmtM = n => Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  caja.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">⚠️ Apostó más de lo que le queda</div>` +
+    lista.map(x => `<div style="margin-bottom:4px;"><b>${formatNombre(x.nombre)}</b>: apostó ${fmtM(x.apostado)} y su pozo disponible es ${fmtM(x.pozoDisponible)} (se pasa por ${fmtM(x.faltante)})</div>`).join('') +
+    `<div style="margin-top:8px; text-align:right;"><button type="button" class="btn-secundario" onclick="document.getElementById('avisoPozoFlotante').remove()">Entendido</button></div>`;
+}
+// Revisión de cuadre nocturna (07-10-2026) — estado de las últimas noches.
+async function pintarCuadreNocturno() {
+  const est = document.getElementById('estadoCuadreNocturno');
+  const det = document.getElementById('detalleCuadreNocturno');
+  if (!est) return;
+  let filas;
+  try { filas = await apiHipismo('/api/hipismo/cuadre-nocturno'); }
+  catch (e) { est.textContent = 'No se pudo cargar: ' + e.message; return; }
+  if (!filas.length) { est.textContent = 'Todavía no ha corrido ninguna revisión (corre sola cada noche después de las 3:00 a. m.).'; det.textContent = ''; return; }
+  const u = filas[0];
+  const fechaTxt = String(u.fecha).slice(0, 10).split('-').reverse().join('-');
+  if (u.estado === 'ok') { est.innerHTML = `<span style="color:#2a7a2a; font-weight:600;">✅ Última revisión (${fechaTxt}): todo cuadra</span>`; }
+  else if (u.estado === 'descuadre') { est.innerHTML = `<span style="color:#b43; font-weight:600;">⚠️ Última revisión (${fechaTxt}): algo no cuadra — mira la alerta de abajo</span>`; }
+  else { est.innerHTML = `<span style="color:#b43;">La última revisión (${fechaTxt}) no pudo completarse: ${(u.detalle && u.detalle.error) || 'error'}</span>`; }
+  det.textContent = 'Últimas noches: ' + filas.map(f => `${String(f.fecha).slice(5, 10).split('-').reverse().join('/')} ${f.estado === 'ok' ? '✅' : (f.estado === 'descuadre' ? '⚠️' : '❌')}`).join('  ·  ');
+}
+async function ejecutarCuadreAhora() {
+  const btn = document.getElementById('btnCuadreAhora');
+  btn.disabled = true; btn.textContent = 'Revisando…';
+  try { await apiHipismo('/api/hipismo/cuadre-nocturno/ejecutar', { method: 'POST' }); }
+  catch (e) { alert('No se pudo revisar: ' + e.message); }
+  btn.disabled = false; btn.textContent = 'Revisar ahora';
+  await pintarCuadreNocturno();
+  pintarAlertasHipismo();
+}
+async function pintarErroresServidor() {
+  const tbody = document.getElementById('tablaErroresServidor');
+  if (!tbody) return;
+  let filas;
+  try { filas = await apiHipismo('/api/hipismo/errores?limite=50'); }
+  catch (e) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">No se pudo cargar: ${e.message}</td></tr>`; return; }
+  if (!filas.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim);">Sin errores. 🎉</td></tr>'; return; }
+  const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  tbody.innerHTML = filas.map(f => {
+    const cuando = new Date(f.creado_en).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `<tr><td>${cuando}</td><td>${esc(f.metodo)} ${esc(f.ruta)}</td><td>${esc(f.usuario || '—')}</td><td>${esc(f.mensaje)}</td></tr>`;
+  }).join('');
+}
+
 async function pintarAlertasHipismo() {
+  pintarCuadreNocturno();
+  pintarErroresServidor();
   const tbody = document.getElementById('tablaAlertasHipismo');
   let filas;
   try {

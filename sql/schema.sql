@@ -2020,3 +2020,47 @@ alter table grupos add column if not exists hipismo_marcas_banqueo jsonb;
 -- { nombre, porcentaje, pagaComision } cuyos % suman 100. NULL = las Tablas
 -- Fijas juegan contra el ítem "TABLAS FIJAS" de siempre. Seguro de re-correr.
 alter table grupos add column if not exists hipismo_tf_banqueo jsonb;
+
+-- ---------------------------------------------------------------
+-- 07-10-2026 — ALERTAS NUEVAS, CUADRE NOCTURNO Y REGISTRO DE ERRORES.
+--
+-- 1) Dos tipos nuevos en hipismo_alertas:
+--    APUESTA_SOBRE_POZO: un cliente con pozo apostó más de lo que le queda.
+--    CUADRE_DESCUADRADO: la revisión automática de la noche encontró algo que
+--    no cuadra (un cliente con grilla distinta al link, o el balance no suma 0).
+alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
+alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO'));
+
+-- 2) Bitácora de la revisión de cuadre automática: una fila por grupo y por día
+--    (unique), así el servidor no repite la revisión si se reinicia, y el
+--    Administrador ve "anoche: todo cuadra / tantas diferencias".
+create table if not exists hipismo_cuadre_nocturno (
+  id          uuid primary key default gen_random_uuid(),
+  grupo_id    uuid not null references grupos(id) on delete cascade,
+  fecha       date not null,           -- día (hora de Venezuela) en que corrió la revisión
+  estado      text not null check (estado in ('ok','descuadre','error')),
+  detalle     jsonb,                   -- { semanas: [...], discrepancias: [...], sumaBalance: [...] }
+  creado_en   timestamptz not null default now(),
+  unique (grupo_id, fecha)
+);
+create index if not exists idx_hipismo_cuadre_nocturno_grupo on hipismo_cuadre_nocturno(grupo_id, fecha desc);
+alter table hipismo_cuadre_nocturno enable row level security;
+
+-- 3) Registro de errores del servidor: todo error 500/503 queda guardado con
+--    la ruta y el grupo, para enterarse sin que un usuario tenga que reportarlo.
+--    Súper-admin ve todos; cada grupo ve los suyos. Se limpia solo (30 días).
+create table if not exists errores_servidor (
+  id          uuid primary key default gen_random_uuid(),
+  grupo_id    uuid references grupos(id) on delete cascade,   -- NULL si no se sabe de qué grupo fue
+  usuario     text,
+  metodo      text,
+  ruta        text,
+  estado      integer,
+  mensaje     text not null,
+  detalle     text,                    -- primeras líneas del stack
+  creado_en   timestamptz not null default now()
+);
+create index if not exists idx_errores_servidor_creado on errores_servidor(creado_en desc);
+create index if not exists idx_errores_servidor_grupo on errores_servidor(grupo_id, creado_en desc);
+alter table errores_servidor enable row level security;

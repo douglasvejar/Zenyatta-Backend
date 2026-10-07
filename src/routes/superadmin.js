@@ -912,6 +912,13 @@ router.delete('/equipos-globales/:id', asyncHandler(async (req, res) => {
 // que ve cada Grupo en la suya (src/routes/sabana.js), solo que acá
 // vienen todas juntas con el nombre del grupo de cada una.
 // =================================================================
+// Errores del servidor de TODOS los grupos (07-10-2026, ver
+// services/erroresServidor.js) — para enterarse de las fallas sin que un
+// usuario las reporte.
+router.get('/errores-servidor', asyncHandler(async (req, res) => {
+  res.json(await require('../services/erroresServidor').listarErrores({ limite: req.query.limite }));
+}));
+
 router.get('/alertas', asyncHandler(async (req, res) => {
   const alertas = await alertasService.listarAlertasTodas();
   res.json(alertas);
