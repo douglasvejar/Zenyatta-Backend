@@ -332,6 +332,11 @@
 
   .resultado-caja { margin-top: 16px; background: #fbfffc; color: #10231a; border: 1px solid var(--card-border); border-radius: 10px; padding: 18px 20px; font-family: 'ui-monospace', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.55; box-shadow: inset 0 0 0 1px rgba(15,60,35,0.03); }
   .resultado-vacio { color: var(--text-dim); font-style: italic; font-size: 13px; margin-top: 16px; white-space: pre-line; }
+  /* "CLIENTE X NO EXISTE" (07-10-2026): se marca en rojo en cualquier mensaje de plano/carga. */
+  .resultado-vacio.resultado-error { color: var(--danger); font-style: normal; font-weight: 700; }
+  /* Campo de cliente que no coincide EXACTO con un cliente creado. */
+  input.cli-invalido { border-color: var(--danger) !important; background: rgba(220,38,38,.08); }
+  .cli-error { color: var(--danger); font-size: 12.5px; font-weight: 700; margin: 6px 0; white-space: pre-line; }
   .aviso-resultado { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: #eaf4ff; border: 1px solid #bdddfd; color: #0b3d66; }
   .aviso-resultado.aviso-confirmado { background: #e9f8ee; border-color: #b9e6c7; color: #0f5a2c; }
   /* Info admin del Remate (26-09-2026, ver la nota grande junto a
@@ -1770,6 +1775,7 @@
              listaHipodromosConocidos: <input list="..."> + <datalist>
              vacío que se llena solo (ver cargarBanqueadoresConocidos). -->
         <datalist id="listaBanqueadoresConocidos"></datalist>
+        <datalist id="listaClientesExistentes"></datalist>
       </div>
     </section>
 
@@ -8146,8 +8152,8 @@ function filaEdicionTerciosAdelantadaHtml(j) {
     <div style="margin-top:8px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
       <div style="font-size:13px; margin-bottom:6px;">✏️ Editando esta jugada:</div>
       <div class="fila" style="margin-bottom:6px;">
-        <input type="text" id="editTerciosJugador_${j.id}" placeholder="Jugador" value="${jugadorVal}">
-        <input type="text" id="editTerciosBanquero_${j.id}" placeholder="Banquero" value="${banqueroVal}">
+        <input type="text" id="editTerciosJugador_${j.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Jugador" value="${jugadorVal}">
+        <input type="text" id="editTerciosBanquero_${j.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Banquero" value="${banqueroVal}">
         <input type="number" id="editTerciosMonto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto != null ? j.monto : ''}">
         <input type="text" id="editTerciosModalidad_${j.id}" placeholder="Modalidad (ej: 1p, 10a8)" value="${modalidadVal}">
       </div>
@@ -8459,6 +8465,7 @@ async function cargarClientesReales() {
   // un cliente (pintarFichaCliente()) y la lista de posibles avales sin
   // tener que pedir /api/jugadores de nuevo.
   CLIENTES_HIPISMO_CACHE = jugadores;
+  refrescarListaClientesExistentes();
   poblarSelectPozoAjusteCliente();
   pintarTablaPozos();
   pintarTablaClientesFiltrada();
@@ -9458,6 +9465,7 @@ async function poblarSelectTitularGrupoClienteHip() {
     return;
   }
   CLIENTES_HIPISMO_CACHE = jugadores;
+  refrescarListaClientesExistentes();
   const activos = jugadores.filter(j => j.activo).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
   sel.innerHTML = '<option value="">Elige el cliente titular…</option>' +
     activos.map(j => `<option value="${j.id}">${escaparHtmlChat(j.nombre)}</option>`).join('');
@@ -13512,8 +13520,8 @@ function filaEdicionTicketHtml(planoId, t) {
   return `
     <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
       <div class="fila" style="margin-bottom:6px;">
-        <input type="text" id="editTicketCliente_${t.id}" placeholder="Cliente" value="${clienteVal}">
-        <input type="text" id="editTicketBanquero_${t.id}" placeholder="Banquero (si tiene)" value="${banqueroVal}">
+        <input type="text" id="editTicketCliente_${t.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Cliente" value="${clienteVal}">
+        <input type="text" id="editTicketBanquero_${t.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Banquero (si tiene)" value="${banqueroVal}">
         <input type="number" id="editTicketMonto_${t.id}" placeholder="Monto" step="0.01" value="${t.monto}">
       </div>
       <div class="btn-fila">
@@ -13659,7 +13667,7 @@ function filaEdicionWinnerHtml(w) {
   return `
     <div style="margin-top:6px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
       <div class="fila" style="margin-bottom:6px;">
-        <input type="text" id="editWinnerCliente_${w.id}" placeholder="Cliente" value="${clienteVal}">
+        <input type="text" id="editWinnerCliente_${w.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Cliente" value="${clienteVal}">
         <input type="text" id="editWinnerCaballo_${w.id}" placeholder="N° Caballo" value="${caballoVal}">
         <input type="number" id="editWinnerMonto_${w.id}" placeholder="Monto" step="0.01" value="${w.monto}">
       </div>
@@ -14489,8 +14497,8 @@ function revHtmlPlanos(planos) {
       const detalle = `<b>${escRev(t.cliente)}</b>${t.banquero ? ` vs ${escRev(t.banquero)}` : ''} — ${escRev(t.modalidad)}${t.caballo ? ' ' + escRev(t.caballo) : ''} — $${formatMontoTabla(t.monto)}
         <span style="color:var(--text-dim); font-size:12px;"> (jugador ${revMontoConSigno(t.resultadoJugador)}${t.banquero ? `, banquero ${revMontoConSigno(t.resultadoBanquero)}` : ''}${t.sinComision ? ', sin comisión' : ''})</span>`;
       const form = revEnEdicion('ticket', t.id) ? revFormEdicion('ticket:' + p.id, t.id, `
-        <input type="text" id="rev_cliente_${t.id}" placeholder="Cliente" value="${escRev(t.cliente)}">
-        <input type="text" id="rev_banquero_${t.id}" placeholder="Banquero" value="${escRev(t.banquero)}">
+        <input type="text" id="rev_cliente_${t.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Cliente" value="${escRev(t.cliente)}">
+        <input type="text" id="rev_banquero_${t.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Banquero" value="${escRev(t.banquero)}">
         <input type="number" id="rev_monto_${t.id}" placeholder="Monto" step="0.01" value="${t.monto}">`) : '';
       return revFilaWrap(detalle + revBotonesFila('ticket:' + p.id, t.id) + form);
     }).join('');
@@ -14510,6 +14518,66 @@ function revHtmlPlanos(planos) {
 // "Normal" (el programa calcula el % de la jugada como siempre) o "Sin comisión" (07-10-2026: la jugada se resuelve
 // igual, pero con los montos exactos: no se le cobra % a nadie, no genera comisión para el grupo ni % devuelto —
 // como un traspaso con el monto ya neto).
+// ------------------------------------------------------------------
+// CLIENTES EXISTENTES (07-10-2026, a pedido del usuario: "si voy a cambiar de cliente debe salir, cuando
+// ponga la letra, la lista desplegable de los clientes ya creados... solo se puede usar clientes ya creados;
+// si no está escrito exactamente igual debe marcar error e indicar que no existe"). Todos los campos de
+// cliente/banquero/jugador de las ediciones llevan data-cliente-existente: ofrecen la lista (datalist) y, si lo
+// escrito no coincide con un cliente creado (se ignoran mayúsculas y espacios de más, igual que el servidor), se
+// marca en rojo con "CLIENTE X NO EXISTE" y no deja guardar. El servidor también lo rechaza (422).
+// ------------------------------------------------------------------
+function normalizarNombreClienteUI(v) { return String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, ' '); }
+function refrescarListaClientesExistentes() {
+  const dl = document.getElementById('listaClientesExistentes');
+  if (!dl) return;
+  const nombres = (CLIENTES_HIPISMO_CACHE || []).map(j => j.nombre).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'));
+  dl.innerHTML = nombres.map(n => `<option value="${String(n).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"></option>`).join('');
+}
+function clienteExisteExacto(v) {
+  const n = normalizarNombreClienteUI(v);
+  if (!n || n === 'GENERAL') return true; // vacío = no aplica (ej. banquero opcional)
+  if (!(CLIENTES_HIPISMO_CACHE || []).length) return true; // lista todavía sin cargar: lo valida el servidor
+  return (CLIENTES_HIPISMO_CACHE || []).some(j => normalizarNombreClienteUI(j.nombre) === n);
+}
+function contenedorFormCliente(el) {
+  let p = el.parentElement;
+  while (p && !p.querySelector('.btn-primario')) p = p.parentElement;
+  return p;
+}
+function actualizarBotonGuardarForm(form) {
+  if (!form) return;
+  const btn = form.querySelector('.btn-primario');
+  const invalidos = Array.from(form.querySelectorAll('input[data-cliente-existente].cli-invalido'));
+  let aviso = form.querySelector('.cli-error');
+  if (invalidos.length) {
+    const txt = invalidos.map(i => `CLIENTE ${normalizarNombreClienteUI(i.value)} NO EXISTE`).join('\n') + '\nElige uno de la lista o créalo primero en Clientes.';
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.className = 'cli-error';
+      if (btn && btn.parentElement) btn.parentElement.parentElement.insertBefore(aviso, btn.parentElement);
+      else form.appendChild(aviso);
+    }
+    aviso.textContent = txt;
+  } else if (aviso) {
+    aviso.remove();
+  }
+  if (btn) btn.disabled = invalidos.length > 0 || btn.dataset.bloqSuma === '1';
+}
+function validarClienteInput(el) {
+  const ok = clienteExisteExacto(el.value);
+  el.classList.toggle('cli-invalido', !ok);
+  actualizarBotonGuardarForm(contenedorFormCliente(el));
+}
+document.addEventListener('input', ev => { if (ev.target && ev.target.matches && ev.target.matches('input[data-cliente-existente]')) validarClienteInput(ev.target); });
+document.addEventListener('change', ev => { if (ev.target && ev.target.matches && ev.target.matches('input[data-cliente-existente]')) validarClienteInput(ev.target); });
+// Mensajes de plano/carga con "NO EXISTE": se pintan en rojo y negrita.
+(function () {
+  const marcar = el => { if (el.classList && el.classList.contains('resultado-vacio')) el.classList.toggle('resultado-error', /NO EXISTE/.test(el.textContent || '')); };
+  new MutationObserver(muts => muts.forEach(m => {
+    const t = m.target.nodeType === 3 ? m.target.parentElement : m.target;
+    if (t) marcar(t);
+  })).observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+})();
 var BQ_CFG = { marca: [], tf: [] }; // banqueadores configurados del grupo (para los montos exactos a mano)
 async function bqLeerCfgGlobal() {
   try {
@@ -14543,7 +14611,7 @@ function adelCamposEdicionHtml(j, ids) {
     filaTablas = `<div><label for="${ids.modo}_tf">Contraparte: TABLAS FIJAS</label><input type="text" inputmode="decimal" id="${ids.modo}_tf" placeholder="${prevTf != null ? 'ahora: ' + adelFmtSigno(prevTf) : 'en blanco = el opuesto del cliente'}" value="${manual && prevTf != null ? String(prevTf).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>`;
   }
   return `
-    <div><label for="${ids.cliente}">Cliente</label><input type="text" id="${ids.cliente}" value="${esc(j.cliente)}"></div>
+    <div><label for="${ids.cliente}">Cliente</label><input type="text" id="${ids.cliente}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" value="${esc(j.cliente)}"></div>
     <div><label for="${ids.monto}">Monto apostado</label><input type="number" id="${ids.monto}" step="0.01" value="${j.monto}"></div>
     ${campos}
     <div class="rev-modo" role="radiogroup" aria-label="Comisión de esta jugada">
@@ -14593,7 +14661,7 @@ function adelSumaManual(modo) {
     }
   }
   nota.textContent = texto;
-  if (btn) btn.disabled = !ok;
+  if (btn) { btn.dataset.bloqSuma = ok ? '' : '1'; actualizarBotonGuardarForm(form); }
 }
 // Montos a mano elegidos: undefined = modo "Normal" (no se manda nada); null = "Sin comisión" sin montos escritos
 // (quita los montos a mano si los había); objeto = montos exactos.
@@ -14643,8 +14711,8 @@ function revHtmlTercios(lista) {
     const detalle = `<b>${escRev(j.jugador || '(sin jugador)')}</b> vs <b>${escRev(j.banquero || '(sin banquero)')}</b> — ${escRev(caballos)}${j.modalidad ? ' ' + escRev(j.modalidad) : ''} — ${j.monto != null ? '$' + formatMontoTabla(j.monto) : '(sin monto)'}
       <span style="color:var(--text-dim); font-size:12px;">(${estado}${faltas.length ? ' — ⚠ falta ' + faltas.join(', ') : ''})</span>`;
     const form = revEnEdicion('tercios', j.id) ? revFormEdicion('tercios', j.id, `
-        <input type="text" id="rev_jugador_${j.id}" placeholder="Jugador" value="${escRev(j.jugador)}">
-        <input type="text" id="rev_banquero_${j.id}" placeholder="Banquero" value="${escRev(j.banquero)}">
+        <input type="text" id="rev_jugador_${j.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Jugador" value="${escRev(j.jugador)}">
+        <input type="text" id="rev_banquero_${j.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Banquero" value="${escRev(j.banquero)}">
         <input type="number" id="rev_monto_${j.id}" placeholder="Monto" step="0.01" value="${j.monto != null ? j.monto : ''}">
         <input type="text" id="rev_modalidad_${j.id}" placeholder="Modalidad (ej: 1p, 10a8)" value="${escRev(j.modalidad)}">`) : '';
     return revFilaWrap(detalle + revBotonesFila('tercios', j.id) + form);
@@ -14665,7 +14733,7 @@ function revHtmlRemates(remates) {
         : `$${formatMontoTabla(a.monto)} <span style="color:var(--text-dim); font-size:12px;">(${r.pizarra ? 'resultado ' + revMontoConSigno(a.resultado) : 'pendiente de llegada'})</span>`;
       const detalle = `🐎 <b>${escRev(a.numeroEjemplar)}</b> — <b>${escRev(a.cliente)}</b> — ${resultado}`;
       const form = revEnEdicion('apuesta', a.id) ? revFormEdicion('apuesta:' + r.id, a.id, `
-          <input type="text" id="rev_cliente_${a.id}" placeholder="Jugador" value="${escRev(a.cliente)}">
+          <input type="text" id="rev_cliente_${a.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Jugador" value="${escRev(a.cliente)}">
           <input type="number" id="rev_ejemplar_${a.id}" placeholder="N° ejemplar" value="${a.numeroEjemplar}">
           <input type="number" id="rev_monto_${a.id}" placeholder="${esManual ? 'Monto neto (+gana / -pierde)' : 'Monto'}" step="0.01" value="${a.monto}">`) : '';
       return revFilaWrap(detalle + revBotonesFila('apuesta:' + r.id, a.id) + form);
@@ -14690,7 +14758,7 @@ function revHtmlWinners(lista) {
     REVISAR_INDICE[w.id] = { etiqueta: `el Winner de ${w.cliente}`, esUltimo: false };
     const detalle = `🏆 <b>${escRev(w.cliente)}</b> — ejemplar ${escRev(w.caballo)} — <b style="color:${revColorMonto(w.monto)};">${revMontoConSigno(w.monto)}</b>`;
     const form = revEnEdicion('winner', w.id) ? revFormEdicion('winner', w.id, `
-        <input type="text" id="rev_cliente_${w.id}" placeholder="Cliente" value="${escRev(w.cliente)}">
+        <input type="text" id="rev_cliente_${w.id}" list="listaClientesExistentes" autocomplete="off" data-cliente-existente="1" placeholder="Cliente" value="${escRev(w.cliente)}">
         <input type="text" id="rev_caballo_${w.id}" placeholder="Caballo / ejemplar" value="${escRev(w.caballo)}">
         <input type="number" id="rev_monto_${w.id}" placeholder="Monto neto (+gana / -pierde)" step="0.01" value="${w.monto}">`) : '';
     return revFilaWrap(detalle + revBotonesFila('winner', w.id) + form);
@@ -14744,6 +14812,8 @@ async function cargarRevisarJugadas() {
     return;
   }
   await bqLeerCfgGlobal();
+  if (!(CLIENTES_HIPISMO_CACHE || []).length) await cargarClientesReales();
+  refrescarListaClientesExistentes();
   pintarRevisarJugadas(data);
 }
 

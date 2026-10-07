@@ -30,6 +30,12 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) return { rows: [] };
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
+  // Filas que leen las rutas de EDICIÓN (PUT) antes de validar el cliente nuevo.
+  if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha FROM hipismo_adelantadas_jugadas/i.test(sql)) return { rows: [{ id: 'ja1', grupo_id: GRUPO_ID, cliente_nombre: 'ANA', tipo: 'tf', monto: 50, numero_ejemplar: 3, estado: 'pendiente', sin_comision: false, montos_manuales: false, comision_porcentaje: 2.5, hipodromo_nombre: 'La Rinconada', fecha: '2026-10-06', carrera_numero: 1 }] };
+  if (/^SELECT j\.\*, p\.hipodromo_nombre, p\.fecha FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [{ id: 'jt1', grupo_id: GRUPO_ID, jugador_nombre: 'ANA', banquero_nombre: 'LUIS', monto: 10, modalidad: '1p', estado: 'pendiente', hipodromo_nombre: 'La Rinconada', fecha: '2026-10-06', carrera_numero: 1 }] };
+  if (/^SELECT \* FROM hipismo_winners WHERE id/i.test(sql)) return { rows: [{ id: 'w1', grupo_id: GRUPO_ID, cliente_nombre: 'ANA', caballo: '3', monto: 10 }] };
+  if (/^SELECT \* FROM hipismo_planos WHERE id = \$1 AND grupo_id/i.test(sql)) return { rows: [{ id: 'p1', grupo_id: GRUPO_ID, pizarra: '3.4.8.1.7' }] };
+  if (/^SELECT \* FROM hipismo_tickets WHERE id = \$1 AND plano_id/i.test(sql)) return { rows: [{ id: 't1', plano_id: 'p1', cliente_nombre: 'ANA', banquero_nombre: 'LUIS', modalidad: '1p', caballo: 3, monto: 10, sin_comision: false }] };
   if (/^(INSERT|UPDATE|DELETE)/i.test(sql)) { escrituras.push(sql); return { rows: [{ id: 'x1' }] }; }
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
@@ -143,6 +149,37 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     ] }
   });
   check(r.status === 422 && /CLIENTE AAA NO EXISTE/.test(r.salida.error) && /CLIENTE BBB NO EXISTE/.test(r.salida.error), '9) si faltan varios, avisa uno por uno');
+
+  // 10) EDITAR una jugada y cambiarle el cliente a uno que no existe (o mal escrito): 422 y no se guarda
+  const ediciones = [
+    ['put', '/adelantadas/jugadas/:id', { id: 'ja1' }, { cliente: 'ANNA' }, 'ANNA', 'Tablas Fijas y Marcas'],
+    ['put', '/tercios-adelantadas/jugadas/:id', { id: 'jt1' }, { jugador: 'ANNA' }, 'ANNA', 'Tercios Adelantadas (jugador)'],
+    ['put', '/tercios-adelantadas/jugadas/:id', { id: 'jt1' }, { banquero: 'LUISS' }, 'LUISS', 'Tercios Adelantadas (banquero)'],
+    ['put', '/winners/:id', { id: 'w1' }, { cliente: 'ANNA' }, 'ANNA', 'Winners'],
+    ['put', '/planos/:id/tickets/:ticketId', { id: 'p1', ticketId: 't1' }, { clienteNombre: 'ANNA' }, 'ANNA', 'ticket de un plano (cliente)'],
+    ['put', '/planos/:id/tickets/:ticketId', { id: 'p1', ticketId: 't1' }, { banqueroNombre: 'LUISS' }, 'LUISS', 'ticket de un plano (banquero)']
+  ];
+  for (const [m, ruta, params, body, mal, etiqueta] of ediciones) {
+    escrituras.length = 0;
+    r = await invocarRuta(handlerDe(m, ruta), { ...base, params, body });
+    check(r.status === 422 && new RegExp(`CLIENTE ${mal} NO EXISTE`).test((r.salida || {}).error || '') && escrituras.length === 0, `10) editar ${etiqueta} con "${mal}" (mal escrito) da 422 "CLIENTE ${mal} NO EXISTE" y no guarda nada`);
+  }
+  // En minúsculas / con espacios de más SÍ es el mismo cliente (se normaliza igual que el servidor)
+  escrituras.length = 0;
+  r = await invocarRuta(handlerDe('put', '/winners/:id'), { ...base, params: { id: 'w1' }, body: { cliente: '  luis ' } });
+  check(r.status !== 422, '10) "  luis " (minúsculas y espacios) se toma como LUIS: no da "NO EXISTE"');
+
+  // 11) La pantalla: los campos de cliente de las ediciones ofrecen la lista de clientes y validan
+  const html = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+  const inputsCliente = [
+    'rev_cliente_${t.id}', 'rev_banquero_${t.id}', 'rev_jugador_${j.id}', 'rev_banquero_${j.id}', 'rev_cliente_${a.id}', 'rev_cliente_${w.id}',
+    'editTicketCliente_${t.id}', 'editTicketBanquero_${t.id}', 'editTerciosJugador_${j.id}', 'editTerciosBanquero_${j.id}', 'editWinnerCliente_${w.id}', '${ids.cliente}'
+  ];
+  inputsCliente.forEach(id => {
+    const m = html.match(new RegExp('<input type="text" id="' + id.replace(/[$.{}]/g, '\\$&') + '"[^>]*>'));
+    check(!!m && /list="listaClientesExistentes"/.test(m[0]) && /data-cliente-existente="1"/.test(m[0]), `11) el campo ${id} ofrece la lista de clientes y valida que exista`);
+  });
+  check(/<datalist id="listaClientesExistentes">/.test(html) && /CLIENTE \$\{normalizarNombreClienteUI\(i\.value\)\} NO EXISTE/.test(html), '11) existe la lista desplegable y el mensaje "CLIENTE X NO EXISTE" en rojo');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
