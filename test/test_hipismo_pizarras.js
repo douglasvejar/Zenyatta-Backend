@@ -218,7 +218,7 @@ function ejecutarQuery(text, params) {
       }));
     return { rows: filas };
   }
-  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, j\.banqueadores, p\.hipodromo_nombre FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
+  if (/^SELECT j\.id, j\.cliente_nombre, j\.tipo, j\.monto, j\.resultado_cliente, j\.numero_ejemplar, j\.numero1, j\.numero2, j\.carrera_numero, j\.gano, j\.sin_comision, j\.banqueadores, p\.hipodromo_nombre FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id WHERE j\.grupo_id = \$1 AND p\.fecha = \$2/i.test(sql)) {
     return { rows: [] };
   }
   // comisiones propias / % devuelto (GET /montos-apostados las ignora para

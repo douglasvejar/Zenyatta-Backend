@@ -89,7 +89,7 @@ const guardarBanqueoTablasFijasGrupo = (grupoId, lista) => guardarConfigBanqueo(
 async function banquearMarcasConConfig(grupoId, config, estadoOrigen) {
   const filtroExtra = estadoOrigen === 'resuelto' ? "AND banqueadores IS NOT NULL AND gano IS NOT NULL" : '';
   const r = await db.query(
-    `SELECT id, gano, monto, resultado_cliente, comision_porcentaje
+    `SELECT id, gano, monto, resultado_cliente, comision_porcentaje, sin_comision
        FROM hipismo_adelantadas_jugadas
       WHERE grupo_id = $1 AND tipo = 'marca' AND estado = '${estadoOrigen}' ${filtroExtra}`,
     [grupoId]
@@ -99,7 +99,7 @@ async function banquearMarcasConConfig(grupoId, config, estadoOrigen) {
   for (const j of filas) {
     const acierta = !!j.gano;
     const base = acierta ? Number(j.resultado_cliente) : Number(j.monto);
-    const banqueo = banqueoAutomaticoMarca({ acierta, base }, j.comision_porcentaje, null, config);
+    const banqueo = banqueoAutomaticoMarca({ acierta, base }, j.sin_comision ? 0 : j.comision_porcentaje, null, config);
     if (!banqueo) continue;
     await db.query(
       `UPDATE hipismo_adelantadas_jugadas

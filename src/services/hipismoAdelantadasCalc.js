@@ -553,6 +553,34 @@ function armarBloqueAdelantadas(movimientos) {
 }
 
 // =================================================================
+// JUGADA "SIN COMISIÓN" (07-10-2026, a pedido del usuario: "cuando edite una
+// jugada dame la opción de colocarla normal, donde el programa calculará sus %
+// normalmente, o SIN COMISIÓN: se guarda con los montos exactos, sin darle
+// comisión a nadie ni generar comisión para el grupo; es como un traspaso,
+// monto ya neto"). La jugada se resuelve igual con la pizarra (el cliente gana
+// o pierde lo mismo de siempre), pero con 0% para TODOS: la contraparte (ítem
+// TABLAS FIJAS o los banqueadores) recibe el opuesto EXACTO, no se cobra
+// comisión a ningún banquero, no hay comisión del grupo y la jugada no
+// genera % devuelto (propio/de aval). Se guarda como bandera
+// (`sin_comision`) para no perder el % original si se vuelve a "normal".
+// =================================================================
+// % de comisión efectivo de una jugada (fila de hipismo_adelantadas_jugadas).
+function pctJugada(j) {
+  return j && j.sin_comision ? 0 : Number(j.comision_porcentaje);
+}
+
+// banqueadores ya guardados de la jugada, con su % propio de comisión en 0 si
+// la jugada es "sin comisión" (cada banquero trae el % con el que se calculó).
+function banqueadoresJugada(j, volverANormal) {
+  let prev = j && j.banqueadores;
+  if (typeof prev === 'string') { try { prev = JSON.parse(prev); } catch (e) { prev = null; } }
+  if (!Array.isArray(prev)) return prev || null;
+  if (j.sin_comision) return prev.map(b => Object.assign({}, b, { comisionPorcentaje: 0 }));
+  if (volverANormal) return prev.map(b => Object.assign({}, b, { comisionPorcentaje: null }));
+  return prev;
+}
+
+// =================================================================
 // CABALLO RETIRADO => APUESTA NULA (06-10-2026, a pedido del usuario, caso
 // real La Rinconada 11ma: "Ret: 6" y aun así se resolvía la Marca 6x3 y una
 // Tabla Fija del 6: "YA QUE RETIRARON UN CABALLO QUE ESTÁ INCLUIDO EN LAS
@@ -596,6 +624,8 @@ function adelantadaConRetirado(j, retirados) {
 module.exports = {
   parsearJugadasAdelantadas,
   parsearRetirados,
+  pctJugada,
+  banqueadoresJugada,
   apuestaConRetirado,
   adelantadaConRetirado,
   contarPosicionesPizarra,

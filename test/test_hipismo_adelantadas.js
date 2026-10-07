@@ -362,14 +362,14 @@ function ejecutarQuery(text, params) {
     return { rows: j ? [j] : [] };
   }
   // PUT /adelantadas/jugadas/:id (duodécima-tercera ronda, editar).
-  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET cliente_nombre = \$1, monto = \$2, numero_ejemplar = \$3, numero1 = \$4, numero2 = \$5,\s*estado = \$6, gano = \$7, resultado_cliente = \$8, comision = \$9, banqueadores = \$10\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
-    const [cliente, monto, numeroEjemplar, numero1, numero2, estado, gano, resultadoCliente, comision, banqueadores, id, grupoId] = params;
+  if (/^UPDATE hipismo_adelantadas_jugadas\s+SET cliente_nombre = \$1, monto = \$2, numero_ejemplar = \$3, numero1 = \$4, numero2 = \$5,\s*estado = \$6, gano = \$7, resultado_cliente = \$8, comision = \$9, banqueadores = \$10, sin_comision = \$13\s*WHERE id = \$11 AND grupo_id = \$12/i.test(sql)) {
+    const [cliente, monto, numeroEjemplar, numero1, numero2, estado, gano, resultadoCliente, comision, banqueadores, id, grupoId, sinComision] = params;
     const j = TABLAS.hipismo_adelantadas_jugadas.find(x => x.id === id && x.grupo_id === grupoId);
     if (j) {
       Object.assign(j, {
         cliente_nombre: cliente, monto, numero_ejemplar: numeroEjemplar, numero1, numero2,
-        estado, gano, resultado_cliente: resultadoCliente, comision,
-        banqueadores: banqueadores == null ? null : JSON.parse(banqueadores)
+        estado, gano, resultado_cliente: resultadoCliente, comision, sin_comision: !!sinComision,
+        banqueadores: banqueadores == null ? null : (typeof banqueadores === 'string' ? JSON.parse(banqueadores) : banqueadores)
       });
     }
     return { rows: j ? [j] : [] };
@@ -433,7 +433,7 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   // 06-10-2026: banqueo automático de las Marcas que ya estaban 'falta_banqueo'.
-  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'falta_banqueo'/i.test(sql)) {
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'falta_banqueo'/i.test(sql)) {
     const [grupoId] = params;
     return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'falta_banqueo') };
   }
@@ -444,7 +444,7 @@ function ejecutarQuery(text, params) {
     return { rows: j ? [j] : [] };
   }
   // 06-10-2026: re-banquear con la configuración del grupo las Marcas YA banqueadas.
-  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'resuelto' AND banqueadores IS NOT NULL AND gano IS NOT NULL/i.test(sql)) {
+  if (/^SELECT id, gano, monto, resultado_cliente, comision_porcentaje(, sin_comision)?\s+FROM hipismo_adelantadas_jugadas\s+WHERE grupo_id = \$1 AND tipo = 'marca' AND estado = 'resuelto' AND banqueadores IS NOT NULL AND gano IS NOT NULL/i.test(sql)) {
     const [grupoId] = params;
     return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === 'marca' && j.estado === 'resuelto' && j.banqueadores && j.gano !== null) };
   }
@@ -1137,6 +1137,46 @@ function reqBase(grupoId) {
   // Editar una jugada ya resuelta hacia un caballo retirado la deja nula.
   const resEd = await invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { params: { id: 'ret-tf3' }, body: { numeroEjemplar: 6 } }));
   check(resEd._status === 200 && jRet('ret-tf3').estado === 'sin_decidir' && Number(jRet('ret-tf3').resultado_cliente) === 0, '14) Editar la TF para jugar al 6 retirado la deja nula (sin_decidir, 0)');
+  CONFIG_BANQUEO_MARCAS.valor = null;
+
+  // --- 15) JUGADA "SIN COMISIÓN" (07-10-2026, "al editar dame la opción de colocarla normal o SIN
+  // COMISIÓN: montos exactos, sin darle comisión a nadie ni generar comisión para el grupo,
+  // como un traspaso") ---
+  const nuevaSC = (id, cliente, tipo, sinComision, extra) => TABLAS.hipismo_adelantadas_jugadas.push(Object.assign({ id, plano_id: planoM.id, grupo_id: GRUPO_ID, cliente_nombre: cliente, carrera_numero: 41, tipo, comision_porcentaje: 2.5, sin_comision: sinComision, estado: 'pendiente', gano: null, resultado_cliente: null, comision: null, banqueadores: null, pizarra_usada: null, resuelto_en: null, creado_en: 9e15 + 300 }, extra));
+  nuevaSC('sc-tf-sin', 'LINARES', 'tf', true, { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100 });
+  nuevaSC('sc-tf-normal', 'RAMBO', 'tf', false, { numero_ejemplar: 3, monto: 50, ganancia_potencial: 100 });
+  nuevaSC('sc-marca-sin', 'HANRY', 'marca', true, { numero1: 4, numero2: 3, monto: 120 });
+  nuevaSC('sc-marca-normal', 'ROSA', 'marca', false, { numero1: 4, numero2: 3, monto: 120 });
+  CONFIG_BANQUEO_MARCAS.valor = [{ nombre: 'MARCAS ZENYATTA', porcentaje: 50, pagaComision: false }, { nombre: 'MARCAS SAMMY', porcentaje: 50, pagaComision: true }];
+  const resSC = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: 'Juega Sebastian 1p (10) con 50,00 da Flaco', pizarra: '3.4.8.1.7', ret: '', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 41, fecha: FECHA_PRUEBA }
+  }));
+  const jSC = id => TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === id);
+  check(resSC._status === 201, '15) POST /planos (carrera 41) responde 201');
+  check(jSC('sc-tf-sin').estado === 'resuelto' && Number(jSC('sc-tf-sin').resultado_cliente) === 50 && Number(jSC('sc-tf-sin').comision) === 0, '15) TF sin comisión: el cliente gana igual (+50) y la comisión de la jugada es 0');
+  check(Number(jSC('sc-tf-normal').resultado_cliente) === 50 && Number(jSC('sc-tf-normal').comision) === 1.25, '15) TF normal (control): +50 y comisión 1,25 (2,5% de 50)');
+  const bSin = jSC('sc-marca-sin').banqueadores;
+  check(bSin && bSin.find(b => b.nombre === 'MARCAS ZENYATTA').monto === 60 && bSin.find(b => b.nombre === 'MARCAS SAMMY').monto === 60 && Number(jSC('sc-marca-sin').comision) === 0, '15) Marca sin comisión (Hanry pierde -120): MARCAS ZENYATTA +60 y MARCAS SAMMY +60 EXACTOS (aunque SAMMY normalmente paga %), comisión 0');
+  const bNor = jSC('sc-marca-normal').banqueadores;
+  check(bNor.find(b => b.nombre === 'MARCAS SAMMY').monto === 58.5 && Number(jSC('sc-marca-normal').comision) === 1.5, '15) Marca normal (control): SAMMY +58,5 y comisión 1,5');
+  check(resSC._json.adelantadasResueltas.some(r => r.cliente === 'LINARES'), '15) La jugada sin comisión sigue saliendo resuelta en el plano');
+  check(!('LINARES - PORCENTAJE' in resSC._json.totalesFinales), '15) La jugada sin comisión NO genera % devuelto propio (Linares tiene % propio configurado y aun así no aparece su ítem de porcentaje)');
+  check(Math.round((Number(jSC('sc-tf-sin').resultado_cliente) + 0) * 100) / 100 === 50, '15) Cuadre: cliente +50 y la contraparte -50 exacto (sin comisión de por medio)');
+
+  // Editar: pasar una jugada normal a "sin comisión" y volver a "normal".
+  const edSC = (id, body) => invocarRuta(handlerAdelantadasEditar, Object.assign(reqBase(GRUPO_ID), { params: { id }, body }));
+  const e1 = await edSC('sc-tf-normal', { sinComision: true });
+  check(e1._status === 200 && e1._json.sinComision === true && Number(jSC('sc-tf-normal').comision) === 0 && Number(jSC('sc-tf-normal').resultado_cliente) === 50, '15) Editar TF a "sin comisión": comisión pasa a 0 y el cliente conserva su +50');
+  const e2 = await edSC('sc-tf-normal', { sinComision: false });
+  check(e2._json.sinComision === false && Number(jSC('sc-tf-normal').comision) === 1.25, '15) Volver a "normal": la comisión vuelve a 1,25 (se conserva el % original de la jugada)');
+  const e3 = await edSC('sc-marca-normal', { sinComision: true });
+  const bE3 = jSC('sc-marca-normal').banqueadores;
+  check(e3._status === 200 && bE3.find(b => b.nombre === 'MARCAS SAMMY').monto === 60 && Number(jSC('sc-marca-normal').comision) === 0, '15) Editar Marca a "sin comisión": banqueadores exactos (+60/+60) y comisión 0');
+  await edSC('sc-marca-normal', { sinComision: false });
+  const bE4 = jSC('sc-marca-normal').banqueadores;
+  check(bE4.find(b => b.nombre === 'MARCAS SAMMY').monto === 58.5 && Number(jSC('sc-marca-normal').comision) === 1.5, '15) Volver la Marca a "normal": SAMMY +58,5 y comisión 1,5 otra vez (sin arrastrar el 0%)');
+  const e5 = await edSC('sc-marca-sin', { monto: 150 });
+  check(jSC('sc-marca-sin').sin_comision === true && Number(jSC('sc-marca-sin').comision) === 0, '15) Editar otro dato de una jugada "sin comisión" no pierde la marca: sigue sin comisión');
   CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {

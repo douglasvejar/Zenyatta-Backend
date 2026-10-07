@@ -89,7 +89,7 @@ const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, banqueoAutomaticoTablaFija, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto,
-  parsearRetirados, apuestaConRetirado, adelantadaConRetirado
+  parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada
 } = require('../services/hipismoAdelantadasCalc');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
 // de "Jugadas Adelantadas"/Tablas Fijas y Marcas de arriba, ver la nota
@@ -399,7 +399,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
   const configBanqueoTf = await obtenerBanqueoTablasFijasGrupo(req.grupoId);
   const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret });
 
-  const resueltas = pendientes.map(j => {
+  const resueltas = pendientes.map(j => { const r = ((j) => {
     // CABALLO RETIRADO => NULA (06-10-2026): si algún caballo de esta Marca o
     // Tabla Fija figura en "Ret:", la apuesta no se juega: 0 para el cliente,
     // sin banqueo, sin comisión y sin línea en el plano. Aplica a TODAS las
@@ -410,13 +410,13 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
     if (j.tipo === 'tf') {
       const r = resolverTablaFija(
         { numeroEjemplar: j.numero_ejemplar, monto: Number(j.monto), gananciaPotencial: Number(j.ganancia_potencial) },
-        rank, Number(j.comision_porcentaje)
+        rank, pctJugada(j)
       );
       // BANQUEO DE TABLAS FIJAS por grupo (06-10-2026): si el grupo configuró
       // quién banquea sus TF (o la jugada ya tenía banqueadores), el lado de
       // la banca se reparte entre ellos en vez del ítem "TABLAS FIJAS".
       // `comision` pasa a ser la que realmente pagan los banqueadores.
-      const bqTf = banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: Number(j.monto) }, j.comision_porcentaje, j.banqueadores, configBanqueoTf);
+      const bqTf = banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: Number(j.monto) }, pctJugada(j), banqueadoresJugada(j), configBanqueoTf);
       return {
         id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto', monto: Number(j.monto),
         gano: r.gano, resultadoCliente: r.resultadoCliente, comision: bqTf ? bqTf.comision : r.comision, banqueadores: bqTf ? bqTf.banqueadores : null,
@@ -443,7 +443,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
     // ver banqueoAutomaticoMarca. Si la jugada ya tenía banqueadores puestos
     // a mano (recálculo por corrección de pizarra) se conservan esos. Un
     // grupo SIN configuración queda 'falta_banqueo' como siempre.
-    const banqueo = banqueoAutomaticoMarca({ acierta: c.acierta, base: c.acierta ? c.resultadoCliente : Number(j.monto) }, j.comision_porcentaje, j.banqueadores, configBanqueoMarcas);
+    const banqueo = banqueoAutomaticoMarca({ acierta: c.acierta, base: c.acierta ? c.resultadoCliente : Number(j.monto) }, pctJugada(j), banqueadoresJugada(j), configBanqueoMarcas);
     return {
       id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: banqueo ? 'resuelto' : 'falta_banqueo', monto: Number(j.monto),
       gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: banqueo ? banqueo.comisionMarcas : null, banqueadores: banqueo ? banqueo.banqueadores : null,
@@ -469,7 +469,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       // exactamente lo opuesto a resultadoCliente, nunca más ni menos.
       movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente), individual: true, grupo: j.id }]
     };
-  });
+  })(j); r.sinComision = !!j.sin_comision; return r; });
 
   const movimientosParaTexto = [];
   resueltas.forEach(r => movimientosParaTexto.push(...r.movimientos));
@@ -1295,6 +1295,7 @@ function filaJugadaAdelantadaPublica(j) {
     numero2: j.numero2,
     monto: Number(j.monto),
     comisionPorcentaje: Number(j.comision_porcentaje),
+    sinComision: !!j.sin_comision,
     textoOriginal: j.texto_original,
     errorCalculo: j.error_calculo,
     detalleError: j.detalle_error,
@@ -1522,9 +1523,11 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
   const comisionPctDefecto = comisionPorcentaje !== undefined && comisionPorcentaje !== null && comisionPorcentaje !== '' && !isNaN(Number(comisionPorcentaje))
     ? Number(comisionPorcentaje) : Number(jugada.comision_porcentaje);
 
+  // SIN COMISIÓN (07-10-2026): ningún banquero paga %, sin importar lo que traiga la petición.
   const { banqueadores: banqueadoresResueltos, comisionMarcas } = resolverBanqueoMarca(
     { acierta: jugada.gano, base: jugada.gano ? Number(jugada.resultado_cliente) : Number(jugada.monto) },
-    banqueadores, comisionPctDefecto
+    jugada.sin_comision ? banqueadores.map(b => Object.assign({}, b, { comisionPorcentaje: 0 })) : banqueadores,
+    jugada.sin_comision ? 0 : comisionPctDefecto
   );
 
   if (await rechazarClientesInexistentes(req, res, banqueadoresResueltos.map(b => b.nombre))) return;
@@ -1578,7 +1581,7 @@ router.post('/adelantadas/jugadas/:id/banquear', asyncHandler(async (req, res) =
 // pizarra de esa carrera nunca llegó a los puestos necesarios) se deja
 // tal cual quedó — no depende de los datos que se estén editando.
 router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
-  const { cliente, monto, numeroEjemplar, numero1, numero2 } = req.body;
+  const { cliente, monto, numeroEjemplar, numero1, numero2, sinComision } = req.body;
 
   const rJugada = await db.query(
     `SELECT j.*, p.hipodromo_nombre, p.fecha
@@ -1609,6 +1612,16 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
 
   if (clienteFinal !== jugada.cliente_nombre) if (await rechazarClientesInexistentes(req, res, [clienteFinal])) return;
 
+  // SIN COMISIÓN (07-10-2026): "normal" (el programa calcula el % de la jugada) o "sin
+  // comisión" (0% para todos, sin comisión de grupo, sin % devuelto — ver pctJugada en
+  // hipismoAdelantadasCalc.js). Si no se manda, se conserva lo que ya tenía la jugada.
+  const sinComisionFinal = (sinComision === undefined || sinComision === null || sinComision === '')
+    ? !!jugada.sin_comision
+    : (sinComision === true || sinComision === 'true' || sinComision === 1 || sinComision === '1');
+  const volverANormal = !sinComisionFinal && !!jugada.sin_comision;
+  const jugadaEf = Object.assign({}, jugada, { sin_comision: sinComisionFinal });
+  const pctEf = pctJugada(jugadaEf);
+
   let recalculo = { estado: jugada.estado, gano: jugada.gano, resultadoCliente: jugada.resultado_cliente, comision: jugada.comision, banqueadores: jugada.banqueadores };
   if (jugada.pizarra_usada && jugada.estado !== 'sin_decidir') {
     const rank = parsearPizarraRank(jugada.pizarra_usada);
@@ -1621,13 +1634,13 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
     } else if (jugada.tipo === 'tf') {
       const r = resolverTablaFija(
         { numeroEjemplar: numeroEjemplarFinal, monto: montoFinal, gananciaPotencial: Number(jugada.ganancia_potencial) },
-        rank, Number(jugada.comision_porcentaje)
+        rank, pctEf
       );
       // TF que YA tenía banqueadores (06-10-2026): se recalculan sus montos con
       // los mismos nombres/%/comisión; una TF sin banqueadores sigue contra el
       // ítem "TABLAS FIJAS" (el historial no cambia solo por editar).
       const bqTf = jugada.banqueadores
-        ? banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: montoFinal }, jugada.comision_porcentaje, jugada.banqueadores, null)
+        ? banqueoAutomaticoTablaFija({ gano: r.gano, resultadoCliente: r.resultadoCliente, monto: montoFinal }, pctEf, banqueadoresJugada(jugadaEf, volverANormal), null)
         : null;
       recalculo = bqTf
         ? { estado: 'resuelto', gano: r.gano, resultadoCliente: r.resultadoCliente, comision: bqTf.comision, banqueadores: JSON.stringify(bqTf.banqueadores) }
@@ -1640,15 +1653,15 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
         // asignado (con nula no hay nada que banquear) y queda en 0.
         recalculo = { estado: 'sin_decidir', gano: null, resultadoCliente: 0, comision: null, banqueadores: null };
       } else if (jugada.banqueadores) {
-        const banqueadoresPrevios = typeof jugada.banqueadores === 'string' ? JSON.parse(jugada.banqueadores) : jugada.banqueadores;
+        const banqueadoresPrevios = banqueadoresJugada(jugadaEf, volverANormal);
         const base = c.acierta ? c.resultadoCliente : montoFinal;
-        const { banqueadores, comisionMarcas } = resolverBanqueoMarca({ acierta: c.acierta, base }, banqueadoresPrevios, Number(jugada.comision_porcentaje));
+        const { banqueadores, comisionMarcas } = resolverBanqueoMarca({ acierta: c.acierta, base }, banqueadoresPrevios, pctEf);
         recalculo = { estado: 'resuelto', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: comisionMarcas, banqueadores: JSON.stringify(banqueadores) };
       } else {
         // Sin banqueadores previos: banqueo automático SI el grupo lo
         // configuró (06-10-2026); si no, 'falta_banqueo' como siempre.
         const base = c.acierta ? c.resultadoCliente : montoFinal;
-        const auto = banqueoAutomaticoMarca({ acierta: c.acierta, base }, jugada.comision_porcentaje, null, await obtenerBanqueoMarcasGrupo(req.grupoId));
+        const auto = banqueoAutomaticoMarca({ acierta: c.acierta, base }, pctEf, null, await obtenerBanqueoMarcasGrupo(req.grupoId));
         recalculo = auto
           ? { estado: 'resuelto', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: auto.comisionMarcas, banqueadores: JSON.stringify(auto.banqueadores) }
           : { estado: 'falta_banqueo', gano: c.acierta, resultadoCliente: c.resultadoCliente, comision: null, banqueadores: null };
@@ -1659,11 +1672,11 @@ router.put('/adelantadas/jugadas/:id', asyncHandler(async (req, res) => {
   const r = await db.query(
     `UPDATE hipismo_adelantadas_jugadas
         SET cliente_nombre = $1, monto = $2, numero_ejemplar = $3, numero1 = $4, numero2 = $5,
-            estado = $6, gano = $7, resultado_cliente = $8, comision = $9, banqueadores = $10
+            estado = $6, gano = $7, resultado_cliente = $8, comision = $9, banqueadores = $10, sin_comision = $13
       WHERE id = $11 AND grupo_id = $12 RETURNING *`,
     [clienteFinal, montoFinal, numeroEjemplarFinal, numero1Final, numero2Final,
       recalculo.estado, recalculo.gano, recalculo.resultadoCliente, recalculo.comision, recalculo.banqueadores,
-      jugada.id, req.grupoId]
+      jugada.id, req.grupoId, sinComisionFinal]
   );
 
   const fechaTexto = jugada.fecha instanceof Date ? jugada.fecha.toISOString().slice(0, 10) : jugada.fecha;
@@ -2708,7 +2721,7 @@ function entradasApostadasDeTickets(tickets, resueltas, resueltasTercios) {
     if (Number(r.resultadoBanquero) !== 0) entradasTerciosAdelantadas.push({ nombre: r.banquero, monto: montoBaseTerciosAdelantadaExacto(r.resultadoBanquero, r.comisionPorcentaje) });
   });
   return entradasTickets
-    .concat((resueltas || []).filter(r => r.gano !== null).map(r => ({ nombre: r.cliente, monto: montoDecididoExacto(r.resultadoCliente, true) })))
+    .concat((resueltas || []).filter(r => r.gano !== null && !r.sinComision).map(r => ({ nombre: r.cliente, monto: montoDecididoExacto(r.resultadoCliente, true) })))
     .concat(entradasTerciosAdelantadas);
 }
 
@@ -4051,13 +4064,13 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
 
   const rAdelantadas = mismoDia
     ? await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.banqueadores, p.hipodromo_nombre
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.sin_comision, j.banqueadores, p.hipodromo_nombre
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha = $2`,
         [grupoId, desde]
       )
     : await db.query(
-        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.banqueadores, p.hipodromo_nombre, p.fecha
+        `SELECT j.id, j.cliente_nombre, j.tipo, j.monto, j.resultado_cliente, j.numero_ejemplar, j.numero1, j.numero2, j.carrera_numero, j.gano, j.sin_comision, j.banqueadores, p.hipodromo_nombre, p.fecha
            FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
           WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3`,
         [grupoId, desde, hasta]
@@ -4074,7 +4087,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
       // montoDecidido con sinComision=true lo deja en valor absoluto.
       montoDecidido: montoDecidido(j.resultado_cliente, true),
       montoDecididoExacto: montoDecididoExacto(j.resultado_cliente, true),
-      decidida: j.gano !== null,
+      decidida: j.gano !== null && !j.sin_comision, // sin comisión (07-10-2026): no genera % devuelto
       // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
       // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
       // (Marca todavía sin pizarra — Tabla Fija siempre decide true/false, ver
@@ -4109,7 +4122,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
           monto: Number(j.monto),
           montoDecidido: round2(parte),
           montoDecididoExacto: parte,
-          decidida: j.gano !== null,
+          decidida: j.gano !== null && !j.sin_comision,
           gano: j.gano,
           rol: 'banquero'
         });
@@ -4964,7 +4977,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // grande EXACTA de acumularSaldo más abajo: hacen falta para fusionar por
   // carrera antes de redondear — antes esta consulta no las traía).
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.monto, j.resultado_cliente, j.banqueadores, j.gano,
+    `SELECT j.cliente_nombre, j.monto, j.resultado_cliente, j.banqueadores, j.gano, j.sin_comision,
             p.fecha, p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
@@ -5080,7 +5093,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // claveCarrera con p.fecha/p.hipodromo_nombre/j.carrera_numero (agregadas
   // arriba a rAdelantadas) para poder fusionar con tickets de Tercios de la
   // misma carrera.
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => {
+  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularSaldo(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true), claveCarrera);
@@ -5091,7 +5104,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // para repartir entre banqueadores — ver services/hipismoAdelantadasCalc.js),
   // nunca de j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores)) return;
+    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
     const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
@@ -5264,7 +5277,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // EXACTA de acumularDevueltoDia más abajo: hacen falta para fusionar por
   // carrera antes de redondear — antes esta consulta no las traía).
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, p.fecha,
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, j.sin_comision, p.fecha,
             p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
@@ -5410,7 +5423,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // claveCarrera con p.hipodromo_nombre/j.carrera_numero (agregadas arriba
   // a rAdelantadas) para poder fusionar con tickets de Tercios de la misma
   // carrera.
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => {
+  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaIsoJ = j.fecha instanceof Date ? isoDeFechaUTC(j.fecha) : j.fecha;
     const claveCarreraJ = `${fechaIsoJ}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecididoExacto(j.resultado_cliente, true), claveCarreraJ);
@@ -5420,7 +5433,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // base DECIDIDA de la jugada completa (|resultado_cliente|), nunca de
   // j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores)) return;
+    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
     const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     const fechaIsoJ = j.fecha instanceof Date ? isoDeFechaUTC(j.fecha) : j.fecha;
     const claveCarreraJ = `${fechaIsoJ}::${j.hipodromo_nombre}::${j.carrera_numero}`;

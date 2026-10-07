@@ -1271,7 +1271,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // redondear — antes esta consulta no las traía porque nada en esta
   // función las necesitaba).
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano,
+    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano, j.sin_comision,
             p.fecha, p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
@@ -1611,7 +1611,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // p.fecha/p.hipodromo_nombre/j.carrera_numero (agregadas arriba a
   // rAdelantadas) para poder fusionar con tickets de Tercios de la misma
   // carrera, igual que ya hace obtenerApuestasDelRango.
-  rAdelantadas.rows.filter(j => j.gano !== null).forEach(j => {
+  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularDevuelto(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true), claveCarrera);
@@ -1627,7 +1627,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // del .filter() de arriba a propósito para no confundir al próximo
   // lector con un filtro que acá nunca hace nada.)
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores)) return;
+    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
     // montoDecididoExacto, no montoDecidido (02-10-2026, ver la nota
     // grande EXACTA en hipismoAdelantadasCalc.js) — sin redondear antes de
     // repartir entre banqueadores.

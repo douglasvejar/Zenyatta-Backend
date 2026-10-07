@@ -146,7 +146,7 @@ function ejecutarQuery(text, params) {
       })
     };
   }
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, j\.monto(, j\.gano)?, p\.fecha/i.test(sql)) {
+  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores, j\.monto(, j\.gano)?(, j\.sin_comision)?, p\.fecha/i.test(sql)) {
     const [grupoId] = params;
     return {
       rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId).map(j => {

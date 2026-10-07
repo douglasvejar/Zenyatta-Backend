@@ -529,6 +529,9 @@ create table if not exists hipismo_adelantadas_jugadas (
   resuelto_en           timestamptz,
   creado_en             timestamptz not null default now()
 );
+-- 07-10-2026: jugada "sin comisión" (se edita desde Revisar Jugadas): se resuelve igual con la pizarra pero
+-- con 0% para todos (contraparte exacta, sin comisión de grupo, sin % devuelto). Es como un traspaso con monto ya neto.
+alter table hipismo_adelantadas_jugadas add column if not exists sin_comision boolean not null default false;
 create index if not exists idx_hipismo_adelantadas_jugadas_plano on hipismo_adelantadas_jugadas(plano_id);
 create index if not exists idx_hipismo_adelantadas_jugadas_grupo_cliente on hipismo_adelantadas_jugadas(grupo_id, cliente_nombre);
 create index if not exists idx_hipismo_adelantadas_jugadas_pendientes on hipismo_adelantadas_jugadas(grupo_id, estado);
