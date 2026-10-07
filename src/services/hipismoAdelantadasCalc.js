@@ -497,6 +497,30 @@ function formatNombre(nombre) {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
+// Agrupa los movimientos de adelantadas ya resueltos en pares individuales
+// (cliente + espejo) y en las listas GANAN/PIERDEN de siempre. La usan tanto
+// el texto del plano (armarBloqueAdelantadas) como la imagen del plano
+// (hipismoPlanoImagen.js), para que las dos muestren exactamente lo mismo.
+function agruparMovimientosAdelantadas(movimientos) {
+  const porNombre = new Map();
+  const pares = new Map();
+  let nIndividuales = 0;
+  movimientos.forEach(({ nombre, monto, individual, grupo }) => {
+    if (individual) {
+      const clave = grupo != null ? `g:${grupo}` : `auto:${Math.floor(nIndividuales / 2)}`;
+      nIndividuales += 1;
+      if (!pares.has(clave)) pares.set(clave, []);
+      pares.get(clave).push([nombre, round2(monto)]);
+      return;
+    }
+    porNombre.set(nombre, round2((porNombre.get(nombre) || 0) + monto));
+  });
+  const entradas = Array.from(porNombre.entries());
+  const ganan = entradas.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
+  const pierden = entradas.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
+  return { pares: Array.from(pares.values()), ganan, pierden };
+}
+
 // Arma el bloque "PARADA ADELANTADAS" que se agrega ABAJO del plano
 // normal de esa carrera (a pedido del usuario: "quiero que las jugadas
 // adelantadas se agreguen al plano de las jugadas de esa carrera...
@@ -522,22 +546,7 @@ function armarBloqueAdelantadas(movimientos) {
   // movimientos (Jugadas entre Tercios Adelantadas) siguen sumándose por
   // nombre en las listas GANAN/PIERDEN de siempre. Esto es solo el TEXTO del
   // plano; los saldos nunca cambian.
-  const porNombre = new Map();
-  const pares = new Map();
-  let nIndividuales = 0;
-  movimientos.forEach(({ nombre, monto, individual, grupo }) => {
-    if (individual) {
-      const clave = grupo != null ? `g:${grupo}` : `auto:${Math.floor(nIndividuales / 2)}`;
-      nIndividuales += 1;
-      if (!pares.has(clave)) pares.set(clave, []);
-      pares.get(clave).push([nombre, round2(monto)]);
-      return;
-    }
-    porNombre.set(nombre, round2((porNombre.get(nombre) || 0) + monto));
-  });
-  const entradas = Array.from(porNombre.entries());
-  const ganan = entradas.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
-  const pierden = entradas.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
+  const { pares, ganan, pierden } = agruparMovimientosAdelantadas(movimientos);
   const linea = ([n, v]) => `${formatNombre(n)} ${v < 0 ? '-' : '+'}${formatMontoTabla(v)}`;
 
   const bloques = ['------------------------------\nPARADA ADELANTADAS'];
@@ -696,7 +705,7 @@ module.exports = {
   banqueoAutomaticoMarca,
   resolverBanqueoTablaFija,
   banqueoAutomaticoTablaFija,
-  armarBloqueAdelantadas,
+  armarBloqueAdelantadas, agruparMovimientosAdelantadas,
   formatMontoTabla,
   formatNombre,
   round2,

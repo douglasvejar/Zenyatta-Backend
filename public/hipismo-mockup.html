@@ -1494,8 +1494,14 @@
                (25-09-2026, a pedido del usuario). -->
           <button class="btn btn-primario" type="button" id="btnConfirmarPlano" style="display:none;" onclick="confirmarPlano()">✔️ Confirmar Plano</button>
           <button class="btn btn-secundario" type="button" onclick="limpiarPlano()">🧹 Limpiar</button>
-          <button class="btn btn-secundario" type="button" onclick="copiarResultado()">📋 Copiar Resultado</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultado()">📋 Copiar en texto</button>
+          <!-- 07-10-2026: "Copiar en imagen" arma una tarjeta con las jugadas, el logo del
+               grupo y quiénes ganan/pierden (siempre UNA sola imagen, se adapta sola a la
+               cantidad de jugadas) y la copia junto al texto "TOTALES DE LA CARRERA ...". -->
+          <button class="btn btn-secundario" type="button" id="btnCopiarImagenPlano" onclick="copiarPlanoEnImagen()">📸 Copiar en imagen</button>
+          <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarMensajePlanoImagen()" title="Copia solo el texto que acompaña a la imagen (TOTALES DE LA CARRERA ... EN EL HIPÓDROMO ... EN EL GRUPO ...)">📝 Solo el mensaje</button>
           <span class="toast-copiado" id="toastCopiado">Copiado ✅</span>
+          <span class="toast-copiado" id="toastPlanoImagen" style="flex-basis:100%; margin-left:0;"></span>
         </div>
 
         <!-- Mismo logo de fondo, ahora detrás de "donde te doy el
@@ -6616,6 +6622,7 @@ async function calcularPlano() {
   // confirmar anterior — el operador siempre confirma el ÚLTIMO cálculo
   // que ve en pantalla, nunca uno viejo que ya no coincide con el plano.
   planoPendienteDeConfirmar = null;
+  ULTIMOS_DATOS_IMAGEN_PLANO = null; // la imagen siempre sale del ÚLTIMO plano que se ve en pantalla
   aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
 
@@ -6666,6 +6673,7 @@ async function calcularPlano() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+  ULTIMOS_DATOS_IMAGEN_PLANO = data.datosImagen || null;
 
   // Guarda exactamente lo que se acaba de previsualizar — confirmarPlano()
   // manda ESTO, no una nueva lectura del formulario.
@@ -6737,6 +6745,7 @@ async function confirmarPlano() {
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
+  ULTIMOS_DATOS_IMAGEN_PLANO = data.datosImagen || null;
   mostrarAvisoPozo(data.alertasPozo);
 
   // Deja todo listo para la SIGUIENTE carrera de la misma jornada
@@ -8354,6 +8363,292 @@ setInterval(() => {
     actualizarAlertaTerciosAdelantadas(totalTerciosAdelantadasPendientesActual);
   }
 }, 60 * 60 * 1000);
+
+// ------------------------------------------------------------------
+// "📸 COPIAR EN IMAGEN" de Cargar Planos (07-10-2026, a pedido del usuario:
+// "un botón que diga COPIAR EN TEXTO (el plano de siempre) y otro COPIAR EN
+// IMAGEN... al enviar a WhatsApp en imagen, se pegue la imagen junto a un texto
+// que diga: TOTALES DE LA CARRERA XXXX EN EL HIPÓDROMO XXXX EN EL GRUPO XXXX").
+//
+// Los DATOS vienen del servidor (datosImagen en POST /planos/calcular y POST
+// /planos, services/hipismoPlanoImagen.js): las mismas jugadas y los mismos
+// Ganan/Pierden que el texto del plano. Acá solo se DIBUJA. La tarjeta se
+// adapta sola a la cantidad de jugadas para que SIEMPRE sea UNA sola imagen y
+// se vea lo mejor posible (ver pimgNivel): pocas jugadas = una columna y letra
+// grande; muchas = dos o tres columnas y letra más chica. Logo del grupo de
+// fondo detrás de las jugadas (si el grupo tiene logo) y, abajo, quiénes ganan
+// y quiénes pierden, ordenados.
+//
+// Al copiar, el portapapeles lleva la imagen Y el texto de acompañamiento
+// (image/png + text/plain). Algunas versiones de WhatsApp Web/Escritorio no
+// ponen solas el texto como pie de foto, por eso el mismo texto también va
+// escrito en la propia imagen (arriba) y existe el botón "📝 Solo el mensaje".
+// Nunca se muestra la comisión del grupo ni los banqueadores reales de
+// Marcas/TF (igual que en el texto del plano).
+// ------------------------------------------------------------------
+let ULTIMOS_DATOS_IMAGEN_PLANO = null;
+const PIMG_SILK = {
+  1: ['#d62828', '#fff'], 2: ['#f4f4f4', '#111'], 3: ['#1d4ed8', '#fff'], 4: ['#facc15', '#111'], 5: ['#16a34a', '#fff'],
+  6: ['#111111', '#fff'], 7: ['#f97316', '#111'], 8: ['#f472b6', '#111'], 9: ['#22b8cf', '#111'], 10: ['#7c3aed', '#fff'],
+  11: ['#9ca3af', '#111'], 12: ['#a3e635', '#111'], 13: ['#d6b98c', '#111'], 14: ['#7f1d1d', '#fff'], 15: ['#2dd4bf', '#111'], 16: ['#1e3a8a', '#fff']
+};
+function pimgEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function pimgMonto(v) { return Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function pimgSigno(v) { const n = Math.round(Number(v) * 100) / 100; return (n < 0 ? '-' : '+') + pimgMonto(Math.abs(n)); }
+function pimgSilk(n, px) {
+  const num = parseInt(n, 10);
+  const c = PIMG_SILK[num] || ['#6b7280', '#fff'];
+  return `<span class="pimg-silk" style="width:${px}px;height:${px}px;background:${c[0]};color:${c[1]};font-size:${Math.round(px * 0.52)}px;">${pimgEsc(n)}</span>`;
+}
+// Nivel de densidad según la cantidad de renglones (jugadas + adelantadas).
+function pimgNivel(n) {
+  if (n <= 10) return { w: 1080, cols: 1, rowh: 58, fs: 28, silk: 46, cCli: '250px', cMod: '96px', cSilk: '56px', cMonto: '150px', cDa: '200px', perCol: 8, fl: 52, flfs: 30 };
+  if (n <= 30) return { w: 1400, cols: 2, rowh: 44, fs: 23, silk: 34, cCli: '150px', cMod: '66px', cSilk: '38px', cMonto: '96px', cDa: '128px', perCol: 6, fl: 44, flfs: 23 };
+  if (n <= 60) return { w: 1400, cols: 2, rowh: 41, fs: 22, silk: 30, cCli: '150px', cMod: '62px', cSilk: '34px', cMonto: '88px', cDa: '128px', perCol: 6, fl: 41, flfs: 22 };
+  return { w: 1800, cols: 3, rowh: 40, fs: 21, silk: 28, cCli: '140px', cMod: '60px', cSilk: '32px', cMonto: '84px', cDa: '120px', perCol: 6, fl: 40, flfs: 21 };
+}
+function pimgFechaLarga(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const [a, m, d] = iso.split('-').map(Number);
+  const dia = dias[new Date(Date.UTC(a, m - 1, d)).getUTCDay()];
+  return `${dia} ${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${a}`;
+}
+// Colores del formato: los que el grupo tiene configurados desde Súper-admin
+// (Cargar logo -> colores del logo: GRUPO.temaColorPrimario/Secundario, los mismos
+// de Balance General, Cierre Final y Grupo de Clientes). Sin tema configurado, el
+// verde de Ludox de siempre. Todo lo demás (tintes, líneas, texto del encabezado)
+// se deriva de esos dos colores para que la tarjeta siempre se lea bien.
+function pimgHexARgb(hex) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function pimgLuminancia(rgb) {
+  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+}
+function pimgContraste(a, b) {
+  const la = pimgLuminancia(a), lb = pimgLuminancia(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+function pimgMezcla(rgb, t) { return `rgb(${rgb.map(v => Math.round(v * t + 255 * (1 - t))).join(',')})`; }
+function pimgTema(tema) {
+  const c1 = pimgHexARgb(tema && tema.c1) || [14, 59, 44];
+  const c2 = pimgHexARgb(tema && tema.c2) || [200, 162, 74];
+  const blanco = [255, 255, 255], oscuro = [20, 33, 27];
+  const fg = pimgContraste(c1, blanco) >= pimgContraste(c1, oscuro) ? blanco : oscuro;
+  // El color secundario se usa como acento sobre el primario solo si contrasta; si no, el texto normal.
+  const acc = pimgContraste(c1, c2) >= 2.2 ? c2 : fg;
+  const rgb = a => `rgb(${a.join(',')})`;
+  return {
+    estilo: `--pimg-c1:${rgb(c1)};--pimg-c2:${rgb(c2)};--pimg-fg:${rgb(fg)};--pimg-acc:${rgb(acc)};` +
+      `--pimg-bg:${pimgMezcla(c1, 0.06)};--pimg-tint:${pimgMezcla(c1, 0.12)};--pimg-line:${pimgMezcla(c1, 0.2)};`,
+    fondo: pimgMezcla(c1, 0.06)
+  };
+}
+function pimgAsegurarEstilos() {
+  if (document.getElementById('estiloPlanoImagen')) return;
+  const st = document.createElement('style');
+  st.id = 'estiloPlanoImagen';
+  st.textContent = `
+  .pimg { font-family: 'Segoe UI', Carlito, Calibri, Arial, sans-serif; background:var(--pimg-bg); color:#14211b; box-sizing:border-box; }
+  .pimg *, .pimg *::before { box-sizing:border-box; margin:0; padding:0; }
+  .pimg-head { background:var(--pimg-c1); color:var(--pimg-fg); padding:18px 32px 16px; border-bottom:5px solid var(--pimg-c2); }
+  .pimg-grupo { font-size:22px; letter-spacing:.22em; text-transform:uppercase; color:var(--pimg-acc); font-weight:700; }
+  .pimg-titulo { font-size:46px; font-weight:700; line-height:1.1; margin-top:2px; }
+  .pimg-sub { font-size:22px; opacity:.85; margin-top:2px; }
+  .pimg-llegada { display:flex; align-items:center; gap:10px; padding:12px 32px; background:#fff; border-bottom:1px solid var(--pimg-line); }
+  .pimg-et { font-size:19px; color:#5b6b63; text-transform:uppercase; letter-spacing:.12em; width:110px; font-weight:700; }
+  .pimg-pos { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:15px; color:#5b6b63; font-weight:700; }
+  .pimg-ret { margin-left:auto; display:flex; align-items:center; gap:8px; font-size:20px; color:#b42318; font-weight:700; }
+  .pimg-silk { display:inline-flex; align-items:center; justify-content:center; border-radius:50%; font-weight:700; border:2px solid rgba(0,0,0,.2); flex:none; }
+  .pimg-cuerpo { padding:14px 32px 6px; }
+  .pimg-marca { position:relative; border-radius:14px; overflow:hidden; background:#fff; border:1px solid var(--pimg-line); }
+  .pimg-logo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); max-width:380px; max-height:80%; opacity:.12; }
+  .pimg-dos { position:relative; display:flex; }
+  .pimg-col { flex:1; min-width:0; padding:0 8px; }
+  .pimg-col + .pimg-col { border-left:2px solid var(--pimg-line); }
+  .pimg-sec { background:var(--pimg-c1); color:var(--pimg-acc); font-weight:700; letter-spacing:.14em; font-size:18px; padding:6px 16px; position:relative; }
+  .pimg-j { display:grid; align-items:center; column-gap:6px; padding:0 6px; border-top:1px solid var(--pimg-line); }
+  .pimg-jh { font-size:15px; letter-spacing:.08em; text-transform:uppercase; color:#5b6b63; font-weight:700; height:34px; background:var(--pimg-tint); margin:0 -8px; padding:0 14px; border-top:none; }
+  .pimg-j b { font-weight:700; white-space:nowrap; overflow:hidden; }
+  .pimg-j .pimg-m { font-weight:700; }
+  .pimg-j .pimg-a, .pimg-jh .pimg-a { text-align:right; }
+  .pimg-j .pimg-d { color:#5b6b63; font-weight:700; white-space:nowrap; overflow:hidden; padding-left:14px; font-size:.9em; }
+  .pimg-jh .pimg-d { padding-left:14px; }
+  .pimg-j .pimg-r, .pimg-jh .pimg-r { text-align:right; font-weight:700; }
+  .pimg-g { color:#17803f; } .pimg-p { color:#b42318; }
+  .pimg-res { display:flex; gap:14px; padding:10px 32px 6px; align-items:flex-start; }
+  .pimg-rc { background:#fff; border-radius:12px; overflow:hidden; border:1px solid var(--pimg-line); }
+  .pimg-rc h4 { font-size:19px; letter-spacing:.1em; color:#fff; padding:7px 16px; }
+  .pimg-rc.gn h4 { background:#17803f; } .pimg-rc.pd h4 { background:#b42318; }
+  .pimg-rcols { display:flex; } .pimg-rcol { flex:1; min-width:0; } .pimg-rcol + .pimg-rcol { border-left:2px solid var(--pimg-line); }
+  .pimg-fl { display:flex; align-items:center; gap:8px; padding:0 12px; border-top:1px solid var(--pimg-line); }
+  .pimg-fl b { flex:1; overflow:hidden; white-space:nowrap; font-weight:700; }
+  .pimg-pu { width:26px; height:26px; border-radius:50%; background:var(--pimg-tint); color:#5b6b63; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; }
+  .pimg-pie { padding:4px 32px 14px; font-size:19px; color:#5b6b63; display:flex; justify-content:space-between; }
+  `;
+  document.head.appendChild(st);
+}
+function pimgFila(c, mod, cab, monto, da, res, L) {
+  const grid = `grid-template-columns:${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr; height:${L.rowh}px; font-size:${L.fs}px;`;
+  const toks = String(cab || '').split(/[^0-9]+/).filter(Boolean);
+  const cabHtml = toks.length === 1 ? pimgSilk(toks[0], L.silk) : `<span style="font-weight:700;font-size:${Math.round(L.fs * 0.8)}px;white-space:nowrap;">${pimgEsc(cab || '')}</span>`;
+  const r = Number(res);
+  return `<div class="pimg-j" style="${grid}"><b>${pimgEsc(c)}</b><span class="pimg-m">${pimgEsc(mod)}</span><span>${cab === '' || cab == null ? '' : cabHtml}</span>` +
+    `<span class="pimg-a">${monto === '' || monto == null ? '' : pimgMonto(monto)}</span><span class="pimg-d">${pimgEsc(da)}</span>` +
+    `<span class="pimg-r ${r < 0 ? 'pimg-p' : 'pimg-g'}">${pimgSigno(r)}</span></div>`;
+}
+function pimgCabecera(L) {
+  const grid = `grid-template-columns:${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr;`;
+  return `<div class="pimg-j pimg-jh" style="${grid}"><span>Juega</span><span>Jugó</span><span></span><span class="pimg-a">Apostó</span><span class="pimg-d">Da</span><span class="pimg-r">Resultado</span></div>`;
+}
+function pimgTabla(filasHtml, L) {
+  const n = Math.ceil(filasHtml.length / L.cols);
+  const cols = [];
+  for (let k = 0; k < L.cols; k++) {
+    const trozo = filasHtml.slice(k * n, (k + 1) * n);
+    if (trozo.length) cols.push(`<div class="pimg-col">${pimgCabecera(L)}${trozo.join('')}</div>`);
+  }
+  return `<div class="pimg-dos">${cols.join('')}</div>`;
+}
+function pimgResumen(items, cls, titulo, color, L) {
+  const nc = Math.max(1, Math.ceil(items.length / L.perCol));
+  const porCol = Math.ceil(items.length / nc);
+  let cols = '';
+  for (let k = 0; k < nc; k++) {
+    cols += '<div class="pimg-rcol">' + items.slice(k * porCol, (k + 1) * porCol).map(([n, v], i) =>
+      `<div class="pimg-fl" style="height:${L.fl}px;font-size:${L.flfs}px;"><span class="pimg-pu">${k * porCol + i + 1}</span><b>${pimgEsc(n)}</b><span class="${color}" style="font-weight:700;">${pimgSigno(v)}</span></div>`).join('') + '</div>';
+  }
+  return `<div class="pimg-rc ${cls}" style="flex:${nc};"><h4>${titulo}</h4><div class="pimg-rcols">${cols}</div></div>`;
+}
+// Arma el HTML de la tarjeta. Devuelve { html, w }. `logoUrl` es opcional.
+function construirHtmlPlanoImagen(d, logoUrl, tema) {
+  const adel = d.adelantadas && d.adelantadas.filas && d.adelantadas.filas.length ? d.adelantadas.filas : [];
+  const L = pimgNivel(d.jugadas.length + adel.length);
+  const llegada = (d.llegada || []).map((n, i) => `<div class="pimg-pos">${pimgSilk(n, 56)}${i + 1}º</div>`).join('');
+  const ret = (d.retirados || []).length
+    ? `<div class="pimg-ret">🚫 Retirado ${d.retirados.map(n => pimgSilk(n, 40)).join(' ')}</div>` : '';
+  const titulo = [d.hipodromo, d.carreraTexto ? d.carreraTexto + ' carrera' : ''].filter(Boolean).join(' · ') || 'Plano';
+  const filasJ = d.jugadas.map(j => pimgFila(j.cliente, j.modalidad, j.caballo, j.monto, j.banquero, j.resultado, L));
+  const logo = logoUrl ? `<img class="pimg-logo" src="${pimgEsc(logoUrl)}" alt="">` : '';
+  let cuerpo = filasJ.length ? `<div class="pimg-cuerpo"><div class="pimg-marca">${logo}${pimgTabla(filasJ, L)}</div></div>` : '';
+  if (adel.length) {
+    const etiqueta = it => (/^marca/i.test(it) ? 'Marca' : /^tablas?/i.test(it) ? 'TF' : 'Adel.');
+    const filasA = adel.map(f => pimgFila(f.cliente, etiqueta(f.item), '', '', f.item, f.resultado, L));
+    cuerpo += `<div class="pimg-cuerpo" style="padding-top:${filasJ.length ? 4 : 14}px;"><div class="pimg-marca"><div class="pimg-sec">PARADA ADELANTADAS</div>${filasJ.length ? '' : logo}${pimgTabla(filasA, L)}</div></div>`;
+  }
+  const res = `<div class="pimg-res">${d.ganan.length ? pimgResumen(d.ganan, 'gn', '✅ GANAN', 'pimg-g', L) : ''}${d.pierden.length ? pimgResumen(d.pierden, 'pd', '❌ PIERDEN', 'pimg-p', L) : ''}</div>`;
+  const fecha = pimgFechaLarga(d.fecha);
+  const total = d.jugadas.length + adel.length;
+  const t = pimgTema(tema);
+  const html = `<div class="pimg" style="width:${L.w}px;${t.estilo}">` +
+    `<div class="pimg-head"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>` +
+    `<div class="pimg-llegada"><div class="pimg-et">Llegada</div>${llegada}${ret}</div>` +
+    cuerpo + res +
+    `<div class="pimg-pie"><span>Tilde su jugada y se revisará</span><span>${total} jugada${total === 1 ? '' : 's'} · Reclamos al privado</span></div></div>`;
+  return { html, w: L.w, fondo: t.fondo };
+}
+
+function mostrarToastPlanoImagen(texto, esError) {
+  const t = document.getElementById('toastPlanoImagen');
+  if (!t) { if (esError) alert(texto); return; }
+  t.textContent = texto;
+  t.style.color = esError ? '#b43' : '';
+  t.classList.add('visible');
+  clearTimeout(mostrarToastPlanoImagen._h);
+  mostrarToastPlanoImagen._h = setTimeout(() => t.classList.remove('visible'), esError ? 5000 : 7000);
+}
+
+function esperarImagenesPimg(host) {
+  const imgs = Array.from(host.querySelectorAll('img'));
+  return Promise.all(imgs.map(img => new Promise(resolve => {
+    if (img.complete) return resolve();
+    img.onload = img.onerror = () => resolve();
+    setTimeout(resolve, 4000);
+  })));
+}
+
+async function copiarPlanoEnImagen() {
+  const caja = document.getElementById('resultadoCaja');
+  const d = ULTIMOS_DATOS_IMAGEN_PLANO;
+  if (!caja || caja.style.display === 'none' || !d || (!d.jugadas.length && !(d.adelantadas && d.adelantadas.filas.length))) {
+    mostrarToastPlanoImagen('Primero dale "Calcular" al plano.', true);
+    return;
+  }
+  if (typeof html2canvas !== 'function') {
+    mostrarToastPlanoImagen('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  const btn = document.getElementById('btnCopiarImagenPlano');
+  if (btn) { btn.disabled = true; }
+  pimgAsegurarEstilos();
+  const logoUrl = (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : null;
+  const { html, w, fondo } = construirHtmlPlanoImagen(d, logoUrl, { c1: GRUPO && GRUPO.temaColorPrimario, c2: GRUPO && GRUPO.temaColorSecundario });
+  const host = document.createElement('div');
+  host.style.cssText = `position:fixed; left:-99999px; top:0; width:${w}px; z-index:-1;`;
+  host.innerHTML = html;
+  document.body.appendChild(host);
+  try {
+    await esperarImagenesPimg(host);
+    const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: fondo, useCORS: true });
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('no se pudo armar el PNG');
+    const texto = d.textoAcompanante;
+    let hecho = false;
+    // 1) Portapapeles con imagen + texto de acompañamiento.
+    try {
+      if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob, 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
+      } catch (e) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); // este navegador no admite los dos tipos juntos
+      }
+      mostrarToastPlanoImagen('✅ Imagen copiada — pégala en WhatsApp. Pie de foto: ' + texto);
+      hecho = true;
+    } catch (e) { /* sigue abajo */ }
+    // 2) Celular: compartir imagen + texto directo a WhatsApp.
+    if (!hecho && navigator.share && navigator.canShare) {
+      try {
+        const archivo = new File([blob], 'plano_carrera.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [archivo] })) {
+          await navigator.share({ files: [archivo], text: texto });
+          hecho = true;
+        }
+      } catch (e) { /* cancelado o sin soporte: sigue abajo */ }
+    }
+    // 3) Último recurso: descargar la imagen y copiar el texto.
+    if (!hecho) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'plano_carrera.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      if (navigator.clipboard && navigator.clipboard.writeText) { try { await navigator.clipboard.writeText(texto); } catch (e) { /* sin permiso */ } }
+      mostrarToastPlanoImagen('No se pudo copiar directo — se descargó la imagen. Texto para el pie de foto: ' + texto, true);
+    }
+  } catch (e) {
+    mostrarToastPlanoImagen('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  } finally {
+    document.body.removeChild(host);
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Solo el texto de acompañamiento ("TOTALES DE LA CARRERA ... EN EL GRUPO ..."),
+// por si WhatsApp no lo pone solo como pie de foto al pegar la imagen.
+function copiarMensajePlanoImagen() {
+  const d = ULTIMOS_DATOS_IMAGEN_PLANO;
+  if (!d) { mostrarToastPlanoImagen('Primero dale "Calcular" al plano.', true); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(d.textoAcompanante).then(() => mostrarToastPlanoImagen('✅ Mensaje copiado: ' + d.textoAcompanante))
+      .catch(() => mostrarToastPlanoImagen('No se pudo copiar — escríbelo a mano: ' + d.textoAcompanante, true));
+  } else {
+    mostrarToastPlanoImagen('No se pudo copiar — escríbelo a mano: ' + d.textoAcompanante, true);
+  }
+}
 
 function copiarResultado() {
   const caja = document.getElementById('resultadoCaja');

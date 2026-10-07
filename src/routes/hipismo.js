@@ -91,6 +91,7 @@ const {
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto,
   parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada, resolverMontosManuales
 } = require('../services/hipismoAdelantadasCalc');
+const { armarDatosImagenPlano } = require('../services/hipismoPlanoImagen');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
 // de "Jugadas Adelantadas"/Tablas Fijas y Marcas de arriba, ver la nota
 // grande en services/hipismoTerciosAdelantadasCalc.js y en sql/schema.sql,
@@ -872,6 +873,11 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
 
   res.json({
     textoResultado,
+    // Datos para "Copiar en imagen" (07-10-2026): mismas fuentes que el texto de arriba.
+    datosImagen: armarDatosImagenPlano({
+      grupoNombre: req.grupo.nombre, hipodromoNombre: hipodromoNombre || '', carreraNumero, fecha: fechaFinal, ret, pizarra,
+      tickets: resultado.tickets, totalesFinales: resultado.totalesFinales, movimientosAdelantadas: movimientosParaTexto
+    }),
     totalesFinales: balance.totales,
     comisionTotal: balance.comision,
     sinReconocer: resultado.sinReconocer,
@@ -1027,6 +1033,10 @@ router.post('/planos', asyncHandler(async (req, res) => {
 
   res.status(201).json({
     plano,
+    datosImagen: armarDatosImagenPlano({
+      grupoNombre: req.grupo.nombre, hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, ret, pizarra,
+      tickets: resultado.tickets, totalesFinales: resultado.totalesFinales, movimientosAdelantadas: movimientosParaTexto
+    }),
     totalesFinales: balance.totales,
     comisionTotal: balance.comision,
     sinReconocer: resultado.sinReconocer,
