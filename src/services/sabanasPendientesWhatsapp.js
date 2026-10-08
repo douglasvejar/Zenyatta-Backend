@@ -56,6 +56,15 @@ const COLUMNAS = 'id, grupo_id, fecha_detectada, texto, remitente, remitente_nom
 // que ya tenía guardado.
 async function grupoIdPorJid(jid) {
   if (!jid) return null;
+  // Telegram (08-10-2026): el bot de Telegram reusa todo el flujo de sábanas y
+  // comandos de WhatsApp, representando cada chat de Telegram como un "jid"
+  // sintético "tg_<chatId>@g.us" (ver telegramBot.js). Para esos se busca por
+  // telegram_chat_id + telegram_habilitado, igual de exclusivos del Súper-admin.
+  if (String(jid).startsWith('tg_')) {
+    const chatId = String(jid).replace(/^tg_/, '').replace(/@g\.us$/, '');
+    const rt = await db.query('SELECT id FROM grupos WHERE telegram_chat_id = $1 AND telegram_habilitado = true', [chatId]);
+    return rt.rows.length > 0 ? rt.rows[0].id : null;
+  }
   const res = await db.query('SELECT id FROM grupos WHERE whatsapp_grupo_jid = $1 AND whatsapp_habilitado = true', [jid]);
   return res.rows.length > 0 ? res.rows[0].id : null;
 }

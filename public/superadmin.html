@@ -1462,6 +1462,33 @@
             </div>
 
             <div class="modal-seccion">
+              <h3>✈️ Sábana automática por Telegram</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Alternativa oficial a WhatsApp (sin riesgo de baneo): el bot lee los mensajes "SABANA DE JUGADAS" del grupo de Telegram, los carga, responde el listado ya calculado y atiende los comandos (solo administradores del grupo de Telegram). Requiere <code>TELEGRAM_BOT_ACTIVADO</code> y <code>TELEGRAM_BOT_TOKEN</code> en el servidor (ver .env.example).</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Servicio</span>
+                <span class="valor" id="telegramHabilitadoEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleTelegramHabilitado" onclick="toggleTelegramHabilitadoGrupo()" style="margin-top:6px;"></button>
+              <div class="detalle-fila" style="margin-top:10px;">
+                <span class="etiqueta">Bot</span>
+                <span class="valor" id="telegramBotEstado">Consultando…</span>
+              </div>
+              <div class="detalle-fila">
+                <span class="etiqueta">Grupo de Telegram</span>
+                <span class="valor" id="telegramVinculoEstado"></span>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                <button type="button" class="btn-secundario" id="btnTelegramCodigo" onclick="generarCodigoTelegramGrupo()">🔑 Generar código de vinculación</button>
+                <button type="button" class="btn-secundario" id="btnTelegramDesvincular" onclick="desvincularTelegramGrupo()" style="color:var(--danger);">Desvincular</button>
+              </div>
+              <div id="telegramCodigoCaja" style="display:none; margin-top:10px; padding:10px 12px; border:1px dashed var(--border, #bbb); border-radius:8px; font-size:13px;">
+                En el grupo de Telegram, un <b>administrador</b> escribe: <code id="telegramCodigoTexto" style="font-size:14px;"></code>
+                <div style="color:var(--text-dim); font-size:12px; margin-top:4px;">El código es de un solo uso. Antes agrega el bot al grupo.</div>
+              </div>
+              <div id="telegramError"></div>
+            </div>
+
+            <div class="modal-seccion">
               <h3>📟 Comandos por WhatsApp</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
               <div class="detalle-fila">
@@ -3421,6 +3448,10 @@ async function abrirDetalleGrupo(id, nombre) {
     pintarEstadoWhatsappHabilitado();
     cargarWhatsappGruposDisponibles(false);
 
+    GRUPO_TELEGRAM = { habilitado: !!d.telegramHabilitado, chatId: d.telegramChatId || null, codigo: d.telegramCodigoVinculo || null };
+    pintarTelegramGrupo();
+    cargarEstadoBotTelegram();
+
     GRUPO_COMANDOS_WHATSAPP_HABILITADO = !!d.comandosWhatsappHabilitado;
     document.getElementById('comandosWhatsappNumeroInput').value = d.comandosWhatsappNumero || '';
     pintarEstadoComandosWhatsapp();
@@ -3820,6 +3851,83 @@ async function toggleWhatsappHabilitadoGrupo() {
 // es el único comportamiento, para todos los grupos, sin interruptor. Ver
 // la advertencia grande al principio de whatsappBot.js. Si hace falta
 // retomarlo, está en el historial de git de este archivo.
+
+// =================================================================
+// SÁBANA AUTOMÁTICA POR TELEGRAM (08-10-2026) — ver el bloque HTML de arriba y
+// src/routes/superadmin.js (telegram-habilitado / telegram-codigo /
+// telegram-desvincular / telegram-estado). Exclusivo del Súper-admin.
+// =================================================================
+let GRUPO_TELEGRAM = { habilitado: false, chatId: null, codigo: null };
+
+function pintarTelegramGrupo() {
+  const t = GRUPO_TELEGRAM;
+  document.getElementById('telegramHabilitadoEstado').innerHTML = t.habilitado
+    ? '<span style="color:#2e7d32; font-weight:600;">✅ Contratado</span>'
+    : '<span style="color:#888;">— No contratado —</span>';
+  document.getElementById('btnToggleTelegramHabilitado').textContent = t.habilitado ? 'Desactivar servicio' : 'Activar servicio';
+  document.getElementById('telegramVinculoEstado').innerHTML = t.chatId
+    ? '<span style="color:#2e7d32; font-weight:600;">✅ Vinculado</span> <span style="color:var(--text-dim); font-size:12px;">(chat ' + t.chatId + ')</span>'
+    : '<span style="color:#888;">— Sin vincular —</span>';
+  document.getElementById('btnTelegramCodigo').disabled = !t.habilitado;
+  document.getElementById('btnTelegramDesvincular').style.display = t.chatId ? '' : 'none';
+  const caja = document.getElementById('telegramCodigoCaja');
+  if (t.codigo && t.habilitado && !t.chatId) {
+    document.getElementById('telegramCodigoTexto').textContent = '/vincular ' + t.codigo;
+    caja.style.display = 'block';
+  } else {
+    caja.style.display = 'none';
+  }
+}
+
+async function cargarEstadoBotTelegram() {
+  const el = document.getElementById('telegramBotEstado');
+  try {
+    const e = await apiSuperadmin('/api/superadmin/telegram-estado');
+    if (!e.configurado || !e.activadoEnServidor) el.innerHTML = '<span style="color:#888;">Apagado en el servidor (faltan TELEGRAM_BOT_ACTIVADO / TELEGRAM_BOT_TOKEN)</span>';
+    else if (e.conectado) el.innerHTML = '<span style="color:#2e7d32; font-weight:600;">✅ Conectado' + (e.usuario ? ' como @' + e.usuario : '') + '</span>';
+    else el.innerHTML = '<span style="color:var(--danger);">⚠️ Sin conexión' + (e.ultimoError ? ': ' + e.ultimoError : '') + '</span>';
+  } catch (err) {
+    el.textContent = 'No se pudo consultar el estado.';
+  }
+}
+
+async function toggleTelegramHabilitadoGrupo() {
+  if (!GRUPO_DETALLE_ID) return;
+  document.getElementById('telegramError').textContent = '';
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/telegram-habilitado', { method: 'PATCH', body: JSON.stringify({ habilitado: !GRUPO_TELEGRAM.habilitado }) });
+    GRUPO_TELEGRAM = { habilitado: !!r.telegramHabilitado, chatId: r.telegramChatId || null, codigo: r.telegramCodigoVinculo || null };
+    pintarTelegramGrupo();
+  } catch (e) {
+    document.getElementById('telegramError').textContent = e.message;
+  }
+}
+
+async function generarCodigoTelegramGrupo() {
+  if (!GRUPO_DETALLE_ID) return;
+  document.getElementById('telegramError').textContent = '';
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/telegram-codigo', { method: 'POST', body: '{}' });
+    GRUPO_TELEGRAM.codigo = r.telegramCodigoVinculo;
+    GRUPO_TELEGRAM.chatId = null;
+    pintarTelegramGrupo();
+  } catch (e) {
+    document.getElementById('telegramError').textContent = e.message;
+  }
+}
+
+async function desvincularTelegramGrupo() {
+  if (!GRUPO_DETALLE_ID) return;
+  if (!confirm('¿Desvincular el grupo de Telegram? El bot dejará de leer sus mensajes.')) return;
+  try {
+    await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/telegram-desvincular', { method: 'PATCH', body: '{}' });
+    GRUPO_TELEGRAM.chatId = null;
+    GRUPO_TELEGRAM.codigo = null;
+    pintarTelegramGrupo();
+  } catch (e) {
+    document.getElementById('telegramError').textContent = e.message;
+  }
+}
 
 async function guardarWhatsappJidGrupo() {
   const jid = document.getElementById('whatsappJidInputSuperadmin').value.trim();

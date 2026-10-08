@@ -88,6 +88,20 @@ if (process.env.WHATSAPP_BOT_ACTIVADO === 'true') {
 }
 
 // =================================================================
+// BOT DE TELEGRAM (08-10-2026) — 100% opcional, apagado por defecto, igual
+// que el de WhatsApp: solo arranca si TELEGRAM_BOT_ACTIVADO=true y hay un
+// TELEGRAM_BOT_TOKEN (el que da @BotFather). Usa la API OFICIAL de bots de
+// Telegram (sin librerías nuevas, sin riesgo de baneo). Un error al arrancar
+// queda en el log y NUNCA tumba el resto del servidor. Ver telegramBot.js y
+// .env.example.
+// =================================================================
+if (process.env.TELEGRAM_BOT_ACTIVADO === 'true') {
+  require('./services/telegramBot').iniciarBotTelegram().catch((err) => {
+    console.error('[telegramBot] No se pudo arrancar el bot de Telegram (el resto del servidor sigue funcionando normal):', err.message);
+  });
+}
+
+// =================================================================
 // LOGROS AUTOMÁTICOS DE LA CALCULADORA PARLEY (01-10-2026) — 100%
 // opcional, igual que FOOTBALL_DATA_API_KEY/API_FOOTBALL_KEY: si no hay
 // ODDS_API_KEY en el .env, esto no hace nada y la Calculadora Parley

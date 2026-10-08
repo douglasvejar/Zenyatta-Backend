@@ -166,7 +166,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
     // base64 completo en este SELECT inflaría la respuesta de "detalle"
     // sin necesidad, solo hace falta saber SI existe uno.
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -211,6 +211,9 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     temaColorSecundario: grupo.tema_color_secundario,
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
+    telegramHabilitado: !!grupo.telegram_habilitado,
+    telegramChatId: grupo.telegram_chat_id || null,
+    telegramCodigoVinculo: grupo.telegram_codigo_vinculo || null,
     sabanaMuestra: grupo.sabana_muestra,
     // (09-09-2026, a pedido del usuario) número autorizado para los
     // comandos de chat de WhatsApp ("act"/"saldo final"/"corte semana"/
@@ -629,6 +632,58 @@ router.patch('/grupos/:id/hipismo-cruzar', asyncHandler(async (req, res) => {
 // leer la sábana (se copia del log del servidor la primera vez que el
 // bot se conecta con ese número — ver whatsappBot.js). Mandar
 // { jid: null } (o vacío) para desvincular.
+// =================================================================
+// SÁBANA AUTOMÁTICA POR TELEGRAM (08-10-2026) — ver telegramBot.js y la nota
+// en sql/schema.sql. Exclusivo del Súper-admin. Flujo: 1) se activa el
+// servicio, 2) se genera un código de un solo uso, 3) un administrador del
+// grupo de Telegram escribe "/vincular CODIGO" y el bot guarda solo el chat.
+// =================================================================
+router.patch('/grupos/:id/telegram-habilitado', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET telegram_habilitado = $1 WHERE id = $2 RETURNING id, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ telegramHabilitado: r.rows[0].telegram_habilitado, telegramChatId: r.rows[0].telegram_chat_id, telegramCodigoVinculo: r.rows[0].telegram_codigo_vinculo });
+}));
+
+router.post('/grupos/:id/telegram-codigo', asyncHandler(async (req, res) => {
+  const crypto = require('crypto');
+  // Sin 0/O/1/I para que no se confundan al escribirlo.
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let codigo = '';
+  for (let i = 0; i < 8; i++) codigo += alfabeto[crypto.randomInt(alfabeto.length)];
+  const r = await db.query(
+    'UPDATE grupos SET telegram_codigo_vinculo = $1 WHERE id = $2 AND telegram_habilitado = true RETURNING id',
+    [codigo, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(400).json({ error: 'Primero activa el servicio de Telegram para este grupo.' });
+  res.json({ telegramCodigoVinculo: codigo });
+}));
+
+router.patch('/grupos/:id/telegram-desvincular', asyncHandler(async (req, res) => {
+  const r = await db.query(
+    'UPDATE grupos SET telegram_chat_id = NULL, telegram_codigo_vinculo = NULL WHERE id = $1 RETURNING id',
+    [req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ telegramChatId: null, telegramCodigoVinculo: null });
+}));
+
+router.get('/telegram-estado', asyncHandler(async (req, res) => {
+  const { obtenerEstadoTelegram } = require('../services/telegramBot');
+  const e = obtenerEstadoTelegram();
+  res.json({
+    configurado: !!process.env.TELEGRAM_BOT_TOKEN,
+    activadoEnServidor: process.env.TELEGRAM_BOT_ACTIVADO === 'true',
+    conectado: e.conectado,
+    usuario: e.usuario,
+    ultimoError: e.ultimoError,
+    ultimaActualizacionEn: e.ultimaActualizacionEn
+  });
+}));
+
 router.patch('/grupos/:id/whatsapp-jid', asyncHandler(async (req, res) => {
   const { jid } = req.body;
   const valor = (jid || '').trim() || null;

@@ -2064,3 +2064,20 @@ create table if not exists errores_servidor (
 create index if not exists idx_errores_servidor_creado on errores_servidor(creado_en desc);
 create index if not exists idx_errores_servidor_grupo on errores_servidor(grupo_id, creado_en desc);
 alter table errores_servidor enable row level security;
+
+-- =================================================================
+-- SÁBANA AUTOMÁTICA POR TELEGRAM (08-10-2026, a pedido del usuario: "vamos a
+-- conectar el módulo de deportes a un Telegram para que me saque las sábanas
+-- automáticas y me calcule todo... Telegram sí podemos trabajar mejor que
+-- WhatsApp"). Mismo espíritu que whatsapp_habilitado / whatsapp_grupo_jid:
+-- TODO EXCLUSIVO del Súper-admin.
+--   - telegram_habilitado: "este grupo contrató el servicio por Telegram".
+--   - telegram_chat_id: el grupo de Telegram al que está vinculado (se llena
+--     SOLO: el bot lo guarda cuando alguien administrador escribe en ese grupo
+--     "/vincular CODIGO"; no hay que buscar ningún ID a mano).
+--   - telegram_codigo_vinculo: código de un solo uso que genera el Súper-admin.
+-- =================================================================
+alter table grupos add column if not exists telegram_habilitado boolean not null default false;
+alter table grupos add column if not exists telegram_chat_id text;
+alter table grupos add column if not exists telegram_codigo_vinculo text;
+create index if not exists idx_grupos_telegram_chat on grupos(telegram_chat_id) where telegram_chat_id is not null;
