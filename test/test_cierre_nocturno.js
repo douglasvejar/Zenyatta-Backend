@@ -119,6 +119,62 @@ function check(c, m) { try { assert.ok(c); ok++; console.log('OK: ' + m); } catc
   check(enviadosPorGrupo[1].jid === 'tgc_g-central@g.us' && enviados[1].chat === '-100999' && enviados[1].t.startsWith('📍 *CENTRAL VIP*'), 'el grupo sin chat propio lo recibe en el central, con su nombre arriba');
   check(enviados[2].chat === '-100999' && /TODOS LOS GRUPOS RESUELTOS/.test(enviados[2].t) && rt.finalEnviado, 'y el mensaje final de "todos resueltos" sale en el central, de último');
 
+  // --- Aviso de problemas: qué pasa y con qué grupo ---
+  const tf = cierre.textoProblemaCierre({ grupoNombre: 'Bernal', fecha: '2026-10-07', resultado: { accion: 'FALTAN_JUEGOS', pendientes: 2, detalle: [
+    { cliente: 'PEDRO', ticket: '3', estado: 'SUSPENDIDA', jugadas: ['houston -120', 'astros +150'] },
+    { cliente: 'LOPEZ', ticket: '1', estado: 'PENDIENTE', jugadas: ['rangers -110'] }
+  ] } });
+  check(tf.includes('PROBLEMA — BERNAL') && tf.includes('07/10/2026') && tf.includes('2 jugadas siguen sin resolver'), 'el aviso dice el grupo, el día y cuántas jugadas siguen sin resolver');
+  check(tf.includes('• PEDRO — ticket 3 · SUSPENDIDA · houston -120 / astros +150') && tf.includes('• LOPEZ — ticket 1 · PENDIENTE · rangers -110'), 'lista cada jugada sin resolver con su cliente, ticket, estado y texto');
+  check(/Qué hacer/.test(tf), 'y dice qué hacer');
+  const te = cierre.textoProblemaCierre({ grupoNombre: 'Bernal', fecha: '2026-10-07', resultado: { accion: 'ERROR', error: 'se cayó la API' } });
+  check(te.includes('PROBLEMA — BERNAL') && te.includes('se cayó la API'), 'un error al revisar la sábana también dice el grupo y el motivo');
+  const muchas = cierre.textoProblemaCierre({ grupoNombre: 'G', fecha: '2026-10-07', resultado: { accion: 'FALTAN_JUEGOS', pendientes: 20, detalle: Array.from({ length: 20 }, (_, i) => ({ cliente: 'C' + i, ticket: String(i), estado: 'PENDIENTE', jugadas: [] })) } });
+  check(muchas.includes('… y 5 más.') && !muchas.includes('C19'), 'con muchas jugadas pendientes lista las primeras 15 y dice cuántas más hay');
+
+  // orquestador: llama al aviso por cada grupo que no se pudo cerrar
+  dias = [{ grupoId: 'g-a', nombre: 'A', cerrado: false }, { grupoId: 'g-b', nombre: 'B', cerrado: false }, { grupoId: 'g-c', nombre: 'C', cerrado: false }];
+  resultados = { 'g-a': { accion: 'FALTAN_JUEGOS', pendientes: 1, detalle: [] }, 'g-b': { accion: 'ERROR', error: 'x' } };
+  const problemasAvisados = [];
+  await cierre.revisarCierreNocturno({ fecha: '2026-10-07', destinoDe, enviarFinal, cerrarDia, avisarProblema: async p => problemasAvisados.push(p.grupoNombre + ':' + p.resultado.accion) });
+  check(problemasAvisados.join(',') === 'A:FALTAN_JUEGOS,B:ERROR', 'avisa por cada grupo que no se pudo cerrar (juegos pendientes o error), no por el que sí cerró');
+
+  // Telegram: destino y que no se repita
+  const salida = [];
+  telegramBot._usarCliente({ enviarTexto: async (chat, t) => salida.push({ chat, t }), enviarFoto: async () => {} });
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+  let rp = await telegramBot.avisarProblema({ grupoNombre: 'Bernal', titulo: 'Algo pasó', detalle: 'detalle', clave: 'k1' });
+  check(rp.enviado && salida[0].chat === '-100999' && salida[0].t.includes('PROBLEMA — BERNAL'), 'sin chat de avisos configurado, el aviso de problema sale en el grupo central');
+  rp = await telegramBot.avisarProblema({ grupoNombre: 'Bernal', titulo: 'Algo pasó', detalle: 'detalle', clave: 'k1' });
+  check(rp.repetido && salida.length === 1, 'el mismo problema no se repite (los chequeos corren cada 15 minutos)');
+  rp = await telegramBot.avisarProblema({ grupoNombre: 'Bernal', titulo: 'Otra cosa', detalle: 'd2', clave: 'k2' });
+  check(rp.enviado && salida.length === 2, 'un problema distinto sí se avisa');
+  process.env.TELEGRAM_AVISOS_CHAT_ID = '555';
+  await telegramBot.avisarProblema({ grupoNombre: 'Bernal', titulo: 'Tercero', detalle: 'd3', clave: 'k3' });
+  check(salida[2].chat === '555', 'con TELEGRAM_AVISOS_CHAT_ID configurado, el aviso va a ese chat privado');
+
+  // lo que viene de whatsappBot (sábana ilegible): avisa con el grupo, salvo que ya se respondió en el mismo chat
+  db.query = async sql => (/SELECT nombre FROM grupos WHERE id/i.test(sql) ? { rows: [{ nombre: 'Deportes Bernal' }] } : { rows: [] });
+  salida.length = 0;
+  await telegramBot.notificarProblemaDeBot({ jid: 'tg_-100111@g.us', grupoId: 'g1', titulo: 'No se pudo leer la sábana', detalle: 'Motivo: x', clave: 'n1' });
+  check(salida.length === 1 && salida[0].chat === '555' && salida[0].t.includes('DEPORTES BERNAL'), 'una sábana ilegible en el chat propio de un grupo se le avisa al dueño, con el nombre del grupo');
+  await telegramBot.notificarProblemaDeBot({ jid: 'tg_555@g.us', grupoId: 'g1', titulo: 'No se pudo leer la sábana', detalle: 'Motivo: x', clave: 'n2' });
+  check(salida.length === 1, 'si el problema ocurrió en el mismo chat donde van los avisos, no se duplica (ya se le respondió allí)');
+  await telegramBot.notificarProblemaDeBot({ jid: '120363@g.us', grupoId: 'g1', titulo: 'x', detalle: 'y', clave: 'n3' });
+  check(salida.length === 1, 'lo que no vino por Telegram (WhatsApp) no se manda por Telegram');
+
+  // Integración: el cierre nocturno de Telegram avisa UNA sola vez de un grupo atascado (chequeo tras chequeo)
+  db.query = async sql => (/FROM grupos WHERE telegram_habilitado/i.test(sql) ? { rows: [{ id: 'g-atasc', telegram_chat_id: null }] } : { rows: [] });
+  dias = [{ grupoId: 'g-atasc', nombre: 'Lusho VIP', cerrado: false }];
+  whatsappBot.cerrarDiaCompleto = async () => ({ accion: 'FALTAN_JUEGOS', pendientes: 1, detalle: [{ cliente: 'PEDRO', ticket: '2', estado: 'SUSPENDIDA', jugadas: ['mets +110'] }] });
+  salida.length = 0;
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+  const apiInt = { enviarTexto: async (chat, t) => salida.push({ chat, t }), enviarFoto: async () => {} };
+  await telegramBot.revisarCierreNocturnoTelegram({ api: apiInt, sock: {}, fecha: '2026-10-07' });
+  await telegramBot.revisarCierreNocturnoTelegram({ api: apiInt, sock: {}, fecha: '2026-10-07' });
+  const avisosAtasco = salida.filter(x => /PROBLEMA — LUSHO VIP/.test(x.t));
+  check(avisosAtasco.length === 1 && avisosAtasco[0].t.includes('PEDRO — ticket 2 · SUSPENDIDA · mets +110') && salida.every(x => !/TODOS LOS GRUPOS RESUELTOS/.test(x.t)), 'el grupo atascado se avisa una sola vez aunque el chequeo corra dos veces, y NO sale el mensaje final de "todos resueltos"');
+
   console.log('\n' + ok + ' pruebas OK, ' + mal + ' fallaron.');
   process.exit(mal ? 1 : 0);
 })().catch(e => { console.error('Se cayó:', e); process.exit(1); });

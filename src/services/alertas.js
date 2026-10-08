@@ -58,9 +58,9 @@ async function crearAlerta(grupoId, fecha, datos) {
     ]
   );
   const esNueva = r.rows.length > 0;
-  // Aviso al dueño por Telegram (08-10-2026) — solo si hay TELEGRAM_AVISOS_CHAT_ID y
-  // el bot está activo; sin eso no hace nada. Nunca interrumpe ni retrasa la sábana.
-  if (esNueva && process.env.TELEGRAM_AVISOS_CHAT_ID) {
+  // Aviso al dueño por Telegram (08-10-2026) — va a TELEGRAM_AVISOS_CHAT_ID o, si no hay, al grupo
+  // central; si el bot de Telegram no está activo no hace nada. Nunca interrumpe ni retrasa la sábana.
+  if (esNueva && (process.env.TELEGRAM_AVISOS_CHAT_ID || process.env.TELEGRAM_CENTRAL_CHAT_ID)) {
     try {
       const nombreGrupo = (await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId])).rows[0];
       require('./telegramBot').avisarPropietario(

@@ -359,11 +359,20 @@ async function revisarResumenesAutomaticos(ctxExterno) {
   const central = idsCentrales()[0];
   for (const g of r.rows) {
     try {
+      let r = null;
       if (g.telegram_chat_id) {
-        await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, { forzar: false });
+        r = await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, { forzar: false });
       } else if (central) {
         // Sin grupo de Telegram propio: el resumen sale en el central, con el nombre arriba.
-        await whatsappBot.procesarDiaAbierto(crearSockCentral(ctx.api, central, g.nombre), g.id, jidCentralDeGrupo(g.id), fecha, { forzar: false });
+        r = await whatsappBot.procesarDiaAbierto(crearSockCentral(ctx.api, central, g.nombre), g.id, jidCentralDeGrupo(g.id), fecha, { forzar: false });
+      }
+      if (r && r.accion === 'ERROR') {
+        await avisarProblema({
+          grupoNombre: g.nombre,
+          titulo: 'No pude revisar la sábana del ' + fecha.split('-').reverse().join('/') + ' con los resultados en vivo.',
+          detalle: 'Motivo: ' + (r.error || 'error desconocido') + '\nLo sigo intentando cada ' + (Number(process.env.TELEGRAM_RESUMEN_MINUTOS) || 15) + ' minutos; si se repite, revisa la sábana en el panel.',
+          clave: 'resumen|' + g.id + '|' + fecha + '|' + r.error
+        });
       }
     } catch (e) {
       console.error('[telegramBot] Resumen automático falló (grupo ' + g.id + '):', e.message);
@@ -377,7 +386,7 @@ async function revisarResumenesAutomaticos(ctxExterno) {
 // (o, si no hay, en el chat de avisos del dueño).
 async function revisarCierreNocturnoTelegram(ctxExterno) {
   const ctx = ctxPorDefecto(ctxExterno);
-  const { revisarCierreNocturno } = require('./cierreNocturno');
+  const { revisarCierreNocturno, textoProblemaCierre } = require('./cierreNocturno');
   const central = idsCentrales()[0];
   const destinoFinal = central || process.env.TELEGRAM_AVISOS_CHAT_ID || null;
   const r = await db.query('SELECT id, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true');
@@ -390,13 +399,22 @@ async function revisarCierreNocturnoTelegram(ctxExterno) {
       if (central) return { sock: crearSockCentral(ctx.api, central, g.nombre), jid: jidCentralDeGrupo(g.grupoId) };
       return null;
     },
-    enviarFinal: destinoFinal ? (texto => ctx.api.enviarTexto(destinoFinal, texto)) : null
+    enviarFinal: destinoFinal ? (texto => ctx.api.enviarTexto(destinoFinal, texto)) : null,
+    avisarProblema: ({ grupoNombre, grupoId, fecha, resultado }) => {
+      const firma = resultado.accion === 'ERROR'
+        ? String(resultado.error)
+        : (resultado.detalle || []).map(d => d.cliente + '#' + d.ticket + ':' + d.estado).join(',');
+      return avisarProblema({ texto: textoProblemaCierre({ grupoNombre, fecha, resultado }), grupoNombre, clave: 'cierre|' + grupoId + '|' + fecha + '|' + firma });
+    }
   });
 }
 
-// ---- Avisos al dueño (mensaje privado) ----------------------------------
+// ---- Avisos al dueño ------------------------------------------------------
+// Van a su chat privado con el bot (TELEGRAM_AVISOS_CHAT_ID) y, si no lo configuró, al grupo central.
+const destinoAvisos = () => process.env.TELEGRAM_AVISOS_CHAT_ID || idsCentrales()[0] || null;
+
 async function avisarPropietario(texto) {
-  const destino = process.env.TELEGRAM_AVISOS_CHAT_ID;
+  const destino = destinoAvisos();
   if (!destino || !apiActual) return { enviado: false };
   try {
     await apiActual.enviarTexto(destino, texto);
@@ -405,6 +423,41 @@ async function avisarPropietario(texto) {
     console.error('[telegramBot] No se pudo avisar al dueño:', e.message);
     return { enviado: false, motivo: e.message };
   }
+}
+
+// PROBLEMAS (08-10-2026, a pedido del usuario: "si no puedes resolver una sabana o un juego debes
+// enviarme un mensaje al telegram indicandome que pasa y con que grupo pasa"): un aviso con el grupo
+// arriba, qué pasa y qué hacer. `clave` evita repetir el MISMO problema (los chequeos corren cada 15
+// minutos): el mismo aviso no sale otra vez en 12 horas; si el problema cambia, la clave cambia y sí sale.
+const avisosEnviados = new Map();
+const REPETIR_AVISO_MS = 12 * 60 * 60 * 1000;
+async function avisarProblema({ grupoNombre, titulo, detalle, clave, texto }) {
+  const k = clave || (String(grupoNombre) + '|' + titulo + '|' + detalle);
+  const antes = avisosEnviados.get(k);
+  if (antes && Date.now() - antes < REPETIR_AVISO_MS) return { enviado: false, repetido: true };
+  const cuerpo = texto || ('⚠️ *PROBLEMA' + (grupoNombre ? ' — ' + String(grupoNombre).toUpperCase() : '') + '*\n' + (titulo ? titulo + '\n' : '') + (detalle || ''));
+  const r = await avisarPropietario(cuerpo);
+  if (r.enviado) {
+    avisosEnviados.set(k, Date.now());
+    if (avisosEnviados.size > 500) avisosEnviados.delete(avisosEnviados.keys().next().value);
+  }
+  return r;
+}
+
+// Lo que recibe de whatsappBot (sábana que no se pudo leer, error inesperado): ubica el grupo por el jid y
+// avisa. Si el mensaje venía del grupo central y los avisos van al central, no se repite (ya se le respondió allí).
+async function notificarProblemaDeBot({ jid, grupoId, titulo, detalle, clave }) {
+  const j = String(jid || '');
+  if (!/^tgc?_/.test(j)) return; // solo lo que vino por Telegram
+  const id = grupoId || await grupoIdPorJid(j);
+  let nombre = null;
+  if (id) {
+    const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [id]);
+    nombre = r.rows[0] && r.rows[0].nombre;
+  }
+  const chatOrigen = j.startsWith('tgc_') ? idsCentrales()[0] : chatDeJid(j);
+  if (String(chatOrigen) === String(destinoAvisos())) return;
+  return avisarProblema({ grupoNombre: nombre || (j.startsWith('tg_') ? 'chat ' + chatDeJid(j) : null), titulo, detalle, clave });
 }
 
 // ---- Arranque / bucle ---------------------------------------------------
@@ -422,7 +475,16 @@ async function bucleDeLectura() {
       for (const u of novedades) {
         offset = u.update_id + 1;
         estado.ultimaActualizacionEn = new Date().toISOString();
-        try { await manejarActualizacion(u); } catch (e) { console.error('[telegramBot] Error con una actualización (se sigue con la próxima):', e); }
+        try { await manejarActualizacion(u); } catch (e) {
+          console.error('[telegramBot] Error con una actualización (se sigue con la próxima):', e);
+          const chat = u && (u.message || u.edited_message) && (u.message || u.edited_message).chat;
+          avisarProblema({
+            grupoNombre: chat && (chat.title || String(chat.id)),
+            titulo: 'Error inesperado al procesar un mensaje de Telegram.',
+            detalle: 'Motivo: ' + e.message + '\nEse mensaje no se cargó: vuelve a mandarlo y, si se repite, avísame.',
+            clave: 'telegram|' + e.message
+          }).catch(() => {});
+        }
       }
     } catch (e) {
       estado.conectado = false;
@@ -449,6 +511,7 @@ async function iniciarBotTelegram({ fetchImpl, token } = {}) {
   detenido = false;
   try { await apiActual.quitarWebhook(); } catch (e) { /* si no había webhook, nada que quitar */ }
   console.log('[telegramBot] Conectado como @' + estado.usuario + '.');
+  require('./whatsappBot').registrarNotificadorProblemas(notificarProblemaDeBot);
 
   const resumenAuto = process.env.TELEGRAM_RESUMEN_AUTOMATICO !== 'false';
   const cierreNocturno = process.env.TELEGRAM_CIERRE_NOCTURNO !== 'false';
@@ -481,7 +544,7 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
-  manejarActualizacion, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario,
+  manejarActualizacion, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
   jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };

@@ -57,7 +57,9 @@ function textoTodosResueltos(fecha, nombres) {
 //   destinoDe     (grupo) => { sock, jid } | null — dónde se manda el cierre de ese grupo
 //   enviarFinal   (texto) => Promise — manda el mensaje final
 //   cerrarDia     (sock, grupoId, jid, fecha) => resultado — por defecto whatsappBot.cerrarDiaCompleto
-async function revisarCierreNocturno({ fecha, destinoDe, enviarFinal, cerrarDia } = {}) {
+//   avisarProblema ({ grupoNombre, fecha, resultado }) => Promise — se llama por cada grupo que NO se
+//                  pudo cerrar (juegos sin resolver o error) para avisarle al dueño qué pasa y con qué grupo
+async function revisarCierreNocturno({ fecha, destinoDe, enviarFinal, cerrarDia, avisarProblema } = {}) {
   if (ejecutando) return { omitido: true, motivo: 'Ya hay un cierre nocturno en curso.' };
   ejecutando = true;
   try {
@@ -76,11 +78,19 @@ async function revisarCierreNocturno({ fecha, destinoDe, enviarFinal, cerrarDia 
       try {
         const r = await cerrar(destino.sock, g.grupoId, destino.jid, dia);
         if (r.accion === 'CERRADO') cerradosAhora.push(g.nombre);
-        else if (r.accion === 'FALTAN_JUEGOS' || r.accion === 'ERROR') pendientes.push({ nombre: g.nombre, motivo: r.accion, pendientes: r.pendientes });
+        else if (r.accion === 'FALTAN_JUEGOS' || r.accion === 'ERROR') {
+          pendientes.push({ nombre: g.nombre, motivo: r.accion, pendientes: r.pendientes });
+          if (avisarProblema) {
+            try { await avisarProblema({ grupoNombre: g.nombre, grupoId: g.grupoId, fecha: dia, resultado: r }); } catch (e) { console.error('[cierreNocturno] No se pudo avisar el problema:', e.message); }
+          }
+        }
         // SIN_SABANA / YA_CERRADO: no hay nada más que hacer con este grupo.
       } catch (e) {
         console.error('[cierreNocturno] Falló el cierre del grupo ' + g.grupoId + ':', e.message);
         pendientes.push({ nombre: g.nombre, motivo: 'ERROR' });
+        if (avisarProblema) {
+          try { await avisarProblema({ grupoNombre: g.nombre, grupoId: g.grupoId, fecha: dia, resultado: { accion: 'ERROR', error: e.message } }); } catch (e2) { /* un aviso que falla no frena nada */ }
+        }
       }
     }
 
@@ -103,4 +113,27 @@ async function revisarCierreNocturno({ fecha, destinoDe, enviarFinal, cerrarDia 
   }
 }
 
-module.exports = { revisarCierreNocturno, fechaVenezuelaAyer, textoTodosResueltos };
+const ABREVIAR = 90;
+function resumirJugadas(jugadas) {
+  const t = (jugadas || []).map(j => String(j).trim()).filter(Boolean).join(' / ');
+  return t.length > ABREVIAR ? t.slice(0, ABREVIAR - 1).trimEnd() + '…' : t;
+}
+
+// El aviso al dueño cuando un grupo NO se pudo cerrar: qué pasa y con qué grupo.
+function textoProblemaCierre({ grupoNombre, fecha, resultado }) {
+  const cab = `⚠️ *PROBLEMA — ${String(grupoNombre).toUpperCase()}*\nDía ${fechaLegible(fecha)}.`;
+  if (resultado.accion === 'ERROR') {
+    return cab + `\nNo pude revisar la sábana de ese día: ${resultado.error || 'error desconocido'}.\nLo vuelvo a intentar solo en el próximo chequeo; si se repite, hay que revisar la sábana en el panel.`;
+  }
+  const lista = (resultado.detalle || []).slice(0, 15).map(d => `• ${d.cliente || '?'} — ticket ${d.ticket || '?'} · ${d.estado}` + (d.jugadas && d.jugadas.length ? ` · ${resumirJugadas(d.jugadas)}` : ''));
+  const resto = (resultado.detalle || []).length - lista.length;
+  return [
+    cab,
+    `Ya pasó la medianoche y no puedo cerrar el grupo: ${resultado.pendientes} ${resultado.pendientes === 1 ? 'jugada sigue' : 'jugadas siguen'} sin resolver.`,
+    ...lista,
+    ...(resto > 0 ? [`… y ${resto} más.`] : []),
+    'Qué hacer: revísalas en el panel del grupo (resolverlas a mano o corregir la sábana). Apenas queden resueltas, el cierre sale solo.'
+  ].join('\n');
+}
+
+module.exports = { revisarCierreNocturno, fechaVenezuelaAyer, textoTodosResueltos, textoProblemaCierre };

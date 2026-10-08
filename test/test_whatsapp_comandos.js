@@ -450,6 +450,7 @@ function fechaMasDias(fechaISO, n) {
   const resCierrePend = await whatsappBot.cerrarDiaCompleto(sockCierrePend, GRUPO_ID, JID, HOY);
   check(resCierrePend.accion === 'FALTAN_JUEGOS' && resCierrePend.pendientes >= 1, 'con un juego sin resultado, el cierre completo NO manda nada y avisa cuántos faltan');
   check(sockCierrePend.mensajes.length === 0, '...y no deja ningún mensaje suelto en el grupo');
+  check(Array.isArray(resCierrePend.detalle) && resCierrePend.detalle.length === resCierrePend.pendientes && resCierrePend.detalle.every(d => d.cliente && d.estado && Array.isArray(d.jugadas)), '...y devuelve el detalle de qué jugadas faltan (cliente, ticket, estado y jugadas) para avisarle al dueño');
   const diaSinCerrar = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === GRUPO_ID && w.fecha === HOY);
   check(!diaSinCerrar.cierre_nocturno_en, '...ni reclama el día (se vuelve a intentar en el próximo chequeo)');
 
@@ -469,6 +470,15 @@ function fechaMasDias(fechaISO, n) {
   const sockSinDia = crearSockFalso();
   const resSinDia = await whatsappBot.cerrarDiaCompleto(sockSinDia, GRUPO_ID, JID, '2020-01-01');
   check(resSinDia.accion === 'SIN_SABANA' && sockSinDia.mensajes.length === 0, 'una fecha sin sábana no manda nada (SIN_SABANA)');
+
+  // Aviso de problema: una sábana que no se puede leer le llega al notificador (con el grupo y el motivo).
+  const problemas = [];
+  whatsappBot.registrarNotificadorProblemas(async p => { problemas.push(p); });
+  const sockMala = crearSockFalso();
+  await whatsappBot.manejarMensajeEntrante(sockMala, crearMensaje('SABANA DE JUGADAS\n' + HOY.split('-').reverse().join('-') + '\nesto no es una jugada'));
+  check(problemas.length === 1 && problemas[0].jid === JID && problemas[0].grupoId === GRUPO_ID, 'una sábana que no se puede leer se le avisa al notificador, con el grupo');
+  check(/No se pudo leer la sábana/.test(problemas[0].titulo) && /Motivo/.test(problemas[0].detalle), '...con qué pasa (título y motivo)');
+  whatsappBot.registrarNotificadorProblemas(null);
 
   // La semana que se cierra es la del día que se cierra: un domingo, la semana que termina ese día.
   const sockSemana = crearSockFalso();

@@ -541,7 +541,23 @@ async function diagnosticarSesionesGrupo(sock, jid) {
 // la bandeja de "recientes"/sabanas_pendientes_whatsapp) queda guardado
 // en memoria y se expone en obtenerEstadoConexion(), para que tanto el
 // panel del Grupo (routes/whatsapp.js → estadoBot) como Súper-admin
-// (GET /whatsapp-estado) lo puedan mostrar en pantalla.async function avisar(sock, jid, texto, intento = 1) {
+// (GET /whatsapp-estado) lo puedan mostrar en pantalla.
+// Avisos de PROBLEMAS (08-10-2026, a pedido del usuario: "si no puedes resolver una sabana o un juego
+// debes enviarme un mensaje al telegram indicandome que pasa y con que grupo pasa"). Este archivo no
+// sabe nada de Telegram: quien quiera enterarse registra una función con
+// registrarNotificadorProblemas() y recibe { jid, grupoId, titulo, detalle, clave } cada vez que algo
+// no se pudo leer/procesar. Si nadie la registró (o falla), no pasa nada.
+let notificadorProblemas = null;
+function registrarNotificadorProblemas(fn) { notificadorProblemas = typeof fn === 'function' ? fn : null; }
+async function notificarProblema(datos) {
+  try {
+    if (notificadorProblemas) await notificadorProblemas(datos);
+  } catch (e) {
+    console.error('[whatsappBot] No se pudo avisar el problema:', e.message);
+  }
+}
+
+async function avisar(sock, jid, texto, intento = 1) {
   try {
     if (!sock || !jid) return;
     await sock.sendMessage(jid, { text: texto });
@@ -922,8 +938,13 @@ async function cerrarDiaCompleto(sock, grupoId, jid, fecha) {
   if (!resp.tickets || resp.tickets.length === 0) return { accion: 'SIN_SABANA' };
 
   if (!whatsappResumenDia.todosLosTicketsResueltos(resp.tickets)) {
-    const pendientes = resp.tickets.filter(t => whatsappResumenDia.ESTADOS_ABIERTOS.includes(t.estado)).length;
-    return { accion: 'FALTAN_JUEGOS', pendientes };
+    const abiertos = resp.tickets.filter(t => whatsappResumenDia.ESTADOS_ABIERTOS.includes(t.estado));
+    return {
+      accion: 'FALTAN_JUEGOS',
+      pendientes: abiertos.length,
+      // Para avisarle al dueño QUÉ jugadas no se pudieron resolver y en qué estado quedaron.
+      detalle: abiertos.map(t => ({ cliente: t.cliente, ticket: t.ticket, estado: t.estado, jugadas: Array.isArray(t.jugadas) ? t.jugadas.map(String) : [] }))
+    };
   }
 
   const reclamado = await whatsappDiaEstado.reclamarCierreNocturno(grupoId, fecha);
@@ -1102,6 +1123,12 @@ async function manejarMensajeEntrante(sock, msg) {
     } else {
       await marcarError(grupoId, pendiente.id, motivoError || 'No se pudo leer ninguna jugada en el mensaje.');
       await avisar(sock, remoteJid, '⚠️ No se pudo leer la sábana: ' + (motivoError || 'no se reconoció ninguna jugada') + '\nRevisa el formato del mensaje y vuelve a mandarla.');
+      await notificarProblema({
+        jid: remoteJid, grupoId,
+        titulo: 'No se pudo leer la sábana del ' + formatFechaAviso(fecha),
+        detalle: 'Motivo: ' + (motivoError || 'no se reconoció ninguna jugada') + '\nRevisa el formato del mensaje y vuelve a mandarla.',
+        clave: 'sabana|' + grupoId + '|' + fecha + '|' + (motivoError || '')
+      });
       return; // sin una sábana válida cargada para hoy, no hay nada más que verificar/mandar
     }
 
@@ -1113,6 +1140,12 @@ async function manejarMensajeEntrante(sock, msg) {
     console.log('[whatsappBot] Sábana' + (esFinal ? ' FINAL' : '') + ' leída e importada (grupo ' + grupoId + ', fecha ' + fecha + ') — el envío del resumen queda en pausa hasta que alguien lo pida con "📤 Enviar resumen ahora" o un comando de chat.');
   } catch (e) {
     console.error('[whatsappBot] Error al procesar un mensaje entrante (no se cae el bot, solo se pierde este mensaje puntual):', e);
+    await notificarProblema({
+      jid: msg && msg.key && msg.key.remoteJid,
+      titulo: 'Error inesperado al procesar un mensaje',
+      detalle: 'Motivo: ' + (e && e.message ? e.message : String(e)) + '\nEse mensaje no se cargó: vuelve a mandarlo y, si se repite, avísame.',
+      clave: 'inesperado|' + (msg && msg.key && msg.key.remoteJid) + '|' + (e && e.message)
+    });
   }
 }
 
@@ -1364,6 +1397,7 @@ module.exports = {
   manejarComandoSaldoDia,
   manejarComandoCorteSemana,
   cerrarDiaCompleto,
+  registrarNotificadorProblemas,
   manejarComandoSaldoCliente,
   // Autorización de comandos (09-09-2026) — exportada aparte para
   // probarla directo (ver test_whatsapp_comandos_autorizacion.js).
