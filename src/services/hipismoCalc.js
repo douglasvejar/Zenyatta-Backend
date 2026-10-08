@@ -1353,29 +1353,20 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   return salida;
 }
 
-// "Copiar plano sin resolver" (Revisar Jugadas, 08-10-2026): el plano con las jugadas ACTUALES
-// (ya editadas) pero SIN ningún resultado: sin pizarra/llegada, sin $ por jugada, sin
-// GANAN/PIERDEN y sin PARADA ADELANTADAS. Solo lee lo que se le pasa (no calcula saldos).
-function armarTextoSinResolver({ nombreGrupo, hipodromoNombre, carreraNumero, tickets, piePlano }) {
-  const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${ordinalCarrera(carreraNumero)} Carrera\n\n*TERCIOS*`;
-  const lineas = [];
-  tickets.forEach(t => {
+// "Copiar plano sin resolver" (Revisar Jugadas, 08-10-2026): las jugadas ACTUALES (ya editadas) en
+// el MISMO formato con que se cargan los planos en Cargar Planos -- una línea por jugada,
+// "Juega DH 2N (8) con 150,00 da Tykhe" -- sin encabezado, sin pie y sin ningún resultado (ni
+// pizarra, ni $, ni GANAN/PIERDEN, ni PARADA ADELANTADAS, ni comisión). Pegado de vuelta en Cargar
+// Planos con su pizarra se resuelve igual. Solo arma texto con lo que se le pasa (no calcula saldos).
+function armarTextoSinResolver({ tickets }) {
+  // Siglas cortas (DH, ZMF) se dejan en mayúscula como se escriben; el resto, Primera mayúscula.
+  const nom = n => (String(n).trim().length <= 3 ? String(n).trim().toUpperCase() : formatNombre(n));
+  return tickets.map(t => {
     const mod = String(t.modalidad);
-    const caballo = String(t.caballo === undefined || t.caballo === null ? '' : t.caballo);
-    if (mod.toLowerCase() === 'pp' || /^\d+\s*x\s*\d+$/i.test(caballo)) {
-      const [hA, hB] = caballo.split(/x/i).map(h => parseInt(String(h).trim(), 10));
-      lineas.push(`${mod.toLowerCase() === 'pp' ? 'pp' : mod} (${hA}x${hB}) con ${montoComoSeEscribe(t.monto)}`);
-      lineas.push(`(${hA}) ${formatNombre(t.clienteNombre)}`);
-      lineas.push(`(${hB}) ${formatNombre(t.banqueroNombre)}`);
-    } else {
-      lineas.push(`${mod} (${caballo}) con ${montoComoSeEscribe(t.monto)}`);
-      lineas.push(`Juega ${formatNombre(t.clienteNombre)}`);
-      lineas.push(`Consigue ${formatNombre(t.banqueroNombre)}`);
-    }
-    lineas.push('');
-  });
-  return encabezado + '\n' + lineas.join('\n') + '\n------------------------------\nTotal Jugadas: ' + tickets.length +
-    '\n------------------------------\n------------------------------\n' + (piePlano || PIE_PLANO_DEFECTO);
+    const caballo = String(t.caballo === undefined || t.caballo === null ? '' : t.caballo).trim();
+    const cab = /^\d+\s*x\s*\d+$/i.test(caballo) ? caballo.replace(/\s+/g, '').toLowerCase() : caballo;
+    return `Juega ${nom(t.clienteNombre)} ${mod} (${cab}) con ${formatMontoTabla(t.monto)} da ${nom(t.banqueroNombre)}`;
+  }).join('\n');
 }
 
 module.exports = {

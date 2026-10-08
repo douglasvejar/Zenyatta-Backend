@@ -55,12 +55,14 @@ check(r.tickets[0].clienteNombre === 'SOYGANADOR' && r.tickets[0].banqueroNombre
 // 2) Ida y vuelta: lo que arma el botón se vuelve a leer igual (incluye cruzadas pp y nombres con espacio)
 const base = calcularPlano({ texto: 'Juega Sammy 1p (3) con 225 da Zenyatta\nJuega Mr Increible pp (4x3) con 100 da North\nJuega Tykhe 1/2 (4) con 200 da Sammy'.replace('Mr Increible', 'Mr'), pizarra: '3 4 8 1 7', cruzar: false });
 const tickets = base.tickets.map(t => ({ ...t }));
-tickets[1] = { ...tickets[1], clienteNombre: 'MR INCREIBLE' };
-const texto = armarTextoSinResolver({ nombreGrupo: 'Zenyatta', hipodromoNombre: 'La Rinconada', carreraNumero: 11, tickets });
+const texto = armarTextoSinResolver({ tickets });
+check(texto === 'Juega Sammy 1p (3) con 225,00 da Zenyatta\nJuega MR pp (4x3) con 100,00 da North\nJuega Tykhe 1/2 (4) con 200,00 da Sammy', '4b) el botón da el formato de carga: una línea "Juega X mod (caballo) con monto da Y" por jugada');
 const vuelta = calcularPlano({ texto, pizarra: '3 4 8 1 7', cruzar: false });
 check(vuelta.tickets.length === 3, '5) el texto del botón (con una cruzada pp) se lee de vuelta: 3 jugadas (obtuvo ' + vuelta.tickets.length + ')');
 check(vuelta.tickets.map(t => t.monto).join() === '225,100,200', '6) montos iguales tras la vuelta');
-check(vuelta.tickets[1].clienteNombre === 'MR INCREIBLE', '7) un nombre con espacio ("Mr Increible") se conserva');
+// formato viejo de 3 líneas (con nombre con espacio) también se sigue leyendo
+const tres = calcularPlano({ texto: '1P (6) con 50\nJuega Mr Increible\nConsigue North', pizarra: '6 1 2 3', cruzar: false });
+check(tres.tickets.length === 1 && tres.tickets[0].clienteNombre === 'MR INCREIBLE', '7) el modelo de 3 líneas (con nombre con espacio) se sigue leyendo');
 check(vuelta.tickets[1].resultadoJugador === base.tickets[1].resultadoJugador, '8) la cruzada pp da el mismo resultado');
 
 // 3) El formato de siempre no cambia

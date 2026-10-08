@@ -130,10 +130,9 @@ const filaDeTicket = (t, i) => ({
   check(/📌 \*TABLAS FIJAS\*\n\n✅ Pepe \+150,00/.test(r.salida.textoResultado) && /📌 \*MARCAS ADELANTADAS\*\n\n❌ Luis -50,00/.test(r.salida.textoResultado) && /🤝 \*JUGADAS ENTRE TERCIOS ADELANTADAS\*\n\n✅ \*GANAN\*\nHanry \+30,00/.test(r.salida.textoResultado), '13c) el texto trae los 3 títulos separados con su contenido debajo');
 
   const sr = r.salida.textoSinResolver || '';
-  check(/^\*🇻🇪🏇🏟️ZENYATTA🏟️🏇🇻🇪\*\nLa Rinconada, 11ma Carrera\n\n\*TERCIOS\*/.test(sr), '13d) el plano sin resolver trae el encabezado de siempre');
-  check(!/Pizarra|Ret:|GANAN|PIERDEN|PARADA ADELANTADAS|\$ [+-]/.test(sr), '13e) sin pizarra, sin llegada, sin $ de resultado, sin GANAN/PIERDEN ni adelantadas');
-  check(/Juega Mujica\nConsigue /.test(sr) && /con 300/.test(sr) && !/450/.test(sr), '13f) refleja lo editado (Mujica con 300) y lista Juega/Consigue');
-  check(/Total Jugadas: 3/.test(sr) && sr.trim().endsWith('*TILDE SU JUGADA Y SE REVISARÁ*') && !/comisi/i.test(sr), '13g) trae Total Jugadas y el pie, nunca la comisión');
+  check(sr === 'Juega Sammy 1p (3) con 225,00 da Zenyatta\nJuega Mujica 1p (5) con 300,00 da Zenyatta\nJuega Tykhe 1/2 (4) con 200,00 da Sammy', '13d) el plano sin resolver sale en el formato de carga: una línea "Juega X mod (caballo) con monto da Y" por jugada' + (' --> ' + JSON.stringify(sr)));
+  check(!/Pizarra|Ret:|GANAN|PIERDEN|PARADA ADELANTADAS|\$|TERCIOS|PLANO REFERENCIAL|comisi/i.test(sr), '13e) sin encabezado, pie, pizarra, resultados ni comisión');
+  check(/con 300,00/.test(sr) && !/450/.test(sr), '13f) refleja lo editado (Mujica con 300)');
 
   // ---- 4) Seguridad y solo lectura ----
   const r404 = await invocar(handler, { ...reqBase, params: { id: 'otro-plano' } });

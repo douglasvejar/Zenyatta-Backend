@@ -3482,9 +3482,7 @@ router.get('/planos/:id/copia', asyncHandler(async (req, res) => {
 
   res.json({
     textoResultado,
-    textoSinResolver: armarTextoSinResolver({
-      nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, tickets: ticketsPlanos
-    }),
+    textoSinResolver: armarTextoSinResolver({ tickets: ticketsPlanos }),
     datosImagen: armarDatosImagenPlano({
       grupoNombre: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha,
       ret: plano.ret, pizarra: plano.pizarra, tickets: ticketsPlanos, totalesFinales, movimientosAdelantadas: movimientos
