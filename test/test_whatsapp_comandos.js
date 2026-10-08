@@ -149,6 +149,10 @@ function ejecutarQuery(text, params) {
   }
 
   // --- obtenerNombreGrupo / grupoIdPorJid ---
+  if (/^SELECT nombre, tema_color_primario, tema_color_secundario, logo_base64, logo_mime FROM grupos WHERE id = \$1/i.test(sql)) {
+    const fila = TABLAS.grupos.find(g => g.id === params[0]);
+    return { rows: fila ? [{ nombre: fila.nombre, tema_color_primario: null, tema_color_secundario: null, logo_base64: null, logo_mime: null }] : [] };
+  }
   if (/^SELECT nombre FROM grupos WHERE id = \$1/i.test(sql)) {
     const fila = TABLAS.grupos.find(g => g.id === params[0]);
     return { rows: fila ? [{ nombre: fila.nombre }] : [] };
@@ -246,7 +250,7 @@ function check(cond, msg) {
 
 function crearSockFalso() {
   const mensajes = [];
-  return { mensajes, sendMessage: async (jid, contenido) => { mensajes.push({ jid, text: contenido.text }); } };
+  return { mensajes, sendMessage: async (jid, contenido) => { mensajes.push({ jid, text: contenido.text || '', image: contenido.image || null, caption: contenido.caption || '' }); } };
 }
 
 function crearMensaje(texto) {
@@ -335,7 +339,13 @@ function fechaMasDias(fechaISO, n) {
   // 08-10-2026: solo salen los clientes CON jugadas en la semana (BERNAL y
   // LOPEZ; PEDRO y CARLOS no jugaron, no se mandan) + al final 1 mensaje
   // con el total por día del grupo. LOPEZ tiene 10% de comisión (2 mensajes).
-  check(sockCorte.mensajes.length === 4, '"corte semana" manda BERNAL (1) + LOPEZ (2: balance y %) + el total del grupo (1) = 4 mensajes');
+  const mensajesTexto = sockCorte.mensajes.filter(m => !m.image);
+  const mensajesFoto = sockCorte.mensajes.filter(m => m.image);
+  check(mensajesTexto.length === 4, '"corte semana" manda BERNAL (1) + LOPEZ (2: balance y %) + el total del grupo (1) = 4 mensajes de texto');
+  check(mensajesFoto.length === 1 && resultadoCorte.fotos === 1, 'y después del total del grupo, UNA foto con el balance de la semana');
+  check(sockCorte.mensajes[sockCorte.mensajes.length - 1].image !== null, 'la foto es lo ÚLTIMO que sale, después del total del grupo');
+  check(Buffer.isBuffer(mensajesFoto[0].image) && mensajesFoto[0].image.slice(0, 8).toString('hex') === '89504e470d0a1a0a', 'la foto es un PNG válido');
+  check(/Balance de la semana/.test(mensajesFoto[0].caption), 'la foto lleva el texto "Balance de la semana" abajo');
   check(sockCorte.mensajes.every(m => m.jid === JID), 'todos los mensajes del corte semanal se mandan al JID correcto del grupo');
 
   const mensajeBernal = sockCorte.mensajes.find(m => m.text.includes('*Cliente: BERNAL*'));
@@ -351,8 +361,8 @@ function fechaMasDias(fechaISO, n) {
   check(!!pctLopez && pctLopez.text.includes('+10,00$'), 'el mensaje de % de LOPEZ muestra su comisión de esa jugada perdida: 100*10% = 10,00$');
 
   check(!sockCorte.mensajes.some(m => m.text.includes('CARLOS') || m.text.includes('PEDRO')), 'los clientes sin jugadas en la semana (CARLOS, PEDRO) NO aparecen en el corte');
-  const ultimo = sockCorte.mensajes[sockCorte.mensajes.length - 1];
-  check(ultimo.text.includes('*TOTAL DEL GRUPO*'), 'el último mensaje del corte es el total del grupo');
+  const ultimo = mensajesTexto[mensajesTexto.length - 1];
+  check(ultimo.text.includes('*TOTAL DEL GRUPO*'), 'el último mensaje de TEXTO del corte es el total del grupo');
   check(ultimo.text.includes(nombreDiaSemana(lunesSemana) + ': -200,00$') && ultimo.text.includes(nombreDiaSemana(diaMartes) + ': +150,00$') && ultimo.text.includes(nombreDiaSemana(diaMiercoles) + ': -100,00$'), 'el total del grupo trae un renglón por cada día con jugadas (-200, +150, -100)');
   check(ultimo.text.trim().endsWith('-150,00$'), 'el total semana del grupo es -200+150-100 = -150,00$');
   const lineasDias = ultimo.text.split('\n').filter(l => /: [+-]/.test(l));

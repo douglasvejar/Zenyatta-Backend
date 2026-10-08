@@ -87,6 +87,9 @@ const chatDeJid = jid => String(jid).replace(/^tg_/, '').replace(/@g\.us$/, '');
 function crearSock(api) {
   return {
     sendMessage: async (jid, contenido) => {
+      if (contenido && contenido.image) {
+        return api.enviarFoto(chatDeJid(jid), contenido.image, contenido.caption || '');
+      }
       if (!contenido || typeof contenido.text !== 'string') return;
       await api.enviarTexto(chatDeJid(jid), contenido.text);
     }
@@ -145,6 +148,9 @@ const jidCentralDeGrupo = grupoId => 'tgc_' + grupoId + '@g.us';
 function crearSockCentral(api, chatCentral, nombreGrupo) {
   return {
     sendMessage: async (_jid, contenido) => {
+      if (contenido && contenido.image) {
+        return api.enviarFoto(chatCentral, contenido.image, '📍 *' + String(nombreGrupo).toUpperCase() + '*' + (contenido.caption ? '\n' + contenido.caption : ''));
+      }
       if (!contenido || typeof contenido.text !== 'string') return;
       await api.enviarTexto(chatCentral, '📍 *' + String(nombreGrupo).toUpperCase() + '*\n' + contenido.text);
     }

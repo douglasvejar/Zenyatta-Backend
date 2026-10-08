@@ -115,6 +115,7 @@ const { procesarSabana } = require('./procesarSabana');
 const { confirmarDia, formatearFechaISO, calcularRangoRapido } = require('./historial');
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
+const { generarFotosSaldosSemana } = require('./saldosSemanaImagen');
 const {
   generarTextoListadoSabana,
   generarTextoTotalesDia,
@@ -581,6 +582,22 @@ async function diagnosticarSesionesGrupo(sock, jid) {
   }
 }
 
+// Igual que avisar() pero con una FOTO (PNG en un Buffer) y un texto corto abajo — la usa el
+// "corte semana" para mandar el balance de la semana. Es un extra: si falla, solo queda en el
+// log (el corte de texto ya salió completo).
+async function avisarFoto(sock, jid, imagen, caption, intento = 1) {
+  try {
+    if (!sock || !jid || !imagen) return;
+    await sock.sendMessage(jid, { image: imagen, caption: caption || '' });
+  } catch (e) {
+    if (/no sessions/i.test(e.message || '') && intento < 3) {
+      await new Promise(r => setTimeout(r, 3000 * intento));
+      return avisarFoto(sock, jid, imagen, caption, intento + 1);
+    }
+    console.error('[whatsappBot] No se pudo mandar la foto al grupo ' + jid + ':', e.message);
+  }
+}
+
 async function extraerTexto(msg) {
   if (!msg || !msg.message) return null;
   return (
@@ -836,7 +853,13 @@ async function manejarComandoCorteSemana(sock, grupoId, jid) {
   nombres.forEach(n => Object.keys(porCliente[n].porFecha).forEach(f => { if (!fechasConJugadas.includes(f)) fechasConJugadas.push(f); }));
   await avisar(sock, jid, generarTextoTotalGrupoSemanal(totalPorFecha, fechasConJugadas));
 
-  return { accion: 'CORTE_SEMANA_ENVIADO', clientes: nombres.length };
+  // 08-10-2026, a pedido del usuario: después del total del grupo, la foto del balance de la
+  // semana (apostado / ganado / perdido / polla / traspasos / saldo de cada cliente con jugadas).
+  const fotos = await generarFotosSaldosSemana({ grupoId, desde, hasta, porCliente });
+  for (let i = 0; i < fotos.length; i++) {
+    await avisarFoto(sock, jid, fotos[i], i === 0 ? '📊 Balance de la semana' : '');
+  }
+  return { accion: 'CORTE_SEMANA_ENVIADO', clientes: nombres.length, fotos: fotos.length };
 }
 
 // "saldo total semana <nombre>" / "total semana <nombre>": lo mismo de

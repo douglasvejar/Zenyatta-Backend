@@ -55,15 +55,16 @@ function crearClienteTelegram({ token, fetchImpl } = {}) {
   const hacerFetch = fetchImpl || ((...a) => fetch(...a));
   const base = 'https://api.telegram.org/bot' + token + '/';
 
-  async function llamar(metodo, params = {}, { timeoutMs = 40000 } = {}) {
+  async function llamar(metodo, params = {}, { timeoutMs = 40000, formData = null } = {}) {
     if (!token) throw new Error('Falta TELEGRAM_BOT_TOKEN.');
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const temporizador = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
     try {
       const resp = await hacerFetch(base + metodo, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(params),
+        // Con archivo (foto) va como multipart: el navegador/Node pone solo el content-type.
+        headers: formData ? undefined : { 'content-type': 'application/json' },
+        body: formData || JSON.stringify(params),
         signal: ctl ? ctl.signal : undefined
       });
       const datos = await resp.json();
@@ -98,6 +99,29 @@ function crearClienteTelegram({ token, fetchImpl } = {}) {
     return enviados;
   }
 
+  // Manda una foto (PNG en un Buffer) con un texto corto abajo. Si Telegram rechaza el
+  // HTML del texto, reintenta sin formato para que la foto nunca se pierda.
+  async function enviarFoto(chatId, buffer, caption) {
+    const armar = (texto, conHtml) => {
+      const f = new FormData();
+      f.append('chat_id', String(chatId));
+      if (texto) {
+        f.append('caption', String(texto).slice(0, 1000));
+        if (conHtml) f.append('parse_mode', 'HTML');
+      }
+      f.append('photo', new Blob([buffer], { type: 'image/png' }), 'saldos-semana.png');
+      return f;
+    };
+    try {
+      return await llamar('sendPhoto', {}, { timeoutMs: 60000, formData: armar(caption ? formatearParaTelegram(caption) : '', true) });
+    } catch (e) {
+      if (caption && /parse entities|can't parse/i.test(e.message || '')) {
+        return await llamar('sendPhoto', {}, { timeoutMs: 60000, formData: armar(caption, false) });
+      }
+      throw e;
+    }
+  }
+
   // ¿Quién escribió es administrador (o dueño) del grupo de Telegram? En un
   // chat privado siempre es "él mismo".
   async function esAdministrador(chatId, userId) {
@@ -109,6 +133,7 @@ function crearClienteTelegram({ token, fetchImpl } = {}) {
   return {
     llamar,
     enviarTexto,
+    enviarFoto,
     esAdministrador,
     obtenerYo: () => llamar('getMe'),
     obtenerActualizaciones: (offset, timeoutSeg = 30) => llamar('getUpdates', { offset, timeout: timeoutSeg, allowed_updates: ['message', 'edited_message'] }, { timeoutMs: (timeoutSeg + 15) * 1000 }),
