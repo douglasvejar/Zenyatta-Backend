@@ -147,7 +147,38 @@ async function eliminarEstadoDia(grupoId, fecha) {
   await db.query('DELETE FROM whatsapp_dia_estado WHERE grupo_id = $1 AND fecha = $2', [grupoId, fecha]);
 }
 
+// =================================================================
+// CIERRE NOCTURNO (08-10-2026) — columna aparte whatsapp_dia_estado.cierre_nocturno_en. A propósito
+// NO está en COLUMNAS/mapFila: así, si todavía no se corrió el SQL que la crea, solo falla el cierre
+// nocturno y no el resto del bot.
+// =================================================================
+// Días con sábana de esa fecha, de los grupos con Telegram activo, en orden por nombre de grupo.
+async function listarDiasParaCierreNocturno(fecha) {
+  const res = await db.query(
+    `SELECT w.grupo_id, g.nombre, w.cierre_nocturno_en
+       FROM whatsapp_dia_estado w
+       JOIN grupos g ON g.id = w.grupo_id
+      WHERE w.fecha = $1 AND w.ultimo_texto IS NOT NULL AND g.activo = true AND g.telegram_habilitado = true
+      ORDER BY lower(g.nombre), g.nombre`,
+    [fecha]
+  );
+  return res.rows.map(r => ({ grupoId: r.grupo_id, nombre: r.nombre, cerrado: !!r.cierre_nocturno_en }));
+}
+
+// "Reclama" el cierre de ese día: devuelve true SOLO a quien lo reclamó primero (UPDATE atómico).
+async function reclamarCierreNocturno(grupoId, fecha) {
+  const res = await db.query(
+    `UPDATE whatsapp_dia_estado SET cierre_nocturno_en = now()
+      WHERE grupo_id = $1 AND fecha = $2 AND cierre_nocturno_en IS NULL
+      RETURNING grupo_id`,
+    [grupoId, fecha]
+  );
+  return res.rows.length > 0;
+}
+
 module.exports = {
+  listarDiasParaCierreNocturno,
+  reclamarCierreNocturno,
   obtenerEstadoDia,
   registrarTextoRecibido,
   marcarSabanaFinalRecibida,

@@ -116,6 +116,7 @@ const { confirmarDia, formatearFechaISO, calcularRangoRapido } = require('./hist
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
 const { generarFotosSaldosSemana } = require('./saldosSemanaImagen');
+const { calcularSemana } = require('./fechaSemana');
 const {
   generarTextoListadoSabana,
   generarTextoTotalesDia,
@@ -829,8 +830,10 @@ async function enviarCorteClienteSemana(sock, jid, nombreCliente, datosCliente) 
 // el grupo, 2 mensajes por cliente por separado (09-09-2026, a pedido
 // del usuario, ver la nota grande en balanceGeneral.
 // calcularBalanceSemanalPorCliente).
-async function manejarComandoCorteSemana(sock, grupoId, jid) {
-  const { desde, hasta } = await calcularRangoRapido(grupoId, 'semana');
+async function manejarComandoCorteSemana(sock, grupoId, jid, { fecha } = {}) {
+  // `fecha` (opcional): la semana que contiene ese día. Lo usa el cierre nocturno — a las 00:30 de un
+  // lunes hay que cerrar la semana que terminó ayer (domingo), no la semana nueva que recién arranca.
+  const { desde, hasta } = fecha ? calcularSemana(fecha) : await calcularRangoRapido(grupoId, 'semana');
   const { porcentajesPropios, avalesMap, modeloComision, tiersComision, modelosComisionPorCliente } = await cargarConfigGrupo(grupoId);
   const configComision = { modelo: modeloComision, tiers: tiersComision, modelosPorCliente: modelosComisionPorCliente };
   const { porCliente, totalPorFecha } = await calcularBalanceSemanalPorCliente(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision);
@@ -890,6 +893,60 @@ async function manejarComandoSaldoCliente(sock, grupoId, jid, nombreBuscado) {
 
   await enviarCorteClienteSemana(sock, jid, nombreCliente, porCliente[nombreCliente]);
   return { accion: 'SALDO_CLIENTE_ENVIADO', cliente: nombreCliente };
+}
+
+// =================================================================
+// CIERRE COMPLETO DE UN DÍA (08-10-2026, a pedido del usuario: "al comprobar la sabana que ya no
+// tengan mas jugadas por resolver y ya sean pasadas las 12:00am del dia siguiente... ve cerrando
+// todos los grupos con sabanas activas, me vas a pasar en orden por grupo: su sabana con todos los
+// juegos resueltos, sus totales del dia, totales semana de jugadores activos, la foto").
+//
+// Lo llama el cierre nocturno (cierreNocturno.js) una vez por grupo. Si TODAVÍA falta algún juego
+// por resolver no manda nada y devuelve FALTAN_JUEGOS (el próximo chequeo lo vuelve a intentar).
+// Cuando todo está resuelto, "reclama" el cierre en la base (cierre_nocturno_en) ANTES de mandar,
+// así aunque el servidor se reinicie o dos chequeos se solapen, un grupo nunca recibe el cierre
+// dos veces. Orden de lo que se manda: listado final → totales del día → corte de la semana (solo
+// clientes con jugadas + total del grupo) → foto del balance.
+// =================================================================
+async function cerrarDiaCompleto(sock, grupoId, jid, fecha) {
+  const estadoDia = await whatsappDiaEstado.obtenerEstadoDia(grupoId, fecha);
+  if (!estadoDia || !estadoDia.ultimoTexto) return { accion: 'SIN_SABANA' };
+
+  let resp;
+  try {
+    resp = await procesarSabana(grupoId, estadoDia.ultimoTexto, fecha);
+  } catch (e) {
+    console.error('[whatsappBot] cerrarDiaCompleto: no se pudo reprocesar la sábana (grupo ' + grupoId + ', fecha ' + fecha + '):', e.message);
+    return { accion: 'ERROR', error: e.message };
+  }
+  if (!resp.tickets || resp.tickets.length === 0) return { accion: 'SIN_SABANA' };
+
+  if (!whatsappResumenDia.todosLosTicketsResueltos(resp.tickets)) {
+    const pendientes = resp.tickets.filter(t => whatsappResumenDia.ESTADOS_ABIERTOS.includes(t.estado)).length;
+    return { accion: 'FALTAN_JUEGOS', pendientes };
+  }
+
+  const reclamado = await whatsappDiaEstado.reclamarCierreNocturno(grupoId, fecha);
+  if (!reclamado) return { accion: 'YA_CERRADO' };
+
+  const nombreGrupo = await obtenerNombreGrupo(grupoId);
+  await avisar(sock, jid, generarTextoListadoSabana(resp, { esFinal: true, nombreGrupo }));
+  await avisar(sock, jid, generarTextoTotalesDia(resp));
+  await whatsappDiaEstado.registrarEnvioResumen(grupoId, fecha, whatsappResumenDia.calcularHashTickets(resp.tickets));
+  if (!estadoDia.cierreEnviadoEn) await whatsappDiaEstado.marcarCierreEnviado(grupoId, fecha);
+  try {
+    await confirmarDia(grupoId, fecha);
+  } catch (e) {
+    console.error('[whatsappBot] cerrarDiaCompleto: no se pudo confirmar el día en Balance General (grupo ' + grupoId + ', fecha ' + fecha + '):', e.message);
+  }
+  try {
+    await manejarComandoCorteSemana(sock, grupoId, jid, { fecha });
+  } catch (e) {
+    console.error('[whatsappBot] cerrarDiaCompleto: falló el corte de la semana (grupo ' + grupoId + '):', e.message);
+    await avisar(sock, jid, '⚠️ No se pudo armar el corte de la semana: ' + e.message);
+  }
+  console.log('[whatsappBot] Cierre nocturno completo (grupo ' + grupoId + ', fecha ' + fecha + ').');
+  return { accion: 'CERRADO', resp };
 }
 
 async function manejarComando(sock, grupoId, jid, comando) {
@@ -1306,6 +1363,7 @@ module.exports = {
   manejarComandoActualizar,
   manejarComandoSaldoDia,
   manejarComandoCorteSemana,
+  cerrarDiaCompleto,
   manejarComandoSaldoCliente,
   // Autorización de comandos (09-09-2026) — exportada aparte para
   // probarla directo (ver test_whatsapp_comandos_autorizacion.js).

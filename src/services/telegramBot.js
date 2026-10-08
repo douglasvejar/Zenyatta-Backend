@@ -371,6 +371,29 @@ async function revisarResumenesAutomaticos(ctxExterno) {
   }
 }
 
+// ---- Cierre nocturno de todos los grupos ---------------------------------
+// Cada grupo recibe su cierre donde ya recibe el resto (su chat de Telegram vinculado o, si no
+// tiene, el central con el nombre arriba). El mensaje final de "todos resueltos" sale en el central
+// (o, si no hay, en el chat de avisos del dueño).
+async function revisarCierreNocturnoTelegram(ctxExterno) {
+  const ctx = ctxPorDefecto(ctxExterno);
+  const { revisarCierreNocturno } = require('./cierreNocturno');
+  const central = idsCentrales()[0];
+  const destinoFinal = central || process.env.TELEGRAM_AVISOS_CHAT_ID || null;
+  const r = await db.query('SELECT id, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true');
+  const chatPropio = new Map(r.rows.map(g => [g.id, g.telegram_chat_id]));
+  return revisarCierreNocturno({
+    fecha: ctxExterno && ctxExterno.fecha,
+    destinoDe: g => {
+      const propio = chatPropio.get(g.grupoId);
+      if (propio) return { sock: ctx.sock, jid: jidDeChat(propio) };
+      if (central) return { sock: crearSockCentral(ctx.api, central, g.nombre), jid: jidCentralDeGrupo(g.grupoId) };
+      return null;
+    },
+    enviarFinal: destinoFinal ? (texto => ctx.api.enviarTexto(destinoFinal, texto)) : null
+  });
+}
+
 // ---- Avisos al dueño (mensaje privado) ----------------------------------
 async function avisarPropietario(texto) {
   const destino = process.env.TELEGRAM_AVISOS_CHAT_ID;
@@ -427,10 +450,14 @@ async function iniciarBotTelegram({ fetchImpl, token } = {}) {
   try { await apiActual.quitarWebhook(); } catch (e) { /* si no había webhook, nada que quitar */ }
   console.log('[telegramBot] Conectado como @' + estado.usuario + '.');
 
-  if (process.env.TELEGRAM_RESUMEN_AUTOMATICO !== 'false') {
+  const resumenAuto = process.env.TELEGRAM_RESUMEN_AUTOMATICO !== 'false';
+  const cierreNocturno = process.env.TELEGRAM_CIERRE_NOCTURNO !== 'false';
+  if (resumenAuto || cierreNocturno) {
     const minutos = Number(process.env.TELEGRAM_RESUMEN_MINUTOS) || 15;
     temporizadorResumen = setInterval(() => {
-      revisarResumenesAutomaticos().catch(e => console.error('[telegramBot] Resumen automático:', e.message));
+      if (resumenAuto) revisarResumenesAutomaticos().catch(e => console.error('[telegramBot] Resumen automático:', e.message));
+      // Pasada la medianoche de Venezuela: cierra los grupos cuya sábana de ayer ya está toda resuelta.
+      if (cierreNocturno) revisarCierreNocturnoTelegram().catch(e => console.error('[telegramBot] Cierre nocturno:', e.message));
     }, minutos * 60 * 1000);
     if (temporizadorResumen.unref) temporizadorResumen.unref();
   }
@@ -454,7 +481,7 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
-  manejarActualizacion, revisarResumenesAutomaticos, avisarPropietario,
+  manejarActualizacion, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario,
   jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };

@@ -219,6 +219,21 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
+  if (/^UPDATE whatsapp_dia_estado SET cierre_enviado_en = now\(\)/i.test(sql)) {
+    const [grupoId, fecha] = params;
+    const fila = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === grupoId && w.fecha === fecha);
+    if (fila) fila.cierre_enviado_en = new Date();
+    return { rows: [] };
+  }
+  // Cierre nocturno (08-10-2026): UPDATE atómico "reclamar" — solo devuelve fila la primera vez.
+  if (/^UPDATE whatsapp_dia_estado SET cierre_nocturno_en = now\(\)/i.test(sql)) {
+    const [grupoId, fecha] = params;
+    const fila = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === grupoId && w.fecha === fecha);
+    if (!fila || fila.cierre_nocturno_en) return { rows: [] };
+    fila.cierre_nocturno_en = new Date();
+    return { rows: [{ grupo_id: grupoId }] };
+  }
+
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
@@ -425,6 +440,43 @@ function fechaMasDias(fechaISO, n) {
   check(confirmacionCompleta.confirmado === true, 'con todo resuelto, "saldo final" SÍ confirma el día en Balance General ("como termine el día")');
   const diaTrasSaldoFinal = await (require(path.join(__dirname, '..', 'src', 'services', 'whatsappDiaEstado'))).obtenerEstadoDia(GRUPO_ID, HOY);
   check(!diaTrasSaldoFinal.sabanaFinalEn && !diaTrasSaldoFinal.cierreEnviadoEn, '"saldo final" NO marca el día como cerrado para nuevas sábanas — es una consulta, no reemplaza a "SABANA DE JUGADAS FINAL"');
+
+  // =================================================================
+  // 5) CIERRE COMPLETO (08-10-2026, cierre nocturno): cerrarDiaCompleto() — listado final →
+  // totales del día → corte de la semana → foto, y nunca dos veces.
+  // =================================================================
+  partidoFinal = false;
+  const sockCierrePend = crearSockFalso();
+  const resCierrePend = await whatsappBot.cerrarDiaCompleto(sockCierrePend, GRUPO_ID, JID, HOY);
+  check(resCierrePend.accion === 'FALTAN_JUEGOS' && resCierrePend.pendientes >= 1, 'con un juego sin resultado, el cierre completo NO manda nada y avisa cuántos faltan');
+  check(sockCierrePend.mensajes.length === 0, '...y no deja ningún mensaje suelto en el grupo');
+  const diaSinCerrar = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === GRUPO_ID && w.fecha === HOY);
+  check(!diaSinCerrar.cierre_nocturno_en, '...ni reclama el día (se vuelve a intentar en el próximo chequeo)');
+
+  partidoFinal = true;
+  const sockCierre = crearSockFalso();
+  const resCierre = await whatsappBot.cerrarDiaCompleto(sockCierre, GRUPO_ID, JID, HOY);
+  check(resCierre.accion === 'CERRADO', 'con todos los juegos resueltos, el cierre completo corre y devuelve CERRADO');
+  const tipos = sockCierre.mensajes.map(m => m.image ? 'foto' : (m.text.includes('SÁBANA FINAL') ? 'listado' : m.text.includes('*TOTALES DEL DÍA*') ? 'totales' : m.text.includes('*TOTAL DEL GRUPO*') ? 'total_grupo' : m.text.includes('*Cliente:') ? 'cliente' : 'otro'));
+  check(tipos[0] === 'listado' && tipos[1] === 'totales', 'primero la sábana con todos los juegos resueltos y después los totales del día');
+  check(tipos.indexOf('cliente') > 1 && tipos.indexOf('total_grupo') > tipos.lastIndexOf('cliente'), 'luego los clientes de la semana y, de último, el total del grupo');
+  check(tipos[tipos.length - 1] === 'foto' && tipos.filter(t => t === 'foto').length === 1, 'y lo último que sale es la foto del balance');
+  check(!tipos.includes('otro'), 'no sale ningún mensaje de más');
+  const diaCerrado = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === GRUPO_ID && w.fecha === HOY);
+  check(!!diaCerrado.cierre_nocturno_en && !!diaCerrado.cierre_enviado_en, 'el día queda marcado como cerrado (nocturno y cierre enviado)');
+  const resCierre2 = await whatsappBot.cerrarDiaCompleto(crearSockFalso(), GRUPO_ID, JID, HOY);
+  check(resCierre2.accion === 'YA_CERRADO', 'si se pide otra vez, no lo manda de nuevo (YA_CERRADO)');
+  const sockSinDia = crearSockFalso();
+  const resSinDia = await whatsappBot.cerrarDiaCompleto(sockSinDia, GRUPO_ID, JID, '2020-01-01');
+  check(resSinDia.accion === 'SIN_SABANA' && sockSinDia.mensajes.length === 0, 'una fecha sin sábana no manda nada (SIN_SABANA)');
+
+  // La semana que se cierra es la del día que se cierra: un domingo, la semana que termina ese día.
+  const sockSemana = crearSockFalso();
+  await whatsappBot.manejarComandoCorteSemana(sockSemana, GRUPO_ID, JID, { fecha: fechaMasDias(lunesSemana, 6) });
+  check(sockSemana.mensajes.some(m => m.text.includes('*Cliente: BERNAL*')), 'el corte con fecha de referencia usa la semana que contiene ese día (el domingo de esa semana sigue mostrando a BERNAL)');
+  const sockSemanaSig = crearSockFalso();
+  const resSemanaSig = await whatsappBot.manejarComandoCorteSemana(sockSemanaSig, GRUPO_ID, JID, { fecha: fechaMasDias(lunesSemana, 7) });
+  check(resSemanaSig.accion === 'SIN_JUGADAS_SEMANA', 'y con la fecha del lunes siguiente (semana nueva, sin jugadas) avisa que no hay jugadas');
 
   // --- "act"/"saldo final" en un grupo SIN el servicio contratado: se
   // ignoran en silencio, igual que "SABANA DE JUGADAS" ---

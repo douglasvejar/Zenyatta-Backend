@@ -2081,3 +2081,11 @@ alter table grupos add column if not exists telegram_habilitado boolean not null
 alter table grupos add column if not exists telegram_chat_id text;
 alter table grupos add column if not exists telegram_codigo_vinculo text;
 create index if not exists idx_grupos_telegram_chat on grupos(telegram_chat_id) where telegram_chat_id is not null;
+
+-- =================================================================
+-- CIERRE NOCTURNO (08-10-2026): pasada la medianoche de Venezuela, el bot de Telegram cierra cada
+-- grupo cuya sábana de ayer ya tiene todos los juegos resueltos (listado final, totales del día,
+-- corte de la semana y foto) y, al terminar con todos, manda un mensaje final. Esta columna marca
+-- "ya se cerró ese día" para que un grupo nunca reciba el cierre dos veces (ni con reinicios).
+-- =================================================================
+alter table whatsapp_dia_estado add column if not exists cierre_nocturno_en timestamptz;
