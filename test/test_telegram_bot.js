@@ -218,8 +218,15 @@ function ejecutarQuery(text, params) {
     TABLAS.grupos.forEach(g => { if (g.telegram_chat_id === params[1]) g.telegram_chat_id = params[0]; });
     return { rows: [] };
   }
-  if (/^SELECT id, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND telegram_chat_id IS NOT NULL AND activo = true/i.test(sql)) {
-    return { rows: TABLAS.grupos.filter(g => g.telegram_habilitado && g.telegram_chat_id && g.activo).map(g => ({ id: g.id, telegram_chat_id: g.telegram_chat_id })) };
+  if (/^SELECT id, nombre, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true/i.test(sql)) {
+    return { rows: TABLAS.grupos.filter(g => g.telegram_habilitado && g.activo).map(g => ({ id: g.id, nombre: g.nombre, telegram_chat_id: g.telegram_chat_id || null })) };
+  }
+  if (/^SELECT id, nombre FROM grupos WHERE telegram_habilitado = true AND activo = true/i.test(sql)) {
+    return { rows: TABLAS.grupos.filter(g => g.telegram_habilitado && g.activo).map(g => ({ id: g.id, nombre: g.nombre })) };
+  }
+  if (/^SELECT id FROM grupos WHERE id = \$1 AND telegram_habilitado = true/i.test(sql)) {
+    const fila = TABLAS.grupos.find(g => g.id === params[0] && g.telegram_habilitado === true);
+    return { rows: fila ? [{ id: fila.id }] : [] };
   }
 
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
@@ -402,6 +409,87 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
   process.env.TELEGRAM_AVISOS_CHAT_ID = '4242';
   api.enviados.length = 0;
   check((await telegramBot.avisarPropietario('🔔 prueba')).enviado === true && api.enviados[0].chatId === '4242', 'con TELEGRAM_AVISOS_CHAT_ID el aviso llega al chat privado del dueño');
+
+
+  // ===== 9b) GRUPO CENTRAL: sábanas de varios grupos en un solo chat =====
+  TABLAS.grupos[0].telegram_chat_id = String(CHAT);
+  TABLAS.grupos.push({ id: 'g2', nombre: 'Deportes Lusho', activo: true, telegram_habilitado: true, telegram_chat_id: null, telegram_codigo_vinculo: null, modelo_comision: 'plano', comision_tiers: [] });
+  TABLAS.grupos.push({ id: 'g3', nombre: 'Deportes Lusho VIP', activo: true, telegram_habilitado: true, telegram_chat_id: null, telegram_codigo_vinculo: null, modelo_comision: 'plano', comision_tiers: [] });
+  TABLAS.grupos.push({ id: 'g4', nombre: 'Sin Telegram', activo: true, telegram_habilitado: false, telegram_chat_id: null, modelo_comision: 'plano', comision_tiers: [] });
+  const CENTRAL = -1007777;
+  process.env.TELEGRAM_CENTRAL_CHAT_ID = String(CENTRAL);
+
+  const sepa = telegramBot.separarEncabezadoGrupo(['🇻🇪 *ZENYATTA*', '', 'SABANA DE JUGADAS', '08-10-2026', 'PEDRO', 'houston -120', '100//90'].join('\n'));
+  check(sepa && sepa.esSabana && /ZENYATTA/.test(sepa.nombre) && sepa.cuerpo.startsWith('SABANA DE JUGADAS'), 'separa el nombre del grupo (1ª línea, aunque traiga emoji/asteriscos) del resto de la sábana');
+  check(telegramBot.separarEncabezadoGrupo(sabana) === null, 'una sábana SIN nombre arriba no trae encabezado de grupo');
+  const sepaCmd = telegramBot.separarEncabezadoGrupo('Lusho\nact');
+  check(sepaCmd && !sepaCmd.esSabana && sepaCmd.nombre === 'Lusho' && sepaCmd.cuerpo === 'act', 'también separa "NOMBRE + comando"');
+  const cands = [{ id: 'a', nombre: 'Deportes Zenyatta' }, { id: 'b', nombre: 'Deportes Lusho' }, { id: 'c', nombre: 'Deportes Lusho VIP' }];
+  check(telegramBot.resolverGrupoPorNombre('zenyatta', cands).grupo.id === 'a', 'resuelve "zenyatta" -> "Deportes Zenyatta" (sin mayúsculas ni prefijo)');
+  check(telegramBot.resolverGrupoPorNombre('DEPORTES LUSHO', cands).grupo.id === 'b', 'un nombre exacto gana aunque otro lo contenga ("Deportes Lusho" vs "Deportes Lusho VIP")');
+  check(telegramBot.resolverGrupoPorNombre('Lusho', cands).grupo === null && telegramBot.resolverGrupoPorNombre('Lusho', cands).ambiguos.length === 2, 'un nombre que calza con varios grupos es ambiguo y NO elige uno');
+  check(telegramBot.resolverGrupoPorNombre('Zenyáta', cands).grupo === null, 'un nombre que no existe no se adivina');
+
+  TABLAS.whatsapp_dia_estado.length = 0;
+  TABLAS.tickets_historial.length = 0;
+  api.enviados.length = 0;
+  const sabanaLusho = ['LUSHO VIP', 'SABANA DE JUGADAS', HOY, 'ANA', 'houston -120', '50//45'].join('\n');
+  await telegramBot.manejarActualizacion(upd(sabanaLusho, { chat: CENTRAL, from: ADMIN }), ctx);
+  check(TABLAS.tickets_historial.length === 1 && TABLAS.tickets_historial[0].grupo_id === 'g3' && TABLAS.tickets_historial[0].cliente_nombre === 'ANA', 'la sábana del central se carga en el grupo que dice el encabezado (Deportes Lusho VIP)');
+  check(api.enviados.length >= 1 && api.enviados.every(m => m.chatId === String(CENTRAL) && m.texto.startsWith('📍 *DEPORTES LUSHO VIP*')), 'las respuestas salen SOLO en el central, con el nombre del grupo arriba');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['Zenyatta', 'SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(!TABLAS.tickets_historial.some(t => t.cliente_nombre === 'PEDRO'), 'una sábana con un nombre de grupo que no existe ("Zenyatta") no se carga en NINGÚN grupo');
+  check(api.enviados.length === 1 && /No encontré ningún grupo llamado "Zenyatta"/.test(api.enviados[0].texto) && /Deportes Lusho/.test(api.enviados[0].texto), 'un nombre que no existe se avisa, lista los grupos disponibles y no carga nada');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['Bernal', 'SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(TABLAS.tickets_historial.some(t => t.grupo_id === GRUPO_ID && t.cliente_nombre === 'PEDRO'), 'con "Bernal" arriba, la sábana de PEDRO va a Deportes Bernal (el nombre parcial alcanza si es único)');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['Lusho', 'SABANA DE JUGADAS', HOY, 'ANA', 'houston -120', '50//45'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 1 && /calza con varios grupos/.test(api.enviados[0].texto), '"Lusho" calza con 2 grupos: pide el nombre completo y no carga nada');
+
+  api.enviados.length = 0;
+  const antesTickets = TABLAS.tickets_historial.length;
+  await telegramBot.manejarActualizacion(upd(sabanaLusho, { chat: CENTRAL, from: CLIENTE }), ctx);
+  check(api.enviados.length === 0 && TABLAS.tickets_historial.length === antesTickets, 'en el central solo cuentan los ADMINISTRADORES: un miembro común se ignora');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['Sin Telegram', 'SABANA DE JUGADAS', HOY, 'ANA', 'houston -120', '50//45'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 1 && /No encontré/.test(api.enviados[0].texto), 'un grupo SIN el servicio de Telegram contratado no se puede alimentar desde el central');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['Deportes Lusho VIP', 'act'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 1 && api.enviados[0].texto.startsWith('📍 *DEPORTES LUSHO VIP*') && /Actualización de resultados/.test(api.enviados[0].texto), 'un comando con el nombre del grupo arriba ("Deportes Lusho VIP" + "act") responde en el central con ese grupo');
+
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd('hola, buenas', { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 0, 'una conversación normal en el central no dispara nada');
+
+  // resumen automático: los grupos sin Telegram propio salen en el central
+  const filaL = TABLAS.whatsapp_dia_estado.find(w => w.grupo_id === 'g3');
+  filaL.ultimo_envio_resumen_en = new Date(Date.now() - 2 * 3600 * 1000);
+  filaL.ultimo_hash_resumen = 'otro';
+  api.enviados.length = 0;
+  await telegramBot.revisarResumenesAutomaticos(ctx);
+  check(api.enviados.some(m => m.chatId === String(CENTRAL) && m.texto.startsWith('📍 *DEPORTES LUSHO VIP*')), 'el resumen automático de un grupo sin Telegram propio se publica en el central, con su nombre');
+  check(!api.enviados.some(m => /Sin Telegram/i.test(m.texto)), '...y un grupo sin el servicio nunca recibe nada');
+
+  // sábana larga partida, con nombre de grupo, en el central
+  telegramBot.config.esperaPartesMs = 40;
+  TABLAS.tickets_historial.length = 0;
+  TABLAS.whatsapp_dia_estado.length = 0;
+  const relleno2 = Array.from({ length: 190 }, () => 'houston -120\n10//9').join('\n');
+  const larga1 = ['Deportes Lusho VIP', 'SABANA DE JUGADAS', HOY, 'ANA', relleno2].join('\n');
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(larga1, { chat: CENTRAL, from: ADMIN }), ctx);
+  check(TABLAS.tickets_historial.length === 0, '(central) la primera parte muy larga espera a la siguiente');
+  await telegramBot.manejarActualizacion(upd(['LUIS', 'astros -110', '77//70'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  await espera(150);
+  check(TABLAS.tickets_historial.some(t => t.cliente_nombre === 'LUIS') && TABLAS.tickets_historial.every(t => t.grupo_id === 'g3'), '(central) las dos partes se juntan y se cargan en el grupo del encabezado');
+  delete process.env.TELEGRAM_CENTRAL_CHAT_ID;
 
   // ===== 10) Arranque y bucle de lectura con un fetch falso =====
   const metodos = [];

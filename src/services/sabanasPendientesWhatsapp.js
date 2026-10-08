@@ -60,6 +60,16 @@ async function grupoIdPorJid(jid) {
   // comandos de WhatsApp, representando cada chat de Telegram como un "jid"
   // sintético "tg_<chatId>@g.us" (ver telegramBot.js). Para esos se busca por
   // telegram_chat_id + telegram_habilitado, igual de exclusivos del Súper-admin.
+  // "Grupo central" de Telegram (08-10-2026): una sola sala del dueño desde donde
+  // manda las sábanas de VARIOS grupos del programa; el bot lee el nombre del
+  // grupo en el encabezado y arma un jid sintético "tgc_<grupoId>@g.us" que ya
+  // trae el id del grupo. Sigue exigiendo que el servicio de Telegram esté
+  // contratado (telegram_habilitado) para ese grupo, igual de exclusivo del Súper-admin.
+  if (String(jid).startsWith('tgc_')) {
+    const idGrupo = String(jid).replace(/^tgc_/, '').replace(/@g\.us$/, '');
+    const rc = await db.query('SELECT id FROM grupos WHERE id = $1 AND telegram_habilitado = true', [idGrupo]);
+    return rc.rows.length > 0 ? rc.rows[0].id : null;
+  }
   if (String(jid).startsWith('tg_')) {
     const chatId = String(jid).replace(/^tg_/, '').replace(/@g\.us$/, '');
     const rt = await db.query('SELECT id FROM grupos WHERE telegram_chat_id = $1 AND telegram_habilitado = true', [chatId]);

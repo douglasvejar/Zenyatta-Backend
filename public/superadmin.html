@@ -1463,7 +1463,7 @@
 
             <div class="modal-seccion">
               <h3>✈️ Sábana automática por Telegram</h3>
-              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Alternativa oficial a WhatsApp (sin riesgo de baneo): el bot lee los mensajes "SABANA DE JUGADAS" del grupo de Telegram, los carga, responde el listado ya calculado y atiende los comandos (solo administradores del grupo de Telegram). Requiere <code>TELEGRAM_BOT_ACTIVADO</code> y <code>TELEGRAM_BOT_TOKEN</code> en el servidor (ver .env.example).</p>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Alternativa oficial a WhatsApp (sin riesgo de baneo): el bot lee los mensajes "SABANA DE JUGADAS" del grupo de Telegram, los carga, responde el listado ya calculado y atiende los comandos (solo administradores del grupo de Telegram). Requiere <code>TELEGRAM_BOT_ACTIVADO</code> y <code>TELEGRAM_BOT_TOKEN</code> en el servidor (ver .env.example). Dos formas de usarlo: <b>(a)</b> un grupo de Telegram propio de este grupo (genera el código y un administrador escribe <code>/vincular CODIGO</code>), o <b>(b)</b> tu <b>grupo central</b> (<code>TELEGRAM_CENTRAL_CHAT_ID</code>): solo activa el servicio aquí y manda la sábana allá con el nombre de este grupo en la primera línea — no hace falta vincular nada.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Servicio</span>
                 <span class="valor" id="telegramHabilitadoEstado"></span>

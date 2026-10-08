@@ -677,6 +677,7 @@ router.get('/telegram-estado', asyncHandler(async (req, res) => {
   res.json({
     configurado: !!process.env.TELEGRAM_BOT_TOKEN,
     activadoEnServidor: process.env.TELEGRAM_BOT_ACTIVADO === 'true',
+    centralConfigurado: !!process.env.TELEGRAM_CENTRAL_CHAT_ID,
     conectado: e.conectado,
     usuario: e.usuario,
     ultimoError: e.ultimoError,

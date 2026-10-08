@@ -28,6 +28,24 @@
 //   4. Avisos al dueño: si TELEGRAM_AVISOS_CHAT_ID está cargado, las alertas
 //      del sistema (ver alertas.crearAlerta) le llegan por mensaje privado.
 //
+// GRUPO CENTRAL (08-10-2026, a pedido del usuario: "puedo tener en un grupo creado
+// con mi otro teléfono... todos los grupos me lleguen allí? te enviaré la sábana de
+// varios grupos, leerás al principio a qué grupo pertenece"): con
+// TELEGRAM_CENTRAL_CHAT_ID=<id del grupo central> (el ID lo da /id escrito allí; se
+// admiten varios separados por coma), el dueño manda ahí las sábanas de CUALQUIER
+// grupo del programa con el NOMBRE del grupo en la primera línea:
+//     ZENYATTA
+//     SABANA DE JUGADAS
+//     08-10-2026
+//     ...jugadas
+// El bot busca ese nombre entre los grupos con el servicio de Telegram contratado
+// (sin importar mayúsculas ni tildes), carga la sábana en ESE grupo y responde en el
+// central con el nombre del grupo arriba ("📍 ZENYATTA"). Los comandos funcionan igual
+// con el nombre en la primera línea ("ZENYATTA" + "act"). Solo los ADMINISTRADORES del
+// central pueden mandar ahí; si el nombre no calza (o calza con varios) no se carga
+// nada y el bot lo dice. Los grupos que no tienen un grupo de Telegram propio
+// vinculado reciben ahí también el resumen automático.
+//
 // Vincular un grupo: el Súper-admin prende el servicio y genera un código en el
 // detalle del grupo; un administrador escribe en el grupo de Telegram
 // "/vincular CODIGO" y el bot guarda solo el chat. Sin buscar IDs a mano.
@@ -47,7 +65,7 @@
 // =================================================================
 const db = require('../db');
 const { crearClienteTelegram } = require('./telegramApi');
-const { detectarTriggerSabana, detectarComando } = require('./whatsappTrigger');
+const { detectarTriggerSabana, detectarComando, quitarTildes } = require('./whatsappTrigger');
 const { grupoIdPorJid } = require('./sabanasPendientesWhatsapp');
 const whatsappDiaEstado = require('./whatsappDiaEstado');
 const { formatearFechaISO } = require('./historial');
@@ -117,31 +135,127 @@ async function migrarChat(viejo, nuevo) {
   console.log('[telegramBot] El chat ' + viejo + ' migró a ' + nuevo + ' — vínculo actualizado.');
 }
 
+// ---- Grupo central: un chat para las sábanas de varios grupos --------
+const idsCentrales = () => String(process.env.TELEGRAM_CENTRAL_CHAT_ID || '').split(',').map(x => x.trim()).filter(Boolean);
+const esCentral = chatId => idsCentrales().includes(String(chatId));
+const jidCentralDeGrupo = grupoId => 'tgc_' + grupoId + '@g.us';
+
+// Sock que escribe SIEMPRE en el central, con el nombre del grupo arriba para que
+// se sepa de cuál es cada mensaje (el jid que le pasa el motor se ignora).
+function crearSockCentral(api, chatCentral, nombreGrupo) {
+  return {
+    sendMessage: async (_jid, contenido) => {
+      if (!contenido || typeof contenido.text !== 'string') return;
+      await api.enviarTexto(chatCentral, '📍 *' + String(nombreGrupo).toUpperCase() + '*\n' + contenido.text);
+    }
+  };
+}
+
+const normalizarNombre = t => quitarTildes(String(t || '').toLowerCase()).replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const ES_LINEA_TRIGGER = /^\s*\**\s*SABANA\s+DE\s+JUGADAS\b/;
+
+// Separa "NOMBRE DEL GRUPO" (líneas arriba) del resto. Devuelve null si el texto no
+// trae un nombre arriba. Con "SABANA DE JUGADAS" abajo, `esSabana` es true.
+function separarEncabezadoGrupo(texto) {
+  const lineas = String(texto || '').split('\n');
+  const noVacias = lineas.map((l, i) => ({ l: l.trim(), i })).filter(x => x.l);
+  if (noVacias.length < 2) return null;
+  const idxTrigger = lineas.findIndex(l => ES_LINEA_TRIGGER.test(quitarTildes(l).toUpperCase()));
+  if (idxTrigger >= 1) {
+    const arriba = noVacias.filter(x => x.i < idxTrigger);
+    if (!arriba.length) return null;
+    return { nombre: arriba[arriba.length - 1].l, cuerpo: lineas.slice(idxTrigger).join('\n'), esSabana: true };
+  }
+  if (idxTrigger === 0) return null;
+  // Comando con el nombre del grupo arriba: "ZENYATTA" + "act".
+  const primera = noVacias[0];
+  const resto = lineas.slice(primera.i + 1).join('\n');
+  if (detectarComando(resto)) return { nombre: primera.l, cuerpo: resto, esSabana: false };
+  return null;
+}
+
+function resolverGrupoPorNombre(nombreCrudo, candidatos) {
+  let buscado = normalizarNombre(nombreCrudo).replace(/^grupo /, '');
+  if (!buscado) return { grupo: null, ambiguos: [] };
+  const lista = candidatos.map(c => ({ ...c, norm: normalizarNombre(c.nombre) }));
+  const exactos = lista.filter(c => c.norm === buscado || c.norm.replace(/^grupo /, '') === buscado);
+  if (exactos.length === 1) return { grupo: exactos[0], ambiguos: [] };
+  if (exactos.length > 1) return { grupo: null, ambiguos: exactos };
+  if (buscado.length < 3) return { grupo: null, ambiguos: [] };
+  const parecidos = lista.filter(c => c.norm.includes(buscado) || (c.norm.length >= 3 && buscado.includes(c.norm)));
+  if (parecidos.length === 1) return { grupo: parecidos[0], ambiguos: [] };
+  return { grupo: null, ambiguos: parecidos };
+}
+
+// Carga una sábana por el motor de siempre y, si de verdad se cargó, responde con
+// el listado ya calculado ("que me calcule todo"). Sirve para el grupo vinculado
+// y para el central: solo cambia el sock y el jid.
+async function cargarSabanaYResponder(sock, jid, usuario, texto) {
+  const whatsappBot = require('./whatsappBot');
+  const sabana = detectarTriggerSabana(texto);
+  const msg = { key: { remoteJid: jid, participant: 'tg_user_' + (usuario && usuario.id) }, message: { conversation: texto }, pushName: nombreDe(usuario) };
+  const grupoId = await grupoIdPorJid(jid);
+  const antes = grupoId && sabana.fecha ? await whatsappDiaEstado.obtenerEstadoDia(grupoId, sabana.fecha) : null;
+  await whatsappBot.manejarMensajeEntrante(sock, msg);
+  if (grupoId && sabana.fecha && process.env.TELEGRAM_RESPONDER_SABANA !== 'false') {
+    const despues = await whatsappDiaEstado.obtenerEstadoDia(grupoId, sabana.fecha);
+    const seCargo = despues && despues.ultimoTexto && (!antes || String(antes.ultimoTextoEn) !== String(despues.ultimoTextoEn) || antes.ultimoTexto !== despues.ultimoTexto);
+    if (seCargo) {
+      try {
+        await whatsappBot.procesarDiaAbierto(sock, grupoId, jid, sabana.fecha, { forzar: true });
+      } catch (e) {
+        console.error('[telegramBot] Sábana cargada pero no se pudo mandar el listado:', e.message);
+      }
+    }
+  }
+}
+
+// Devuelve true si el mensaje era para el grupo central y ya se atendió.
+async function procesarEnCentral({ api }, chatId, usuario, texto) {
+  const partes = separarEncabezadoGrupo(texto);
+  if (!partes) return false;
+  const whatsappBot = require('./whatsappBot');
+
+  let esAdmin = false;
+  try { esAdmin = await api.esAdministrador(chatId, usuario && usuario.id); } catch (e) { esAdmin = false; }
+  if (!esAdmin) {
+    console.log('[telegramBot] Mensaje del grupo central ignorado: quien lo mandó no es administrador.');
+    return true;
+  }
+
+  const r = await db.query('SELECT id, nombre FROM grupos WHERE telegram_habilitado = true AND activo = true');
+  const { grupo, ambiguos } = resolverGrupoPorNombre(partes.nombre, r.rows);
+  if (!grupo) {
+    const disponibles = r.rows.map(g => g.nombre).join(', ') || '(ninguno todavía: activa el servicio de Telegram en Súper-admin)';
+    const motivo = ambiguos.length > 1
+      ? '⚠️ "' + partes.nombre + '" calza con varios grupos (' + ambiguos.map(g => g.nombre).join(', ') + '). Escribe el nombre completo en la primera línea.'
+      : '⚠️ No encontré ningún grupo llamado "' + partes.nombre + '". Escribe el nombre del grupo en la primera línea. Grupos disponibles: ' + disponibles + '.';
+    await responder(api, chatId, motivo + '\nNo se cargó nada.');
+    return true;
+  }
+
+  const sock = crearSockCentral(api, chatId, grupo.nombre);
+  const jid = jidCentralDeGrupo(grupo.id);
+  if (partes.esSabana) {
+    await cargarSabanaYResponder(sock, jid, usuario, partes.cuerpo);
+  } else {
+    await whatsappBot.manejarComando(sock, grupo.id, jid, detectarComando(partes.cuerpo));
+  }
+  return true;
+}
+
 // ---- Procesa UN texto ya completo (una sábana entera o un comando) -----
 async function procesarTexto({ api, sock }, chatId, usuario, texto) {
   const whatsappBot = require('./whatsappBot');
   const jid = jidDeChat(chatId);
-  const sabana = detectarTriggerSabana(texto);
 
-  if (sabana.esSabana) {
-    const msg = { key: { remoteJid: jid, participant: 'tg_user_' + (usuario && usuario.id) }, message: { conversation: texto }, pushName: nombreDe(usuario) };
-    const grupoId = await grupoIdPorJid(jid);
-    const antes = grupoId && sabana.fecha ? await whatsappDiaEstado.obtenerEstadoDia(grupoId, sabana.fecha) : null;
-    await whatsappBot.manejarMensajeEntrante(sock, msg);
-    // Si la sábana se cargó de verdad (el estado del día cambió), responde de una
-    // vez con el listado ya calculado — "que me calcule todo".
-    if (grupoId && sabana.fecha && process.env.TELEGRAM_RESPONDER_SABANA !== 'false') {
-      const despues = await whatsappDiaEstado.obtenerEstadoDia(grupoId, sabana.fecha);
-      const seCargo = despues && despues.ultimoTexto && (!antes || String(antes.ultimoTextoEn) !== String(despues.ultimoTextoEn) || antes.ultimoTexto !== despues.ultimoTexto);
-      if (seCargo) {
-        try {
-          await whatsappBot.procesarDiaAbierto(sock, grupoId, jid, sabana.fecha, { forzar: true });
-        } catch (e) {
-          console.error('[telegramBot] Sábana cargada pero no se pudo mandar el listado:', e.message);
-        }
-      }
-    }
-    return;
+  if (esCentral(chatId)) {
+    const atendido = await procesarEnCentral({ api, sock }, chatId, usuario, texto);
+    if (atendido) return;
+  }
+
+  if (detectarTriggerSabana(texto).esSabana) {
+    return cargarSabanaYResponder(sock, jid, usuario, texto);
   }
 
   const comando = detectarComando(texto);
@@ -178,7 +292,7 @@ function recibirTexto(ctx, chatId, usuario, texto) {
     }
     return vaciar();
   }
-  if (texto.length >= LONGITUD_MENSAJE_PARTIDO && detectarTriggerSabana(texto).esSabana) {
+  if (texto.length >= LONGITUD_MENSAJE_PARTIDO && (detectarTriggerSabana(texto).esSabana || (esCentral(chatId) && separarEncabezadoGrupo(texto)))) {
     const b = { partes: [texto], temporizador: null };
     b.temporizador = setTimeout(vaciar, config.esperaPartesMs);
     buffers.set(clave, b);
@@ -234,11 +348,17 @@ async function manejarActualizacion(update, ctxExterno) {
 async function revisarResumenesAutomaticos(ctxExterno) {
   const ctx = ctxPorDefecto(ctxExterno);
   const whatsappBot = require('./whatsappBot');
-  const r = await db.query('SELECT id, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND telegram_chat_id IS NOT NULL AND activo = true');
+  const r = await db.query('SELECT id, nombre, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true');
   const fecha = formatearFechaISO(new Date());
+  const central = idsCentrales()[0];
   for (const g of r.rows) {
     try {
-      await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, { forzar: false });
+      if (g.telegram_chat_id) {
+        await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, { forzar: false });
+      } else if (central) {
+        // Sin grupo de Telegram propio: el resumen sale en el central, con el nombre arriba.
+        await whatsappBot.procesarDiaAbierto(crearSockCentral(ctx.api, central, g.nombre), g.id, jidCentralDeGrupo(g.id), fecha, { forzar: false });
+      }
     } catch (e) {
       console.error('[telegramBot] Resumen automático falló (grupo ' + g.id + '):', e.message);
     }
@@ -329,5 +449,6 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
   manejarActualizacion, revisarResumenesAutomaticos, avisarPropietario,
-  jidDeChat, chatDeJid, crearSock, config, _usarCliente
+  jidDeChat, chatDeJid, crearSock, config, _usarCliente,
+  separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };
