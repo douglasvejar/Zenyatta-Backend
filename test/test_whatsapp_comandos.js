@@ -332,10 +332,10 @@ function fechaMasDias(fechaISO, n) {
   const sockCorte = crearSockFalso();
   const resultadoCorte = await whatsappBot.manejarComandoCorteSemana(sockCorte, GRUPO_ID, JID);
   check(resultadoCorte.accion === 'CORTE_SEMANA_ENVIADO', '"corte semana" corre sin errores y confirma el envío');
-  // PEDRO, BERNAL, LOPEZ, CARLOS = 4 clientes activos registrados; BERNAL
-  // y CARLOS no tienen comisión (1 mensaje c/u), LOPEZ sí tiene 10% de
-  // comisión (2 mensajes) — PEDRO tampoco jugó ni tiene % (1 mensaje).
-  check(sockCorte.mensajes.length === 5, '"corte semana" manda 1 mensaje por cada cliente sin comisión (PEDRO, BERNAL, CARLOS) + 2 para el único con comisión (LOPEZ) = 5 mensajes en total');
+  // 08-10-2026: solo salen los clientes CON jugadas en la semana (BERNAL y
+  // LOPEZ; PEDRO y CARLOS no jugaron, no se mandan) + al final 1 mensaje
+  // con el total por día del grupo. LOPEZ tiene 10% de comisión (2 mensajes).
+  check(sockCorte.mensajes.length === 4, '"corte semana" manda BERNAL (1) + LOPEZ (2: balance y %) + el total del grupo (1) = 4 mensajes');
   check(sockCorte.mensajes.every(m => m.jid === JID), 'todos los mensajes del corte semanal se mandan al JID correcto del grupo');
 
   const mensajeBernal = sockCorte.mensajes.find(m => m.text.includes('*Cliente: BERNAL*'));
@@ -350,8 +350,13 @@ function fechaMasDias(fechaISO, n) {
   check(!!balanceLopez && balanceLopez.text.includes(nombreDiaSemana(diaMiercoles) + ': -100,00$'), 'el mensaje de balance de LOPEZ muestra -100,00$ (SOLO el resultado de la jugada, sin descontar la comisión)');
   check(!!pctLopez && pctLopez.text.includes('+10,00$'), 'el mensaje de % de LOPEZ muestra su comisión de esa jugada perdida: 100*10% = 10,00$');
 
-  const mensajeCarlos = sockCorte.mensajes.find(m => m.text.includes('*Cliente: CARLOS*'));
-  check(!!mensajeCarlos && mensajeCarlos.text.includes('(sin jugadas esta semana)'), 'CARLOS (registrado pero sin ninguna jugada esta semana) igual recibe su reporte, avisando que no jugó');
+  check(!sockCorte.mensajes.some(m => m.text.includes('CARLOS') || m.text.includes('PEDRO')), 'los clientes sin jugadas en la semana (CARLOS, PEDRO) NO aparecen en el corte');
+  const ultimo = sockCorte.mensajes[sockCorte.mensajes.length - 1];
+  check(ultimo.text.includes('*TOTAL DEL GRUPO*'), 'el último mensaje del corte es el total del grupo');
+  check(ultimo.text.includes(nombreDiaSemana(lunesSemana) + ': -200,00$') && ultimo.text.includes(nombreDiaSemana(diaMartes) + ': +150,00$') && ultimo.text.includes(nombreDiaSemana(diaMiercoles) + ': -100,00$'), 'el total del grupo trae un renglón por cada día con jugadas (-200, +150, -100)');
+  check(ultimo.text.trim().endsWith('-150,00$'), 'el total semana del grupo es -200+150-100 = -150,00$');
+  const lineasDias = ultimo.text.split('\n').filter(l => /: [+-]/.test(l));
+  check(lineasDias.length === 3, 'el total del grupo no lista días sin jugadas');
 
   // --- "saldo total semana <nombre>"/"total semana <nombre>" — un solo cliente ---
   const sockUno = crearSockFalso();

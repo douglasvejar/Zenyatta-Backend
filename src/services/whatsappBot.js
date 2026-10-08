@@ -119,6 +119,7 @@ const {
   generarTextoListadoSabana,
   generarTextoTotalesDia,
   generarTextoBalanceSemanalCliente,
+  generarTextoTotalGrupoSemanal,
   generarTextoPorcentajeSemanalCliente
 } = require('./planoWhatsAppTexto');
 
@@ -538,8 +539,7 @@ async function diagnosticarSesionesGrupo(sock, jid) {
 // la bandeja de "recientes"/sabanas_pendientes_whatsapp) queda guardado
 // en memoria y se expone en obtenerEstadoConexion(), para que tanto el
 // panel del Grupo (routes/whatsapp.js → estadoBot) como Súper-admin
-// (GET /whatsapp-estado) lo puedan mostrar en pantalla.
-async function avisar(sock, jid, texto, intento = 1) {
+// (GET /whatsapp-estado) lo puedan mostrar en pantalla.async function avisar(sock, jid, texto, intento = 1) {
   try {
     if (!sock || !jid) return;
     await sock.sendMessage(jid, { text: texto });
@@ -814,26 +814,28 @@ async function enviarCorteClienteSemana(sock, jid, nombreCliente, datosCliente) 
 // calcularBalanceSemanalPorCliente).
 async function manejarComandoCorteSemana(sock, grupoId, jid) {
   const { desde, hasta } = await calcularRangoRapido(grupoId, 'semana');
-  const { porcentajesPropios, avalesMap, modeloComision, tiersComision, modelosComisionPorCliente, jugadores } = await cargarConfigGrupo(grupoId);
+  const { porcentajesPropios, avalesMap, modeloComision, tiersComision, modelosComisionPorCliente } = await cargarConfigGrupo(grupoId);
   const configComision = { modelo: modeloComision, tiers: tiersComision, modelosPorCliente: modelosComisionPorCliente };
-  const { porCliente } = await calcularBalanceSemanalPorCliente(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision);
+  const { porCliente, totalPorFecha } = await calcularBalanceSemanalPorCliente(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision);
 
-  // Todos los clientes ACTIVOS registrados en el grupo (aunque no hayan
-  // jugado nada esta semana — el propio texto de generarTextoBalanceSemanalCliente
-  // avisa "(sin jugadas esta semana)" en ese caso) + cualquier cliente
-  // que sí tuvo movimiento esta semana pero ya no esté activo (para no
-  // perder su corte solo porque se dio de baja a mitad de semana).
-  const nombres = jugadores.filter(j => j.activo).map(j => j.nombre);
-  Object.keys(porCliente).forEach(nombre => { if (!nombres.includes(nombre)) nombres.push(nombre); });
+  // 08-10-2026, a pedido del usuario: solo los clientes que tuvieron
+  // movimiento esta semana (calcularBalanceSemanalPorCliente ya deja
+  // fuera a quien no tuvo nada), y al final el total por día del grupo.
+  const nombres = Object.keys(porCliente).filter(n => Object.keys(porCliente[n].porFecha || {}).length > 0).sort();
 
   if (nombres.length === 0) {
-    await avisar(sock, jid, '⚠️ Este grupo todavía no tiene ningún cliente registrado.');
-    return { accion: 'SIN_CLIENTES' };
+    await avisar(sock, jid, '⚠️ No hay jugadas esta semana en este grupo.');
+    return { accion: 'SIN_JUGADAS_SEMANA' };
   }
 
   for (const nombre of nombres) {
     await enviarCorteClienteSemana(sock, jid, nombre, porCliente[nombre]);
   }
+
+  const fechasConJugadas = [];
+  nombres.forEach(n => Object.keys(porCliente[n].porFecha).forEach(f => { if (!fechasConJugadas.includes(f)) fechasConJugadas.push(f); }));
+  await avisar(sock, jid, generarTextoTotalGrupoSemanal(totalPorFecha, fechasConJugadas));
+
   return { accion: 'CORTE_SEMANA_ENVIADO', clientes: nombres.length };
 }
 

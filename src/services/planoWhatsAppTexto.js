@@ -217,6 +217,29 @@ function generarTextoPorcentajeSemanalCliente(cliente, datosCliente) {
   return partes.join('\n');
 }
 
+// Mensaje final del "corte semana" (08-10-2026, a pedido del usuario:
+// "solo enviame los clientes con jugadas en la semana y de ultimo total
+// por dia del grupo"): el total de TODOS los clientes día por día + el
+// total de la semana. Mismo criterio de signo y de montos que las líneas
+// de cada cliente (suma de sus balances, sin la comisión), para que los
+// números del grupo cuadren con lo que se mandó arriba.
+function generarTextoTotalGrupoSemanal(totalPorFecha, fechasConJugadas) {
+  const partes = [];
+  partes.push('*TOTAL DEL GRUPO*');
+  partes.push('');
+  const fechas = (fechasConJugadas || []).slice().sort();
+  let total = 0;
+  fechas.forEach(fecha => {
+    const monto = (totalPorFecha && totalPorFecha[fecha] && totalPorFecha[fecha].resultado) || 0;
+    total += monto;
+    partes.push(nombreDiaSemana(fecha) + ': ' + formatDineroPlano(monto));
+  });
+  partes.push('');
+  partes.push('*TOTAL SEMANA*');
+  partes.push(formatDineroPlano(total));
+  return partes.join('\n');
+}
+
 module.exports = {
   formatMontoPlano,
   formatDineroPlano,
@@ -226,5 +249,6 @@ module.exports = {
   generarTextoTotalesDia,
   nombreDiaSemana,
   generarTextoBalanceSemanalCliente,
-  generarTextoPorcentajeSemanalCliente
+  generarTextoPorcentajeSemanalCliente,
+  generarTextoTotalGrupoSemanal
 };

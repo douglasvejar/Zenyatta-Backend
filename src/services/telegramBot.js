@@ -449,6 +449,6 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
   manejarActualizacion, revisarResumenesAutomaticos, avisarPropietario,
-  jidDeChat, chatDeJid, crearSock, config, _usarCliente,
+  jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };
