@@ -52,6 +52,22 @@ const mezcla = armarBloqueAdelantadas([
 ]);
 check(mezcla.includes('✅ Halland +100,00\nMarcas -100,00') && /✅ \*GANAN\*\nLuis \+30,00/.test(mezcla), '5) los pares de Marcas van primero y las Jugadas entre Tercios Adelantadas siguen sumándose por nombre en GANAN/PIERDEN');
 
+// 08-10-2026: PARADA ADELANTADAS separada en secciones con título (Tablas Fijas / Marcas Adelantadas /
+// Jugadas entre Tercios Adelantadas), cada una solo si tiene jugadas y siempre en ese orden.
+const todo = armarBloqueAdelantadas([
+  { nombre: 'LUIS', monto: 40 }, { nombre: 'ANA', monto: -40 },
+  { nombre: 'HALLAND', monto: 100, individual: true, grupo: 'm1' }, { nombre: 'MARCAS', monto: -100, individual: true, grupo: 'm1' },
+  { nombre: 'PEPE', monto: 150, individual: true, grupo: 't1' }, { nombre: 'TABLAS FIJAS', monto: -152.5, individual: true, grupo: 't1' }
+]);
+const iTf = todo.indexOf('📌 *TABLAS FIJAS*'), iMa = todo.indexOf('📌 *MARCAS ADELANTADAS*'), iTe = todo.indexOf('🤝 *JUGADAS ENTRE TERCIOS ADELANTADAS*');
+check(iTf > 0 && iMa > iTf && iTe > iMa, '7a) las 3 secciones salen separadas y en orden: Tablas Fijas, Marcas Adelantadas, Jugadas entre Tercios Adelantadas');
+check(todo.slice(iTf, iMa).includes('Pepe +150,00') && !todo.slice(iTf, iMa).includes('Halland'), '7b) en TABLAS FIJAS solo van las tablas');
+check(todo.slice(iMa, iTe).includes('Halland +100,00\nMarcas -100,00') && !todo.slice(iMa, iTe).includes('Pepe'), '7c) en MARCAS ADELANTADAS solo van las marcas');
+check(/GANAN\*\nLuis \+40,00/.test(todo.slice(iTe)) && /PIERDEN\*\nAna -40,00/.test(todo.slice(iTe)), '7d) en JUGADAS ENTRE TERCIOS ADELANTADAS van sus GANAN/PIERDEN por nombre');
+const soloTf = armarBloqueAdelantadas([{ nombre: 'PEPE', monto: 10, individual: true, grupo: 'x' }, { nombre: 'TABLAS FIJAS', monto: -10, individual: true, grupo: 'x' }]);
+check(soloTf.includes('TABLAS FIJAS') && !soloTf.includes('MARCAS ADELANTADAS') && !soloTf.includes('TERCIOS ADELANTADAS'), '7e) una sección sin jugadas no se imprime');
+check(!/%/.test(todo), '7f) ninguna sección muestra porcentajes (la comisión sigue oculta)');
+
 check(armarBloqueAdelantadas([]) === '', '6) sin movimientos no hay bloque');
 
 console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);

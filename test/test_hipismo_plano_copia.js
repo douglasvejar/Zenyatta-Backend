@@ -125,7 +125,15 @@ const filaDeTicket = (t, i) => ({
   check(/PARADA ADELANTADAS/.test(r.salida.textoResultado) && /Tablas fijas -152,50/.test(r.salida.textoResultado) && /Marcas \+50,00/.test(r.salida.textoResultado), '11) la Tabla Fija sale con su ítem genérico "Tablas fijas" (-152,50) y la Marca con "Marcas" (+50,00), sin banqueadores reales');
   check(r.salida.textoResultado.trim().endsWith('*TILDE SU JUGADA Y SE REVISARÁ*'), '12) el pie "Tilde su jugada" queda de último');
   const ad = r.salida.datosImagen.adelantadas;
-  check(ad && ad.filas.length === 4 && ad.filas.some(f => f.cliente === 'Pepe' && f.item === 'Tablas fijas') && ad.filas.some(f => f.cliente === 'Hanry' && f.item === 'Tercios adel.'), '13) la imagen trae las adelantadas (Pepe + Tablas Fijas, Hanry entre tercios)');
+  check(ad && ad.secciones.map(x => x.clave).join() === 'tf,marca,tercios', '13) la imagen trae las adelantadas separadas: Tablas Fijas, Marcas y Tercios Adelantadas');
+  check(ad && ad.secciones[0].filas[0].cliente === 'Pepe' && ad.secciones[0].filas[0].item === 'Tablas fijas' && ad.secciones[1].filas[0].cliente === 'Luis' && ad.secciones[2].filas.some(f => f.cliente === 'Hanry'), '13b) Pepe en Tablas Fijas, Luis en Marcas, Hanry entre tercios');
+  check(/📌 \*TABLAS FIJAS\*\n\n✅ Pepe \+150,00/.test(r.salida.textoResultado) && /📌 \*MARCAS ADELANTADAS\*\n\n❌ Luis -50,00/.test(r.salida.textoResultado) && /🤝 \*JUGADAS ENTRE TERCIOS ADELANTADAS\*\n\n✅ \*GANAN\*\nHanry \+30,00/.test(r.salida.textoResultado), '13c) el texto trae los 3 títulos separados con su contenido debajo');
+
+  const sr = r.salida.textoSinResolver || '';
+  check(/^\*🇻🇪🏇🏟️ZENYATTA🏟️🏇🇻🇪\*\nLa Rinconada, 11ma Carrera\n\n\*TERCIOS\*/.test(sr), '13d) el plano sin resolver trae el encabezado de siempre');
+  check(!/Pizarra|Ret:|GANAN|PIERDEN|PARADA ADELANTADAS|\$ [+-]/.test(sr), '13e) sin pizarra, sin llegada, sin $ de resultado, sin GANAN/PIERDEN ni adelantadas');
+  check(/Juega Mujica\nConsigue /.test(sr) && /con 300/.test(sr) && !/450/.test(sr), '13f) refleja lo editado (Mujica con 300) y lista Juega/Consigue');
+  check(/Total Jugadas: 3/.test(sr) && sr.trim().endsWith('*TILDE SU JUGADA Y SE REVISARÁ*') && !/comisi/i.test(sr), '13g) trae Total Jugadas y el pie, nunca la comisión');
 
   // ---- 4) Seguridad y solo lectura ----
   const r404 = await invocar(handler, { ...reqBase, params: { id: 'otro-plano' } });

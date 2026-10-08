@@ -8472,6 +8472,7 @@ function pimgAsegurarEstilos() {
   .pimg-col { flex:1; min-width:0; padding:0 8px; }
   .pimg-col + .pimg-col { border-left:2px solid var(--pimg-line); }
   .pimg-sec { background:var(--pimg-c1); color:var(--pimg-acc); font-weight:700; letter-spacing:.14em; font-size:18px; padding:6px 16px; position:relative; }
+  .pimg-sec2 { position:relative; background:var(--pimg-tint); color:#14211b; font-weight:700; letter-spacing:.1em; font-size:17px; padding:5px 16px; border-top:1px solid var(--pimg-line); border-bottom:1px solid var(--pimg-line); }
   .pimg-j { display:grid; align-items:center; column-gap:6px; padding:0 6px; border-top:1px solid var(--pimg-line); }
   .pimg-jh { font-size:15px; letter-spacing:.08em; text-transform:uppercase; color:#5b6b63; font-weight:700; height:34px; background:var(--pimg-tint); margin:0 -8px; padding:0 14px; border-top:none; }
   .pimg-j b { font-weight:700; white-space:nowrap; overflow:hidden; }
@@ -8506,12 +8507,12 @@ function pimgCabecera(L) {
   const grid = `grid-template-columns:${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr;`;
   return `<div class="pimg-j pimg-jh" style="${grid}"><span>Juega</span><span>Jugó</span><span></span><span class="pimg-a">Apostó</span><span class="pimg-d">Da</span><span class="pimg-r">Resultado</span></div>`;
 }
-function pimgTabla(filasHtml, L) {
+function pimgTabla(filasHtml, L, sinCab) {
   const n = Math.ceil(filasHtml.length / L.cols);
   const cols = [];
   for (let k = 0; k < L.cols; k++) {
     const trozo = filasHtml.slice(k * n, (k + 1) * n);
-    if (trozo.length) cols.push(`<div class="pimg-col">${pimgCabecera(L)}${trozo.join('')}</div>`);
+    if (trozo.length) cols.push(`<div class="pimg-col">${sinCab ? '' : pimgCabecera(L)}${trozo.join('')}</div>`);
   }
   return `<div class="pimg-dos">${cols.join('')}</div>`;
 }
@@ -8537,9 +8538,15 @@ function construirHtmlPlanoImagen(d, logoUrl, tema) {
   const logo = logoUrl ? `<img class="pimg-logo" src="${pimgEsc(logoUrl)}" alt="">` : '';
   let cuerpo = filasJ.length ? `<div class="pimg-cuerpo"><div class="pimg-marca">${logo}${pimgTabla(filasJ, L)}</div></div>` : '';
   if (adel.length) {
-    const etiqueta = it => (/^marca/i.test(it) ? 'Marca' : /^tablas?/i.test(it) ? 'TF' : 'Adel.');
-    const filasA = adel.map(f => pimgFila(f.cliente, etiqueta(f.item), '', '', f.item, f.resultado, L));
-    cuerpo += `<div class="pimg-cuerpo" style="padding-top:${filasJ.length ? 4 : 14}px;"><div class="pimg-marca"><div class="pimg-sec">PARADA ADELANTADAS</div>${filasJ.length ? '' : logo}${pimgTabla(filasA, L)}</div></div>`;
+    // PARADA ADELANTADAS separada en secciones (Tablas Fijas / Marcas Adelantadas / Jugadas entre
+    // Tercios Adelantadas), cada una con su título y su propia tabla (08-10-2026).
+    const secciones = (d.adelantadas.secciones && d.adelantadas.secciones.length) ? d.adelantadas.secciones : [{ clave: 'todas', titulo: '', filas: adel }];
+    // Sin encabezado de columnas ni etiqueta "Jugó": el título de la sección ya dice qué es cada renglón.
+    const bloquesSec = secciones.map(sec => {
+      const filasA = sec.filas.map(f => pimgFila(f.cliente, '', '', '', f.item, f.resultado, L));
+      return (sec.titulo ? `<div class="pimg-sec2">${pimgEsc(sec.titulo)}</div>` : '') + pimgTabla(filasA, L, true);
+    }).join('');
+    cuerpo += `<div class="pimg-cuerpo" style="padding-top:${filasJ.length ? 4 : 14}px;"><div class="pimg-marca"><div class="pimg-sec">PARADA ADELANTADAS</div>${filasJ.length ? '' : logo}${bloquesSec}</div></div>`;
   }
   const res = `<div class="pimg-res">${d.ganan.length ? pimgResumen(d.ganan, 'gn', '✅ GANAN', 'pimg-g', L) : ''}${d.pierden.length ? pimgResumen(d.pierden, 'pd', '❌ PIERDEN', 'pimg-p', L) : ''}</div>`;
   const fecha = pimgFechaLarga(d.fecha);
@@ -15154,6 +15161,7 @@ function revHtmlPlanos(planos) {
           <button class="btn btn-secundario" type="button" style="font-size:12px; padding:2px 8px;" onclick="revCopiarPlanoTexto('${p.id}')" title="Copia el plano en texto, tal cual sale en Cargar Planos, con lo ya editado">📋 Copiar en texto</button>
           <button class="btn btn-secundario" type="button" id="btnRevImg_${p.id}" style="font-size:12px; padding:2px 8px;" onclick="revCopiarPlanoImagen('${p.id}')" title="Copia el plano en imagen, tal cual sale en Cargar Planos, con lo ya editado">📸 Copiar en imagen</button>
           <button class="btn btn-secundario" type="button" style="font-size:11px; padding:2px 8px;" onclick="revCopiarMensajePlano('${p.id}')" title="Copia solo el texto que acompaña la imagen">📝 Solo el mensaje</button>
+          <button class="btn btn-secundario" type="button" style="font-size:12px; padding:2px 8px;" onclick="revCopiarPlanoSinResolver('${p.id}')" title="Copia el plano con las jugadas actuales pero SIN resultados (sin llegada, sin ganan/pierden)">🕒 Copiar plano sin resolver</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger); font-size:12px; padding:2px 8px;" onclick="revEliminarPlano('${p.id}')">🗑️ Eliminar este plano completo</button>
           <span class="toast-copiado" id="toastRev_${p.id}" style="flex-basis:100%; margin-left:0;"></span>
         </div>
@@ -15603,6 +15611,10 @@ async function revCopiarTextoDelServidor(planoId, obtenerTexto, mensajeOk) {
 
 function revCopiarPlanoTexto(planoId) {
   return revCopiarTextoDelServidor(planoId, c => c.textoResultado, () => '✅ Plano copiado en texto (con lo ya editado).');
+}
+
+function revCopiarPlanoSinResolver(planoId) {
+  return revCopiarTextoDelServidor(planoId, c => c.textoSinResolver, () => '✅ Plano sin resolver copiado (jugadas actuales, sin resultados).');
 }
 
 function revCopiarMensajePlano(planoId) {

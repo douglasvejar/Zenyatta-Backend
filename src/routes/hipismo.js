@@ -49,7 +49,7 @@ const {
 } = require('../services/hipismoSemana');
 const {
   calcularPlano, armarTextoResultado, PIE_PLANO_DEFECTO,
-  parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
+  parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets, armarTextoSinResolver,
   parsearValoresSinComision,
   // calcularAjustesCruce (26-09-2026, a pedido del usuario: "LOS PLANOS SI
   // ME ESTAN CRUZANDO LAS JUGADAS... PERO EN LOS BALANCES NO ME LA ESTA
@@ -466,7 +466,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       return {
         id: j.id, cliente: j.cliente_nombre, tipo: 'tf', estadoNuevo: 'resuelto', monto: Number(j.monto),
         gano: r.gano, resultadoCliente: r.resultadoCliente, comision: bqTf ? bqTf.comision : r.comision, banqueadores: bqTf ? bqTf.banqueadores : null,
-        movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas, individual: true, grupo: j.id }]
+        movimientos: [{ nombre: j.cliente_nombre, monto: r.resultadoCliente, individual: true, grupo: j.id, seccion: 'tf' }, { nombre: 'TABLAS FIJAS', monto: r.tablasFijas, individual: true, grupo: j.id, seccion: 'tf' }]
       };
     }
     // Marca
@@ -513,7 +513,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       // grande de armarBloqueAdelantadas). SIN descontar ningún % ("LAS
       // MARCAS NO SE LE DESCUENTA % X ESO SALE ASI NETO EN EL PLANO") —
       // exactamente lo opuesto a resultadoCliente, nunca más ni menos.
-      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente, individual: true, grupo: j.id }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente), individual: true, grupo: j.id }]
+      movimientos: [{ nombre: j.cliente_nombre, monto: c.resultadoCliente, individual: true, grupo: j.id, seccion: 'marca' }, { nombre: 'MARCAS', monto: round2(-c.resultadoCliente), individual: true, grupo: j.id, seccion: 'marca' }]
     };
   })(j); r.sinComision = !!j.sin_comision; return r; });
 
@@ -603,7 +603,7 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
       id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'resuelto',
       resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado), comisionGrupo: round2(r.comisionGrupo),
       comisionPorcentaje: Number(j.comision_porcentaje),
-      movimientos: [{ nombre: j.jugador_nombre, monto: r.montoJugadorMostrado }, { nombre: j.banquero_nombre, monto: r.montoBanqueroMostrado }]
+      movimientos: [{ nombre: j.jugador_nombre, monto: r.montoJugadorMostrado, seccion: 'tercios' }, { nombre: j.banquero_nombre, monto: r.montoBanqueroMostrado, seccion: 'tercios' }]
     };
   });
 
@@ -3436,9 +3436,9 @@ async function movimientosAdelantadasDeCarrera(grupoId, { hipodromoNombre, carre
           parsearPizarraRank(j.pizarra_usada), pctJugada(j)
         ).tablasFijas;
       }
-      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id }, { nombre: 'TABLAS FIJAS', monto: espejo, individual: true, grupo: j.id });
+      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id, seccion: 'tf' }, { nombre: 'TABLAS FIJAS', monto: espejo, individual: true, grupo: j.id, seccion: 'tf' });
     } else {
-      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id }, { nombre: 'MARCAS', monto: round2(-rc), individual: true, grupo: j.id });
+      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id, seccion: 'marca' }, { nombre: 'MARCAS', monto: round2(-rc), individual: true, grupo: j.id, seccion: 'marca' });
     }
   });
   const rTer = await db.query(
@@ -3450,7 +3450,7 @@ async function movimientosAdelantadasDeCarrera(grupoId, { hipodromoNombre, carre
     [grupoId, hipodromoNombre, carreraNumero, fecha]
   );
   rTer.rows.forEach(j => {
-    movimientos.push({ nombre: j.jugador_nombre, monto: Number(j.resultado_jugador) || 0 }, { nombre: j.banquero_nombre, monto: Number(j.resultado_banquero) || 0 });
+    movimientos.push({ nombre: j.jugador_nombre, monto: Number(j.resultado_jugador) || 0, seccion: 'tercios' }, { nombre: j.banquero_nombre, monto: Number(j.resultado_banquero) || 0, seccion: 'tercios' });
   });
   return movimientos;
 }
@@ -3482,6 +3482,9 @@ router.get('/planos/:id/copia', asyncHandler(async (req, res) => {
 
   res.json({
     textoResultado,
+    textoSinResolver: armarTextoSinResolver({
+      nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, tickets: ticketsPlanos
+    }),
     datosImagen: armarDatosImagenPlano({
       grupoNombre: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha,
       ret: plano.ret, pizarra: plano.pizarra, tickets: ticketsPlanos, totalesFinales, movimientosAdelantadas: movimientos

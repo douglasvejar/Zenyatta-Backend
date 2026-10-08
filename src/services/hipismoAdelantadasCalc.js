@@ -521,6 +521,43 @@ function agruparMovimientosAdelantadas(movimientos) {
   return { pares: Array.from(pares.values()), ganan, pierden };
 }
 
+// SECCIONES DE PARADA ADELANTADAS (08-10-2026, a pedido del usuario: "quiero que
+// aquí y en la imagen me separes todo: tablas fijas me coloques las tablas, marcas
+// adelantadas las marcas, y jugadas entre tercios adelantadas... así separado, para
+// que los clientes vean más detallado"): el bloque se divide en 3 secciones, cada una
+// con su título, en este orden y solo las que tengan jugadas. Cada movimiento trae su
+// `seccion` ('tf' | 'marca' | 'tercios'); si no la trae (código viejo/pruebas) se deduce:
+// lo no individual es de Tercios Adelantadas, y cada par individual es una Tabla Fija si
+// su ítem espejo es "TABLAS FIJAS" y una Marca en cualquier otro caso. Solo cambia cómo
+// se AGRUPA el texto: los montos y los saldos son exactamente los mismos.
+const SECCIONES_ADELANTADAS = [
+  { clave: 'tf', titulo: 'TABLAS FIJAS', icono: '📌' },
+  { clave: 'marca', titulo: 'MARCAS ADELANTADAS', icono: '📌' },
+  { clave: 'tercios', titulo: 'JUGADAS ENTRE TERCIOS ADELANTADAS', icono: '🤝' }
+];
+
+function agruparSeccionesAdelantadas(movimientos) {
+  // Sección de cada par individual (mismas claves de emparejado que agruparMovimientosAdelantadas).
+  const espejoTf = new Map();
+  let nInd = 0;
+  const claves = movimientos.map(m => {
+    if (!m.individual) return null;
+    const clave = m.grupo != null ? `g:${m.grupo}` : `auto:${Math.floor(nInd / 2)}`;
+    nInd += 1;
+    if (String(m.nombre).toUpperCase() === 'TABLAS FIJAS') espejoTf.set(clave, true);
+    return clave;
+  });
+  const porSeccion = { tf: [], marca: [], tercios: [] };
+  movimientos.forEach((m, i) => {
+    const clave = m.seccion && porSeccion[m.seccion] ? m.seccion
+      : (!m.individual ? 'tercios' : (espejoTf.get(claves[i]) ? 'tf' : 'marca'));
+    porSeccion[clave].push(m);
+  });
+  return SECCIONES_ADELANTADAS
+    .filter(sec => porSeccion[sec.clave].length)
+    .map(sec => Object.assign({ clave: sec.clave, titulo: sec.titulo, icono: sec.icono }, agruparMovimientosAdelantadas(porSeccion[sec.clave])));
+}
+
 // Arma el bloque "PARADA ADELANTADAS" que se agrega ABAJO del plano
 // normal de esa carrera (a pedido del usuario: "quiero que las jugadas
 // adelantadas se agreguen al plano de las jugadas de esa carrera...
@@ -546,18 +583,21 @@ function armarBloqueAdelantadas(movimientos) {
   // movimientos (Jugadas entre Tercios Adelantadas) siguen sumándose por
   // nombre en las listas GANAN/PIERDEN de siempre. Esto es solo el TEXTO del
   // plano; los saldos nunca cambian.
-  const { pares, ganan, pierden } = agruparMovimientosAdelantadas(movimientos);
+  // 08-10-2026: y ahora cada tipo va en su propia sección con título (ver arriba).
   const linea = ([n, v]) => `${formatNombre(n)} ${v < 0 ? '-' : '+'}${formatMontoTabla(v)}`;
 
   const bloques = ['------------------------------\nPARADA ADELANTADAS'];
-  pares.forEach(par => {
-    // La primera línea del par es el cliente (con ✅ si ganó / ❌ si perdió);
-    // el espejo (MARCAS / TABLAS FIJAS) va debajo, sin marca.
-    const [cliente, ...resto] = par;
-    bloques.push([`${cliente[1] < 0 ? '❌' : '✅'} ${linea(cliente)}`, ...resto.map(linea)].join('\n'));
+  agruparSeccionesAdelantadas(movimientos).forEach(sec => {
+    bloques.push(`${sec.icono} *${sec.titulo}*`);
+    sec.pares.forEach(par => {
+      // La primera línea del par es el cliente (con ✅ si ganó / ❌ si perdió);
+      // el espejo (MARCAS / TABLAS FIJAS) va debajo, sin marca.
+      const [cliente, ...resto] = par;
+      bloques.push([`${cliente[1] < 0 ? '❌' : '✅'} ${linea(cliente)}`, ...resto.map(linea)].join('\n'));
+    });
+    if (sec.ganan.length) bloques.push('✅ *GANAN*\n' + sec.ganan.map(linea).join('\n'));
+    if (sec.pierden.length) bloques.push('❌ *PIERDEN*\n' + sec.pierden.map(linea).join('\n'));
   });
-  if (ganan.length) bloques.push('✅ *GANAN*\n' + ganan.map(linea).join('\n'));
-  if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(linea).join('\n'));
   return bloques.join('\n\n');
 }
 
@@ -705,7 +745,7 @@ module.exports = {
   banqueoAutomaticoMarca,
   resolverBanqueoTablaFija,
   banqueoAutomaticoTablaFija,
-  armarBloqueAdelantadas, agruparMovimientosAdelantadas,
+  armarBloqueAdelantadas, agruparMovimientosAdelantadas, agruparSeccionesAdelantadas, SECCIONES_ADELANTADAS,
   formatMontoTabla,
   formatNombre,
   round2,

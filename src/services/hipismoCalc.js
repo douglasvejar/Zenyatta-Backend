@@ -1313,8 +1313,33 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   return salida;
 }
 
+// "Copiar plano sin resolver" (Revisar Jugadas, 08-10-2026): el plano con las jugadas ACTUALES
+// (ya editadas) pero SIN ningún resultado: sin pizarra/llegada, sin $ por jugada, sin
+// GANAN/PIERDEN y sin PARADA ADELANTADAS. Solo lee lo que se le pasa (no calcula saldos).
+function armarTextoSinResolver({ nombreGrupo, hipodromoNombre, carreraNumero, tickets, piePlano }) {
+  const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${ordinalCarrera(carreraNumero)} Carrera\n\n*TERCIOS*`;
+  const lineas = [];
+  tickets.forEach(t => {
+    const mod = String(t.modalidad);
+    const caballo = String(t.caballo === undefined || t.caballo === null ? '' : t.caballo);
+    if (mod.toLowerCase() === 'pp' || /^\d+\s*x\s*\d+$/i.test(caballo)) {
+      const [hA, hB] = caballo.split(/x/i).map(h => parseInt(String(h).trim(), 10));
+      lineas.push(`${mod.toLowerCase() === 'pp' ? 'pp' : mod} (${hA}x${hB}) con ${montoComoSeEscribe(t.monto)}`);
+      lineas.push(`(${hA}) ${formatNombre(t.clienteNombre)}`);
+      lineas.push(`(${hB}) ${formatNombre(t.banqueroNombre)}`);
+    } else {
+      lineas.push(`${mod} (${caballo}) con ${montoComoSeEscribe(t.monto)}`);
+      lineas.push(`Juega ${formatNombre(t.clienteNombre)}`);
+      lineas.push(`Consigue ${formatNombre(t.banqueroNombre)}`);
+    }
+    lineas.push('');
+  });
+  return encabezado + '\n' + lineas.join('\n') + '\n------------------------------\nTotal Jugadas: ' + tickets.length +
+    '\n------------------------------\n------------------------------\n' + (piePlano || PIE_PLANO_DEFECTO);
+}
+
 module.exports = {
-  calcularPlano, armarTextoResultado, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
+  calcularPlano, armarTextoResultado, armarTextoSinResolver, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
   calcularAjustesCruce, netearJugadorBanqueroTercios,
   ordinalCarrera, limpiarEncabezadoYPie,

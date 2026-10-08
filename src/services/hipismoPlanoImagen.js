@@ -16,7 +16,7 @@
 // (en el plano esos salen como el ítem genérico, igual que en el texto).
 // =================================================================
 const { formatNombre, ordinalCarrera } = require('./hipismoCalc');
-const { agruparMovimientosAdelantadas, parsearRetirados } = require('./hipismoAdelantadasCalc');
+const { agruparSeccionesAdelantadas, parsearRetirados } = require('./hipismoAdelantadasCalc');
 
 const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -52,14 +52,19 @@ function armarDatosImagenPlano({ grupoNombre, hipodromoNombre, carreraNumero, fe
   }));
   const { ganan, pierden } = ordenarTotales(totalesFinales);
 
-  // PARADA ADELANTADAS: cada Tabla Fija / Marca como su propio renglón (cliente
-  // + ítem genérico), y las Jugadas entre Tercios Adelantadas sumadas por nombre.
+  // PARADA ADELANTADAS, separada en secciones (08-10-2026): Tablas Fijas, Marcas
+  // Adelantadas y Jugadas entre Tercios Adelantadas, cada una con su título (las
+  // mismas del texto del plano). Cada Tabla Fija / Marca es su propio renglón
+  // (cliente + ítem genérico); las Jugadas entre Tercios Adelantadas se suman por
+  // nombre. `filas` junta todas (para contar renglones y para clientes viejos).
   let adelantadas = null;
   if (movimientosAdelantadas && movimientosAdelantadas.length) {
-    const g = agruparMovimientosAdelantadas(movimientosAdelantadas);
-    const filas = g.pares.map(par => ({ cliente: formatNombre(par[0][0]), item: par[1] ? formatNombre(par[1][0]) : '', resultado: redondear(par[0][1]) }));
-    [...g.ganan, ...g.pierden].forEach(([n, v]) => filas.push({ cliente: formatNombre(n), item: 'Tercios adel.', resultado: redondear(v) }));
-    adelantadas = { filas };
+    const secciones = agruparSeccionesAdelantadas(movimientosAdelantadas).map(sec => {
+      const filas = sec.pares.map(par => ({ cliente: formatNombre(par[0][0]), item: par[1] ? formatNombre(par[1][0]) : '', resultado: redondear(par[0][1]) }));
+      [...sec.ganan, ...sec.pierden].forEach(([n, v]) => filas.push({ cliente: formatNombre(n), item: '', resultado: redondear(v) }));
+      return { clave: sec.clave, titulo: sec.titulo, filas };
+    });
+    adelantadas = { secciones, filas: secciones.reduce((acc, sec) => acc.concat(sec.filas), []) };
   }
 
   return {

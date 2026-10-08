@@ -142,8 +142,12 @@ async function invocarRuta(handler, req) {
   check(JSON.stringify(p.ganan) === JSON.stringify([['C', 30], ['A', 10], ['E', 0]]), '12) Ganan ordenado de mayor a menor (el 0 va entre los que ganan, igual que el texto)');
   check(JSON.stringify(p.pierden) === JSON.stringify([['D', -50], ['B', -5]]), '13) Pierden ordenado del que más pierde al que menos');
   check(p.adelantadas && p.adelantadas.filas.length === 3, '14) PARADA ADELANTADAS: 2 pares individuales + 1 neto por nombre');
-  check(p.adelantadas.filas[0].cliente === 'Halland' && p.adelantadas.filas[0].item === 'Marcas' && p.adelantadas.filas[0].resultado === 100, '15) el par muestra el ítem genérico (Marcas), nunca un banqueador real');
-  check(p.adelantadas.filas[2].cliente === 'Pepe' && p.adelantadas.filas[2].item === 'Tercios adel.', '16) las Tercios Adelantadas salen por nombre');
+  const sec = p.adelantadas.secciones;
+  check(sec.length === 3 && sec.map(x => x.clave).join() === 'tf,marca,tercios' && sec.map(x => x.titulo).join('|') === 'TABLAS FIJAS|MARCAS ADELANTADAS|JUGADAS ENTRE TERCIOS ADELANTADAS', '14b) 3 secciones separadas y en orden: Tablas Fijas, Marcas Adelantadas, Jugadas entre Tercios Adelantadas');
+  check(sec[0].filas[0].cliente === 'Hanry' && sec[0].filas[0].item === 'Tablas fijas' && sec[0].filas[0].resultado === -120, '15a) Tablas Fijas: Hanry con el ítem genérico "Tablas fijas"');
+  check(sec[1].filas[0].cliente === 'Halland' && sec[1].filas[0].item === 'Marcas' && sec[1].filas[0].resultado === 100, '15) Marcas Adelantadas: Halland con el ítem genérico "Marcas", nunca un banqueador real');
+  check(sec[2].filas[0].cliente === 'Pepe' && sec[2].filas[0].item === '' && sec[2].filas[0].resultado === 40, '16) Jugadas entre Tercios Adelantadas: Pepe por nombre, sin ítem ni porcentaje');
+  check(!/%/.test(JSON.stringify(p.adelantadas)), '16b) ninguna sección muestra porcentajes');
   check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: '', carreraNumero: '' }) === 'TOTALES DE LA CARRERA EN EL GRUPO LUSHO', '17) sin carrera ni hipódromo: se omiten sin dejar huecos');
   check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: 'La Rinconada', carreraNumero: 3 }) === 'TOTALES DE LA CARRERA 3RA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO LUSHO', '18) 3ra se escribe 3RA');
 
