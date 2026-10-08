@@ -8572,19 +8572,9 @@ function esperarImagenesPimg(host) {
   })));
 }
 
-async function copiarPlanoEnImagen() {
-  const caja = document.getElementById('resultadoCaja');
-  const d = ULTIMOS_DATOS_IMAGEN_PLANO;
-  if (!caja || caja.style.display === 'none' || !d || (!d.jugadas.length && !(d.adelantadas && d.adelantadas.filas.length))) {
-    mostrarToastPlanoImagen('Primero dale "Calcular" al plano.', true);
-    return;
-  }
-  if (typeof html2canvas !== 'function') {
-    mostrarToastPlanoImagen('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
-    return;
-  }
-  const btn = document.getElementById('btnCopiarImagenPlano');
-  if (btn) { btn.disabled = true; }
+// Dibuja la tarjeta del plano con html2canvas y devuelve el PNG (Blob). La tarjeta se arma en un
+// contenedor fuera de pantalla que se quita siempre al terminar.
+async function renderizarBlobPlanoImagen(d) {
   pimgAsegurarEstilos();
   const logoUrl = (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : null;
   const { html, w, fondo } = construirHtmlPlanoImagen(d, logoUrl, { c1: GRUPO && GRUPO.temaColorPrimario, c2: GRUPO && GRUPO.temaColorSecundario });
@@ -8597,44 +8587,78 @@ async function copiarPlanoEnImagen() {
     const canvas = await html2canvas(host.firstElementChild, { scale: 2, backgroundColor: fondo, useCORS: true });
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('no se pudo armar el PNG');
-    const texto = d.textoAcompanante;
+    return blob;
+  } finally {
+    document.body.removeChild(host);
+  }
+}
+
+// Copia la imagen del plano + su texto de acompañamiento ("TOTALES DE LA CARRERA ... EN EL GRUPO ...").
+// La usan "Cargar Planos" y "Revisar Jugadas" (08-10-2026). `datos` puede ser un objeto o una promesa
+// (en Revisar los datos llegan del servidor). Safari/Chrome solo dejan escribir en el portapapeles
+// dentro del clic del usuario, y dibujar la imagen es asíncrono: por eso el portapapeles se pide AL
+// INSTANTE con una promesa de la imagen (ClipboardItem acepta Promise<Blob>) en vez de esperar a tener
+// el PNG listo. `avisar(texto, esError)` muestra el aviso donde corresponda.
+async function copiarImagenDeDatosPlano(datos, btn, avisar) {
+  if (typeof html2canvas !== 'function') {
+    avisar('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+    return;
+  }
+  if (btn) btn.disabled = true;
+  const datosPromesa = Promise.resolve(datos);
+  const blobPromesa = datosPromesa.then(d => renderizarBlobPlanoImagen(d));
+  blobPromesa.catch(() => {}); // el error se atiende más abajo; evita "unhandled rejection"
+  try {
     let hecho = false;
     // 1) Portapapeles con imagen + texto de acompañamiento.
     try {
       if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+      const textoPromesa = datosPromesa.then(d => new Blob([d.textoAcompanante], { type: 'text/plain' }));
       try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob, 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromesa, 'text/plain': textoPromesa })]);
       } catch (e) {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); // este navegador no admite los dos tipos juntos
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromesa })]); // este navegador no admite los dos tipos juntos
       }
-      mostrarToastPlanoImagen('✅ Imagen copiada — pégala en WhatsApp. Pie de foto: ' + texto);
+      const d = await datosPromesa;
+      avisar('✅ Imagen copiada — pégala en WhatsApp. Pie de foto: ' + d.textoAcompanante);
       hecho = true;
     } catch (e) { /* sigue abajo */ }
+    if (hecho) return;
+    const blob = await blobPromesa;
+    const d = await datosPromesa;
+    const texto = d.textoAcompanante;
     // 2) Celular: compartir imagen + texto directo a WhatsApp.
-    if (!hecho && navigator.share && navigator.canShare) {
+    if (navigator.share && navigator.canShare) {
       try {
         const archivo = new File([blob], 'plano_carrera.png', { type: 'image/png' });
         if (navigator.canShare({ files: [archivo] })) {
           await navigator.share({ files: [archivo], text: texto });
-          hecho = true;
+          return;
         }
       } catch (e) { /* cancelado o sin soporte: sigue abajo */ }
     }
     // 3) Último recurso: descargar la imagen y copiar el texto.
-    if (!hecho) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'plano_carrera.png';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      if (navigator.clipboard && navigator.clipboard.writeText) { try { await navigator.clipboard.writeText(texto); } catch (e) { /* sin permiso */ } }
-      mostrarToastPlanoImagen('No se pudo copiar directo — se descargó la imagen. Texto para el pie de foto: ' + texto, true);
-    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'plano_carrera.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if (navigator.clipboard && navigator.clipboard.writeText) { try { await navigator.clipboard.writeText(texto); } catch (e) { /* sin permiso */ } }
+    avisar('No se pudo copiar directo — se descargó la imagen. Texto para el pie de foto: ' + texto, true);
   } catch (e) {
-    mostrarToastPlanoImagen('⚠️ No se pudo generar la imagen: ' + e.message, true);
+    avisar('⚠️ No se pudo generar la imagen: ' + e.message, true);
   } finally {
-    document.body.removeChild(host);
     if (btn) btn.disabled = false;
   }
+}
+
+async function copiarPlanoEnImagen() {
+  const caja = document.getElementById('resultadoCaja');
+  const d = ULTIMOS_DATOS_IMAGEN_PLANO;
+  if (!caja || caja.style.display === 'none' || !d || (!d.jugadas.length && !(d.adelantadas && d.adelantadas.filas.length))) {
+    mostrarToastPlanoImagen('Primero dale "Calcular" al plano.', true);
+    return;
+  }
+  await copiarImagenDeDatosPlano(d, document.getElementById('btnCopiarImagenPlano'), mostrarToastPlanoImagen);
 }
 
 // Solo el texto de acompañamiento ("TOTALES DE LA CARRERA ... EN EL GRUPO ..."),
@@ -15126,8 +15150,12 @@ function revHtmlPlanos(planos) {
       <div style="margin-bottom:10px;">
         <div style="font-size:13px; margin-bottom:4px;">📋 Plano — llegada <b>${escRev(p.pizarra)}</b>${p.ret ? ` (ret ${escRev(p.ret)})` : ''}${p.cruzaJugadas ? ' — cruza jugadas' : ''} — comisión ${formatMontoTabla(p.comisionTotal)}</div>
         ${filas}
-        <div class="btn-fila" style="margin-top:6px;">
+        <div class="btn-fila" style="margin-top:6px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-secundario" type="button" style="font-size:12px; padding:2px 8px;" onclick="revCopiarPlanoTexto('${p.id}')" title="Copia el plano en texto, tal cual sale en Cargar Planos, con lo ya editado">📋 Copiar en texto</button>
+          <button class="btn btn-secundario" type="button" id="btnRevImg_${p.id}" style="font-size:12px; padding:2px 8px;" onclick="revCopiarPlanoImagen('${p.id}')" title="Copia el plano en imagen, tal cual sale en Cargar Planos, con lo ya editado">📸 Copiar en imagen</button>
+          <button class="btn btn-secundario" type="button" style="font-size:11px; padding:2px 8px;" onclick="revCopiarMensajePlano('${p.id}')" title="Copia solo el texto que acompaña la imagen">📝 Solo el mensaje</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger); font-size:12px; padding:2px 8px;" onclick="revEliminarPlano('${p.id}')">🗑️ Eliminar este plano completo</button>
+          <span class="toast-copiado" id="toastRev_${p.id}" style="flex-basis:100%; margin-left:0;"></span>
         </div>
       </div>`;
   }).join('');
@@ -15525,6 +15553,65 @@ async function revEliminar(tipoCompleto, id) {
   if (REVISAR_EDICION && REVISAR_EDICION.id === id) REVISAR_EDICION = null;
   await cargarRevisarJugadas();
   cargarClientesReales();
+}
+
+// ------------------------------------------------------------------
+// COPIAR EL PLANO DESDE REVISAR JUGADAS (08-10-2026) — texto o imagen, tal cual salen en Cargar
+// Planos pero armados con lo que hoy está guardado (tickets ya editados y adelantadas de esa
+// carrera). Siempre se pide al servidor al momento del clic (GET /planos/:id/copia), así que nunca
+// se copia un plano viejo aunque se haya editado hace un segundo. Solo lee: no cambia ningún saldo.
+// ------------------------------------------------------------------
+function revAvisoCopia(planoId, texto, esError) {
+  const t = document.getElementById('toastRev_' + planoId);
+  if (!t) { if (esError) alert(texto); return; }
+  t.textContent = texto;
+  t.style.color = esError ? '#b43' : '';
+  t.classList.add('visible');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('visible'), esError ? 5000 : 7000);
+}
+
+function revPedirCopiaPlano(planoId) {
+  const p = apiHipismo(`/api/hipismo/planos/${planoId}/copia`);
+  p.catch(() => {}); // el error se atiende donde se espera la respuesta
+  return p;
+}
+
+// Copia un texto que llega del servidor. El portapapeles se pide al instante con una promesa (Safari
+// no deja escribir después de esperar la red), y si el navegador no lo admite se usa writeText.
+async function revCopiarTextoDelServidor(planoId, obtenerTexto, mensajeOk) {
+  const copiaPromesa = revPedirCopiaPlano(planoId);
+  try {
+    let hecho = false;
+    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': copiaPromesa.then(c => new Blob([obtenerTexto(c)], { type: 'text/plain' })) })]);
+        hecho = true;
+      } catch (e) { /* sigue con writeText */ }
+    }
+    const copia = await copiaPromesa;
+    const texto = obtenerTexto(copia);
+    if (!hecho && navigator.clipboard && navigator.clipboard.writeText) {
+      try { await navigator.clipboard.writeText(texto); hecho = true; } catch (e) { /* sin permiso */ }
+    }
+    if (hecho) revAvisoCopia(planoId, mensajeOk(texto));
+    else revAvisoCopia(planoId, 'No se pudo copiar automáticamente — escríbelo o cópialo a mano: ' + texto.slice(0, 200), true);
+  } catch (e) {
+    revAvisoCopia(planoId, '⚠️ No se pudo armar el plano: ' + e.message, true);
+  }
+}
+
+function revCopiarPlanoTexto(planoId) {
+  return revCopiarTextoDelServidor(planoId, c => c.textoResultado, () => '✅ Plano copiado en texto (con lo ya editado).');
+}
+
+function revCopiarMensajePlano(planoId) {
+  return revCopiarTextoDelServidor(planoId, c => c.datosImagen.textoAcompanante, t => '✅ Mensaje copiado: ' + t);
+}
+
+async function revCopiarPlanoImagen(planoId) {
+  const btn = document.getElementById('btnRevImg_' + planoId);
+  await copiarImagenDeDatosPlano(revPedirCopiaPlano(planoId).then(c => c.datosImagen), btn, (t, e) => revAvisoCopia(planoId, t, e));
 }
 
 async function revEliminarPlano(planoId) {

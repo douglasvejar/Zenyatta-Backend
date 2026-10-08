@@ -3393,6 +3393,103 @@ router.delete('/winners/:id', asyncHandler(async (req, res) => {
 // leído de la base — spec sección 12. Cierre Final (agregado semanal
 // real) sigue pendiente, ver nota grande arriba del archivo.
 // =================================================================
+// COPIAR EL PLANO DESDE "REVISAR JUGADAS" (08-10-2026, a pedido del usuario:
+// "desde aquí dame la opción de copiar el plano en texto o en imagen y me lo
+// vas a dar tal cual como si fuera desde Cargar Plano... eso para que si edito
+// o algo poder enviar el plano corregido... recuerda que al modificar aquí
+// modificas los saldos, balances, todo"). GET /planos/:id/copia reconstruye,
+// SOLO LEYENDO lo que hoy está guardado (nunca recalcula ni escribe nada), el
+// mismo texto de WhatsApp y los mismos datos de la imagen que daba "Cargar
+// Planos", pero con los tickets YA EDITADOS: líneas, GANAN/PIERDEN y total de
+// jugadas salen de hipismo_tickets tal cual están ahora, igual que lo hace el
+// PUT de editar un ticket.
+//
+// A diferencia de hipismo_planos.texto_resultado (que al editar un ticket NO
+// se regenera si el plano tiene "PARADA ADELANTADAS" pegado — ver la nota del
+// PUT /planos/:id/tickets/:ticketId), acá el bloque de Adelantadas también se
+// reconstruye desde lo guardado de esa carrera (Tablas Fijas y Marcas ya
+// resueltas + Jugadas entre Tercios Adelantadas resueltas), con el mismo
+// formato y el mismo ítem genérico "TABLAS FIJAS"/"MARCAS" (nunca los
+// banqueadores reales). Así lo que se copia refleja también lo que se corrigió
+// en las adelantadas. Un plano sin editar sale idéntico al que se envió.
+// =================================================================
+async function movimientosAdelantadasDeCarrera(grupoId, { hipodromoNombre, carreraNumero, fecha }) {
+  const movimientos = [];
+  const rAdel = await db.query(
+    `SELECT j.* FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND lower(p.hipodromo_nombre) = lower($2) AND j.carrera_numero = $3 AND p.fecha = $4
+        AND j.estado IN ('resuelto', 'falta_banqueo')
+      ORDER BY j.creado_en`,
+    [grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  rAdel.rows.forEach(j => {
+    const rc = Number(j.resultado_cliente) || 0;
+    if (j.tipo === 'tf') {
+      // Mismo cálculo del ítem espejo que al resolver (resolverTablaFija) cuando se
+      // puede repetir con lo guardado; si la jugada tiene montos fijados a mano (o no
+      // guardó su pizarra) se usa el invariante cliente + contraparte + comisión = 0.
+      let espejo = round2(-(rc + (Number(j.comision) || 0)));
+      if (!j.montos_manuales && j.pizarra_usada) {
+        espejo = resolverTablaFija(
+          { numeroEjemplar: j.numero_ejemplar, monto: Number(j.monto), gananciaPotencial: Number(j.ganancia_potencial) },
+          parsearPizarraRank(j.pizarra_usada), pctJugada(j)
+        ).tablasFijas;
+      }
+      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id }, { nombre: 'TABLAS FIJAS', monto: espejo, individual: true, grupo: j.id });
+    } else {
+      movimientos.push({ nombre: j.cliente_nombre, monto: rc, individual: true, grupo: j.id }, { nombre: 'MARCAS', monto: round2(-rc), individual: true, grupo: j.id });
+    }
+  });
+  const rTer = await db.query(
+    `SELECT j.* FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND lower(p.hipodromo_nombre) = lower($2) AND j.carrera_numero = $3 AND p.fecha = $4
+        AND j.estado = 'resuelto'
+      ORDER BY j.creado_en`,
+    [grupoId, hipodromoNombre, carreraNumero, fecha]
+  );
+  rTer.rows.forEach(j => {
+    movimientos.push({ nombre: j.jugador_nombre, monto: Number(j.resultado_jugador) || 0 }, { nombre: j.banquero_nombre, monto: Number(j.resultado_banquero) || 0 });
+  });
+  return movimientos;
+}
+
+router.get('/planos/:id/copia', asyncHandler(async (req, res) => {
+  const rPlano = await db.query('SELECT * FROM hipismo_planos WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  const plano = rPlano.rows[0];
+  if (!plano) return res.status(404).json({ error: 'Plano no encontrado.' });
+
+  const rTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
+  const ticketsPlanos = rTickets.rows.map(t => ({
+    clienteNombre: t.cliente_nombre, banqueroNombre: t.banquero_nombre, modalidad: t.modalidad, caballo: t.caballo,
+    monto: Number(t.monto), resultadoJugador: Number(t.resultado_jugador), resultadoBanquero: Number(t.resultado_banquero),
+    sinComision: !!t.sin_comision
+  }));
+  const { totalesFinales } = recalcularTotalesPlano(ticketsPlanos, plano.cruza_jugadas);
+  const fecha = fechaComoISO(plano.fecha);
+
+  const movimientos = await movimientosAdelantadasDeCarrera(req.grupoId, { hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha });
+  const bloqueAdelantadas = armarBloqueAdelantadas(movimientos);
+  let textoResultado = armarTextoResultado({
+    nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
+    ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { fiel: true }),
+    totalesFinales, incluirPie: !bloqueAdelantadas, totalJugadas: ticketsPlanos.length
+  });
+  if (bloqueAdelantadas) {
+    textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
+  }
+
+  res.json({
+    textoResultado,
+    datosImagen: armarDatosImagenPlano({
+      grupoNombre: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero, fecha,
+      ret: plano.ret, pizarra: plano.pizarra, tickets: ticketsPlanos, totalesFinales, movimientosAdelantadas: movimientos
+    })
+  });
+}));
+
+// =================================================================
 // REVISAR JUGADAS (05-10-2026, a pedido del usuario: "en administración
 // necesito una pestaña que se llame revisar jugadas... al seleccionar el
 // día, el hipódromo y la carrera me despliegue todo absolutamente todo lo

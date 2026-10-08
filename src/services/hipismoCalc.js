@@ -1223,16 +1223,28 @@ function netearJugadorBanqueroTercios(tickets) {
 // routes/hipismo.js sobre cuándo esto se usa y cuándo NO (planos con
 // bloque "PARADA ADELANTADAS" no se regeneran, para no arriesgar
 // mezclarlo mal con ese bloque).
-function armarSalidaLineasDeTickets(tickets) {
+// opciones.fiel (08-10-2026, "Copiar plano" desde Revisar Jugadas): arma las líneas
+// EXACTAMENTE como las daba calcularPlano al cargar el plano -- el monto "como se
+// escribe" (225, 50,5; sin ceros de más) en vez de 225,00, y las jugadas cruzadas
+// (pp o "a premio" cruzada, caballo "4x3") en su formato de 2 líneas "(caballo) nombre".
+// Sin esta opción todo queda igual que siempre (lo usan las rutas de editar/borrar).
+function montoComoSeEscribe(n) {
+  const v = Math.round(Number(n) * 100) / 100;
+  return Number.isInteger(v) ? String(v) : String(v).replace('.', ',');
+}
+function armarSalidaLineasDeTickets(tickets, opciones) {
+  const fiel = !!(opciones && opciones.fiel);
+  const montoTxt = m => (fiel ? montoComoSeEscribe(m) : formatMontoTabla(m));
   const salidaLineas = [];
   tickets.forEach(t => {
-    if (t.modalidad.toLowerCase() === 'pp') {
+    const cruzado = t.modalidad.toLowerCase() === 'pp' || (fiel && /^\d+\s*x\s*\d+$/i.test(String(t.caballo === undefined || t.caballo === null ? '' : t.caballo)));
+    if (cruzado) {
       const [hA, hB] = String(t.caballo).split(/x/i).map(h => parseInt(String(h).trim(), 10));
-      salidaLineas.push(`pp (${hA}x${hB}) con ${formatMontoTabla(t.monto)}`);
+      salidaLineas.push(`${t.modalidad.toLowerCase() === 'pp' ? 'pp' : t.modalidad} (${hA}x${hB}) con ${montoTxt(t.monto)}`);
       salidaLineas.push(`(${hA}) ${formatNombre(t.clienteNombre)} $ ${t.resultadoJugador >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoJugador)}`);
       salidaLineas.push(`(${hB}) ${formatNombre(t.banqueroNombre)} $ ${t.resultadoBanquero >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoBanquero)}`);
     } else {
-      salidaLineas.push(`${t.modalidad} (${t.caballo}) con ${formatMontoTabla(t.monto)}`);
+      salidaLineas.push(`${t.modalidad} (${t.caballo}) con ${montoTxt(t.monto)}`);
       salidaLineas.push(`Juega ${formatNombre(t.clienteNombre)} $ ${t.resultadoJugador >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoJugador)}`);
       salidaLineas.push(`Consigue ${formatNombre(t.banqueroNombre)} $ ${t.resultadoBanquero >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoBanquero)}`);
     }
