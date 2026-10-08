@@ -733,6 +733,46 @@ function resolverResultadoLinea({ modalidadNorm, caballoTxt, rank }) {
 // array de valores N (ej. [2, 3]) de jugadas "a premio" (10a2, 10a3...)
 // que para ESTA carrera van SIN el 5% de comisión al ganador — opcional,
 // default [] (comportamiento de siempre, nadie exento).
+// Plano SIN RESOLVER como modelo de entrada (08-10-2026, a pedido del usuario: "lee este modelo de
+// plano tambien"). Es el que da el botón "Copiar plano sin resolver" de Revisar Jugadas: cada jugada
+// en 3 líneas, sin resultados --
+//   1P (6) con 150        |  pp (4x3) con 100
+//   Juega Soyganador      |  (4) Soyganador
+//   Consigue North        |  (3) North
+// Se reescribe cada trío como la línea de siempre ("Juega X 1P (6) con 150 da Y") para que lo lea el
+// mismo motor, así se puede pegar de vuelta en Cargar Planos (por ejemplo después de corregirlo) y
+// resolverlo con la pizarra. Lo que no calza con este modelo se deja intacto. Un nombre con espacios
+// se protege con \u0001 mientras lo lee la expresión de la línea (que espera una sola palabra) y se
+// restituye después (ver calcularPlano).
+const ESP_NOMBRE = '\u0001';
+const nombreProtegido = n => String(n).trim().replace(/\s+/g, ESP_NOMBRE);
+function normalizarPlanoSinResolver(texto) {
+  if (!texto) return texto || '';
+  const lineas = String(texto).split('\n');
+  const limpia = l => String(l === undefined ? '' : l).replace(/\*/g, '').trim();
+  const salida = [];
+  for (let i = 0; i < lineas.length; i++) {
+    const cab = limpia(lineas[i]).match(/^(?!juega\b)(.+?)\s*\(([^)]+)\)\s*con\s+([\d.,]+)$/i);
+    if (cab) {
+      const l2 = limpia(lineas[i + 1]), l3 = limpia(lineas[i + 2]);
+      const j = l2.match(/^juega\s+(.+)$/i), c = l3.match(/^consigue\s+(.+)$/i);
+      if (j && c) {
+        salida.push(`Juega ${nombreProtegido(j[1])} ${cab[1].trim()} (${cab[2].trim()}) con ${cab[3]} da ${nombreProtegido(c[1])}`);
+        i += 2;
+        continue;
+      }
+      const pj = l2.match(/^\((\d{1,2})\)\s+(.+)$/), pc = l3.match(/^\((\d{1,2})\)\s+(.+)$/);
+      if (pj && pc && /^\d{1,2}\s*x\s*\d{1,2}$/i.test(cab[2].trim())) {
+        salida.push(`Juega ${nombreProtegido(pj[2])} ${cab[1].trim()} (${cab[2].trim()}) con ${cab[3]} da ${nombreProtegido(pc[2])}`);
+        i += 2;
+        continue;
+      }
+    }
+    salida.push(lineas[i]);
+  }
+  return salida.join('\n');
+}
+
 function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
   const rank = parsearPizarra(pizarra);
   // 24-09-2026: se descarta el encabezado/pie que venga pegado en el
@@ -741,7 +781,7 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
   // (con "🇻🇪🏇🏟️ZENYATTA..." y "PLANO REFERENCIAL" incluidos), esas líneas
   // nunca llegan a salidaLineas ni se duplican con el encabezado/pie que
   // arma armarTextoResultado() más abajo.
-  const lineas = limpiarEncabezadoYPie(texto || '').split('\n');
+  const lineas = limpiarEncabezadoYPie(normalizarPlanoSinResolver(texto || '')).split('\n');
 
   const rawPorNombre = {};
   const add = (nombre, monto) => { rawPorNombre[nombre] = (rawPorNombre[nombre] || 0) + monto; };
@@ -805,8 +845,8 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
     // hipismo_tickets.cliente_nombre (obtenerComisionesPropias, en
     // services/hipismoComisionPropia.js) fallaba en silencio y el % de
     // ese cliente quedaba sin aplicarse a sus propias jugadas.
-    const jugador = jugadorCrudo.trim().toUpperCase().replace(/\s+/g, ' ');
-    const banco = bancoCrudo.trim().toUpperCase().replace(/\s+/g, ' ');
+    const jugador = jugadorCrudo.split(ESP_NOMBRE).join(' ').trim().toUpperCase().replace(/\s+/g, ' ');
+    const banco = bancoCrudo.split(ESP_NOMBRE).join(' ').trim().toUpperCase().replace(/\s+/g, ' ');
     // modalidadNorm: normaliza "guion pegado" vs "con espacio" en una
     // jugada mixta a SIEMPRE guion pegado (ver normalizarModalidadCombo
     // más arriba) — para una modalidad simple (sin combinar) esto no
@@ -1339,7 +1379,7 @@ function armarTextoSinResolver({ nombreGrupo, hipodromoNombre, carreraNumero, ti
 }
 
 module.exports = {
-  calcularPlano, armarTextoResultado, armarTextoSinResolver, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
+  calcularPlano, armarTextoResultado, armarTextoSinResolver, normalizarPlanoSinResolver, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
   calcularAjustesCruce, netearJugadorBanqueroTercios,
   ordinalCarrera, limpiarEncabezadoYPie,
