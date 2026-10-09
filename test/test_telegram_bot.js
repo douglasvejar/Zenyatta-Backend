@@ -464,6 +464,17 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
   await telegramBot.manejarActualizacion(upd(['Deportes Lusho VIP', 'act'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
   check(api.enviados.length === 1 && api.enviados[0].texto.startsWith('📍 *DEPORTES LUSHO VIP*') && /Actualización de resultados/.test(api.enviados[0].texto), 'un comando con el nombre del grupo arriba ("Deportes Lusho VIP" + "act") responde en el central con ese grupo');
 
+  // "act" suelto en el central (sin nombre de grupo): antes no pasaba nada; ahora el admin recibe la pista
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd('act', { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 1 && /nombre del grupo en la primera línea/.test(api.enviados[0].texto) && /Deportes Lusho VIP/.test(api.enviados[0].texto), '"act" suelto en el central: el administrador recibe cómo escribirlo (nombre del grupo arriba) y la lista de grupos');
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd('act', { chat: CENTRAL, from: CLIENTE }), ctx);
+  check(api.enviados.length === 0, '"act" suelto de un miembro común en el central se ignora (sin ruido)');
+  api.enviados.length = 0;
+  await telegramBot.manejarActualizacion(upd(['SABANA DE JUGADAS', HOY, 'ANA', 'houston -120', '50//45'].join('\n'), { chat: CENTRAL, from: ADMIN }), ctx);
+  check(api.enviados.length === 1 && /SABANA DE JUGADAS/.test(api.enviados[0].texto) && /primera línea/.test(api.enviados[0].texto), 'una sábana sin nombre de grupo en el central: el administrador recibe la pista y no se carga nada');
+
   api.enviados.length = 0;
   await telegramBot.manejarActualizacion(upd('hola, buenas', { chat: CENTRAL, from: ADMIN }), ctx);
   check(api.enviados.length === 0, 'una conversación normal en el central no dispara nada');

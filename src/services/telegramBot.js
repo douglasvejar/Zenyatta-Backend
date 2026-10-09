@@ -250,6 +250,19 @@ async function procesarEnCentral({ api }, chatId, usuario, texto) {
   return true;
 }
 
+// Respuesta cuando en el grupo central llega un comando/sábana sin el nombre del grupo en la 1ª línea.
+async function textoFaltaNombreGrupo(texto) {
+  let disponibles = '';
+  try {
+    const r = await db.query('SELECT id, nombre FROM grupos WHERE telegram_habilitado = true AND activo = true');
+    disponibles = r.rows.map(g => g.nombre).join(', ');
+  } catch (e) { /* sin lista, igual se explica el formato */ }
+  const esSabana = detectarTriggerSabana(texto).esSabana;
+  const ejemplo = esSabana ? 'NOMBRE DEL GRUPO\nSABANA DE JUGADAS\n09-10-2026\n...jugadas...' : 'NOMBRE DEL GRUPO\nact';
+  return '⚠️ En el grupo central escribe el *nombre del grupo en la primera línea*, así:\n\n' + ejemplo +
+    (disponibles ? '\n\nGrupos disponibles: ' + disponibles + '.' : '') + '\nNo se hizo nada.';
+}
+
 // ---- Procesa UN texto ya completo (una sábana entera o un comando) -----
 async function procesarTexto({ api, sock }, chatId, usuario, texto) {
   const whatsappBot = require('./whatsappBot');
@@ -258,6 +271,14 @@ async function procesarTexto({ api, sock }, chatId, usuario, texto) {
   if (esCentral(chatId)) {
     const atendido = await procesarEnCentral({ api, sock }, chatId, usuario, texto);
     if (atendido) return;
+    // Un comando o una sábana SIN el nombre del grupo arriba, escrito en el central: antes se
+    // ignoraba en silencio (parecía que el bot no hacía nada). Ahora el administrador recibe la pista.
+    if ((detectarComando(texto) || detectarTriggerSabana(texto).esSabana) && !(await grupoIdPorJid(jid))) {
+      let esAdmin = false;
+      try { esAdmin = await api.esAdministrador(chatId, usuario && usuario.id); } catch (e) { esAdmin = false; }
+      if (esAdmin) await responder(api, chatId, await textoFaltaNombreGrupo(texto));
+      return;
+    }
   }
 
   if (detectarTriggerSabana(texto).esSabana) {
