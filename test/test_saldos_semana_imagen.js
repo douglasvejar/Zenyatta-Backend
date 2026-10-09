@@ -74,6 +74,23 @@ const cli = (a, g, p, c, pol, tr, s, conJugadas = true) => ({ porFecha: conJugad
   await crearClienteTelegram({ token: 'T', fetchImpl: fetchRechaza }).enviarFoto(1, png, '*x*');
   check(n === 2, 'si Telegram rechaza el formato del texto, reintenta la foto sin formato');
 
+  // --- límite de mensajes de Telegram (429): espera lo que pide y reintenta, sin perder la foto ---
+  let n429 = 0;
+  const esperas = [];
+  const fetch429 = async () => { n429++; return { json: async () => (n429 <= 2 ? { ok: false, error_code: 429, description: 'Too Many Requests: retry after 7', parameters: { retry_after: 7 } } : { ok: true, result: { message_id: 9 } }) }; };
+  const api429 = crearClienteTelegram({ token: 'T', fetchImpl: fetch429, esperarImpl: async ms => { esperas.push(ms); } });
+  const r429 = await api429.enviarFoto(-100123, png, 'x');
+  check(n429 === 3 && r429.message_id === 9 && esperas.length === 2 && esperas[0] === 7500, 'si Telegram responde 429 (demasiados mensajes seguidos), espera lo que pide (retry_after) y reintenta hasta que sale');
+  let nSiempre = 0;
+  const fetchSiempre429 = async () => { nSiempre++; return { json: async () => ({ ok: false, error_code: 429, description: 'Too Many Requests', parameters: { retry_after: 1 } }) }; };
+  let fallo429 = null;
+  try { await crearClienteTelegram({ token: 'T', fetchImpl: fetchSiempre429, esperarImpl: async () => {} }).enviarTexto(1, 'hola'); } catch (e) { fallo429 = e; }
+  check(fallo429 && fallo429.codigo === 429 && nSiempre === 5, 'si el límite no se levanta, reintenta 4 veces y recién ahí se rinde (no se queda colgado)');
+  let nOtro = 0;
+  const fetch400 = async () => { nOtro++; return { json: async () => ({ ok: false, error_code: 400, description: 'Bad Request: chat not found' }) }; };
+  try { await crearClienteTelegram({ token: 'T', fetchImpl: fetch400, esperarImpl: async () => {} }).enviarTexto(1, 'hola'); } catch (e) { /* esperado */ }
+  check(nOtro === 1, 'los demás errores (400) no se reintentan');
+
   // --- socks de Telegram ---
   const enviadas = [];
   const apiFalsa = { enviarFoto: async (chat, buf, cap) => enviadas.push({ chat, buf, cap }), enviarTexto: async () => {} };

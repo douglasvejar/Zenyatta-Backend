@@ -51,11 +51,33 @@ function partirTexto(texto, max = LIMITE_TROZO) {
   return trozos;
 }
 
-function crearClienteTelegram({ token, fetchImpl } = {}) {
+function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
   const hacerFetch = fetchImpl || ((...a) => fetch(...a));
+  const esperar = esperarImpl || (ms => new Promise(r => setTimeout(r, ms)));
   const base = 'https://api.telegram.org/bot' + token + '/';
 
-  async function llamar(metodo, params = {}, { timeoutMs = 40000, formData = null } = {}) {
+  // Telegram limita a ~20 mensajes por minuto en un mismo grupo. El cierre de varios grupos manda muchos
+  // seguidos al central: cuando Telegram responde 429 ("Too Many Requests", con retry_after), se espera lo
+  // que pide y se reintenta, en vez de perder el mensaje (por ejemplo la foto del último grupo).
+  const MAX_REINTENTOS_429 = 4;
+  const ESPERA_MAX_429_S = 60;
+  async function llamar(metodo, params = {}, opciones = {}) {
+    for (let intento = 0; ; intento++) {
+      try {
+        return await llamarUnaVez(metodo, params, opciones);
+      } catch (e) {
+        if (e && e.codigo === 429 && intento < MAX_REINTENTOS_429) {
+          const segundos = Math.min(Math.max(Number(e.reintentarEnSegundos) || 5, 1), ESPERA_MAX_429_S);
+          console.log('[telegramApi] Telegram pidió esperar ' + segundos + 's (límite de mensajes) en ' + metodo + ' — reintento ' + (intento + 1) + '/' + MAX_REINTENTOS_429 + '.');
+          await esperar(segundos * 1000 + 500);
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
+  async function llamarUnaVez(metodo, params = {}, { timeoutMs = 40000, formData = null } = {}) {
     if (!token) throw new Error('Falta TELEGRAM_BOT_TOKEN.');
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const temporizador = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
@@ -71,6 +93,7 @@ function crearClienteTelegram({ token, fetchImpl } = {}) {
       if (!datos || datos.ok !== true) {
         const err = new Error((datos && datos.description) || 'Telegram respondió con error.');
         err.codigo = datos && datos.error_code;
+        err.reintentarEnSegundos = datos && datos.parameters && datos.parameters.retry_after;
         throw err;
       }
       return datos.result;
