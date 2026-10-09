@@ -71,7 +71,7 @@ function calcularHashTickets(tickets) {
 // verdad entre un envío real y el siguiente, sin que el reloj de fondo
 // la reinicie solo cada 5 minutos.
 // =================================================================
-function decidirAccion({ ahora, ultimoEnvioEn, sabanaFinalEn, hashActual, ultimoHashResumen, todosResueltos, forzar }) {
+function decidirAccion({ ahora, ultimoEnvioEn, sabanaFinalEn, hashActual, ultimoHashResumen, todosResueltos, forzar, cierreYaEnviado }) {
   // El cierre (ya llegó "SABANA FINAL" Y todos los tickets tienen
   // resultado) NUNCA espera el reloj de la hora — es un evento único de
   // una sola vez ("al todos los tickets tener resultado, enviar la
@@ -79,7 +79,10 @@ function decidirAccion({ ahora, ultimoEnvioEn, sabanaFinalEn, hashActual, ultimo
   // aviso periódico. Si esto se dejara atrás del chequeo de la hora, el
   // cierre podría demorarse hasta 60 minutos después de terminado el
   // último partido, que es justo lo que el usuario no quiere.
-  if (sabanaFinalEn && todosResueltos) return 'ENVIAR_CIERRE';
+  // (09-10-2026) Una vez enviado el cierre NO se repite en cada chequeo automático (el resumen de
+  // Telegram corre cada 15 minutos y, sin esto, volvería a mandar el cierre una y otra vez). Solo un
+  // pedido manual (forzar) lo manda de nuevo.
+  if (sabanaFinalEn && todosResueltos) return (forzar || !cierreYaEnviado) ? 'ENVIAR_CIERRE' : 'NADA_QUE_ENVIAR';
 
   const cambioAlgo = !!forzar || hashActual !== ultimoHashResumen;
 

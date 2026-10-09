@@ -636,7 +636,7 @@ async function extraerTexto(msg) {
 // de grupos.whatsapp_grupo_jid) necesitan llamar esta misma función,
 // siempre con forzar:true (18-09-2026: ya no existe ningún llamador
 // automático — ver la advertencia grande al principio del archivo).
-async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } = {}) {
+async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false, cierreCompleto = false } = {}) {
   const estadoDia = await whatsappDiaEstado.obtenerEstadoDia(grupoId, fecha);
   if (!estadoDia || !estadoDia.ultimoTexto) {
     return { accion: 'SIN_SABANA', motivo: 'Todavía no se cargó ninguna sábana para esta fecha.' };
@@ -669,7 +669,8 @@ async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } 
     hashActual,
     ultimoHashResumen: estadoDia.ultimoHashResumen,
     todosResueltos,
-    forzar
+    forzar,
+    cierreYaEnviado: !!estadoDia.cierreEnviadoEn
   });
 
   // Esto se actualiza cada vez que alguien pide el resumen (botón o
@@ -688,6 +689,15 @@ async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } 
     await avisar(sock, jid, texto);
     await whatsappDiaEstado.registrarEnvioResumen(grupoId, fecha, hashActual);
     return { accion, resp };
+  }
+
+  if (accion === 'ENVIAR_CIERRE' && cierreCompleto) {
+    // (09-10-2026, a pedido del usuario: que apenas llegue SABANA FINAL y todo esté resuelto salga
+    // solo el cierre completo — sábana final, totales del día, total de la semana y foto — sin
+    // esperar la medianoche). Es el mismo cierre del job nocturno; ambos "reclaman" el día en la
+    // base (cierre_nocturno_en), así que un grupo nunca lo recibe dos veces.
+    const r = await cerrarDiaCompleto(sock, grupoId, jid, fecha);
+    return r.accion === 'CERRADO' ? { accion: 'ENVIAR_CIERRE', resp: r.resp } : r;
   }
 
   if (accion === 'ENVIAR_CIERRE') {

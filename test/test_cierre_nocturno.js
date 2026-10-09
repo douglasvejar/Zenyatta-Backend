@@ -104,6 +104,25 @@ function check(c, m) { try { assert.ok(c); ok++; console.log('OK: ' + m); } catc
   liberar();
   await p1;
 
+  // todos los grupos ya se cerraron ANTES de la medianoche (SABANA FINAL + todo resuelto): el mensaje final
+  // igual sale una vez pasada la medianoche, y solo una vez aunque sigan los chequeos
+  estado._reiniciarFinales();
+  dias = [{ grupoId: 'g-a', nombre: 'A', cerrado: true }, { grupoId: 'g-b', nombre: 'B', cerrado: true }];
+  finales.length = 0;
+  llamadas.length = 0;
+  r = await correr();
+  check(llamadas.length === 0 && finales.length === 1 && r.finalEnviado, 'si todos los grupos ya se cerraron antes de la medianoche, igual sale el mensaje final (sin volver a cerrar a nadie)');
+  r = await correr();
+  check(finales.length === 1 && !r.finalEnviado, '...y el mensaje final no se repite en los chequeos siguientes');
+  estado._reiniciarFinales();
+  dias = [{ grupoId: 'g-a', nombre: 'A', cerrado: true }, { grupoId: 'g-b', nombre: 'B', cerrado: false }];
+  finales.length = 0;
+  resultados = { 'g-b': { accion: 'FALTAN_JUEGOS', pendientes: 1 } };
+  r = await correr();
+  check(finales.length === 0, 'con uno cerrado antes y otro todavía pendiente NO sale el mensaje final');
+  resultados = {};
+
+  estado._reiniciarFinales(); // (el mensaje final se guarda por día: cada escenario empieza limpio)
   // --- Telegram: a dónde sale cada cosa ---
   process.env.TELEGRAM_CENTRAL_CHAT_ID = '-100999';
   const enviados = [];
@@ -118,6 +137,19 @@ function check(c, m) { try { assert.ok(c); ok++; console.log('OK: ' + m); } catc
   check(enviadosPorGrupo[0].jid === 'tg_-100111@g.us' && enviados[0].chat === '-100111', 'el grupo con chat propio recibe su cierre en su chat');
   check(enviadosPorGrupo[1].jid === 'tgc_g-central@g.us' && enviados[1].chat === '-100999' && enviados[1].t.startsWith('📍 *CENTRAL VIP*'), 'el grupo sin chat propio lo recibe en el central, con su nombre arriba');
   check(enviados[2].chat === '-100999' && /TODOS LOS GRUPOS RESUELTOS/.test(enviados[2].t) && rt.finalEnviado, 'y el mensaje final de "todos resueltos" sale en el central, de último');
+
+  // el resumen automático de Telegram pide el cierre COMPLETO (para que salga apenas llegue SABANA FINAL)
+  const opcionesVistas = [];
+  const procesarOriginal = whatsappBot.procesarDiaAbierto;
+  whatsappBot.procesarDiaAbierto = async (sock, grupoId, jid, fecha, opts) => { opcionesVistas.push(opts); return { accion: 'NADA_QUE_ENVIAR' }; };
+  await telegramBot.revisarResumenesAutomaticos({ api: apiFalsa, sock: { sendMessage: async () => {} } });
+  check(opcionesVistas.length === 2 && opcionesVistas.every(o => o.cierreCompleto === true && o.forzar === false), 'el resumen automático de Telegram pide el cierre completo (día + semana + foto) y no fuerza');
+  process.env.TELEGRAM_CIERRE_NOCTURNO = 'false';
+  opcionesVistas.length = 0;
+  await telegramBot.revisarResumenesAutomaticos({ api: apiFalsa, sock: { sendMessage: async () => {} } });
+  check(opcionesVistas.length === 2 && opcionesVistas.every(o => o.cierreCompleto === false), 'con TELEGRAM_CIERRE_NOCTURNO=false el cierre completo automático queda apagado');
+  delete process.env.TELEGRAM_CIERRE_NOCTURNO;
+  whatsappBot.procesarDiaAbierto = procesarOriginal;
 
   // --- Aviso de problemas: qué pasa y con qué grupo ---
   const tf = cierre.textoProblemaCierre({ grupoNombre: 'Bernal', fecha: '2026-10-07', resultado: { accion: 'FALTAN_JUEGOS', pendientes: 2, detalle: [

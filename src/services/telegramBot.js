@@ -378,14 +378,16 @@ async function revisarResumenesAutomaticos(ctxExterno) {
   const r = await db.query('SELECT id, nombre, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true');
   const fecha = fechaVenezuelaHoy(); // hora de Venezuela (UTC-4), no UTC
   const central = idsCentrales()[0];
+  // Con SABANA FINAL + todo resuelto, el cierre sale completo (día + semana + foto) sin esperar la medianoche.
+  const opciones = { forzar: false, cierreCompleto: process.env.TELEGRAM_CIERRE_NOCTURNO !== 'false' };
   for (const g of r.rows) {
     try {
       let r = null;
       if (g.telegram_chat_id) {
-        r = await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, { forzar: false });
+        r = await whatsappBot.procesarDiaAbierto(ctx.sock, g.id, jidDeChat(g.telegram_chat_id), fecha, opciones);
       } else if (central) {
         // Sin grupo de Telegram propio: el resumen sale en el central, con el nombre arriba.
-        r = await whatsappBot.procesarDiaAbierto(crearSockCentral(ctx.api, central, g.nombre), g.id, jidCentralDeGrupo(g.id), fecha, { forzar: false });
+        r = await whatsappBot.procesarDiaAbierto(crearSockCentral(ctx.api, central, g.nombre), g.id, jidCentralDeGrupo(g.id), fecha, opciones);
       }
       if (r && r.accion === 'ERROR') {
         await avisarProblema({

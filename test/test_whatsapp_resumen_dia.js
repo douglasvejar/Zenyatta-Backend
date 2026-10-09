@@ -104,5 +104,10 @@ check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_30_MIN, sabanaFinalEn: H
 check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_90_MIN, sabanaFinalEn: null, hashActual: 'nuevo', ultimoHashResumen: 'viejo', todosResueltos: false, forzar: false }) === 'ENVIAR_ACTUALIZACION', 'regresión: SIN SABANA FINAL, pasada la hora, sigue funcionando exactamente igual que siempre');
 check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_30_MIN, sabanaFinalEn: null, hashActual: 'nuevo', ultimoHashResumen: 'viejo', todosResueltos: false, forzar: false }) === 'ESPERAR', 'regresión: SIN SABANA FINAL, a los 30 minutos TODAVÍA hay que ESPERAR — el límite de 1 hora sigue intacto antes de que llegue la sábana final');
 
+// 09-10-2026: el cierre no se repite en cada chequeo automático
+check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_30_MIN, sabanaFinalEn: HACE_30_MIN, hashActual: 'igual', ultimoHashResumen: 'igual', todosResueltos: true, forzar: false, cierreYaEnviado: false }) === 'ENVIAR_CIERRE', 'SABANA FINAL + todo resuelto y el cierre todavía no salió: ENVIAR_CIERRE');
+check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_30_MIN, sabanaFinalEn: HACE_30_MIN, hashActual: 'igual', ultimoHashResumen: 'igual', todosResueltos: true, forzar: false, cierreYaEnviado: true }) === 'NADA_QUE_ENVIAR', 'si el cierre ya salió, los chequeos automáticos siguientes NO lo repiten');
+check(decidirAccion({ ahora: AHORA, ultimoEnvioEn: HACE_30_MIN, sabanaFinalEn: HACE_30_MIN, hashActual: 'igual', ultimoHashResumen: 'igual', todosResueltos: true, forzar: true, cierreYaEnviado: true }) === 'ENVIAR_CIERRE', 'pero un pedido manual (forzar) sí lo manda de nuevo');
+
 console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
 process.exit(fallaron > 0 ? 1 : 0);

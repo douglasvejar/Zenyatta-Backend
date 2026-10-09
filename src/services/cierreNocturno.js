@@ -94,11 +94,14 @@ async function revisarCierreNocturno({ fecha, destinoDe, enviarFinal, cerrarDia,
       }
     }
 
-    // Ya no queda nadie por resolver y en este chequeo se cerró al menos uno: el mensaje final.
+    // Ya no queda nadie por resolver y hay al menos un grupo cerrado (ahora, o antes: el cierre también
+    // sale solo apenas llega SABANA FINAL y todo está resuelto): el mensaje final, una sola vez por día.
     let finalEnviado = false;
-    if (pendientes.length === 0 && cerradosAhora.length > 0 && enviarFinal) {
+    const hayCerrados = cerradosAhora.length > 0 || grupos.some(g => g.cerrado && elegibles.includes(g.nombre));
+    if (pendientes.length === 0 && hayCerrados && enviarFinal && !(await whatsappDiaEstado.finalNocturnoYaEnviado(dia))) {
       try {
         await enviarFinal(textoTodosResueltos(dia, elegibles));
+        await whatsappDiaEstado.marcarFinalNocturnoEnviado(dia);
         finalEnviado = true;
       } catch (e) {
         console.error('[cierreNocturno] No se pudo mandar el mensaje final:', e.message);

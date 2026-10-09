@@ -2091,3 +2091,8 @@ create index if not exists idx_grupos_telegram_chat on grupos(telegram_chat_id) 
 -- "ya se cerró ese día" para que un grupo nunca reciba el cierre dos veces (ni con reinicios).
 -- =================================================================
 alter table whatsapp_dia_estado add column if not exists cierre_nocturno_en timestamptz;
+
+-- Mensaje final "todos los grupos resueltos": se manda una sola vez por día, aunque el servidor se
+-- reinicie. (El cierre de cada grupo también puede salir antes de la medianoche, apenas llega
+-- SABANA FINAL y todos los juegos están resueltos.)
+alter table whatsapp_dia_estado add column if not exists cierre_final_enviado_en timestamptz;

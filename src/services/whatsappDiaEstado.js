@@ -176,7 +176,33 @@ async function reclamarCierreNocturno(grupoId, fecha) {
   return res.rows.length > 0;
 }
 
+// Mensaje final "todos los grupos resueltos": se manda UNA vez por día. Se guarda en
+// whatsapp_dia_estado.cierre_final_enviado_en (sobrevive a reinicios del servidor). Si esa columna
+// todavía no existe, se apoya en la memoria del proceso para no repetirlo mientras siga encendido.
+const finalesEnMemoria = new Set();
+async function finalNocturnoYaEnviado(fecha) {
+  if (finalesEnMemoria.has(fecha)) return true;
+  try {
+    const res = await db.query('SELECT 1 FROM whatsapp_dia_estado WHERE fecha = $1 AND cierre_final_enviado_en IS NOT NULL LIMIT 1', [fecha]);
+    return res.rows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+async function marcarFinalNocturnoEnviado(fecha) {
+  finalesEnMemoria.add(fecha);
+  try {
+    await db.query('UPDATE whatsapp_dia_estado SET cierre_final_enviado_en = now() WHERE fecha = $1', [fecha]);
+  } catch (e) {
+    console.error('[whatsappDiaEstado] No se pudo guardar que el mensaje final ya salió (¿falta correr el SQL de cierre_final_enviado_en?):', e.message);
+  }
+}
+function _reiniciarFinales() { finalesEnMemoria.clear(); }
+
 module.exports = {
+  finalNocturnoYaEnviado,
+  marcarFinalNocturnoEnviado,
+  _reiniciarFinales,
   listarDiasParaCierreNocturno,
   reclamarCierreNocturno,
   obtenerEstadoDia,

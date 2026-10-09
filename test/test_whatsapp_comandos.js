@@ -471,6 +471,37 @@ function fechaMasDias(fechaISO, n) {
   const resSinDia = await whatsappBot.cerrarDiaCompleto(sockSinDia, GRUPO_ID, JID, '2020-01-01');
   check(resSinDia.accion === 'SIN_SABANA' && sockSinDia.mensajes.length === 0, 'una fecha sin sábana no manda nada (SIN_SABANA)');
 
+  // --- 09-10-2026: el cierre completo también sale solo APENAS llega SABANA FINAL y todo está resuelto
+  // (procesarDiaAbierto con cierreCompleto, lo que usa el resumen automático de Telegram), y no se repite ---
+  diaCerrado.cierre_nocturno_en = null; diaCerrado.cierre_enviado_en = null; diaCerrado.sabana_final_en = null; diaCerrado.ultimo_hash_resumen = null; diaCerrado.ultimo_envio_resumen_en = null;
+  partidoFinal = true;
+  const sockAntes = crearSockFalso();
+  const rSinFinal = await whatsappBot.procesarDiaAbierto(sockAntes, GRUPO_ID, JID, HOY, { forzar: false, cierreCompleto: true });
+  check(!sockAntes.mensajes.some(m => m.image || (m.text && m.text.includes('SÁBANA FINAL'))), 'sin SABANA FINAL, aunque todo esté resuelto, el cierre completo NO sale antes de la medianoche');
+  diaCerrado.sabana_final_en = new Date();
+  const sockAuto = crearSockFalso();
+  const rAuto = await whatsappBot.procesarDiaAbierto(sockAuto, GRUPO_ID, JID, HOY, { forzar: false, cierreCompleto: true });
+  const tiposAuto = sockAuto.mensajes.map(m => m.image ? 'foto' : (m.text.includes('SÁBANA FINAL') ? 'listado' : m.text.includes('*TOTALES DEL DÍA*') ? 'totales' : m.text.includes('*TOTAL DEL GRUPO*') ? 'total_grupo' : m.text.includes('*Cliente:') ? 'cliente' : 'otro'));
+  check(rAuto.accion === 'ENVIAR_CIERRE' && tiposAuto[0] === 'listado' && tiposAuto[1] === 'totales' && tiposAuto.includes('total_grupo') && tiposAuto[tiposAuto.length - 1] === 'foto', 'con SABANA FINAL + todo resuelto sale solo el cierre completo: sábana, totales del día, total de la semana y foto');
+  check(!!diaCerrado.cierre_nocturno_en && !!diaCerrado.cierre_enviado_en, '...y el día queda marcado como cerrado');
+  const sockAuto2 = crearSockFalso();
+  const rAuto2 = await whatsappBot.procesarDiaAbierto(sockAuto2, GRUPO_ID, JID, HOY, { forzar: false, cierreCompleto: true });
+  check(sockAuto2.mensajes.length === 0 && rAuto2.accion === 'NADA_QUE_ENVIAR', 'el siguiente chequeo automático (15 min después) no repite el cierre');
+  const rNoche = await whatsappBot.cerrarDiaCompleto(crearSockFalso(), GRUPO_ID, JID, HOY);
+  check(rNoche.accion === 'YA_CERRADO', 'y a la medianoche el cierre nocturno tampoco lo repite (YA_CERRADO)');
+  // sin cierreCompleto (botón del panel / WhatsApp) el comportamiento de siempre: listado final + totales, una vez
+  diaCerrado.cierre_nocturno_en = null; diaCerrado.cierre_enviado_en = null;
+  const sockViejo = crearSockFalso();
+  await whatsappBot.procesarDiaAbierto(sockViejo, GRUPO_ID, JID, HOY, { forzar: false });
+  check(sockViejo.mensajes.length === 2 && !sockViejo.mensajes.some(m => m.image), 'sin cierreCompleto se mantiene el cierre de siempre: listado final + totales (sin semana ni foto)');
+  const sockViejo2 = crearSockFalso();
+  await whatsappBot.procesarDiaAbierto(sockViejo2, GRUPO_ID, JID, HOY, { forzar: false });
+  check(sockViejo2.mensajes.length === 0, '...y ese cierre tampoco se repite en cada chequeo');
+  const sockViejo3 = crearSockFalso();
+  await whatsappBot.procesarDiaAbierto(sockViejo3, GRUPO_ID, JID, HOY, { forzar: true });
+  check(sockViejo3.mensajes.length === 2, 'pero un pedido manual (forzar) sí lo vuelve a mandar');
+  diaCerrado.sabana_final_en = null; diaCerrado.cierre_enviado_en = null; diaCerrado.cierre_nocturno_en = null; // el resto de la prueba sigue con el día abierto
+
   // Aviso de problema: una sábana que no se puede leer le llega al notificador (con el grupo y el motivo).
   const problemas = [];
   whatsappBot.registrarNotificadorProblemas(async p => { problemas.push(p); });
