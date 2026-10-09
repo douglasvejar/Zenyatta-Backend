@@ -328,7 +328,7 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
   check(/no es válido|ya se usó/.test(api.enviados[0].texto), 'el código no se puede reusar');
 
   // ===== 4) Sábana en el grupo vinculado =====
-  const HOY = formatearFechaISO(new Date());
+  const HOY = require(path.join(__dirname, '..', 'src', 'services', 'fechaVenezuela')).fechaVenezuelaHoy(); // 'hoy' del bot = hora de Venezuela
   const sabana = ['SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n');
   api.enviados.length = 0;
   await telegramBot.manejarActualizacion(upd(sabana), ctx);

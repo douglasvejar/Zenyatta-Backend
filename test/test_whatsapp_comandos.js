@@ -338,7 +338,7 @@ function fechaMasDias(fechaISO, n) {
   // completa, con tickets ya decididos guardados en tickets_historial
   // (no hace falta reprocesar ninguna sábana en vivo para esto)
   // =================================================================
-  const { desde: lunesSemana } = await calcularRangoRapido(GRUPO_ID, 'semana');
+  const { desde: lunesSemana } = require(path.join(__dirname, '..', 'src', 'services', 'fechaSemana')).calcularSemana(require(path.join(__dirname, '..', 'src', 'services', 'fechaVenezuela')).fechaVenezuelaHoy());
   const diaMartes = fechaMasDias(lunesSemana, 1);
   const diaMiercoles = fechaMasDias(lunesSemana, 2);
 
@@ -403,7 +403,7 @@ function fechaMasDias(fechaISO, n) {
   // integración completa vía manejarMensajeEntrante(), con una sábana en
   // vivo de HOY (misma fecha real que usa la producción)
   // =================================================================
-  const HOY = formatearFechaISO(new Date());
+  const HOY = require(path.join(__dirname, '..', 'src', 'services', 'fechaVenezuela')).fechaVenezuelaHoy(); // 'hoy' del bot = hora de Venezuela
   const textoSabanaHoy = ['SABANA DE JUGADAS', HOY, 'PEDRO', 'houston -120', '100//90'].join('\n');
   const sockCarga = crearSockFalso();
   await whatsappBot.manejarMensajeEntrante(sockCarga, crearMensaje(textoSabanaHoy));

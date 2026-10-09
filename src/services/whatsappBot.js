@@ -112,11 +112,12 @@ const { grupoIdPorJid, crearPendiente, marcarImportada, descartarPendiente, marc
 const whatsappDiaEstado = require('./whatsappDiaEstado');
 const whatsappResumenDia = require('./whatsappResumenDia');
 const { procesarSabana } = require('./procesarSabana');
-const { confirmarDia, formatearFechaISO, calcularRangoRapido } = require('./historial');
+const { confirmarDia } = require('./historial');
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { calcularBalanceSemanalPorCliente } = require('./balanceGeneral');
 const { generarFotosSaldosSemana } = require('./saldosSemanaImagen');
 const { calcularSemana } = require('./fechaSemana');
+const { fechaVenezuelaHoy } = require('./fechaVenezuela');
 const {
   generarTextoListadoSabana,
   generarTextoTotalesDia,
@@ -753,7 +754,7 @@ async function procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar = false } 
 // lo mismo que hace el botón "📤 Enviar resumen ahora" del panel, nada
 // nuevo que probar aparte de esto.
 async function manejarComandoActualizar(sock, grupoId, jid) {
-  const fecha = formatearFechaISO(new Date());
+  const fecha = fechaVenezuelaHoy(); // hora de Venezuela (UTC-4), no UTC
   const resultado = await procesarDiaAbierto(sock, grupoId, jid, fecha, { forzar: true });
   if (resultado && resultado.accion === 'SIN_SABANA') {
     await avisar(sock, jid, '⚠️ Todavía no se cargó ninguna sábana de jugadas para hoy (' + formatFechaAviso(fecha) + ').');
@@ -787,7 +788,7 @@ async function manejarComandoActualizar(sock, grupoId, jid) {
 // igual que en el cierre automático — si más tarde cambia algo, se
 // desconfirma sola (ver desconfirmarDia en historial.js).
 async function manejarComandoSaldoDia(sock, grupoId, jid) {
-  const fecha = formatearFechaISO(new Date());
+  const fecha = fechaVenezuelaHoy(); // hora de Venezuela (UTC-4), no UTC
   const estadoDia = await whatsappDiaEstado.obtenerEstadoDia(grupoId, fecha);
   if (!estadoDia || !estadoDia.ultimoTexto) {
     await avisar(sock, jid, '⚠️ Todavía no se cargó ninguna sábana de jugadas para hoy (' + formatFechaAviso(fecha) + ').');
@@ -849,7 +850,7 @@ async function enviarCorteClienteSemana(sock, jid, nombreCliente, datosCliente) 
 async function manejarComandoCorteSemana(sock, grupoId, jid, { fecha } = {}) {
   // `fecha` (opcional): la semana que contiene ese día. Lo usa el cierre nocturno — a las 00:30 de un
   // lunes hay que cerrar la semana que terminó ayer (domingo), no la semana nueva que recién arranca.
-  const { desde, hasta } = fecha ? calcularSemana(fecha) : await calcularRangoRapido(grupoId, 'semana');
+  const { desde, hasta } = calcularSemana(fecha || fechaVenezuelaHoy());
   const { porcentajesPropios, avalesMap, modeloComision, tiersComision, modelosComisionPorCliente } = await cargarConfigGrupo(grupoId);
   const configComision = { modelo: modeloComision, tiers: tiersComision, modelosPorCliente: modelosComisionPorCliente };
   const { porCliente, totalPorFecha } = await calcularBalanceSemanalPorCliente(grupoId, desde, hasta, porcentajesPropios, avalesMap, configComision);
@@ -886,7 +887,7 @@ async function manejarComandoCorteSemana(sock, grupoId, jid, { fecha } = {}) {
 // (los nombres de cliente en el sistema siempre se guardan en MAYÚSCULAS,
 // ver routes/jugadores.js).
 async function manejarComandoSaldoCliente(sock, grupoId, jid, nombreBuscado) {
-  const { desde, hasta } = await calcularRangoRapido(grupoId, 'semana');
+  const { desde, hasta } = calcularSemana(fechaVenezuelaHoy());
   const { porcentajesPropios, avalesMap, modeloComision, tiersComision, modelosComisionPorCliente, jugadores } = await cargarConfigGrupo(grupoId);
 
   const buscadoNormalizado = quitarTildes(nombreBuscado.trim().toLowerCase());

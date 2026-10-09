@@ -68,7 +68,7 @@ const { crearClienteTelegram } = require('./telegramApi');
 const { detectarTriggerSabana, detectarComando, quitarTildes } = require('./whatsappTrigger');
 const { grupoIdPorJid } = require('./sabanasPendientesWhatsapp');
 const whatsappDiaEstado = require('./whatsappDiaEstado');
-const { formatearFechaISO } = require('./historial');
+const { fechaVenezuelaHoy } = require('./fechaVenezuela');
 
 const LONGITUD_MENSAJE_PARTIDO = 3500; // un mensaje así de largo probablemente sigue en el próximo
 
@@ -355,7 +355,7 @@ async function revisarResumenesAutomaticos(ctxExterno) {
   const ctx = ctxPorDefecto(ctxExterno);
   const whatsappBot = require('./whatsappBot');
   const r = await db.query('SELECT id, nombre, telegram_chat_id FROM grupos WHERE telegram_habilitado = true AND activo = true');
-  const fecha = formatearFechaISO(new Date());
+  const fecha = fechaVenezuelaHoy(); // hora de Venezuela (UTC-4), no UTC
   const central = idsCentrales()[0];
   for (const g of r.rows) {
     try {
