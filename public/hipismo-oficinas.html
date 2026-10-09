@@ -111,6 +111,41 @@
   table.lista td { padding: 8px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
   .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.35); margin: 1px 3px 1px 0; }
   .oculto { display: none !important; }
+
+  /* ---------- Informes (Balance General, Detallado por Cliente, Comisión por Carrera) ---------- */
+  .periodo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .periodo button { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border-light); background: var(--card-2); color: var(--accent-deep); cursor: pointer; }
+  .periodo button.activo { background: var(--accent-grass); border-color: var(--accent-grass); color: #fff; }
+  .periodo .rango { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 6px; }
+  .periodo .rango input { width: 150px; padding: 6px 8px; }
+  .barra-export { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 10px; }
+  .barra-export .toast { font-size: 13px; font-weight: 600; }
+  .toast.ok { color: var(--ok); } .toast.error { color: var(--danger); }
+  /* La tarjeta que se captura (imagen HD / PDF): fondo blanco y colores fijos, para que salga igual de clara siempre. */
+  .informe { background: #ffffff; color: #15321f; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; }
+  .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #16a34a; padding-bottom: 10px; margin-bottom: 12px; }
+  .informe .inf-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; }
+  .informe .inf-titulo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: #14532d; text-transform: uppercase; letter-spacing: 0.6px; }
+  .informe .inf-periodo { font-size: 12.5px; color: #587264; text-align: right; }
+  .informe table.com-cols { table-layout: fixed; }
+  .informe table.com-cols td:first-child, .informe table.com-cols th:first-child { width: 34%; }
+  .informe table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .informe th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #587264; padding: 5px 8px; border-bottom: 1px solid #d7e8dc; }
+  .informe td { padding: 6px 8px; border-bottom: 1px solid #eaf3ed; }
+  .informe .num { text-align: right; white-space: nowrap; }
+  .informe .pos { color: #15803d; font-weight: 700; } .informe .neg { color: #dc2626; font-weight: 700; }
+  .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f1f8f3; }
+  .informe .item-tag { font-size: 10px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #f3d9a4; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+  .informe tr.total td { font-weight: 800; border-top: 2px solid #14532d; border-bottom: none; background: #f1f8f3; }
+  .informe tr.comision td { font-weight: 800; font-size: 15px; background: #14532d; color: #ffffff; border: none; }
+  .informe tr.aviso-dif td { background: #fffbeb; color: #92400e; font-weight: 700; }
+  .informe .dia-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; background: #14532d; color: #fff; padding: 6px 10px; border-radius: 8px; margin: 14px 0 6px; display: flex; justify-content: space-between; }
+  .informe .hip-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #14532d; margin: 10px 0 2px; padding-left: 2px; }
+  .informe .car-tit td { background: #f1f8f3; font-weight: 700; color: #14532d; font-size: 12.5px; }
+  .informe tr.sub td { font-weight: 700; background: #f8fbf9; }
+  .informe tr.sub-hip td { font-weight: 800; background: #e3f1e8; }
+  .informe .vacio { padding: 18px; text-align: center; color: #587264; }
+  .informe .sub-linea { color: #587264; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -136,6 +171,9 @@
 <div class="contenedor">
   <div class="tabs" role="tablist">
     <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
+    <button type="button" class="tab" data-tab="balance" onclick="irATab('balance')">💰 Balance General</button>
+    <button type="button" class="tab" data-tab="detalle" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
+    <button type="button" class="tab" data-tab="comision" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
     <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
   </div>
@@ -153,7 +191,8 @@
             <div><label for="jCarrera">Carrera</label><input type="number" min="1" id="jCarrera" onchange="cambioCarrera()"></div>
             <div><label for="jPizarra">Llegada (pizarra)</label><input type="text" id="jPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off"></div>
             <div><label for="jRet">Retirados (opcional)</label><input type="text" id="jRet" placeholder="Ej. 5" autocomplete="off"></div>
-            <div id="jCruzarWrap" class="oculto"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;margin:0;"><input type="checkbox" id="jCruzar" style="width:auto;"> Cruzar jugadas</label></div>
+            <div id="jCruzarWrap"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;margin:0;" title="Se activa/desactiva por grupo desde Súper-admin"><input type="checkbox" id="jCruzar" style="width:auto;" checked> Cruzar jugadas</label></div>
+            <p id="jCruzarNota" class="nota oculto" style="grid-column:1 / -1;margin:0;">🔀 Cruzar jugadas: <b>desactivado por Súper-admin</b> para este grupo — cada jugada se paga sola.</p>
           </div>
           <div class="cargadas" id="jCargadas"></div>
           <div class="aviso info oculto" id="jAviso"></div>
@@ -196,6 +235,54 @@
         <div id="cuadreErrores" class="errores-fila"></div>
         <div id="cuadreGrupos"></div>
       </aside>
+    </div>
+  </section>
+
+  <!-- ===================== BALANCE GENERAL ===================== -->
+  <section class="panel" id="panel-balance">
+    <div class="card">
+      <h2>Balance General</h2>
+      <p class="nota">El total de todos los clientes y de todos los ítems, y abajo la comisión de la oficina. Toca un cliente para ver su detalle.</p>
+      <div id="balPeriodo"></div>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('balCaptura','balance_general')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('balCaptura','balance_general','balToast')">📄 Descargar PDF</button>
+        <span class="toast" id="balToast"></span>
+      </div>
+      <div class="informe" id="balCaptura"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== DETALLADO POR CLIENTE ===================== -->
+  <section class="panel" id="panel-detalle">
+    <div class="card">
+      <h2>Detallado por Cliente</h2>
+      <p class="nota">Elige un cliente y el período: verás cada carrera por hipódromo, con el total de cada carrera, del hipódromo, del día y del período.</p>
+      <div class="fila-campos" style="margin-bottom:12px;max-width:520px;">
+        <div><label for="detCliente">Cliente</label><select id="detCliente" onchange="cargarDetalle()"><option value="">— Elige un cliente —</option></select></div>
+      </div>
+      <div id="detPeriodo"></div>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('detCaptura','detalle_cliente')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('detCaptura','detalle_cliente','detToast')">📄 Descargar PDF</button>
+        <span class="toast" id="detToast"></span>
+      </div>
+      <div class="informe" id="detCaptura"><div class="vacio">Elige un cliente para ver su detalle.</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== COMISIÓN POR CARRERA ===================== -->
+  <section class="panel" id="panel-comision">
+    <div class="card">
+      <h2>Comisión por Carrera</h2>
+      <p class="nota">Cuánto ganó la oficina en cada carrera: el 5% cobrado menos los % devueltos a clientes. La suma es la misma comisión del Balance General.</p>
+      <div id="comPeriodo"></div>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('comCaptura','comision_por_carrera')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('comCaptura','comision_por_carrera','comToast')">📄 Descargar PDF</button>
+        <span class="toast" id="comToast"></span>
+      </div>
+      <div class="informe" id="comCaptura"><div class="vacio">Cargando…</div></div>
     </div>
   </section>
 
@@ -296,6 +383,9 @@
   <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp">
 </datalist>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="oficinas-informes.js"></script>
 <script>
 // ------------------------------------------------------------------
 // Sesión: misma que Hipismo Grupos Hípicos y Deportes (mismas claves de localStorage). Esta página no tiene
@@ -314,6 +404,8 @@ if (TOKEN && GRUPO) {
   }
 }
 if (!TOKEN || !GRUPO || !GRUPO.moduloHipismoOficinasHabilitado) window.location.href = 'grupo.html';
+
+function puedeCruzarJugadas() { return !!GRUPO && GRUPO.hipismoCruzarHabilitado !== false; }
 
 function cerrarSesionOficinas(mensaje) {
   ['zenyatta_token', 'zenyatta_grupo', 'zenyatta_ultima_actividad'].forEach(k => localStorage.removeItem(k));
@@ -365,7 +457,8 @@ function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el
   $('btnModuloHipismo').style.display = GRUPO.moduloHipismoHabilitado ? '' : 'none';
   const n = [GRUPO.moduloDeportesHabilitado, GRUPO.moduloHipismoHabilitado, GRUPO.moduloHipismoOficinasHabilitado].filter(Boolean).length;
   $('selectorModulo').style.display = n >= 2 ? 'flex' : 'none';
-  if (GRUPO.hipismoCruzarHabilitado) $('jCruzarWrap').classList.remove('oculto');
+  // Igual que en Grupos Hípicos: el mismo interruptor de Súper-admin manda en los dos módulos (=== false es la única forma de apagarlo).
+  if (!puedeCruzarJugadas()) { $('jCruzarWrap').classList.add('oculto'); $('jCruzar').checked = false; $('jCruzarNota').classList.remove('oculto'); }
 })();
 
 function irATab(t) {
@@ -373,6 +466,9 @@ function irATab(t) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
   if (t === 'clientes') cargarClientes();
   if (t === 'hipodromos') cargarHipodromos();
+  if (t === 'balance') cargarBalance();
+  if (t === 'detalle') cargarListaDetalle();
+  if (t === 'comision') cargarComision();
 }
 
 // ------------------------------------------------------------------
@@ -511,7 +607,7 @@ function cuerpoCarrera() {
   return {
     filas: FILAS, pizarra: $('jPizarra').value.trim(), hipodromoId: $('jHipodromo').value,
     carreraNumero: Number($('jCarrera').value), ret: $('jRet').value.trim(), fecha: $('jFecha').value,
-    cruzaJugadas: !!(GRUPO.hipismoCruzarHabilitado && $('jCruzar').checked)
+    cruzaJugadas: !!(puedeCruzarJugadas() && $('jCruzar').checked)
   };
 }
 function mostrarResultado(titulo, texto, avisos) {
@@ -549,7 +645,7 @@ async function guardarCarrera() {
     msg('jMsg', '✅ Carrera ' + cuerpo.carreraNumero + ' guardada.', true);
     // Lista para la siguiente: tabla vacía, llegada vacía y la carrera que sigue.
     FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
-    pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = false;
+    pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = puedeCruzarJugadas();
     pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
     $('jAviso').classList.add('oculto');
     await abrirSiguienteCarrera();
@@ -744,11 +840,210 @@ async function borrarHipodromo(id) {
 }
 
 // ------------------------------------------------------------------
+// INFORMES: Balance General, Detallado por Cliente y Comisión por Carrera.
+// Los números salen de las mismas rutas de Hipismo Grupos Hípicos (cierre-final, detalle-semana) y de
+// /oficinas/comision-por-carrera, que se calcula con la misma cuenta del Balance: por eso los saldos coinciden.
+// ------------------------------------------------------------------
+const INF = window.OficinasInformes;
+const clasePN = n => (INF.r2(n) > 0 ? 'pos' : (INF.r2(n) < 0 ? 'neg' : ''));
+const celdaSaldo = n => `<span class="${clasePN(n)}">${INF.dineroConSigno(n)}</span>`;
+
+// Selector de período: semana actual / anterior / hace 2 semanas, o un rango de fechas a mano.
+const PERIODO = {};
+function iniciarPeriodo(prefijo, alCambiar) {
+  PERIODO[prefijo] = { semana: 'actual', personalizado: false, desde: '', hasta: '', alCambiar };
+  const cont = $(prefijo + 'Periodo');
+  cont.innerHTML = `<div class="periodo">
+      <button type="button" data-s="actual" class="activo">Semana actual</button>
+      <button type="button" data-s="anterior">Semana anterior</button>
+      <button type="button" data-s="hace2">Hace 2 semanas</button>
+      <span class="rango"><input type="date" id="${prefijo}Desde" aria-label="Desde"><input type="date" id="${prefijo}Hasta" aria-label="Hasta">
+      <button type="button" data-s="rango">Ver rango</button></span></div>`;
+  cont.addEventListener('click', e => {
+    const b = e.target.closest('button[data-s]'); if (!b) return;
+    const p = PERIODO[prefijo];
+    if (b.dataset.s === 'rango') {
+      const d = $(prefijo + 'Desde').value, h = $(prefijo + 'Hasta').value;
+      if (!d || !h) { alert('Elige la fecha desde y la fecha hasta.'); return; }
+      p.personalizado = true; p.desde = d; p.hasta = h;
+    } else { p.personalizado = false; p.semana = b.dataset.s; }
+    cont.querySelectorAll('button[data-s]').forEach(x => x.classList.toggle('activo', x === b));
+    p.alCambiar();
+  });
+}
+function queryPeriodo(prefijo) {
+  const p = PERIODO[prefijo];
+  return p.personalizado ? `desde=${encodeURIComponent(p.desde)}&hasta=${encodeURIComponent(p.hasta)}` : `semana=${p.semana}`;
+}
+function cabeceraInforme(titulo, d, extra) {
+  return `<div class="inf-cab"><div><div class="inf-grupo">${esc(GRUPO.nombre || '')}</div><div class="inf-titulo">${esc(titulo)}</div>${extra ? `<div class="sub-linea">${extra}</div>` : ''}</div>
+    <div class="inf-periodo">${esc(INF.textoPeriodo(d))}</div></div>`;
+}
+
+// ---------- Balance General ----------
+let BALANCE = null;
+async function cargarBalance() {
+  const caja = $('balCaptura');
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const [cierre] = await Promise.all([api('/api/hipismo/cierre-final?' + queryPeriodo('bal')), CLIENTES.length ? null : cargarClientes()]);
+    BALANCE = cierre; pintarBalance();
+  } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+function esItemBalance(nombre) {
+  const real = CLIENTES.find(c => normNombre(c.nombre) === normNombre(nombre) && !c.es_cuenta_comision);
+  return !real;
+}
+function pintarBalance() {
+  const d = BALANCE; if (!d) return;
+  const b = INF.armarBalance(d, esItemBalance);
+  const filas = b.filas.map(f => `<tr class="fila-click" onclick="verDetalleDe(decodeURIComponent('${encodeURIComponent(f.nombre)}'))">
+      <td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${f.jugadas || ''}</td><td class="num">${celdaSaldo(f.saldo)}</td></tr>`).join('');
+  $('balCaptura').innerHTML = cabeceraInforme('Balance General', d) + `<table>
+      <thead><tr><th>Cliente / ítem</th><th class="num">Jugadas</th><th class="num">Saldo</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="3" class="vacio">No hay jugadas en este período.</td></tr>'}</tbody>
+      <tfoot>
+        <tr class="total"><td colspan="2">TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
+        <tr class="comision"><td colspan="2">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
+        ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td colspan="2">⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
+      </tfoot></table>`;
+}
+function verDetalleDe(nombre) {
+  irATab('detalle');
+  const sel = $('detCliente');
+  if (![...sel.options].some(o => o.value === nombre)) sel.insertAdjacentHTML('beforeend', `<option value="${esc(nombre)}">${esc(nombreBonito(nombre))}</option>`);
+  sel.value = nombre;
+  cargarDetalle();
+}
+
+// ---------- Detallado por Cliente ----------
+async function cargarListaDetalle() {
+  const sel = $('detCliente'), actual = sel.value;
+  try {
+    const cierre = await api('/api/hipismo/cierre-final?' + queryPeriodo('det'));
+    sel.innerHTML = '<option value="">— Elige un cliente —</option>' + cierre.clientes.map(c => `<option value="${esc(c.nombre)}">${esc(nombreBonito(c.nombre))}</option>`).join('');
+    if (actual && [...sel.options].some(o => o.value === actual)) sel.value = actual;
+  } catch (e) { /* si falla, queda la lista anterior */ }
+  if (sel.value) cargarDetalle();
+}
+async function cargarDetalle() {
+  const nombre = $('detCliente').value, caja = $('detCaptura');
+  if (!nombre) { caja.innerHTML = '<div class="vacio">Elige un cliente para ver su detalle.</div>'; return; }
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const d = await api('/api/hipismo/clientes/' + encodeURIComponent(nombre) + '/detalle-semana?' + queryPeriodo('det'));
+    pintarDetalle(nombre, d);
+  } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+function pintarDetalle(nombre, resp) {
+  const det = INF.armarDetalleCliente(resp);
+  let html = cabeceraInforme('Detallado por Cliente', resp, `<b>${esc(nombreBonito(nombre))}</b>`);
+  if (!det.dias.length) html += '<div class="vacio">Este cliente no tiene movimientos en este período.</div>';
+  det.dias.forEach(dia => {
+    html += `<div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dineroConSigno(dia.total)}</span></div>`;
+    dia.hipodromos.forEach(h => {
+      html += `<div class="hip-tit">${esc(h.nombre)}</div><table><tbody>`;
+      h.carreras.forEach(c => {
+        if (c.numero) html += `<tr class="car-tit"><td colspan="2">Carrera ${c.numero}</td></tr>`;
+        c.lineas.forEach(l => { html += `<tr><td>${esc(l.texto)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`; });
+        if (c.numero) html += `<tr class="sub"><td>Total carrera ${c.numero}</td><td class="num">${celdaSaldo(c.total)}</td></tr>`;
+      });
+      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table>`;
+    });
+    html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table>`;
+  });
+  html += `<table style="margin-top:14px;"><tbody><tr class="comision"><td>TOTAL ${resp.rangoPersonalizado ? 'DEL PERÍODO' : 'DE LA SEMANA ' + resp.numeroSemana}</td><td class="num">${INF.dineroConSigno(det.totalPeriodo)}</td></tr>
+    ${Math.abs(det.totalPeriodo - det.totalSegunServidor) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ El total del servidor es distinto</td><td class="num">${INF.dineroConSigno(det.totalSegunServidor)}</td></tr>` : ''}</tbody></table>`;
+  $('detCaptura').innerHTML = html;
+}
+
+// ---------- Comisión por Carrera ----------
+async function cargarComision() {
+  const caja = $('comCaptura');
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const d = await api('/api/hipismo/oficinas/comision-por-carrera?' + queryPeriodo('com'));
+    pintarComision(d);
+  } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+function pintarComision(d) {
+  let html = cabeceraInforme('Comisión por Carrera', d);
+  if (!d.dias.length) html += '<div class="vacio">No hay carreras cargadas en este período.</div>';
+  const cabTabla = '<thead><tr><th>Carrera</th><th class="num">Comisión 5%</th><th class="num">Devuelto</th><th class="num">Comisión neta</th></tr></thead>';
+  d.dias.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(dia => {
+    html += `<div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dinero(dia.neta)}</span></div>`;
+    dia.hipodromos.forEach(h => {
+      html += `<div class="hip-tit">${esc(h.nombre)}</div><table class="com-cols">${cabTabla}<tbody>`;
+      h.carreras.forEach(c => { html += `<tr><td>Carrera ${c.carreraNumero}</td><td class="num">${INF.dinero(c.bruta)}</td><td class="num">${c.devuelto ? '-' + INF.dinero(c.devuelto) : INF.dinero(0)}</td><td class="num"><b>${INF.dinero(c.neta)}</b></td></tr>`; });
+      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${INF.dinero(h.bruta)}</td><td class="num">${h.devuelto ? '-' + INF.dinero(h.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(h.neta)}</td></tr></tbody></table>`;
+    });
+    html += `<table class="com-cols"><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${INF.dinero(dia.bruta)}</td><td class="num">${dia.devuelto ? '-' + INF.dinero(dia.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(dia.neta)}</td></tr></tbody></table>`;
+  });
+  html += `<table class="com-cols" style="margin-top:14px;"><tbody>
+      <tr class="total"><td>TOTAL DE LAS CARRERAS</td><td class="num">${INF.dinero(d.totales.bruta)}</td><td class="num">${d.totales.devuelto ? '-' + INF.dinero(d.totales.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(d.totales.neta)}</td></tr>
+      ${Math.abs(d.otrosConceptos) >= 0.005 ? `<tr class="sub"><td colspan="3">Comisión de jugadas adelantadas (no ligada a una carrera)</td><td class="num">${INF.dinero(d.otrosConceptos)}</td></tr>` : ''}
+      <tr class="comision"><td colspan="3">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(d.comisionOficina)}</td></tr></tbody></table>`;
+  $('comCaptura').innerHTML = html;
+}
+
+// ---------- Copiar imagen HD y descargar PDF ----------
+function avisoInforme(id, texto, error) { const t = $(id); if (!t) return; t.textContent = texto; t.className = 'toast ' + (error ? 'error' : 'ok'); }
+function toastDe(idCaptura) { return { balCaptura: 'balToast', detCaptura: 'detToast', comCaptura: 'comToast' }[idCaptura]; }
+async function copiarImagenHD(idCaptura, nombreArchivo) {
+  const caja = $(idCaptura), aviso = toastDe(idCaptura);
+  if (typeof html2canvas !== 'function') return avisoInforme(aviso, '⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
+  try {
+    const canvas = await html2canvas(caja, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) return avisoInforme(aviso, '⚠️ No se pudo generar la imagen.', true);
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        avisoInforme(aviso, '✅ Imagen copiada — pégala (Ctrl+V) donde la necesites.');
+      } catch (e) {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArchivo + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        avisoInforme(aviso, 'No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) { avisoInforme(aviso, '⚠️ No se pudo generar la imagen: ' + e.message, true); }
+}
+// PDF A4 de varias páginas: la imagen se corta en tramos del alto de una hoja (los informes largos no se recortan).
+async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
+  const caja = $(idCaptura);
+  if (typeof html2canvas !== 'function' || !window.jspdf) return avisoInforme(idAviso, '⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
+  try {
+    const canvas = await html2canvas(caja, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
+    const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight();
+    const margen = 18, anchoUtil = ancho - margen * 2, altoUtil = alto - margen * 2;
+    const escala = anchoUtil / canvas.width;
+    const altoTramoPx = Math.floor(altoUtil / escala);
+    let y = 0, primera = true;
+    while (y < canvas.height) {
+      const h = Math.min(altoTramoPx, canvas.height - y);
+      const tramo = document.createElement('canvas'); tramo.width = canvas.width; tramo.height = h;
+      const ctx = tramo.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, tramo.width, tramo.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+      if (!primera) pdf.addPage();
+      pdf.addImage(tramo.toDataURL('image/jpeg', 0.95), 'JPEG', margen, margen, anchoUtil, h * escala);
+      primera = false; y += h;
+    }
+    pdf.save(nombreArchivo + '.pdf');
+    avisoInforme(idAviso, '✅ PDF descargado.');
+  } catch (e) { avisoInforme(idAviso, '⚠️ No se pudo generar el PDF: ' + e.message, true); }
+}
+
+// ------------------------------------------------------------------
 // Arranque
 // ------------------------------------------------------------------
 (async function iniciar() {
   if (!TOKEN || !GRUPO) return;
   $('jFecha').value = fechaHoyVenezuela();
+  iniciarPeriodo('bal', cargarBalance);
+  iniciarPeriodo('det', cargarListaDetalle);
+  iniciarPeriodo('com', cargarComision);
   limpiarTabla();
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
   await Promise.all([cargarHipodromos(), cargarClientes()]);

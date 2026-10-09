@@ -199,6 +199,17 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [F('fantasma', 'jugo', '1p', '3', 10), F('pedro', 'dio', '1p', '3', 10)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 2, fecha: '2026-10-09' } });
   check(r.status === 422 && /CLIENTE FANTASMA NO EXISTE/.test(r.salida.error) && planos.length === 1, '3p) un jugador que no es cliente: "CLIENTE FANTASMA NO EXISTE" y no se guarda');
 
+  // "Cruzar jugadas": el mismo interruptor de Súper-admin vale para los dos módulos
+  const tablaCruce = [F('jose', 'jugo', '1p', '3', 100), F('pedro', 'dio', '1p', '3', 100), F('jose', 'jugo', '1p', '7', 40), F('ana', 'dio', '1p', '7', 40)];
+  const cuerpoBase = { filas: tablaCruce, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 5, fecha: '2026-10-09' };
+  r = await invocarRuta(handlerDe('post', '/oficinas/calcular'), { ...base, body: { ...cuerpoBase, cruzaJugadas: false } });
+  const sinCruzar = r.salida.totalesFinales.JOSE;
+  r = await invocarRuta(handlerDe('post', '/oficinas/calcular'), { ...base, body: { ...cuerpoBase, cruzaJugadas: true } });
+  const cruzando = r.salida.totalesFinales.JOSE;
+  check(Math.abs(sinCruzar - 55) < 0.01 && Math.abs(cruzando - 57) < 0.01, `3q) con "cruzar" JOSE queda en 57 (5% solo sobre el saldo 60) y sin cruzar en 55 (dio ${cruzando} y ${sinCruzar})`);
+  const htmlOf = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-oficinas.html'), 'utf8');
+  check(/hipismoCruzarHabilitado !== false/.test(htmlOf) && /puedeCruzarJugadas\(\) && \$\('jCruzar'\)\.checked/.test(htmlOf), '3r) Oficinas respeta el interruptor "Cruzar jugadas" de Súper-admin igual que Grupos Hípicos');
+
   // ---------- 4) Interruptores del módulo ----------
   const leer = rel => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
   check(/modulo_hipismo_oficinas_habilitado boolean not null default false/.test(leer('sql/schema.sql')) && /jugadas_oficina jsonb/.test(leer('sql/schema.sql')), '4a) el SQL crea la columna del módulo (apagado por defecto) y jugadas_oficina');

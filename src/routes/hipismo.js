@@ -1178,6 +1178,68 @@ router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
   res.status(out.status).json(out.body);
 }));
 
+// GET /oficinas/comision-por-carrera?semana=actual|anterior|hace2 | ?desde=&hasta= — cuánto ganó la oficina en cada
+// carrera. Comisión NETA = el 5% cobrado en la carrera (comision_total del plano) menos los % devueltos a
+// clientes/avales en esa misma carrera. Los devueltos salen de construirCierreFinalHipismo (la misma cuenta del
+// Balance General, ya redondeada), así que la suma de todas las carreras + lo que no está ligado a una carrera
+// (comisión de Jugadas Adelantadas) da EXACTAMENTE la "Comisión" del Balance General (comisionOficina).
+router.get('/oficinas/comision-por-carrera', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const hoyVe = hoyVenezuela();
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVe, offset);
+
+  const cierre = await construirCierreFinalHipismo(req.grupoId, desde, hasta);
+  const rPlanos = await db.query(
+    `SELECT id, fecha, hipodromo_nombre, carrera_numero, comision_total
+       FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3
+      ORDER BY fecha DESC, hipodromo_nombre, carrera_numero`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const carreras = new Map(); // fecha::hipodromo::carrera -> fila
+  const fila = (fecha, hipodromo, carrera) => {
+    const clave = `${fecha}::${hipodromo}::${carrera}`;
+    if (!carreras.has(clave)) carreras.set(clave, { fecha, hipodromo, carreraNumero: Number(carrera), bruta: 0, devuelto: 0 });
+    return carreras.get(clave);
+  };
+  rPlanos.rows.forEach(p => { fila(fechaComoISO(p.fecha), p.hipodromo_nombre, p.carrera_numero).bruta += Number(p.comision_total) || 0; });
+  (cierre.devueltoPorCarrera || []).forEach(d => { fila(d.fecha, d.hipodromo, d.carrera).devuelto += d.monto; });
+
+  const porDia = new Map();
+  carreras.forEach(c => {
+    const bruta = round2(c.bruta), devuelto = round2(c.devuelto), neta = round2(bruta - devuelto);
+    if (!porDia.has(c.fecha)) porDia.set(c.fecha, new Map());
+    const hips = porDia.get(c.fecha);
+    if (!hips.has(c.hipodromo)) hips.set(c.hipodromo, { nombre: c.hipodromo, carreras: [] });
+    hips.get(c.hipodromo).carreras.push({ carreraNumero: c.carreraNumero, bruta, devuelto, neta });
+  });
+  const sumar = (arr) => ({
+    bruta: round2(arr.reduce((s, x) => s + x.bruta, 0)),
+    devuelto: round2(arr.reduce((s, x) => s + x.devuelto, 0)),
+    neta: round2(arr.reduce((s, x) => s + x.neta, 0))
+  });
+  const dias = Array.from(porDia.entries()).map(([fecha, hips]) => {
+    const hipodromos = Array.from(hips.values()).map(h => {
+      h.carreras.sort((a, b) => a.carreraNumero - b.carreraNumero);
+      return { nombre: h.nombre, ...sumar(h.carreras), carreras: h.carreras };
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    return { fecha, ...sumar(hipodromos), hipodromos };
+  }).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const totales = sumar(dias);
+  // Lo que cobró la oficina y no pertenece a una carrera de esta lista (Tablas Fijas/Marcas y Tercios
+  // Adelantadas): se muestra aparte para que el total siga siendo igual al del Balance General.
+  const otrosConceptos = round2(Number(cierre.comisionSemana) - totales.neta);
+
+  res.json({
+    grupoNombre: req.grupo.nombre,
+    rango: { desde, hasta }, semana, rangoPersonalizado: !!rangoPersonalizado, numeroSemana: numeroSemanaISO(desde),
+    dias, totales, otrosConceptos,
+    comisionOficina: round2(Number(cierre.comisionSemana))
+  });
+}));
+
 // GET /planos?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
 router.get('/planos', asyncHandler(async (req, res) => {
   const { fecha, hipodromoId, limite } = req.query;

@@ -1525,7 +1525,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
         // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
         // info.cuentaNombre ya es el nombre final, no hace falta pegarle
         // el sufijo de nuevo.
-        porGrupoCarrera.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto: 0 });
+        porGrupoCarrera.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto: 0, claveCarrera });
       }
       porGrupoCarrera.get(claveGrupo).exacto += exacto;
     });
@@ -1685,11 +1685,20 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // ver la nota grande EXACTA de acumularDevuelto más arriba — y ese valor
   // ya redondeado es el que se suma a la cuenta destino y a
   // totalDevueltoSemana (nunca al revés).
-  porGrupoCarrera.forEach(({ cuentaNombre, exacto }) => {
+  // devueltoPorCarrera (09-10-2026, Hipismo Oficinas > Comisión por Carrera): lo devuelto en cada carrera,
+  // sumando los MISMOS montos ya redondeados que van a totalDevueltoSemana — así la comisión neta por carrera
+  // suma EXACTO la comisión que muestra el Balance General.
+  const devueltoPorCarreraMap = new Map();
+  porGrupoCarrera.forEach(({ cuentaNombre, exacto, claveCarrera }) => {
     const devuelto = round2(exacto);
     if (!devuelto) return;
     acumular(cuentaNombre, devuelto);
     totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
+    devueltoPorCarreraMap.set(claveCarrera, round2((devueltoPorCarreraMap.get(claveCarrera) || 0) + devuelto));
+  });
+  const devueltoPorCarrera = Array.from(devueltoPorCarreraMap.entries()).map(([clave, monto]) => {
+    const partes = String(clave).split('::');
+    return { fecha: partes[0], hipodromo: partes.slice(1, -1).join('::'), carrera: Number(partes[partes.length - 1]), monto };
   });
 
   const clientes = Array.from(porCliente.values())
@@ -1818,6 +1827,8 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   return {
     clientes,
     comisionSemana,
+    devueltoPorCarrera,
+    totalDevueltoSemana,
     // comisionRemateSemana (26-09-2026): se sigue devolviendo el dato
     // crudo por compatibilidad, pero YA NO representa "comisión" — el
     // frontend ya no lo suma al total de comisión mostrado (ver el ítem
