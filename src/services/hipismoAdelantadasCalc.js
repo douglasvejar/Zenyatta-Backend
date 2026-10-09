@@ -222,7 +222,13 @@ function numDe(s) {
 }
 
 const RE_ENCABEZADO = /PLANOS?\s+MARCAS|TABLAS?\s+ADELANTAD/i;
-const RE_CLIENTE = /^JUGANDO\s+(.+)$/i;
+// 09-10-2026, a pedido del usuario: el plano de Tablas Fijas y Marcas también llega con el
+// cliente escrito como "*#TERCIO HAALAND*" / "*TERCIO HANRY*" ("tercio significa cliente": el
+// cliente es el nombre que está al lado de la palabra TERCIO), además del "*JUGANDO HALLAND*" de
+// siempre. El "#" del principio es opcional. "TERCIOS" (plural) no calza: lleva \s+ justo después.
+const RE_CLIENTE = /^#?\s*(?:JUGANDO|TERCIO)\s+(.+)$/i;
+// Líneas de pura decoración (➖➖➖➖, -----, =====, emojis sueltos): ni letras ni dígitos.
+const RE_DECORATIVA = /^[^\p{L}\p{N}]+$/u;
 const RE_CARRERA = /^(\d{1,2})\)\s*(.+)$/;
 const RE_TF = /^(\d+)\s*TF\s+DEL\s+(\d+)\s+A\s+(\d+(?:[.,]\d+)?)\s*,\s*(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*\$/i;
 const RE_MARCA = /^(\d{1,2})\s*[xX]\s*(\d{1,2})\s+(\d+(?:[.,]\d+)?)\s*\$/;
@@ -242,6 +248,7 @@ function parsearJugadasAdelantadas(textoOriginal) {
     const linea = lineaCruda.trim();
     if (!linea) return;
     if (RE_ENCABEZADO.test(linea)) return; // "PLANOS MARCAS Y TABLAS ADELANTADAS ZENYATTA" — decorativo
+    if (RE_DECORATIVA.test(linea)) return; // separadores "➖➖➖➖➖" entre un cliente y el siguiente
 
     const mCliente = linea.match(RE_CLIENTE);
     // 29-09-2026 — mismo criterio y mismo motivo que hipismoCalc.js
@@ -252,7 +259,7 @@ function parsearJugadasAdelantadas(textoOriginal) {
 
     const mCarrera = linea.match(RE_CARRERA);
     if (!mCarrera) { sinReconocer.push(linea); return; }
-    if (!clienteActual) { sinReconocer.push(linea); return; } // línea numerada antes de cualquier "JUGANDO..."
+    if (!clienteActual) { sinReconocer.push(linea); return; } // línea numerada antes de cualquier "JUGANDO..."/"TERCIO..."
 
     const carreraNumero = parseInt(mCarrera[1], 10);
     const resto = mCarrera[2].trim();
