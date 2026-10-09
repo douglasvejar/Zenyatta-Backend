@@ -2503,8 +2503,16 @@ setInterval(revisarInactividad, 30000);
 function actualizarSelectorModulo() {
   const selector = document.getElementById('selectorModulo');
   if (!selector) return;
-  selector.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+  // Hipismo Oficinas (09-10-2026): ahora hay hasta 3 módulos. El selector se muestra si el grupo tiene 2 o más,
+  // y cada botón de Hipismo solo aparece si ese módulo está contratado.
+  const btnHip = document.getElementById('btnModuloHipismo');
+  const btnOfi = document.getElementById('btnModuloOficinas');
+  if (btnHip) btnHip.style.display = GRUPO.moduloHipismoHabilitado ? '' : 'none';
+  if (btnOfi) btnOfi.style.display = GRUPO.moduloHipismoOficinasHabilitado ? '' : 'none';
+  const cantidad = [GRUPO.moduloDeportesHabilitado, GRUPO.moduloHipismoHabilitado, GRUPO.moduloHipismoOficinasHabilitado].filter(Boolean).length;
+  selector.style.display = cantidad >= 2 ? 'flex' : 'none';
 }
+function irAModuloOficinas() { window.location.href = 'hipismo-oficinas.html'; }
 function irAModuloHipismo() {
   // Solo navega — la sesión sigue viva en localStorage (mismo origen,
   // mismas claves 'zenyatta_token'/'zenyatta_grupo' que ya lee
@@ -2521,6 +2529,10 @@ function mostrarApp() {
   // más abajo también pasa por acá).
   if (!GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) {
     window.location.href = 'hipismo-mockup.html';
+    return;
+  }
+  if (!GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoOficinasHabilitado) {
+    window.location.href = 'hipismo-oficinas.html';
     return;
   }
   document.getElementById('vistaLogin').style.display = 'none';
@@ -4158,7 +4170,7 @@ function actualizarVisibilidadPozoJugador() {
 // hay nada que anclar con nada, así que se oculta para no confundir.
 function actualizarVisibilidadAnclarModulos() {
   const cont = document.getElementById('contenedorAnclarModulos');
-  if (cont) cont.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+  if (cont) cont.style.display = (GRUPO.moduloDeportesHabilitado && (GRUPO.moduloHipismoHabilitado || GRUPO.moduloHipismoOficinasHabilitado)) ? 'flex' : 'none';
 }
 
 // "Moneda del Jugador" (18-09-2026, ver la nota grande en grupo.html

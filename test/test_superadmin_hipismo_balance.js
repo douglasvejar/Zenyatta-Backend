@@ -50,7 +50,7 @@ function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
-  if (/^SELECT id, modulo_hipismo_habilitado FROM grupos WHERE id = \$1$/i.test(sql)) {
+  if (/^SELECT id, modulo_hipismo_habilitado(, modulo_hipismo_oficinas_habilitado)? FROM grupos WHERE id = \$1$/i.test(sql)) {
     const [id] = params;
     const grupo = TABLAS.grupos.find(g => g.id === id);
     return { rows: grupo ? [{ id: grupo.id, modulo_hipismo_habilitado: grupo.modulo_hipismo_habilitado }] : [] };

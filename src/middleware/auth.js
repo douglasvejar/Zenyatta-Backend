@@ -76,7 +76,7 @@ function firmarSesionEmpleado(empleado) {
 // grupo fue desactivado por el súper-admin, o el empleado fue
 // desactivado/borrado por su Administrador, el token deja de servir
 // aunque todavía no haya expirado.
-const SELECT_GRUPO_SESION = 'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado FROM grupos WHERE id = $1';
+const SELECT_GRUPO_SESION = 'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1';
 
 async function requiereGrupo(req, res, next) {
   try {

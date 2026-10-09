@@ -45,7 +45,7 @@ async function buscarJugadorYGrupo(token) {
     err.status = 404;
     throw err;
   }
-  const grupoRes = await db.query('SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  const grupoRes = await db.query('SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = grupoRes.rows[0];
   if (!grupo || !grupo.activo) {
     const err = new Error('Esta cuenta no está disponible en este momento.');
@@ -112,7 +112,7 @@ router.get('/:token', asyncHandler(async (req, res) => {
   // 🐎 adelante en el campo "ticket" para que se distingan de un vistazo.
   let totalHipismo = 0;
   let cantidadTicketsHipismo = 0;
-  const hipismoAnclado = !!(jugador.modulos_anclados && grupo.modulo_hipismo_habilitado);
+  const hipismoAnclado = !!(jugador.modulos_anclados && (grupo.modulo_hipismo_habilitado || grupo.modulo_hipismo_oficinas_habilitado));
   if (hipismoAnclado) {
     const lineasHipismo = await obtenerLineasHipismoCliente(jugador.grupo_id, jugador.nombre, desde, hasta);
     lineasHipismo.forEach(linea => {

@@ -2096,3 +2096,22 @@ alter table whatsapp_dia_estado add column if not exists cierre_nocturno_en time
 -- reinicie. (El cierre de cada grupo también puede salir antes de la medianoche, apenas llega
 -- SABANA FINAL y todos los juegos están resueltos.)
 alter table whatsapp_dia_estado add column if not exists cierre_final_enviado_en timestamptz;
+
+
+-- =================================================================
+-- HIPISMO OFICINAS (09-10-2026, a pedido del usuario)
+-- =================================================================
+-- Segundo módulo de Hipismo para grupos que trabajan con OFICINAS: los
+-- cálculos son EXACTAMENTE los mismos que "Hipismo Grupos Hípicos" (mismo
+-- motor, mismas tablas, mismos clientes y mismos hipódromos), solo cambia
+-- la forma de cargar las jugadas: en vez de pegar un plano de texto, se
+-- cargan en una tabla (jugador, jugó/dio, tipo, caballo, monto) y la
+-- carrera solo se puede guardar cuando lo que jugaron es igual a lo que
+-- dieron. Interruptor manual, exclusivo del Súper-admin, igual que los
+-- otros módulos.
+alter table grupos add column if not exists modulo_hipismo_oficinas_habilitado boolean not null default false;
+
+-- Las jugadas tal cual se cargaron en la tabla de Oficinas (para poder
+-- volver a abrir la carrera y corregirla). El cálculo sigue saliendo de
+-- hipismo_tickets, esto es solo la copia editable.
+alter table hipismo_planos add column if not exists jugadas_oficina jsonb;

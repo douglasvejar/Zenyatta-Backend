@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ludox Hipismo Oficinas 🏢 — Panel del Grupo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* =================================================================
+     HIPISMO OFICINAS (09-10-2026, a pedido del usuario) — misma paleta "pasto" de Hipismo Grupos Hípicos
+     (hipismo-mockup.html) para que se sienta del mismo producto. Los cálculos son los mismos: esta pantalla
+     solo cambia la forma de CARGAR las jugadas (tabla en vez de plano) — ver src/services/hipismoOficinasCalc.js.
+     ================================================================= */
+  :root {
+    --bg: #f3f9f4; --card: #ffffff; --card-2: #f1f8f3;
+    --card-border: rgba(15,60,35,0.12); --border-light: rgba(15,60,35,0.18);
+    --text: #15321f; --text-dim: #587264;
+    --accent-grass: #16a34a; --accent-lime: #65a30d; --accent-deep: #14532d;
+    --danger: #dc2626; --ok: #16a34a; --warning: #d97706;
+    --danger-bg: #fef2f2; --ok-bg: #ecfdf3; --warn-bg: #fffbeb;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+  h1, h2, h3 { font-family: 'Outfit', sans-serif; margin: 0; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; padding: 14px 18px 0; }
+  .marca { display: flex; align-items: center; gap: 10px; }
+  .marca .logo-emoji { font-size: 26px; }
+  .marca h1 { font-size: 19px; font-weight: 800; }
+  .marca .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+  .selector-modulo { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--card-border); border-radius: 30px; padding: 4px; flex-wrap: wrap; }
+  .selector-modulo button { border: none; border-radius: 24px; padding: 7px 16px; font-size: 13px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: pointer; background: transparent; color: var(--text-dim); }
+  .selector-modulo button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); color: #fff; cursor: default; }
+  .barra-der { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .contenedor { max-width: 1400px; margin: 0 auto; padding: 14px 18px 40px; }
+
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--card-border); margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { border: none; background: transparent; font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: var(--text-dim); padding: 10px 18px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .tab.activa { color: var(--accent-deep); border-bottom-color: var(--accent-grass); }
+  .panel { display: none; }
+  .panel.activo { display: block; }
+
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px 18px; }
+  .card + .card { margin-top: 14px; }
+  .card h2 { font-size: 17px; margin-bottom: 4px; }
+  .nota { color: var(--text-dim); font-size: 13px; margin: 2px 0 12px; }
+
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; }
+  input, select, textarea { width: 100%; font: inherit; font-size: 14px; color: var(--text); background: #fff; border: 1px solid var(--border-light); border-radius: 8px; padding: 8px 10px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid rgba(22,163,74,0.35); border-color: var(--accent-grass); }
+  button.btn { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; border: none; border-radius: 9px; padding: 9px 16px; cursor: pointer; background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); color: #fff; }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.btn-sec { background: var(--card-2); color: var(--accent-deep); border: 1px solid var(--border-light); }
+  button.btn-peligro { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(220,38,38,0.35); }
+  button.btn-chico { padding: 5px 10px; font-size: 12px; }
+  .fila-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+  .msg { margin-top: 10px; font-size: 13px; font-weight: 600; }
+  .msg.ok { color: var(--ok); } .msg.error { color: var(--danger); }
+
+  /* ---------- Jugadas ---------- */
+  .jug-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .jug-layout { grid-template-columns: 1fr; } }
+  .cargadas { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .chip-carrera { border: 1px solid var(--border-light); background: var(--card-2); color: var(--accent-deep); border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Outfit', sans-serif; }
+  .chip-carrera.actual { background: var(--accent-grass); color: #fff; border-color: var(--accent-grass); }
+  .aviso { border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-top: 12px; }
+  .aviso.info { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.35); color: #92400e; }
+  .tabla-wrap { overflow-x: auto; margin-top: 12px; }
+  table.jugadas { width: 100%; border-collapse: collapse; min-width: 640px; }
+  table.jugadas th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); padding: 6px 6px; }
+  table.jugadas td { padding: 4px 4px; }
+  table.jugadas td.n { width: 28px; color: var(--text-dim); font-size: 12px; text-align: center; }
+  table.jugadas td.x { width: 36px; }
+  table.jugadas tr.fila-error input, table.jugadas tr.fila-error select { border-color: var(--danger); background: var(--danger-bg); }
+  select.lado-jugo { background: var(--ok-bg); font-weight: 700; color: var(--accent-deep); }
+  select.lado-dio { background: #eff6ff; font-weight: 700; color: #1e40af; }
+  .acciones-tabla { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .espacio { flex: 1; }
+
+  /* Ventana de cuadre */
+  .cuadre { position: sticky; top: 12px; }
+  .cuadre-cab { display: flex; align-items: center; gap: 8px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; padding: 10px 12px; border-radius: 10px; }
+  .cuadre-cab.ok { background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.4); }
+  .cuadre-cab.mal { background: var(--warn-bg); color: #92400e; border: 1px solid rgba(217,119,6,0.4); }
+  .cuadre-cab.vacio { background: var(--card-2); color: var(--text-dim); border: 1px solid var(--card-border); }
+  .grupo-cuadre { border: 1px solid var(--card-border); border-radius: 10px; padding: 9px 11px; margin-top: 9px; font-size: 13px; }
+  .grupo-cuadre.ok { border-color: rgba(22,163,74,0.4); background: var(--ok-bg); }
+  .grupo-cuadre.mal { border-color: rgba(217,119,6,0.45); background: var(--warn-bg); }
+  .grupo-cuadre .tit { font-weight: 800; font-family: 'Outfit', sans-serif; font-size: 14px; }
+  .grupo-cuadre .num { display: flex; justify-content: space-between; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .grupo-cuadre .falta { margin-top: 6px; font-weight: 800; color: #b45309; }
+  .grupo-cuadre .quienes { margin-top: 5px; color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+  .errores-fila { margin-top: 9px; font-size: 12.5px; color: var(--danger); }
+
+  .resultado { white-space: pre-wrap; font-family: 'Inter', monospace; font-size: 13px; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; margin-top: 10px; max-height: 480px; overflow: auto; }
+
+  /* ---------- Clientes / Hipódromos ---------- */
+  .dos-col { display: grid; grid-template-columns: minmax(320px, 460px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .dos-col { grid-template-columns: 1fr; } }
+  .campo { margin-top: 12px; }
+  .pregunta { margin-top: 16px; padding: 12px; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; }
+  .pregunta .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .si-no { display: flex; gap: 8px; }
+  .si-no label { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 14px; border: 1px solid var(--border-light); border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--text); background: #fff; }
+  .si-no input { width: auto; }
+  .sub-bloque { margin-top: 10px; }
+  .aval-fila { display: grid; grid-template-columns: 1fr 100px 36px; gap: 8px; margin-top: 8px; }
+  table.lista { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.lista th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); padding: 6px 8px; border-bottom: 1px solid var(--card-border); }
+  table.lista td { padding: 8px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.35); margin: 1px 3px 1px 0; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">
+    <span class="logo-emoji">🏢</span>
+    <div>
+      <h1>Ludox — Hipismo Oficinas</h1>
+      <div class="sub" id="topbarNombreGrupo"></div>
+    </div>
+  </div>
+  <div class="barra-der">
+    <div class="selector-modulo" id="selectorModulo" style="display:none;">
+      <button type="button" id="btnModuloDeportes" onclick="location.href='grupo.html'" style="display:none;">⚽ Deportes</button>
+      <button type="button" id="btnModuloHipismo" onclick="location.href='hipismo-mockup.html'" style="display:none;">🐎 Hipismo Grupos Hípicos</button>
+      <button type="button" class="activo" disabled>🏢 Hipismo Oficinas</button>
+    </div>
+    <button type="button" class="btn btn-sec btn-chico" onclick="cerrarSesionOficinas()">🚪 Cerrar sesión</button>
+  </div>
+</div>
+
+<div class="contenedor">
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
+    <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
+    <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
+  </div>
+
+  <!-- ===================== JUGADAS ===================== -->
+  <section class="panel activo" id="panel-jugadas">
+    <div class="jug-layout">
+      <div>
+        <div class="card">
+          <h2>Cargar carrera</h2>
+          <p class="nota">Elige el hipódromo: se abre solo la carrera que sigue a la última cargada. La carrera se guarda cuando lo que jugaron es igual a lo que dieron, por cada tipo de jugada y caballo.</p>
+          <div class="fila-campos">
+            <div><label for="jFecha">Fecha</label><input type="date" id="jFecha" onchange="cambioFechaOHipodromo()"></div>
+            <div><label for="jHipodromo">Hipódromo</label><select id="jHipodromo" onchange="cambioFechaOHipodromo()"><option value="">— Elige —</option></select></div>
+            <div><label for="jCarrera">Carrera</label><input type="number" min="1" id="jCarrera" onchange="cambioCarrera()"></div>
+            <div><label for="jPizarra">Llegada (pizarra)</label><input type="text" id="jPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off"></div>
+            <div><label for="jRet">Retirados (opcional)</label><input type="text" id="jRet" placeholder="Ej. 5" autocomplete="off"></div>
+            <div id="jCruzarWrap" class="oculto"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;margin:0;"><input type="checkbox" id="jCruzar" style="width:auto;"> Cruzar jugadas</label></div>
+          </div>
+          <div class="cargadas" id="jCargadas"></div>
+          <div class="aviso info oculto" id="jAviso"></div>
+        </div>
+
+        <div class="card">
+          <h2>Jugadas de la carrera</h2>
+          <div class="tabla-wrap">
+            <table class="jugadas">
+              <thead><tr><th></th><th>Jugador</th><th>Jugó / Dio</th><th>Tipo</th><th>Caballo</th><th>Monto</th><th></th></tr></thead>
+              <tbody id="jTbody"></tbody>
+            </table>
+          </div>
+          <div class="acciones-tabla">
+            <button type="button" class="btn btn-sec" onclick="agregarFila(true)">＋ Agregar fila</button>
+            <button type="button" class="btn btn-sec btn-chico" onclick="limpiarTabla()">Limpiar tabla</button>
+            <span class="espacio"></span>
+            <button type="button" class="btn btn-sec" id="btnCalcular" onclick="calcularVistaPrevia()" disabled>Calcular (vista previa)</button>
+            <button type="button" class="btn" id="btnGuardar" onclick="guardarCarrera()" disabled>💾 Guardar carrera</button>
+          </div>
+          <div class="msg" id="jMsg"></div>
+        </div>
+
+        <div class="card oculto" id="jResultadoCard">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <h2 id="jResultadoTitulo">Resultado</h2>
+            <span class="espacio"></span>
+            <button type="button" class="btn btn-sec btn-chico" onclick="copiarResultado()">📋 Copiar texto</button>
+          </div>
+          <div id="jResultadoAvisos"></div>
+          <div class="resultado" id="jResultadoTexto"></div>
+        </div>
+      </div>
+
+      <!-- Ventana de cuadre: cuánto falta para que la carrera cuadre -->
+      <aside class="card cuadre" aria-live="polite">
+        <h2>Cuadre de la carrera</h2>
+        <p class="nota" style="margin-bottom:8px;">Por cada tipo de jugada y caballo, lo que jugaron tiene que ser igual a lo que dieron.</p>
+        <div id="cuadreCab" class="cuadre-cab vacio">Agrega jugadas para ver el cuadre.</div>
+        <div id="cuadreErrores" class="errores-fila"></div>
+        <div id="cuadreGrupos"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== CREAR CLIENTE ===================== -->
+  <section class="panel" id="panel-clientes">
+    <div class="dos-col">
+      <div class="card">
+        <h2>Crear cliente</h2>
+        <p class="nota">Los clientes son los mismos de Hipismo Grupos Hípicos: lo que crees aquí aparece allá y al revés.</p>
+        <div class="campo"><label for="cNombre">Nombre</label><input type="text" id="cNombre" autocomplete="off"></div>
+        <div class="fila-campos campo">
+          <div><label for="cTelefono">Teléfono (opcional)</label><input type="text" id="cTelefono" autocomplete="off"></div>
+          <div><label for="cNotas">Notas (opcional)</label><input type="text" id="cNotas" autocomplete="off"></div>
+        </div>
+
+        <div class="pregunta">
+          <div class="q">¿Se le devuelve un % a este cliente?</div>
+          <div class="si-no">
+            <label><input type="radio" name="cDevuelve" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
+            <label><input type="radio" name="cDevuelve" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
+          </div>
+          <div class="sub-bloque oculto" id="cDevuelveBloque">
+            <label for="cPorcentaje">¿Cuánto %?</label>
+            <input type="number" id="cPorcentaje" min="0" step="0.01" placeholder="Ej. 1">
+            <div class="campo">
+              <label>¿Dónde va ese %?</label>
+              <div class="si-no">
+                <label><input type="radio" name="cDonde" value="jugadas" checked onchange="actualizarPreguntasCliente()"> Incluido en sus jugadas</label>
+                <label><input type="radio" name="cDonde" value="ficha" onchange="actualizarPreguntasCliente()"> En otra ficha aparte</label>
+              </div>
+            </div>
+            <div class="campo oculto" id="cFichaWrap">
+              <label for="cFicha">Nombre de la ficha</label>
+              <input type="text" id="cFicha" list="dlClientes" autocomplete="off" placeholder="Ej. PEDRO - PORCENTAJE">
+            </div>
+          </div>
+        </div>
+
+        <div class="pregunta">
+          <div class="q">¿Este cliente le genera % a otro cliente?</div>
+          <div class="si-no">
+            <label><input type="radio" name="cGenera" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
+            <label><input type="radio" name="cGenera" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
+          </div>
+          <div class="sub-bloque oculto" id="cGeneraBloque">
+            <div id="cAvales"></div>
+            <button type="button" class="btn btn-sec btn-chico" style="margin-top:10px;" onclick="agregarAval()">＋ Otro cliente</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="btn" onclick="guardarCliente()">Guardar cliente</button>
+        </div>
+        <div class="msg" id="cMsg"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <h2>Clientes</h2><span class="espacio"></span>
+          <input type="search" id="cBuscar" placeholder="Buscar cliente…" style="max-width:240px;" oninput="pintarClientes()">
+        </div>
+        <div style="overflow-x:auto;margin-top:8px;">
+          <table class="lista"><thead><tr><th>Cliente</th><th>% que se le devuelve</th><th>Le genera % a</th></tr></thead><tbody id="cLista"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CREAR HIPÓDROMO ===================== -->
+  <section class="panel" id="panel-hipodromos">
+    <div class="dos-col">
+      <div class="card">
+        <h2 id="hTitulo">Crear hipódromo</h2>
+        <p class="nota">Cada hipódromo se crea una sola vez y queda para siempre (también lo ve Hipismo Grupos Hípicos).</p>
+        <div class="campo"><label for="hNombre">Nombre</label><input type="text" id="hNombre" autocomplete="off" placeholder="Ej. Gulfstream"></div>
+        <div class="fila-campos campo">
+          <div><label for="hPais">País</label><select id="hPais"><option value="VE">Venezuela</option><option value="US">Estados Unidos</option></select></div>
+          <div><label for="hMax">Carreras máximas</label><input type="number" id="hMax" min="1" max="40" value="12"></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="button" class="btn" id="hBtnGuardar" onclick="guardarHipodromo()">Guardar hipódromo</button>
+          <button type="button" class="btn btn-sec oculto" id="hBtnCancelar" onclick="cancelarEdicionHipodromo()">Cancelar edición</button>
+        </div>
+        <div class="msg" id="hMsg"></div>
+      </div>
+      <div class="card">
+        <h2>Hipódromos creados</h2>
+        <div style="overflow-x:auto;margin-top:8px;">
+          <table class="lista"><thead><tr><th>Nombre</th><th>País</th><th>Carreras</th><th></th></tr></thead><tbody id="hLista"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<datalist id="dlClientes"></datalist>
+<datalist id="dlTipos">
+  <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp">
+</datalist>
+
+<script>
+// ------------------------------------------------------------------
+// Sesión: misma que Hipismo Grupos Hípicos y Deportes (mismas claves de localStorage). Esta página no tiene
+// login propio: si no hay sesión o el grupo no tiene este módulo, se manda a grupo.html.
+// ------------------------------------------------------------------
+let TOKEN = localStorage.getItem('zenyatta_token') || null;
+let GRUPO = null;
+try { GRUPO = JSON.parse(localStorage.getItem('zenyatta_grupo') || 'null'); } catch (e) { GRUPO = null; }
+const MS_INACTIVIDAD_MAXIMA = 60 * 60 * 1000;
+if (TOKEN && GRUPO) {
+  let ult; try { ult = parseInt(localStorage.getItem('zenyatta_ultima_actividad'), 10); } catch (e) { ult = NaN; }
+  if (ult && !isNaN(ult) && (Date.now() - ult > MS_INACTIVIDAD_MAXIMA)) {
+    ['zenyatta_token', 'zenyatta_grupo', 'zenyatta_ultima_actividad'].forEach(k => localStorage.removeItem(k));
+    try { localStorage.setItem('zenyatta_login_mensaje', 'Tu sesión se cerró por inactividad. Inicia sesión de nuevo.'); } catch (e) { /* no crítico */ }
+    TOKEN = null; GRUPO = null;
+  }
+}
+if (!TOKEN || !GRUPO || !GRUPO.moduloHipismoOficinasHabilitado) window.location.href = 'grupo.html';
+
+function cerrarSesionOficinas(mensaje) {
+  ['zenyatta_token', 'zenyatta_grupo', 'zenyatta_ultima_actividad'].forEach(k => localStorage.removeItem(k));
+  if (mensaje) { try { localStorage.setItem('zenyatta_login_mensaje', mensaje); } catch (e) { /* no crítico */ } }
+  window.location.href = 'grupo.html';
+}
+let ultimaEscritura = 0;
+function registrarActividad() {
+  const t = Date.now();
+  if (t - ultimaEscritura < 5000) return;
+  ultimaEscritura = t;
+  try { localStorage.setItem('zenyatta_ultima_actividad', String(t)); } catch (e) { /* no crítico */ }
+}
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(ev => document.addEventListener(ev, registrarActividad, { passive: true }));
+setInterval(() => {
+  if (!TOKEN) return;
+  let u; try { u = parseInt(localStorage.getItem('zenyatta_ultima_actividad'), 10); } catch (e) { u = NaN; }
+  if (u && !isNaN(u) && Date.now() - u > MS_INACTIVIDAD_MAXIMA) cerrarSesionOficinas('Tu sesión se cerró por inactividad. Inicia sesión de nuevo.');
+}, 30000);
+
+async function api(path, options = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+  if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+  let res;
+  try { res = await fetch(path, Object.assign({}, options, { headers })); }
+  catch (e) { throw new Error('No se pudo conectar con el servidor.'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* sin body */ }
+  if (res.status === 401) { cerrarSesionOficinas(data && data.error ? data.error : 'Tu sesión venció. Inicia sesión de nuevo.'); throw new Error('Sesión inválida.'); }
+  if (!res.ok) {
+    const err = new Error((data && data.error) || ('Error inesperado (' + res.status + ').'));
+    if (data) err.datos = data;
+    throw err;
+  }
+  return data;
+}
+const $ = id => document.getElementById(id);
+const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function fechaHoyVenezuela() { return new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10); }
+function fmt(n) { return Number(n || 0).toLocaleString('es-VE', { maximumFractionDigits: 2 }); }
+function nombreBonito(n) { const t = String(n || '').trim().toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); }
+function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el.className = 'msg ' + (texto ? (ok ? 'ok' : 'error') : ''); }
+
+// Selector de módulos de la barra superior (hasta 3).
+(function pintarSelector() {
+  if (!GRUPO) return;
+  $('topbarNombreGrupo').textContent = GRUPO.nombre || '';
+  $('btnModuloDeportes').style.display = GRUPO.moduloDeportesHabilitado ? '' : 'none';
+  $('btnModuloHipismo').style.display = GRUPO.moduloHipismoHabilitado ? '' : 'none';
+  const n = [GRUPO.moduloDeportesHabilitado, GRUPO.moduloHipismoHabilitado, GRUPO.moduloHipismoOficinasHabilitado].filter(Boolean).length;
+  $('selectorModulo').style.display = n >= 2 ? 'flex' : 'none';
+  if (GRUPO.hipismoCruzarHabilitado) $('jCruzarWrap').classList.remove('oculto');
+})();
+
+function irATab(t) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
+  if (t === 'clientes') cargarClientes();
+  if (t === 'hipodromos') cargarHipodromos();
+}
+
+// ------------------------------------------------------------------
+// Datos compartidos
+// ------------------------------------------------------------------
+let HIPODROMOS = [];
+let CLIENTES = [];
+
+async function cargarHipodromos() {
+  try { HIPODROMOS = await api('/api/hipismo/hipodromos'); } catch (e) { HIPODROMOS = []; msg('hMsg', e.message, false); }
+  pintarHipodromos();
+  const sel = $('jHipodromo');
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">— Elige —</option>' + HIPODROMOS.map(h => `<option value="${esc(h.id)}">${esc(h.nombre)}</option>`).join('');
+  if (actual && HIPODROMOS.some(h => h.id === actual)) sel.value = actual;
+}
+async function cargarClientes() {
+  try { CLIENTES = await api('/api/jugadores'); } catch (e) { CLIENTES = []; msg('cMsg', e.message, false); }
+  $('dlClientes').innerHTML = CLIENTES.map(c => `<option value="${esc(nombreBonito(c.nombre))}">`).join('');
+  pintarClientes();
+}
+
+// ------------------------------------------------------------------
+// JUGADAS
+// ------------------------------------------------------------------
+let FILAS = [];          // { jugador, lado, tipo, caballo, monto }
+let CUADRE_OK = false;
+let TIMER_CUADRE = null;
+let ULTIMO_RESULTADO_TEXTO = '';
+let CARGADAS = [];
+
+function filaVacia(base) {
+  return { jugador: '', lado: 'jugo', tipo: base ? base.tipo : '', caballo: base ? base.caballo : '', monto: '' };
+}
+function agregarFila(enfocar) {
+  const previa = FILAS.length ? FILAS[FILAS.length - 1] : null;
+  FILAS.push(filaVacia(previa));
+  pintarTabla();
+  if (enfocar) { const inp = document.querySelector('#jTbody tr:last-child input[data-c="jugador"]'); if (inp) inp.focus(); }
+}
+function limpiarTabla() {
+  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
+  pintarTabla();
+  programarCuadre();
+}
+function quitarFila(i) {
+  FILAS.splice(i, 1);
+  if (!FILAS.length) FILAS.push(filaVacia(null));
+  pintarTabla();
+  programarCuadre();
+}
+function pintarTabla(erroresPorFila) {
+  const malas = new Set((erroresPorFila || []).map(e => e.fila));
+  $('jTbody').innerHTML = FILAS.map((f, i) => `
+    <tr class="${malas.has(i + 1) ? 'fila-error' : ''}">
+      <td class="n">${i + 1}</td>
+      <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
+      <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
+      <td style="width:110px;"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"></td>
+      <td style="width:100px;"><input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off"></td>
+      <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
+      <td class="x"><button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
+    </tr>`).join('');
+}
+$('jTbody').addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
+  FILAS[+t.dataset.i][t.dataset.c] = t.value;
+  if (t.dataset.c === 'lado') t.className = 'lado-' + t.value;
+  programarCuadre();
+});
+$('jTbody').addEventListener('change', e => {
+  const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
+  FILAS[+t.dataset.i][t.dataset.c] = t.value;
+  if (t.dataset.c === 'lado') t.className = 'lado-' + t.value;
+  programarCuadre();
+});
+// Enter en el monto de la última fila abre una fila nueva y salta al jugador.
+$('jTbody').addEventListener('keydown', e => {
+  const t = e.target;
+  if (e.key !== 'Enter' || !t.dataset || t.dataset.c !== 'monto') return;
+  e.preventDefault();
+  const i = +t.dataset.i;
+  if (i === FILAS.length - 1) agregarFila(true);
+  else { const sig = document.querySelector(`#jTbody input[data-i="${i + 1}"][data-c="jugador"]`); if (sig) sig.focus(); }
+});
+
+function programarCuadre() {
+  clearTimeout(TIMER_CUADRE);
+  TIMER_CUADRE = setTimeout(pedirCuadre, 250);
+  actualizarBotones();
+}
+async function pedirCuadre() {
+  const cab = $('cuadreCab');
+  let c;
+  try { c = await api('/api/hipismo/oficinas/cuadre', { method: 'POST', body: JSON.stringify({ filas: FILAS }) }); }
+  catch (e) { cab.className = 'cuadre-cab mal'; cab.textContent = 'No pude revisar el cuadre: ' + e.message; return; }
+  pintarCuadre(c);
+}
+function listaNombres(arr) { return arr.map(x => `${esc(nombreBonito(x.nombre))} ${fmt(x.monto)}`).join(' · ') || '—'; }
+function pintarCuadre(c) {
+  const cab = $('cuadreCab');
+  const hayErrores = c.errores && c.errores.length;
+  const malas = c.noReconocidas || [];
+  CUADRE_OK = !!c.cuadra && malas.length === 0;
+  if (!c.hayJugadas && !hayErrores) { cab.className = 'cuadre-cab vacio'; cab.textContent = 'Agrega jugadas para ver el cuadre.'; }
+  else if (CUADRE_OK) { cab.className = 'cuadre-cab ok'; cab.textContent = `✅ La carrera cuadra — ${fmt(c.totalJugo)} jugados y dados`; }
+  else { cab.className = 'cuadre-cab mal'; cab.textContent = '⚠️ La carrera todavía no cuadra'; }
+  const errs = [];
+  (c.errores || []).forEach(e => errs.push(`Fila ${e.fila}: ${esc(e.error)}`));
+  if (malas.length) errs.push('No reconozco: ' + malas.map(esc).join(', ') + '. Revisa el tipo y el caballo.');
+  $('cuadreErrores').innerHTML = errs.join('<br>');
+  $('cuadreGrupos').innerHTML = (c.detalle || []).map(d => `
+    <div class="grupo-cuadre ${d.cuadra ? 'ok' : 'mal'}">
+      <div class="tit">${d.cuadra ? '✅' : '⚠️'} ${esc(d.etiqueta)}</div>
+      <div class="num"><span>Jugaron</span><b>${fmt(d.jugo)}</b></div>
+      <div class="num"><span>Dieron</span><b>${fmt(d.dio)}</b></div>
+      ${d.cuadra ? '' : `<div class="falta">${d.faltaLado === 'dio' ? `Faltan ${fmt(d.falta)} por dar` : `Faltan ${fmt(d.falta)} por jugar (o sobran ${fmt(d.falta)} dados)`}</div>`}
+      <div class="quienes">Jugaron: ${listaNombres(d.jugaron)}<br>Dieron: ${listaNombres(d.dieron)}</div>
+    </div>`).join('');
+  marcarFilasConError(c.errores);
+  actualizarBotones();
+}
+// Solo cambia el color de las filas con error: NO se vuelve a pintar la tabla, para no quitarle el cursor a quien está escribiendo.
+function marcarFilasConError(errores) {
+  const malas = new Set((errores || []).map(e => e.fila));
+  document.querySelectorAll('#jTbody tr').forEach((tr, i) => tr.classList.toggle('fila-error', malas.has(i + 1)));
+}
+function actualizarBotones() {
+  const listo = CUADRE_OK && $('jHipodromo').value && $('jCarrera').value && $('jPizarra').value.trim();
+  $('btnGuardar').disabled = !listo;
+  $('btnCalcular').disabled = !listo;
+}
+$('jPizarra').addEventListener('input', actualizarBotones);
+
+function cuerpoCarrera() {
+  return {
+    filas: FILAS, pizarra: $('jPizarra').value.trim(), hipodromoId: $('jHipodromo').value,
+    carreraNumero: Number($('jCarrera').value), ret: $('jRet').value.trim(), fecha: $('jFecha').value,
+    cruzaJugadas: !!(GRUPO.hipismoCruzarHabilitado && $('jCruzar').checked)
+  };
+}
+function mostrarResultado(titulo, texto, avisos) {
+  ULTIMO_RESULTADO_TEXTO = texto || '';
+  $('jResultadoCard').classList.remove('oculto');
+  $('jResultadoTitulo').textContent = titulo;
+  $('jResultadoTexto').textContent = texto || '';
+  $('jResultadoAvisos').innerHTML = (avisos || []).map(a => `<div class="aviso info">${esc(a)}</div>`).join('');
+  $('jResultadoCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function textoError(e) {
+  if (e.datos && e.datos.cuadre) pintarCuadre(Object.assign({}, e.datos.cuadre, { noReconocidas: e.datos.noReconocidas || [] }));
+  return e.message;
+}
+async function calcularVistaPrevia() {
+  msg('jMsg', '');
+  $('btnCalcular').disabled = true;
+  try {
+    const r = await api('/api/hipismo/oficinas/calcular', { method: 'POST', body: JSON.stringify(cuerpoCarrera()) });
+    mostrarResultado('Vista previa (no guardada) — carrera ' + $('jCarrera').value, r.textoResultado, (r.sinReconocer || []).map(x => 'No reconocí: ' + x));
+  } catch (e) { msg('jMsg', textoError(e), false); }
+  actualizarBotones();
+}
+async function guardarCarrera() {
+  msg('jMsg', '');
+  const cuerpo = cuerpoCarrera();
+  $('btnGuardar').disabled = true;
+  try {
+    const r = await api('/api/hipismo/oficinas/guardar', { method: 'POST', body: JSON.stringify(cuerpo) });
+    const avisos = [];
+    if (r.sustituyoAnterior) avisos.push('Esta carrera ya estaba cargada: la nueva sustituyó a la anterior (la anterior queda en la papelera de planos).');
+    (r.alertasPozo || []).forEach(a => avisos.push(typeof a === 'string' ? a : (a.mensaje || JSON.stringify(a))));
+    (r.sinReconocer || []).forEach(x => avisos.push('No reconocí: ' + x));
+    mostrarResultado('Carrera ' + cuerpo.carreraNumero + ' guardada', r.plano ? r.plano.texto_resultado : '', avisos);
+    msg('jMsg', '✅ Carrera ' + cuerpo.carreraNumero + ' guardada.', true);
+    // Lista para la siguiente: tabla vacía, llegada vacía y la carrera que sigue.
+    FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
+    pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = false;
+    pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
+    $('jAviso').classList.add('oculto');
+    await abrirSiguienteCarrera();
+  } catch (e) { msg('jMsg', textoError(e), false); actualizarBotones(); }
+}
+function copiarResultado() {
+  if (!ULTIMO_RESULTADO_TEXTO) return;
+  navigator.clipboard.writeText(ULTIMO_RESULTADO_TEXTO).then(() => msg('jMsg', '📋 Texto copiado.', true), () => msg('jMsg', 'No se pudo copiar; selecciónalo a mano.', false));
+}
+
+// Carrera siguiente automática: la que sigue a la última cargada de ese hipódromo en esa fecha.
+async function abrirSiguienteCarrera() {
+  const h = $('jHipodromo').value;
+  if (!h) { CARGADAS = []; pintarCargadas(); return; }
+  try {
+    const r = await api('/api/hipismo/oficinas/siguiente-carrera?hipodromoId=' + encodeURIComponent(h) + '&fecha=' + encodeURIComponent($('jFecha').value));
+    CARGADAS = r.cargadas || [];
+    $('jCarrera').value = r.siguiente;
+    if (r.carrerasMax && r.siguiente > r.carrerasMax) mostrarAviso(`Ojo: este hipódromo tiene ${r.carrerasMax} carreras y la que sigue es la ${r.siguiente}.`);
+    else $('jAviso').classList.add('oculto');
+  } catch (e) { msg('jMsg', e.message, false); }
+  pintarCargadas();
+  actualizarBotones();
+}
+function mostrarAviso(t) { const a = $('jAviso'); a.textContent = t; a.classList.remove('oculto'); }
+function pintarCargadas() {
+  const actual = Number($('jCarrera').value);
+  $('jCargadas').innerHTML = CARGADAS.length
+    ? 'Ya cargadas: ' + CARGADAS.map(n => `<button type="button" class="chip-carrera${n === actual ? ' actual' : ''}" onclick="abrirCarrera(${n})" title="Abrir para corregir">${n}</button>`).join('')
+    : ($('jHipodromo').value ? 'Todavía no hay carreras cargadas en este hipódromo hoy.' : '');
+}
+async function abrirCarrera(n) { $('jCarrera').value = n; await cambioCarrera(); }
+async function cambioFechaOHipodromo() { await abrirSiguienteCarrera(); await cambioCarrera(true); }
+// Si la carrera escrita ya existe, se trae su tabla para corregirla; guardar la sustituye.
+async function cambioCarrera(soloAvisar) {
+  pintarCargadas();
+  const h = $('jHipodromo').value, c = $('jCarrera').value;
+  if (!h || !c) { actualizarBotones(); return; }
+  if (!CARGADAS.includes(Number(c))) {
+    if (!soloAvisar) { $('jAviso').classList.add('oculto'); }
+    actualizarBotones(); return;
+  }
+  try {
+    const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent($('jFecha').value)}`);
+    if (!r.existe) { actualizarBotones(); return; }
+    if (r.filas && r.filas.length) {
+      FILAS = r.filas.map(f => ({ jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) }));
+      $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
+      $('jCruzar').checked = !!r.cruzaJugadas;
+      pintarTabla(); programarCuadre();
+      mostrarAviso(`La carrera ${c} ya estaba cargada. Estás viendo sus jugadas: si guardas, la nueva sustituye a la anterior.`);
+    } else {
+      mostrarAviso(`La carrera ${c} ya estaba cargada desde Hipismo Grupos Hípicos (como plano). Si guardas aquí, la nueva la sustituye.`);
+    }
+  } catch (e) { msg('jMsg', e.message, false); }
+  actualizarBotones();
+}
+
+// ------------------------------------------------------------------
+// CREAR CLIENTE
+// ------------------------------------------------------------------
+function valorRadio(nombre) { const r = document.querySelector(`input[name="${nombre}"]:checked`); return r ? r.value : ''; }
+function actualizarPreguntasCliente() {
+  $('cDevuelveBloque').classList.toggle('oculto', valorRadio('cDevuelve') !== 'si');
+  $('cFichaWrap').classList.toggle('oculto', !(valorRadio('cDevuelve') === 'si' && valorRadio('cDonde') === 'ficha'));
+  const genera = valorRadio('cGenera') === 'si';
+  $('cGeneraBloque').classList.toggle('oculto', !genera);
+  if (genera && !document.querySelector('#cAvales .aval-fila')) agregarAval();
+}
+function agregarAval() {
+  const div = document.createElement('div');
+  div.className = 'aval-fila';
+  div.innerHTML = '<input type="text" class="av-nombre" list="dlClientes" placeholder="Nombre del cliente o ficha" autocomplete="off">' +
+    '<input type="number" class="av-pct" min="0" step="0.01" placeholder="% ">' +
+    '<button type="button" class="btn btn-peligro btn-chico" title="Quitar" onclick="this.parentElement.remove()">✕</button>';
+  $('cAvales').appendChild(div);
+}
+function normNombre(n) { return String(n || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+function clienteRealPorNombre(nombre) {
+  const n = normNombre(nombre); if (!n) return null;
+  return CLIENTES.find(c => !c.es_cuenta_comision && normNombre(c.nombre) === n) || null;
+}
+async function guardarCliente() {
+  msg('cMsg', '');
+  const nombre = $('cNombre').value.trim();
+  if (!nombre) return msg('cMsg', 'Escribe el nombre del cliente.', false);
+  if (clienteRealPorNombre(nombre)) return msg('cMsg', 'Ya existe un cliente con ese nombre.', false);
+
+  let comisionPropia = 0, incluirPorcentajeEnJugadas = false, comisionPropiaFicha = '';
+  if (valorRadio('cDevuelve') === 'si') {
+    comisionPropia = parseFloat(String($('cPorcentaje').value).replace(',', '.')) || 0;
+    if (!(comisionPropia > 0)) return msg('cMsg', 'Escribe cuánto % se le devuelve.', false);
+    if (valorRadio('cDonde') === 'jugadas') incluirPorcentajeEnJugadas = true;
+    else {
+      comisionPropiaFicha = $('cFicha').value.trim();
+      if (!comisionPropiaFicha) return msg('cMsg', 'Escribe el nombre de la ficha donde va ese %.', false);
+    }
+  }
+  const avalesPorcentaje = [];
+  if (valorRadio('cGenera') === 'si') {
+    document.querySelectorAll('#cAvales .aval-fila').forEach(f => {
+      const fichaNombre = f.querySelector('.av-nombre').value.trim();
+      const txt = String(f.querySelector('.av-pct').value).trim().replace(',', '.');
+      if (!fichaNombre && !txt) return;
+      const porcentaje = parseFloat(txt);
+      if (!fichaNombre || !isFinite(porcentaje) || porcentaje <= 0) { avalesPorcentaje.push(null); return; }
+      avalesPorcentaje.push({ fichaNombre, porcentaje });
+    });
+    if (avalesPorcentaje.includes(null)) return msg('cMsg', 'Cada cliente al que se le genera % necesita nombre y un % mayor que 0.', false);
+    if (!avalesPorcentaje.length) return msg('cMsg', 'Escribe a qué cliente se le genera % y cuánto, o marca "No".', false);
+    const nombres = avalesPorcentaje.map(a => normNombre(a.fichaNombre));
+    if (new Set(nombres).size !== nombres.length) return msg('cMsg', 'No repitas el mismo cliente: junta el % en una sola fila.', false);
+  }
+  // Si el % cae en un cliente real que ya existe, se avisa (se mezcla con sus jugadas normales).
+  const destinos = [comisionPropiaFicha, ...avalesPorcentaje.map(a => a.fichaNombre)].filter(Boolean);
+  const vistos = new Set();
+  for (const d of destinos) {
+    const k = normNombre(d); if (vistos.has(k)) continue; vistos.add(k);
+    const real = clienteRealPorNombre(d);
+    if (real && !confirm('"' + nombreBonito(real.nombre) + '" ya existe como cliente (con sus propias jugadas).\n\nAceptar = sí, este % cae directo en su ficha y se mezcla con sus jugadas normales.\nCancelar = no, voy a corregir el nombre.')) return;
+  }
+  try {
+    await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
+      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: 'libre',
+      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje
+    }) });
+  } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
+  msg('cMsg', '✅ Cliente creado.', true);
+  $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
+  document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
+  document.querySelector('input[name="cGenera"][value="no"]').checked = true;
+  document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
+  $('cAvales').innerHTML = '';
+  actualizarPreguntasCliente();
+  await cargarClientes();
+}
+function pintarClientes() {
+  const q = normNombre($('cBuscar').value);
+  const filas = CLIENTES.filter(c => !c.es_cuenta_comision && (!q || normNombre(c.nombre).includes(q)));
+  $('cLista').innerHTML = filas.length ? filas.map(c => {
+    const pct = Number(c.comision_propia) || 0;
+    const devuelve = pct > 0 ? `<span class="tag">${fmt(pct)}%</span> ${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}` : '—';
+    const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}</td><td>${devuelve}</td><td>${avales}</td></tr>`;
+  }).join('') : '<tr><td colspan="3" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
+}
+
+// ------------------------------------------------------------------
+// CREAR HIPÓDROMO
+// ------------------------------------------------------------------
+let HIPODROMO_EDITANDO = null;
+function pintarHipodromos() {
+  $('hLista').innerHTML = HIPODROMOS.length ? HIPODROMOS.map(h => `
+    <tr><td><b>${esc(h.nombre)}</b></td><td>${h.pais === 'US' ? 'Estados Unidos' : 'Venezuela'}</td><td>${esc(h.carreras_max)}</td>
+    <td style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" onclick="editarHipodromo('${esc(h.id)}')">Editar</button>
+    <button type="button" class="btn btn-peligro btn-chico" onclick="borrarHipodromo('${esc(h.id)}')">Eliminar</button></td></tr>`).join('')
+    : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay hipódromos. Crea el primero a la izquierda.</td></tr>';
+}
+function editarHipodromo(id) {
+  const h = HIPODROMOS.find(x => x.id === id); if (!h) return;
+  HIPODROMO_EDITANDO = id;
+  $('hTitulo').textContent = 'Editar hipódromo';
+  $('hNombre').value = h.nombre; $('hPais').value = h.pais === 'US' ? 'US' : 'VE'; $('hMax').value = h.carreras_max;
+  $('hBtnGuardar').textContent = 'Guardar cambios'; $('hBtnCancelar').classList.remove('oculto');
+  msg('hMsg', '');
+}
+function cancelarEdicionHipodromo() {
+  HIPODROMO_EDITANDO = null;
+  $('hTitulo').textContent = 'Crear hipódromo';
+  $('hNombre').value = ''; $('hPais').value = 'VE'; $('hMax').value = 12;
+  $('hBtnGuardar').textContent = 'Guardar hipódromo'; $('hBtnCancelar').classList.add('oculto');
+}
+async function guardarHipodromo() {
+  const nombre = $('hNombre').value.trim();
+  if (!nombre) return msg('hMsg', 'Escribe el nombre del hipódromo.', false);
+  const cuerpo = { nombre, pais: $('hPais').value, carrerasMax: parseInt($('hMax').value, 10) || 12 };
+  try {
+    if (HIPODROMO_EDITANDO) await api('/api/hipismo/hipodromos/' + HIPODROMO_EDITANDO, { method: 'PUT', body: JSON.stringify(cuerpo) });
+    else await api('/api/hipismo/hipodromos', { method: 'POST', body: JSON.stringify(cuerpo) });
+  } catch (e) { return msg('hMsg', e.message, false); }
+  const editando = !!HIPODROMO_EDITANDO;
+  cancelarEdicionHipodromo();
+  msg('hMsg', editando ? '✅ Hipódromo actualizado.' : '✅ Hipódromo creado.', true);
+  await cargarHipodromos();
+}
+async function borrarHipodromo(id) {
+  const h = HIPODROMOS.find(x => x.id === id); if (!h) return;
+  if (!confirm('¿Eliminar el hipódromo "' + h.nombre + '"? Los planos ya cargados se conservan.')) return;
+  try { await api('/api/hipismo/hipodromos/' + id, { method: 'DELETE' }); } catch (e) { return msg('hMsg', e.message, false); }
+  if (HIPODROMO_EDITANDO === id) cancelarEdicionHipodromo();
+  await cargarHipodromos();
+}
+
+// ------------------------------------------------------------------
+// Arranque
+// ------------------------------------------------------------------
+(async function iniciar() {
+  if (!TOKEN || !GRUPO) return;
+  $('jFecha').value = fechaHoyVenezuela();
+  limpiarTabla();
+  pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
+  await Promise.all([cargarHipodromos(), cargarClientes()]);
+  actualizarPreguntasCliente();
+})();
+</script>
+</body>
+</html>

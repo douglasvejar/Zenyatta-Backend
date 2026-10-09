@@ -1211,8 +1211,9 @@
        solo navegar a grupo.html — la sesión sigue en localStorage
        (mismas claves que ya usa app.js), no se pierde nada de acá. -->
   <div class="selector-modulo" id="selectorModulo" style="display:none;">
-    <button type="button" onclick="irAModuloDeportes()">⚽ Deportes</button>
-    <button type="button" class="activo" disabled>🐎 Hipismo</button>
+    <button type="button" id="btnModuloDeportes" onclick="irAModuloDeportes()" style="display:none;">⚽ Deportes</button>
+    <button type="button" class="activo" disabled>🐎 Hipismo Grupos Hípicos</button>
+    <button type="button" id="btnModuloOficinas" onclick="irAModuloOficinas()" style="display:none;">🏢 Hipismo Oficinas</button>
   </div>
 </div>
 
@@ -3652,9 +3653,16 @@ async function apiHipismo(path, options = {}) {
 function actualizarSelectorModulo() {
   const selector = document.getElementById('selectorModulo');
   if (!selector || !GRUPO) return;
-  selector.style.display = (GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado) ? 'flex' : 'none';
+  // Hipismo Oficinas (09-10-2026): hasta 3 módulos; cada botón solo si ese módulo está contratado.
+  const btnDep = document.getElementById('btnModuloDeportes');
+  const btnOfi = document.getElementById('btnModuloOficinas');
+  if (btnDep) btnDep.style.display = GRUPO.moduloDeportesHabilitado ? '' : 'none';
+  if (btnOfi) btnOfi.style.display = GRUPO.moduloHipismoOficinasHabilitado ? '' : 'none';
+  const cantidad = [GRUPO.moduloDeportesHabilitado, GRUPO.moduloHipismoHabilitado, GRUPO.moduloHipismoOficinasHabilitado].filter(Boolean).length;
+  selector.style.display = cantidad >= 2 ? 'flex' : 'none';
 }
 function irAModuloDeportes() { window.location.href = 'grupo.html'; }
+function irAModuloOficinas() { window.location.href = 'hipismo-oficinas.html'; }
 
 // "Cerrar sesión" en Hipismo (25-09-2026, a pedido del usuario). Hipismo no
 // tiene pantalla de login propia — comparte la de grupo.html (mismas 2
@@ -8797,7 +8805,7 @@ function pintarTablaClientesFiltrada() {
   // "Anclar módulos" (23-09-2026) — la columna solo aparece si el grupo
   // tiene los 2 módulos contratados (mismo criterio que el selector
   // ⚽/🐎 de arriba); si no, no hay nada que anclar con nada.
-  const hayLos2Modulos = !!(GRUPO && GRUPO.moduloDeportesHabilitado && GRUPO.moduloHipismoHabilitado);
+  const hayLos2Modulos = !!(GRUPO && GRUPO.moduloDeportesHabilitado && (GRUPO.moduloHipismoHabilitado || GRUPO.moduloHipismoOficinasHabilitado));
   const thAnclar = document.getElementById('thAnclarModulos');
   if (thAnclar) thAnclar.style.display = hayLos2Modulos ? '' : 'none';
   const colspan = hayLos2Modulos ? 6 : 5;

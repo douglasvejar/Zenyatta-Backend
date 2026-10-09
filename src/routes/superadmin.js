@@ -59,7 +59,7 @@ router.use('/grupos/:id/jugadores', comoGrupo, require('./jugadores'));
 
 // Lista todos los grupos (para ver cuáles están activos/inactivos).
 router.get('/grupos', asyncHandler(async (req, res) => {
-  const r = await db.query('SELECT id, nombre, email, activo, creado_en, modulo_hipismo_habilitado FROM grupos ORDER BY creado_en DESC');
+  const r = await db.query('SELECT id, nombre, email, activo, creado_en, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos ORDER BY creado_en DESC');
   res.json(r.rows);
 }));
 
@@ -166,7 +166,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
     // base64 completo en este SELECT inflaría la respuesta de "detalle"
     // sin necesidad, solo hace falta saber SI existe uno.
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -229,6 +229,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // Súper-admin, igual que whatsappHabilitado arriba.
     moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
     moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
+    moduloHipismoOficinasHabilitado: !!grupo.modulo_hipismo_oficinas_habilitado,
     // (24-09-2026, a pedido del usuario) "Cruzar jugadas" de Hipismo —
     // ver la nota grande junto a esta columna en sql/schema.sql. Exclusivo
     // del Súper-admin, igual que moduloHipismoHabilitado arriba.
@@ -330,9 +331,9 @@ router.get('/grupos/:id/balance-clientes', asyncHandler(async (req, res) => {
 router.get('/grupos/:id/hipismo-cierre-final', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const grupoRes = await db.query('SELECT id, modulo_hipismo_habilitado FROM grupos WHERE id = $1', [id]);
+  const grupoRes = await db.query('SELECT id, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1', [id]);
   if (grupoRes.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
-  if (!grupoRes.rows[0].modulo_hipismo_habilitado) {
+  if (!grupoRes.rows[0].modulo_hipismo_habilitado && !grupoRes.rows[0].modulo_hipismo_oficinas_habilitado) {
     return res.status(404).json({ error: 'Este grupo no tiene el módulo de Hipismo habilitado.' });
   }
 
@@ -603,6 +604,17 @@ router.patch('/grupos/:id/modulo-hipismo', asyncHandler(async (req, res) => {
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ moduloHipismoHabilitado: r.rows[0].modulo_hipismo_habilitado });
+}));
+
+// Hipismo Oficinas (09-10-2026): mismo interruptor manual, exclusivo del Súper-admin.
+router.patch('/grupos/:id/modulo-hipismo-oficinas', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET modulo_hipismo_oficinas_habilitado = $1 WHERE id = $2 RETURNING id, modulo_hipismo_oficinas_habilitado',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ moduloHipismoOficinasHabilitado: r.rows[0].modulo_hipismo_oficinas_habilitado });
 }));
 
 // "Cruzar jugadas" de Hipismo (24-09-2026, a pedido del usuario: "el

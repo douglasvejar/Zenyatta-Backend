@@ -219,7 +219,8 @@ router.use(requiereGrupo);
 router.use(requierePermiso('hipismo'));
 
 function requiereModuloHipismo(req, res, next) {
-  if (!req.grupo.modulo_hipismo_habilitado) {
+  // Hipismo Oficinas (09-10-2026) usa el mismo motor y las mismas rutas: basta con tener uno de los 2 módulos de Hipismo.
+  if (!req.grupo.modulo_hipismo_habilitado && !req.grupo.modulo_hipismo_oficinas_habilitado) {
     return res.status(403).json({ error: 'Este grupo no tiene el módulo de Hipismo habilitado. Pídele al administrador de la plataforma que lo active desde Súper-admin.' });
   }
   next();
@@ -765,7 +766,7 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
 // =================================================================
 // POST /planos/calcular: calcula SIN guardar — para la vista previa del
 // botón "Calcular" antes de decidir si se guarda de verdad.
-router.post('/planos/calcular', asyncHandler(async (req, res) => {
+const calcularPlanoHandler = asyncHandler(async (req, res) => {
   const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
 
@@ -885,10 +886,11 @@ router.post('/planos/calcular', asyncHandler(async (req, res) => {
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
     terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
-}));
+});
+router.post('/planos/calcular', calcularPlanoHandler);
 
 // POST /planos: calcula Y guarda de verdad (hipismo_planos + hipismo_tickets).
-router.post('/planos', asyncHandler(async (req, res) => {
+const guardarPlanoHandler = asyncHandler(async (req, res) => {
   const { texto, pizarra, cruzaJugadas, hipodromoId, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
   if (!carreraNumero) return res.status(400).json({ error: 'Falta el número de carrera.' });
@@ -1058,6 +1060,122 @@ router.post('/planos', asyncHandler(async (req, res) => {
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
     terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
+});
+router.post('/planos', guardarPlanoHandler);
+
+// =================================================================
+// HIPISMO OFICINAS (09-10-2026) — carga de jugadas en tabla, con cuadre por tipo + caballo.
+// =================================================================
+// Ver la nota grande de services/hipismoOficinasCalc.js. Estas rutas NO calculan nada propio: validan el
+// cuadre, arman un plano de texto en el formato de 3 líneas y se lo pasan a los MISMOS manejadores de
+// POST /planos/calcular y POST /planos (arriba), así el cálculo, el 5%, el cruce, los % devueltos, la
+// sustitución de una carrera ya cargada y las alertas son idénticos a Hipismo Grupos Hípicos.
+const oficinasCalc = require('../services/hipismoOficinasCalc');
+
+// Corre uno de los manejadores de planos con otro body y devuelve { status, body } en vez de responder.
+function correrManejadorPlano(manejador, req, body) {
+  return new Promise((resolve, reject) => {
+    const salida = { status: 200, body: null };
+    const resFalso = {
+      status(c) { salida.status = c; return resFalso; },
+      json(b) { salida.body = b; resolve(salida); return resFalso; }
+    };
+    const reqNuevo = Object.create(req);
+    reqNuevo.body = body;
+    manejador(reqNuevo, resFalso, reject);
+  });
+}
+
+// Revisa la tabla completa. Devuelve null si todo está bien, o el error 422 listo para responder.
+function errorDeTablaOficina(filas) {
+  const cuadre = oficinasCalc.calcularCuadre(filas);
+  if (cuadre.errores.length) return { error: 'Hay filas incompletas en la tabla.', cuadre };
+  if (!cuadre.hayJugadas) return { error: 'La tabla no tiene jugadas.', cuadre };
+  const malos = oficinasCalc.tiposNoReconocidos(filas);
+  if (malos.length) return { error: 'No reconozco estas jugadas: ' + malos.join(', ') + '. Revisa el tipo y el caballo.', cuadre, noReconocidas: malos };
+  if (!cuadre.cuadra) return { error: 'La carrera no cuadra: ' + cuadre.mensajes.join(' '), cuadre };
+  return null;
+}
+
+// POST /oficinas/cuadre { filas } — para la ventana "cuánto falta" mientras se escribe.
+router.post('/oficinas/cuadre', asyncHandler(async (req, res) => {
+  const filas = req.body.filas;
+  const cuadre = oficinasCalc.calcularCuadre(filas);
+  res.json({ ...cuadre, noReconocidas: cuadre.errores.length ? [] : oficinasCalc.tiposNoReconocidos(filas) });
+}));
+
+// GET /oficinas/siguiente-carrera?hipodromoId=&fecha= — la carrera que sigue a la última cargada.
+router.get('/oficinas/siguiente-carrera', asyncHandler(async (req, res) => {
+  const { hipodromoId } = req.query;
+  const fecha = req.query.fecha || fechaHoyVenezuela();
+  if (!hipodromoId) return res.status(400).json({ error: 'Falta el hipódromo.' });
+  const rh = await db.query('SELECT nombre, carreras_max FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+  if (rh.rows.length === 0) return res.status(404).json({ error: 'Hipódromo no encontrado.' });
+  const r = await db.query(
+    `SELECT carrera_numero FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND fecha = $3 ORDER BY carrera_numero`,
+    [req.grupoId, rh.rows[0].nombre, fecha]
+  );
+  const cargadas = [...new Set(r.rows.map(x => Number(x.carrera_numero)))];
+  const ultima = cargadas.length ? Math.max(...cargadas) : 0;
+  res.json({ siguiente: ultima + 1, cargadas, carrerasMax: rh.rows[0].carreras_max });
+}));
+
+// GET /oficinas/carrera?hipodromoId=&carrera=&fecha= — reabrir una carrera ya cargada para corregirla.
+router.get('/oficinas/carrera', asyncHandler(async (req, res) => {
+  const { hipodromoId, carrera } = req.query;
+  const fecha = req.query.fecha || fechaHoyVenezuela();
+  if (!hipodromoId || !carrera) return res.status(400).json({ error: 'Falta el hipódromo o la carrera.' });
+  const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+  if (rh.rows.length === 0) return res.status(404).json({ error: 'Hipódromo no encontrado.' });
+  const r = await db.query(
+    `SELECT id, pizarra, ret, cruza_jugadas, jugadas_oficina, texto_resultado FROM hipismo_planos
+      WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4 ORDER BY creado_en DESC LIMIT 1`,
+    [req.grupoId, rh.rows[0].nombre, carrera, fecha]
+  );
+  if (r.rows.length === 0) return res.json({ existe: false });
+  const p = r.rows[0];
+  res.json({
+    existe: true, planoId: p.id, pizarra: p.pizarra, ret: p.ret || '', cruzaJugadas: !!p.cruza_jugadas,
+    // Una carrera cargada como plano en Grupos Hípicos no tiene tabla para reabrir.
+    filas: Array.isArray(p.jugadas_oficina) ? p.jugadas_oficina : null,
+    textoResultado: p.texto_resultado
+  });
+}));
+
+function cuerpoPlanoDeOficina(req) {
+  const { filas, pizarra, hipodromoId, carreraNumero, ret, fecha, cruzaJugadas } = req.body;
+  const parejas = oficinasCalc.emparejar(filas);
+  return {
+    texto: oficinasCalc.armarTextoPlano(parejas), pizarra, hipodromoId, carreraNumero, ret, fecha,
+    cruzaJugadas: !!cruzaJugadas
+  };
+}
+
+// POST /oficinas/calcular — vista previa (no guarda). Exige que la carrera cuadre.
+router.post('/oficinas/calcular', asyncHandler(async (req, res) => {
+  const falla = errorDeTablaOficina(req.body.filas);
+  if (falla) return res.status(422).json(falla);
+  const cuerpo = cuerpoPlanoDeOficina(req);
+  if (cuerpo.hipodromoId) {
+    const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [cuerpo.hipodromoId, req.grupoId]);
+    if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+    cuerpo.hipodromoNombre = rh.rows[0].nombre;
+  }
+  const out = await correrManejadorPlano(calcularPlanoHandler, req, cuerpo);
+  res.status(out.status).json(out.body);
+}));
+
+// POST /oficinas/guardar — guarda la carrera (sustituye a la que ya existía) y deja la tabla para reabrirla.
+router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
+  const falla = errorDeTablaOficina(req.body.filas);
+  if (falla) return res.status(422).json(falla);
+  const cuerpo = cuerpoPlanoDeOficina(req);
+  const out = await correrManejadorPlano(guardarPlanoHandler, req, cuerpo);
+  if (out.status === 201 && out.body && out.body.plano) {
+    const { entradas } = oficinasCalc.normalizarEntradas(req.body.filas);
+    await db.query('UPDATE hipismo_planos SET jugadas_oficina = $1 WHERE id = $2 AND grupo_id = $3', [JSON.stringify(entradas), out.body.plano.id, req.grupoId]);
+  }
+  res.status(out.status).json(out.body);
 }));
 
 // GET /planos?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).

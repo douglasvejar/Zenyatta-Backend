@@ -35,7 +35,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     // solo redirige a Hipismo si Hipismo está prendido, nunca bloquea
     // cuando los 2 están apagados). Se corta acá, ANTES de entrar a
     // ningún panel.
-    if (!grupo.modulo_deportes_habilitado && !grupo.modulo_hipismo_habilitado) {
+    if (!grupo.modulo_deportes_habilitado && !grupo.modulo_hipismo_habilitado && !grupo.modulo_hipismo_oficinas_habilitado) {
       return res.status(403).json({ error: 'Este grupo no tiene ningún módulo activo (ni Deportes ni Hipismo). Contacta al administrador de la plataforma.' });
     }
 
@@ -81,6 +81,8 @@ router.post('/login', asyncHandler(async (req, res) => {
         id: grupo.id, nombre: grupo.nombre, email: grupo.email, rol: 'administrador', permisos: null,
         moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
         moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
+        // Hipismo Oficinas (09-10-2026): tercer módulo, mismo patrón.
+        moduloHipismoOficinasHabilitado: !!grupo.modulo_hipismo_oficinas_habilitado,
         // "Cruzar jugadas" de Hipismo (24-09-2026) — viaja en el login
         // igual que los 2 de arriba, para que hipismo-mockup.html sepa,
         // sin otra llamada aparte, si este Grupo tiene permitido cruzar.
@@ -101,6 +103,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, g.logo_base64 AS grupo_logo_base64,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
+            g.modulo_hipismo_oficinas_habilitado AS grupo_modulo_hipismo_oficinas_habilitado,
             g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado,
             g.tema_color_primario AS grupo_tema_color_primario,
             g.tema_color_secundario AS grupo_tema_color_secundario
@@ -118,7 +121,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   // "Ningún módulo activo" (26-09-2026) — mismo chequeo que el login del
   // Administrador de arriba: si el grupo al que pertenece este Empleado
   // tiene Deportes Y Hipismo desactivados, tampoco lo deja entrar.
-  if (!empleado.grupo_modulo_deportes_habilitado && !empleado.grupo_modulo_hipismo_habilitado) {
+  if (!empleado.grupo_modulo_deportes_habilitado && !empleado.grupo_modulo_hipismo_habilitado && !empleado.grupo_modulo_hipismo_oficinas_habilitado) {
     return res.status(403).json({ error: 'Este grupo no tiene ningún módulo activo (ni Deportes ni Hipismo). Contacta al administrador de la plataforma.' });
   }
 
@@ -141,6 +144,7 @@ router.post('/login', asyncHandler(async (req, res) => {
       id: empleado.grupo_id, nombre: empleado.grupo_nombre, email: empleado.email, rol: 'empleado', permisos, nombreEmpleado: empleado.nombre,
       moduloDeportesHabilitado: empleado.grupo_modulo_deportes_habilitado,
       moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
+      moduloHipismoOficinasHabilitado: !!empleado.grupo_modulo_hipismo_oficinas_habilitado,
       hipismoCruzarHabilitado: empleado.grupo_hipismo_cruzar_habilitado,
       logoUrl: urlLogoGrupo(empleado.grupo_id, empleado, { campoUrl: 'grupo_logo_url', campoBase64: 'grupo_logo_base64' }),
       temaColorPrimario: temaEmpleado.colorPrimario,

@@ -112,7 +112,7 @@ async function pasadaNocturna({ hoy } = {}) {
   const hoyVe = hoy || hoyVenezuela();
   if (hoyVe.getUTCHours() < HORA_INICIO_VE) return { corridos: 0 };
   const fecha = isoFecha(hoyVe);
-  const rGrupos = await db.query('SELECT * FROM grupos WHERE modulo_hipismo_habilitado = true');
+  const rGrupos = await db.query('SELECT * FROM grupos WHERE modulo_hipismo_habilitado = true OR modulo_hipismo_oficinas_habilitado = true');
   const rHechos = await db.query('SELECT grupo_id FROM hipismo_cuadre_nocturno WHERE fecha = $1', [fecha]);
   const hechos = new Set(rHechos.rows.map(r => r.grupo_id));
   let corridos = 0;

@@ -1332,7 +1332,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>🐎 Módulo Hipismo</h3>
+              <h3>🐎 Módulo Hipismo Grupos Hípicos</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Apuestas a carreras de caballos (planos, tercios, 10/N). Producto nuevo, todavía en mockup de front-end (<code>hipismo-mockup.html</code>) — prender este interruptor deja registrado que el grupo contrató el servicio, para cuando el módulo tenga backend real.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Estado</span>
@@ -1340,6 +1340,18 @@
               </div>
               <button type="button" class="btn-secundario" id="btnToggleModuloHipismo" onclick="toggleModuloGrupo('hipismo')" style="margin-top:6px;"></button>
               <div id="moduloHipismoError"></div>
+            </div>
+
+            <!-- Hipismo Oficinas (09-10-2026): mismos cálculos que Grupos Hípicos, pero las jugadas se cargan
+                 en una tabla (jugador, jugó/dio, tipo, caballo, monto) en vez de pegar un plano. -->
+            <div class="modal-seccion">
+              <h3>🏢 Módulo Hipismo Oficinas</h3>
+              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismos cálculos que Hipismo Grupos Hípicos (comparte clientes e hipódromos), pero las jugadas se cargan en una tabla y cada carrera debe cuadrar (lo que jugaron = lo que dieron).</p>
+              <div class="detalle-fila">
+                <span class="etiqueta">Estado</span>
+                <span class="valor" id="moduloOficinasEstado"></span>
+              </div>
+              <button type="button" class="btn-secundario" id="btnToggleModuloOficinas" onclick="toggleModuloGrupo('hipismo-oficinas')" style="margin-top:6px;"></button>
             </div>
 
             <!-- "Cruzar jugadas" de Hipismo (24-09-2026, a pedido del
@@ -1908,7 +1920,7 @@ function pmSeleccionarGrupo(id) {
   document.getElementById('pmPaneles').style.display = 'none';
   if (!PM_GRUPO_ID) return;
   const g = PM_GRUPOS.find(x => x.id === PM_GRUPO_ID);
-  if (g && g.modulo_hipismo_habilitado === false) {
+  if (g && g.modulo_hipismo_habilitado === false && !g.modulo_hipismo_oficinas_habilitado) {
     document.getElementById('pmModuloApagado').style.display = 'block';
     pmMsg('pmModuloMsg', '', true);
     return;
@@ -2631,7 +2643,7 @@ async function cargarBalanceClientesDetalle(tipoForzado) {
 // src/routes/superadmin.js).
 async function cargarBalanceHipismoDetalle(desde, hasta) {
   const cont = document.getElementById('bcContenidoHipismo');
-  if (!GRUPO_MODULO_HIPISMO_HABILITADO) { cont.innerHTML = ''; return; }
+  if (!GRUPO_MODULO_HIPISMO_HABILITADO && !GRUPO_MODULO_OFICINAS_HABILITADO) { cont.innerHTML = ''; return; }
   const titulo = '<h4 style="margin:18px 0 6px; color:var(--accent-cyan);">🐎 Balance General (Hipismo)</h4>';
   cont.innerHTML = titulo + 'Cargando...';
   try {
@@ -3440,6 +3452,7 @@ async function abrirDetalleGrupo(id, nombre) {
 
     GRUPO_MODULO_DEPORTES_HABILITADO = !!d.moduloDeportesHabilitado;
     GRUPO_MODULO_HIPISMO_HABILITADO = !!d.moduloHipismoHabilitado;
+    GRUPO_MODULO_OFICINAS_HABILITADO = !!d.moduloHipismoOficinasHabilitado;
     GRUPO_HIPISMO_CRUZAR_HABILITADO = !!d.hipismoCruzarHabilitado;
     pintarEstadoModulos();
 
@@ -3738,6 +3751,7 @@ async function restablecerTemaCliente() {
 // =================================================================
 let GRUPO_MODULO_DEPORTES_HABILITADO = true;
 let GRUPO_MODULO_HIPISMO_HABILITADO = false;
+let GRUPO_MODULO_OFICINAS_HABILITADO = false;
 // "Cruzar jugadas" de Hipismo (24-09-2026) — ver la nota grande en el
 // bloque HTML de arriba y en hipismo_cruzar_habilitado (sql/schema.sql).
 let GRUPO_HIPISMO_CRUZAR_HABILITADO = true;
@@ -3763,6 +3777,18 @@ function pintarEstadoModulos() {
     hipismoBoton.textContent = 'Activar módulo Hipismo';
   }
 
+  const oficinasEstado = document.getElementById('moduloOficinasEstado');
+  const oficinasBoton = document.getElementById('btnToggleModuloOficinas');
+  if (oficinasEstado && oficinasBoton) {
+    if (GRUPO_MODULO_OFICINAS_HABILITADO) {
+      oficinasEstado.innerHTML = '<span style="color:#2e7d32; font-weight:600;">✅ Contratado</span>';
+      oficinasBoton.textContent = 'Desactivar módulo Hipismo Oficinas';
+    } else {
+      oficinasEstado.innerHTML = '<span style="color:#888;">— No contratado —</span>';
+      oficinasBoton.textContent = 'Activar módulo Hipismo Oficinas';
+    }
+  }
+
   const cruzarEstado = document.getElementById('hipismoCruzarEstado');
   const cruzarBoton = document.getElementById('btnToggleHipismoCruzar');
   if (cruzarEstado && cruzarBoton) {
@@ -3781,17 +3807,20 @@ async function toggleModuloGrupo(modulo) {
   if (!GRUPO_DETALLE_ID) return;
   const errorEl = document.getElementById('moduloHipismoError');
   if (errorEl) errorEl.textContent = '';
-  const nuevoValor = modulo === 'deportes' ? !GRUPO_MODULO_DEPORTES_HABILITADO : !GRUPO_MODULO_HIPISMO_HABILITADO;
+  const nuevoValor = modulo === 'deportes' ? !GRUPO_MODULO_DEPORTES_HABILITADO
+    : (modulo === 'hipismo-oficinas' ? !GRUPO_MODULO_OFICINAS_HABILITADO : !GRUPO_MODULO_HIPISMO_HABILITADO);
   try {
     const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/modulo-' + modulo, { method: 'PATCH', body: JSON.stringify({ habilitado: nuevoValor }) });
     if (modulo === 'deportes') {
       GRUPO_MODULO_DEPORTES_HABILITADO = !!r.moduloDeportesHabilitado;
+    } else if (modulo === 'hipismo-oficinas') {
+      GRUPO_MODULO_OFICINAS_HABILITADO = !!r.moduloHipismoOficinasHabilitado;
     } else {
       GRUPO_MODULO_HIPISMO_HABILITADO = !!r.moduloHipismoHabilitado;
     }
     pintarEstadoModulos();
   } catch (e) {
-    const msg = 'No se pudo actualizar el módulo ' + (modulo === 'deportes' ? 'Deportes' : 'Hipismo') + ': ' + e.message;
+    const msg = 'No se pudo actualizar el módulo ' + (modulo === 'deportes' ? 'Deportes' : (modulo === 'hipismo-oficinas' ? 'Hipismo Oficinas' : 'Hipismo')) + ': ' + e.message;
     if (errorEl) errorEl.textContent = msg; else alert(msg);
   }
 }
