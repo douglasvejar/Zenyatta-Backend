@@ -1097,11 +1097,18 @@ function errorDeTablaOficina(filas) {
   return null;
 }
 
+// Nombres de jugador de las filas válidas de la tabla.
+function nombresDeLaTabla(filas) {
+  return Array.from(new Set(oficinasCalc.normalizarEntradas(filas).entradas.map(e => e.jugador)));
+}
+
 // POST /oficinas/cuadre { filas } — para la ventana "cuánto falta" mientras se escribe.
 router.post('/oficinas/cuadre', asyncHandler(async (req, res) => {
   const filas = req.body.filas;
   const cuadre = oficinasCalc.calcularCuadre(filas);
-  res.json({ ...cuadre, noReconocidas: cuadre.errores.length ? [] : oficinasCalc.tiposNoReconocidos(filas) });
+  // Clientes que escribieron en la tabla y no existen: la pantalla avisa "CLIENTE X NO EXISTE" (nunca se crean solos).
+  const clientesNoExisten = await clientesInexistentes(req.grupoId, nombresDeLaTabla(filas));
+  res.json({ ...cuadre, noReconocidas: cuadre.errores.length ? [] : oficinasCalc.tiposNoReconocidos(filas), clientesNoExisten });
 }));
 
 // GET /oficinas/siguiente-carrera?hipodromoId=&fecha= — la carrera que sigue a la última cargada.
@@ -1153,6 +1160,7 @@ function cuerpoPlanoDeOficina(req) {
 
 // POST /oficinas/calcular — vista previa (no guarda). Exige que la carrera cuadre.
 router.post('/oficinas/calcular', asyncHandler(async (req, res) => {
+  if (await rechazarClientesInexistentes(req, res, nombresDeLaTabla(req.body.filas))) return;
   const falla = errorDeTablaOficina(req.body.filas);
   if (falla) return res.status(422).json(falla);
   const cuerpo = cuerpoPlanoDeOficina(req);
@@ -1167,6 +1175,7 @@ router.post('/oficinas/calcular', asyncHandler(async (req, res) => {
 
 // POST /oficinas/guardar — guarda la carrera (sustituye a la que ya existía) y deja la tabla para reabrirla.
 router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
+  if (await rechazarClientesInexistentes(req, res, nombresDeLaTabla(req.body.filas))) return;
   const falla = errorDeTablaOficina(req.body.filas);
   if (falla) return res.status(422).json(falla);
   const cuerpo = cuerpoPlanoDeOficina(req);

@@ -79,6 +79,14 @@
   .espacio { flex: 1; }
 
   /* Ventana de cuadre */
+  .modal-fondo { position: fixed; inset: 0; background: rgba(15,30,20,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal-fondo.oculto { display: none; }
+  .modal-caja { background: var(--card); border-radius: 14px; max-width: 440px; width: 100%; padding: 20px 22px; border: 2px solid var(--danger); box-shadow: 0 18px 50px rgba(0,0,0,0.35); }
+  .modal-caja h3 { margin: 0 0 8px; font-family: 'Outfit', sans-serif; color: var(--danger); font-size: 19px; }
+  .modal-caja .nombres { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-weight: 800; font-size: 15px; letter-spacing: .2px; color: var(--danger); }
+  .modal-caja p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-dim); }
+  .modal-botones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  tr.fila-noexiste input[data-c="jugador"] { border-color: var(--danger); background: #fef2f2; }
   .cuadre { position: sticky; top: 12px; }
   .cuadre-cab { display: flex; align-items: center; gap: 8px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; padding: 10px 12px; border-radius: 10px; }
   .cuadre-cab.ok { background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.4); }
@@ -378,6 +386,17 @@
   </section>
 </div>
 
+<div class="modal-fondo oculto" id="modalNoExiste" role="dialog" aria-modal="true" aria-labelledby="modalNoExisteTit">
+  <div class="modal-caja">
+    <h3 id="modalNoExisteTit">⚠️ Cliente no existe</h3>
+    <div class="nombres" id="modalNoExisteNombres"></div>
+    <p>Escribe bien su nombre o créalo primero en <b>Crear Cliente</b>. Ningún cliente se crea solo.</p>
+    <div class="modal-botones">
+      <button type="button" class="btn" id="modalNoExisteCrear">👤 Crear cliente</button>
+      <button type="button" class="btn btn-sec" id="modalNoExisteCorregir">Corregir el nombre</button>
+    </div>
+  </div>
+</div>
 <datalist id="dlClientes"></datalist>
 <datalist id="dlTipos">
   <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp">
@@ -532,6 +551,7 @@ function pintarTabla(erroresPorFila) {
       <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
       <td class="x"><button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
+  if (typeof marcarFilasNoExisten === 'function') marcarFilasNoExisten();
 }
 $('jTbody').addEventListener('input', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
@@ -555,6 +575,54 @@ $('jTbody').addEventListener('keydown', e => {
   else { const sig = document.querySelector(`#jTbody input[data-i="${i + 1}"][data-c="jugador"]`); if (sig) sig.focus(); }
 });
 
+
+// ---------- "CLIENTE X NO EXISTE" ----------
+// Se avisa en una ventana (con el nombre) al salir del campo jugador, y también si el servidor lo rechaza al
+// calcular o guardar. Nunca se crea un cliente solo: la ventana lleva a "Crear Cliente" con el nombre puesto.
+let NO_EXISTEN = [];            // nombres (MAYÚSCULA) que el servidor dijo que no existen, para marcar las filas
+const AVISADOS_NO_EXISTE = new Set();
+let ULTIMO_NO_EXISTE = '';
+function existeCliente(nombre) {
+  const n = normNombre(nombre);
+  return CLIENTES.some(c => normNombre(c.nombre) === n);
+}
+function mostrarNoExiste(nombres) {
+  const lista = Array.from(new Set((nombres || []).map(normNombre).filter(Boolean)));
+  if (!lista.length) return;
+  ULTIMO_NO_EXISTE = lista[0];
+  $('modalNoExisteNombres').innerHTML = lista.map(n => `<div>CLIENTE ${esc(n)} NO EXISTE</div>`).join('');
+  $('modalNoExiste').classList.remove('oculto');
+  $('modalNoExisteCorregir').focus();
+}
+function cerrarNoExiste() { $('modalNoExiste').classList.add('oculto'); }
+$('modalNoExisteCorregir').addEventListener('click', () => {
+  cerrarNoExiste();
+  const i = FILAS.findIndex(f => normNombre(f.jugador) === ULTIMO_NO_EXISTE);
+  const inp = document.querySelector(`#jTbody input[data-i="${i < 0 ? 0 : i}"][data-c="jugador"]`);
+  if (inp) { inp.focus(); inp.select(); }
+});
+$('modalNoExisteCrear').addEventListener('click', () => {
+  cerrarNoExiste();
+  irATab('clientes');
+  const c = $('cNombre'); if (c) { c.value = nombreBonito(ULTIMO_NO_EXISTE); c.focus(); }
+});
+$('modalNoExiste').addEventListener('click', e => { if (e.target === $('modalNoExiste')) cerrarNoExiste(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarNoExiste(); });
+$('jTbody').addEventListener('focusout', e => {
+  const t = e.target;
+  if (!t.dataset || t.dataset.c !== 'jugador') return;
+  const n = normNombre(t.value);
+  if (!n || !CLIENTES.length) return;
+  if (existeCliente(n)) { AVISADOS_NO_EXISTE.delete(n); return; }
+  if (AVISADOS_NO_EXISTE.has(n)) return;
+  AVISADOS_NO_EXISTE.add(n);
+  mostrarNoExiste([n]);
+});
+function marcarFilasNoExisten() {
+  const malos = new Set(NO_EXISTEN.map(normNombre));
+  document.querySelectorAll('#jTbody tr').forEach((tr, i) => tr.classList.toggle('fila-noexiste', !!FILAS[i] && malos.has(normNombre(FILAS[i].jugador))));
+}
+
 function programarCuadre() {
   clearTimeout(TIMER_CUADRE);
   TIMER_CUADRE = setTimeout(pedirCuadre, 250);
@@ -574,9 +642,12 @@ function pintarCuadre(c) {
   const malas = c.noReconocidas || [];
   CUADRE_OK = !!c.cuadra && malas.length === 0;
   if (!c.hayJugadas && !hayErrores) { cab.className = 'cuadre-cab vacio'; cab.textContent = 'Agrega jugadas para ver el cuadre.'; }
+  else if (NO_EXISTEN.length) { cab.className = 'cuadre-cab mal'; cab.textContent = '⚠️ Hay clientes que no existen'; }
   else if (CUADRE_OK) { cab.className = 'cuadre-cab ok'; cab.textContent = `✅ La carrera cuadra — ${fmt(c.totalJugo)} jugados y dados`; }
   else { cab.className = 'cuadre-cab mal'; cab.textContent = '⚠️ La carrera todavía no cuadra'; }
   const errs = [];
+  NO_EXISTEN = c.clientesNoExisten || [];
+  NO_EXISTEN.forEach(n => errs.push(`<b>CLIENTE ${esc(n)} NO EXISTE</b> — escribe bien su nombre o créalo en Crear Cliente.`));
   (c.errores || []).forEach(e => errs.push(`Fila ${e.fila}: ${esc(e.error)}`));
   if (malas.length) errs.push('No reconozco: ' + malas.map(esc).join(', ') + '. Revisa el tipo y el caballo.');
   $('cuadreErrores').innerHTML = errs.join('<br>');
@@ -589,6 +660,7 @@ function pintarCuadre(c) {
       <div class="quienes">Jugaron: ${listaNombres(d.jugaron)}<br>Dieron: ${listaNombres(d.dieron)}</div>
     </div>`).join('');
   marcarFilasConError(c.errores);
+  marcarFilasNoExisten();
   actualizarBotones();
 }
 // Solo cambia el color de las filas con error: NO se vuelve a pintar la tabla, para no quitarle el cursor a quien está escribiendo.
@@ -619,6 +691,10 @@ function mostrarResultado(titulo, texto, avisos) {
   $('jResultadoCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 function textoError(e) {
+  if (e.datos && e.datos.clientesNoExisten && e.datos.clientesNoExisten.length) {
+    NO_EXISTEN = e.datos.clientesNoExisten; marcarFilasNoExisten();
+    mostrarNoExiste(e.datos.clientesNoExisten);
+  }
   if (e.datos && e.datos.cuadre) pintarCuadre(Object.assign({}, e.datos.cuadre, { noReconocidas: e.datos.noReconocidas || [] }));
   return e.message;
 }

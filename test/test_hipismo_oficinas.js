@@ -169,7 +169,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(r.status === 422 && /no cuadra/i.test(r.salida.error) && /350/.test(r.salida.error), '3c) guardar una carrera que no cuadra da 422 y dice cuánto falta');
   check(planos.length === 0, '3d) y NO se guardó ningún plano');
 
-  r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [...tabla.slice(0, 2), F('pedro', 'dio', '1p', '3', 350), F('x', 'jugo', 'zz', '3', 5), F('y', 'dio', 'zz', '3', 5)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 1, fecha: '2026-10-09' } });
+  r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [...tabla.slice(0, 2), F('pedro', 'dio', '1p', '3', 350), F('ana', 'jugo', 'zz', '3', 5), F('luis', 'dio', 'zz', '3', 5)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 1, fecha: '2026-10-09' } });
   check(r.status === 422 && /zz del 3/.test(r.salida.error), '3e) un tipo que el motor no entiende se rechaza nombrándolo');
 
   r = await invocarRuta(handlerDe('post', '/oficinas/calcular'), { ...base, body: { filas: tabla, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 1, fecha: '2026-10-09' } });
@@ -198,6 +198,18 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   // Cliente que no existe: igual que en Grupos Hípicos
   r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [F('fantasma', 'jugo', '1p', '3', 10), F('pedro', 'dio', '1p', '3', 10)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 2, fecha: '2026-10-09' } });
   check(r.status === 422 && /CLIENTE FANTASMA NO EXISTE/.test(r.salida.error) && planos.length === 1, '3p) un jugador que no es cliente: "CLIENTE FANTASMA NO EXISTE" y no se guarda');
+
+  // Aviso "CLIENTE X NO EXISTE" (ventana en pantalla con el nombre)
+  const tablaFantasma = [F('fantasma', 'jugo', '1p', '3', 10), F('Pedro', 'dio', '1p', '3', 10), F('otro fantasma', 'jugo', '2p', '4', 5), F('raul', 'dio', '2p', '4', 5)];
+  r = await invocarRuta(handlerDe('post', '/oficinas/cuadre'), { ...base, body: { filas: tablaFantasma } });
+  check(r.status === 200 && JSON.stringify(r.salida.clientesNoExisten) === JSON.stringify(['FANTASMA', 'OTRO FANTASMA']), '3q) POST /oficinas/cuadre lista los clientes que no existen (con su nombre)');
+  r = await invocarRuta(handlerDe('post', '/oficinas/cuadre'), { ...base, body: { filas: tabla } });
+  check(r.salida.clientesNoExisten.length === 0, '3r) si todos existen, no hay aviso');
+  const planosAntes = planos.length;
+  r = await invocarRuta(handlerDe('post', '/oficinas/calcular'), { ...base, body: { filas: tablaFantasma, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 2, fecha: '2026-10-09' } });
+  check(r.status === 422 && /CLIENTE FANTASMA NO EXISTE/.test(r.salida.error) && /CLIENTE OTRO FANTASMA NO EXISTE/.test(r.salida.error) && r.salida.clientesNoExisten.length === 2, '3s) calcular con clientes inexistentes: 422 con TODOS los nombres');
+  r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [F('fantasma', 'jugo', '1p', '3', 10), F('pedro', 'dio', '1p', '3', 4)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 2, fecha: '2026-10-09' } });
+  check(r.status === 422 && Array.isArray(r.salida.clientesNoExisten) && planos.length === planosAntes, '3t) el aviso de cliente inexistente sale antes que el de cuadre y no guarda nada');
 
   // "Cruzar jugadas": el mismo interruptor de Súper-admin vale para los dos módulos
   const tablaCruce = [F('jose', 'jugo', '1p', '3', 100), F('pedro', 'dio', '1p', '3', 100), F('jose', 'jugo', '1p', '7', 40), F('ana', 'dio', '1p', '7', 40)];
@@ -231,6 +243,8 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   });
   check(/¿Se le devuelve un % a este cliente\?/.test(html) && /le genera % a otro cliente/.test(html), '5) Crear Cliente pregunta por el % que se le devuelve y el % que le genera a otro cliente');
   check(/moduloHipismoOficinasHabilitado/.test(html), '5) la pantalla exige tener el módulo Oficinas');
+  check(/modalNoExiste/.test(html) && /NO EXISTE/.test(html) && /clientesNoExisten/.test(html) && /focusout/.test(html), '5) la pantalla avisa en una ventana "CLIENTE X NO EXISTE" con el nombre');
+  check(/modalNoExisteCrear/.test(html) && /irATab\('clientes'\)/.test(html), '5) la ventana ofrece ir a Crear Cliente con el nombre puesto');
   // El script de la página compila
   const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
   try { new Function(script); check(true, '5) el script de la pantalla no tiene errores de sintaxis'); } catch (e) { check(false, '5) el script de la pantalla tiene error de sintaxis: ' + e.message); }
