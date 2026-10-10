@@ -2115,3 +2115,25 @@ alter table grupos add column if not exists modulo_hipismo_oficinas_habilitado b
 -- volver a abrir la carrera y corregirla). El cálculo sigue saliendo de
 -- hipismo_tickets, esto es solo la copia editable.
 alter table hipismo_planos add column if not exists jugadas_oficina jsonb;
+
+-- =================================================================
+-- HIPISMO OFICINAS — carreras guardadas SIN llegada (10-10-2026)
+-- =================================================================
+-- Registro de Jugadas: las jugadas de una carrera se pueden guardar antes de tener la pizarra. Quedan aquí,
+-- "pendientes de llegada", sin tickets ni comisión (no afectan ningún balance). Al guardar la carrera con su
+-- pizarra se calcula con el motor de siempre y esta fila se borra.
+create table if not exists hipismo_oficinas_pendientes (
+  id               uuid primary key default gen_random_uuid(),
+  grupo_id         uuid not null references grupos(id) on delete cascade,
+  hipodromo_id     uuid references hipismo_hipodromos(id) on delete set null,
+  hipodromo_nombre text not null,
+  carrera_numero   integer not null,
+  fecha            date not null,
+  ret              text,
+  cruza_jugadas    boolean not null default false,
+  jugadas          jsonb not null default '[]',
+  creado_en        timestamptz not null default now(),
+  actualizado_en   timestamptz not null default now(),
+  unique (grupo_id, hipodromo_nombre, carrera_numero, fecha)
+);
+create index if not exists idx_hipismo_oficinas_pendientes_grupo_fecha on hipismo_oficinas_pendientes(grupo_id, fecha);

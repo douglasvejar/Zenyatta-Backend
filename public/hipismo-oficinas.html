@@ -63,6 +63,12 @@
   @media (max-width: 1000px) { .jug-layout { grid-template-columns: 1fr; } }
   .cargadas { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
   .chip-carrera { border: 1px solid var(--border-light); background: var(--card-2); color: var(--accent-deep); border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Outfit', sans-serif; }
+  .chip-carrera.pend { border-style: dashed; color: #92400e; background: #fffbeb; }
+  .tag.pend { background: #fffbeb; color: #92400e; border-color: #f3d9a4; }
+  .reg-fila { cursor: pointer; } .reg-fila:hover td { background: var(--ok-bg); }
+  .reg-hip { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 16px; margin: 0 0 8px; }
+  .edicion-barra { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #fffbeb; border: 1px solid #f3d9a4; color: #92400e; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; font-weight: 600; }
+  .edicion-barra .espacio { flex: 1; }
   .chip-carrera.actual { background: var(--accent-grass); color: #fff; border-color: var(--accent-grass); }
   .aviso { border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-top: 12px; }
   .aviso.info { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.35); color: #92400e; }
@@ -183,6 +189,7 @@
 <div class="contenedor">
   <div class="tabs" role="tablist">
     <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
+    <button type="button" class="tab" data-tab="registro" onclick="irATab('registro')">📚 Registro de Jugadas</button>
     <button type="button" class="tab" data-tab="balance" onclick="irATab('balance')">💰 Balance General</button>
     <button type="button" class="tab" data-tab="detalle" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
@@ -194,6 +201,11 @@
   <section class="panel activo" id="panel-jugadas">
     <div class="jug-layout">
       <div>
+        <div class="edicion-barra oculto" id="jEdicion">
+          <span id="jEdicionTxt"></span><span class="espacio"></span>
+          <button type="button" class="btn btn-sec btn-chico" onclick="volverAlRegistro()">← Volver al Registro</button>
+          <button type="button" class="btn btn-peligro btn-chico" onclick="eliminarCarreraEnEdicion()">🗑️ Eliminar carrera</button>
+        </div>
         <div class="card">
           <h2>Cargar carrera</h2>
           <p class="nota">Elige el hipódromo: se abre solo la carrera que sigue a la última cargada. La carrera se guarda cuando lo que jugaron es igual a lo que dieron, por cada tipo de jugada y caballo.</p>
@@ -251,6 +263,22 @@
   </section>
 
   <!-- ===================== BALANCE GENERAL ===================== -->
+  <!-- ===================== REGISTRO DE JUGADAS ===================== -->
+  <section class="panel" id="panel-registro">
+    <div class="card">
+      <h2>Registro de Jugadas</h2>
+      <p class="nota">Abre un día, elige el hipódromo y toca una carrera para corregir jugadores y montos. Al guardar, la carrera se calcula de nuevo sola si ya tiene su llegada (pizarra); si no la tiene, queda pendiente.</p>
+      <div class="fila-campos">
+        <div><label for="rFecha">Día</label><input type="date" id="rFecha" onchange="cargarRegistro()"></div>
+        <div><label for="rHipodromo">Hipódromo</label><select id="rHipodromo" onchange="pintarRegistro()"><option value="">Todos</option></select></div>
+        <div><label>&nbsp;</label><span style="display:flex;gap:6px;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button></span></div>
+      </div>
+      <div class="cargadas" id="rDias"></div>
+      <div class="msg" id="rMsg"></div>
+    </div>
+    <div id="rLista"></div>
+  </section>
+
   <section class="panel" id="panel-balance">
     <div class="card">
       <h2>Balance General</h2>
@@ -487,6 +515,7 @@ function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el
 function irATab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
+  if (t === 'registro') abrirRegistro();
   if (t === 'clientes') cargarClientes();
   if (t === 'hipodromos') cargarHipodromos();
   if (t === 'balance') cargarBalance();
@@ -522,6 +551,7 @@ let CUADRE_OK = false;
 let TIMER_CUADRE = null;
 let ULTIMO_RESULTADO_TEXTO = '';
 let CARGADAS = [];
+let PENDIENTES = [];     // carreras guardadas sin llegada
 
 function filaVacia(base) {
   return { jugador: '', lado: 'jugo', tipo: base ? base.tipo : '', caballo: base ? base.caballo : '', monto: '' };
@@ -673,9 +703,13 @@ function marcarFilasConError(errores) {
   document.querySelectorAll('#jTbody tr').forEach((tr, i) => tr.classList.toggle('fila-error', malas.has(i + 1)));
 }
 function actualizarBotones() {
-  const listo = CUADRE_OK && $('jHipodromo').value && $('jCarrera').value && $('jPizarra').value.trim();
-  $('btnGuardar').disabled = !listo;
-  $('btnCalcular').disabled = !listo;
+  const base = CUADRE_OK && $('jHipodromo').value && $('jCarrera').value;
+  const hayPizarra = !!$('jPizarra').value.trim();
+  // Con llegada: guarda Y calcula. Sin llegada: guarda las jugadas "pendientes" (no afectan balances).
+  $('btnGuardar').disabled = !base;
+  $('btnGuardar').textContent = hayPizarra ? '💾 Guardar y calcular' : '💾 Guardar sin llegada';
+  $('btnCalcular').disabled = !(base && hayPizarra);
+  pintarEdicion();
 }
 $('jPizarra').addEventListener('input', actualizarBotones);
 
@@ -714,15 +748,28 @@ async function calcularVistaPrevia() {
 async function guardarCarrera() {
   msg('jMsg', '');
   const cuerpo = cuerpoCarrera();
+  const sinLlegada = !cuerpo.pizarra;
+  const editando = enEdicion();
   $('btnGuardar').disabled = true;
   try {
-    const r = await api('/api/hipismo/oficinas/guardar', { method: 'POST', body: JSON.stringify(cuerpo) });
+    const r = await api(sinLlegada ? '/api/hipismo/oficinas/pendiente' : '/api/hipismo/oficinas/guardar', { method: 'POST', body: JSON.stringify(cuerpo) });
     const avisos = [];
-    if (r.sustituyoAnterior) avisos.push('Esta carrera ya estaba cargada: la nueva sustituyó a la anterior (la anterior queda en la papelera de planos).');
-    (r.alertasPozo || []).forEach(a => avisos.push(typeof a === 'string' ? a : (a.mensaje || JSON.stringify(a))));
-    (r.sinReconocer || []).forEach(x => avisos.push('No reconocí: ' + x));
-    mostrarResultado('Carrera ' + cuerpo.carreraNumero + ' guardada', r.plano ? r.plano.texto_resultado : '', avisos);
-    msg('jMsg', '✅ Carrera ' + cuerpo.carreraNumero + ' guardada.', true);
+    if (!sinLlegada) {
+      if (r.sustituyoAnterior) avisos.push('Esta carrera ya estaba cargada: la nueva sustituyó a la anterior (la anterior queda en la papelera de planos).');
+      (r.alertasPozo || []).forEach(a => avisos.push(typeof a === 'string' ? a : (a.mensaje || JSON.stringify(a))));
+      (r.sinReconocer || []).forEach(x => avisos.push('No reconocí: ' + x));
+      mostrarResultado('Carrera ' + cuerpo.carreraNumero + ' guardada', r.plano ? r.plano.texto_resultado : '', avisos);
+    }
+    const texto = sinLlegada
+      ? `⏳ Carrera ${cuerpo.carreraNumero} guardada SIN llegada (pendiente). Cuando tengas la pizarra, ábrela desde el Registro, agrégala y guarda: se calcula sola.`
+      : `✅ Carrera ${cuerpo.carreraNumero} guardada y calculada.`;
+    msg('jMsg', texto, true);
+    if (editando) {            // venía del Registro: vuelve ahí con la lista al día
+      EDICION = null;
+      irATab('registro');
+      msg('rMsg', texto, true);
+      return;
+    }
     // Lista para la siguiente: tabla vacía, llegada vacía y la carrera que sigue.
     FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
     pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = puedeCruzarJugadas();
@@ -743,6 +790,7 @@ async function abrirSiguienteCarrera() {
   try {
     const r = await api('/api/hipismo/oficinas/siguiente-carrera?hipodromoId=' + encodeURIComponent(h) + '&fecha=' + encodeURIComponent($('jFecha').value));
     CARGADAS = r.cargadas || [];
+    PENDIENTES = r.pendientes || [];
     $('jCarrera').value = r.siguiente;
     if (r.carrerasMax && r.siguiente > r.carrerasMax) mostrarAviso(`Ojo: este hipódromo tiene ${r.carrerasMax} carreras y la que sigue es la ${r.siguiente}.`);
     else $('jAviso').classList.add('oculto');
@@ -754,7 +802,7 @@ function mostrarAviso(t) { const a = $('jAviso'); a.textContent = t; a.classList
 function pintarCargadas() {
   const actual = Number($('jCarrera').value);
   $('jCargadas').innerHTML = CARGADAS.length
-    ? 'Ya cargadas: ' + CARGADAS.map(n => `<button type="button" class="chip-carrera${n === actual ? ' actual' : ''}" onclick="abrirCarrera(${n})" title="Abrir para corregir">${n}</button>`).join('')
+    ? 'Ya cargadas: ' + CARGADAS.map(n => `<button type="button" class="chip-carrera${n === actual ? ' actual' : ''}${PENDIENTES.includes(n) ? ' pend' : ''}" onclick="abrirCarrera(${n})" title="${PENDIENTES.includes(n) ? 'Guardada sin llegada: ábrela para agregar la pizarra' : 'Abrir para corregir'}">${n}${PENDIENTES.includes(n) ? ' ⏳' : ''}</button>`).join('')
     : ($('jHipodromo').value ? 'Todavía no hay carreras cargadas en este hipódromo hoy.' : '');
 }
 async function abrirCarrera(n) { $('jCarrera').value = n; await cambioCarrera(); }
@@ -771,17 +819,114 @@ async function cambioCarrera(soloAvisar) {
   try {
     const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent($('jFecha').value)}`);
     if (!r.existe) { actualizarBotones(); return; }
+    if (enEdicion()) { EDICION.estado = r.pendiente ? 'pendiente' : 'calculada'; EDICION.planoId = r.planoId || null; }
     if (r.filas && r.filas.length) {
       FILAS = r.filas.map(f => ({ jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) }));
       $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
       $('jCruzar').checked = !!r.cruzaJugadas;
       pintarTabla(); programarCuadre();
-      mostrarAviso(`La carrera ${c} ya estaba cargada. Estás viendo sus jugadas: si guardas, la nueva sustituye a la anterior.`);
+      mostrarAviso(r.pendiente
+        ? `La carrera ${c} está guardada SIN llegada. Agrega la pizarra y guarda: se calcula sola.`
+        : `La carrera ${c} ya estaba cargada. Estás viendo sus jugadas: si guardas, se calcula de nuevo y sustituye a la anterior.`);
     } else {
       mostrarAviso(`La carrera ${c} ya estaba cargada desde Hipismo Grupos Hípicos (como plano). Si guardas aquí, la nueva la sustituye.`);
     }
   } catch (e) { msg('jMsg', e.message, false); }
   actualizarBotones();
+}
+
+// ------------------------------------------------------------------
+// REGISTRO DE JUGADAS: abrir un día, un hipódromo y una carrera para corregirla en la pestaña Jugadas.
+// Guardar vuelve a calcular sola si la carrera tiene llegada (pizarra); si no, queda pendiente.
+// ------------------------------------------------------------------
+let REGISTRO = null;
+let EDICION = null;     // { fecha, hipodromoId, carrera, estado, planoId } cuando se abrió desde el Registro
+function enEdicion() {
+  return !!EDICION && EDICION.fecha === $('jFecha').value && EDICION.hipodromoId === $('jHipodromo').value && String(EDICION.carrera) === String($('jCarrera').value);
+}
+function pintarEdicion() {
+  const ver = enEdicion();
+  $('jEdicion').classList.toggle('oculto', !ver);
+  if (!ver) return;
+  const h = HIPODROMOS.find(x => x.id === EDICION.hipodromoId);
+  $('jEdicionTxt').textContent = `✏️ Editando desde el Registro: ${h ? h.nombre : 'hipódromo'} · carrera ${EDICION.carrera} · ${INF.fechaCorta(EDICION.fecha)}` +
+    (EDICION.estado === 'pendiente' ? ' · pendiente de llegada' : (EDICION.estado === 'calculada' ? ' · calculada' : ''));
+}
+function abrirRegistro() {
+  if (!$('rFecha').value) $('rFecha').value = fechaHoyVenezuela();
+  cargarRegistro();
+}
+function moverDiaRegistro(n) {
+  const d = new Date($('rFecha').value + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+  $('rFecha').value = d.toISOString().slice(0, 10);
+  cargarRegistro();
+}
+async function cargarRegistro() {
+  const fecha = $('rFecha').value;
+  if (!fecha) return;
+  try {
+    const [reg, dias] = await Promise.all([
+      api('/api/hipismo/oficinas/registro?fecha=' + encodeURIComponent(fecha)),
+      api('/api/hipismo/oficinas/registro-dias')
+    ]);
+    REGISTRO = reg;
+    $('rDias').innerHTML = dias.dias.length
+      ? 'Días con carreras: ' + dias.dias.map(d => `<button type="button" class="chip-carrera${d.fecha === fecha ? ' actual' : ''}" onclick="irADiaRegistro('${d.fecha}')" title="${d.carreras} calculadas${d.pendientes ? ', ' + d.pendientes + ' pendientes' : ''}">${INF.fechaCorta(d.fecha).slice(0, 5)} · ${d.carreras + d.pendientes}${d.pendientes ? ' ⏳' : ''}</button>`).join('')
+      : 'Todavía no hay carreras cargadas.';
+    const sel = $('rHipodromo'), actual = sel.value;
+    sel.innerHTML = '<option value="">Todos</option>' + reg.hipodromos.map(h => `<option value="${esc(h.nombre)}">${esc(h.nombre)}</option>`).join('');
+    if (actual && reg.hipodromos.some(h => h.nombre === actual)) sel.value = actual;
+    pintarRegistro();
+  } catch (e) { msg('rMsg', e.message, false); }
+}
+function irADiaRegistro(f) { $('rFecha').value = f; cargarRegistro(); }
+function pintarRegistro() {
+  const cont = $('rLista');
+  if (!REGISTRO) { cont.innerHTML = ''; return; }
+  const filtro = $('rHipodromo').value;
+  const hips = REGISTRO.hipodromos.filter(h => !filtro || h.nombre === filtro);
+  if (!hips.length) { cont.innerHTML = `<div class="card"><div class="vacio" style="padding:18px;text-align:center;color:var(--text-dim);">No hay carreras cargadas el ${INF.fechaCorta(REGISTRO.fecha)}${filtro ? ' en ' + esc(filtro) : ''}.</div></div>`; return; }
+  const t = REGISTRO.totales;
+  cont.innerHTML = `<p class="nota" style="margin:0 2px 10px;">${INF.nombreDia(REGISTRO.fecha)} ${INF.fechaCorta(REGISTRO.fecha)} — ${t.carreras} ${t.carreras === 1 ? 'carrera' : 'carreras'}: ${t.calculadas} calculadas${t.pendientes ? `, <b>${t.pendientes} pendientes de llegada</b>` : ''}. Toca una carrera para editarla.</p>` +
+    hips.map(h => `<div class="card" style="margin-bottom:12px;">
+      <div class="reg-hip">🏇 ${esc(h.nombre)}</div>
+      <div class="tabla-wrap"><table class="lista">
+        <thead><tr><th>Carrera</th><th>Estado</th><th>Llegada</th><th class="num">Jugadas</th><th class="num">Jugadores</th><th class="num">Total jugado</th><th></th></tr></thead>
+        <tbody>${h.carreras.map(c => `<tr class="reg-fila" onclick="abrirDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">
+          <td><b>Carrera ${c.numero}</b></td>
+          <td>${c.estado === 'calculada' ? '<span class="tag">✅ Calculada</span>' : '<span class="tag pend">⏳ Pendiente de llegada</span>'}</td>
+          <td>${c.pizarra ? esc(c.pizarra) : '—'}${c.ret ? ` <span class="sub-linea">ret. ${esc(c.ret)}</span>` : ''}</td>
+          <td class="num">${c.filas}</td><td class="num">${c.jugadores}</td><td class="num">${INF.dinero(c.totalJugado)}</td>
+          <td class="num"><button type="button" class="btn btn-sec btn-chico">✏️ Editar</button></td></tr>`).join('')}</tbody>
+      </table></div></div>`).join('');
+}
+async function abrirDelRegistro(hipodromoId, numero) {
+  if (!hipodromoId || !HIPODROMOS.some(h => h.id === hipodromoId)) return msg('rMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder editar esta carrera.', false);
+  msg('rMsg', '');
+  EDICION = { fecha: REGISTRO.fecha, hipodromoId, carrera: numero, estado: null, planoId: null };
+  $('jFecha').value = REGISTRO.fecha; $('jHipodromo').value = hipodromoId;
+  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  $('jPizarra').value = ''; $('jRet').value = ''; $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
+  irATab('jugadas');
+  await abrirSiguienteCarrera();
+  $('jCarrera').value = numero;
+  await cambioCarrera();
+  $('panel-jugadas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function volverAlRegistro() { EDICION = null; irATab('registro'); }
+async function eliminarCarreraEnEdicion() {
+  if (!enEdicion()) return;
+  const h = HIPODROMOS.find(x => x.id === EDICION.hipodromoId);
+  if (!confirm(`¿Eliminar la carrera ${EDICION.carrera} de ${h ? h.nombre : 'este hipódromo'} (${INF.fechaCorta(EDICION.fecha)})?` + (EDICION.estado === 'calculada' ? '\nSe va a la papelera de planos y deja de contar en los balances.' : ''))) return;
+  try {
+    if (EDICION.estado === 'pendiente') await api(`/api/hipismo/oficinas/pendiente?hipodromoId=${encodeURIComponent(EDICION.hipodromoId)}&carrera=${EDICION.carrera}&fecha=${encodeURIComponent(EDICION.fecha)}`, { method: 'DELETE' });
+    else if (EDICION.planoId) await api('/api/hipismo/planos/' + encodeURIComponent(EDICION.planoId), { method: 'DELETE' });
+    else return msg('jMsg', 'No se encontró la carrera para eliminarla.', false);
+  } catch (e) { return msg('jMsg', e.message, false); }
+  const n = EDICION.carrera;
+  EDICION = null;
+  irATab('registro');
+  msg('rMsg', `🗑️ Carrera ${n} eliminada.`, true);
 }
 
 // ------------------------------------------------------------------

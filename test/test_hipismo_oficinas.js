@@ -16,6 +16,7 @@ const GRUPO_ID = 'g-oficinas-1';
 const CLIENTES = new Set(['JOSE', 'RAUL', 'PEDRO', 'ANA', 'LUIS']);
 const HIPODROMOS = { 'h-gulf': 'GULFSTREAM' };
 const planos = [];            // planos "guardados" en la base falsa
+const pendientes = [];        // carreras guardadas sin llegada
 const papelera = [];
 const escrituras = [];
 
@@ -37,6 +38,40 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id FROM hipismo_planos WHERE grupo_id/i.test(sql)) {
     return { rows: planos.filter(p => p.hipodromo_nombre === params[1] && String(p.carrera_numero) === String(params[2]) && p.fecha === params[3]).map(p => ({ id: p.id })) };
   }
+  // ---- carreras pendientes de llegada y Registro de Jugadas ----
+  if (/^SELECT carrera_numero FROM hipismo_oficinas_pendientes/i.test(sql)) {
+    return { rows: pendientes.filter(x => x.hipodromo_nombre === params[1] && x.fecha === params[2]).map(x => ({ carrera_numero: x.carrera_numero })) };
+  }
+  if (/^SELECT id, ret, cruza_jugadas, jugadas FROM hipismo_oficinas_pendientes/i.test(sql)) {
+    const x = pendientes.find(q => q.hipodromo_nombre === params[1] && String(q.carrera_numero) === String(params[2]) && q.fecha === params[3]);
+    return { rows: x ? [x] : [] };
+  }
+  if (/^SELECT id, hipodromo_id, hipodromo_nombre, carrera_numero, ret, jugadas FROM hipismo_oficinas_pendientes/i.test(sql)) {
+    return { rows: pendientes.filter(x => x.fecha === params[1]) };
+  }
+  if (/^SELECT id, hipodromo_id, hipodromo_nombre, carrera_numero, pizarra, ret, jugadas_oficina FROM hipismo_planos/i.test(sql)) {
+    return { rows: planos.filter(x => x.fecha === params[1] && x.jugadas_oficina) };
+  }
+  if (/^SELECT id, nombre FROM hipismo_hipodromos WHERE grupo_id/i.test(sql)) return { rows: Object.entries(HIPODROMOS).map(([id, nombre]) => ({ id, nombre })) };
+  if (/^SELECT fecha, COUNT\(\*\)::int AS carreras FROM hipismo_planos/i.test(sql)) {
+    const m = new Map(); planos.filter(x => x.jugadas_oficina).forEach(x => m.set(x.fecha, (m.get(x.fecha) || 0) + 1));
+    return { rows: [...m.entries()].map(([fecha, carreras]) => ({ fecha, carreras })) };
+  }
+  if (/^SELECT fecha, COUNT\(\*\)::int AS pendientes FROM hipismo_oficinas_pendientes/i.test(sql)) {
+    const m = new Map(); pendientes.forEach(x => m.set(x.fecha, (m.get(x.fecha) || 0) + 1));
+    return { rows: [...m.entries()].map(([fecha, pendientes]) => ({ fecha, pendientes })) };
+  }
+  if (/^INSERT INTO hipismo_oficinas_pendientes/i.test(sql)) {
+    const fila = { id: 'pend-' + (pendientes.length + 1), grupo_id: params[0], hipodromo_id: params[1], hipodromo_nombre: params[2], carrera_numero: params[3], fecha: params[4], ret: params[5], cruza_jugadas: params[6], jugadas: JSON.parse(params[7]) };
+    const i = pendientes.findIndex(q => q.hipodromo_nombre === fila.hipodromo_nombre && q.carrera_numero === fila.carrera_numero && q.fecha === fila.fecha);
+    if (i >= 0) pendientes[i] = { ...fila, id: pendientes[i].id }; else pendientes.push(fila);
+    return { rows: [] };
+  }
+  if (/^DELETE FROM hipismo_oficinas_pendientes/i.test(sql)) {
+    const i = pendientes.findIndex(q => q.hipodromo_nombre === params[1] && String(q.carrera_numero) === String(params[2]) && q.fecha === params[3]);
+    if (i >= 0) pendientes.splice(i, 1);
+    return { rows: [] };
+  }
   if (/^INSERT INTO hipismo_planos \(/i.test(sql)) {
     const p = { id: 'plano-' + (planos.length + 1), grupo_id: params[0], hipodromo_id: params[1], hipodromo_nombre: params[2], carrera_numero: params[3], fecha: params[4], ret: params[5], pizarra: params[6], cruza_jugadas: params[7], texto_original: params[8], texto_resultado: params[9], comision_total: params[10], jugadas_oficina: null };
     planos.push(p); return { rows: [p] };
@@ -49,6 +84,11 @@ function ejecutarQuery(text, params) {
   if (/^SELECT .*FROM hipismo_(adelantadas|tercios_adelantadas)/i.test(sql)) return { rows: [] };
   if (/^SELECT id, nombre, comision_propia, cuenta_comision_id, incluir_porcentaje_en_jugadas FROM jugadores/i.test(sql)) return { rows: [] };
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, cc_propio\.nombre AS cc_propio_nombre/i.test(sql)) return { rows: [] };
+  // Sustituir una carrera ya cargada: el plano viejo va a la papelera y se borra (services/hipismoPlanosPapelera.js)
+  if (/^SELECT \* FROM hipismo_planos WHERE id = \$1 AND grupo_id/i.test(sql)) return { rows: planos.filter(x => x.id === params[0]) };
+  if (/^SELECT \* FROM hipismo_tickets WHERE plano_id/i.test(sql)) return { rows: [] };
+  if (/^INSERT INTO hipismo_planos_papelera/i.test(sql)) { papelera.push(params); return { rows: [{ id: 'pap-' + papelera.length }] }; }
+  if (/^DELETE FROM hipismo_planos WHERE id/i.test(sql)) { const i = planos.findIndex(x => x.id === params[0]); if (i >= 0) planos.splice(i, 1); return { rows: [] }; }
   if (/^SELECT .*FROM hipismo_planos_papelera/i.test(sql)) return { rows: [] };
   if (/^SELECT .*FROM hipismo_planos/i.test(sql)) return { rows: [] };
   if (/^SELECT .*FROM hipismo_tickets/i.test(sql)) return { rows: [] };
@@ -211,6 +251,52 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: [F('fantasma', 'jugo', '1p', '3', 10), F('pedro', 'dio', '1p', '3', 4)], pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 2, fecha: '2026-10-09' } });
   check(r.status === 422 && Array.isArray(r.salida.clientesNoExisten) && planos.length === planosAntes, '3t) el aviso de cliente inexistente sale antes que el de cuadre y no guarda nada');
 
+  // ---------- Registro de Jugadas y carreras pendientes de llegada ----------
+  const tablaCinco = [F('jose', 'jugo', '1p', '3', 200), F('raul', 'jugo', '1p', '3', 150), F('pedro', 'dio', '1p', '3', 350)];
+  const cuerpoPend = (extra) => ({ filas: tablaCinco, hipodromoId: 'h-gulf', carreraNumero: 5, fecha: '2026-10-09', ...(extra || {}) });
+  const planosAntesReg = planos.length;
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend() });
+  check(r.status === 201 && pendientes.length === 1 && planos.length === planosAntesReg, '6a) guardar SIN llegada: queda pendiente y NO se crea ningún plano (no afecta balances)');
+  check(pendientes[0].jugadas.length === 3 && pendientes[0].jugadas[0].jugador === 'JOSE', '6b) el pendiente guarda las jugadas tal cual (para reabrirlas)');
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend({ filas: tablaCinco.slice(0, 2) }) });
+  check(r.status === 422 && /no cuadra/i.test(r.salida.error) && pendientes.length === 1, '6c) sin llegada TAMBIÉN exige que la carrera cuadre');
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend({ filas: [F('fantasma', 'jugo', '1p', '3', 10), F('pedro', 'dio', '1p', '3', 10)] }) });
+  check(r.status === 422 && /CLIENTE FANTASMA NO EXISTE/.test(r.salida.error) && pendientes.length === 1, '6d) sin llegada también avisa "CLIENTE X NO EXISTE"');
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend({ filas: [F('jose', 'jugo', '1p', '3', 100), F('pedro', 'dio', '1p', '3', 100)] }) });
+  check(r.status === 201 && pendientes.length === 1 && pendientes[0].jugadas.length === 2, '6e) volver a guardar el pendiente lo corrige (no lo duplica)');
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend({ carreraNumero: 1 }) });
+  check(r.status === 409 && r.salida.calculada === true, '6f) una carrera ya calculada no se puede dejar sin llegada (409)');
+
+  r = await invocarRuta(handlerDe('get', '/oficinas/carrera'), { ...base, query: { hipodromoId: 'h-gulf', carrera: '5', fecha: '2026-10-09' } });
+  check(r.salida.existe && r.salida.pendiente === true && r.salida.pizarra === '' && r.salida.filas.length === 2, '6g) reabrir una carrera pendiente devuelve sus jugadas y avisa que es pendiente');
+  r = await invocarRuta(handlerDe('get', '/oficinas/siguiente-carrera'), { ...base, query: { hipodromoId: 'h-gulf', fecha: '2026-10-09' } });
+  check(JSON.stringify(r.salida.cargadas) === '[1,5]' && JSON.stringify(r.salida.pendientes) === '[5]' && r.salida.siguiente === 6, '6h) las pendientes cuentan como cargadas y se distinguen');
+
+  r = await invocarRuta(handlerDe('get', '/oficinas/registro'), { ...base, query: { fecha: '2026-10-09' } });
+  const regGulf = r.salida.hipodromos.find(h => h.nombre === 'GULFSTREAM');
+  check(regGulf && regGulf.hipodromoId === 'h-gulf' && regGulf.carreras.map(x => x.numero + ':' + x.estado).join() === '1:calculada,5:pendiente', '6i) el Registro del día lista por hipódromo cada carrera con su estado (calculada / pendiente)');
+  check(regGulf.carreras[0].pizarra === '3-1-2' && regGulf.carreras[0].filas === 3 && regGulf.carreras[0].totalJugado === 350 && regGulf.carreras[0].jugadores === 3, '6j) cada carrera muestra su llegada, cuántas jugadas, jugadores y total jugado');
+  check(r.salida.totales.carreras === 2 && r.salida.totales.calculadas === 1 && r.salida.totales.pendientes === 1, '6k) el Registro suma carreras, calculadas y pendientes');
+  r = await invocarRuta(handlerDe('get', '/oficinas/registro'), { ...base, query: { fecha: '2026-10-11' } });
+  check(r.salida.hipodromos.length === 0 && r.salida.totales.carreras === 0, '6l) un día sin carreras sale vacío');
+  r = await invocarRuta(handlerDe('get', '/oficinas/registro'), { ...base, query: { fecha: 'ayer' } });
+  check(r.status === 400, '6m) una fecha inválida da 400');
+  r = await invocarRuta(handlerDe('get', '/oficinas/registro-dias'), { ...base, query: {} });
+  check(r.salida.dias.length === 1 && r.salida.dias[0].fecha === '2026-10-09' && r.salida.dias[0].carreras === 1 && r.salida.dias[0].pendientes === 1, '6n) los días con carreras se pueden abrir de un clic');
+
+  // Agregar la llegada: se calcula sola y el pendiente desaparece
+  r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: cuerpoPend({ pizarra: '3-1-2' }) });
+  check(r.status === 201 && pendientes.length === 0 && planos.length === planosAntesReg + 1, '6o) al guardar el pendiente con su pizarra se calcula (plano nuevo) y deja de estar pendiente');
+  // Editar una carrera ya calculada: cambiar un monto y un jugador y guardar la recalcula
+  const filasEditadas = [F('jose', 'jugo', '1p', '3', 300), F('ana', 'jugo', '1p', '3', 150), F('pedro', 'dio', '1p', '3', 450)];
+  r = await invocarRuta(handlerDe('post', '/oficinas/guardar'), { ...base, body: { filas: filasEditadas, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 5, fecha: '2026-10-09' } });
+  check(r.status === 201 && r.salida.sustituyoAnterior === true && r.salida.totalesFinales.PEDRO === -450, '6p) editar montos y jugadores de una carrera calculada y guardar la recalcula (PEDRO -450) y sustituye la anterior');
+  const planoEditado = planos.filter(x => x.carrera_numero === 5).pop();
+  check(planoEditado.jugadas_oficina.some(f => f.jugador === 'ANA') && planoEditado.jugadas_oficina.find(f => f.jugador === 'JOSE').monto === 300, '6q) lo editado queda guardado para volver a abrirlo');
+  r = await invocarRuta(handlerDe('post', '/oficinas/pendiente'), { ...base, body: cuerpoPend({ carreraNumero: 7 }) });
+  r = await invocarRuta(handlerDe('delete', '/oficinas/pendiente'), { ...base, query: { hipodromoId: 'h-gulf', carrera: '7', fecha: '2026-10-09' } });
+  check(r.status === 200 && pendientes.length === 0, '6r) una carrera pendiente se puede descartar');
+
   // "Cruzar jugadas": el mismo interruptor de Súper-admin vale para los dos módulos
   const tablaCruce = [F('jose', 'jugo', '1p', '3', 100), F('pedro', 'dio', '1p', '3', 100), F('jose', 'jugo', '1p', '7', 40), F('ana', 'dio', '1p', '7', 40)];
   const cuerpoBase = { filas: tablaCruce, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 5, fecha: '2026-10-09' };
@@ -243,6 +329,8 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   });
   check(/¿Se le devuelve un % a este cliente\?/.test(html) && /le genera % a otro cliente/.test(html), '5) Crear Cliente pregunta por el % que se le devuelve y el % que le genera a otro cliente');
   check(/moduloHipismoOficinasHabilitado/.test(html), '5) la pantalla exige tener el módulo Oficinas');
+  check(/Registro de Jugadas/.test(html) && /panel-registro/.test(html) && /\/api\/hipismo\/oficinas\/registro\?fecha=/.test(html) && /\/api\/hipismo\/oficinas\/pendiente/.test(html), '5) la pestaña "Registro de Jugadas" existe y usa las rutas del Registro y de pendientes');
+  check(/abrirDelRegistro/.test(html) && /Guardar y calcular/.test(html) && /Guardar sin llegada/.test(html) && /volverAlRegistro/.test(html), '5) abrir una carrera desde el Registro, guardar y calcular / guardar sin llegada y volver');
   check(/modalNoExiste/.test(html) && /NO EXISTE/.test(html) && /clientesNoExisten/.test(html) && /focusout/.test(html), '5) la pantalla avisa en una ventana "CLIENTE X NO EXISTE" con el nombre');
   check(/modalNoExisteCrear/.test(html) && /irATab\('clientes'\)/.test(html), '5) la ventana ofrece ir a Crear Cliente con el nombre puesto');
   // El script de la página compila

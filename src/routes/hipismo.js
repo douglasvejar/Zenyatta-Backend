@@ -1122,9 +1122,14 @@ router.get('/oficinas/siguiente-carrera', asyncHandler(async (req, res) => {
     `SELECT carrera_numero FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND fecha = $3 ORDER BY carrera_numero`,
     [req.grupoId, rh.rows[0].nombre, fecha]
   );
-  const cargadas = [...new Set(r.rows.map(x => Number(x.carrera_numero)))];
+  const rp = await db.query(
+    `SELECT carrera_numero FROM hipismo_oficinas_pendientes WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND fecha = $3 ORDER BY carrera_numero`,
+    [req.grupoId, rh.rows[0].nombre, fecha]
+  );
+  const pendientes = [...new Set(rp.rows.map(x => Number(x.carrera_numero)))];
+  const cargadas = [...new Set(r.rows.map(x => Number(x.carrera_numero)).concat(pendientes))].sort((a, b) => a - b);
   const ultima = cargadas.length ? Math.max(...cargadas) : 0;
-  res.json({ siguiente: ultima + 1, cargadas, carrerasMax: rh.rows[0].carreras_max });
+  res.json({ siguiente: ultima + 1, cargadas, pendientes, carrerasMax: rh.rows[0].carreras_max });
 }));
 
 // GET /oficinas/carrera?hipodromoId=&carrera=&fecha= — reabrir una carrera ya cargada para corregirla.
@@ -1139,7 +1144,17 @@ router.get('/oficinas/carrera', asyncHandler(async (req, res) => {
       WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4 ORDER BY creado_en DESC LIMIT 1`,
     [req.grupoId, rh.rows[0].nombre, carrera, fecha]
   );
-  if (r.rows.length === 0) return res.json({ existe: false });
+  if (r.rows.length === 0) {
+    // Sin plano calculado: puede estar guardada "pendiente de llegada" (jugadas sin pizarra).
+    const rp = await db.query(
+      `SELECT id, ret, cruza_jugadas, jugadas FROM hipismo_oficinas_pendientes
+        WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4`,
+      [req.grupoId, rh.rows[0].nombre, carrera, fecha]
+    );
+    if (rp.rows.length === 0) return res.json({ existe: false });
+    const q = rp.rows[0];
+    return res.json({ existe: true, pendiente: true, pizarra: '', ret: q.ret || '', cruzaJugadas: !!q.cruza_jugadas, filas: Array.isArray(q.jugadas) ? q.jugadas : [] });
+  }
   const p = r.rows[0];
   res.json({
     existe: true, planoId: p.id, pizarra: p.pizarra, ret: p.ret || '', cruzaJugadas: !!p.cruza_jugadas,
@@ -1183,8 +1198,137 @@ router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
   if (out.status === 201 && out.body && out.body.plano) {
     const { entradas } = oficinasCalc.normalizarEntradas(req.body.filas);
     await db.query('UPDATE hipismo_planos SET jugadas_oficina = $1 WHERE id = $2 AND grupo_id = $3', [JSON.stringify(entradas), out.body.plano.id, req.grupoId]);
+    // Ya tiene llegada y está calculada: deja de estar "pendiente".
+    await db.query(
+      'DELETE FROM hipismo_oficinas_pendientes WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4',
+      [req.grupoId, out.body.plano.hipodromo_nombre, out.body.plano.carrera_numero, fechaComoISO(out.body.plano.fecha)]
+    );
   }
   res.status(out.status).json(out.body);
+}));
+
+// ---------- Carreras guardadas SIN llegada ("pendientes") y Registro de Jugadas ----------
+// Las jugadas se pueden guardar antes de tener la pizarra: quedan "pendientes de llegada" (no afectan balances ni
+// comisiones). Al guardar la carrera con su pizarra, /oficinas/guardar la calcula y borra el pendiente.
+function fechaValida(f) { return /^\d{4}-\d{2}-\d{2}$/.test(String(f || '')); }
+
+// POST /oficinas/pendiente { filas, hipodromoId, carreraNumero, fecha, ret, cruzaJugadas }
+router.post('/oficinas/pendiente', asyncHandler(async (req, res) => {
+  const { filas, hipodromoId, ret, cruzaJugadas } = req.body;
+  const carreraNumero = Number(req.body.carreraNumero);
+  const fecha = req.body.fecha || fechaHoyVenezuela();
+  if (!hipodromoId || !(carreraNumero >= 1) || !Number.isInteger(carreraNumero)) return res.status(400).json({ error: 'Falta el hipódromo o la carrera.' });
+  if (!fechaValida(fecha)) return res.status(400).json({ error: 'La fecha no es válida.' });
+  if (await rechazarClientesInexistentes(req, res, nombresDeLaTabla(filas))) return;
+  const falla = errorDeTablaOficina(filas);
+  if (falla) return res.status(422).json(falla);
+  const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+  if (rh.rows.length === 0) return res.status(400).json({ error: 'Hipódromo no encontrado.' });
+  const nombreHip = rh.rows[0].nombre;
+  const rPlano = await db.query(
+    'SELECT id FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4 LIMIT 1',
+    [req.grupoId, nombreHip, carreraNumero, fecha]
+  );
+  if (rPlano.rows.length) return res.status(409).json({ error: 'Esta carrera ya está calculada: necesita su llegada (pizarra) para guardarla. Si quieres quitarla, elimínala.', calculada: true });
+  const { entradas } = oficinasCalc.normalizarEntradas(filas);
+  await db.query(
+    `INSERT INTO hipismo_oficinas_pendientes (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, ret, cruza_jugadas, jugadas)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (grupo_id, hipodromo_nombre, carrera_numero, fecha)
+       DO UPDATE SET hipodromo_id = EXCLUDED.hipodromo_id, ret = EXCLUDED.ret, cruza_jugadas = EXCLUDED.cruza_jugadas,
+                     jugadas = EXCLUDED.jugadas, actualizado_en = now()`,
+    [req.grupoId, hipodromoId, nombreHip, carreraNumero, fecha, (ret || '').trim() || null, !!cruzaJugadas, JSON.stringify(entradas)]
+  );
+  res.status(201).json({ ok: true, pendiente: true, hipodromoNombre: nombreHip, carreraNumero, fecha });
+}));
+
+// DELETE /oficinas/pendiente?hipodromoId=&carrera=&fecha= — descarta una carrera pendiente de llegada.
+router.delete('/oficinas/pendiente', asyncHandler(async (req, res) => {
+  const { hipodromoId, carrera } = req.query;
+  const fecha = req.query.fecha || fechaHoyVenezuela();
+  if (!hipodromoId || !carrera) return res.status(400).json({ error: 'Falta el hipódromo o la carrera.' });
+  const rh = await db.query('SELECT nombre FROM hipismo_hipodromos WHERE id = $1 AND grupo_id = $2', [hipodromoId, req.grupoId]);
+  if (rh.rows.length === 0) return res.status(404).json({ error: 'Hipódromo no encontrado.' });
+  await db.query(
+    'DELETE FROM hipismo_oficinas_pendientes WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4',
+    [req.grupoId, rh.rows[0].nombre, carrera, fecha]
+  );
+  res.json({ ok: true });
+}));
+
+function resumenJugadasOficina(jugadas) {
+  const filas = Array.isArray(jugadas) ? jugadas : [];
+  return {
+    filas: filas.length,
+    jugadores: new Set(filas.map(f => String(f.jugador || '').toUpperCase())).size,
+    totalJugado: round2(filas.filter(f => f.lado === 'jugo').reduce((t, f) => t + (Number(f.monto) || 0), 0))
+  };
+}
+
+// GET /oficinas/registro?fecha= — las carreras de ese día (calculadas y pendientes), por hipódromo.
+router.get('/oficinas/registro', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || fechaHoyVenezuela();
+  if (!fechaValida(fecha)) return res.status(400).json({ error: 'La fecha no es válida.' });
+  const [rPlanos, rPend, rHips] = await Promise.all([
+    db.query(
+      `SELECT id, hipodromo_id, hipodromo_nombre, carrera_numero, pizarra, ret, jugadas_oficina FROM hipismo_planos
+        WHERE grupo_id = $1 AND fecha = $2 AND jugadas_oficina IS NOT NULL ORDER BY hipodromo_nombre, carrera_numero, creado_en DESC`,
+      [req.grupoId, fecha]
+    ),
+    db.query(
+      `SELECT id, hipodromo_id, hipodromo_nombre, carrera_numero, ret, jugadas FROM hipismo_oficinas_pendientes
+        WHERE grupo_id = $1 AND fecha = $2 ORDER BY hipodromo_nombre, carrera_numero`,
+      [req.grupoId, fecha]
+    ),
+    db.query('SELECT id, nombre FROM hipismo_hipodromos WHERE grupo_id = $1', [req.grupoId])
+  ]);
+  const idPorNombre = new Map(rHips.rows.map(h => [h.nombre, h.id]));
+  const porHip = new Map();
+  const agregar = (nombre, hipId, carrera) => {
+    if (!porHip.has(nombre)) porHip.set(nombre, { nombre, hipodromoId: idPorNombre.get(nombre) || hipId || null, carreras: new Map() });
+    return porHip.get(nombre).carreras;
+  };
+  rPlanos.rows.forEach(p => {
+    const mapa = agregar(p.hipodromo_nombre, p.hipodromo_id);
+    if (mapa.has(Number(p.carrera_numero))) return; // (si hubiera duplicadas, vale la más reciente)
+    mapa.set(Number(p.carrera_numero), { numero: Number(p.carrera_numero), estado: 'calculada', pizarra: p.pizarra, ret: p.ret || '', planoId: p.id, ...resumenJugadasOficina(p.jugadas_oficina) });
+  });
+  rPend.rows.forEach(p => {
+    const mapa = agregar(p.hipodromo_nombre, p.hipodromo_id);
+    if (mapa.has(Number(p.carrera_numero))) return;
+    mapa.set(Number(p.carrera_numero), { numero: Number(p.carrera_numero), estado: 'pendiente', pizarra: '', ret: p.ret || '', planoId: null, ...resumenJugadasOficina(p.jugadas) });
+  });
+  const hipodromos = Array.from(porHip.values()).map(h => ({
+    nombre: h.nombre, hipodromoId: h.hipodromoId, carreras: Array.from(h.carreras.values()).sort((a, b) => a.numero - b.numero)
+  })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const todas = hipodromos.flatMap(h => h.carreras);
+  res.json({
+    fecha, hipodromos,
+    totales: { carreras: todas.length, calculadas: todas.filter(c => c.estado === 'calculada').length, pendientes: todas.filter(c => c.estado === 'pendiente').length }
+  });
+}));
+
+// GET /oficinas/registro-dias — los últimos días con carreras cargadas (para abrirlos de un clic).
+router.get('/oficinas/registro-dias', asyncHandler(async (req, res) => {
+  const [rPlanos, rPend] = await Promise.all([
+    db.query(
+      `SELECT fecha, COUNT(*)::int AS carreras FROM hipismo_planos
+        WHERE grupo_id = $1 AND jugadas_oficina IS NOT NULL GROUP BY fecha ORDER BY fecha DESC LIMIT 45`,
+      [req.grupoId]
+    ),
+    db.query(
+      `SELECT fecha, COUNT(*)::int AS pendientes FROM hipismo_oficinas_pendientes WHERE grupo_id = $1 GROUP BY fecha ORDER BY fecha DESC LIMIT 45`,
+      [req.grupoId]
+    )
+  ]);
+  const dias = new Map();
+  rPlanos.rows.forEach(r => dias.set(fechaComoISO(r.fecha), { fecha: fechaComoISO(r.fecha), carreras: Number(r.carreras), pendientes: 0 }));
+  rPend.rows.forEach(r => {
+    const f = fechaComoISO(r.fecha);
+    if (!dias.has(f)) dias.set(f, { fecha: f, carreras: 0, pendientes: 0 });
+    dias.get(f).pendientes = Number(r.pendientes);
+  });
+  res.json({ dias: Array.from(dias.values()).sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 31) });
 }));
 
 // GET /oficinas/comision-por-carrera?semana=actual|anterior|hace2 | ?desde=&hasta= — cuánto ganó la oficina en cada
