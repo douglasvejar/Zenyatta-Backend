@@ -63,6 +63,19 @@ async function obtenerResultadosNFL(fechaISO) {
       const enEntretiempo = periodo === 2 && /halftime|entretiempo/i.test(tipoEstado.description || tipoEstado.name || '');
       const final1H = finalizado || periodo > 2 || enEntretiempo;
 
+      // "2h" / segunda mitad (10-10-2026, a pedido del usuario: "se puede
+      // implementar los 2h en nba y nfl?"): cuartos 3 y 4 MÁS el tiempo extra
+      // si lo hubo (períodos 5 en adelante) — igual que las casas de apuestas
+      // de NFL, donde la 2da mitad incluye el overtime. Por eso la 2da mitad
+      // solo se da por TERMINADA cuando termina el partido entero (mientras
+      // haya tiempo extra en juego, todavía puede sumar puntos).
+      const sumaSegundaMitad = (competitor) => (competitor.linescores || [])
+        .filter(ls => ls.period >= 3)
+        .reduce((suma, ls) => suma + (Number(ls.value) || 0), 0);
+      const homeScore2H = sumaSegundaMitad(home);
+      const awayScore2H = sumaSegundaMitad(away);
+      const final2H = finalizado;
+
       const info = {
         deporte: 'nfl',
         homeTeam: home.team.displayName,
@@ -73,6 +86,9 @@ async function obtenerResultadosNFL(fechaISO) {
         homeScore1H,
         awayScore1H,
         final1H,
+        homeScore2H,
+        awayScore2H,
+        final2H,
         finalizado,
         suspendido,
         homeTeamLogo: home.team.logo || null,

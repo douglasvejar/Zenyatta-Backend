@@ -73,31 +73,24 @@ function check(cond, msg) {
 })();
 
 // --- Caso 3: NFL, empatado en el marcador FINAL pero NO en la 2da mitad puntual ---
+// (10-10-2026: NFL ahora SÍ tiene "2h" habilitado — antes esta prueba
+// confirmaba que "2h" caía al marcador completo; ahora debe usar la 2da
+// mitad real: 7-10, no empatada -> PERDIDA aunque el final sea 17-17.)
 (function testEmpateSegundaMitadNFL() {
-  const datosNFL = {
-    'pittsburgh steelers': {
-      deporte: 'nfl', homeTeam: 'Pittsburgh Steelers', awayTeam: 'Cincinnati Bengals',
-      homeScore: 17, awayScore: 17,
-      homeScore1H: 10, awayScore1H: 7, final1H: true,
-      finalizado: true, suspendido: false
-    },
-    'cincinnati bengals': {
-      deporte: 'nfl', homeTeam: 'Pittsburgh Steelers', awayTeam: 'Cincinnati Bengals',
-      homeScore: 17, awayScore: 17,
-      homeScore1H: 10, awayScore1H: 7, final1H: true,
-      finalizado: true, suspendido: false
-    }
+  const juego = {
+    deporte: 'nfl', homeTeam: 'Pittsburgh Steelers', awayTeam: 'Cincinnati Bengals',
+    homeScore: 17, awayScore: 17,
+    homeScore1H: 10, awayScore1H: 7, final1H: true,
+    homeScore2H: 7, awayScore2H: 10, final2H: true,
+    finalizado: true, suspendido: false
   };
+  const datosNFL = { 'pittsburgh steelers': juego, 'cincinnati bengals': juego };
   const datosPorDeporte = { mlb: {}, nfl: datosNFL, nhl: {}, soccer: {} };
 
-  // NFL no tiene "usaSegundaMitad" habilitado en su config (solo
-  // usaPrimeraMitad) — "2h" en NFL con este motor no se reconoce como
-  // segmento (queda como juego completo), así que el marcador final
-  // (17-17, empatado) SÍ debe ganar. Este caso confirma que "2h" en un
-  // deporte sin usaSegundaMitad no rompe nada (cae al comportamiento de
-  // juego completo, como siempre).
   const res2h = evaluarJugada(normalizarTexto('Steelers empate 2h +1800'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
-  check(res2h.estado === 'GANADA', '3) NFL no tiene 2da mitad habilitada — "Steelers empate 2h +1800" cae al marcador completo (17-17, empatado) -> GANADA');
+  check(res2h.estado === 'PERDIDA', '3) NFL con 2da mitad habilitada — "Steelers empate 2h +1800": final 17-17 pero la 2da mitad fue 7-10 (no empatada) -> PERDIDA');
+  const resCompleto = evaluarJugada(normalizarTexto('Steelers empate +1800'), datosPorDeporte, DICCIONARIO_EQUIPOS_BASE);
+  check(resCompleto.estado === 'GANADA', '3b) Mismo partido SIN "2h": el marcador completo 17-17 sí es empate -> GANADA (no se rompió el caso de siempre)');
 })();
 
 // --- Caso 4: partido finalizado pero SIN el dato de primera mitad todavía (liga sin cobertura) ---

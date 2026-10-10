@@ -92,6 +92,13 @@ const CONFIG_POR_DEPORTE = {
     campoHomePrimeraMitad: 'homeScore1H',
     campoAwayPrimeraMitad: 'awayScore1H',
     campoFinalPrimeraMitad: 'final1H',
+    // "2h" (10-10-2026, a pedido del usuario): 2da mitad = cuartos 3+4 MÁS el
+    // tiempo extra si lo hubo (ver nflApi.js, homeScore2H/final2H).
+    usaSegundaMitad: true,
+    textoSegundaMitad: ' (2da mitad)',
+    campoHomeSegundaMitad: 'homeScore2H',
+    campoAwaySegundaMitad: 'awayScore2H',
+    campoFinalSegundaMitad: 'final2H',
     // Apuesta al empate (31-08-2026): rarísimo en NFL (un partido de
     // temporada regular casi nunca termina empatado), pero el usuario
     // pidió que se reconozca igual por si acaso llega una jugada así.
