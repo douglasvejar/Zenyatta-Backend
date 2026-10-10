@@ -17,6 +17,7 @@ const CLIENTES = new Set(['JOSE', 'RAUL', 'PEDRO', 'ANA', 'LUIS']);
 const HIPODROMOS = { 'h-gulf': 'GULFSTREAM' };
 const planos = [];            // planos "guardados" en la base falsa
 const pendientes = [];        // carreras guardadas sin llegada
+let configPlanoResuelto = false; // grupos.oficinas_plano_resuelto
 const papelera = [];
 const escrituras = [];
 
@@ -38,6 +39,8 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id FROM hipismo_planos WHERE grupo_id/i.test(sql)) {
     return { rows: planos.filter(p => p.hipodromo_nombre === params[1] && String(p.carrera_numero) === String(params[2]) && p.fecha === params[3]).map(p => ({ id: p.id })) };
   }
+  if (/^SELECT oficinas_plano_resuelto FROM grupos/i.test(sql)) return { rows: [{ oficinas_plano_resuelto: configPlanoResuelto }] };
+  if (/^UPDATE grupos SET oficinas_plano_resuelto/i.test(sql)) { configPlanoResuelto = !!params[0]; return { rows: [] }; }
   // ---- carreras pendientes de llegada y Registro de Jugadas ----
   if (/^SELECT carrera_numero FROM hipismo_oficinas_pendientes/i.test(sql)) {
     return { rows: pendientes.filter(x => x.hipodromo_nombre === params[1] && x.fecha === params[2]).map(x => ({ carrera_numero: x.carrera_numero })) };
@@ -297,6 +300,20 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   r = await invocarRuta(handlerDe('delete', '/oficinas/pendiente'), { ...base, query: { hipodromoId: 'h-gulf', carrera: '7', fecha: '2026-10-09' } });
   check(r.status === 200 && pendientes.length === 0, '6r) una carrera pendiente se puede descartar');
 
+  // ---------- Configuración > Planos para grupos ----------
+  r = await invocarRuta(handlerDe('get', '/oficinas/configuracion'), { ...base, query: {} });
+  check(r.status === 200 && r.salida.planoResuelto === false, '7a) por defecto el plano resuelto está APAGADO (en las oficinas las jugadas son en vivo)');
+  r = await invocarRuta(handlerDe('put', '/oficinas/configuracion'), { ...base, body: { planoResuelto: true } });
+  check(r.status === 200 && r.salida.planoResuelto === true && configPlanoResuelto === true, '7b) activar el plano resuelto lo guarda');
+  r = await invocarRuta(handlerDe('get', '/oficinas/configuracion'), { ...base, query: {} });
+  check(r.salida.planoResuelto === true, '7c) al volver a leer la configuración sigue activado');
+  r = await invocarRuta(handlerDe('put', '/oficinas/configuracion'), { ...base, body: { planoResuelto: false } });
+  check(r.status === 200 && configPlanoResuelto === false, '7d) desactivarlo también se guarda');
+  r = await invocarRuta(handlerDe('put', '/oficinas/configuracion'), { ...base, body: { planoResuelto: 'si' } });
+  check(r.status === 400, '7e) un valor que no es true/false se rechaza');
+  const entradaPut = hipismoRouter.__handlers.find(([m, a]) => m === 'put' && a[0] === '/oficinas/configuracion');
+  check(entradaPut[1].length === 3, '7f) cambiar la configuración exige ser administrador del grupo (lleva el guardia de administrador)');
+
   // "Cruzar jugadas": el mismo interruptor de Súper-admin vale para los dos módulos
   const tablaCruce = [F('jose', 'jugo', '1p', '3', 100), F('pedro', 'dio', '1p', '3', 100), F('jose', 'jugo', '1p', '7', 40), F('ana', 'dio', '1p', '7', 40)];
   const cuerpoBase = { filas: tablaCruce, pizarra: '3-1-2', hipodromoId: 'h-gulf', carreraNumero: 5, fecha: '2026-10-09' };
@@ -330,6 +347,9 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/¿Se le devuelve un % a este cliente\?/.test(html) && /le genera % a otro cliente/.test(html), '5) Crear Cliente pregunta por el % que se le devuelve y el % que le genera a otro cliente');
   check(/moduloHipismoOficinasHabilitado/.test(html), '5) la pantalla exige tener el módulo Oficinas');
   check(/Registro de Jugadas/.test(html) && /panel-registro/.test(html) && /\/api\/hipismo\/oficinas\/registro\?fecha=/.test(html) && /\/api\/hipismo\/oficinas\/pendiente/.test(html), '5) la pestaña "Registro de Jugadas" existe y usa las rutas del Registro y de pendientes');
+  check(/data-tab="configuracion"/.test(html) && /panel-configuracion/.test(html) && /Planos para grupos/.test(html) && /\/api\/hipismo\/oficinas\/configuracion/.test(html) && /id="cfgPlano"/.test(html), '5) hay un botón "Configuración" con la pestaña "Planos para grupos" y su interruptor');
+  check(/if \(!CONFIG\.planoResuelto\) return;/.test(html), '5) con el plano resuelto apagado, la pantalla no lo muestra');
+  check(/\.tabs \{[^}]*flex-direction: column/.test(html) && /grid-template-columns: 230px/.test(html), '5) el menú de botones va a la izquierda, uno debajo del otro');
   check(/abrirDelRegistro/.test(html) && /Guardar y calcular/.test(html) && /Guardar sin llegada/.test(html) && /volverAlRegistro/.test(html), '5) abrir una carrera desde el Registro, guardar y calcular / guardar sin llegada y volver');
   check(/modalNoExiste/.test(html) && /NO EXISTE/.test(html) && /clientesNoExisten/.test(html) && /focusout/.test(html), '5) la pantalla avisa en una ventana "CLIENTE X NO EXISTE" con el nombre');
   check(/modalNoExisteCrear/.test(html) && /irATab\('clientes'\)/.test(html), '5) la ventana ofrece ir a Crear Cliente con el nombre puesto');

@@ -2137,3 +2137,7 @@ create table if not exists hipismo_oficinas_pendientes (
   unique (grupo_id, hipodromo_nombre, carrera_numero, fecha)
 );
 create index if not exists idx_hipismo_oficinas_pendientes_grupo_fecha on hipismo_oficinas_pendientes(grupo_id, fecha);
+
+-- Hipismo Oficinas > Configuración > "Planos para grupos" (10-10-2026): ¿mostrar el plano resuelto al calcular
+-- una jugada? Apagado por defecto (en las oficinas las jugadas son en vivo, no por WhatsApp).
+alter table grupos add column if not exists oficinas_plano_resuelto boolean not null default false;

@@ -1256,6 +1256,21 @@ router.delete('/oficinas/pendiente', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- Configuración de Hipismo Oficinas ----------
+// GET /oficinas/configuracion — ajustes del grupo. planoResuelto: ¿sacar el "plano resuelto" (texto listo para
+// pegar en un grupo) al calcular una jugada? En las oficinas las jugadas son en vivo, no por WhatsApp: apagado por defecto.
+router.get('/oficinas/configuracion', asyncHandler(async (req, res) => {
+  const r = await db.query('SELECT oficinas_plano_resuelto FROM grupos WHERE id = $1', [req.grupoId]);
+  res.json({ planoResuelto: !!(r.rows[0] && r.rows[0].oficinas_plano_resuelto) });
+}));
+
+// PUT /oficinas/configuracion { planoResuelto: true|false } — solo el administrador del grupo.
+router.put('/oficinas/configuracion', requiereAdministrador, asyncHandler(async (req, res) => {
+  if (typeof req.body.planoResuelto !== 'boolean') return res.status(400).json({ error: 'planoResuelto debe ser true o false.' });
+  await db.query('UPDATE grupos SET oficinas_plano_resuelto = $1 WHERE id = $2', [req.body.planoResuelto, req.grupoId]);
+  res.json({ planoResuelto: req.body.planoResuelto });
+}));
+
 function resumenJugadasOficina(jugadas) {
   const filas = Array.isArray(jugadas) ? jugadas : [];
   return {

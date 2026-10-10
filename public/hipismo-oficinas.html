@@ -33,13 +33,34 @@
   .selector-modulo button { border: none; border-radius: 24px; padding: 7px 16px; font-size: 13px; font-weight: 700; font-family: 'Outfit', sans-serif; cursor: pointer; background: transparent; color: var(--text-dim); }
   .selector-modulo button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); color: #fff; cursor: default; }
   .barra-der { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .contenedor { max-width: 1400px; margin: 0 auto; padding: 14px 18px 40px; }
-
-  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--card-border); margin-bottom: 16px; flex-wrap: wrap; }
-  .tab { border: none; background: transparent; font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: var(--text-dim); padding: 10px 18px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
-  .tab.activa { color: var(--accent-deep); border-bottom-color: var(--accent-grass); }
-  .panel { display: none; }
+  /* Menú de botones a la IZQUIERDA, uno debajo del otro; el contenido a la derecha. */
+  .contenedor { max-width: 1500px; margin: 0 auto; padding: 14px 18px 40px; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 18px; align-items: start; }
+  .tabs { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 12px; }
+  .tab { text-align: left; border: 1px solid var(--card-border); background: var(--card); border-radius: 12px; font-family: 'Outfit', sans-serif; font-size: 14.5px; font-weight: 700; color: var(--text-dim); padding: 11px 14px; cursor: pointer; }
+  .tab:hover { background: var(--card-2); }
+  .tab.activa { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); border-color: transparent; color: #fff; }
+  .tab.sep { margin-top: 12px; }
+  .panel { display: none; grid-column: 2; grid-row: 1; min-width: 0; }
   .panel.activo { display: block; }
+  @media (max-width: 900px) {
+    .contenedor { grid-template-columns: 1fr; }
+    .tabs { grid-column: 1; flex-direction: row; overflow-x: auto; position: static; padding-bottom: 4px; }
+    .tab { white-space: nowrap; } .tab.sep { margin-top: 0; }
+    .panel { grid-column: 1; grid-row: auto; }
+  }
+  /* Configuración */
+  .subtabs { display: flex; gap: 6px; border-bottom: 1px solid var(--card-border); margin: 10px 0 14px; flex-wrap: wrap; }
+  .subtab { border: none; background: transparent; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: var(--text-dim); padding: 8px 14px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .subtab.activa { color: var(--accent-deep); border-bottom-color: var(--accent-grass); }
+  .subpanel { display: none; } .subpanel.activo { display: block; }
+  .interruptor { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text); margin: 0; }
+  .interruptor input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .interruptor .pista { flex-shrink: 0; width: 46px; height: 26px; border-radius: 999px; background: #cbd5d0; position: relative; transition: background .15s; }
+  .interruptor .pista::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+  .interruptor input:checked + .pista { background: var(--accent-grass); }
+  .interruptor input:checked + .pista::after { left: 23px; }
+  .interruptor input:focus-visible + .pista { outline: 2px solid rgba(22,163,74,0.5); outline-offset: 2px; }
+  .interruptor .estado { font-weight: 800; min-width: 92px; }
 
   .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px 18px; }
   .card + .card { margin-top: 14px; }
@@ -60,7 +81,7 @@
 
   /* ---------- Jugadas ---------- */
   .jug-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
-  @media (max-width: 1000px) { .jug-layout { grid-template-columns: 1fr; } }
+  @media (max-width: 1250px) { .jug-layout { grid-template-columns: 1fr; } }
   .cargadas { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
   .chip-carrera { border: 1px solid var(--border-light); background: var(--card-2); color: var(--accent-deep); border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Outfit', sans-serif; }
   .chip-carrera.pend { border-style: dashed; color: #92400e; background: #fffbeb; }
@@ -111,7 +132,7 @@
 
   /* ---------- Clientes / Hipódromos ---------- */
   .dos-col { display: grid; grid-template-columns: minmax(320px, 460px) minmax(0, 1fr); gap: 16px; align-items: start; }
-  @media (max-width: 1000px) { .dos-col { grid-template-columns: 1fr; } }
+  @media (max-width: 1150px) { .dos-col { grid-template-columns: 1fr; } }
   .campo { margin-top: 12px; }
   .pregunta { margin-top: 16px; padding: 12px; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; }
   .pregunta .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
@@ -162,6 +183,16 @@
   .informe .car-tit td { background: rgba(241,248,243,0.78); font-weight: 700; color: #14532d; font-size: 12.5px; }
   .informe tr.sub td { font-weight: 700; background: rgba(248,251,249,0.72); }
   .informe tr.sub-hip td { font-weight: 800; background: rgba(227,241,232,0.82); }
+  /* Detallado por Cliente: cada carrera en su cuadro; el total de la carrera resalta. */
+  .informe .car-caja { border: 1px solid #b9d6c3; border-radius: 10px; margin: 8px 0; overflow: hidden; background: rgba(255,255,255,0.55); }
+  .informe .car-caja .car-cab { background: rgba(227,241,232,0.9); color: #14532d; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .3px; padding: 6px 10px; border-bottom: 1px solid #b9d6c3; }
+  .informe .car-caja table td { padding: 5px 10px; }
+  .informe .car-caja table tr:last-child td { border-bottom: none; }
+  .informe .car-total { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15.5px; border-top: 2px solid; }
+  .informe .car-total b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .informe .car-total.gana { background: #dcfce7; color: #166534; border-top-color: #16a34a; }
+  .informe .car-total.pierde { background: #fee2e2; color: #b91c1c; border-top-color: #dc2626; }
+  .informe .car-total.cero { background: #eef2ef; color: #3f5247; border-top-color: #94a3a0; }
   .informe .vacio { padding: 18px; text-align: center; color: #587264; }
   .informe .sub-linea { color: #587264; font-size: 12px; }
 </style>
@@ -195,6 +226,7 @@
     <button type="button" class="tab" data-tab="comision" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
     <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
+    <button type="button" class="tab sep" data-tab="configuracion" onclick="irATab('configuracion')">⚙️ Configuración</button>
   </div>
 
   <!-- ===================== JUGADAS ===================== -->
@@ -392,6 +424,27 @@
   </section>
 
   <!-- ===================== CREAR HIPÓDROMO ===================== -->
+  <!-- ===================== CONFIGURACIÓN ===================== -->
+  <section class="panel" id="panel-configuracion">
+    <div class="card">
+      <h2>⚙️ Configuración</h2>
+      <div class="subtabs" role="tablist">
+        <button type="button" class="subtab activa" data-sub="planos" onclick="irASubConfig('planos')">📄 Planos para grupos</button>
+      </div>
+      <div class="subpanel activo" id="sub-planos">
+        <h3 style="font-size:16px;margin-bottom:4px;">Planos para grupos</h3>
+        <p class="nota">Cuando está <b>activado</b>, cada vez que calcules o guardes una carrera aparece el <b>plano resuelto</b> (el texto listo para copiar y pegar en un grupo). En las oficinas las jugadas son en vivo y no se mandan por WhatsApp, así que normalmente se deja <b>desactivado</b>. Los cálculos y balances no cambian: esto solo muestra u oculta el plano.</p>
+        <label class="interruptor" for="cfgPlano">
+          <input type="checkbox" id="cfgPlano" onchange="guardarConfigPlano()">
+          <span class="pista"></span>
+          <span class="estado" id="cfgPlanoEstado">Desactivado</span>
+          <span style="font-weight:500;color:var(--text-dim);">Mostrar el plano resuelto al calcular una jugada</span>
+        </label>
+        <div class="msg" id="cfgMsg"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="panel" id="panel-hipodromos">
     <div class="dos-col">
       <div class="card">
@@ -516,11 +569,46 @@ function irATab(t) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
   if (t === 'registro') abrirRegistro();
+  if (t === 'configuracion') cargarConfiguracion();
   if (t === 'clientes') cargarClientes();
   if (t === 'hipodromos') cargarHipodromos();
   if (t === 'balance') cargarBalance();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();
+}
+
+// ------------------------------------------------------------------
+// CONFIGURACIÓN > Planos para grupos: mostrar (o no) el plano resuelto al calcular una jugada.
+// En las oficinas las jugadas son en vivo, no por WhatsApp: por defecto está apagado. Es por grupo (se guarda en el servidor).
+// ------------------------------------------------------------------
+let CONFIG = { planoResuelto: false };
+const nombreHip = n => window.OficinasInformes.nombreHipodromo(n);
+function irASubConfig(sub) {
+  document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('activa', b.dataset.sub === sub));
+  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('activo', p.id === 'sub-' + sub));
+}
+function aplicarConfigPlano() {
+  $('cfgPlano').checked = !!CONFIG.planoResuelto;
+  $('cfgPlanoEstado').textContent = CONFIG.planoResuelto ? 'Activado' : 'Desactivado';
+  $('cfgPlanoEstado').style.color = CONFIG.planoResuelto ? 'var(--accent-deep)' : 'var(--text-dim)';
+  // Sin plano resuelto no hay nada que previsualizar: se oculta "Calcular (vista previa)" y el cuadro de resultado.
+  $('btnCalcular').classList.toggle('oculto', !CONFIG.planoResuelto);
+  if (!CONFIG.planoResuelto) $('jResultadoCard').classList.add('oculto');
+}
+async function cargarConfiguracion() {
+  try { const c = await api('/api/hipismo/oficinas/configuracion'); CONFIG = { planoResuelto: !!c.planoResuelto }; }
+  catch (e) { /* si falla se queda con lo último conocido (apagado) */ }
+  aplicarConfigPlano();
+}
+async function guardarConfigPlano() {
+  const quiere = $('cfgPlano').checked;
+  msg('cfgMsg', '');
+  try {
+    const c = await api('/api/hipismo/oficinas/configuracion', { method: 'PUT', body: JSON.stringify({ planoResuelto: quiere }) });
+    CONFIG = { planoResuelto: !!c.planoResuelto };
+    msg('cfgMsg', CONFIG.planoResuelto ? '✅ Activado: se mostrará el plano resuelto al calcular una jugada.' : '✅ Desactivado: ya no se muestra el plano resuelto.', true);
+  } catch (e) { msg('cfgMsg', e.message, false); }
+  aplicarConfigPlano();
 }
 
 // ------------------------------------------------------------------
@@ -534,7 +622,7 @@ async function cargarHipodromos() {
   pintarHipodromos();
   const sel = $('jHipodromo');
   const actual = sel.value;
-  sel.innerHTML = '<option value="">— Elige —</option>' + HIPODROMOS.map(h => `<option value="${esc(h.id)}">${esc(h.nombre)}</option>`).join('');
+  sel.innerHTML = '<option value="">— Elige —</option>' + HIPODROMOS.map(h => `<option value="${esc(h.id)}">${esc(nombreHip(h.nombre))}</option>`).join('');
   if (actual && HIPODROMOS.some(h => h.id === actual)) sel.value = actual;
 }
 async function cargarClientes() {
@@ -721,6 +809,7 @@ function cuerpoCarrera() {
   };
 }
 function mostrarResultado(titulo, texto, avisos) {
+  if (!CONFIG.planoResuelto) return;   // Configuración > Planos para grupos: apagado, no se muestra el plano resuelto
   ULTIMO_RESULTADO_TEXTO = texto || '';
   $('jResultadoCard').classList.remove('oculto');
   $('jResultadoTitulo').textContent = titulo;
@@ -849,7 +938,7 @@ function pintarEdicion() {
   $('jEdicion').classList.toggle('oculto', !ver);
   if (!ver) return;
   const h = HIPODROMOS.find(x => x.id === EDICION.hipodromoId);
-  $('jEdicionTxt').textContent = `✏️ Editando desde el Registro: ${h ? h.nombre : 'hipódromo'} · carrera ${EDICION.carrera} · ${INF.fechaCorta(EDICION.fecha)}` +
+  $('jEdicionTxt').textContent = `✏️ Editando desde el Registro: ${h ? nombreHip(h.nombre) : 'hipódromo'} · carrera ${EDICION.carrera} · ${INF.fechaCorta(EDICION.fecha)}` +
     (EDICION.estado === 'pendiente' ? ' · pendiente de llegada' : (EDICION.estado === 'calculada' ? ' · calculada' : ''));
 }
 function abrirRegistro() {
@@ -874,7 +963,7 @@ async function cargarRegistro() {
       ? 'Días con carreras: ' + dias.dias.map(d => `<button type="button" class="chip-carrera${d.fecha === fecha ? ' actual' : ''}" onclick="irADiaRegistro('${d.fecha}')" title="${d.carreras} calculadas${d.pendientes ? ', ' + d.pendientes + ' pendientes' : ''}">${INF.fechaCorta(d.fecha).slice(0, 5)} · ${d.carreras + d.pendientes}${d.pendientes ? ' ⏳' : ''}</button>`).join('')
       : 'Todavía no hay carreras cargadas.';
     const sel = $('rHipodromo'), actual = sel.value;
-    sel.innerHTML = '<option value="">Todos</option>' + reg.hipodromos.map(h => `<option value="${esc(h.nombre)}">${esc(h.nombre)}</option>`).join('');
+    sel.innerHTML = '<option value="">Todos</option>' + reg.hipodromos.map(h => `<option value="${esc(h.nombre)}">${esc(nombreHip(h.nombre))}</option>`).join('');
     if (actual && reg.hipodromos.some(h => h.nombre === actual)) sel.value = actual;
     pintarRegistro();
   } catch (e) { msg('rMsg', e.message, false); }
@@ -885,11 +974,11 @@ function pintarRegistro() {
   if (!REGISTRO) { cont.innerHTML = ''; return; }
   const filtro = $('rHipodromo').value;
   const hips = REGISTRO.hipodromos.filter(h => !filtro || h.nombre === filtro);
-  if (!hips.length) { cont.innerHTML = `<div class="card"><div class="vacio" style="padding:18px;text-align:center;color:var(--text-dim);">No hay carreras cargadas el ${INF.fechaCorta(REGISTRO.fecha)}${filtro ? ' en ' + esc(filtro) : ''}.</div></div>`; return; }
+  if (!hips.length) { cont.innerHTML = `<div class="card"><div class="vacio" style="padding:18px;text-align:center;color:var(--text-dim);">No hay carreras cargadas el ${INF.fechaCorta(REGISTRO.fecha)}${filtro ? ' en ' + esc(nombreHip(filtro)) : ''}.</div></div>`; return; }
   const t = REGISTRO.totales;
   cont.innerHTML = `<p class="nota" style="margin:0 2px 10px;">${INF.nombreDia(REGISTRO.fecha)} ${INF.fechaCorta(REGISTRO.fecha)} — ${t.carreras} ${t.carreras === 1 ? 'carrera' : 'carreras'}: ${t.calculadas} calculadas${t.pendientes ? `, <b>${t.pendientes} pendientes de llegada</b>` : ''}. Toca una carrera para editarla.</p>` +
     hips.map(h => `<div class="card" style="margin-bottom:12px;">
-      <div class="reg-hip">🏇 ${esc(h.nombre)}</div>
+      <div class="reg-hip">🏇 ${esc(nombreHip(h.nombre))}</div>
       <div class="tabla-wrap"><table class="lista">
         <thead><tr><th>Carrera</th><th>Estado</th><th>Llegada</th><th class="num">Jugadas</th><th class="num">Jugadores</th><th class="num">Total jugado</th><th></th></tr></thead>
         <tbody>${h.carreras.map(c => `<tr class="reg-fila" onclick="abrirDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">
@@ -917,7 +1006,7 @@ function volverAlRegistro() { EDICION = null; irATab('registro'); }
 async function eliminarCarreraEnEdicion() {
   if (!enEdicion()) return;
   const h = HIPODROMOS.find(x => x.id === EDICION.hipodromoId);
-  if (!confirm(`¿Eliminar la carrera ${EDICION.carrera} de ${h ? h.nombre : 'este hipódromo'} (${INF.fechaCorta(EDICION.fecha)})?` + (EDICION.estado === 'calculada' ? '\nSe va a la papelera de planos y deja de contar en los balances.' : ''))) return;
+  if (!confirm(`¿Eliminar la carrera ${EDICION.carrera} de ${h ? nombreHip(h.nombre) : 'este hipódromo'} (${INF.fechaCorta(EDICION.fecha)})?` + (EDICION.estado === 'calculada' ? '\nSe va a la papelera de planos y deja de contar en los balances.' : ''))) return;
   try {
     if (EDICION.estado === 'pendiente') await api(`/api/hipismo/oficinas/pendiente?hipodromoId=${encodeURIComponent(EDICION.hipodromoId)}&carrera=${EDICION.carrera}&fecha=${encodeURIComponent(EDICION.fecha)}`, { method: 'DELETE' });
     else if (EDICION.planoId) await api('/api/hipismo/planos/' + encodeURIComponent(EDICION.planoId), { method: 'DELETE' });
@@ -1024,7 +1113,7 @@ function pintarClientes() {
 let HIPODROMO_EDITANDO = null;
 function pintarHipodromos() {
   $('hLista').innerHTML = HIPODROMOS.length ? HIPODROMOS.map(h => `
-    <tr><td><b>${esc(h.nombre)}</b></td><td>${h.pais === 'US' ? 'Estados Unidos' : 'Venezuela'}</td><td>${esc(h.carreras_max)}</td>
+    <tr><td><b>${esc(nombreHip(h.nombre))}</b></td><td>${h.pais === 'US' ? 'Estados Unidos' : 'Venezuela'}</td><td>${esc(h.carreras_max)}</td>
     <td style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" onclick="editarHipodromo('${esc(h.id)}')">Editar</button>
     <button type="button" class="btn btn-peligro btn-chico" onclick="borrarHipodromo('${esc(h.id)}')">Eliminar</button></td></tr>`).join('')
     : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay hipódromos. Crea el primero a la izquierda.</td></tr>';
@@ -1058,7 +1147,7 @@ async function guardarHipodromo() {
 }
 async function borrarHipodromo(id) {
   const h = HIPODROMOS.find(x => x.id === id); if (!h) return;
-  if (!confirm('¿Eliminar el hipódromo "' + h.nombre + '"? Los planos ya cargados se conservan.')) return;
+  if (!confirm('¿Eliminar el hipódromo "' + nombreHip(h.nombre) + '"? Los planos ya cargados se conservan.')) return;
   try { await api('/api/hipismo/hipodromos/' + id, { method: 'DELETE' }); } catch (e) { return msg('hMsg', e.message, false); }
   if (HIPODROMO_EDITANDO === id) cancelarEdicionHipodromo();
   await cargarHipodromos();
@@ -1129,14 +1218,14 @@ function pintarBalance() {
   const d = BALANCE; if (!d) return;
   const b = INF.armarBalance(d, esItemBalance);
   const filas = b.filas.map(f => `<tr class="fila-click" onclick="verDetalleDe(decodeURIComponent('${encodeURIComponent(f.nombre)}'))">
-      <td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${f.jugadas || ''}</td><td class="num">${celdaSaldo(f.saldo)}</td></tr>`).join('');
+      <td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${celdaSaldo(f.saldo)}</td></tr>`).join('');
   ponerInforme('balCaptura', cabeceraInforme('Balance General', d) + `<table>
-      <thead><tr><th>Cliente / ítem</th><th class="num">Jugadas</th><th class="num">Saldo</th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="3" class="vacio">No hay jugadas en este período.</td></tr>'}</tbody>
+      <thead><tr><th>Cliente / ítem</th><th class="num">Saldo</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="2" class="vacio">No hay jugadas en este período.</td></tr>'}</tbody>
       <tfoot>
-        <tr class="total"><td colspan="2">TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
-        <tr class="comision"><td colspan="2">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
-        ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td colspan="2">⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
+        <tr class="total"><td>TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
+        <tr class="comision"><td>COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
+        ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
       </tfoot></table>`);
 }
 function verDetalleDe(nombre) {
@@ -1173,13 +1262,20 @@ function pintarDetalle(nombre, resp) {
   det.dias.forEach(dia => {
     html += `<div class="inf-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dineroConSigno(dia.total)}</span></div>`;
     dia.hipodromos.forEach(h => {
-      html += `<div class="inf-hip"><div class="hip-tit">${esc(h.nombre)}</div><table><tbody>`;
+      const titulo = h.esCarreras ? nombreHip(h.nombre) : h.nombre;
+      html += `<div class="inf-hip"><div class="hip-tit">${esc(titulo)}</div>`;
+      // Cada carrera va en su propio cuadro y el total de la carrera resalta al pie.
       h.carreras.forEach(c => {
-        if (c.numero) html += `<tr class="car-tit"><td colspan="2">Carrera ${c.numero}</td></tr>`;
-        c.lineas.forEach(l => { html += `<tr><td>${esc(l.texto)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`; });
-        if (c.numero) html += `<tr class="sub"><td>Total carrera ${c.numero}</td><td class="num">${celdaSaldo(c.total)}</td></tr>`;
+        const lineas = c.lineas.map(l => `<tr><td>${esc(l.texto)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`).join('');
+        if (c.numero) {
+          const signo = INF.r2(c.total) > 0 ? 'gana' : (INF.r2(c.total) < 0 ? 'pierde' : 'cero');
+          html += `<div class="car-caja"><div class="car-cab">Carrera ${c.numero}</div><table><tbody>${lineas}</tbody></table>
+            <div class="car-total ${signo}"><span>Total carrera ${c.numero}</span><b>${INF.dineroConSigno(c.total)}</b></div></div>`;
+        } else {
+          html += `<div class="car-caja"><table><tbody>${lineas}</tbody></table></div>`;
+        }
       });
-      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table></div>`;
+      html += `<table><tbody><tr class="sub-hip"><td>Total ${esc(titulo)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table></div>`;
     });
     html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table></div>`;
   });
@@ -1204,9 +1300,9 @@ function pintarComision(d) {
   d.dias.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(dia => {
     html += `<div class="inf-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dinero(dia.neta)}</span></div>`;
     dia.hipodromos.forEach(h => {
-      html += `<div class="inf-hip"><div class="hip-tit">${esc(h.nombre)}</div><table class="com-cols">${cabTabla}<tbody>`;
+      html += `<div class="inf-hip"><div class="hip-tit">${esc(nombreHip(h.nombre))}</div><table class="com-cols">${cabTabla}<tbody>`;
       h.carreras.forEach(c => { html += `<tr><td>Carrera ${c.carreraNumero}</td><td class="num">${INF.dinero(c.bruta)}</td><td class="num">${c.devuelto ? '-' + INF.dinero(c.devuelto) : INF.dinero(0)}</td><td class="num"><b>${INF.dinero(c.neta)}</b></td></tr>`; });
-      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${INF.dinero(h.bruta)}</td><td class="num">${h.devuelto ? '-' + INF.dinero(h.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(h.neta)}</td></tr></tbody></table></div>`;
+      html += `<tr class="sub-hip"><td>Total ${esc(nombreHip(h.nombre))}</td><td class="num">${INF.dinero(h.bruta)}</td><td class="num">${h.devuelto ? '-' + INF.dinero(h.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(h.neta)}</td></tr></tbody></table></div>`;
     });
     html += `<table class="com-cols"><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${INF.dinero(dia.bruta)}</td><td class="num">${dia.devuelto ? '-' + INF.dinero(dia.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(dia.neta)}</td></tr></tbody></table></div>`;
   });
@@ -1266,13 +1362,19 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
     });
     const f = canvas.width / rect.width; // píxeles del canvas por píxel de pantalla
     // Dónde se puede cortar: debajo de cada fila (menos los títulos de carrera y las filas que deben quedar pegadas al total).
-    const cortes = [];
-    caja.querySelectorAll('tbody tr:not(.car-tit), tfoot tr:last-child').forEach(tr => {
-      const tabla = tr.closest('table');
-      if (tr.parentElement.tagName === 'TBODY' && tabla.tFoot && tr === tr.parentElement.lastElementChild) return;
-      cortes.push(Math.round((tr.getBoundingClientRect().bottom - rect.top) * f));
+    // Cortes "de bloque": debajo de un cuadro de carrera completo o de una fila suelta (un cuadro de carrera nunca se parte
+    // si cabe en una página). Cortes "de fila": dentro de un cuadro, solo si un cuadro es más alto que la página.
+    const cortes = [], cortesFila = [];
+    caja.querySelectorAll('.car-caja, tbody tr:not(.car-tit), tfoot tr:last-child').forEach(el => {
+      const esCaja = el.classList.contains('car-caja');
+      if (!esCaja) {
+        const tabla = el.closest('table');
+        if (el.parentElement.tagName === 'TBODY' && tabla.tFoot && el === el.parentElement.lastElementChild) return;
+      }
+      const y = Math.round((el.getBoundingClientRect().bottom - rect.top) * f);
+      (!esCaja && el.closest('.car-caja') ? cortesFila : cortes).push(y);
     });
-    cortes.sort((a, b) => a - b);
+    cortes.sort((a, b) => a - b); cortesFila.sort((a, b) => a - b);
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
@@ -1312,7 +1414,11 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
       const disp = tramos.length === 0 ? altoUtil : altoUtil - cabPx - altoContexto(ctxLista);
       let fin = y + disp;
       if (fin >= canvas.height) fin = canvas.height;
-      else { const c = cortes.filter(v => v > y + disp * 0.35 && v <= fin).pop(); if (c) fin = c; }
+      else {
+        const ok = lista => lista.filter(v => v > y + disp * 0.35 && v <= fin).pop();
+        const c = ok(cortes) || ok(cortesFila);
+        if (c) fin = c;
+      }
       tramos.push({ y0: y, y1: fin, ctx: ctxLista }); y = fin;
     }
 
@@ -1355,7 +1461,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   iniciarPeriodo('com', cargarComision);
   limpiarTabla();
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
-  await Promise.all([cargarHipodromos(), cargarClientes()]);
+  await Promise.all([cargarHipodromos(), cargarClientes(), cargarConfiguracion()]);
   actualizarPreguntasCliente();
 })();
 </script>

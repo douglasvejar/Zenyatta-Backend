@@ -277,6 +277,14 @@ async function invocarRuta(handler, req) {
   check(/inf-logo-fondo/.test(html) && /ponerInforme\('balCaptura'/.test(html) && /ponerInforme\('detCaptura'/.test(html) && /ponerInforme\('comCaptura'/.test(html) && /\/api\/imagenes\/logo-grupo\//.test(html), '3) Balance, Detallado y Comisión llevan el logo del grupo de fondo');
   check(/cargarImagenLogo\(urlLogoGrupo\(\)\)/.test(html) && /globalAlpha = 0\.14/.test(html), '3) en el PDF, cada página dibuja el logo de fondo');
   check(/contextoEn/.test(html) && /i > 0 && cabPx/.test(html) && /Página \$\{i \+ 1\} de \$\{tramos\.length\}/.test(html), '3) en el PDF, cada página repite el encabezado y el contexto (día, hipódromo, columnas) y numera "Página X de Y"');
+  // --- nombres de hipódromo, Balance sin jugadas, detalle en cuadros ---
+  const nh = INF.nombreHipodromo;
+  check(nh('gulfstream park') === 'Gulfstream Park' && nh('GULFSTREAM PARK') === 'Gulfstream Park' && nh('  la   rinconada ') === 'La Rinconada', '4a) el hipódromo se muestra con la primera letra en mayúscula, lo hayan escrito como lo hayan escrito');
+  check(nh('hipodromo de caracas') === 'Hipodromo de Caracas' && nh('McKee') === 'McKee' && nh('') === '', '4b) "de/del/la" quedan en minúscula (salvo al inicio), lo escrito con mezcla se respeta y vacío da vacío');
+  check(/<th>Cliente \/ ítem<\/th><th class="num">Saldo<\/th>/.test(html) && !/\$\{f\.jugadas/.test(html), '4c) el Balance General ya no muestra la cantidad de jugadas del cliente');
+  check(/car-caja/.test(html) && /car-total/.test(html) && /Total carrera \$\{c\.numero\}/.test(html) && /\.car-total\.gana/.test(html) && /\.car-total\.pierde/.test(html), '4d) el detallado por cliente pone cada carrera en su cuadro y resalta el total de la carrera');
+  check(/'\.car-caja, tbody tr:not\(\.car-tit\)/.test(html) || /\.car-caja, tbody tr:not\(\.car-tit\)/.test(html), '4e) el PDF no parte un cuadro de carrera por la mitad si cabe en una página');
+  check(/nombreHip\(h\.nombre\)/.test(html) && !/>\$\{esc\(h\.nombre\)\}</.test(html.replace(/hNombre/g, '')), '4f) los hipódromos se muestran con el formato (primera letra en mayúscula) en todas las pantallas');
   check(/inf-dia/.test(html) && /inf-hip/.test(html), '3) los bloques de día y de hipódromo están marcados para repetirlos en cada página');
   check(/Semana actual/.test(html) && /Semana anterior/.test(html) && /Ver rango/.test(html), '3) selector de semana + rango de fechas');
   const script = html.match(/<script>([\s\S]*)<\/script>\s*<\/body>/)[1];

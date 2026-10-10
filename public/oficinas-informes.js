@@ -92,7 +92,21 @@
     return { dias, totalPeriodo, totalSegunServidor: r2(resp.resumen ? resp.resumen.totalSemana : totalPeriodo) };
   }
 
-  const api = { r2, dinero, dineroConSigno, fechaCorta, nombreDia, textoPeriodo, armarBalance, armarDetalleCliente, descripcionLinea };
+  // Nombre de hipódromo para mostrar: cada palabra empieza con mayúscula, como lo hayan escrito al crearlo
+  // ("gulfstream park" / "GULFSTREAM PARK" -> "Gulfstream Park"). Las siglas escritas a mano (mezcla de mayúsculas y
+  // minúsculas, ej. "McKee") se respetan; "de/del/la/y…" van en minúscula salvo al principio.
+  const CONECTORES = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y']);
+  function nombreHipodromo(n) {
+    return String(n === undefined || n === null ? '' : n).trim().replace(/\s+/g, ' ').split(' ').map((w, i) => {
+      if (!w) return w;
+      const mixta = /[a-záéíóúñü]/.test(w) && /[A-ZÁÉÍÓÚÑÜ]/.test(w.slice(1));
+      const base = mixta ? w : w.toLowerCase();
+      if (i > 0 && CONECTORES.has(base)) return base;
+      return base.charAt(0).toUpperCase() + base.slice(1);
+    }).join(' ');
+  }
+
+  const api = { nombreHipodromo, r2, dinero, dineroConSigno, fechaCorta, nombreDia, textoPeriodo, armarBalance, armarDetalleCliente, descripcionLinea };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   raiz.OficinasInformes = api;
 })(typeof window !== 'undefined' ? window : globalThis);
