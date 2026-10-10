@@ -521,7 +521,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
         // de la MISMA API que el marcador final), o fútbol de una liga
         // genuinamente sin cobertura (ej. Europa League/Conference League)
         // — acá sí puede que el dato nunca llegue solo.
-        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para poder resolver esta jugada — puede que esta liga/competición no tenga ese dato disponible (ej. en fútbol, la Europa League y la Conference League no están cubiertas); si sigue así, revisar y resolver a mano.';
+        razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para poder resolver esta jugada — puede que esta liga/competición no tenga ese dato disponible (ej. en fútbol, la Liga MX, la MLS o las copas Libertadores/Sudamericana no están cubiertas); si sigue así, revisar y resolver a mano.';
       }
       return { estado: 'PENDIENTE', razon, debug: debugBase };
     }

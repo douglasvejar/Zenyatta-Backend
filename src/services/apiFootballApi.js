@@ -52,11 +52,28 @@
 // este sandbox (mismo bloqueo de red de siempre — confirmado con curl
 // directo). Todo lo de arriba se confirmó con pedidos reales que hizo el
 // usuario desde su cuenta, pegados tal cual en el chat.
+// 10-10-2026, a pedido del usuario (ticket real "Psv Eindhoven alta 1h 2
+// +109" en PENDIENTE: "el partido ya terminó, pero todavía no hay datos de la
+// primera mitad... la Europa League y la Conference League no están
+// cubiertas"): se suman 3 competencias de CLUBES que football-data.org no
+// cubre en su plan gratis — UEFA Europa League (id 3), UEFA Conference
+// League (id 848) y Eredivisie (id 88). NO cuesta ni un pedido más al cupo
+// diario: el pedido ya es `/fixtures?date=X` (trae TODAS las competencias
+// del día) y el filtro es solo por estos ids, así que sumar competencias es
+// solo ampliar esta lista. Los ids son los de la numeración oficial de
+// api-football.com (3 = Europa League, 848 = Conference League, 88 =
+// Eredivisie); a diferencia de los 4 de arriba no se pudieron confirmar
+// contra /leagues real desde este sandbox (sin red hacia esa API). Si algún
+// id estuviera mal, el efecto es el de antes (el partido sigue PENDIENTE con
+// el aviso de siempre), nunca un resultado equivocado.
 const COMPETENCIAS_API_FOOTBALL = [
   { id: 5, nombre: 'UEFA Nations League' },
   { id: 9, nombre: 'Copa América' },
   { id: 10, nombre: 'Amistoso Internacional' },
-  { id: 34, nombre: 'Eliminatorias Conmebol' }
+  { id: 34, nombre: 'Eliminatorias Conmebol' },
+  { id: 3, nombre: 'UEFA Europa League' },
+  { id: 848, nombre: 'UEFA Conference League' },
+  { id: 88, nombre: 'Eredivisie' }
 ];
 const IDS_CUBIERTOS = new Set(COMPETENCIAS_API_FOOTBALL.map(c => c.id));
 

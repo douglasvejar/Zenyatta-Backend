@@ -179,18 +179,19 @@ function limpiarClaves() {
     '02-10-2026: también en "sin-cruce" queda marcada la fuente real (api-football.com/API_FOOTBALL_KEY)');
 
   // -----------------------------------------------------------------
-  // Caso E: regresión — una liga que NINGUNA de las 2 fuentes cubre
-  // (Europa League, de clubes, no está en football-data.org NI es una
-  // selección de api-football.com) sigue siendo 'liga-no-cubierta', aun
-  // con AMBAS claves configuradas.
+  // Caso E: regresión — una liga que NINGUNA de las 2 fuentes cubre (Liga
+  // MX, de clubes: no está en football-data.org ni en la lista de
+  // api-football.com) sigue siendo 'liga-no-cubierta', aun con AMBAS claves
+  // configuradas. (Hasta el 09-10-2026 esta prueba usaba Europa League; desde
+  // el 10-10-2026 esa ya la cubre api-football.com — ver Caso E2.)
   // -----------------------------------------------------------------
   resetFootballData(); resetApiFootball();
   process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
   process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
   global.fetch = async (url) => {
     const u = String(url);
-    if (u.includes('site.api.espn.com') && u.includes('/soccer/uefa.europa/')) {
-      return { ok: true, json: async () => fixtureESPN('Bologna', 'Aston Villa', 1, 0) };
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/mex.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Club America', 'Chivas', 1, 0) };
     }
     if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
     if (u.includes('api.football-data.org')) return { ok: true, json: async () => ({ matches: [] }) };
@@ -198,8 +199,43 @@ function limpiarClaves() {
     throw new Error('URL inesperada en la prueba: ' + url);
   };
   const resE = await obtenerResultadosSoccer('2026-09-25');
-  check(resE['bologna'] && resE['bologna'].motivoSinPrimeraMitad === 'liga-no-cubierta',
-    'Regresión: Europa League (ninguna de las 2 fuentes de "1h" la cubre) sigue marcándose "liga-no-cubierta", aun con las 2 claves configuradas');
+  const claveE = Object.keys(resE).find(k => resE[k].liga === 'Liga MX');
+  check(claveE && resE[claveE].motivoSinPrimeraMitad === 'liga-no-cubierta',
+    'Regresión: Liga MX (ninguna de las 2 fuentes de "1h" la cubre) sigue marcándose "liga-no-cubierta", aun con las 2 claves configuradas');
+
+  // -----------------------------------------------------------------
+  // Caso E2 (10-10-2026): Europa League y Eredivisie AHORA las cubre
+  // api-football.com (ticket real "Psv Eindhoven alta 1h 2 +109"): con la
+  // clave puesta y el partido en la respuesta de /fixtures, el dato de "1h"
+  // se completa solo; si el partido no aparece, ya no dice "liga no cubierta"
+  // sino 'sin-cruce' (con la fuente real).
+  // -----------------------------------------------------------------
+  resetFootballData(); resetApiFootball();
+  process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
+  process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/uefa.europa/')) {
+      return { ok: true, json: async () => fixtureESPN('PSV Eindhoven', 'Aston Villa', 2, 1) };
+    }
+    if (u.includes('site.api.espn.com') && u.includes('/soccer/ned.1/')) {
+      return { ok: true, json: async () => fixtureESPN('Ajax', 'Feyenoord', 1, 0) };
+    }
+    if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+    if (u.includes('api.football-data.org')) return { ok: true, json: async () => ({ matches: [] }) };
+    if (u.includes('v3.football.api-sports.io')) {
+      return { ok: true, json: async () => ({ errors: [], response: [partidoApiFootball(3, 'PSV Eindhoven', 'Aston Villa', 2, 1)] }) };
+    }
+    throw new Error('URL inesperada en la prueba: ' + url);
+  };
+  const resE2 = await obtenerResultadosSoccer('2026-09-25');
+  const kPsv = Object.keys(resE2).find(k => resE2[k].liga === 'UEFA Europa League');
+  check(kPsv && resE2[kPsv].final1H === true && resE2[kPsv].homeScore1H === 2 && resE2[kPsv].awayScore1H === 1,
+    'Europa League: el "1h" del PSV se completa solo desde api-football.com (2-1 al descanso)');
+  check(kPsv && !resE2[kPsv].motivoSinPrimeraMitad, 'Europa League cruzada: ya no queda ningún motivo de "sin datos de la primera mitad"');
+  const kAjax = Object.keys(resE2).find(k => resE2[k].liga === 'Eredivisie');
+  check(kAjax && resE2[kAjax].motivoSinPrimeraMitad === 'sin-cruce' && resE2[kAjax].fuentePrimeraMitad === 'api-football.com',
+    'Eredivisie (ahora cubierta) sin su partido en la respuesta: "sin-cruce" con la fuente real, ya no "liga-no-cubierta"');
 
   // -----------------------------------------------------------------
   // Caso F: las 2 fuentes a la vez, en la MISMA llamada — un partido de
