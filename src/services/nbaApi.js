@@ -19,7 +19,7 @@
 // para armar las sumas de abajo) MÁS los campos ya sumados que
 // evaluador.js usa de verdad: `homeScore1H`/`awayScore1H`/`final1H` (cuartos
 // 1+2, mismo patrón que ya usa NFL) y, nuevos, `homeScore2H`/`awayScore2H`/
-// `final2H` (cuartos 3+4).
+// `final2H` (cuartos 3+4 más el tiempo extra, si hubo).
 async function obtenerResultadosNBA(fechaISO) {
   const datosNBA = {};
   const fechaCompacta = (fechaISO || '').replace(/-/g, '');
@@ -75,13 +75,18 @@ async function obtenerResultadosNBA(fechaISO) {
       const awayScore1H = (awayLinescores[0] || 0) + (awayLinescores[1] || 0);
       const final1H = finalizado || periodo > 2;
 
-      // 2da mitad = cuartos 3+4 (sin contar tiempo(s) extra). ¿Ya terminó?
-      // Si el juego entero terminó, o si ya va por un 5to período (tiempo
-      // extra, lo que confirma que la 2da mitad de tiempo regular ya
-      // cerró), es que sí.
-      const homeScore2H = (homeLinescores[2] || 0) + (homeLinescores[3] || 0);
-      const awayScore2H = (awayLinescores[2] || 0) + (awayLinescores[3] || 0);
-      const final2H = finalizado || periodo > 4;
+      // 2da mitad = cuartos 3+4 MÁS el tiempo extra si lo hubo (períodos 5 en
+      // adelante). CAMBIADO el 10-10-2026, a pedido del usuario: antes se
+      // contaban solo los cuartos 3+4 ("sin contar tiempo(s) extra"), pero en
+      // las casas de apuestas la 2da mitad incluye el overtime — un partido
+      // que se iba a tiempo extra daba la 2da mitad con menos puntos de los
+      // reales (ej. 52-56 en vez de 62-68). Igual que NFL (ver nflApi.js).
+      // Como el tiempo extra todavía puede sumar puntos, la 2da mitad solo se
+      // da por TERMINADA cuando termina el partido entero.
+      const sumaDesdeTercerCuarto = (linescores) => linescores.slice(2).reduce((suma, v) => suma + v, 0);
+      const homeScore2H = sumaDesdeTercerCuarto(homeLinescores);
+      const awayScore2H = sumaDesdeTercerCuarto(awayLinescores);
+      const final2H = finalizado;
 
       const info = {
         deporte: 'basket',
