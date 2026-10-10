@@ -130,7 +130,11 @@
   .barra-export .toast { font-size: 13px; font-weight: 600; }
   .toast.ok { color: var(--ok); } .toast.error { color: var(--danger); }
   /* La tarjeta que se captura (imagen HD / PDF): fondo blanco y colores fijos, para que salga igual de clara siempre. */
-  .informe { background: #ffffff; color: #15321f; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; }
+  .informe { background: #ffffff; color: #15321f; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; position: relative; overflow: hidden; }
+  /* Logo del grupo como marca de agua de fondo (Balance General, Detallado por Cliente y Comisión por Carrera): va en una capa
+     aparte detrás del contenido; las filas de totales son semitransparentes para que se note. En el PDF cada página lo repite. */
+  .informe .inf-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.14; pointer-events: none; z-index: 0; }
+  .informe .inf-contenido { position: relative; z-index: 1; }
   .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #16a34a; padding-bottom: 10px; margin-bottom: 12px; }
   .informe .inf-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; }
   .informe .inf-titulo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: #14532d; text-transform: uppercase; letter-spacing: 0.6px; }
@@ -144,14 +148,14 @@
   .informe .pos { color: #15803d; font-weight: 700; } .informe .neg { color: #dc2626; font-weight: 700; }
   .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f1f8f3; }
   .informe .item-tag { font-size: 10px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #f3d9a4; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
-  .informe tr.total td { font-weight: 800; border-top: 2px solid #14532d; border-bottom: none; background: #f1f8f3; }
+  .informe tr.total td { font-weight: 800; border-top: 2px solid #14532d; border-bottom: none; background: rgba(241,248,243,0.78); }
   .informe tr.comision td { font-weight: 800; font-size: 15px; background: #14532d; color: #ffffff; border: none; }
   .informe tr.aviso-dif td { background: #fffbeb; color: #92400e; font-weight: 700; }
   .informe .dia-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; background: #14532d; color: #fff; padding: 6px 10px; border-radius: 8px; margin: 14px 0 6px; display: flex; justify-content: space-between; }
   .informe .hip-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #14532d; margin: 10px 0 2px; padding-left: 2px; }
-  .informe .car-tit td { background: #f1f8f3; font-weight: 700; color: #14532d; font-size: 12.5px; }
-  .informe tr.sub td { font-weight: 700; background: #f8fbf9; }
-  .informe tr.sub-hip td { font-weight: 800; background: #e3f1e8; }
+  .informe .car-tit td { background: rgba(241,248,243,0.78); font-weight: 700; color: #14532d; font-size: 12.5px; }
+  .informe tr.sub td { font-weight: 700; background: rgba(248,251,249,0.72); }
+  .informe tr.sub-hip td { font-weight: 800; background: rgba(227,241,232,0.82); }
   .informe .vacio { padding: 18px; text-align: center; color: #587264; }
   .informe .sub-linea { color: #587264; font-size: 12px; }
 </style>
@@ -951,6 +955,12 @@ function queryPeriodo(prefijo) {
   const p = PERIODO[prefijo];
   return p.personalizado ? `desde=${encodeURIComponent(p.desde)}&hasta=${encodeURIComponent(p.hasta)}` : `semana=${p.semana}`;
 }
+// Pone el contenido de un informe con el logo del grupo como marca de agua detrás (si el grupo tiene logo).
+function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : null; }
+function ponerInforme(idCaptura, html) {
+  const logo = urlLogoGrupo();
+  $(idCaptura).innerHTML = `<div class="inf-logo-fondo"${logo ? ` style="background-image:url('${logo}')"` : ''}></div><div class="inf-contenido">${html}</div>`;
+}
 function cabeceraInforme(titulo, d, extra) {
   return `<div class="inf-cab"><div><div class="inf-grupo">${esc(GRUPO.nombre || '')}</div><div class="inf-titulo">${esc(titulo)}</div>${extra ? `<div class="sub-linea">${extra}</div>` : ''}</div>
     <div class="inf-periodo">${esc(INF.textoPeriodo(d))}</div></div>`;
@@ -975,14 +985,14 @@ function pintarBalance() {
   const b = INF.armarBalance(d, esItemBalance);
   const filas = b.filas.map(f => `<tr class="fila-click" onclick="verDetalleDe(decodeURIComponent('${encodeURIComponent(f.nombre)}'))">
       <td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${f.jugadas || ''}</td><td class="num">${celdaSaldo(f.saldo)}</td></tr>`).join('');
-  $('balCaptura').innerHTML = cabeceraInforme('Balance General', d) + `<table>
+  ponerInforme('balCaptura', cabeceraInforme('Balance General', d) + `<table>
       <thead><tr><th>Cliente / ítem</th><th class="num">Jugadas</th><th class="num">Saldo</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3" class="vacio">No hay jugadas en este período.</td></tr>'}</tbody>
       <tfoot>
         <tr class="total"><td colspan="2">TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
         <tr class="comision"><td colspan="2">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
         ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td colspan="2">⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
-      </tfoot></table>`;
+      </tfoot></table>`);
 }
 function verDetalleDe(nombre) {
   irATab('detalle');
@@ -1016,21 +1026,21 @@ function pintarDetalle(nombre, resp) {
   let html = cabeceraInforme('Detallado por Cliente', resp, `<b>${esc(nombreBonito(nombre))}</b>`);
   if (!det.dias.length) html += '<div class="vacio">Este cliente no tiene movimientos en este período.</div>';
   det.dias.forEach(dia => {
-    html += `<div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dineroConSigno(dia.total)}</span></div>`;
+    html += `<div class="inf-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dineroConSigno(dia.total)}</span></div>`;
     dia.hipodromos.forEach(h => {
-      html += `<div class="hip-tit">${esc(h.nombre)}</div><table><tbody>`;
+      html += `<div class="inf-hip"><div class="hip-tit">${esc(h.nombre)}</div><table><tbody>`;
       h.carreras.forEach(c => {
         if (c.numero) html += `<tr class="car-tit"><td colspan="2">Carrera ${c.numero}</td></tr>`;
         c.lineas.forEach(l => { html += `<tr><td>${esc(l.texto)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`; });
         if (c.numero) html += `<tr class="sub"><td>Total carrera ${c.numero}</td><td class="num">${celdaSaldo(c.total)}</td></tr>`;
       });
-      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table>`;
+      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table></div>`;
     });
-    html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table>`;
+    html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table></div>`;
   });
   html += `<table style="margin-top:14px;"><tbody><tr class="comision"><td>TOTAL ${resp.rangoPersonalizado ? 'DEL PERÍODO' : 'DE LA SEMANA ' + resp.numeroSemana}</td><td class="num">${INF.dineroConSigno(det.totalPeriodo)}</td></tr>
     ${Math.abs(det.totalPeriodo - det.totalSegunServidor) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ El total del servidor es distinto</td><td class="num">${INF.dineroConSigno(det.totalSegunServidor)}</td></tr>` : ''}</tbody></table>`;
-  $('detCaptura').innerHTML = html;
+  ponerInforme('detCaptura', html);
 }
 
 // ---------- Comisión por Carrera ----------
@@ -1047,19 +1057,19 @@ function pintarComision(d) {
   if (!d.dias.length) html += '<div class="vacio">No hay carreras cargadas en este período.</div>';
   const cabTabla = '<thead><tr><th>Carrera</th><th class="num">Comisión 5%</th><th class="num">Devuelto</th><th class="num">Comisión neta</th></tr></thead>';
   d.dias.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(dia => {
-    html += `<div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dinero(dia.neta)}</span></div>`;
+    html += `<div class="inf-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dinero(dia.neta)}</span></div>`;
     dia.hipodromos.forEach(h => {
-      html += `<div class="hip-tit">${esc(h.nombre)}</div><table class="com-cols">${cabTabla}<tbody>`;
+      html += `<div class="inf-hip"><div class="hip-tit">${esc(h.nombre)}</div><table class="com-cols">${cabTabla}<tbody>`;
       h.carreras.forEach(c => { html += `<tr><td>Carrera ${c.carreraNumero}</td><td class="num">${INF.dinero(c.bruta)}</td><td class="num">${c.devuelto ? '-' + INF.dinero(c.devuelto) : INF.dinero(0)}</td><td class="num"><b>${INF.dinero(c.neta)}</b></td></tr>`; });
-      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${INF.dinero(h.bruta)}</td><td class="num">${h.devuelto ? '-' + INF.dinero(h.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(h.neta)}</td></tr></tbody></table>`;
+      html += `<tr class="sub-hip"><td>Total ${esc(h.nombre)}</td><td class="num">${INF.dinero(h.bruta)}</td><td class="num">${h.devuelto ? '-' + INF.dinero(h.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(h.neta)}</td></tr></tbody></table></div>`;
     });
-    html += `<table class="com-cols"><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${INF.dinero(dia.bruta)}</td><td class="num">${dia.devuelto ? '-' + INF.dinero(dia.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(dia.neta)}</td></tr></tbody></table>`;
+    html += `<table class="com-cols"><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${INF.dinero(dia.bruta)}</td><td class="num">${dia.devuelto ? '-' + INF.dinero(dia.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(dia.neta)}</td></tr></tbody></table></div>`;
   });
   html += `<table class="com-cols" style="margin-top:14px;"><tbody>
       <tr class="total"><td>TOTAL DE LAS CARRERAS</td><td class="num">${INF.dinero(d.totales.bruta)}</td><td class="num">${d.totales.devuelto ? '-' + INF.dinero(d.totales.devuelto) : INF.dinero(0)}</td><td class="num">${INF.dinero(d.totales.neta)}</td></tr>
       ${Math.abs(d.otrosConceptos) >= 0.005 ? `<tr class="sub"><td colspan="3">Comisión de jugadas adelantadas (no ligada a una carrera)</td><td class="num">${INF.dinero(d.otrosConceptos)}</td></tr>` : ''}
       <tr class="comision"><td colspan="3">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(d.comisionOficina)}</td></tr></tbody></table>`;
-  $('comCaptura').innerHTML = html;
+  ponerInforme('comCaptura', html);
 }
 
 // ---------- Copiar imagen HD y descargar PDF ----------
@@ -1084,30 +1094,108 @@ async function copiarImagenHD(idCaptura, nombreArchivo) {
     }, 'image/png');
   } catch (e) { avisoInforme(aviso, '⚠️ No se pudo generar la imagen: ' + e.message, true); }
 }
-// PDF A4 de varias páginas: la imagen se corta en tramos del alto de una hoja (los informes largos no se recortan).
+// PDF A4 de varias páginas. El informe se corta SOLO entre filas (nunca por la mitad de una línea) y CADA página mantiene el
+// formato: logo del grupo de fondo, el encabezado (grupo, título, cliente y período) repetido arriba y "Página X de Y" abajo.
+function cargarImagenLogo(url) {
+  return new Promise(resolve => {
+    if (!url) return resolve(null);
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => resolve(im); im.onerror = () => resolve(null); im.src = url;
+  });
+}
 async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   const caja = $(idCaptura);
   if (typeof html2canvas !== 'function' || !window.jspdf) return avisoInforme(idAviso, '⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true);
   try {
-    const canvas = await html2canvas(caja, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const S = 2;
+    const rect = caja.getBoundingClientRect();
+    const cab = caja.querySelector('.inf-cab');
+    // Contenido sin fondo y sin la marca de agua (esa se dibuja aparte en cada página, centrada en la hoja).
+    const canvas = await html2canvas(caja, {
+      scale: S, backgroundColor: null, useCORS: true,
+      onclone: doc => {
+        const c = doc.getElementById(idCaptura);
+        c.style.background = 'transparent'; c.style.borderColor = 'transparent'; c.style.boxShadow = 'none';
+        const l = c.querySelector('.inf-logo-fondo'); if (l) l.style.display = 'none';
+      }
+    });
+    const f = canvas.width / rect.width; // píxeles del canvas por píxel de pantalla
+    // Dónde se puede cortar: debajo de cada fila (menos los títulos de carrera y las filas que deben quedar pegadas al total).
+    const cortes = [];
+    caja.querySelectorAll('tbody tr:not(.car-tit), tfoot tr:last-child').forEach(tr => {
+      const tabla = tr.closest('table');
+      if (tr.parentElement.tagName === 'TBODY' && tabla.tFoot && tr === tr.parentElement.lastElementChild) return;
+      cortes.push(Math.round((tr.getBoundingClientRect().bottom - rect.top) * f));
+    });
+    cortes.sort((a, b) => a - b);
+
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: 'a4' });
-    const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight();
-    const margen = 18, anchoUtil = ancho - margen * 2, altoUtil = alto - margen * 2;
-    const escala = anchoUtil / canvas.width;
-    const altoTramoPx = Math.floor(altoUtil / escala);
-    let y = 0, primera = true;
+    const anchoPdf = pdf.internal.pageSize.getWidth(), altoPdf = pdf.internal.pageSize.getHeight();
+    const mx = Math.round(canvas.width * 0.05);               // margen lateral y superior
+    const PW = canvas.width + mx * 2, PH = Math.round(PW * altoPdf / anchoPdf);
+    const pie = Math.round(mx * 1.5);                          // espacio del pie de página
+    const altoUtil = PH - mx - pie;
+    let cabPx = cab ? Math.round(((cab.getBoundingClientRect().bottom - rect.top) + 10) * f) : 0;
+    if (cabPx > altoUtil * 0.4) cabPx = 0;                      // encabezado absurdamente alto: no se repite
+
+    // Contexto que se repite arriba de cada página cuando el corte cae a mitad de un bloque: la barra del día, el nombre del
+    // hipódromo y los títulos de columna de la tabla — así una página suelta se entiende sola.
+    const caja0 = rect.top;
+    const caja_y = el => ({ y0: Math.round((el.getBoundingClientRect().top - caja0) * f), y1: Math.round((el.getBoundingClientRect().bottom - caja0) * f) });
+    const contextoEn = y => {
+      const tr = [];
+      const dentro = el => { const r = caja_y(el); return r.y0 < y - 2 && r.y1 > y + 2; };
+      const dia = Array.from(caja.querySelectorAll('.inf-dia')).find(dentro);
+      if (dia) tr.push(caja_y(dia.querySelector('.dia-tit')));
+      const hip = Array.from(caja.querySelectorAll('.inf-hip')).find(dentro);
+      if (hip) tr.push(caja_y(hip.querySelector('.hip-tit')));
+      const tabla = Array.from(caja.querySelectorAll('table')).find(t => t.tHead && dentro(t));
+      if (tabla) tr.push(caja_y(tabla.tHead));
+      return tr;
+    };
+    const altoContexto = lista => lista.reduce((a, c) => a + (c.y1 - c.y0), 0) + (lista.length ? Math.round(6 * f) : 0);
+
+    // Reparto en páginas
+    const tramos = []; let y = 0;
     while (y < canvas.height) {
-      const h = Math.min(altoTramoPx, canvas.height - y);
-      const tramo = document.createElement('canvas'); tramo.width = canvas.width; tramo.height = h;
-      const ctx = tramo.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, tramo.width, tramo.height);
-      ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-      if (!primera) pdf.addPage();
-      pdf.addImage(tramo.toDataURL('image/jpeg', 0.95), 'JPEG', margen, margen, anchoUtil, h * escala);
-      primera = false; y += h;
+      let ctxLista = [];
+      if (tramos.length) {
+        ctxLista = contextoEn(y);
+        if (cabPx + altoContexto(ctxLista) > altoUtil * 0.5) ctxLista = [];
+      }
+      const disp = tramos.length === 0 ? altoUtil : altoUtil - cabPx - altoContexto(ctxLista);
+      let fin = y + disp;
+      if (fin >= canvas.height) fin = canvas.height;
+      else { const c = cortes.filter(v => v > y + disp * 0.35 && v <= fin).pop(); if (c) fin = c; }
+      tramos.push({ y0: y, y1: fin, ctx: ctxLista }); y = fin;
     }
+
+    const logo = await cargarImagenLogo(urlLogoGrupo());
+    const nombreGrupo = (caja.querySelector('.inf-grupo') || {}).textContent || '';
+    const tituloInf = (caja.querySelector('.inf-titulo') || {}).textContent || '';
+    tramos.forEach(({ y0, y1, ctx: ctxLista }, i) => {
+      const pg = document.createElement('canvas'); pg.width = PW; pg.height = PH;
+      const ctx = pg.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PW, PH);
+      if (logo && logo.naturalWidth) {                          // marca de agua del grupo, igual en todas las páginas
+        const w = Math.min(PW * 0.62, PH * 0.5 * logo.naturalWidth / logo.naturalHeight), h = w * logo.naturalHeight / logo.naturalWidth;
+        ctx.globalAlpha = 0.14; ctx.drawImage(logo, (PW - w) / 2, (PH - h) / 2, w, h); ctx.globalAlpha = 1;
+      }
+      let dy = mx;
+      if (i > 0 && cabPx) { ctx.drawImage(canvas, 0, 0, canvas.width, cabPx, mx, dy, canvas.width, cabPx); dy += cabPx; }
+      if (i > 0 && ctxLista.length) {
+        ctxLista.forEach(c => { ctx.drawImage(canvas, 0, c.y0, canvas.width, c.y1 - c.y0, mx, dy, canvas.width, c.y1 - c.y0); dy += c.y1 - c.y0; });
+        dy += Math.round(6 * f);
+      }
+      ctx.drawImage(canvas, 0, y0, canvas.width, y1 - y0, mx, dy, canvas.width, y1 - y0);
+      ctx.fillStyle = '#587264'; ctx.textAlign = 'center'; ctx.font = `${Math.round(PW * 0.017)}px Arial, sans-serif`;
+      ctx.fillText(`${nombreGrupo} — ${tituloInf} — Página ${i + 1} de ${tramos.length}`, PW / 2, PH - Math.round(mx * 0.7));
+      if (i > 0) pdf.addPage();
+      pdf.addImage(pg.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, anchoPdf, altoPdf);
+    });
     pdf.save(nombreArchivo + '.pdf');
-    avisoInforme(idAviso, '✅ PDF descargado.');
+    avisoInforme(idAviso, `✅ PDF descargado (${tramos.length} ${tramos.length === 1 ? 'página' : 'páginas'}).`);
   } catch (e) { avisoInforme(idAviso, '⚠️ No se pudo generar el PDF: ' + e.message, true); }
 }
 

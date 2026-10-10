@@ -274,6 +274,10 @@ async function invocarRuta(handler, req) {
   ['Balance General', 'Detallado por Cliente', 'Comisión por Carrera', 'COMISIÓN OFICINA', 'Copiar imagen HD', 'Descargar PDF', 'TOTAL DEL DÍA', 'oficinas-informes.js', 'html2canvas', 'jspdf', '/api/hipismo/cierre-final', '/detalle-semana', '/api/hipismo/oficinas/comision-por-carrera'].forEach(t => check(html.includes(t), `3) la pantalla incluye "${t}"`));
   ['balCaptura', 'detCaptura', 'comCaptura'].forEach(id => check(new RegExp(`copiarImagenHD\\('${id}'`).test(html) && new RegExp(`descargarPDF\\('${id}'`).test(html), `3) ${id}: tiene botón de imagen HD y de PDF`));
   check(/while \(y < canvas\.height\)/.test(html) && /pdf\.addPage\(\)/.test(html), '3) el PDF se parte en varias páginas (no recorta un informe largo)');
+  check(/inf-logo-fondo/.test(html) && /ponerInforme\('balCaptura'/.test(html) && /ponerInforme\('detCaptura'/.test(html) && /ponerInforme\('comCaptura'/.test(html) && /\/api\/imagenes\/logo-grupo\//.test(html), '3) Balance, Detallado y Comisión llevan el logo del grupo de fondo');
+  check(/cargarImagenLogo\(urlLogoGrupo\(\)\)/.test(html) && /globalAlpha = 0\.14/.test(html), '3) en el PDF, cada página dibuja el logo de fondo');
+  check(/contextoEn/.test(html) && /i > 0 && cabPx/.test(html) && /Página \$\{i \+ 1\} de \$\{tramos\.length\}/.test(html), '3) en el PDF, cada página repite el encabezado y el contexto (día, hipódromo, columnas) y numera "Página X de Y"');
+  check(/inf-dia/.test(html) && /inf-hip/.test(html), '3) los bloques de día y de hipódromo están marcados para repetirlos en cada página');
   check(/Semana actual/.test(html) && /Semana anterior/.test(html) && /Ver rango/.test(html), '3) selector de semana + rango de fechas');
   const script = html.match(/<script>([\s\S]*)<\/script>\s*<\/body>/)[1];
   try { new Function(script); check(true, '3) el script de la pantalla compila'); } catch (e) { check(false, '3) error de sintaxis: ' + e.message); }
