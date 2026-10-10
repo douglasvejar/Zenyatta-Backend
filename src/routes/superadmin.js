@@ -362,7 +362,7 @@ router.get('/grupos/:id/hipismo-cierre-final', asyncHandler(async (req, res) => 
 // =================================================================
 router.get('/grupos/:id/saldos-semana', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const grupoRes = await db.query('SELECT id, nombre, logo_url, logo_base64 FROM grupos WHERE id = $1', [id]);
+  const grupoRes = await db.query('SELECT id, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64 FROM grupos WHERE id = $1', [id]);
   const grupo = grupoRes.rows[0];
   if (!grupo) return res.status(404).json({ error: 'Grupo no encontrado.' });
 
@@ -1152,6 +1152,13 @@ router.get('/chat/conteo-no-leidos', asyncHandler(async (req, res) => {
 router.get('/chat/:grupoId', asyncHandler(async (req, res) => {
   const mensajes = await chatService.listarMensajes(req.params.grupoId);
   res.json(mensajes);
+}));
+
+router.get('/chat/:grupoId/adjunto/:id', asyncHandler(async (req, res) => {
+  const adj = await chatService.obtenerAdjunto(req.params.grupoId, req.params.id);
+  if (!adj) return res.status(404).json({ error: 'Adjunto no encontrado.' });
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.json(adj);
 }));
 
 router.post('/chat/:grupoId', asyncHandler(async (req, res) => {

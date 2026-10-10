@@ -45,7 +45,7 @@ async function buscarJugadorYGrupo(token) {
     err.status = 404;
     throw err;
   }
-  const grupoRes = await db.query('SELECT activo, nombre, logo_url, logo_base64, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  const grupoRes = await db.query('SELECT activo, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = grupoRes.rows[0];
   if (!grupo || !grupo.activo) {
     const err = new Error('Esta cuenta no está disponible en este momento.');

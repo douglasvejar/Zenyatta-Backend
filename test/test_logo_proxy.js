@@ -70,18 +70,28 @@ const PNG_1X1_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 const LOGOS_GRUPO_BASE64 = {
   'g4': { logo_base64: PNG_1X1_BASE64, logo_mime: 'image/png' }
 };
+let DESCARGAS_BASE64 = 0;
+const HUELLA_LOGO = {};
 const fakePool = function () {
   this.query = async (text, params) => {
     // 29-09-2026: el SELECT real ahora también trae logo_base64/logo_mime
     // (ver la nota grande de la ruta) -- se cubren acá los DOS caminos: el
     // LEGACY (logo_url externa, g1/g2/g3) y el NUEVO (archivo subido, g4).
-    if (/SELECT logo_url, logo_base64, logo_mime FROM grupos WHERE id = \$1/i.test(text)) {
+    // 10-10-2026 (egress de Supabase): el endpoint primero pide SOLO
+    // metadatos + huella (sin el base64) y el archivo en una consulta aparte,
+    // únicamente si el navegador no lo tiene ya (ETag) ni está en memoria.
+    if (/SELECT logo_url, logo_mime, \(logo_base64 IS NOT NULL\) AS tiene_archivo, md5\(logo_base64\) AS huella FROM grupos WHERE id = \$1/i.test(text)) {
       const id = params[0];
       if (id in LOGOS_GRUPO_BASE64) {
-        return { rows: [{ logo_url: null, logo_base64: LOGOS_GRUPO_BASE64[id].logo_base64, logo_mime: LOGOS_GRUPO_BASE64[id].logo_mime }] };
+        return { rows: [{ logo_url: null, logo_mime: LOGOS_GRUPO_BASE64[id].logo_mime, tiene_archivo: true, huella: HUELLA_LOGO[id] || 'h-' + id }] };
       }
       if (!(id in LOGOS_GRUPO)) return { rows: [] }; // grupo que no existe
-      return { rows: [{ logo_url: LOGOS_GRUPO[id], logo_base64: null, logo_mime: null }] };
+      return { rows: [{ logo_url: LOGOS_GRUPO[id], logo_mime: null, tiene_archivo: false, huella: null }] };
+    }
+    if (/^SELECT logo_base64 FROM grupos WHERE id = \$1/i.test(text.trim())) {
+      DESCARGAS_BASE64++;
+      const id = params[0];
+      return { rows: id in LOGOS_GRUPO_BASE64 ? [{ logo_base64: LOGOS_GRUPO_BASE64[id].logo_base64 }] : [] };
     }
     return { rows: [] };
   };
@@ -189,9 +199,21 @@ function check(cond, msg) {
   const rg5 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g4' } });
   check(rg5._status === 200 && rg5._body, 'grupo con logo subido (base64) -> 200 con el body de la imagen');
   check(rg5._headers['Content-Type'] === 'image/png', 'devuelve el logo_mime guardado como content-type');
-  check(/max-age=300/.test(rg5._headers['Cache-Control'] || ''), 'cachea corto (5 min), igual que el camino legacy');
+  check(/max-age=300/.test(rg5._headers['Cache-Control'] || ''), 'el logo subido se cachea 5 min en el navegador y después revalida con ETag');
   check(Buffer.compare(rg5._body, Buffer.from(PNG_1X1_BASE64, 'base64')) === 0, 'el body son los bytes decodificados de logo_base64 tal cual, sin tocar');
   check(LLAMADAS_FETCH === llamadasFetchAntes, 'servir un logo subido NO hace ningún fetch externo (no depende de ningún CDN)');
+
+  // --- Egress (10-10-2026): ETag/304 + caché en memoria ---
+  check(rg5._headers['ETag'] === '"h-g4"', 'la respuesta lleva ETag con la huella del logo');
+  check(DESCARGAS_BASE64 === 1, 'la primera vez se baja el base64 de la base UNA vez');
+  const rg6 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g4' }, headers: { 'if-none-match': '"h-g4"' } });
+  check(rg6._status === 304 && rg6._body === null, 'si el navegador ya tiene esa versión (If-None-Match) responde 304 sin mandar la imagen');
+  check(DESCARGAS_BASE64 === 1, 'el 304 NO baja el base64 de la base');
+  const rg7 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g4' }, headers: {} });
+  check(rg7._status === 200 && Buffer.compare(rg7._body, Buffer.from(PNG_1X1_BASE64, 'base64')) === 0 && DESCARGAS_BASE64 === 1, 'otro navegador sin copia recibe el logo desde la memoria del servidor, sin volver a bajar el base64');
+  HUELLA_LOGO['g4'] = 'h-nuevo';
+  const rg8 = await invocarRuta(handlerGrupo, { params: { grupoId: 'g4' }, headers: { 'if-none-match': '"h-g4"' } });
+  check(rg8._status === 200 && rg8._headers['ETag'] === '"h-nuevo"' && DESCARGAS_BASE64 === 2, 'si el Súper-admin cambia el logo (huella distinta) se vuelve a bajar y el ETag cambia');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

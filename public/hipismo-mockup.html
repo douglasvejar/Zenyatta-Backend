@@ -3790,8 +3790,12 @@ async function cargarChatGrupo() {
   }
 }
 
-function renderChatMensajesGrupo(mensajes) {
+function renderChatMensajesGrupo(mensajes, forzar) {
   const cont = document.getElementById('chatMensajes');
+  CHAT_ULTIMOS_MENSAJES = mensajes;
+  const firma = mensajes.map(m => m.id).join(',') + '|' + Object.keys(CHAT_ADJ_CACHE).length;
+  if (!forzar && firma === CHAT_ULTIMA_FIRMA) return; // nada cambió: no repintar
+  CHAT_ULTIMA_FIRMA = firma;
   if (mensajes.length === 0) {
     cont.innerHTML = '<p style="color:var(--text-dim); font-size:13px; text-align:center;">Todavía no hay mensajes. Escríbele al Súper-admin abajo.</p>';
   } else {
@@ -3804,20 +3808,43 @@ function renderChatMensajesGrupo(mensajes) {
   cont.scrollTop = cont.scrollHeight;
 }
 
+// 10-10-2026 (aviso de Supabase "Egress Exceeded"): la lista del chat ya NO
+// trae el archivo adjunto (base64, hasta 8MB) en cada refresco de 8s — solo
+// `tiene_adjunto`. El archivo se pide UNA vez (imágenes: solo; el resto:
+// al tocarlo) y queda en esta memoria mientras la página siga abierta.
+const CHAT_ADJ_CACHE = {};
+const CHAT_ADJ_PIDIENDO = {};
+const CHAT_ADJ_FALLO = {};
+let CHAT_ULTIMOS_MENSAJES = null;
+let CHAT_ULTIMA_FIRMA = null;
+function cargarAdjuntoChat(id) {
+  if (CHAT_ADJ_CACHE[id] || CHAT_ADJ_PIDIENDO[id]) return;
+  CHAT_ADJ_PIDIENDO[id] = true;
+  apiHipismo('/api/hipismo/chat/' + id + '/adjunto').then(a => { CHAT_ADJ_CACHE[id] = a; delete CHAT_ADJ_FALLO[id]; })
+    .catch(() => { CHAT_ADJ_FALLO[id] = true; })
+    .finally(() => { delete CHAT_ADJ_PIDIENDO[id]; if (CHAT_ULTIMOS_MENSAJES) renderChatMensajesGrupo(CHAT_ULTIMOS_MENSAJES, true); });
+}
+
 function renderAdjuntoChat(m) {
-  if (!m.adjunto_datos) return '';
+  if (!m.adjunto_datos && !m.tiene_adjunto) return '';
   const tipo = m.adjunto_tipo || '';
   const nombre = escaparHtmlChat(m.adjunto_nombre || 'archivo');
+  const datos = m.adjunto_datos || (CHAT_ADJ_CACHE[m.id] && CHAT_ADJ_CACHE[m.id].datos);
+  if (!datos) {
+    if (CHAT_ADJ_FALLO[m.id]) return '<a href="#" class="chat-archivo-msg" onclick="delete CHAT_ADJ_FALLO[\'' + m.id + '\']; cargarAdjuntoChat(\'' + m.id + '\'); return false;">⚠️ No se pudo cargar ' + nombre + ' — tocar para reintentar</a>';
+    if (tipo.startsWith('image/')) { cargarAdjuntoChat(m.id); return '<span class="chat-archivo-msg">🖼️ cargando imagen…</span>'; }
+    return '<a href="#" class="chat-archivo-msg" onclick="cargarAdjuntoChat(\'' + m.id + '\'); return false;">📎 ' + nombre + ' — tocar para cargar</a>';
+  }
   if (tipo.startsWith('image/')) {
-    return '<img src="' + m.adjunto_datos + '" class="chat-img-msg" alt="' + nombre + '" onclick="window.open(this.src, \'_blank\')">';
+    return '<img src="' + datos + '" class="chat-img-msg" alt="' + nombre + '" onclick="window.open(this.src, \'_blank\')">';
   }
   if (tipo.startsWith('video/')) {
-    return '<video src="' + m.adjunto_datos + '" class="chat-video-msg" controls></video>';
+    return '<video src="' + datos + '" class="chat-video-msg" controls></video>';
   }
   if (tipo.startsWith('audio/')) {
-    return '<audio src="' + m.adjunto_datos + '" class="chat-audio-msg" controls></audio>';
+    return '<audio src="' + datos + '" class="chat-audio-msg" controls></audio>';
   }
-  return '<a href="' + m.adjunto_datos + '" download="' + nombre + '" class="chat-archivo-msg">📄 ' + nombre + '</a>';
+  return '<a href="' + datos + '" download="' + nombre + '" class="chat-archivo-msg">📄 ' + nombre + '</a>';
 }
 
 function manejarArchivoChatSeleccionado(input) {

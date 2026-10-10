@@ -22,22 +22,26 @@ const TABLAS = {
   mensajes_chat: []
 };
 let seq = 1;
-const nuevoId = () => 'msj' + (seq++);
+const nuevoId = () => '00000000-0000-4000-8000-' + String(seq++).padStart(12, '0'); // con forma de uuid, como los ids reales
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
 
-  if (/^INSERT INTO mensajes_chat \(grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)\s+RETURNING id, grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en/i.test(sql)) {
+  if (/^INSERT INTO mensajes_chat \(grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5, \$6\)\s+RETURNING id, grupo_id, remitente, texto, \(adjunto_datos IS NOT NULL\) AS tiene_adjunto, adjunto_tipo, adjunto_nombre, creado_en/i.test(sql)) {
     const [grupoId, remitente, texto, adjuntoDatos, adjuntoTipo, adjuntoNombre] = params;
     const fila = { id: nuevoId(), grupo_id: grupoId, remitente, texto, adjunto_datos: adjuntoDatos, adjunto_tipo: adjuntoTipo, adjunto_nombre: adjuntoNombre, creado_en: new Date().toISOString(), leido_grupo: remitente === 'grupo', leido_superadmin: remitente === 'superadmin' };
     TABLAS.mensajes_chat.push(fila);
-    return { rows: [{ id: fila.id, grupo_id: fila.grupo_id, remitente: fila.remitente, texto: fila.texto, adjunto_datos: fila.adjunto_datos, adjunto_tipo: fila.adjunto_tipo, adjunto_nombre: fila.adjunto_nombre, creado_en: fila.creado_en }] };
+    return { rows: [{ id: fila.id, grupo_id: fila.grupo_id, remitente: fila.remitente, texto: fila.texto, tiene_adjunto: fila.adjunto_datos != null, adjunto_tipo: fila.adjunto_tipo, adjunto_nombre: fila.adjunto_nombre, creado_en: fila.creado_en }] };
   }
-  if (/^SELECT id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = \$1 ORDER BY creado_en ASC LIMIT 500/i.test(sql)) {
+  if (/^SELECT id, remitente, texto, \(adjunto_datos IS NOT NULL\) AS tiene_adjunto, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = \$1 ORDER BY creado_en ASC LIMIT 500/i.test(sql)) {
     const [grupoId] = params;
     const filas = TABLAS.mensajes_chat.filter(m => m.grupo_id === grupoId).sort((a, b) => a.creado_en < b.creado_en ? -1 : 1);
-    return { rows: filas.map(m => ({ id: m.id, remitente: m.remitente, texto: m.texto, adjunto_datos: m.adjunto_datos, adjunto_tipo: m.adjunto_tipo, adjunto_nombre: m.adjunto_nombre, creado_en: m.creado_en })) };
+    return { rows: filas.map(m => ({ id: m.id, remitente: m.remitente, texto: m.texto, tiene_adjunto: m.adjunto_datos != null, adjunto_tipo: m.adjunto_tipo, adjunto_nombre: m.adjunto_nombre, creado_en: m.creado_en })) };
+  }
+  if (/^SELECT adjunto_datos AS datos, adjunto_tipo AS tipo, adjunto_nombre AS nombre FROM mensajes_chat WHERE id = \$1 AND grupo_id = \$2 AND adjunto_datos IS NOT NULL/i.test(sql)) {
+    const f = TABLAS.mensajes_chat.find(m => m.id === params[0] && m.grupo_id === params[1] && m.adjunto_datos != null);
+    return { rows: f ? [{ datos: f.adjunto_datos, tipo: f.adjunto_tipo, nombre: f.adjunto_nombre }] : [] };
   }
   if (/^SELECT COUNT\(\*\)::int AS total FROM mensajes_chat WHERE grupo_id = \$1 AND remitente = 'superadmin' AND leido_grupo = false/i.test(sql)) {
     const [grupoId] = params;
@@ -102,6 +106,7 @@ function handlerDe(metodo, rutaPath) {
 }
 const handlerListar = handlerDe('get', '/chat');
 const handlerEnviar = handlerDe('post', '/chat');
+const handlerAdjunto = handlerDe('get', '/chat/:id/adjunto');
 const handlerConteo = handlerDe('get', '/chat/conteo-no-leidos');
 const handlerMarcarLeidos = handlerDe('post', '/chat/marcar-leidos');
 
@@ -114,6 +119,7 @@ function invocarRuta(handler, req) {
     const res = {};
     res._status = 200;
     res._json = null;
+    res.set = () => res;
     res.status = (codigo) => { res._status = codigo; return res; };
     res.json = (obj) => { res._json = obj; resolve(res); return res; };
     res.end = () => { resolve(res); return res; };
@@ -188,6 +194,17 @@ function check(cond, msg) {
 
   const resListarConAdjuntos = await invocarRuta(handlerListar, reqBase(GRUPO_ID));
   check(resListarConAdjuntos._json.filter(m => m.adjunto_tipo).length === 4, '6h) GET /api/hipismo/chat trae los 4 mensajes con adjunto guardados (foto, nota de voz, video+texto, pdf) — ninguno de los rechazados');
+
+  // --- 7) EGRESS (10-10-2026): la lista NO trae el archivo; se pide aparte ---
+  check(resListarConAdjuntos._json.every(m => !('adjunto_datos' in m)), '7a) GET /api/hipismo/chat ya NO manda adjunto_datos (el base64 pesado) en la lista');
+  check(resListarConAdjuntos._json.filter(m => m.tiene_adjunto).length === 4, '7b) Cada mensaje con archivo viene marcado tiene_adjunto=true');
+  const idFoto = resFoto._json.id;
+  const resAdj = await invocarRuta(handlerAdjunto, Object.assign(reqBase(GRUPO_ID), { params: { id: idFoto } }));
+  check(resAdj._json && resAdj._json.datos === fotoBase64 && resAdj._json.tipo === 'image/jpeg', '7c) GET /api/hipismo/chat/:id/adjunto devuelve el archivo del mensaje pedido');
+  const resAdjOtro = await invocarRuta(handlerAdjunto, Object.assign(reqBase('otro-grupo-cualquiera'), { params: { id: idFoto } }));
+  check(resAdjOtro._status === 404, '7d) Otro grupo NO puede leer el adjunto de este (404)');
+  const resAdjMalo = await invocarRuta(handlerAdjunto, Object.assign(reqBase(GRUPO_ID), { params: { id: "x'; DROP TABLE" } }));
+  check(resAdjMalo._status === 404, '7e) Un id inválido responde 404 sin tocar la base');
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

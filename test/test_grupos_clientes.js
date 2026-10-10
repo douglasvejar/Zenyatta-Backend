@@ -188,7 +188,7 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   // --- construirTarjetaGrupoCliente()/construirTarjetaPorToken() ---
-  if (/^SELECT gc\.id, gc\.grupo_id, gc\.modulo, gc\.titular_id, gc\.token, gc\.creado_en,\s+g\.nombre AS grupo_nombre, g\.logo_url, g\.logo_base64,\s+g\.tema_color_primario, g\.tema_color_secundario\s+FROM grupos_clientes gc\s+JOIN grupos g ON g\.id = gc\.grupo_id\s+WHERE gc\.id = \$1/i.test(sql)) {
+  if (/^SELECT gc\.id, gc\.grupo_id, gc\.modulo, gc\.titular_id, gc\.token, gc\.creado_en,\s+g\.nombre AS grupo_nombre, g\.logo_url, \(g\.logo_base64 IS NOT NULL\) AS logo_base64,\s+g\.tema_color_primario, g\.tema_color_secundario\s+FROM grupos_clientes gc\s+JOIN grupos g ON g\.id = gc\.grupo_id\s+WHERE gc\.id = \$1/i.test(sql)) {
     const id = params[0];
     const gc = TABLAS.grupos_clientes.find(gc => gc.id === id);
     if (!gc) return { rows: [] };

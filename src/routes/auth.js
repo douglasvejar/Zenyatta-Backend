@@ -100,7 +100,7 @@ router.post('/login', asyncHandler(async (req, res) => {
 
   // No es el Administrador de ningún grupo — probamos si es un Empleado.
   const r2 = await db.query(
-    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, g.logo_base64 AS grupo_logo_base64,
+    `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, (g.logo_base64 IS NOT NULL) AS grupo_logo_base64,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
             g.modulo_hipismo_oficinas_habilitado AS grupo_modulo_hipismo_oficinas_habilitado,

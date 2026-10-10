@@ -92,19 +92,47 @@ router.get('/logo', asyncHandler(async (req, res) => {
 // que tenía pegada, exactamente como funcionaba hasta ahora — así un
 // grupo viejo no se queda de repente sin logo por no haber vuelto a
 // subirlo.
+// 10-10-2026 (aviso de Supabase "Egress Exceeded"): antes este endpoint
+// bajaba el logo COMPLETO (base64, varios MB) desde Postgres en cada
+// pedido, y el navegador lo repetía cada 5 min por cada pantalla abierta.
+// Ahora (a) el logo ya decodificado se guarda en memoria del servidor
+// junto con su huella (md5, calculada por Postgres: sale solo ~32 bytes);
+// (b) la respuesta lleva ETag, así que si el navegador ya lo tiene
+// contesta 304 sin mandar la imagen; (c) cada 5 min el navegador solo revalida (304). Si el Súper-admin sube otro logo, la huella cambia y se vuelve
+// a bajar una sola vez.
+const LOGOS_EN_MEMORIA = new Map(); // grupoId -> { etag, mime, buffer }
+const LOGOS_TOPE = 200;
+
+function recordarLogo(grupoId, entrada) {
+  if (LOGOS_EN_MEMORIA.size >= LOGOS_TOPE) LOGOS_EN_MEMORIA.delete(LOGOS_EN_MEMORIA.keys().next().value);
+  LOGOS_EN_MEMORIA.set(grupoId, entrada);
+}
+
 router.get('/logo-grupo/:grupoId', asyncHandler(async (req, res) => {
-  const r = await db.query('SELECT logo_url, logo_base64, logo_mime FROM grupos WHERE id = $1', [req.params.grupoId]);
+  const id = req.params.grupoId;
+  // Solo metadatos + huella: el base64 NO se trae si no hace falta.
+  const r = await db.query(
+    'SELECT logo_url, logo_mime, (logo_base64 IS NOT NULL) AS tiene_archivo, md5(logo_base64) AS huella FROM grupos WHERE id = $1',
+    [id]
+  );
   const fila = r.rows[0];
   if (!fila) return res.status(404).end();
 
-  if (fila.logo_base64) {
-    res.set('Content-Type', fila.logo_mime || 'image/png');
-    // El Súper-admin puede volver a subir un logo distinto — cache corto
-    // (5 min) en vez de "immutable" (el de los escudos de equipo, que
-    // nunca cambian), para que un cambio se vea reflejado sin que el
-    // usuario tenga que limpiar caché a mano.
-    res.set('Cache-Control', 'public, max-age=300');
-    return res.send(Buffer.from(fila.logo_base64, 'base64'));
+  if (fila.tiene_archivo) {
+    const etag = '"' + fila.huella + '"';
+    res.set('Cache-Control', 'public, max-age=300'); // 5 min como siempre; con ETag la revalidación es un 304 sin imagen
+    res.set('ETag', etag);
+    if (((req.headers || {})['if-none-match']) === etag) return res.status(304).end();
+
+    let entrada = LOGOS_EN_MEMORIA.get(id);
+    if (!entrada || entrada.etag !== etag) {
+      const rb = await db.query('SELECT logo_base64 FROM grupos WHERE id = $1', [id]);
+      if (!rb.rows[0] || !rb.rows[0].logo_base64) return res.status(404).end();
+      entrada = { etag, mime: fila.logo_mime || 'image/png', buffer: Buffer.from(rb.rows[0].logo_base64, 'base64') };
+      recordarLogo(id, entrada);
+    }
+    res.set('Content-Type', entrada.mime);
+    return res.send(entrada.buffer);
   }
 
   // --- Legacy: logo_url externa pegada antes del 29-09-2026 ---

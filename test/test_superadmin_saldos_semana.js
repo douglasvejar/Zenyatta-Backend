@@ -37,7 +37,7 @@ function enRango(fila, desde, hasta) {
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
-  if (/^SELECT id, nombre, logo_url, logo_base64 FROM grupos WHERE id = \$1/i.test(sql)) {
+  if (/^SELECT id, nombre, logo_url, \(logo_base64 IS NOT NULL\) AS logo_base64 FROM grupos WHERE id = \$1/i.test(sql)) {
     const g = TABLAS.grupos.find(x => x.id === params[0]);
     return { rows: g ? [{ id: g.id, nombre: g.nombre, logo_url: g.logo_url, logo_base64: g.logo_base64 || null }] : [] };
   }

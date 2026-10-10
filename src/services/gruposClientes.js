@@ -168,7 +168,7 @@ async function construirTarjetaGrupoCliente(grupoClienteId, grupoId, modulo) {
   // temaColorGrupo en services/logoGrupo.js) — nunca un mecanismo nuevo.
   const rGrupo = await db.query(
     `SELECT gc.id, gc.grupo_id, gc.modulo, gc.titular_id, gc.token, gc.creado_en,
-            g.nombre AS grupo_nombre, g.logo_url, g.logo_base64,
+            g.nombre AS grupo_nombre, g.logo_url, (g.logo_base64 IS NOT NULL) AS logo_base64,
             g.tema_color_primario, g.tema_color_secundario
        FROM grupos_clientes gc
        JOIN grupos g ON g.id = gc.grupo_id

@@ -29,6 +29,8 @@ function ejecutarQuery(text, params) {
     return { rows: (params[1] || []).map(nombre => ({ nombre })) };
   }
   if (/^SELECT \* FROM grupos WHERE modulo_hipismo_habilitado/i.test(sql)) return { rows: gruposHipismo };
+  if (/^SELECT id FROM grupos WHERE modulo_hipismo_habilitado/i.test(sql)) return { rows: gruposHipismo.map(g => ({ id: g.id })) };
+  if (/^SELECT \* FROM grupos WHERE id = \$1/i.test(sql)) return { rows: gruposHipismo.filter(g => g.id === params[0]) };
   if (/^SELECT grupo_id FROM hipismo_cuadre_nocturno/i.test(sql)) return { rows: cuadreHechos.map(g => ({ grupo_id: g })) };
   if (/^(INSERT|UPDATE|DELETE)/i.test(sql)) { escrituras.push({ sql, params }); return { rows: [{ id: 'x1' }] }; }
   return { rows: [] };

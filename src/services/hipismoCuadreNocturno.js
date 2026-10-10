@@ -112,13 +112,18 @@ async function pasadaNocturna({ hoy } = {}) {
   const hoyVe = hoy || hoyVenezuela();
   if (hoyVe.getUTCHours() < HORA_INICIO_VE) return { corridos: 0 };
   const fecha = isoFecha(hoyVe);
-  const rGrupos = await db.query('SELECT * FROM grupos WHERE modulo_hipismo_habilitado = true OR modulo_hipismo_oficinas_habilitado = true');
+  // 10-10-2026 (egress de Supabase): antes cada pasada (cada 15 min) traía
+  // "SELECT *" de TODOS los grupos, logo en base64 incluido. Ahora primero
+  // solo los ids, y la fila completa únicamente de los que faltan.
+  const rIds = await db.query('SELECT id FROM grupos WHERE modulo_hipismo_habilitado = true OR modulo_hipismo_oficinas_habilitado = true');
   const rHechos = await db.query('SELECT grupo_id FROM hipismo_cuadre_nocturno WHERE fecha = $1', [fecha]);
   const hechos = new Set(rHechos.rows.map(r => r.grupo_id));
   let corridos = 0;
-  for (const grupo of rGrupos.rows) {
-    if (hechos.has(grupo.id)) continue;
-    await ejecutarCuadreGrupo(grupo, { hoy: hoyVe });
+  for (const { id } of rIds.rows) {
+    if (hechos.has(id)) continue;
+    const rg = await db.query('SELECT * FROM grupos WHERE id = $1', [id]);
+    if (!rg.rows[0]) continue;
+    await ejecutarCuadreGrupo(rg.rows[0], { hoy: hoyVe });
     corridos++;
   }
   try { await db.query(`DELETE FROM errores_servidor WHERE creado_en < now() - interval '30 days'`); } catch (e) { /* limpieza opcional */ }

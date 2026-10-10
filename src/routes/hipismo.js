@@ -6264,6 +6264,13 @@ router.get('/chat', asyncHandler(async (req, res) => {
   res.json(mensajes);
 }));
 
+router.get('/chat/:id/adjunto', asyncHandler(async (req, res) => {
+  const adj = await chatService.obtenerAdjunto(req.grupoId, req.params.id);
+  if (!adj) return res.status(404).json({ error: 'Adjunto no encontrado.' });
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.json(adj);
+}));
+
 router.post('/chat', asyncHandler(async (req, res) => {
   try {
     const mensaje = await chatService.enviarMensaje(req.grupoId, 'grupo', req.body.texto, req.body.adjunto);

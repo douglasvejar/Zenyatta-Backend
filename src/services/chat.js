@@ -62,18 +62,34 @@ async function enviarMensaje(grupoId, remitente, texto, adjunto) {
   const r = await db.query(
     `INSERT INTO mensajes_chat (grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, grupo_id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en`,
+     RETURNING id, grupo_id, remitente, texto, (adjunto_datos IS NOT NULL) AS tiene_adjunto, adjunto_tipo, adjunto_nombre, creado_en`,
     [grupoId, remitente, textoFinal, adjuntoFinal ? adjuntoFinal.datos : null, adjuntoFinal ? adjuntoFinal.tipo : null, adjuntoFinal ? adjuntoFinal.nombre : null]
   );
   return r.rows[0];
 }
 
+// 10-10-2026 (aviso de Supabase "Egress Exceeded"): la lista YA NO trae
+// adjunto_datos (el archivo en base64, hasta 8MB por mensaje) — el chat
+// abierto se refresca cada 8s y bajaba todos los adjuntos en cada vuelta.
+// Ahora cada mensaje trae solo `tiene_adjunto` (+ tipo y nombre) y el
+// navegador pide el archivo UNA vez con obtenerAdjunto().
 async function listarMensajes(grupoId) {
   const r = await db.query(
-    'SELECT id, remitente, texto, adjunto_datos, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = $1 ORDER BY creado_en ASC LIMIT 500',
+    'SELECT id, remitente, texto, (adjunto_datos IS NOT NULL) AS tiene_adjunto, adjunto_tipo, adjunto_nombre, creado_en FROM mensajes_chat WHERE grupo_id = $1 ORDER BY creado_en ASC LIMIT 500',
     [grupoId]
   );
   return r.rows;
+}
+
+// El archivo adjunto de UN mensaje (del grupo indicado, para que un grupo
+// nunca pueda leer el adjunto de otro). null si no existe o no tiene.
+async function obtenerAdjunto(grupoId, mensajeId) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(mensajeId || ''))) return null;
+  const r = await db.query(
+    'SELECT adjunto_datos AS datos, adjunto_tipo AS tipo, adjunto_nombre AS nombre FROM mensajes_chat WHERE id = $1 AND grupo_id = $2 AND adjunto_datos IS NOT NULL',
+    [mensajeId, grupoId]
+  );
+  return r.rows[0] || null;
 }
 
 // Para el panel del Súper-admin: UN renglón por CADA grupo que existe
@@ -130,6 +146,7 @@ async function marcarLeidosSuperadmin(grupoId) {
 module.exports = {
   enviarMensaje,
   listarMensajes,
+  obtenerAdjunto,
   listarConversaciones,
   contarNoLeidosGrupo,
   contarNoLeidosSuperadminTotal,
