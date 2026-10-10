@@ -901,6 +901,15 @@
      WhatsApp, igual criterio que .gc-captura (420px) más arriba. */
   #comisionesSinDevolucionesCaptura { max-width: 480px; margin: 0 auto; }
 
+  /* 10-10-2026, a pedido del usuario ("este balance coloca los nombres y sus
+     saldos un poco mas juntos, haz la columna menos ancha para tener mejor
+     visualizacion"): en pantallas anchas cada columna (Pierden/Ganan)
+     medía ~700px y el nombre quedaba lejísimos de su monto. Con 780px de
+     tarjeta, cada columna queda en ~360px — nombre y saldo a la vista. La
+     imagen que se copia (WhatsApp) sale del mismo elemento, así que también
+     sale más angosta y más legible. */
+  #balanceCaptura { max-width: 780px; margin-left: auto; margin-right: auto; }
+
   /* =================================================================
      LOGO DE FONDO en "Cargar Planos" — donde aparece el resultado
      (01-10-2026, a pedido del usuario: "donde pego el plano y donde me
