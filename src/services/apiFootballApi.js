@@ -75,7 +75,26 @@ const COMPETENCIAS_API_FOOTBALL = [
   { id: 848, nombre: 'UEFA Conference League' },
   { id: 88, nombre: 'Eredivisie' }
 ];
-const IDS_CUBIERTOS = new Set(COMPETENCIAS_API_FOOTBALL.map(c => c.id));
+
+// RESPALDO (11-10-2026, ticket real "Bayern Munich 1h -210 / Barcelona 1h
+// -260", Champions League, quedó PENDIENTE porque football-data.org no
+// devolvió/no cruzó ese partido): las ligas que football-data.org cubre
+// como fuente PRINCIPAL también se piden acá, pero solo como RESPALDO — si
+// football-data.org no tiene el partido, agregarPrimeraMitad() (soccerApi.js)
+// lo busca en esta lista antes de dejarlo PENDIENTE. No cuesta ningún
+// pedido más: `/fixtures?date=X` ya trae TODAS las competencias del día,
+// solo se amplía el filtro por id (2 = Champions League, 39 = Premier, 140 =
+// La Liga, 135 = Serie A, 78 = Bundesliga, 61 = Ligue 1 — ids oficiales).
+// Los nombres tienen que ser idénticos a los de LIGAS_SOCCER (soccerApi.js).
+const COMPETENCIAS_RESPALDO_API_FOOTBALL = [
+  { id: 2, nombre: 'UEFA Champions League' },
+  { id: 39, nombre: 'Premier League' },
+  { id: 140, nombre: 'La Liga' },
+  { id: 135, nombre: 'Serie A' },
+  { id: 78, nombre: 'Bundesliga' },
+  { id: 61, nombre: 'Ligue 1' }
+];
+const IDS_CUBIERTOS = new Set([...COMPETENCIAS_API_FOOTBALL, ...COMPETENCIAS_RESPALDO_API_FOOTBALL].map(c => c.id));
 
 // Un solo pedido a `/fixtures?date=X` (trae TODOS los partidos del mundo
 // de ese día, de cualquier competencia) y se filtra la respuesta por los
@@ -191,4 +210,4 @@ async function obtenerPrimeraMitadApiFootball(fechaISO) {
   return resultado;
 }
 
-module.exports = { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL, _resetCacheParaPruebas };
+module.exports = { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL, COMPETENCIAS_RESPALDO_API_FOOTBALL, _resetCacheParaPruebas };

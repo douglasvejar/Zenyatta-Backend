@@ -422,24 +422,43 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
 
   const juegosUnicos = new Set(Object.values(mapaCombinado));
   juegosUnicos.forEach(juego => {
-    const fuente = listaFuentes.find(f => f.nombresLigas.includes(juego.liga));
-    if (!fuente) {
+    // Fuente PRINCIPAL de esta liga + fuentes de RESPALDO (11-10-2026): si
+    // la principal no tiene el partido (o no se pudo cruzar por nombre), se
+    // prueba con el resto de las fuentes que declaren esta liga como
+    // respaldo (ej. api-football.com para las ligas de clubes de
+    // football-data.org) antes de dejarlo PENDIENTE.
+    const principal = listaFuentes.find(f => f.nombresLigas.includes(juego.liga));
+    const candidatas = [];
+    if (principal) candidatas.push(principal);
+    listaFuentes.forEach(f => {
+      if (f !== principal && (f.nombresLigasRespaldo || []).includes(juego.liga)) candidatas.push(f);
+    });
+    if (!candidatas.length) {
       juego.motivoSinPrimeraMitad = 'liga-no-cubierta';
       return;
     }
-    if (!fuente.claveConfigurada) {
+    const conClave = candidatas.filter(f => f.claveConfigurada);
+    if (!conClave.length) {
       juego.motivoSinPrimeraMitad = 'sin-clave';
-      juego.fuentePrimeraMitad = fuente.nombreFuente;
-      juego.variableEntornoPrimeraMitad = fuente.variableEntorno;
+      juego.fuentePrimeraMitad = candidatas[0].nombreFuente;
+      juego.variableEntornoPrimeraMitad = candidatas[0].variableEntorno;
       return;
     }
-    const primeraMitadPorPartido = fuente.partidos || [];
-    let match = primeraMitadPorPartido.find(pm =>
-      (nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamName) || nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamShortName)) &&
-      (nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamName) || nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamShortName))
-    );
-    if (!match) match = cruceFlexibleUnico(juego, primeraMitadPorPartido);
-    if (match) {
+
+    let elegido = null; // { match, fuente } — se prefiere un cruce que YA traiga el dato del entretiempo
+    for (const fuente of conClave) {
+      const primeraMitadPorPartido = fuente.partidos || [];
+      let match = primeraMitadPorPartido.find(pm =>
+        (nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamName) || nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamShortName)) &&
+        (nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamName) || nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamShortName))
+      );
+      if (!match) match = cruceFlexibleUnico(juego, primeraMitadPorPartido);
+      if (match && (!elegido || (match.final1H && !elegido.match.final1H))) elegido = { match, fuente };
+      if (elegido && elegido.match.final1H) break;
+    }
+
+    if (elegido) {
+      const { match, fuente } = elegido;
       juego.homeScore1H = match.homeScore1H;
       juego.awayScore1H = match.awayScore1H;
       juego.final1H = match.final1H;
@@ -450,9 +469,11 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
       }
       return;
     }
-    juego.motivoSinPrimeraMitad = fuente.huboError ? 'error-api' : 'sin-cruce';
-    juego.fuentePrimeraMitad = fuente.nombreFuente;
-    juego.variableEntornoPrimeraMitad = fuente.variableEntorno;
+    const conError = conClave.find(f => f.huboError);
+    const referencia = conError || conClave[0];
+    juego.motivoSinPrimeraMitad = conError ? 'error-api' : 'sin-cruce';
+    juego.fuentePrimeraMitad = referencia.nombreFuente;
+    juego.variableEntornoPrimeraMitad = referencia.variableEntorno;
   });
 }
 
@@ -517,7 +538,7 @@ async function obtenerResultadosSoccer(fechaISO) {
   const fechaCompacta = (fechaISO || '').replace(/-/g, '');
   const fechaSiguienteISO = sumarUnDiaISO(fechaISO);
   const { obtenerPrimeraMitadFutbol, LIGAS_CON_PRIMERA_MITAD } = require('./footballDataApi'); // require perezoso: evita un ciclo de módulos si algún día footballDataApi.js necesitara algo de acá
-  const { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL } = require('./apiFootballApi');
+  const { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL, COMPETENCIAS_RESPALDO_API_FOOTBALL } = require('./apiFootballApi');
   // (03-10-2026) ANTES el .catch() descartaba el error real sin dejar
   // rastro — si esta promesa llegaba a rechazar por algún motivo no
   // atrapado adentro de footballDataApi.js/apiFootballApi.js, acá quedaba
@@ -561,7 +582,7 @@ async function obtenerResultadosSoccer(fechaISO) {
   // grande sobre agregarPrimeraMitad más arriba.
   agregarPrimeraMitad(mapaCombinado, [
     { nombresLigas: LIGAS_CON_PRIMERA_MITAD.map(l => l.nombre), nombreFuente: 'football-data.org', variableEntorno: 'FOOTBALL_DATA_API_KEY', ...primeraMitadFootballData },
-    { nombresLigas: COMPETENCIAS_API_FOOTBALL.map(c => c.nombre), nombreFuente: 'api-football.com', variableEntorno: 'API_FOOTBALL_KEY', ...primeraMitadApiFootball }
+    { nombresLigas: COMPETENCIAS_API_FOOTBALL.map(c => c.nombre), nombresLigasRespaldo: COMPETENCIAS_RESPALDO_API_FOOTBALL.map(c => c.nombre), nombreFuente: 'api-football.com', variableEntorno: 'API_FOOTBALL_KEY', ...primeraMitadApiFootball }
   ]);
   return mapaCombinado;
 }

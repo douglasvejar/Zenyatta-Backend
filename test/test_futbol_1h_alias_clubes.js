@@ -60,6 +60,41 @@ async function caso(liga, h, a, fdPartido) {
   r = await obtenerResultadosSoccer('2026-10-11');
   check(r['lille'] && r['lille'].final1H !== true && r['lille'].motivoSinPrimeraMitad === 'sin-cruce', 'Con 2 candidatos posibles no se adivina (sigue sin-cruce)');
 
+  // --- RESPALDO api-football.com (11-10-2026) ---
+  const apiF = require('../src/services/apiFootballApi');
+  const apiFixture = (id, hn, an, hh, ah) => ({ league: { id }, teams: { home: { name: hn }, away: { name: an } }, score: { halftime: { home: hh, away: ah } } });
+  async function respaldo(fdMatches, apiMatches, claveFd) {
+    _resetCacheParaPruebas(); apiF._resetCacheParaPruebas();
+    if (claveFd) process.env.FOOTBALL_DATA_API_KEY = 'x'; else delete process.env.FOOTBALL_DATA_API_KEY;
+    process.env.API_FOOTBALL_KEY = 'y';
+    global.fetch = async (url) => {
+      const u = String(url);
+      if (u.includes('site.api.espn.com') && u.includes('/soccer/uefa.champions/')) return { ok: true, json: async () => espn('Bayern Munich', 'Barcelona') };
+      if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+      if (u.includes('api.football-data.org')) return { ok: true, json: async () => ({ matches: fdMatches }) };
+      if (u.includes('v3.football.api-sports.io')) return { ok: true, json: async () => ({ errors: [], response: apiMatches }) };
+      throw new Error('URL inesperada ' + u);
+    };
+    return obtenerResultadosSoccer('2026-10-11');
+  }
+  // football-data NO trae el partido, api-football SÍ (Champions, id 2)
+  r = await respaldo([], [apiFixture(2, 'Bayern Munich', 'Barcelona', 1, 1)], true);
+  j = r['bayern munich'];
+  check(j && j.final1H === true && j.homeScore1H === 1 && j.awayScore1H === 1 && !j.motivoSinPrimeraMitad, 'Respaldo: football-data sin el partido -> lo toma de api-football');
+  // football-data tiene el partido pero SIN el dato del entretiempo todavía, api-football sí
+  r = await respaldo([fd('CL', 'FC Bayern München', 'Bayern Munich', 'FC Barcelona', 'Barcelona', null, null)], [apiFixture(2, 'Bayern Munich', 'Barcelona', 2, 0)], true);
+  j = r['bayern munich'];
+  check(j && j.final1H === true && j.homeScore1H === 2, 'Respaldo: si football-data aún no tiene el 1h pero api-football sí, se usa el de api-football');
+  // sin clave de football-data pero con clave de api-football
+  r = await respaldo([], [apiFixture(2, 'Bayern Munich', 'Barcelona', 0, 0)], false);
+  j = r['bayern munich'];
+  check(j && j.final1H === true, 'Respaldo: sin FOOTBALL_DATA_API_KEY pero con API_FOOTBALL_KEY igual se completa el 1h');
+  // ninguna de las dos tiene el partido
+  r = await respaldo([], [], true);
+  j = r['bayern munich'];
+  check(j && j.final1H !== true && j.motivoSinPrimeraMitad === 'sin-cruce', 'Respaldo: si ninguna fuente lo tiene sigue como sin-cruce');
+  delete process.env.API_FOOTBALL_KEY;
+
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron');
   process.exit(fallaron ? 1 : 0);
 })();
