@@ -1097,6 +1097,10 @@
   .vista { display: none; }
   .vista.activa { display: block; }
 
+  /* Renglones INFORMATIVOS de % Tablas Fijas / % Marcas en Balance General y Cierre Final (11-10-2026): se ven como un cliente más, pero no entran en ningún total (esa comisión ya está dentro de COMISIÓN GRUPO). */
+  .balance-fila.fila-informativa { border: 1px dashed var(--accent-grass); background: transparent !important; font-style: italic; }
+  .balance-fila.fila-informativa .nombre small, tr.fila-informativa td small { display: block; font-size: 10.5px; font-style: normal; color: var(--text-dim); font-weight: 600; }
+  tr.fila-informativa td { font-style: italic; border-top: 1px dashed var(--accent-grass); }
   /* Pantallas de revisión (11-10-2026): Tablas y Marcas Premiadas / Adelantadas de Clientes */
   .rev-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 18px; }
   .rev-resumen .rev-dato { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; }
@@ -10597,6 +10601,20 @@ async function pintarBalanceGeneral() {
   if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
   if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
 
+  // 11-10-2026, a pedido del usuario ("colócame el ítem de % tablas y % marcas
+  // que se vea en los balances como un cliente más para verlo mejor"):
+  // renglones INFORMATIVOS al final de "Ganan" con la comisión que dejaron las
+  // Tablas Fijas y las Marcas. NO se suman otra vez: esa plata ya está dentro de
+  // COMISIÓN GRUPO (data.comisionSemana) y estos renglones no entran en ningún total.
+  [['% Tablas Fijas', data.comisionTablasFijasSemana], ['% Marcas', data.comisionMarcasSemana]].forEach(([nombre, monto]) => {
+    const m = Number(monto) || 0;
+    if (m <= 0) return;
+    const fila = filaBalance(nombre, m, 'ganador fila-informativa');
+    fila.querySelector('.nombre').innerHTML = nombre + '<small>ya incluido en Comisión Grupo</small>';
+    if (listaGanan.querySelector('.placeholder-card')) listaGanan.innerHTML = '';
+    listaGanan.appendChild(fila);
+  });
+
   // Misma comisión total que Cierre Final (ver el arreglo en
   // pintarCierreFinal más abajo), para que los 2 reportes cuadren también
   // en este número, no solo en los saldos. 26-09-2026, a pedido del
@@ -11885,6 +11903,20 @@ async function pintarCierreFinal(semana) {
         <td class="num col-gano ${c.gano > 0 ? 'pos' : ''}">${c.gano > 0 ? '+' : ''}${formatMontoTabla(c.gano)}</td>
         <td class="num col-perdio ${c.perdio > 0 ? 'neg' : ''}">${c.perdio > 0 ? '-' : ''}${formatMontoTabla(c.perdio)}</td>
         <td class="num ${c.saldo >= 0 ? 'pos' : 'neg'}">${c.saldo >= 0 ? '+' : '-'}${formatMontoTabla(c.saldo)}</td>`;
+      tbody.appendChild(tr);
+    });
+    // 11-10-2026: renglones INFORMATIVOS de % Tablas Fijas / % Marcas (ver pintarBalanceGeneral): no entran en ningún total.
+    [['% Tablas Fijas', data.comisionTablasFijasSemana], ['% Marcas', data.comisionMarcasSemana]].forEach(([nombre, monto]) => {
+      const m = Number(monto) || 0;
+      if (m <= 0) return;
+      const tr = document.createElement('tr');
+      tr.className = 'fila-informativa';
+      tr.innerHTML = `
+        <td>${nombre}<small>ya incluido en Comisión Grupo</small></td>
+        <td class="num col-jugadas"></td>
+        <td class="num col-gano pos">+${formatMontoTabla(m)}</td>
+        <td class="num col-perdio"></td>
+        <td class="num pos">+${formatMontoTabla(m)}</td>`;
       tbody.appendChild(tr);
     });
   }

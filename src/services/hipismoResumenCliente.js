@@ -1364,9 +1364,21 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   });
 
   let comisionAdelantadasSemana = 0;
+  // Desglose SOLO INFORMATIVO (11-10-2026, a pedido del usuario: "colócame el
+  // ítem de % tablas y % marcas que se vea en los balances como un cliente más
+  // para verlo mejor"): cuánto de comisionAdelantadasSemana viene de Tablas
+  // Fijas y cuánto de Marcas. NO suma nada nuevo -- ya está dentro de
+  // comisionSemana ("COMISIÓN GRUPO"); las pantallas lo muestran como renglón
+  // informativo, fuera de cualquier total, para no contarlo dos veces.
+  let comisionTablasFijasSemana = 0;
+  let comisionMarcasSemana = 0;
   rAdelantadas.rows.forEach(j => {
     acumular(j.cliente_nombre, j.resultado_cliente);
-    if (j.comision != null) comisionAdelantadasSemana += Number(j.comision);
+    if (j.comision != null) {
+      comisionAdelantadasSemana += Number(j.comision);
+      if (j.tipo === 'tf') comisionTablasFijasSemana += Number(j.comision);
+      else comisionMarcasSemana += Number(j.comision);
+    }
     // "TABLAS FIJAS" (28-09-2026, a pedido del usuario: "el item tabla
     // fijas no me sale en los balances... todos los item deben verse
     // reflejado con su saldo en balances", y corregido el mismo día tras
@@ -1846,6 +1858,9 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // dentro de comisionSemana ("COMISIÓN GRUPO", ver la nota grande de
     // arriba) — se sigue devolviendo también suelta por compatibilidad.
     comisionAdelantadasSemana,
+    // Desglose informativo de lo de arriba (ya incluido en comisionSemana, no se suma otra vez).
+    comisionTablasFijasSemana: round2(comisionTablasFijasSemana),
+    comisionMarcasSemana: round2(comisionMarcasSemana),
     // comisionTerciosAdelantadasSemana (04-10-2026): comisión cruda de
     // Jugadas entre Tercios Adelantadas de la semana, ya sumada dentro de
     // comisionSemana (ver la nota grande de arriba) — se devuelve también
