@@ -11380,7 +11380,7 @@ async function pintarTablaPozos() {
     // jugado en Hipismo esta semana y ese mismo resultado ya está dentro del saldo de la semana — sumar los dos
     // lo contaba DOBLE (Candelita: pozo 10.000, perdió 96,90 -> mostraba 9.806,20 en vez de 9.903,10).
     const pozoBaseSinHipismo = j.pozo ? (j.pozo.pozoActual - (Number(j.pozo.liquidadoHipismo) || 0)) : 0;
-    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozoActual: pozoBaseSinHipismo });
+    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozoActual: pozoBaseSinHipismo, esCuentaComision: !!j.es_cuenta_comision });
   });
   saldosSemana.forEach(c => {
     const existente = porNombre.get(c.nombre);
@@ -11391,7 +11391,10 @@ async function pintarTablaPozos() {
       porNombre.set(c.nombre, { nombre: c.nombre, saldo: saldoFila, pozoActual: 0 });
     }
   });
-  const filas = Array.from(porNombre.values()).sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  // Una cuenta "X - PORCENTAJE" es un cliente más en la lista; sin devolución % se queda en 0 y no se muestra.
+  const filas = Array.from(porNombre.values())
+    .filter(c => conDevolucion || !c.esCuentaComision || c.saldo !== 0 || c.pozoActual !== 0)
+    .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   tbody.innerHTML = filas.length
     ? filas.map(c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual))).join('')
     : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
