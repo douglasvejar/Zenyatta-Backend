@@ -368,8 +368,9 @@ router.put('/hipodromos/:id', asyncHandler(async (req, res) => {
 // resuelven con esa misma pizarra: Tablas Fijas queda 'resuelto' de una
 // (no depende de ningún banqueo), Marcas queda 'falta_banqueo' (el
 // operador todavía tiene que asignar quién banquea, ver más abajo) o
-// 'sin_decidir' si es un hipódromo nacional y la pizarra no llegó a 5
-// puestos (ver esMarcaDecidible en el .js de arriba).
+// 'sin_decidir' si es un hipódromo nacional, la pizarra no llegó a 5
+// puestos Y ninguno de los 2 caballos de la Marca figura en ella (si UNO
+// figura se decide igual, 11-10-2026; ver esMarcaDecidible en el .js de arriba).
 //
 // Esto también es lo que permite "jalar" una jugada adelantada aunque
 // esa carrera no tenga NINGÚN plano de Tercios en vivo (a pedido del
@@ -472,7 +473,7 @@ async function calcularResolucionAdelantadas(req, { hipodromoNombre, carreraNume
       };
     }
     // Marca
-    if (!esMarcaDecidible(pizarra, esNacional)) {
+    if (!esMarcaDecidible(pizarra, esNacional, j.numero1, j.numero2)) {
       return { id: j.id, cliente: j.cliente_nombre, tipo: 'marca', estadoNuevo: 'sin_decidir', monto: Number(j.monto), gano: null, resultadoCliente: 0, comision: 0, movimientos: [] };
     }
     const c = resolverClienteMarca({ numero1: j.numero1, numero2: j.numero2, monto: Number(j.monto) }, rank);

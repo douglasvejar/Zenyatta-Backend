@@ -97,6 +97,10 @@
 // NO nacionales (pais='US') esta exigencia de 5 puestos no aplica — el
 // usuario la limitó explícitamente a "hipodromos nacionales" — así que
 // ahí alcanza con que la pizarra tenga los 2 primeros lugares.
+//
+// EXCEPCIÓN (11-10-2026, caso Hanry 9x2 con pizarra "1 9 2 5"): aunque la pizarra
+// traiga menos de 5 puestos, la Marca SE DECIDE si al menos UNO de sus 2 caballos
+// figura en ella (y ninguno está en "Ret:", que ya la anula antes). Ver esMarcaDecidible.
 // =================================================================
 
 // round2: ÚNICO redondeo de dinero de todo Hipismo (05-10-2026, "NO QUIERO MAS
@@ -323,7 +327,24 @@ function contarPosicionesPizarra(pizarraTxt) {
 }
 
 // Ver la nota grande de arriba ("DECIDIBILIDAD DE UNA MARCA").
-function esMarcaDecidible(pizarraTxt, esNacional) {
+//
+// 11-10-2026 (a pedido explícito del usuario, caso Hanry 9x2 con pizarra de 4
+// puestos "1 9 2 5": "si uno de los caballos está entre la pizarra que te
+// coloqué debes resolverla, aunque un día solo te ponga 3 ejemplares... si uno
+// de los dos figura y no te marca el otro como retirado se decide"): la
+// exigencia de 5 puestos en hipódromos nacionales NO aplica cuando AL MENOS UNO
+// de los 2 caballos de la Marca figura en la pizarra -- con uno solo que figure
+// ya se sabe quién quedó mejor colocado (el que figura le gana al que no), y
+// con los dos, gana el de mejor puesto. (El caso del caballo retirado se corta
+// ANTES, en calcularResolucionAdelantadas -> adelantadaConRetirado.) Solo si
+// NINGUNO de los 2 figura se sigue pidiendo la pizarra completa (si no, queda
+// sin decidir). `numero1`/`numero2` son opcionales: sin ellos rige la regla
+// vieja por cantidad de puestos.
+function esMarcaDecidible(pizarraTxt, esNacional, numero1, numero2) {
+  if (numero1 !== undefined || numero2 !== undefined) {
+    const nums = (pizarraTxt || '').split(/[^0-9]+/).filter(Boolean).map(n => parseInt(n, 10));
+    if (nums.includes(Number(numero1)) || nums.includes(Number(numero2))) return true;
+  }
   const cantidad = contarPosicionesPizarra(pizarraTxt);
   return esNacional ? cantidad >= 5 : cantidad >= 2;
 }

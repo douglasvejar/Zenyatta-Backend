@@ -245,13 +245,14 @@ function check(cond, msg) {
   check(tf1.pizarra_usada === '5.3.1', '2) pizarra_usada queda con la pizarra corregida');
   check(TABLAS.hipismo_alertas.some(a => a.tipo === 'PIZARRA_EDITADA' && a.carreraNumero === 7), '2) Se registró la alerta PIZARRA_EDITADA');
 
-  // --- 3) La Marca ya bancada, si la pizarra corregida deja de decidirla
-  // (nacional con solo 3 puestos -> 'sin_decidir'), pierde su banqueo viejo:
-  // no hay nada que banquear (el caso de que SÍ se decida y conserve a sus
-  // banqueadores se prueba en el punto 6, más abajo).
+  // --- 3) 11-10-2026: la Marca 5x3 ya bancada, con la pizarra corregida '5.3.1'
+  // (solo 3 puestos, nacional) AHORA SÍ se decide porque sus 2 caballos figuran
+  // (regla nueva: si uno de los 2 figura se decide aunque no haya 5 puestos).
+  // Gana el 5 (1ro) contra el 3 (2do) y conserva a su banqueador manual. El caso
+  // de que deje de decidirse (ninguno figura) se prueba en el punto 7.
   const marca1 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-1');
-  check(marca1.banqueadores === null, '3) banqueadores queda en NULL tras recalcular con una pizarra que no decide la Marca');
-  check(marca1.estado === 'sin_decidir', '3) El estado pasa a sin_decidir (ya no "resuelto" con el banqueo viejo)');
+  check(marca1.estado === 'resuelto' && marca1.gano === true, '3) La Marca 5x3 con pizarra de 3 puestos "5.3.1" SE DECIDE (los 2 figuran) y acierta');
+  check(Array.isArray(marca1.banqueadores) && marca1.banqueadores.length === 1 && marca1.banqueadores[0].nombre === 'ZENYATTA', '3) Conserva a su banqueador manual');
 
   // --- 4) DELETE /pizarras/adelantadas: NO borra las jugadas, vuelven a 'pendiente' ---
   const res4 = await invocarRuta(handlerDeleteAdelantadas, reqBase(GRUPO_ID, {
@@ -299,6 +300,28 @@ function check(cond, msg) {
   const bs = marca3.banqueadores.find(b => b.nombre === 'MARCAS SAMMY');
   check(!!bz && !!bs && bz.monto === -50 && bs.monto === -51.25 && marca3.comision === 1.25, '6) Acierta (+100): MARCAS ZENYATTA -50, MARCAS SAMMY -51,25 (50 + 2,5%), comisión de Marcas 1,25');
   check(Math.round((marca3.resultado_cliente + bz.monto + bs.monto + marca3.comision) * 100) === 0, '6) Cliente + banqueadores + comisión suman 0 exacto');
+
+  // --- 7) 11-10-2026: pizarra corta donde NINGUNO de los 2 caballos figura ->
+  // sigue sin decidir (y pierde el banqueo viejo); si UNO figura, se decide ---
+  TABLAS.hipismo_adelantadas_jugadas.push({
+    id: 'marca-4', plano_id: 'ap-1', grupo_id: GRUPO_ID, cliente_nombre: 'NELLY', carrera_numero: 11, tipo: 'marca',
+    numero1: 8, numero2: 9, monto: 120, comision_porcentaje: 2.5,
+    texto_original: 'texto', error_calculo: false, estado: 'resuelto', gano: false, resultado_cliente: -120,
+    comision: null, banqueadores: [{ nombre: 'ZENYATTA', porcentaje: 100, pagaComision: false, comisionPorcentaje: null, monto: 120 }],
+    pizarra_usada: '8.9.1.2.3', resuelto_en: 1000, creado_en: 4000
+  });
+  const res7 = await invocarRuta(handlerPutAdelantadas, reqBase(GRUPO_ID, {
+    body: { fecha: '2026-09-29', hipodromoNombre: 'La Rinconada', carreraNumero: 11, pizarra: '1.2.3' }
+  }));
+  check(res7._status === 200, '7) PUT con pizarra de 3 puestos responde 200');
+  const marca4 = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-4');
+  check(marca4.estado === 'sin_decidir' && marca4.banqueadores === null, '7) Marca 8x9 con pizarra "1.2.3" (ninguno figura, solo 3 puestos) queda sin_decidir y sin banqueo');
+  const res7b = await invocarRuta(handlerPutAdelantadas, reqBase(GRUPO_ID, {
+    body: { fecha: '2026-09-29', hipodromoNombre: 'La Rinconada', carreraNumero: 11, pizarra: '1.9.2' }
+  }));
+  check(res7b._status === 200, '7) PUT con pizarra "1.9.2" responde 200');
+  const marca4b = TABLAS.hipismo_adelantadas_jugadas.find(j => j.id === 'marca-4');
+  check(marca4b.estado !== 'sin_decidir' && marca4b.gano === false && marca4b.resultado_cliente === -120, '7) Con "1.9.2" (solo figura el 9, num2) la Marca 8x9 SE DECIDE: el cliente pierde -120');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

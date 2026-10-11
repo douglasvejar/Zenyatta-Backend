@@ -192,6 +192,18 @@ check(calc.esMarcaDecidible('6.7.8', true) === false, 'Marca de hipódromo NACIO
 check(calc.esMarcaDecidible('6.7.8.3.1', true) === true, 'Marca de hipódromo NACIONAL con 5 puestos -> decidible');
 check(calc.esMarcaDecidible('6.7', false) === true, 'Marca de hipódromo NO nacional (US) con solo 2 puestos ya es decidible (la regla de 5 puestos es solo para nacionales)');
 
+// 11-10-2026 (caso Hanry): si UNO de los 2 caballos figura, se decide aunque la pizarra traiga menos de 5 puestos.
+check(calc.esMarcaDecidible('1 9 2 5', true, 9, 2) === true, 'Marca 9x2 con pizarra de 4 puestos "1 9 2 5" (nacional): los 2 figuran -> se decide');
+check(calc.esMarcaDecidible('1 9 2 5', true, 9, 4) === true, 'Marca 9x4 con pizarra de 4 puestos: solo el 9 figura -> se decide');
+check(calc.esMarcaDecidible('6.7.8', true, 4, 8) === true, 'Pizarra de solo 3 ejemplares y uno de los 2 figura (el 8) -> se decide');
+check(calc.esMarcaDecidible('1 9 2 5', true, 4, 8) === false, 'Pizarra de 4 puestos y NINGUNO de los 2 figura -> sigue sin decidir');
+check(calc.esMarcaDecidible('6.7.8.3.1', true, 4, 2) === true, 'Pizarra de 5 puestos y ninguno figura -> decidible (queda nula, 0)');
+const rank4 = h => ({ 1: 1, 9: 2, 2: 3, 5: 4 })[h] || 99;
+const r9x2 = calc.resolverClienteMarca({ numero1: 9, numero2: 2, monto: 120 }, rank4);
+check(r9x2.nula === false && r9x2.acierta === true && r9x2.resultadoCliente === 100, 'Marca 9x2 120$ con pizarra 1 9 2 5: gana el 9 (2do puesto) contra el 2 (3ro) -> cliente +100');
+const r4x9 = calc.resolverClienteMarca({ numero1: 4, numero2: 9, monto: 120 }, rank4);
+check(r4x9.acierta === false && r4x9.resultadoCliente === -120, 'Marca 4x9 con pizarra 1 9 2 5: solo figura el 9 (num2) -> el cliente pierde -120');
+
 // Error de cálculo: la multiplicación no calza con lo escrito en el plano.
 const { jugadas: jugadasConError } = calc.parsearJugadasAdelantadas('*JUGANDO PRUEBA*\n\n5) 3TF DEL 4 A 20 ,50/300$\n');
 check(jugadasConError[0].errorCalculo === true, 'Detecta el error: 3 TF × 20 = 60, pero el plano dice 50');
