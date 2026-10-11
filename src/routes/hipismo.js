@@ -4188,6 +4188,192 @@ async function leerComisionTerciosAdelantadas(grupoId, desde, hasta) {
   });
 }
 
+// =================================================================
+// PANTALLAS DE REVISIÓN (SOLO LECTURA) en "Saldos" -- 11-10-2026, a pedido
+// del usuario: "crea un apartado en saldos que diga TABLAS Y MARCAS
+// PREMIADAS... por carrera por cliente ordenado las tablas y las marcas que
+// ya tengan pizarra con sus resultados, mostrando el cliente que jugó y las
+// bancas con sus saldos reales ya descontando el % ... es para revisar esos
+// ítems más rápido y aparte de todo... NO DUPLICA NI SALDOS NI COMISIONES, es
+// solo para revisar esas jugadas aparte. Y aparte crea lo mismo un apartado
+// para jugadas adelantadas de clientes".
+//
+// Estas rutas SOLO LEEN: no escriben nada ni alimentan ningún total de
+// Balance General, Cierre Final, Comisiones ni Saldos -- son una lista más
+// para auditar, con los MISMOS números que ya guardó cada jugada
+// (resultado_cliente, banqueadores[].monto, comision, resultado_jugador/
+// banquero, comision_grupo).
+// =================================================================
+function jsonbComoArray(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string') { try { const a = JSON.parse(v); return Array.isArray(a) ? a : null; } catch (e) { return null; } }
+  return null;
+}
+
+// Agrupa filas planas (cada una con fecha, hipodromo, carreraNumero y su
+// `jugada` ya armada) en día > hipódromo > carrera, sumando `sumar(jugada)`
+// por carrera/hipódromo/día en cada total pedido. Días del más nuevo al más
+// viejo, hipódromos A-Z, carreras de la 1ra en adelante.
+function agruparRevisionPorDiaHipodromoCarrera(filas, totalesDe) {
+  const dias = new Map();
+  filas.forEach(f => {
+    if (!dias.has(f.fecha)) dias.set(f.fecha, { fecha: f.fecha, hipodromos: new Map() });
+    const dia = dias.get(f.fecha);
+    if (!dia.hipodromos.has(f.hipodromo)) dia.hipodromos.set(f.hipodromo, { nombre: f.hipodromo, carreras: new Map() });
+    const hip = dia.hipodromos.get(f.hipodromo);
+    if (!hip.carreras.has(f.carreraNumero)) hip.carreras.set(f.carreraNumero, { carreraNumero: f.carreraNumero, pizarra: f.pizarra || null, jugadas: [] });
+    const carrera = hip.carreras.get(f.carreraNumero);
+    if (!carrera.pizarra && f.pizarra) carrera.pizarra = f.pizarra;
+    carrera.jugadas.push(f.jugada);
+  });
+  return Array.from(dias.values())
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+    .map(d => ({
+      fecha: d.fecha,
+      hipodromos: Array.from(d.hipodromos.values())
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+        .map(h => ({
+          nombre: h.nombre,
+          carreras: Array.from(h.carreras.values())
+            .sort((a, b) => a.carreraNumero - b.carreraNumero)
+            .map(c => {
+              // Dentro de la carrera, por cliente (jugador) A-Z; el sort es estable, así
+              // las jugadas del mismo cliente quedan en el orden en que se cargaron.
+              const jugadas = c.jugadas.slice().sort((a, b) => String(a.cliente || a.jugador || '').localeCompare(String(b.cliente || b.jugador || ''), 'es'));
+              return { carreraNumero: c.carreraNumero, pizarra: c.pizarra, jugadas, totales: totalesDe(jugadas) };
+            })
+        }))
+    }));
+}
+
+function textoJugadaAdelantadaRevision(j) {
+  if (j.tipo === 'tf') {
+    const cant = j.cantidad_tf != null ? `${j.cantidad_tf}TF ` : '';
+    const precio = j.precio_por_tf != null ? ` a $${Number(j.precio_por_tf)}` : '';
+    return `${cant}Tabla Fija N° ${j.numero_ejemplar}${precio}`.trim();
+  }
+  return `Marca ${j.numero1} x ${j.numero2}`;
+}
+
+// GET /revision/tablas-marcas-premiadas?semana=actual|anterior|hace2
+router.get('/revision/tablas-marcas-premiadas', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  const numeroSemana = numeroSemanaISO(desde);
+
+  // Solo las que ya tienen pizarra y resultado: 'resuelto' (Tabla Fija, o
+  // Marca ya banqueada) y 'falta_banqueo' (Marca decidida, todavía sin
+  // banqueo asignado). 'sin_decidir' (nulas, retirados, sin pizarra completa)
+  // y 'pendiente' no tienen resultado que revisar.
+  const r = await db.query(
+    `SELECT j.id, j.cliente_nombre, j.tipo, j.cantidad_tf, j.numero_ejemplar, j.precio_por_tf, j.ganancia_potencial,
+            j.numero1, j.numero2, j.monto, j.comision_porcentaje, j.sin_comision, j.estado, j.gano, j.resultado_cliente,
+            j.comision, j.banqueadores, j.pizarra_usada, j.carrera_numero, p.fecha, p.hipodromo_nombre
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto', 'falta_banqueo')
+      ORDER BY p.fecha, p.hipodromo_nombre, j.carrera_numero, j.cliente_nombre, j.creado_en`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const filas = r.rows.map(j => {
+    const resultadoCliente = round2(Number(j.resultado_cliente) || 0);
+    const comision = round2(Number(j.comision) || 0);
+    const banqueadores = jsonbComoArray(j.banqueadores);
+    let banca;
+    let sinBanqueo = false;
+    if (banqueadores) {
+      banca = banqueadores.map(b => ({
+        nombre: b.nombre, monto: round2(Number(b.monto) || 0), porcentaje: b.porcentaje != null ? Number(b.porcentaje) : null,
+        pagaComision: !!b.pagaComision, comisionPorcentaje: b.comisionPorcentaje != null ? Number(b.comisionPorcentaje) : null
+      }));
+    } else if (j.tipo === 'tf') {
+      // Sin banqueadores configurados la banca es el ítem fijo "TABLAS
+      // FIJAS", NETO de su comisión (igual que en Balance General).
+      banca = [{ nombre: 'TABLAS FIJAS', monto: round2(-(resultadoCliente + comision)), porcentaje: 100, pagaComision: true, comisionPorcentaje: null }];
+    } else {
+      banca = [];
+      sinBanqueo = true;
+    }
+    const sumaBanca = round2(banca.reduce((acc, b) => acc + b.monto, 0));
+    return {
+      fecha: fechaComoISO(j.fecha), hipodromo: j.hipodromo_nombre, carreraNumero: j.carrera_numero, pizarra: j.pizarra_usada,
+      jugada: {
+        id: j.id, tipo: j.tipo === 'tf' ? 'tf' : 'marca', cliente: j.cliente_nombre, jugada: textoJugadaAdelantadaRevision(j),
+        monto: Number(j.monto) || 0, comisionPorcentaje: Number(j.comision_porcentaje), sinComision: !!j.sin_comision,
+        gano: j.gano, resultadoCliente, banca, sinBanqueo, comisionGrupo: comision,
+        // cliente + banca + comisión del grupo debe sumar 0 (si la banca ya existe).
+        cuadra: sinBanqueo ? null : Math.abs(round2(resultadoCliente + sumaBanca + comision)) < 0.011
+      }
+    };
+  });
+
+  const totalesDe = (jugadas) => ({
+    jugadas: jugadas.length,
+    clientes: round2(jugadas.reduce((acc, j) => acc + j.resultadoCliente, 0)),
+    comisionGrupo: round2(jugadas.reduce((acc, j) => acc + j.comisionGrupo, 0))
+  });
+  const dias = agruparRevisionPorDiaHipodromoCarrera(filas, totalesDe);
+  const todas = filas.map(f => f.jugada);
+  res.json({
+    rango: { desde, hasta }, semana, numeroSemana, dias,
+    resumen: Object.assign(totalesDe(todas), {
+      tablas: todas.filter(j => j.tipo === 'tf').length,
+      marcas: todas.filter(j => j.tipo === 'marca').length,
+      sinBanqueo: todas.filter(j => j.sinBanqueo).length
+    })
+  });
+}));
+
+// GET /revision/adelantadas-clientes?semana=actual|anterior|hace2 --
+// Jugadas entre Tercios Adelantadas (cliente contra cliente) ya resueltas.
+router.get('/revision/adelantadas-clientes', asyncHandler(async (req, res) => {
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  const numeroSemana = numeroSemanaISO(desde);
+
+  const r = await db.query(
+    `SELECT j.id, j.jugador_nombre, j.banquero_nombre, j.carrera_numero, j.es_cruce, j.grupo_caballos, j.cruce_grupo_a, j.cruce_grupo_b,
+            j.modalidad, j.monto, j.comision_porcentaje, j.resultado_jugador, j.resultado_banquero, j.comision_grupo, j.pizarra_usada,
+            p.fecha, p.hipodromo_nombre
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado = 'resuelto'
+      ORDER BY p.fecha, p.hipodromo_nombre, j.carrera_numero, j.jugador_nombre, j.creado_en`,
+    [req.grupoId, desde, hasta]
+  );
+
+  const filas = r.rows.map(j => {
+    const caballos = j.es_cruce
+      ? `${(j.cruce_grupo_a || []).join('y')} x ${(j.cruce_grupo_b || []).join('y')}`
+      : (j.grupo_caballos || []).join('y');
+    const resultadoJugador = round2(Number(j.resultado_jugador) || 0);
+    const resultadoBanquero = round2(Number(j.resultado_banquero) || 0);
+    const comisionGrupo = round2(Number(j.comision_grupo) || 0);
+    return {
+      fecha: fechaComoISO(j.fecha), hipodromo: j.hipodromo_nombre, carreraNumero: j.carrera_numero, pizarra: j.pizarra_usada,
+      jugada: {
+        id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre,
+        jugada: `${caballos}${j.modalidad ? ' ' + String(j.modalidad).toUpperCase() : ''}`,
+        esCruce: !!j.es_cruce, monto: Number(j.monto) || 0, comisionPorcentaje: Number(j.comision_porcentaje),
+        resultadoJugador, resultadoBanquero, comisionGrupo,
+        ganador: resultadoJugador > 0 ? 'jugador' : (resultadoBanquero > 0 ? 'banquero' : null),
+        cuadra: Math.abs(round2(resultadoJugador + resultadoBanquero + comisionGrupo)) < 0.011
+      }
+    };
+  });
+
+  const totalesDe = (jugadas) => ({
+    jugadas: jugadas.length,
+    comisionGrupo: round2(jugadas.reduce((acc, j) => acc + j.comisionGrupo, 0)),
+    montoJugado: round2(jugadas.reduce((acc, j) => acc + j.monto, 0))
+  });
+  const dias = agruparRevisionPorDiaHipodromoCarrera(filas, totalesDe);
+  res.json({ rango: { desde, hasta }, semana, numeroSemana, dias, resumen: totalesDe(filas.map(f => f.jugada)) });
+}));
+
 router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);

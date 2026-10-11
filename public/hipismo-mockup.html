@@ -1097,6 +1097,28 @@
   .vista { display: none; }
   .vista.activa { display: block; }
 
+  /* Pantallas de revisión (11-10-2026): Tablas y Marcas Premiadas / Adelantadas de Clientes */
+  .rev-resumen { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 16px; }
+  .rev-resumen .rev-dato { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 14px; min-width: 120px; }
+  .rev-resumen .rev-dato .et { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+  .rev-resumen .rev-dato .val { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .rev-dia { margin: 18px 0 6px; font-size: 15px; font-weight: 800; }
+  .rev-hip { margin: 12px 0 6px; font-size: 13.5px; font-weight: 800; color: var(--text-dim); }
+  .rev-carrera { border: 1px solid var(--card-border); border-radius: 10px; margin: 8px 0 14px; overflow: hidden; background: var(--card); }
+  .rev-carrera-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--card-2); font-weight: 800; font-size: 13px; }
+  .rev-carrera-cab .rev-pizarra { font-weight: 600; color: var(--text-dim); font-size: 12px; }
+  .rev-tabla-wrap { overflow-x: auto; }
+  .rev-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .rev-tabla th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); padding: 6px 10px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+  .rev-tabla td { padding: 7px 10px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+  .rev-tabla tr:last-child td { border-bottom: none; }
+  .rev-tabla .num, .rev-tabla th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rev-tabla .rev-banca div { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rev-tabla tr.rev-sin-banca td { background: rgba(255, 193, 7, 0.10); }
+  .rev-etiqueta { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); }
+  .rev-aviso { font-size: 11.5px; color: var(--danger); font-weight: 700; }
+  .rev-filtro { margin: 0 0 12px; }
+  .rev-filtro input { width: 100%; max-width: 360px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); font-size: 13px; }
   .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
   .subnav button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 20px; cursor: pointer; }
   .subnav button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; border-color: transparent; }
@@ -1322,6 +1344,13 @@
       <button type="button" class="nav-item nav-child" data-vista="balanceGeneral" onclick="mostrarVista('balanceGeneral', this)">📒<span class="nav-lbl"> Balance General</span></button>
       <button type="button" class="nav-item nav-child" data-vista="cierreFinal" onclick="mostrarVista('cierreFinal', this)">🏁<span class="nav-lbl"> Cierre Final</span></button>
       <button type="button" class="nav-item nav-child" data-vista="grupoClientes" onclick="mostrarVista('grupoClientes', this)">🗂️<span class="nav-lbl"> Grupo de Clientes</span></button>
+      <!-- 11-10-2026, a pedido del usuario: "crea un apartado en saldos que
+           diga TABLAS Y MARCAS PREMIADAS... y aparte crea lo mismo un
+           apartado para jugadas adelantadas de clientes". Son pantallas de
+           REVISIÓN (solo lectura): no suman ni duplican ningún saldo ni
+           comisión -- ver GET /revision/* en routes/hipismo.js. -->
+      <button type="button" class="nav-item nav-child" data-vista="revTablasMarcas" onclick="mostrarVista('revTablasMarcas', this)">🏅<span class="nav-lbl"> Tablas y Marcas Premiadas</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="revAdelantadasClientes" onclick="mostrarVista('revAdelantadasClientes', this)">⏩<span class="nav-lbl"> Adelantadas de Clientes</span></button>
     </div>
 
     <hr>
@@ -2673,6 +2702,47 @@
          Devueltas por Cliente" (por día) y el ítem "{cliente} -
          PORCENTAJE" de Balance General/Cierre Final — acá, sumado para
          TODA la semana actual. -->
+    <!-- ============ TABLAS Y MARCAS PREMIADAS (REVISIÓN) ============
+         11-10-2026, a pedido del usuario. SOLO LECTURA: lista, por día >
+         hipódromo > carrera, las Tablas Fijas y Marcas que ya tienen pizarra
+         y resultado, con el cliente que jugó y las bancas con sus saldos
+         reales (ya descontado el %). No suma ni duplica nada en Balance
+         General, Cierre Final, Comisiones ni Saldos. Datos: GET
+         /api/hipismo/revision/tablas-marcas-premiadas. -->
+    <section class="vista" id="vista-revTablasMarcas">
+      <div class="card">
+        <h2>🏅 Tablas y Marcas Premiadas</h2>
+        <p class="desc">Pantalla de <b>revisión</b>: las Tablas Fijas y Marcas que ya tienen pizarra, por carrera y por cliente, con el saldo real del cliente y de cada banca (ya descontado el %). <b>No suma ni duplica</b> ningún saldo ni comisión: es solo para revisar estas jugadas aparte.</p>
+        <div class="subnav" id="selectorSemanaRevTablasMarcas">
+          <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaRev('revTablasMarcas', 'actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="cambiarSemanaRev('revTablasMarcas', 'anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="cambiarSemanaRev('revTablasMarcas', 'hace2', this)">🗓️ Hace 2 semanas</button>
+        </div>
+        <div class="rev-filtro"><input type="text" id="filtroRevTablasMarcas" placeholder="Buscar cliente o banca…" oninput="repintarRev('revTablasMarcas')"></div>
+        <div id="resumenRevTablasMarcas"></div>
+        <div id="listaRevTablasMarcas"></div>
+      </div>
+    </section>
+
+    <!-- ============ ADELANTADAS DE CLIENTES (REVISIÓN) ============
+         11-10-2026: lo mismo para las Jugadas entre Tercios Adelantadas
+         (cliente contra cliente) ya resueltas. Solo lectura. Datos: GET
+         /api/hipismo/revision/adelantadas-clientes. -->
+    <section class="vista" id="vista-revAdelantadasClientes">
+      <div class="card">
+        <h2>⏩ Adelantadas de Clientes</h2>
+        <p class="desc">Pantalla de <b>revisión</b>: las Jugadas entre Tercios Adelantadas ya resueltas, por carrera, con el jugador, el banquero, sus saldos reales (ya descontado el %) y la comisión del grupo. <b>No suma ni duplica</b> ningún saldo ni comisión.</p>
+        <div class="subnav" id="selectorSemanaRevAdelantadasClientes">
+          <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaRev('revAdelantadasClientes', 'actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="cambiarSemanaRev('revAdelantadasClientes', 'anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="cambiarSemanaRev('revAdelantadasClientes', 'hace2', this)">🗓️ Hace 2 semanas</button>
+        </div>
+        <div class="rev-filtro"><input type="text" id="filtroRevAdelantadasClientes" placeholder="Buscar jugador o banquero…" oninput="repintarRev('revAdelantadasClientes')"></div>
+        <div id="resumenRevAdelantadasClientes"></div>
+        <div id="listaRevAdelantadasClientes"></div>
+      </div>
+    </section>
+
     <section class="vista" id="vista-saldoComisiones">
       <div class="card">
         <h2>💳 Saldo Comisiones</h2>
@@ -6389,6 +6459,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   comisionesDevueltasPorHipodromo: () => pintarComisionesDevueltasPorHipodromo(),
   comisionesDevueltas: () => pintarComisionesDevueltas(),
   saldoComisiones: () => pintarSaldoComisiones(),
+  // Pantallas de revisión (11-10-2026) -- ver cargarRev() más abajo.
+  revTablasMarcas: () => cargarRev('revTablasMarcas'),
+  revAdelantadasClientes: () => cargarRev('revAdelantadasClientes'),
   // "Grupo sin Devoluciones" (01-10-2026) — ver pintarComisionesSinDevoluciones() más abajo.
   comisionesSinDevoluciones: () => pintarComisionesSinDevoluciones(),
   montosApostados: () => pintarMontosApostados(),
@@ -14960,6 +15033,137 @@ async function restaurarPlanoPapelera(papeleraId) {
     return;
   }
   pintarPlanosEliminados();
+}
+
+// ------------------------------------------------------------------
+// Pantallas de REVISIÓN (11-10-2026): "Tablas y Marcas Premiadas" y
+// "Adelantadas de Clientes". Solo lectura -- nada de lo que se pinta acá
+// alimenta ni duplica un saldo o una comisión. Datos: GET
+// /api/hipismo/revision/tablas-marcas-premiadas y
+// /api/hipismo/revision/adelantadas-clientes (mismos números que ya guardó
+// cada jugada).
+// ------------------------------------------------------------------
+const REV_CONFIG = {
+  revTablasMarcas: { ruta: 'tablas-marcas-premiadas', vacio: 'No hay Tablas ni Marcas con pizarra y resultado en esta semana todavía.' },
+  revAdelantadasClientes: { ruta: 'adelantadas-clientes', vacio: 'No hay Jugadas entre Tercios Adelantadas resueltas en esta semana todavía.' }
+};
+const REV_DATOS = {};
+
+function montoConSigno(n) {
+  const v = Number(n) || 0;
+  return (v > 0 ? '+' : (v < 0 ? '-' : '')) + formatMontoTabla(v);
+}
+function claseSigno(n) { const v = Number(n) || 0; return v > 0 ? 'pos' : (v < 0 ? 'neg' : ''); }
+function escRev(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function cambiarSemanaRev(vista, semana, btn) {
+  const sel = document.getElementById('selectorSemana' + vista.charAt(0).toUpperCase() + vista.slice(1));
+  sel.querySelectorAll('button').forEach(b => b.classList.remove('activo'));
+  if (btn) btn.classList.add('activo');
+  cargarRev(vista);
+}
+
+async function cargarRev(vista) {
+  const cfg = REV_CONFIG[vista];
+  const Nombre = vista.charAt(0).toUpperCase() + vista.slice(1);
+  const cont = document.getElementById('lista' + Nombre);
+  const semana = semanaActivaDeSelector('selectorSemana' + Nombre);
+  cont.innerHTML = '<div class="resultado-vacio">Cargando…</div>';
+  document.getElementById('resumen' + Nombre).innerHTML = '';
+  try {
+    REV_DATOS[vista] = await apiHipismo(`/api/hipismo/revision/${cfg.ruta}?semana=${semana}`);
+  } catch (e) {
+    REV_DATOS[vista] = null;
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escRev(e.message)}</div>`;
+    return;
+  }
+  repintarRev(vista);
+}
+
+function repintarRev(vista) {
+  const data = REV_DATOS[vista];
+  if (!data) return;
+  const cfg = REV_CONFIG[vista];
+  const Nombre = vista.charAt(0).toUpperCase() + vista.slice(1);
+  const cont = document.getElementById('lista' + Nombre);
+  const filtro = (document.getElementById('filtro' + Nombre).value || '').trim().toLowerCase();
+
+  const dato = (et, val, cls) => `<div class="rev-dato"><div class="et">${et}</div><div class="val ${cls || ''}">${val}</div></div>`;
+  const rangoTxt = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` + (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '');
+  let resumen = dato('Rango', rangoTxt) + dato('Jugadas', data.resumen.jugadas);
+  if (vista === 'revTablasMarcas') {
+    resumen += dato('Tablas / Marcas', `${data.resumen.tablas} / ${data.resumen.marcas}`);
+    resumen += dato('Clientes (neto)', '$ ' + montoConSigno(data.resumen.clientes), claseSigno(data.resumen.clientes));
+    if (data.resumen.sinBanqueo) resumen += dato('Marcas sin banqueo', data.resumen.sinBanqueo, 'neg');
+  } else {
+    resumen += dato('Monto jugado', '$ ' + formatMontoTabla(data.resumen.montoJugado));
+  }
+  resumen += dato('Comisión del grupo', '$ ' + formatMontoTabla(data.resumen.comisionGrupo));
+  document.getElementById('resumen' + Nombre).innerHTML = `<div class="rev-resumen">${resumen}</div>`;
+
+  const coincide = (j) => {
+    if (!filtro) return true;
+    const textos = vista === 'revTablasMarcas'
+      ? [j.cliente].concat((j.banca || []).map(b => b.nombre))
+      : [j.jugador, j.banquero];
+    return textos.some(t => String(t || '').toLowerCase().includes(filtro));
+  };
+
+  let html = '';
+  data.dias.forEach(dia => {
+    let htmlDia = '';
+    dia.hipodromos.forEach(hip => {
+      let htmlHip = '';
+      hip.carreras.forEach(carrera => {
+        const jugadas = carrera.jugadas.filter(coincide);
+        if (!jugadas.length) return;
+        const filas = jugadas.map(j => vista === 'revTablasMarcas' ? filaRevTablaMarca(j) : filaRevAdelantadaCliente(j)).join('');
+        const encabezado = vista === 'revTablasMarcas'
+          ? '<th>Cliente</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo cliente</th><th>Bancas (saldo real)</th><th class="num">Comisión grupo</th>'
+          : '<th>Jugador</th><th>Banquero</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo jugador</th><th class="num">Saldo banquero</th><th class="num">Comisión grupo</th>';
+        htmlHip += `
+          <div class="rev-carrera">
+            <div class="rev-carrera-cab">
+              <span>🏇 ${ordinalCarrera(carrera.carreraNumero)} Carrera${carrera.pizarra ? ` <span class="rev-pizarra">· Pizarra ${escRev(carrera.pizarra)}</span>` : ''}</span>
+              <span class="rev-pizarra">${carrera.totales.jugadas} jugada${carrera.totales.jugadas === 1 ? '' : 's'} · comisión grupo $ ${formatMontoTabla(carrera.totales.comisionGrupo)}</span>
+            </div>
+            <div class="rev-tabla-wrap"><table class="rev-tabla"><thead><tr>${encabezado}</tr></thead><tbody>${filas}</tbody></table></div>
+          </div>`;
+      });
+      if (htmlHip) htmlDia += `<div class="rev-hip">🏟️ ${escRev(hip.nombre)}</div>${htmlHip}`;
+    });
+    if (htmlDia) html += `<div class="rev-dia">📅 ${formatFechaCortaDMY(dia.fecha)}</div>${htmlDia}`;
+  });
+  cont.innerHTML = html || `<div class="resultado-vacio">${filtro ? 'Nada coincide con esa búsqueda.' : cfg.vacio}</div>`;
+}
+
+function filaRevTablaMarca(j) {
+  const banca = j.sinBanqueo
+    ? '<span class="rev-aviso">⚠️ Sin banqueo asignado todavía</span>'
+    : j.banca.map(b => `<div>${escRev(formatNombre(b.nombre))}${b.porcentaje != null && j.banca.length > 1 ? ` <span class="rev-etiqueta">${b.porcentaje}%</span>` : ''}: <span class="${claseSigno(b.monto)}">${montoConSigno(b.monto)}</span></div>`).join('');
+  const tipo = j.tipo === 'tf' ? 'Tabla' : 'Marca';
+  const aviso = j.cuadra === false ? '<div class="rev-aviso">⚠️ No cuadra con la banca</div>' : '';
+  return `<tr class="${j.sinBanqueo ? 'rev-sin-banca' : ''}">
+    <td><b>${escRev(formatNombre(j.cliente))}</b></td>
+    <td><span class="rev-etiqueta">${tipo}</span> ${escRev(j.jugada)}${j.sinComision ? ' <span class="rev-etiqueta">sin comisión</span>' : ''}</td>
+    <td class="num">${formatMontoTabla(j.monto)}</td>
+    <td class="num ${claseSigno(j.resultadoCliente)}">${montoConSigno(j.resultadoCliente)}</td>
+    <td class="rev-banca">${banca}${aviso}</td>
+    <td class="num">${formatMontoTabla(j.comisionGrupo)}</td>
+  </tr>`;
+}
+
+function filaRevAdelantadaCliente(j) {
+  const aviso = j.cuadra === false ? '<div class="rev-aviso">⚠️ No cuadra</div>' : '';
+  return `<tr>
+    <td><b>${escRev(formatNombre(j.jugador))}</b></td>
+    <td>${escRev(formatNombre(j.banquero))}</td>
+    <td>${escRev(j.jugada)}${j.comisionPorcentaje != null && !isNaN(j.comisionPorcentaje) ? ` <span class="rev-etiqueta">${j.comisionPorcentaje}%</span>` : ''}</td>
+    <td class="num">${formatMontoTabla(j.monto)}</td>
+    <td class="num ${claseSigno(j.resultadoJugador)}">${montoConSigno(j.resultadoJugador)}</td>
+    <td class="num ${claseSigno(j.resultadoBanquero)}">${montoConSigno(j.resultadoBanquero)}${aviso}</td>
+    <td class="num">${formatMontoTabla(j.comisionGrupo)}</td>
+  </tr>`;
 }
 
 // "Saldo Comisiones" REAL (24-09-2026, vigesimocuarta ronda) — ver la
