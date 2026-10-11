@@ -245,13 +245,13 @@ async function invocarRuta(handler, req) {
 
   check(Number(salidaCierre.comisionRemateSemana) === 12.50, '1b) comisionRemateSemana (dato crudo) sigue trayendo 12,50, sin cambios');
 
-  check(Number(salidaCierre.comisionSemana) === 3.00,
-    `1c) ARREGLO (11-10-2026): comisionSemana = 5,00 (Tercios) - 2,00 (PEDRO - porcentaje) = 3,00, SIN la Tabla Fija (va en "% TABLAS FIJAS") y NUNCA sumando los +12,50 del Remate -- dio ${salidaCierre.comisionSemana}`);
+  check(Number(salidaCierre.comisionSemana) === 8.00,
+    `1c) ARREGLO (02-10-2026): comisionSemana = 5,00 (Tercios) + 5,00 (Tabla Fija) - 2,00 (PEDRO - porcentaje) = 8,00 -- NUNCA sumando los +12,50 del Remate -- dio ${salidaCierre.comisionSemana}`);
 
   const filaPedroPct = salidaCierre.clientes.find(c => c.nombre === 'PEDRO - PORCENTAJE');
   check(!!filaPedroPct && Math.abs(filaPedroPct.saldo - 2.00) < 0.001, '1d) "PEDRO - PORCENTAJE" sigue apareciendo con 2,00 (sin cambios, esto ya funcionaba)');
-  const filaTfPct = salidaCierre.clientes.find(c => c.nombre === '% TABLAS FIJAS');
-  check(!!filaTfPct && Math.abs(filaTfPct.saldo - 5.00) < 0.001, '1e) "% TABLAS FIJAS" aparece como su propio renglón de cliente con 5,00 (11-10-2026) y NO se suma a "COMISIÓN GRUPO"');
+  const filaTfPct = salidaCierre.clientes.find(c => c.nombre === '% DE TABLAS FIJAS');
+  check(!filaTfPct, '1e) "% DE TABLAS FIJAS" ya NO aparece como su propio renglón de cliente (02-10-2026: esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
   const filaRemate = salidaCierre.clientes.find(c => c.nombre === 'REMATE');
   check(!!filaRemate && Math.abs(filaRemate.saldo - 12.50) < 0.001, '1f) El ítem "REMATE" sigue apareciendo con 12,50 (no desapareció, solo no se suma a comisionSemana)');
 
@@ -259,10 +259,10 @@ async function invocarRuta(handler, req) {
   const reqDias = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: {} };
   const salidaDias = await invocarRuta(handlerDe('get', '/semana-por-dias'), reqDias);
   check(!!salidaDias, '2a) GET /semana-por-dias respondió algo');
-  check(Number(salidaDias.comisionSemana) === 3.00,
-    `2b) ARREGLO: comisionSemana de Semana por Días TAMBIÉN da 3,00 -- igualado a Cierre Final -- dio ${salidaDias.comisionSemana}`);
-  check(salidaDias.dias.length === 1 && JSON.stringify(salidaDias.comisionPorDia) === JSON.stringify([3.00]),
-    `2c) comisionPorDia trae un solo día (${FECHA}) con 3,00 -- dio ${JSON.stringify(salidaDias.comisionPorDia)}`);
+  check(Number(salidaDias.comisionSemana) === 8.00,
+    `2b) ARREGLO: comisionSemana de Semana por Días TAMBIÉN da 8,00 -- igualado a Cierre Final -- dio ${salidaDias.comisionSemana}`);
+  check(salidaDias.dias.length === 1 && JSON.stringify(salidaDias.comisionPorDia) === JSON.stringify([8.00]),
+    `2c) comisionPorDia trae un solo día (${FECHA}) con 8,00 -- dio ${JSON.stringify(salidaDias.comisionPorDia)}`);
 
   global.Date = OriginalDate;
 

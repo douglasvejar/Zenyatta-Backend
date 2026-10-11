@@ -183,7 +183,7 @@ const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo } = require('../servi
 // puntual, buscado por nombre en vez de por token — ver
 // GET /clientes/:nombre/detalle-semana más abajo y la nota grande en
 // services/hipismoResumenCliente.js.
-const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirResumenTablasFijasHipismo, construirResumenPctAdelantadasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo, NOMBRE_ITEM_PCT_TABLAS_FIJAS, NOMBRE_ITEM_PCT_MARCAS } = require('../services/hipismoResumenCliente');
+const { construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo, construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo } = require('../services/hipismoResumenCliente');
 // "Grupo de Clientes" (30-09-2026) — CRUD de este módulo para services/
 // gruposClientes.js, siempre con modulo='hipismo' fijo (ver la nota
 // grande arriba de ese archivo y en sql/schema.sql junto a
@@ -705,39 +705,46 @@ function filaJugadaTerciosAdelantadaPublica(j) {
 // total "Comisión" del pie de Balance General SIGUE sumando también esta
 // comisión (sin cambios ahí) — este ítem nuevo es una vista adicional,
 // no un reemplazo.
-//
-// 11-10-2026 (decisión final del usuario: "los % que genere esas jugadas no la
-// vas a sumar a la comisión, lo vas a colocar en cada item como corresponda"):
-// la comisión de Tablas Fijas y de Marcas va SIEMPRE a sus renglones reales
-// "% TABLAS FIJAS" y "% MARCAS" y NUNCA al pie `comision` (COMISIÓN GRUPO). Así
-// cada jugada suma 0 por sí sola y nada se cuenta dos veces.
 function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
   const totales = Object.assign({}, totalesFinales);
-  const comision = comisionTotal;
+  let comision = comisionTotal;
 
   resueltas.forEach(r => {
     totales[r.cliente] = round2((totales[r.cliente] || 0) + r.resultadoCliente);
 
     if (r.tipo === 'tf' && Array.isArray(r.banqueadores)) {
       // TF CON BANQUEADORES del grupo (06-10-2026): cada banquero suma su propio
-      // renglón (ya neto de la comisión que paga) en vez del ítem "TABLAS FIJAS".
+      // renglón (ya neto de la comisión que paga) en vez del ítem "TABLAS
+      // FIJAS"; la comisión (cliente + banqueadores + comisión = 0) va al pie.
       r.banqueadores.forEach(b => { totales[b.nombre] = round2((totales[b.nombre] || 0) + b.monto); });
+      if (r.comision) comision = round2(comision + r.comision);
     } else if (r.tipo === 'tf') {
-      // NETO de su propia comisión: cliente + "TABLAS FIJAS" + "% TABLAS FIJAS" = 0.
+      // NETO de su propia comisión (28-09-2026, mismo arreglo que
+      // /cierre-final más abajo, encontrado por el usuario ahí primero):
+      // antes esto restaba solo r.resultadoCliente (bruto) y además
+      // sumaba r.comision aparte al footer "comisión" — eso dejaba la
+      // comisión "de más" sin contraparte en este mismo Balance (cliente
+      // + "TABLAS FIJAS" + "% DE TABLAS FIJAS" NO sumaban 0) y la pagaba
+      // 2 veces (una en "% DE TABLAS FIJAS", otra en el footer). Mismo
+      // invariante que resolverTablaFija: cliente + tablasFijas + comisión
+      // = 0 exacto — la comisión NO se vuelve a sumar al footer `comision`
+      // acá, porque ya queda representada en el ítem "% DE TABLAS FIJAS".
       totales['TABLAS FIJAS'] = round2((totales['TABLAS FIJAS'] || 0) - (r.resultadoCliente + (r.comision || 0)));
-    }
-    if (r.tipo === 'tf' && r.comision) {
-      totales['% TABLAS FIJAS'] = round2((totales['% TABLAS FIJAS'] || 0) + r.comision);
+      if (r.comision) {
+        totales['% DE TABLAS FIJAS'] = round2((totales['% DE TABLAS FIJAS'] || 0) + r.comision);
+      }
     }
 
-    // MARCAS (06-10-2026): cada banquero (MARCAS ZENYATTA/MARCAS SAMMY o manual)
-    // suma su propio renglón, ya neto de la comisión que pague; la comisión de
-    // la Marca va al renglón "% MARCAS".
+    // MARCAS (06-10-2026, "DEBE SALIR EL ITEM DE MARCAS SAMMY Y MARCAS
+    // ZENYATTA... IGUAL QUE TABLAS"): cada banquero de la Marca (ya sea el
+    // automático MARCAS ZENYATTA/MARCAS SAMMY o uno manual) suma su propio
+    // renglón, ya neto de la comisión que pague -- igual que
+    // construirCierreFinalHipismo. La comisión de Marcas (cliente +
+    // banqueadores + comisión = 0) se suma al footer `comision`, como ya
+    // hace Cierre Final con COMISIÓN GRUPO.
     if (r.tipo === 'marca' && Array.isArray(r.banqueadores)) {
       r.banqueadores.forEach(b => { totales[b.nombre] = round2((totales[b.nombre] || 0) + b.monto); });
-    }
-    if (r.tipo === 'marca' && r.comision) {
-      totales['% MARCAS'] = round2((totales['% MARCAS'] || 0) + r.comision);
+      if (r.comision) comision = round2(comision + r.comision);
     }
   });
 
@@ -1343,7 +1350,7 @@ router.get('/oficinas/registro-dias', asyncHandler(async (req, res) => {
 // carrera. Comisión NETA = el 5% cobrado en la carrera (comision_total del plano) menos los % devueltos a
 // clientes/avales en esa misma carrera. Los devueltos salen de construirCierreFinalHipismo (la misma cuenta del
 // Balance General, ya redondeada), así que la suma de todas las carreras + lo que no está ligado a una carrera
-// (comisión de Tercios Adelantadas) da EXACTAMENTE la "Comisión" del Balance General (comisionOficina).
+// (comisión de Jugadas Adelantadas) da EXACTAMENTE la "Comisión" del Balance General (comisionOficina).
 router.get('/oficinas/comision-por-carrera', asyncHandler(async (req, res) => {
   const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
@@ -1389,7 +1396,8 @@ router.get('/oficinas/comision-por-carrera', asyncHandler(async (req, res) => {
     return { fecha, ...sumar(hipodromos), hipodromos };
   }).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const totales = sumar(dias);
-  // Lo que cobró la oficina y no pertenece a una carrera de esta lista (Tercios Adelantadas): se muestra aparte para que el total siga siendo igual al del Balance General.
+  // Lo que cobró la oficina y no pertenece a una carrera de esta lista (Tablas Fijas/Marcas y Tercios
+  // Adelantadas): se muestra aparte para que el total siga siendo igual al del Balance General.
   const otrosConceptos = round2(Number(cierre.comisionSemana) - totales.neta);
 
   res.json({
@@ -6016,14 +6024,6 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
     const resultado = await construirResumenTablasFijasHipismo(req.grupoId, req.grupo, req.query.semana, rangoPersonalizado);
     return res.json(resultado);
   }
-  // ÍTEMS "% TABLAS FIJAS" y "% MARCAS" (11-10-2026): renglones reales de Balance General.
-  if (req.params.nombre === NOMBRE_ITEM_PCT_TABLAS_FIJAS || req.params.nombre === NOMBRE_ITEM_PCT_MARCAS) {
-    const resultado = await construirResumenPctAdelantadasHipismo(
-      req.grupoId, req.grupo, req.query.semana, rangoPersonalizado,
-      req.params.nombre === NOMBRE_ITEM_PCT_TABLAS_FIJAS ? 'tf' : 'marca'
-    );
-    return res.json(resultado);
-  }
 
   const rJugador = await db.query(
     'SELECT * FROM jugadores WHERE grupo_id = $1 AND nombre = $2',
@@ -6121,7 +6121,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // EXACTA de acumularDevueltoDia más abajo: hacen falta para fusionar por
   // carrera antes de redondear — antes esta consulta no las traía).
   const rAdelantadas = await db.query(
-    `SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano, j.sin_comision, p.fecha,
+    `SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, j.sin_comision, p.fecha,
             p.hipodromo_nombre, j.carrera_numero
        FROM hipismo_adelantadas_jugadas j
        JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
@@ -6163,12 +6163,6 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     acumularDia(j.cliente_nombre, j.fecha, j.resultado_cliente);
     if (Array.isArray(j.banqueadores)) {
       j.banqueadores.forEach(b => acumularDia(b.nombre, j.fecha, b.monto));
-    }
-    // 11-10-2026: la comisión de Tablas Fijas / Marcas es un renglón real
-    // ("% TABLAS FIJAS" / "% MARCAS"), igual que en /cierre-final, y NO se suma
-    // a COMISIÓN GRUPO.
-    if (j.comision != null && Number(j.comision) !== 0) {
-      acumularDia(j.tipo === 'tf' ? NOMBRE_ITEM_PCT_TABLAS_FIJAS : NOMBRE_ITEM_PCT_MARCAS, j.fecha, Number(j.comision));
     }
   });
 
@@ -6387,9 +6381,17 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // /cierre-final) — el Remate NUNCA entra acá (tiene su propio ítem
   // "REMATE", nunca "comisión" del grupo).
   //
-  // 11-10-2026 (decisión final del usuario): la comisión de Tablas Fijas y de
-  // Marcas YA NO se suma acá -- va a sus renglones "% TABLAS FIJAS" y "% MARCAS"
-  // (arriba). COMISIÓN GRUPO = Tercios bruta − devuelto + Tercios Adelantadas.
+  // "COMISIÓN GRUPO" = TODO, no solo Tercios (02-10-2026, a pedido
+  // explícito del usuario verificando contra otro sistema: "se hicieron
+  // de comisión 183,55 [bruta, de TODOS los tipos de jugada]... la
+  // devolución fue de 77,52... restando eso le queda al grupo 106,02" —
+  // ver la nota grande de comisionAdelantadasSemana en GET /cierre-final,
+  // donde se hizo el mismo cambio): además de la comisión de Tercios por
+  // plano, se suma también la de Tablas Fijas + Marcas de Jugadas
+  // Adelantadas (j.comision), ya que "% DE TABLAS FIJAS"/"PORCENTAJE
+  // MARCAS" dejaron de armarse como su propio renglón de "cliente" acá
+  // (esta pantalla nunca los armó como fila, a diferencia de Cierre Final
+  // — pero si no se suman en algún lado, esa plata se pierde del total).
   const rComisionPlanos = await db.query(
     `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
        FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
@@ -6399,6 +6401,18 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   rComisionPlanos.rows.forEach(r => {
     const fechaIso = r.fecha instanceof Date ? isoDeFechaUTC(r.fecha) : r.fecha;
     comisionBrutaPorFecha[fechaIso] = round2((comisionBrutaPorFecha[fechaIso] || 0) + Number(r.total));
+  });
+  const rComisionAdelantadas = await db.query(
+    `SELECT p.fecha AS fecha, j.comision
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')`,
+    [req.grupoId, desde, hasta]
+  );
+  rComisionAdelantadas.rows.forEach(r => {
+    if (r.comision == null) return;
+    const fechaIso = r.fecha instanceof Date ? isoDeFechaUTC(r.fecha) : r.fecha;
+    comisionBrutaPorFecha[fechaIso] = round2((comisionBrutaPorFecha[fechaIso] || 0) + Number(r.comision));
   });
   rTerciosAdelantadasDia.forEach(j => {
     if (!j.comision_grupo) return;

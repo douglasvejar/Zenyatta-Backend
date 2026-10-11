@@ -10616,7 +10616,6 @@ async function pintarBalanceGeneral() {
   // FIJAS" y "PORCENTAJE MARCAS" dejaron de armarse como su propio
   // renglón en data.clientes (esa comisión se pliega acá en vez de tener
   // su fila aparte), así que ya no hay doble conteo.
-  // 11-10-2026: "% TABLAS FIJAS" y "% MARCAS" son renglones reales de data.clientes y ya NO van sumados en data.comisionSemana.
   const comisionTotal = Number(data.comisionSemana);
   document.getElementById('montoComision').textContent = formatMonto(comisionTotal);
 }
@@ -11905,7 +11904,6 @@ async function pintarCierreFinal(semana) {
   // "PORCENTAJE MARCAS" dejaron de armarse como su propio renglón en
   // data.clientes, así que esa plata ya no se contaría en ningún lado si
   // no se suma acá.
-  // 11-10-2026: "% TABLAS FIJAS" y "% MARCAS" son renglones reales de data.clientes y ya NO van sumados en data.comisionSemana.
   const comisionTotal = Number(data.comisionSemana);
   document.getElementById('montoComisionCierre').textContent = formatMonto(comisionTotal);
 }

@@ -40,7 +40,7 @@ const { construirCierreFinalHipismo } = require('./hipismoResumenCliente');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
 const { round2 } = require('./hipismoAdelantadasCalc');
 
-const NOMBRES_PSEUDO_ITEM = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE', '% TABLAS FIJAS', '% MARCAS']);
+const NOMBRES_PSEUDO_ITEM = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE']);
 const MAX_PERIODOS = { semana: 26, mes: 24, anio: 5 };
 const DEFECTO_PERIODOS = { semana: 8, mes: 6, anio: 2 };
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];

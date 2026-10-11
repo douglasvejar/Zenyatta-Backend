@@ -83,9 +83,6 @@ const TEXTO_JUGADA_CARGA_ESPECIAL = {
 // (NOMBRE_ITEM_REMATE) — ver la nota grande de construirCierreFinalHipismo
 // más abajo.
 const NOMBRE_ITEM_REMATE = 'REMATE';
-// 11-10-2026: la comisión de Tablas Fijas / Marcas es un ítem real aparte (no va a COMISIÓN GRUPO).
-const NOMBRE_ITEM_PCT_TABLAS_FIJAS = '% TABLAS FIJAS';
-const NOMBRE_ITEM_PCT_MARCAS = '% MARCAS';
 
 function resultadoTicketDeportes(t) {
   if (t.estado === 'GANADA') return t.gana;
@@ -1228,85 +1225,6 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
   };
 }
 
-// "% TABLAS FIJAS" y "% MARCAS", jugada por jugada (11-10-2026, a pedido del
-// usuario: "los % que genere esas jugadas ... lo vas a colocar en cada item
-// como corresponda"): son renglones reales de Balance General (ver
-// NOMBRE_ITEM_PCT_* arriba) y, igual que "TABLAS FIJAS", al abrirlos desde
-// Detallado por Cliente muestran la comisión que dejó cada jugada del rango.
-async function construirResumenPctAdelantadasHipismo(grupoId, grupo, semanaParam, rangoPersonalizado, tipo) {
-  const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
-  const offset = semana === 'anterior' ? -1 : 0;
-  const hoyVe = hoyVenezuela();
-  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(grupoId, hoyVe, offset);
-  const hoyIso = isoDeFechaUTC(hoyVe);
-  const nombreItem = tipo === 'tf' ? NOMBRE_ITEM_PCT_TABLAS_FIJAS : NOMBRE_ITEM_PCT_MARCAS;
-
-  const rJugadas = await db.query(
-    `SELECT j.cliente_nombre, j.carrera_numero, j.numero_ejemplar, j.monto, j.resultado_cliente,
-            j.comision, j.gano, j.pizarra_usada,
-            p.fecha, p.hipodromo_nombre
-       FROM hipismo_adelantadas_jugadas j
-       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
-      WHERE j.grupo_id = $1 AND j.tipo = $4 AND p.fecha BETWEEN $2 AND $3
-        AND j.estado IN ('resuelto', 'falta_banqueo', 'sin_decidir')
-      ORDER BY p.fecha DESC, j.creado_en ASC`,
-    [grupoId, desde, hasta, tipo]
-  );
-
-  const porDia = new Map();
-  let totalSemana = 0;
-  let totalHoy = 0;
-  let cantidadJugadas = 0;
-  rJugadas.rows.forEach(j => {
-    const comision = j.comision != null ? round2(Number(j.comision)) : 0;
-    if (!comision) return;
-    const fechaIso = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
-    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
-    const hipMap = porDia.get(fechaIso);
-    if (!hipMap.has(j.hipodromo_nombre)) hipMap.set(j.hipodromo_nombre, { nombre: j.hipodromo_nombre, carreras: [] });
-    hipMap.get(j.hipodromo_nombre).carreras.push({
-      tipo: 'tf_resultado',
-      carrera: j.carrera_numero,
-      pizarra: j.pizarra_usada,
-      clienteNombre: j.cliente_nombre,
-      numeroEjemplar: j.numero_ejemplar,
-      monto: Number(j.monto),
-      comision,
-      ganoCliente: !!j.gano,
-      resultado: comision
-    });
-    totalSemana += comision;
-    cantidadJugadas += 1;
-    if (fechaIso === hoyIso) totalHoy += comision;
-  });
-
-  const dias = Array.from(porDia.entries())
-    .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
-    .sort((a, b) => b.fecha.localeCompare(a.fecha));
-
-  return {
-    grupo: { nombre: grupo.nombre, logoUrl: urlLogoGrupo(grupoId, grupo), ...temaColorGrupo(grupo) },
-    jugador: { nombre: nombreItem },
-    semana,
-    rango: { desde, hasta },
-    numeroSemana: numeroSemanaISO(desde),
-    rangoPersonalizado: !!rangoPersonalizado,
-    hoy: hoyIso,
-    esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
-    modulos: { hipismo: true, deportes: false },
-    resumen: {
-      totalSemana: round2(totalSemana),
-      totalHoy: round2(totalHoy),
-      cantidadJugadas,
-      totalHipismo: round2(totalSemana),
-      totalDeportes: 0,
-      cantidadJugadasHipismo: cantidadJugadas,
-      cantidadJugadasDeportes: 0
-    },
-    dias
-  };
-}
-
 // =================================================================
 // CIERRE FINAL / BALANCE GENERAL DE HIPISMO (30-09-2026, a pedido del
 // usuario: "desde super admin muestrame en la pestaña balance por
@@ -1446,18 +1364,11 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     acumular('WINNERS', -Number(w.monto));
   });
 
-  // 11-10-2026 (decisión final del usuario: "no me lo sumes a la comisión,
-  // ponmelo en un item con su nombre % MARCAS y % TABLAS ... los % que genere
-  // esas jugadas no la vas a sumar a la comisión, lo vas a colocar en cada
-  // item como corresponda"): la comisión de Tablas Fijas y de Marcas es ahora
-  // un renglón REAL ("% TABLAS FIJAS" / "% MARCAS") dentro de la lista de
-  // clientes, y YA NO se pliega a COMISIÓN GRUPO (revierte lo de 02-10-2026).
-  // Así cada jugada suma 0 por sí sola (cliente + TABLAS FIJAS/banqueadores +
-  // el % = 0) y nada se cuenta dos veces.
+  let comisionAdelantadasSemana = 0;
   rAdelantadas.rows.forEach(j => {
     acumular(j.cliente_nombre, j.resultado_cliente);
-    if (j.comision != null && Number(j.comision) !== 0) {
-      acumular(j.tipo === 'tf' ? NOMBRE_ITEM_PCT_TABLAS_FIJAS : NOMBRE_ITEM_PCT_MARCAS, Number(j.comision));
+    if (j.comision != null) {
+      comisionAdelantadasSemana += Number(j.comision);
     }
     // "TABLAS FIJAS" (28-09-2026, a pedido del usuario: "el item tabla
     // fijas no me sale en los balances... todos los item deben verse
@@ -1902,12 +1813,24 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // la comisión real de cuánto queda en el grupo" — confirmado con un
   // ejemplo numérico exacto, "CASO A PARA TODOS LOS RENGLONES").
   //
-  // 11-10-2026 (decisión final del usuario): la comisión de Tablas Fijas y de
-  // Marcas YA NO entra en COMISIÓN GRUPO (revierte lo de 02-10-2026): ahora
-  // son los renglones reales "% TABLAS FIJAS" y "% MARCAS" de la lista de
-  // clientes (ver arriba). COMISIÓN GRUPO = comisión bruta de Tercios − todo
-  // lo devuelto + comisión de Tercios Adelantadas. Remate NUNCA entra acá.
-  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionTerciosAdelantadasSemana);
+  // "COMISIÓN GRUPO" = TODO, no solo Tercios (02-10-2026, a pedido
+  // explícito del usuario verificando contra otro sistema — ver la nota
+  // grande de comisionAdelantadasSemana más arriba): antes, comisionSemana
+  // era SOLO la comisión de Tercios menos lo devuelto, porque "% DE
+  // TABLAS FIJAS"/"PORCENTAJE MARCAS" ya aparecían como su propio renglón
+  // de "cliente" (sumarlos acá también habría sido pagarlos 2 veces). Ya
+  // que esos 2 renglones dejaron de armarse (ver arriba), ahora SÍ hace
+  // falta sumarlos acá para que no se pierda esa plata — por eso se le
+  // suma comisionAdelantadasSemana (Tablas Fijas + Marcas, ya con su
+  // propio % devuelto restado adentro de totalDevueltoSemana). El
+  // resultado es exactamente la fórmula que confirmó el usuario con el
+  // otro sistema: "se hicieron de comisión 183,55 [bruta, de TODOS los
+  // tipos de jugada, con el 5%]... la devolución fue de 77,52... restando
+  // eso le queda al grupo 106,02" — comisión BRUTA (Tercios+TF+Marcas)
+  // menos TODO lo devuelto (Tercios+TF+Marcas). Remate NUNCA entra acá —
+  // sigue siendo su propio ítem "REMATE" aparte, nunca "comisión" del
+  // grupo (ver la nota grande de comisionRemateSemana más abajo).
+  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana + comisionTerciosAdelantadasSemana);
 
   return {
     clientes,
@@ -1921,10 +1844,15 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     // "REMATE" arriba, dentro de "clientes", que es donde se muestra de
     // verdad ahora).
     comisionRemateSemana: Number(rComisionRemate.rows[0].total),
+    // comisionAdelantadasSemana (23-09-2026): comisión cruda de Tablas
+    // Fijas + Marcas de la semana. 02-10-2026: ahora SÍ está sumada
+    // dentro de comisionSemana ("COMISIÓN GRUPO", ver la nota grande de
+    // arriba) — se sigue devolviendo también suelta por compatibilidad.
+    comisionAdelantadasSemana,
     // comisionTerciosAdelantadasSemana (04-10-2026): comisión cruda de
     // Jugadas entre Tercios Adelantadas de la semana, ya sumada dentro de
     // comisionSemana (ver la nota grande de arriba) — se devuelve también
-    // suelta por compatibilidad.
+    // suelta por compatibilidad, mismo criterio que comisionAdelantadasSemana.
     comisionTerciosAdelantadasSemana
   };
 }
@@ -1988,7 +1916,7 @@ async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
   // comparar su propio link contra el renglón agregado de Cierre Final
   // compara 2 cosas completamente distintas y siempre va a dar "distinto"
   // sin que sea un bug de dinero.
-  const NOMBRES_PSEUDO_ITEM = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE', NOMBRE_ITEM_PCT_TABLAS_FIJAS, NOMBRE_ITEM_PCT_MARCAS]);
+  const NOMBRES_PSEUDO_ITEM = new Set(['WINNERS', 'TABLAS FIJAS', 'REMATE']);
   const discrepancias = [];
   for (const c of resultadoCierre.clientes) {
     if (NOMBRES_PSEUDO_ITEM.has(c.nombre)) continue;
@@ -2013,6 +1941,5 @@ async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
 
 module.exports = {
   construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo,
-  construirResumenTablasFijasHipismo, construirResumenPctAdelantadasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo,
-  NOMBRE_ITEM_PCT_TABLAS_FIJAS, NOMBRE_ITEM_PCT_MARCAS
+  construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo
 };
