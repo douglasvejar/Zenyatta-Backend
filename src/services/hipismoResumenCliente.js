@@ -1689,10 +1689,15 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // sumando los MISMOS montos ya redondeados que van a totalDevueltoSemana — así la comisión neta por carrera
   // suma EXACTO la comisión que muestra el Balance General.
   const devueltoPorCarreraMap = new Map();
+  // devueltoPorCuenta (11-10-2026, Pozos > "Saldos + Pozos" sin devolución %): cuánto de lo devuelto cayó en
+  // cada ficha (cliente, aval o cuenta "X - PORCENTAJE"), con los mismos montos ya redondeados que se suman
+  // al saldo — así restárselo a esa ficha deja su saldo SIN % devuelto, exacto al centavo.
+  const devueltoPorCuentaMap = new Map();
   porGrupoCarrera.forEach(({ cuentaNombre, exacto, claveCarrera }) => {
     const devuelto = round2(exacto);
     if (!devuelto) return;
     acumular(cuentaNombre, devuelto);
+    devueltoPorCuentaMap.set(cuentaNombre, round2((devueltoPorCuentaMap.get(cuentaNombre) || 0) + devuelto));
     totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
     devueltoPorCarreraMap.set(claveCarrera, round2((devueltoPorCarreraMap.get(claveCarrera) || 0) + devuelto));
   });
@@ -1828,6 +1833,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     clientes,
     comisionSemana,
     devueltoPorCarrera,
+    devueltoPorCuenta: Object.fromEntries(devueltoPorCuentaMap),
     totalDevueltoSemana,
     // comisionRemateSemana (26-09-2026): se sigue devolviendo el dato
     // crudo por compatibilidad, pero YA NO representa "comisión" — el

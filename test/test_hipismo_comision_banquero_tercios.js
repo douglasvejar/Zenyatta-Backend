@@ -205,6 +205,16 @@ async function invocarRuta(handler, req) {
   check(!!filaPurga && Math.abs(filaPurga.saldo - 1.50) < 0.001,
     `1f) "PURGA" (el otro aval de MRINCREIBLE al 0,5%, directo a su propia ficha) ahora aparece con +1,50 -- dio ${filaPurga ? filaPurga.saldo : 'nada (bug reproducido)'}`);
 
+  // 11-10-2026 (Pozos > "Saldos + Pozos" sin devolución %): el cierre también informa cuánto de cada ficha es % devuelto,
+  // para poder mostrar su saldo SIN esos %. Debe sumar exactamente totalDevueltoSemana.
+  const devPorCuenta = (salidaCierre && salidaCierre.devueltoPorCuenta) || {};
+  check(Math.abs((devPorCuenta['MRINCREIBLE - PORCENTAJE'] || 0) - 3.00) < 0.001
+    && Math.abs((devPorCuenta['FERROCARRIL'] || 0) - 1.50) < 0.001 && Math.abs((devPorCuenta['PURGA'] || 0) - 1.50) < 0.001,
+    `1g) devueltoPorCuenta trae lo devuelto a cada ficha (3,00 / 1,50 / 1,50) -- dio ${JSON.stringify(devPorCuenta)}`);
+  const sumaDev = Math.round(Object.values(devPorCuenta).reduce((t, n) => t + n, 0) * 100) / 100;
+  check(Math.abs(sumaDev - salidaCierre.totalDevueltoSemana) < 0.001, `1h) la suma de devueltoPorCuenta (${sumaDev}) = totalDevueltoSemana (${salidaCierre.totalDevueltoSemana})`);
+  check(Math.abs(filaFerro.saldo - (devPorCuenta['FERROCARRIL'] || 0)) < 0.001, '1i) sin devolución %, FERROCARRIL (solo tenía el % de aval) queda en 0');
+
   // ---- 2) GET /saldo-comisiones (mismo cálculo, vista de saldo semanal) ----
   const reqSaldo = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };
   const salidaSaldo = await invocarRuta(handlerDe('get', '/saldo-comisiones'), reqSaldo);

@@ -2000,6 +2000,15 @@
           <button type="button" data-filtro="soloPozos" onclick="mostrarFiltroPozos('soloPozos', this)">🏦 Solo Pozos</button>
           <button type="button" data-filtro="saldos" onclick="mostrarFiltroPozos('saldos', this)">📊 Solo Saldos</button>
         </div>
+        <!-- 11-10-2026, a pedido del usuario: "Saldos + Pozos" ahora sale SIN los % devueltos (cada cliente muestra
+             solo lo que ganó/perdió jugando + su pozo) y este botón los vuelve a incluir (como se veía antes). -->
+        <div id="wrapIncluirDevolucionPozos" style="margin:0 0 12px;">
+          <div class="check-fila" style="flex:0; min-width:auto; margin-bottom:4px;">
+            <input type="checkbox" id="chkPozosIncluirDevolucion" onchange="pintarTablaPozos()">
+            <label for="chkPozosIncluirDevolucion" style="white-space:nowrap; cursor:pointer;">Incluir devolución %</label>
+          </div>
+          <div style="font-size:12px; color:var(--text-dim);">Apagado: sin los % devueltos a clientes y avales. Encendido: con ellos, igual que el Balance General.</div>
+        </div>
 
         <div class="btn-fila" style="margin-bottom:14px;">
           <button class="btn btn-primario" type="button" onclick="copiarPozosImagen()">📸 Copiar Imagen HD</button>
@@ -11245,11 +11254,16 @@ async function guardarAjustePozoPantallaPozos() {
 // REFRESCAR_AL_ENTRAR_VISTA.pozos más arriba, que la limpia).
 let FILTRO_POZOS_ACTUAL = 'saldosMasPozos';
 let SALDOS_SEMANA_POZOS_CACHE = null;
+let SALDOS_SEMANA_POZOS_DEVUELTO = {};
+// Redondeo a centavos con el medio centavo siempre hacia arriba (en valor absoluto), igual que round2 del servidor.
+function redondearCentavos(n) { const x = Number(n) || 0; return (x < 0 ? -1 : 1) * Math.round(Math.abs(x) * 100 + 1e-6) / 100 || 0; }
+function incluirDevolucionPozos() { const c = document.getElementById('chkPozosIncluirDevolucion'); return !!(c && c.checked); }
 
 async function obtenerSaldosSemanaPozos() {
   if (SALDOS_SEMANA_POZOS_CACHE) return SALDOS_SEMANA_POZOS_CACHE;
   const data = await apiHipismo('/api/hipismo/cierre-final?semana=actual');
   SALDOS_SEMANA_POZOS_CACHE = data.clientes || [];
+  SALDOS_SEMANA_POZOS_DEVUELTO = data.devueltoPorCuenta || {};
   return SALDOS_SEMANA_POZOS_CACHE;
 }
 
@@ -11299,6 +11313,10 @@ async function pintarTablaPozos() {
   const tbody = document.querySelector('#tablaPozos tbody');
   if (!tbody) return;
   const filtro = FILTRO_POZOS_ACTUAL;
+  const wrapDev = document.getElementById('wrapIncluirDevolucionPozos');
+  if (wrapDev) wrapDev.style.display = filtro === 'saldosMasPozos' ? 'block' : 'none';
+  const modoCap = document.getElementById('pozosNombreGrupoCaptura');
+  if (modoCap) modoCap.textContent = modoCap.textContent.replace(/ · (con|sin) devolución %$/, '') + (filtro === 'saldosMasPozos' ? (incluirDevolucionPozos() ? ' · con devolución %' : ' · sin devolución %') : '');
   if (thead) thead.innerHTML = encabezadoPozos(filtro);
   const colspanVacio = filtro === 'soloPozos' ? 5 : 2;
 
@@ -11351,18 +11369,31 @@ async function pintarTablaPozos() {
   // con los que solo aparecen en el saldo de la semana (ej. el ítem
   // "REMATE" o "{cliente} - PORCENTAJE", que no son un jugador con pozo
   // propio pero sí deben verse acá, igual que en Balance General).
+  // 11-10-2026: sin "Incluir devolución %" (por defecto) a cada ficha se le resta lo que recibió como % devuelto
+  // (propio, de aval o cuenta "X - PORCENTAJE"); las cuentas "X - PORCENTAJE" que se quedan en 0 no se listan.
+  const conDevolucion = incluirDevolucionPozos();
+  const devueltoPorFicha = SALDOS_SEMANA_POZOS_DEVUELTO || {};
+  const saldoDeLaFila = c => conDevolucion ? c.saldo : redondearCentavos(c.saldo - (Number(devueltoPorFicha[c.nombre]) || 0));
   const porNombre = new Map();
   CLIENTES_HIPISMO_CACHE.forEach(j => {
-    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozoActual: j.pozo ? j.pozo.pozoActual : 0 });
+    // 11-10-2026: se suma el pozo BASE (pozo asignado + Deportes), no el "pozo actual": el pozo actual ya trae lo
+    // jugado en Hipismo esta semana y ese mismo resultado ya está dentro del saldo de la semana — sumar los dos
+    // lo contaba DOBLE (Candelita: pozo 10.000, perdió 96,90 -> mostraba 9.806,20 en vez de 9.903,10).
+    const pozoBaseSinHipismo = j.pozo ? (j.pozo.pozoActual - (Number(j.pozo.liquidadoHipismo) || 0)) : 0;
+    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozoActual: pozoBaseSinHipismo });
   });
   saldosSemana.forEach(c => {
     const existente = porNombre.get(c.nombre);
-    if (existente) existente.saldo = c.saldo;
-    else porNombre.set(c.nombre, { nombre: c.nombre, saldo: c.saldo, pozoActual: 0 });
+    if (existente) existente.saldo = saldoDeLaFila(c);
+    else {
+      const saldoFila = saldoDeLaFila(c);
+      if (!conDevolucion && saldoFila === 0) return; // cuenta de % que solo tenía devoluciones
+      porNombre.set(c.nombre, { nombre: c.nombre, saldo: saldoFila, pozoActual: 0 });
+    }
   });
   const filas = Array.from(porNombre.values()).sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   tbody.innerHTML = filas.length
-    ? filas.map(c => filaPozoSoloSaldo(c.nombre, Math.round((c.saldo + c.pozoActual) * 100) / 100)).join('')
+    ? filas.map(c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual))).join('')
     : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
   actualizarAlertaPozos();
 }
@@ -11473,7 +11504,7 @@ async function copiarPozosImagen() {
 // columnas de "Solo Pozos" — cada filtro arma su propio texto.
 function copiarPozosTexto() {
   const emojiPorColor = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
-  const titulos = { saldosMasPozos: 'SALDOS + POZOS', soloPozos: 'POZOS', saldos: 'SALDOS' };
+  const titulos = { saldosMasPozos: 'SALDOS + POZOS' + (incluirDevolucionPozos() ? ' (con devolución %)' : ' (sin devolución %)'), soloPozos: 'POZOS', saldos: 'SALDOS' };
   const filas = document.querySelectorAll('#tablaPozos tbody tr');
   let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — Zenyatta 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
   filas.forEach(fila => {
