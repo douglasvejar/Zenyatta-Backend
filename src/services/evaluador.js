@@ -916,7 +916,7 @@ function evaluarJugada(lineaJugada, datosPorDeporte, diccionarioEquipos, opcione
     };
   }
 
-  const candidatos = diccionarioEquipos[apodoEncontrado];
+  let candidatos = diccionarioEquipos[apodoEncontrado];
   let infoEquipo;
 
   // =============================================================
@@ -981,7 +981,30 @@ function evaluarJugada(lineaJugada, datosPorDeporte, diccionarioEquipos, opcione
   const marcadorCoincideConAlgunCandidato = deporteMarcador === 'nfl'
     ? candidatos.some(c => esFutbolAmericano(c.deporte))
     : candidatos.some(c => c.deporte === deporteMarcador);
-  if (deporteMarcador && !marcadorCoincideConAlgunCandidato) {
+  let marcadorCoincide = marcadorCoincideConAlgunCandidato;
+  if (deporteMarcador && !marcadorCoincide) {
+    // 11-10-2026 (ticket "Charlotte alta ncaaf 57.5"): "charlotte" pelado solo
+    // existe como Charlotte Hornets (basket), pero Charlotte 49ers (NCAAF)
+    // está mapeado con su nombre compuesto. Si la jugada trae un deporte
+    // explícito y existe UN SOLO equipo de ESE deporte cuyo apodo empieza
+    // con lo escrito (ej. "charlotte" → "charlotte 49ers"), es esa
+    // escuela sin duda. Si hay varias (ej. "texas" → state/tech/a&m) no se
+    // adivina y sigue como SIN_MAPEO.
+    const coincideDeporte = (d) => deporteMarcador === 'nfl' ? esFutbolAmericano(d) : d === deporteMarcador;
+    const nombresUnicos = new Map();
+    for (const clave of Object.keys(diccionarioEquipos)) {
+      if (clave.startsWith(apodoEncontrado + ' ')) {
+        for (const c of diccionarioEquipos[clave]) {
+          if (coincideDeporte(c.deporte)) nombresUnicos.set(c.nombre + '|' + c.deporte, c);
+        }
+      }
+    }
+    if (nombresUnicos.size === 1) {
+      candidatos = [Array.from(nombresUnicos.values())[0]];
+      marcadorCoincide = true;
+    }
+  }
+  if (deporteMarcador && !marcadorCoincide) {
     const nombresConocidos = candidatos.map(c => c.nombre + ' (' + c.deporte.toUpperCase() + ')').join(', ');
     return {
       estado: 'SIN_MAPEO',

@@ -290,7 +290,7 @@ const PALABRAS_DEPORTE = {
   // (es también el nombre de un club de fútbol peruano real — Universitario
   // de Deportes — y forzaría NCAAF por error en una sábana de fútbol que lo
   // mencione): solo frases que no dejan dudas.
-  ncaaf: 'ncaaf', 'college football': 'ncaaf', 'ncaa football': 'ncaaf',
+  ncaaf: 'ncaaf', naacaf: 'ncaaf', ncaf: 'ncaaf', 'college football': 'ncaaf', 'ncaa football': 'ncaaf',
   'futbol universitario': 'ncaaf', 'fútbol universitario': 'ncaaf',
   'futbol colegial': 'ncaaf', 'fútbol colegial': 'ncaaf',
   // NCAAB (13-09-2026, a pedido explícito del usuario, junto con el
@@ -362,14 +362,21 @@ const PALABRAS_DEPORTE_ORDENADAS_POR_LARGO = Object.keys(PALABRAS_DEPORTE)
 function detectarMarcadorDeporteEnTexto(textoOriginal) {
   if (!textoOriginal) return null;
 
-  for (const simbolo of Object.keys(EMOJI_DEPORTE)) {
-    if (textoOriginal.includes(simbolo)) return EMOJI_DEPORTE[simbolo];
-  }
-
+  // 11-10-2026 (bug real, ticket "🏈 Toledo alta naacaf 55.5 / 🏈 Charlotte
+  // alta ncaaf 57.5"): ANTES el emoji se miraba primero y GANABA siempre,
+  // así que 🏈 (que en este sistema significa "nfl") le pasaba por encima a
+  // la palabra "ncaaf" que la persona escribió a propósito al lado del
+  // equipo — y "Charlotte" caía en SIN_MAPEO diciendo "la jugada indica
+  // NFL". Ahora la PALABRA escrita (más específica) gana sobre el emoji;
+  // el emoji solo se usa cuando no hay ninguna palabra de deporte.
   const textoMin = textoOriginal.toLowerCase();
   for (const palabra of PALABRAS_DEPORTE_ORDENADAS_POR_LARGO) {
     const regex = new RegExp('\\b' + palabra + '\\b', 'i');
     if (regex.test(textoMin)) return PALABRAS_DEPORTE[palabra];
+  }
+
+  for (const simbolo of Object.keys(EMOJI_DEPORTE)) {
+    if (textoOriginal.includes(simbolo)) return EMOJI_DEPORTE[simbolo];
   }
 
   return null;
