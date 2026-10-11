@@ -167,6 +167,18 @@ function ejecutarQuery(text, params) {
     };
   }
 
+  // 11-10-2026: detalle de los renglones "% TABLAS FIJAS" / "% MARCAS".
+  if (/^SELECT j\.cliente_nombre, j\.carrera_numero, j\.numero_ejemplar[\s\S]*j\.tipo = \$4/i.test(sql)) {
+    const [grupoId, , , tipo] = params;
+    return {
+      rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.tipo === tipo).map(j => {
+        const p = TABLAS.hipismo_adelantadas_planos.find(x => x.id === j.plano_id);
+        return { cliente_nombre: j.cliente_nombre, carrera_numero: j.carrera_numero, numero_ejemplar: j.numero_ejemplar, monto: j.monto || 0,
+                 resultado_cliente: j.resultado_cliente, comision: j.comision, gano: j.gano, pizarra_usada: null, fecha: p.fecha, hipodromo_nombre: p.hipodromo_nombre || 'X' };
+      })
+    };
+  }
+
   // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
 
   // este archivo crea jugadas de esta pestana nueva, asi que la consulta
@@ -230,8 +242,11 @@ async function invocarRuta(handler, req) {
 
   const c = await invocarRuta(handlerDe('get', '/cierre-final'), { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } });
   check(!!c, '1) /cierre-final respondió');
-  check(Math.abs(Number(c.comisionAdelantadasSemana) - (5 + 1.25 + 2.5)) < 0.001, `2) comisión cruda de Tablas Fijas + Marcas = 5,00 + 1,25 + 2,50 = 8,75 (la Marca sin banqueo no suma) -- dio ${c.comisionAdelantadasSemana}`);
-  check(Math.abs(Number(c.comisionSemana) - 11.75) < 0.001, `3) COMISIÓN GRUPO = 5,00 + 8,75 - 2,00 = 11,75 -- dio ${c.comisionSemana}`);
+  const itemTf = c.clientes.find(x => x.nombre === '% TABLAS FIJAS');
+  const itemMarcas = c.clientes.find(x => x.nombre === '% MARCAS');
+  check(!!itemTf && Math.abs(itemTf.saldo - 7.5) < 0.001, `2a) renglón real "% TABLAS FIJAS" = 5,00 + 2,50 = 7,50 -- dio ${itemTf && itemTf.saldo}`);
+  check(!!itemMarcas && Math.abs(itemMarcas.saldo - 1.25) < 0.001, `2b) renglón real "% MARCAS" = 1,25 (la Marca sin banqueo no suma) -- dio ${itemMarcas && itemMarcas.saldo}`);
+  check(Math.abs(Number(c.comisionSemana) - 3.00) < 0.001, `3) COMISIÓN GRUPO = 5,00 (Tercios) - 2,00 (devuelto) = 3,00, SIN sumar los % de Tablas/Marcas -- dio ${c.comisionSemana}`);
   const suma = Math.round(c.clientes.reduce((a, x) => a + x.saldo, 0) * 100) / 100;
   // ZAMURAY perdió 30 en una Marca todavía SIN banqueo: su lado perdedor ya cuenta, pero la banca todavía
   // no existe (se asigna después), así que ese -30 es lo único que queda sin contraparte.
@@ -241,7 +256,15 @@ async function invocarRuta(handler, req) {
   const nombres = c.clientes.map(x => x.nombre).sort().join(' | ');
   console.log('   renglones:', nombres);
   const d = await invocarRuta(handlerDe('get', '/semana-por-dias'), { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: {} });
-  check(!!d && Math.abs(Number(d.comisionSemana) - 11.75) < 0.001, `5) /semana-por-dias da la misma COMISIÓN GRUPO 11,75 -- dio ${d && d.comisionSemana}`);
+  const dTf = d && d.clientes.find(x => x.nombre === '% TABLAS FIJAS');
+  const dMa = d && d.clientes.find(x => x.nombre === '% MARCAS');
+  check(!!dTf && Math.abs(dTf.totalSemana - 7.5) < 0.001 && !!dMa && Math.abs(dMa.totalSemana - 1.25) < 0.001, `5b) /semana-por-dias trae también los renglones % TABLAS FIJAS (7,50) y % MARCAS (1,25) -- dio ${dTf && dTf.totalSemana} / ${dMa && dMa.totalSemana}`);
+  check(!!d && Math.abs(Number(d.comisionSemana) - 3.00) < 0.001, `5) /semana-por-dias da la misma COMISIÓN GRUPO 3,00 -- dio ${d && d.comisionSemana}`);
+
+  const detTf = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: { nombre: '% TABLAS FIJAS' }, query: { semana: 'actual' } });
+  check(!!detTf && Math.abs(detTf.resumen.totalSemana - 7.5) < 0.001, `6) El detalle de "% TABLAS FIJAS" abre (sin 404) y suma 7,50 -- dio ${detTf && detTf.resumen && detTf.resumen.totalSemana}`);
+  const detMa = await invocarRuta(handlerDe('get', '/clientes/:nombre/detalle-semana'), { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: { nombre: '% MARCAS' }, query: { semana: 'actual' } });
+  check(!!detMa && Math.abs(detMa.resumen.totalSemana - 1.25) < 0.001, `6b) El detalle de "% MARCAS" abre y suma 1,25 -- dio ${detMa && detMa.resumen && detMa.resumen.totalSemana}`);
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron > 0) process.exit(1);

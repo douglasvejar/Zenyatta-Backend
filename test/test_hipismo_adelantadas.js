@@ -716,10 +716,10 @@ function reqBase(grupoId) {
   // footer dejaba esos 4,01 pagados 2 veces, sin ninguna contraparte en
   // el balance.
   check(resPlanos12._json.totalesFinales['TABLAS FIJAS'] === -144.01, 'Balance General trae a "TABLAS FIJAS" (la banca) -144,01, NETO de su propia comisión (-140 de espejo bruto - 4,01 de comisión)');
-  check(resPlanos12._json.totalesFinales['% DE TABLAS FIJAS'] === 4.01, 'Balance General trae un ítem aparte "% DE TABLAS FIJAS" +4,01 (la comisión de las 3 tablas fijas de esta carrera, separada de "TABLAS FIJAS")');
-  check(resPlanos12._json.comisionTotal === 4, 'La Comisión (footer) del Balance General trae la de Tercios (2,5) + la de la Marca de Halland (1,5) — la de las 3 Tablas Fijas (4,01) ya NO se suma aparte, porque ya se ve en "% DE TABLAS FIJAS"');
-  check(Math.round((resPlanos12._json.totalesFinales.LINARES + resPlanos12._json.totalesFinales.MATURIN + (resPlanos12._json.totalesFinales.HALLAND - (-120)) + resPlanos12._json.totalesFinales['TABLAS FIJAS'] + resPlanos12._json.totalesFinales['% DE TABLAS FIJAS']) * 100) === 0,
-    'Los 3 clientes de Tablas Fijas (aislando a Halland de su Marca, que se banquea aparte) + "TABLAS FIJAS" + "% DE TABLAS FIJAS" suman 0 exacto — nada queda "de más" sin contraparte');
+  check(resPlanos12._json.totalesFinales['% TABLAS FIJAS'] === 4.01, 'Balance General trae un ítem aparte "% TABLAS FIJAS" +4,01 (la comisión de las 3 tablas fijas de esta carrera, separada de "TABLAS FIJAS")');
+  check(resPlanos12._json.comisionTotal === 2.5 && resPlanos12._json.totalesFinales['% MARCAS'] === 1.5, 'La Comisión (footer) del Balance General trae SOLO la de Tercios (2,5); la de la Marca de Halland (1,5) va al renglón "% MARCAS" y la de las 3 Tablas Fijas (4,01) a "% TABLAS FIJAS" (11-10-2026)');
+  check(Math.round((resPlanos12._json.totalesFinales.LINARES + resPlanos12._json.totalesFinales.MATURIN + (resPlanos12._json.totalesFinales.HALLAND - (-120)) + resPlanos12._json.totalesFinales['TABLAS FIJAS'] + resPlanos12._json.totalesFinales['% TABLAS FIJAS']) * 100) === 0,
+    'Los 3 clientes de Tablas Fijas (aislando a Halland de su Marca, que se banquea aparte) + "TABLAS FIJAS" + "% TABLAS FIJAS" suman 0 exacto — nada queda "de más" sin contraparte');
   // 23-09-2026 (undécima ronda), "% devuelto" — LINARES tiene 1% de
   // comisión propia (cargado arriba). 02-10-2026, corregido tras el
   // reporte del usuario ("LOS % QUE SE DEVUELVEN ES DE LO DECIDIDO NO DE
@@ -828,7 +828,7 @@ function reqBase(grupoId) {
   // respuesta HTTP.
   const linaresFila = TABLAS.hipismo_adelantadas_jugadas.filter(j => j.cliente_nombre === 'LINARES' && j.estado !== 'pendiente');
   check(linaresFila.length === 1 && Number(linaresFila[0].resultado_cliente) === 225, 'Confirmado en la base: Linares tiene su +225 de Tablas Fijas guardado, listo para que Cierre Final lo sume en la semana que corresponda');
-  check(typeof resCierre._json.comisionAdelantadasSemana === 'number', 'GET /cierre-final devuelve comisionAdelantadasSemana como un campo separado (aunque sea 0 si la fecha de prueba no cae en la semana actual)');
+  check(typeof resCierre._json.comisionTerciosAdelantadasSemana === 'number', 'GET /cierre-final devuelve comisionTerciosAdelantadasSemana como un campo separado');
 
   // (28-09-2026, a pedido del usuario: "ese 2.5% que deja Sammy en marcas,
   // debe verse reflejado en un código llamado PORCENTAJE MARCAS ... me vas
@@ -873,7 +873,8 @@ function reqBase(grupoId) {
   const totalPorcentajeTfEsperado = Math.round(tfResueltas.reduce((acc, j) => acc + (j.comision ? Number(j.comision) : 0), 0) * 100) / 100;
   const itemTablasFijas = resCierre._json.clientes.find(c => c.nombre === 'TABLAS FIJAS');
   check(!!itemTablasFijas && itemTablasFijas.saldo === totalTablasFijasEsperado, `GET /cierre-final trae el ítem "TABLAS FIJAS" (espejo NETO de su propia comisión, de TODAS las Tablas Fijas resueltas esta semana) — esperado ${totalTablasFijasEsperado}, salió ${itemTablasFijas && itemTablasFijas.saldo}`);
-  check(!resCierre._json.clientes.some(c => c.nombre === '% DE TABLAS FIJAS'), 'GET /cierre-final ya NO trae un renglón "% DE TABLAS FIJAS" aparte (esa comisión ahora se suma directo a "COMISIÓN GRUPO")');
+  const itemPctTf = resCierre._json.clientes.find(c => c.nombre === '% TABLAS FIJAS');
+  check(!!itemPctTf && itemPctTf.saldo === totalPorcentajeTfEsperado, `GET /cierre-final trae el renglón real "% TABLAS FIJAS" (11-10-2026, ya NO va a COMISIÓN GRUPO) -- esperado ${totalPorcentajeTfEsperado}, salió ${itemPctTf && itemPctTf.saldo}`);
 
   // "MARCAS ZENYATTA"/"MARCAS SAMMY" como CLIENTES reales propios en
   // Balance General/Cierre Final (04-10-2026, a pedido del usuario: "las
@@ -1050,8 +1051,8 @@ function reqBase(grupoId) {
   check(Math.round((225 + bj.monto + ba.monto + tf14.comision) * 100) === 0, '12) Cliente + banqueadores + comisión suman 0 exacto');
   const tot14 = resPlanos14._json.totalesFinales;
   check(tot14.LINARES === 225 && tot14['JUAN PEREZ'] === -113.44 && tot14.ANA === -113.44, '12) Balance General trae los ítems de los banqueadores de TF (JUAN PEREZ y ANA) en vez de "TABLAS FIJAS"');
-  check(!('TABLAS FIJAS' in tot14) && !('% DE TABLAS FIJAS' in tot14), '12) Con banqueadores configurados NO sale el ítem "TABLAS FIJAS" ni "% DE TABLAS FIJAS" para esa carrera');
-  check(resPlanos14._json.comisionTotal === 1.88, '12) La comisión de la TF (1,88) va al pie de Balance General');
+  check(!('TABLAS FIJAS' in tot14) && tot14['% TABLAS FIJAS'] === 1.88, '12) Con banqueadores configurados NO sale el ítem "TABLAS FIJAS", y la comisión (1,88) va al renglón "% TABLAS FIJAS"');
+  check(resPlanos14._json.comisionTotal !== 1.88, '12) La comisión de la TF (1,88) YA NO va al pie de Balance General (11-10-2026)');
   const texto14 = resPlanos14._json.plano.texto_resultado;
   check(texto14.includes('Tablas fijas') && !/JUAN PEREZ|\bANA\b/i.test(texto14), '12) El plano que ve el cliente sigue mostrando "Tablas fijas" genérico, nunca los nombres reales de quien banquea');
   // Cierre Final / Balance General de la semana: los banqueadores de TF salen como ítems propios
@@ -1250,7 +1251,9 @@ function reqBase(grupoId) {
   const cierreB = await invocarRuta(handlerCierreFinal, Object.assign(reqBase(GRUPO_ID), { query: { semana: 'actual' } }));
   const tfA = cierreA._json.clientes.find(c => c.nombre === 'TABLAS FIJAS').saldo;
   const tfB = cierreB._json.clientes.find(c => c.nombre === 'TABLAS FIJAS').saldo;
-  check(Math.round((tfA - tfB) * 100) / 100 === 50 && Math.round((cierreA._json.comisionSemana - cierreB._json.comisionSemana) * 100) / 100 === -50, `16) Cierre Final: con TABLAS FIJAS -250 el ítem TABLAS FIJAS sube 50 y COMISIÓN GRUPO baja 50 respecto a dejarlo cuadrado (TF ${tfA} vs ${tfB}; comisión ${cierreA._json.comisionSemana} vs ${cierreB._json.comisionSemana})`);
+  const pctA = cierreA._json.clientes.find(c => c.nombre === '% TABLAS FIJAS').saldo;
+  const pctB = cierreB._json.clientes.find(c => c.nombre === '% TABLAS FIJAS').saldo;
+  check(Math.round((tfA - tfB) * 100) / 100 === 50 && Math.round((pctA - pctB) * 100) / 100 === -50 && cierreA._json.comisionSemana === cierreB._json.comisionSemana, `16) Cierre Final: con TABLAS FIJAS -250 el ítem TABLAS FIJAS sube 50 y "% TABLAS FIJAS" baja 50 respecto a dejarlo cuadrado; COMISIÓN GRUPO no se mueve (TF ${tfA} vs ${tfB}; % ${pctA} vs ${pctB}; comisión ${cierreA._json.comisionSemana} vs ${cierreB._json.comisionSemana})`);
   CONFIG_BANQUEO_MARCAS.valor = null;
 
 })().then(() => {

@@ -231,8 +231,8 @@ async function invocarRuta(handler, req) {
   const com = await invocarRuta(handlerDe('get', '/oficinas/comision-por-carrera'), base);
   check(!!com && com.grupoNombre === 'Oficina Uno', '1a) responde con el nombre de la oficina');
   check(com.totales.bruta === 5 && com.totales.devuelto === 2 && com.totales.neta === 3, `1b) la carrera: 5,00 de comisión - 2,00 devuelto = 3,00 neta (dio ${JSON.stringify(com.totales)})`);
-  check(com.otrosConceptos === 5, `1c) la comisión de la Tabla Fija (5,00) no es de una carrera: sale aparte como "otros conceptos" (dio ${com.otrosConceptos})`);
-  check(com.comisionOficina === cierre.comisionSemana && com.comisionOficina === 8, `1d) comisión oficina (${com.comisionOficina}) = comisión del Balance General (${cierre.comisionSemana}) = 8,00`);
+  check(com.otrosConceptos === 0, `1c) la comisión de la Tabla Fija (5,00) ya NO es comisión del grupo (va en el renglón "% TABLAS FIJAS"): sin "otros conceptos" (dio ${com.otrosConceptos})`);
+  check(com.comisionOficina === cierre.comisionSemana && com.comisionOficina === 3, `1d) comisión oficina (${com.comisionOficina}) = comisión del Balance General (${cierre.comisionSemana}) = 3,00`);
   check(com.totales.neta + com.otrosConceptos === com.comisionOficina, '1e) carreras + otros conceptos = comisión oficina');
   check(com.dias.length === 1 && com.dias[0].hipodromos[0].nombre === 'La Rinconada' && com.dias[0].hipodromos[0].carreras[0].carreraNumero === 1, '1f) ordenado por día > hipódromo > carrera');
   check(Array.isArray(cierre.devueltoPorCarrera) && cierre.devueltoPorCarrera.length === 1 && cierre.devueltoPorCarrera[0].monto === 2, '1g) el Balance expone lo devuelto por carrera (2,00)');
