@@ -308,6 +308,13 @@ router.post('/:id/pozo-ajuste', asyncHandler(async (req, res) => {
       const rJug = await client.query('SELECT * FROM jugadores WHERE id = $1 AND grupo_id = $2 FOR UPDATE', [req.params.id, req.grupoId]);
       const jugador = rJug.rows[0];
       if (!jugador) { const err = new Error('Jugador no encontrado.'); err.status = 404; throw err; }
+      // 11-10-2026 (Hipismo Oficinas > Clientes > Pozo): un cliente "libre" no tiene pozo. Con `asignarPozo: true` el
+      // primer ajuste lo pasa a "avalado" (con pozo 0) y le suma el monto; el resto de sus datos no se toca.
+      if (req.body.asignarPozo === true && jugador.tipo_cuenta !== 'avalado') {
+        await client.query("UPDATE jugadores SET tipo_cuenta = 'avalado', pozo_inicial = 0 WHERE id = $1", [jugador.id]);
+        jugador.pozo_inicial = 0;
+        jugador.tipo_cuenta = 'avalado';
+      }
       const pozoResultante = Number(jugador.pozo_inicial) + monto;
       await client.query('UPDATE jugadores SET pozo_inicial = $1 WHERE id = $2', [pozoResultante, jugador.id]);
       await client.query(

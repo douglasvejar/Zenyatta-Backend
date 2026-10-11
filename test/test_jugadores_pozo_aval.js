@@ -63,6 +63,11 @@ function ejecutarQuery(text, params) {
     const j = TABLAS.jugadores.find(x => x.id === id && x.grupo_id === grupoId);
     return { rows: j ? [j] : [] };
   }
+  if (/^UPDATE jugadores SET tipo_cuenta = 'avalado', pozo_inicial = 0 WHERE id = \$1$/i.test(sql)) {
+    const j = TABLAS.jugadores.find(x => x.id === params[0]);
+    if (j) { j.tipo_cuenta = 'avalado'; j.pozo_inicial = 0; }
+    return { rows: [] };
+  }
   if (/^UPDATE jugadores SET pozo_inicial = \$1 WHERE id = \$2$/i.test(sql)) {
     const [pozo, id] = params;
     const j = TABLAS.jugadores.find(x => x.id === id);
@@ -276,6 +281,18 @@ function check(cond, msg) {
   // --- Sin mandar avalesPorcentaje: queda vacío, sin romper nada (retrocompatible) ---
   const resPostSinAvales = await invocarRuta(handlerPost, Object.assign(reqBase(GRUPO_ID), { body: { nombre: 'ANA', comisionPropia: 0 } }));
   check(resPostSinAvales._status === 201 && Array.isArray(resPostSinAvales._json.avalesPorcentaje) && resPostSinAvales._json.avalesPorcentaje.length === 0, 'POST sin avalesPorcentaje crea el cliente con la lista vacía, sin romper nada');
+
+  // --- 8) Hipismo Oficinas > Clientes > "Dar pozo" (11-10-2026): asignarPozo convierte un cliente libre en avalado ---
+  const resDarPozo = await invocarRuta(handlerPozoAjuste, Object.assign(reqBase(GRUPO_ID), { body: { monto: 1000, motivo: 'Pozo inicial', asignarPozo: true } }), { id: 'j-maria' });
+  const maria = TABLAS.jugadores.find(x => x.id === 'j-maria');
+  check(resDarPozo._status === 200 && maria.tipo_cuenta === 'avalado' && maria.pozo_inicial === 1000, '8) asignarPozo: MARIA (libre) pasa a avalado con pozo 1.000');
+  check(TABLAS.pozo_ajustes[TABLAS.pozo_ajustes.length - 1].pozo_resultante === 1000, 'El historial guarda el pozo inicial (1.000)');
+  const carlos = TABLAS.jugadores.find(x => x.id === 'j-carlos'); carlos.tipo_cuenta = 'avalado'; carlos.pozo_inicial = 500;
+  const resYaAvalado = await invocarRuta(handlerPozoAjuste, Object.assign(reqBase(GRUPO_ID), { body: { monto: 100, asignarPozo: true } }), { id: 'j-carlos' });
+  check(resYaAvalado._status === 200 && carlos.pozo_inicial === 600, 'asignarPozo en un cliente que YA es avalado no le borra el pozo (500 + 100 = 600)');
+  const ana = TABLAS.jugadores.find(x => x.id === 'j-pedro'); ana.tipo_cuenta = 'libre';
+  const resSinFlag = await invocarRuta(handlerPozoAjuste, Object.assign(reqBase(GRUPO_ID), { body: { monto: 10 } }), { id: 'j-pedro' });
+  check(resSinFlag._status === 200 && ana.tipo_cuenta === 'libre', 'Sin asignarPozo (como en Hipismo Grupos) el ajuste no cambia el tipo de cuenta');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

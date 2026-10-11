@@ -425,6 +425,19 @@
           </div>
         </div>
 
+        <div class="pregunta">
+          <div class="q">¿Este cliente tiene pozo?</div>
+          <div class="si-no">
+            <label><input type="radio" name="cPozoSi" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
+            <label><input type="radio" name="cPozoSi" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
+          </div>
+          <div class="sub-bloque oculto" id="cPozoBloque">
+            <label for="cPozo">Pozo (monto)</label>
+            <input type="number" id="cPozo" min="0" step="0.01" placeholder="Ej. 1000">
+            <div class="nota" style="margin-top:6px;">Cada semana nueva el pozo vuelve a este monto. Luego lo puedes subir o bajar desde la lista de clientes.</div>
+          </div>
+        </div>
+
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button type="button" class="btn" onclick="guardarCliente()">Guardar cliente</button>
         </div>
@@ -437,11 +450,29 @@
           <input type="search" id="cBuscar" placeholder="Buscar cliente…" style="max-width:240px;" oninput="pintarClientes()">
         </div>
         <div style="overflow-x:auto;margin-top:8px;">
-          <table class="lista"><thead><tr><th>Cliente</th><th>% que se le devuelve</th><th>Le genera % a</th></tr></thead><tbody id="cLista"></tbody></table>
+          <table class="lista"><thead><tr><th>Cliente</th><th>% que se le devuelve</th><th>Le genera % a</th><th class="num">Pozo</th></tr></thead><tbody id="cLista"></tbody></table>
         </div>
       </div>
     </div>
   </section>
+
+  <!-- ===================== POZO DE UN CLIENTE (ventana) ===================== -->
+  <dialog id="dlgPozo" style="border:1px solid var(--line, #d7e8dc); border-radius:14px; padding:20px; max-width:520px; width:92vw;">
+    <h2 id="dlgPozoTitulo" style="margin-top:0;">Pozo</h2>
+    <div id="dlgPozoActual" class="nota"></div>
+    <div class="fila-campos campo" style="margin-top:10px;">
+      <div><label for="dlgPozoMonto" id="dlgPozoMontoEtiqueta">Ajuste (+ sube, - baja)</label><input type="number" id="dlgPozoMonto" step="0.01" placeholder="Ej. 200 o -150"></div>
+      <div><label for="dlgPozoMotivo">Motivo (opcional)</label><input type="text" id="dlgPozoMotivo" autocomplete="off" placeholder="Ej. recarga semanal"></div>
+    </div>
+    <div class="msg" id="dlgPozoMsg"></div>
+    <div style="max-height:200px; overflow:auto; margin-top:8px;">
+      <table class="lista"><thead><tr><th>Cuándo</th><th class="num">Ajuste</th><th class="num">Pozo quedó en</th><th>Motivo</th></tr></thead><tbody id="dlgPozoHistorial"></tbody></table>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+      <button type="button" class="btn btn-sec" onclick="document.getElementById('dlgPozo').close()">Cerrar</button>
+      <button type="button" class="btn" onclick="aplicarPozoCliente()">Aplicar</button>
+    </div>
+  </dialog>
 
   <!-- ===================== CREAR HIPÓDROMO ===================== -->
   <!-- ===================== CONFIGURACIÓN ===================== -->
@@ -1048,6 +1079,7 @@ function actualizarPreguntasCliente() {
   $('cFichaWrap').classList.toggle('oculto', !(valorRadio('cDevuelve') === 'si' && valorRadio('cDonde') === 'ficha'));
   const genera = valorRadio('cGenera') === 'si';
   $('cGeneraBloque').classList.toggle('oculto', !genera);
+  $('cPozoBloque').classList.toggle('oculto', valorRadio('cPozoSi') !== 'si');
   if (genera && !document.querySelector('#cAvales .aval-fila')) agregarAval();
 }
 function agregarAval() {
@@ -1069,6 +1101,11 @@ async function guardarCliente() {
   if (!nombre) return msg('cMsg', 'Escribe el nombre del cliente.', false);
   if (clienteRealPorNombre(nombre)) return msg('cMsg', 'Ya existe un cliente con ese nombre.', false);
 
+  let pozoInicial = 0;
+  if (valorRadio('cPozoSi') === 'si') {
+    pozoInicial = redondearCentavos(parseFloat(String($('cPozo').value).replace(',', '.')));
+    if (!(pozoInicial > 0)) return msg('cMsg', 'Escribe el monto del pozo, o marca "No".', false);
+  }
   let comisionPropia = 0, incluirPorcentajeEnJugadas = false, comisionPropiaFicha = '';
   if (valorRadio('cDevuelve') === 'si') {
     comisionPropia = parseFloat(String($('cPorcentaje').value).replace(',', '.')) || 0;
@@ -1104,18 +1141,58 @@ async function guardarCliente() {
   }
   try {
     await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
-      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: 'libre',
+      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial,
       comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje
     }) });
   } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
   $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
+  $('cPozo').value = ''; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
   document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
   document.querySelector('input[name="cGenera"][value="no"]').checked = true;
   document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
   $('cAvales').innerHTML = '';
   actualizarPreguntasCliente();
   await cargarClientes();
+}
+// Pozo de un cliente (11-10-2026): se asigna al crearlo o desde la lista ("Dar pozo" / "± Pozo"). Los ajustes quedan con motivo e historial
+// (mismo POST /api/jugadores/:id/pozo-ajuste de Hipismo Grupos). Cada semana nueva el pozo vuelve a su monto base.
+let POZO_CLIENTE_ID = null;
+async function abrirPozoCliente(id) {
+  const c = CLIENTES.find(x => x.id === id); if (!c) return;
+  POZO_CLIENTE_ID = id;
+  const tiene = c.tipo_cuenta === 'avalado';
+  $('dlgPozoTitulo').textContent = (tiene ? 'Pozo de ' : 'Dar pozo a ') + nombreBonito(c.nombre);
+  $('dlgPozoActual').textContent = tiene ? 'Pozo actual: ' + INF.dinero(redondearCentavos(c.pozo_inicial)) : 'Este cliente todavía no tiene pozo. Escribe el monto con el que empieza cada semana.';
+  $('dlgPozoMontoEtiqueta').textContent = tiene ? 'Ajuste (+ sube, - baja)' : 'Pozo (monto)';
+  $('dlgPozoMonto').value = ''; $('dlgPozoMotivo').value = ''; msg('dlgPozoMsg', '', true);
+  $('dlgPozoHistorial').innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">Cargando…</td></tr>';
+  $('dlgPozo').showModal();
+  await pintarHistorialPozo(id);
+}
+async function pintarHistorialPozo(id) {
+  let h = [];
+  try { h = await api('/api/jugadores/' + encodeURIComponent(id) + '/pozo-ajustes'); } catch (e) { /* sin historial */ }
+  $('dlgPozoHistorial').innerHTML = h.length ? h.map(a => `<tr><td>${esc(new Date(a.creado_en).toLocaleString('es-VE'))}</td><td class="num">${celdaSaldo(redondearCentavos(a.monto))}</td><td class="num">${INF.dinero(redondearCentavos(a.pozo_resultante))}</td><td>${esc(a.motivo || '')}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="color:var(--text-dim)">Sin ajustes todavía.</td></tr>';
+}
+async function aplicarPozoCliente() {
+  const c = CLIENTES.find(x => x.id === POZO_CLIENTE_ID); if (!c) return;
+  const monto = parseFloat(String($('dlgPozoMonto').value).replace(',', '.'));
+  const tiene = c.tipo_cuenta === 'avalado';
+  if (!isFinite(monto) || monto === 0) return msg('dlgPozoMsg', 'Escribe un monto distinto de 0.', false);
+  if (!tiene && monto < 0) return msg('dlgPozoMsg', 'El pozo inicial tiene que ser mayor que 0.', false);
+  try {
+    await api('/api/jugadores/' + encodeURIComponent(c.id) + '/pozo-ajuste', { method: 'POST', body: JSON.stringify({ monto, motivo: $('dlgPozoMotivo').value.trim() || (tiene ? '' : 'Pozo inicial'), asignarPozo: !tiene }) });
+  } catch (e) { return msg('dlgPozoMsg', 'No se pudo guardar: ' + e.message, false); }
+  await cargarClientes();
+  const nuevo = CLIENTES.find(x => x.id === c.id);
+  $('dlgPozoActual').textContent = 'Pozo actual: ' + INF.dinero(redondearCentavos(nuevo ? nuevo.pozo_inicial : 0));
+  $('dlgPozoTitulo').textContent = 'Pozo de ' + nombreBonito(c.nombre);
+  $('dlgPozoMontoEtiqueta').textContent = 'Ajuste (+ sube, - baja)';
+  $('dlgPozoMonto').value = ''; $('dlgPozoMotivo').value = '';
+  msg('dlgPozoMsg', '✅ Pozo guardado.', true);
+  await pintarHistorialPozo(c.id);
 }
 function pintarClientes() {
   const q = normNombre($('cBuscar').value);
@@ -1124,8 +1201,10 @@ function pintarClientes() {
     const pct = Number(c.comision_propia) || 0;
     const devuelve = pct > 0 ? `<span class="tag">${fmt(pct)}%</span> ${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}` : '—';
     const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}</td><td>${devuelve}</td><td>${avales}</td></tr>`;
-  }).join('') : '<tr><td colspan="3" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
+    const tienePozo = c.tipo_cuenta === 'avalado';
+    const pozo = `<span style="white-space:nowrap;">${tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>' : '<span style="color:var(--text-dim)">—</span>'} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button></span>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}</td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 
 // ------------------------------------------------------------------
