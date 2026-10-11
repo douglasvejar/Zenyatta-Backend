@@ -224,14 +224,55 @@ const ALIAS_SELECCIONES = {
   'trinidad tobago': 'trinidad y tobago'
 };
 
+// 11-10-2026 (caso real: ticket "Bayern Munich 1h -210 / Barcelona 1h -260"
+// quedó PENDIENTE con "football-data.org no tiene (o no se pudo cruzar por
+// nombre de equipo) este partido"): football-data.org escribe el nombre
+// ALEMÁN/LOCAL del club ("FC Bayern München", "1. FC Köln", "FC København",
+// "SK Slavia Praha") y ESPN el nombre en inglés ("Bayern Munich", "FC
+// Cologne", "FC Copenhagen", "Slavia Prague") — ninguna de las 2 palabras
+// es prefijo de la otra ("munich"/"munchen"), así que el cruce por palabras
+// nunca las tomaba como el mismo equipo. Estos alias de PALABRA (se
+// reemplazan dentro del nombre ya sin acentos) y de nombre completo
+// resuelven los casos conocidos de las 6 ligas cubiertas por
+// football-data.org (Premier, La Liga, Serie A, Bundesliga, Ligue 1 y
+// Champions). Además, ver cruceFlexibleUnico() más abajo: un segundo
+// intento más tolerante para los nombres que aun así no crucen.
+const ALIAS_PALABRAS_CLUB = {
+  munchen: 'munich', muenchen: 'munich',
+  koln: 'cologne', koeln: 'cologne',
+  kobenhavn: 'copenhagen', koebenhavn: 'copenhagen',
+  praha: 'prague',
+  milano: 'milan', // "Internazionale Milano" -> "internazionale milan" (prefijo de "inter milan")
+  lyonnais: 'lyon'
+};
+const ALIAS_NOMBRES_CLUB = {
+  'sporting clube de portugal': 'sporting cp',
+  'sporting lisbon': 'sporting cp',
+  'sporting lisboa': 'sporting cp',
+  'sl benfica': 'benfica',
+  'olympique de marseille': 'marseille',
+  'olympique marseille': 'marseille',
+  'olympique lyon': 'lyon',
+  'olympique lyonnais': 'lyon',
+  'crvena zvezda': 'red star belgrade',
+  'red star': 'red star belgrade',
+  'paris saint germain': 'paris saint germain',
+  'paris sg': 'paris saint germain',
+  'psg': 'paris saint germain',
+  'bayern': 'bayern munich',
+  'bayern munich': 'bayern munich'
+};
+
 function normalizarNombreEquipoFutbol(nombre) {
-  const base = (nombre || '')
+  let base = (nombre || '')
     .toLowerCase()
+    .replace(/ø/g, 'o').replace(/æ/g, 'ae').replace(/ß/g, 'ss').replace(/đ/g, 'd').replace(/ł/g, 'l')
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos (misma técnica que ya usa normalizarTexto())
     .replace(SUFIJOS_CLUB, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-  return ALIAS_SELECCIONES[base] || base;
+  base = base.split(' ').map(p => ALIAS_PALABRAS_CLUB[p] || p).join(' ');
+  return ALIAS_SELECCIONES[base] || ALIAS_NOMBRES_CLUB[base] || base;
 }
 
 // Compara palabra por palabra (no letra por letra) para casos como
@@ -342,6 +383,40 @@ function nombresDeEquipoCoinciden(nombreA, nombreB) {
 // `juego.fuentePrimeraMitad`/`juego.variableEntornoPrimeraMitad` para que
 // evaluador.js arme el mensaje con el nombre/variable REAL en vez de uno
 // fijo.
+// 11-10-2026: segundo intento, SOLO cuando el cruce estricto de arriba no
+// encontró nada. La regla estricta (nombresDeEquipoCoinciden) bloquea a
+// propósito que un nombre de 1 sola palabra ("Lille", "Atalanta", "Lens")
+// cruce con uno más largo ("Lille OSC", "Atalanta BC", "Racing Club de
+// Lens") para no confundir clubes que comparten ciudad (AC Milan / Inter
+// Milan). Pero el cruce exige local Y visitante a la vez, y acá además se
+// pide que haya UN SOLO partido de la fuente que cumpla (si hay 2 o más
+// candidatos, no se adivina) — con esas 2 condiciones juntas, el riesgo
+// de cruzar mal es prácticamente nulo y se evita dejar un partido real en
+// PENDIENTE solo por cómo una API escribe el nombre del club.
+function nombreCruzaFlexible(nombreA, nombreB) {
+  if (nombresDeEquipoCoinciden(nombreA, nombreB)) return true;
+  const a = normalizarNombreEquipoFutbol(nombreA).split(' ').filter(p => p.length >= 3);
+  const b = normalizarNombreEquipoFutbol(nombreB).split(' ').filter(p => p.length >= 3);
+  if (!a.length || !b.length) return false;
+  const [cortas, largas] = a.length <= b.length ? [a, b] : [b, a];
+  const significativas = cortas.filter(p => p.length >= 4);
+  if (!significativas.length) return false;
+  return significativas.every(p => largas.includes(p) || palabraCoincide(p, largas));
+}
+
+function cruceFlexibleUnico(juego, partidosFuente) {
+  const candidatos = partidosFuente.filter(pm =>
+    (nombreCruzaFlexible(juego.homeTeam, pm.homeTeamName) || nombreCruzaFlexible(juego.homeTeam, pm.homeTeamShortName)) &&
+    (nombreCruzaFlexible(juego.awayTeam, pm.awayTeamName) || nombreCruzaFlexible(juego.awayTeam, pm.awayTeamShortName))
+  );
+  // Se pide la misma lista para 2 fechas (sábana y día siguiente, ver
+  // obtenerResultadosSoccer): si el mismo partido llegara repetido, cuenta
+  // como UN solo candidato.
+  const unicos = new Map();
+  candidatos.forEach(pm => unicos.set(pm.homeTeamName + '|' + pm.awayTeamName, pm));
+  return unicos.size === 1 ? Array.from(unicos.values())[0] : null;
+}
+
 function agregarPrimeraMitad(mapaCombinado, fuentes) {
   const listaFuentes = fuentes || [];
 
@@ -359,10 +434,11 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
       return;
     }
     const primeraMitadPorPartido = fuente.partidos || [];
-    const match = primeraMitadPorPartido.find(pm =>
+    let match = primeraMitadPorPartido.find(pm =>
       (nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamName) || nombresDeEquipoCoinciden(juego.homeTeam, pm.homeTeamShortName)) &&
       (nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamName) || nombresDeEquipoCoinciden(juego.awayTeam, pm.awayTeamShortName))
     );
+    if (!match) match = cruceFlexibleUnico(juego, primeraMitadPorPartido);
     if (match) {
       juego.homeScore1H = match.homeScore1H;
       juego.awayScore1H = match.awayScore1H;
