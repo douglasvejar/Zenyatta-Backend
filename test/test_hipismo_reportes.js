@@ -441,13 +441,14 @@ function check(cond, msg) {
   // DEVOLUCION A LOS CLIENTES"): Remate ya NO suma acá -- el total baja
   // de 1,8 (1 Tercios + 0,3 Remate + 0,5 Tabla Fija) a 1,5 (1 + 0,5,
   // solo Tercios y Tabla Fija), y su carrera (2) desaparece del detalle.
-  check(pedroDevuelto.total === 1.5, 'PEDRO se devuelve 1,5 en total (1% de 150 -- Tercios + Tabla Fija, Remate ya NO cuenta)');
+  // 11-10-2026: la Tabla Fija tampoco devuelve % (Tablas y Marcas no entran en la devolución).
+  check(pedroDevuelto.total === 1, 'PEDRO se devuelve 1 en total (1% de 100 -- solo Tercios; ni Remate ni la Tabla Fija devuelven %)');
   check(pedroDevuelto.hipodromos.length === 1 && pedroDevuelto.hipodromos[0].nombre === 'La Rinconada', 'Agrupado por hipódromo: solo "La Rinconada"');
-  check(pedroDevuelto.hipodromos[0].total === 1.5, 'El total de "La Rinconada" es 1,5 (Tercios + Tabla Fija, sin Remate)');
-  check(pedroDevuelto.hipodromos[0].carreras.length === 2, 'Trae solo 2 carreras (1 y 3) -- la carrera 2 (Remate) ya no genera % devuelto');
+  check(pedroDevuelto.hipodromos[0].total === 1, 'El total de "La Rinconada" es 1 (solo Tercios)');
+  check(pedroDevuelto.hipodromos[0].carreras.length === 1, 'Trae solo la carrera 1 -- ni la 2 (Remate) ni la 3 (Tabla Fija) generan % devuelto');
   check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 1 && c.devuelto === 1), 'Carrera 1 (Tercios, 100 apostado): devuelto 1');
   check(!pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 2), 'Carrera 2 (Remate) NO aparece -- el Remate no produce % devuelto a los clientes');
-  check(pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 3 && c.devuelto === 0.5), 'Carrera 3 (Tabla Fija, 50 apostado): devuelto 0,5');
+  check(!pedroDevuelto.hipodromos[0].carreras.some(c => c.carreraNumero === 3), 'Carrera 3 (Tabla Fija) NO aparece: las Tablas Fijas no devuelven %');
   check(pedroDevuelto.destino === 'PEDRO', 'Sin aval configurado, "destino" es el propio cliente');
 
   // --- 2b) Avalador ADICIONAL (23-09-2026, #63, a pedido del usuario:
@@ -461,11 +462,11 @@ function check(cond, msg) {
   const resDevueltasConAval = await invocarRuta(handlerComisionesDevueltas, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
   check(resDevueltasConAval._json.clientes.length === 2, '2b) Con el avalador configurado, PEDRO ahora sale en 2 renglones (su % propio + el del avalador), nunca mezclados');
   const pedroPropioConAval = resDevueltasConAval._json.clientes.find(c => c.destino === 'PEDRO');
-  check(!!pedroPropioConAval && pedroPropioConAval.nombre === 'PEDRO' && pedroPropioConAval.total === 1.5 && pedroPropioConAval.porcentaje === 1 && !pedroPropioConAval.esAvalAdicional,
-    'La entrada propia de PEDRO no cambia: sigue en 1,5 con destino=PEDRO');
+  check(!!pedroPropioConAval && pedroPropioConAval.nombre === 'PEDRO' && pedroPropioConAval.total === 1 && pedroPropioConAval.porcentaje === 1 && !pedroPropioConAval.esAvalAdicional,
+    'La entrada propia de PEDRO no cambia: sigue en 1 con destino=PEDRO');
   const pedroConAval = resDevueltasConAval._json.clientes.find(c => c.destino === 'AVAL DE PEDRO');
   check(!!pedroConAval && pedroConAval.nombre === 'PEDRO', 'El reporte SIGUE agrupado por quién apostó (PEDRO), no por el avalador — para poder auditar "quién generó cuánto"');
-  check(!!pedroConAval && pedroConAval.total === 3 && pedroConAval.porcentaje === 2 && pedroConAval.esAvalAdicional === true, 'La entrada del avalador es un 2% aparte -> 3,00 (2% de 150), un renglón totalmente independiente del propio');
+  check(!!pedroConAval && pedroConAval.total === 2 && pedroConAval.porcentaje === 2 && pedroConAval.esAvalAdicional === true, 'La entrada del avalador es un 2% aparte -> 2,00 (2% de 100), un renglón totalmente independiente del propio');
 
   // --- GET /planos/dias (23-09-2026, duodécima-tercera ronda, rediseño
   // de "Eliminar Planos": "al entrar alli vere ordenado por dia") — con

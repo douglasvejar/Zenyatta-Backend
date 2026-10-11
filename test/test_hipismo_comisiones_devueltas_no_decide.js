@@ -196,17 +196,18 @@ async function invocarRuta(handler, req) {
 
   check(!!filaPedro && Math.abs(filaPedro.total - 2.00) < 0.001,
     `1b) ARREGLO: PEDRO en /comisiones-devueltas da 2,00 (SOLO el ticket decidido de 100; el "pp" anulado de 50 -- caso real: Sebastian -- no suma nada) -- dio ${filaPedro ? filaPedro.total : 'nada'}`);
-  check(!!filaAna && Math.abs(filaAna.total - 6.00) < 0.001,
-    `1c) ARREGLO: ANA en /comisiones-devueltas da 6,00 (SOLO la Marca decidida de 200; la Marca "sin_decidir" de 80 no suma nada) -- dio ${filaAna ? filaAna.total : 'nada'}`);
+  // 11-10-2026: las Marcas no devuelven % a nadie (ni decididas ni anuladas).
+  check(!filaAna,
+    `1c) ANA NO aparece en /comisiones-devueltas: sus Marcas (decidida o no) no devuelven % -- dio ${filaAna ? filaAna.total : 'nada (correcto)'}`);
   check(!filaSolonula, '1d) ARREGLO: SOLONULA (su única jugada del día quedó anulada) NO aparece en /comisiones-devueltas -- ni con total 0');
 
   // El detalle expandido de PEDRO solo debe traer la carrera decidida.
   check(!!filaPedro && Array.isArray(filaPedro.hipodromos) && filaPedro.hipodromos.length === 1 && filaPedro.hipodromos[0].carreras.length === 1,
     '1e) El detalle expandido de PEDRO trae UNA sola carrera (la decidida) -- la anulada ni aparece en el detalle');
 
-  const totalGeneralEsperado = 8.00; // 2,00 (PEDRO) + 6,00 (ANA)
+  const totalGeneralEsperado = 2.00; // solo PEDRO (Tercios); las Marcas de ANA no devuelven
   check(Math.abs((salidaDevueltas && salidaDevueltas.totalGeneral) - totalGeneralEsperado) < 0.001,
-    `1f) totalGeneral de /comisiones-devueltas = 8,00 (2,00 + 6,00, sin las jugadas anuladas) -- dio ${salidaDevueltas && salidaDevueltas.totalGeneral}`);
+    `1f) totalGeneral de /comisiones-devueltas = 2,00 (solo PEDRO) -- dio ${salidaDevueltas && salidaDevueltas.totalGeneral}`);
 
   // ---- 2) GET /comisiones-devueltas-por-hipodromo?fecha= ----
   const salidaHipodromo = await invocarRuta(handlerDe('get', '/comisiones-devueltas-por-hipodromo'), { ...reqBase, query: { fecha: FECHA } });
@@ -216,7 +217,7 @@ async function invocarRuta(handler, req) {
   check(!!rinconada && Math.abs(rinconada.totalDevuelto - 2.00) < 0.001,
     `2b) ARREGLO: "La Rinconada" (Tercios de PEDRO) da 2,00, no 3,00 -- dio ${rinconada ? rinconada.totalDevuelto : 'nada'}`);
   check(Math.abs((salidaHipodromo && salidaHipodromo.totalGeneral) - totalGeneralEsperado) < 0.001,
-    `2c) totalGeneral de /comisiones-devueltas-por-hipodromo = 8,00 -- dio ${salidaHipodromo && salidaHipodromo.totalGeneral}`);
+    `2c) totalGeneral de /comisiones-devueltas-por-hipodromo = 2,00 -- dio ${salidaHipodromo && salidaHipodromo.totalGeneral}`);
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

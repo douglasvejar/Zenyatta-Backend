@@ -89,7 +89,8 @@ const {
   parsearJugadasAdelantadas, esMarcaDecidible, resolverTablaFija,
   resolverClienteMarca, resolverBanqueoMarca, banqueoAutomaticoMarca, banqueoAutomaticoTablaFija, armarBloqueAdelantadas, round2,
   montoDecidido, montoDecididoExacto, montoBaseComisionExacto,
-  parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada, resolverMontosManuales
+  parsearRetirados, apuestaConRetirado, adelantadaConRetirado, pctJugada, banqueadoresJugada, resolverMontosManuales,
+  ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO
 } = require('../services/hipismoAdelantadasCalc');
 const { armarDatosImagenPlano } = require('../services/hipismoPlanoImagen');
 // "Jugadas entre Tercios Adelantadas" (04-10-2026, nueva pestaña hermana
@@ -3176,7 +3177,7 @@ function entradasApostadasDeTickets(tickets, resueltas, resueltasTercios) {
     if (Number(r.resultadoBanquero) !== 0) entradasTerciosAdelantadas.push({ nombre: r.banquero, monto: montoBaseTerciosAdelantadaExacto(r.resultadoBanquero, r.comisionPorcentaje) });
   });
   return entradasTickets
-    .concat((resueltas || []).filter(r => r.gano !== null && !r.sinComision).map(r => ({ nombre: r.cliente, monto: montoDecididoExacto(r.resultadoCliente, true) })))
+    .concat((resueltas || []).filter(r => ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && r.gano !== null && !r.sinComision).map(r => ({ nombre: r.cliente, monto: montoDecididoExacto(r.resultadoCliente, true) })))
     .concat(entradasTerciosAdelantadas);
 }
 
@@ -4908,7 +4909,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
       // montoDecidido con sinComision=true lo deja en valor absoluto.
       montoDecidido: montoDecidido(j.resultado_cliente, true),
       montoDecididoExacto: montoDecididoExacto(j.resultado_cliente, true),
-      decidida: j.gano !== null && !j.sin_comision, // sin comisión (07-10-2026): no genera % devuelto
+      decidida: ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && j.gano !== null && !j.sin_comision, // sin comisión (07-10-2026): no genera % devuelto
       // j.gano ya viene en el formato exacto que necesita el front (01-10-2026,
       // "si jugo o dio el caballo"): true/false ya decidido, null = SIN DECIDIR
       // (Marca todavía sin pizarra — Tabla Fija siempre decide true/false, ver
@@ -4943,7 +4944,7 @@ async function obtenerApuestasDelRango(grupoId, desde, hasta, incluirBanquero = 
           monto: Number(j.monto),
           montoDecidido: round2(parte),
           montoDecididoExacto: parte,
-          decidida: j.gano !== null && !j.sin_comision,
+          decidida: ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && j.gano !== null && !j.sin_comision,
           gano: j.gano,
           rol: 'banquero'
         });
@@ -5937,7 +5938,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // claveCarrera con p.fecha/p.hipodromo_nombre/j.carrera_numero (agregadas
   // arriba a rAdelantadas) para poder fusionar con tickets de Tercios de la
   // misma carrera.
-  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
+  rAdelantadas.rows.filter(j => ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularSaldo(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true), claveCarrera);
@@ -5948,7 +5949,7 @@ router.get('/saldo-comisiones', asyncHandler(async (req, res) => {
   // para repartir entre banqueadores — ver services/hipismoAdelantadasCalc.js),
   // nunca de j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
+    if (!ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO || !Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
     const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
@@ -6267,7 +6268,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // claveCarrera con p.hipodromo_nombre/j.carrera_numero (agregadas arriba
   // a rAdelantadas) para poder fusionar con tickets de Tercios de la misma
   // carrera.
-  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
+  rAdelantadas.rows.filter(j => ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaIsoJ = j.fecha instanceof Date ? isoDeFechaUTC(j.fecha) : j.fecha;
     const claveCarreraJ = `${fechaIsoJ}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularDevueltoDia(j.cliente_nombre, j.fecha, montoDecididoExacto(j.resultado_cliente, true), claveCarreraJ);
@@ -6277,7 +6278,7 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // base DECIDIDA de la jugada completa (|resultado_cliente|), nunca de
   // j.monto (el apostado bruto de la Marca completa).
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
+    if (!ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO || !Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
     const baseJugada = montoDecididoExacto(j.resultado_cliente, true);
     const fechaIsoJ = j.fecha instanceof Date ? isoDeFechaUTC(j.fecha) : j.fecha;
     const claveCarreraJ = `${fechaIsoJ}::${j.hipodromo_nombre}::${j.carrera_numero}`;

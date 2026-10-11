@@ -208,8 +208,9 @@ async function invocarRuta(handler, req) {
 
   check(!!filaPedroPct && Math.abs(filaPedroPct.saldo - 2.00) < 0.001,
     `1b) ARREGLO: "PEDRO - PORCENTAJE" da 2,00 (SOLO el 2%% del ticket DECIDIDO de 100; el ticket ANULADO de 50 no suma nada) -- dio ${filaPedroPct ? filaPedroPct.saldo : 'nada'}`);
-  check(!!filaAnaPct && Math.abs(filaAnaPct.saldo - 6.00) < 0.001,
-    `1c) ARREGLO: "ANA - PORCENTAJE" da 6,00 (SOLO el 3%% de la Marca DECIDIDA de 200; la Marca ANULADA de 80 no suma nada) -- dio ${filaAnaPct ? filaAnaPct.saldo : 'nada'}`);
+  // 11-10-2026: las Marcas no devuelven % a nadie.
+  check(!filaAnaPct || Math.abs(filaAnaPct.saldo) < 0.001,
+    `1c) "ANA - PORCENTAJE" NO recibe nada por sus Marcas (no devuelven %) -- dio ${filaAnaPct ? filaAnaPct.saldo : 'nada (correcto)'}`);
 
   // ---- 2) GET /saldo-comisiones (mismo cálculo, vista de saldo semanal) ----
   const reqSaldo = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };
@@ -220,8 +221,8 @@ async function invocarRuta(handler, req) {
   const saldoAna = filasSaldo.find(c => c.nombre === 'ANA' && c.destino === 'ANA');
   check(!!saldoPedro && Math.abs(saldoPedro.devueltoSemana - 2.00) < 0.001,
     `2b) /saldo-comisiones también trae a PEDRO con 2,00 (sin el ticket anulado) -- dio ${saldoPedro ? saldoPedro.devueltoSemana : 'nada'}`);
-  check(!!saldoAna && Math.abs(saldoAna.devueltoSemana - 6.00) < 0.001,
-    `2c) /saldo-comisiones también trae a ANA con 6,00 (sin la Marca anulada) -- dio ${saldoAna ? saldoAna.devueltoSemana : 'nada'}`);
+  check(!saldoAna || Math.abs(saldoAna.devueltoSemana) < 0.001,
+    `2c) /saldo-comisiones NO trae devolución para ANA por sus Marcas -- dio ${saldoAna ? saldoAna.devueltoSemana : 'nada (correcto)'}`);
 
   global.Date = OriginalDate;
 

@@ -210,12 +210,14 @@ async function invocarRuta(handler, req) {
   // JOSUE acierta la Marca de $600 apostados -> decidida (resultado_cliente)
   // = round2(600/1.2) = $500. MRINCREIBLE banqueó el 50% de esa decidida =
   // $250 puntuales. 1% de $250 = $2,50; cada aval al 0,5% de $250 = $1,25.
-  check(!!filaMrPct && Math.abs(filaMrPct.saldo - 2.50) < 0.001,
-    `1b) ARREGLO: "MRINCREIBLE - PORCENTAJE" aparece con +2,50 (1% de los $250 que banqueó de lo DECIDIDO, escalados de su 50% sobre los $500 decididos, no sobre los $600 apostados) -- dio ${filaMrPct ? filaMrPct.saldo : 'nada (bug reproducido)'}`);
-  check(!!filaFerro && Math.abs(filaFerro.saldo - 1.25) < 0.001,
-    `1c) "FERROCARRIL" (aval de MRINCREIBLE al 0,5%, directo a su propia ficha) aparece con +1,25 -- dio ${filaFerro ? filaFerro.saldo : 'nada (bug reproducido)'}`);
-  check(!!filaPurga && Math.abs(filaPurga.saldo - 1.25) < 0.001,
-    `1d) "PURGA" (el otro aval de MRINCREIBLE al 0,5%, directo a su propia ficha) aparece con +1,25 -- dio ${filaPurga ? filaPurga.saldo : 'nada (bug reproducido)'}`);
+  // 11-10-2026 (a pedido del usuario): las Marcas NO devuelven % a nadie -- ni al jugador, ni a su
+  // aval, ni a quien las banquea. Lo que antes daba 2,50 / 1,25 / 1,25 ahora no existe.
+  check(!filaMrPct || Math.abs(filaMrPct.saldo) < 0.001,
+    `1b) "MRINCREIBLE - PORCENTAJE" NO recibe nada por banquear una Marca -- dio ${filaMrPct ? filaMrPct.saldo : 'nada (correcto)'}`);
+  check(!filaFerro || Math.abs(filaFerro.saldo) < 0.001,
+    `1c) "FERROCARRIL" (aval de MRINCREIBLE) NO recibe % por esa Marca -- dio ${filaFerro ? filaFerro.saldo : 'nada (correcto)'}`);
+  check(!filaPurga || Math.abs(filaPurga.saldo) < 0.001,
+    `1d) "PURGA" (el otro aval) NO recibe % por esa Marca -- dio ${filaPurga ? filaPurga.saldo : 'nada (correcto)'}`);
 
   // ---- 2) GET /saldo-comisiones (mismo cálculo, vista de saldo semanal) ----
   const reqSaldo = { grupoId: GRUPO_ID, grupo: { nombre: 'Zenyatta' }, params: {}, query: { semana: 'actual' } };
@@ -225,12 +227,12 @@ async function invocarRuta(handler, req) {
   const saldoMrPropio = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'MRINCREIBLE');
   const saldoFerro = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'FERROCARRIL');
   const saldoPurga = filasSaldo.find(c => c.nombre === 'MRINCREIBLE' && c.destino === 'PURGA');
-  check(!!saldoMrPropio && Math.abs(saldoMrPropio.devueltoSemana - 2.50) < 0.001,
-    `2b) /saldo-comisiones también trae a MRINCREIBLE devolviendo 2,50 por banquear la Marca -- dio ${saldoMrPropio ? saldoMrPropio.devueltoSemana : 'nada'}`);
-  check(!!saldoFerro && Math.abs(saldoFerro.devueltoSemana - 1.25) < 0.001,
-    `2c) /saldo-comisiones trae a FERROCARRIL (avalador, generado por MRINCREIBLE) con 1,25 -- dio ${saldoFerro ? saldoFerro.devueltoSemana : 'nada'}`);
-  check(!!saldoPurga && Math.abs(saldoPurga.devueltoSemana - 1.25) < 0.001,
-    `2d) /saldo-comisiones trae a PURGA (avaladora, generado por MRINCREIBLE) con 1,25 -- dio ${saldoPurga ? saldoPurga.devueltoSemana : 'nada'}`);
+  check(!saldoMrPropio || Math.abs(saldoMrPropio.devueltoSemana) < 0.001,
+    `2b) /saldo-comisiones NO trae devolución para MRINCREIBLE por banquear la Marca -- dio ${saldoMrPropio ? saldoMrPropio.devueltoSemana : 'nada (correcto)'}`);
+  check(!saldoFerro || Math.abs(saldoFerro.devueltoSemana) < 0.001,
+    `2c) /saldo-comisiones NO trae a FERROCARRIL (aval) por esa Marca -- dio ${saldoFerro ? saldoFerro.devueltoSemana : 'nada (correcto)'}`);
+  check(!saldoPurga || Math.abs(saldoPurga.devueltoSemana) < 0.001,
+    `2d) /saldo-comisiones NO trae a PURGA (aval) por esa Marca -- dio ${saldoPurga ? saldoPurga.devueltoSemana : 'nada (correcto)'}`);
 
   global.Date = OriginalDate;
 

@@ -110,6 +110,16 @@
 // flotante (los montos reales nunca caen a menos de 0,01 centavos de un
 // empate de verdad). No uses Math.round(x * 100) / 100 suelto en ningún lado:
 // usa esta función. Ver test/test_hipismo_cuadre_aleatorio.js.
+// 11-10-2026 (a pedido explícito del usuario: "las Tablas y las Marcas NO generan %
+// devuelto a los clientes que tengan % de devolución o comisión, ni para ellos ni para
+// nadie -- esas jugadas, Tablas y Marcas en específico, no devuelven comisión a nadie"):
+// ni el cliente que juega una Tabla Fija / Marca, ni sus avales, ni los banqueadores de
+// una Marca ganan "% devuelto" por ellas. La comisión que esas jugadas dejan al grupo NO
+// cambia. Un solo interruptor para que TODOS los reportes (Balance General, Semana por
+// días, Comisiones Devueltas, Saldo de Comisiones, links, Cargar Planos) coincidan.
+// (Las Jugadas entre Tercios Adelantadas NO entran en esto: siguen generando %.)
+const ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO = false;
+
 function round2(n) {
   const x = Number(n) || 0;
   const signo = x < 0 ? -1 : 1;
@@ -737,6 +747,7 @@ function adelantadaConRetirado(j, retirados) {
 }
 
 module.exports = {
+  ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO,
   parsearJugadasAdelantadas,
   parsearRetirados,
   pctJugada,

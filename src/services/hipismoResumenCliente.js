@@ -22,7 +22,7 @@ const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
 const { asegurarBanqueoAutomaticoMarcas } = require('./hipismoMarcasBanqueoAuto');
-const { round2, montoDecididoExacto, montoBaseComisionExacto } = require('./hipismoAdelantadasCalc');
+const { round2, montoDecididoExacto, montoBaseComisionExacto, ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
 const { rangoSemanaGrupo } = require('./hipismoSemana');
@@ -349,6 +349,8 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
         if (linea.tipo === 'winner') return;
         if (linea.tipo === 'remate') return;
         if (linea.tipo === 'cruce_ajuste') return;
+        // Tablas Fijas y Marcas NO devuelven % a nadie (11-10-2026, ver ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO).
+        if (linea.tipo === 'adelantada' && !ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO) return;
         // NUNCA una jugada que "no se decidió" (29-09-2026, a pedido
         // explícito del usuario: "toda jugada que no se decida no genera
         // % ni comisión"). linea.resultado queda en 0 exactamente cuando
@@ -629,6 +631,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       if (!linea.rol || Number(linea.resultado) === 0) return;
       const clave = `${linea.fecha}::${linea.hipodromoNombre}::${linea.carreraNumero}`;
       if (linea.tipo) {
+        if (linea.tipo === 'adelantada' && !ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO) return; // Tablas/Marcas no devuelven % (11-10-2026)
         otrosPorCarrera.set(clave, (otrosPorCarrera.get(clave) || 0) + Math.abs(Number(montoBaseParaPct(linea)) || 0));
         return;
       }
@@ -711,7 +714,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // agrupamiento por carrera y se calculan exactamente como siempre,
     // línea por línea.
     let comisionIncluida = 0;
-    if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0) {
+    if (pctPropioIncluido && linea.rol && Number(linea.resultado) !== 0 && !(linea.tipo === 'adelantada' && !ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO)) {
       // 05-10-2026: TODAS las líneas con rol (Tercios, Tablas/Marcas y
       // Jugadas entre Tercios Adelantadas) comparten la misma comisión
       // fusionada de su carrera, asignada a la PRIMERA línea de esa
@@ -1632,7 +1635,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // p.fecha/p.hipodromo_nombre/j.carrera_numero (agregadas arriba a
   // rAdelantadas) para poder fusionar con tickets de Tercios de la misma
   // carrera, igual que ya hace obtenerApuestasDelRango.
-  rAdelantadas.rows.filter(j => j.gano !== null && !j.sin_comision).forEach(j => {
+  rAdelantadas.rows.filter(j => ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO && j.gano !== null && !j.sin_comision).forEach(j => {
     const fechaFila = j.fecha instanceof Date ? j.fecha.toISOString().slice(0, 10) : j.fecha;
     const claveCarrera = `${fechaFila}::${j.hipodromo_nombre}::${j.carrera_numero}`;
     acumularDevuelto(j.cliente_nombre, montoDecididoExacto(j.resultado_cliente, true), claveCarrera);
@@ -1648,7 +1651,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // del .filter() de arriba a propósito para no confundir al próximo
   // lector con un filtro que acá nunca hace nada.)
   rAdelantadas.rows.forEach(j => {
-    if (!Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026): no genera % devuelto
+    if (!ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO || !Array.isArray(j.banqueadores) || j.sin_comision) return; // sin comisión (07-10-2026) y Tablas/Marcas (11-10-2026): no genera % devuelto
     // montoDecididoExacto, no montoDecidido (02-10-2026, ver la nota
     // grande EXACTA en hipismoAdelantadasCalc.js) — sin redondear antes de
     // repartir entre banqueadores.

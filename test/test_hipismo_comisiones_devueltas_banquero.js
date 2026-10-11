@@ -212,12 +212,13 @@ async function invocarRuta(handler, req) {
     `1e) ARREGLO: Horseshoe Indianapolis (banqueado) aporta 2,00 al detalle de MUJICA -- antes del fix esta carrera no aparecía en absoluto`);
 
   // ---- 2) Lado BANQUERO de una Marca (Jugadas Adelantadas) ----
-  check(!!filaSocio && Math.abs(filaSocio.total - 2.40) < 0.001,
-    `2a) ARREGLO: SOCIO (banqueó el 40% de la Marca de CARLOS, 2% propio sobre 300*40%=120) da 2,40 en /comisiones-devueltas -- dio ${filaSocio ? filaSocio.total : 'nada'}`);
+  // 11-10-2026 (a pedido del usuario): las Marcas NO devuelven % a nadie, tampoco a quien las banquea.
+  check(!filaSocio,
+    `2a) SOCIO (banqueó el 40% de la Marca de CARLOS) NO aparece en /comisiones-devueltas: las Marcas no devuelven % -- dio ${filaSocio ? filaSocio.total : 'nada (correcto)'}`);
 
-  const totalGeneralEsperado = 5.10; // 2,70 (MUJICA) + 2,40 (SOCIO)
+  const totalGeneralEsperado = 2.70; // solo MUJICA (Tercios); la Marca de SOCIO ya no devuelve nada
   check(Math.abs((salidaDevueltas && salidaDevueltas.totalGeneral) - totalGeneralEsperado) < 0.001,
-    `2b) totalGeneral de /comisiones-devueltas = 5,10 (2,70 + 2,40) -- dio ${salidaDevueltas && salidaDevueltas.totalGeneral}`);
+    `2b) totalGeneral de /comisiones-devueltas = 2,70 (solo MUJICA) -- dio ${salidaDevueltas && salidaDevueltas.totalGeneral}`);
 
   // ---- 3) GET /comisiones-devueltas-por-hipodromo?fecha= ----
   const salidaHipodromo = await invocarRuta(handlerDe('get', '/comisiones-devueltas-por-hipodromo'), { ...reqBase, query: { fecha: FECHA } });
@@ -227,7 +228,7 @@ async function invocarRuta(handler, req) {
   check(!!horseshoe && Math.abs(horseshoe.totalDevuelto - 2.00) < 0.001,
     `3b) ARREGLO: Horseshoe Indianapolis (solo lo que MUJICA banqueó ahí) da 2,00 en /comisiones-devueltas-por-hipodromo -- antes del fix no aparecía -- dio ${horseshoe ? horseshoe.totalDevuelto : 'nada'}`);
   check(Math.abs((salidaHipodromo && salidaHipodromo.totalGeneral) - totalGeneralEsperado) < 0.001,
-    `3c) totalGeneral de /comisiones-devueltas-por-hipodromo = 5,10 -- dio ${salidaHipodromo && salidaHipodromo.totalGeneral}`);
+    `3c) totalGeneral de /comisiones-devueltas-por-hipodromo = 2,70 -- dio ${salidaHipodromo && salidaHipodromo.totalGeneral}`);
 
   // ---- 4) Regresión: /montos-apostados NO debe sumarle a MUJICA/SOCIO
   // lo que banquearon -- "banquear no es apostar" (ver la nota grande de

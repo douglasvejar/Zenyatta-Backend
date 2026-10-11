@@ -728,7 +728,8 @@ function reqBase(grupoId) {
   // resolverTablaFija() nunca le resta ninguna comisión a resultadoCliente,
   // así que 225 ya es "lo decidido" sin comisión que invertir), NO de los
   // 75 apostados = 2,25, SIN que su resultado normal (+225) se toque.
-  check(resPlanos12._json.totalesFinales['LINARES - PORCENTAJE'] === 2.25, 'Balance General trae el ítem "LINARES - PORCENTAJE" +2,25 (1% de los 225 decididos en su Tabla Fija, no de los 75 apostados), sin tocar su +225 normal');
+  // 11-10-2026: las Tablas Fijas NO devuelven % (ni al jugador ni a su aval).
+  check(!('LINARES - PORCENTAJE' in resPlanos12._json.totalesFinales) && resPlanos12._json.totalesFinales.LINARES === 225, 'Balance General NO trae "LINARES - PORCENTAJE" por su Tabla Fija (las Tablas no devuelven %), y su +225 normal queda igual');
   // La Marca de Halland todavía no tiene banqueadores asignados (sigue
   // 'falta_banqueo') — solo entra el lado del cliente por ahora, el de
   // los banqueadores se suma más adelante cuando se resuelva el banqueo
