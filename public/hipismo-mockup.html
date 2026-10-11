@@ -1098,27 +1098,63 @@
   .vista.activa { display: block; }
 
   /* Pantallas de revisión (11-10-2026): Tablas y Marcas Premiadas / Adelantadas de Clientes */
-  .rev-resumen { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 16px; }
-  .rev-resumen .rev-dato { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 14px; min-width: 120px; }
-  .rev-resumen .rev-dato .et { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
-  .rev-resumen .rev-dato .val { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .rev-dia { margin: 18px 0 6px; font-size: 15px; font-weight: 800; }
-  .rev-hip { margin: 12px 0 6px; font-size: 13.5px; font-weight: 800; color: var(--text-dim); }
-  .rev-carrera { border: 1px solid var(--card-border); border-radius: 10px; margin: 8px 0 14px; overflow: hidden; background: var(--card); }
-  .rev-carrera-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--card-2); font-weight: 800; font-size: 13px; }
-  .rev-carrera-cab .rev-pizarra { font-weight: 600; color: var(--text-dim); font-size: 12px; }
+  .rev-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 18px; }
+  .rev-resumen .rev-dato { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; }
+  .rev-resumen .rev-dato.rev-dato-ancho { grid-column: span 2; }
+  .rev-resumen .rev-dato .et { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .rev-resumen .rev-dato .val { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .rev-dia { margin: 26px 0 4px; padding: 8px 14px; border-radius: 10px; background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 70%); color: #fff; font-size: 14.5px; font-weight: 800; letter-spacing: .02em; }
+  .rev-hip { margin: 16px 0 8px; font-size: 14px; font-weight: 800; padding-left: 4px; display: flex; align-items: center; gap: 8px; }
+  .rev-hip::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
+  .rev-carrera { border: 1px solid var(--card-border); border-radius: 12px; margin: 10px 0 16px; overflow: hidden; background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .rev-carrera-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; background: var(--card-2); border-bottom: 1px solid var(--card-border); }
+  .rev-carrera-tit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
+  .rev-carrera-num { background: var(--accent-grass); color: #fff; border-radius: 8px; padding: 2px 10px; font-size: 13px; }
+  .rev-pizarra { display: inline-flex; align-items: center; gap: 4px; }
+  .rev-pizarra .rev-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); font-weight: 700; margin-right: 2px; }
+  .rev-pizarra .rev-cab { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 800; background: var(--card); border: 1px solid var(--card-border); font-variant-numeric: tabular-nums; }
+  .rev-pizarra .rev-cab.p1 { background: #f6c945; border-color: #d9a900; color: #3b2e00; }
+  .rev-pizarra .rev-cab.p2 { background: #d5dbe0; border-color: #aab3ba; color: #2b3238; }
+  .rev-pizarra .rev-cab.p3 { background: #e0a679; border-color: #b9783f; color: #3a2210; }
+  .rev-carrera-sub { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .rev-carrera-sub b { color: var(--text); }
   .rev-tabla-wrap { overflow-x: auto; }
-  .rev-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  .rev-tabla th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); padding: 6px 10px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
-  .rev-tabla td { padding: 7px 10px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
-  .rev-tabla tr:last-child td { border-bottom: none; }
+  .rev-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .rev-tabla th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); padding: 8px 12px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+  .rev-tabla td { padding: 10px 12px; border-bottom: 1px solid var(--card-border); vertical-align: middle; }
+  .rev-tabla tbody tr:nth-child(even) td { background: rgba(120, 140, 120, 0.05); }
+  .rev-tabla tbody tr:last-child td { border-bottom: none; }
   .rev-tabla .num, .rev-tabla th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .rev-tabla .rev-banca div { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .rev-tabla tr.rev-sin-banca td { background: rgba(255, 193, 7, 0.10); }
-  .rev-etiqueta { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); }
+  .rev-tabla td.rev-cli { font-weight: 800; font-size: 13.5px; box-shadow: inset 4px 0 0 var(--card-border); }
+  .rev-tabla tr.rev-gano td.rev-cli { box-shadow: inset 4px 0 0 var(--ok); }
+  .rev-tabla tr.rev-perdio td.rev-cli { box-shadow: inset 4px 0 0 var(--danger); }
+  .rev-tabla td.rev-saldo { font-size: 15px; font-weight: 800; }
+  .rev-banca { min-width: 260px; }
+  .rev-banca .rev-b { display: grid; grid-template-columns: 1fr auto 86px; align-items: center; gap: 8px; padding: 2px 0; font-variant-numeric: tabular-nums; }
+  .rev-banca .rev-b .rev-bn { font-weight: 600; }
+  .rev-banca .rev-b .rev-bm { text-align: right; font-weight: 800; }
+  .rev-tabla tr.rev-sin-banca td { background: rgba(255, 193, 7, 0.12); }
+  .rev-etiqueta { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 8px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); }
+  .rev-etiqueta.rev-tf { background: #e6f0ff; border-color: #b7cff5; color: #1f4f9f; }
+  .rev-etiqueta.rev-marca { background: #f3e8ff; border-color: #d4b8f5; color: #6b2fa8; }
   .rev-aviso { font-size: 11.5px; color: var(--danger); font-weight: 700; }
-  .rev-filtro { margin: 0 0 12px; }
-  .rev-filtro input { width: 100%; max-width: 360px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); font-size: 13px; }
+  .rev-filtro { margin: 0 0 4px; }
+  .rev-filtro input { width: 100%; max-width: 380px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--card); color: var(--text); font-size: 13px; }
+  /* Totales al final */
+  .rev-totales-tit { margin: 30px 0 4px; font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .rev-totales-nota { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+  .rev-totales { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+  .rev-tot-card { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .rev-tot-card h3 { margin: 0; padding: 10px 14px; background: var(--card-2); border-bottom: 1px solid var(--card-border); font-size: 13.5px; font-weight: 800; }
+  .rev-tot-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .rev-tot-card th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); padding: 7px 12px; border-bottom: 1px solid var(--card-border); }
+  .rev-tot-card td { padding: 8px 12px; border-bottom: 1px solid var(--card-border); }
+  .rev-tot-card tbody tr:nth-child(even) td { background: rgba(120, 140, 120, 0.05); }
+  .rev-tot-card .num, .rev-tot-card th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rev-tot-card tfoot td { font-weight: 800; background: var(--card-2); border-bottom: none; font-size: 14px; }
+  .rev-cuadre { margin-top: 16px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--card-2); display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .rev-cuadre .rev-cuadre-ok { font-weight: 800; }
+  @media (max-width: 700px) { .rev-resumen .rev-dato.rev-dato-ancho { grid-column: span 1; } .rev-totales { grid-template-columns: 1fr; } }
   .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
   .subnav button { background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 20px; cursor: pointer; }
   .subnav button.activo { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; border-color: transparent; }
@@ -15080,18 +15116,52 @@ async function cargarRev(vista) {
   repintarRev(vista);
 }
 
+// "Marcas zenyatta" -> "Marcas Zenyatta" (solo estética, no cambia cómo se agrupa nada).
+function nombreBonitoRev(n) {
+  return String(n == null ? '' : n).trim().toLowerCase().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+function pizarraHtmlRev(pizarra) {
+  const nums = String(pizarra || '').split(/[^0-9]+/).filter(Boolean);
+  if (!nums.length) return '';
+  return `<span class="rev-pizarra"><span class="rev-lbl">Pizarra</span>${nums.map((n, i) => `<span class="rev-cab${i < 3 ? ' p' + (i + 1) : ''}" title="${i + 1}º lugar">${escRev(n)}</span>`).join('')}</span>`;
+}
+function filaTotalRevHtml(nombre, jugadas, monto, saldo) {
+  return `<tr><td><b>${escRev(nombreBonitoRev(nombre))}</b></td><td class="num">${jugadas}</td><td class="num">${monto == null ? '' : formatMontoTabla(monto)}</td><td class="num ${claseSigno(saldo)}"><b>${montoConSigno(saldo)}</b></td></tr>`;
+}
+function tablaTotalRevHtml(titulo, filas, sumaSaldo, sumaJugadas, sumaMonto, conMonto) {
+  const cuerpo = filas.length ? filas.map(f => filaTotalRevHtml(f.nombre, f.jugadas, conMonto ? f.monto : null, f.saldo)).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Sin datos</td></tr>';
+  return `<div class="rev-tot-card"><h3>${titulo}</h3><table>
+    <thead><tr><th>Nombre</th><th class="num">Jugadas</th><th class="num">${conMonto ? 'Monto' : ''}</th><th class="num">Saldo</th></tr></thead>
+    <tbody>${cuerpo}</tbody>
+    <tfoot><tr><td>TOTAL</td><td class="num">${sumaJugadas}</td><td class="num">${conMonto ? formatMontoTabla(sumaMonto) : ''}</td><td class="num ${claseSigno(sumaSaldo)}">${montoConSigno(sumaSaldo)}</td></tr></tfoot>
+  </table></div>`;
+}
+// Suma por nombre (sin distinguir mayúsculas) -> [{nombre, jugadas, monto, saldo}] A-Z.
+function acumularTotalesRev(items) {
+  const m = new Map();
+  items.forEach(it => {
+    const k = String(it.nombre || '').trim().toUpperCase();
+    if (!m.has(k)) m.set(k, { nombre: k, jugadas: 0, monto: 0, saldo: 0 });
+    const f = m.get(k); f.jugadas += 1; f.monto += Number(it.monto) || 0; f.saldo += Number(it.saldo) || 0;
+  });
+  return Array.from(m.values()).map(f => ({ nombre: f.nombre, jugadas: f.jugadas, monto: Math.round(f.monto * 100) / 100, saldo: Math.round(f.saldo * 100) / 100 }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+const sumaRev = (arr, k) => Math.round(arr.reduce((acc, x) => acc + (Number(x[k]) || 0), 0) * 100) / 100;
+
 function repintarRev(vista) {
   const data = REV_DATOS[vista];
   if (!data) return;
   const cfg = REV_CONFIG[vista];
+  const esTyM = vista === 'revTablasMarcas';
   const Nombre = vista.charAt(0).toUpperCase() + vista.slice(1);
   const cont = document.getElementById('lista' + Nombre);
   const filtro = (document.getElementById('filtro' + Nombre).value || '').trim().toLowerCase();
 
-  const dato = (et, val, cls) => `<div class="rev-dato"><div class="et">${et}</div><div class="val ${cls || ''}">${val}</div></div>`;
+  const dato = (et, val, cls, ancho) => `<div class="rev-dato${ancho ? ' rev-dato-ancho' : ''}"><div class="et">${et}</div><div class="val ${cls || ''}">${val}</div></div>`;
   const rangoTxt = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}` + (data.numeroSemana ? ` · Semana ${data.numeroSemana.semana} de ${data.numeroSemana.anio}` : '');
-  let resumen = dato('Rango', rangoTxt) + dato('Jugadas', data.resumen.jugadas);
-  if (vista === 'revTablasMarcas') {
+  let resumen = dato('Rango', rangoTxt, '', true) + dato('Jugadas', data.resumen.jugadas);
+  if (esTyM) {
     resumen += dato('Tablas / Marcas', `${data.resumen.tablas} / ${data.resumen.marcas}`);
     resumen += dato('Clientes (neto)', '$ ' + montoConSigno(data.resumen.clientes), claseSigno(data.resumen.clientes));
     if (data.resumen.sinBanqueo) resumen += dato('Marcas sin banqueo', data.resumen.sinBanqueo, 'neg');
@@ -15103,12 +15173,11 @@ function repintarRev(vista) {
 
   const coincide = (j) => {
     if (!filtro) return true;
-    const textos = vista === 'revTablasMarcas'
-      ? [j.cliente].concat((j.banca || []).map(b => b.nombre))
-      : [j.jugador, j.banquero];
+    const textos = esTyM ? [j.cliente].concat((j.banca || []).map(b => b.nombre)) : [j.jugador, j.banquero];
     return textos.some(t => String(t || '').toLowerCase().includes(filtro));
   };
 
+  const todas = [];
   let html = '';
   data.dias.forEach(dia => {
     let htmlDia = '';
@@ -15117,15 +15186,17 @@ function repintarRev(vista) {
       hip.carreras.forEach(carrera => {
         const jugadas = carrera.jugadas.filter(coincide);
         if (!jugadas.length) return;
-        const filas = jugadas.map(j => vista === 'revTablasMarcas' ? filaRevTablaMarca(j) : filaRevAdelantadaCliente(j)).join('');
-        const encabezado = vista === 'revTablasMarcas'
+        jugadas.forEach(j => todas.push(j));
+        const filas = jugadas.map(j => esTyM ? filaRevTablaMarca(j) : filaRevAdelantadaCliente(j)).join('');
+        const encabezado = esTyM
           ? '<th>Cliente</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo cliente</th><th>Bancas (saldo real)</th><th class="num">Comisión grupo</th>'
           : '<th>Jugador</th><th>Banquero</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo jugador</th><th class="num">Saldo banquero</th><th class="num">Comisión grupo</th>';
+        const comCarrera = Math.round(jugadas.reduce((acc, j) => acc + (Number(j.comisionGrupo) || 0), 0) * 100) / 100;
         htmlHip += `
           <div class="rev-carrera">
             <div class="rev-carrera-cab">
-              <span>🏇 ${ordinalCarrera(carrera.carreraNumero)} Carrera${carrera.pizarra ? ` <span class="rev-pizarra">· Pizarra ${escRev(carrera.pizarra)}</span>` : ''}</span>
-              <span class="rev-pizarra">${carrera.totales.jugadas} jugada${carrera.totales.jugadas === 1 ? '' : 's'} · comisión grupo $ ${formatMontoTabla(carrera.totales.comisionGrupo)}</span>
+              <div class="rev-carrera-tit"><span class="rev-carrera-num">${ordinalCarrera(carrera.carreraNumero)}</span> Carrera ${pizarraHtmlRev(carrera.pizarra)}</div>
+              <div class="rev-carrera-sub"><b>${jugadas.length}</b> jugada${jugadas.length === 1 ? '' : 's'} · comisión grupo <b>$ ${formatMontoTabla(comCarrera)}</b></div>
             </div>
             <div class="rev-tabla-wrap"><table class="rev-tabla"><thead><tr>${encabezado}</tr></thead><tbody>${filas}</tbody></table></div>
           </div>`;
@@ -15134,20 +15205,68 @@ function repintarRev(vista) {
     });
     if (htmlDia) html += `<div class="rev-dia">📅 ${formatFechaCortaDMY(dia.fecha)}</div>${htmlDia}`;
   });
-  cont.innerHTML = html || `<div class="resultado-vacio">${filtro ? 'Nada coincide con esa búsqueda.' : cfg.vacio}</div>`;
+
+  if (!html) { cont.innerHTML = `<div class="resultado-vacio">${filtro ? 'Nada coincide con esa búsqueda.' : cfg.vacio}</div>`; return; }
+
+  // ----- TOTALES AL FINAL: de los clientes que jugaron y de las bancas -----
+  let totales;
+  const comTotal = sumaRev(todas, 'comisionGrupo');
+  if (esTyM) {
+    const clientes = acumularTotalesRev(todas.map(j => ({ nombre: j.cliente, monto: j.monto, saldo: j.resultadoCliente })));
+    const bancas = acumularTotalesRev([].concat(...todas.map(j => (j.banca || []).map(b => ({ nombre: b.nombre, monto: 0, saldo: b.monto })))));
+    const sumCli = sumaRev(clientes, 'saldo'), sumBan = sumaRev(bancas, 'saldo');
+    const conBanca = todas.filter(j => !j.sinBanqueo);
+    const sinBanq = todas.length - conBanca.length;
+    // Cuadre: solo con las jugadas que ya tienen banca (una Marca sin banqueo todavía no tiene lado banca).
+    const cliConBanca = sumaRev(conBanca.map(j => ({ v: j.resultadoCliente })), 'v');
+    const comConBanca = sumaRev(conBanca, 'comisionGrupo');
+    const dif = Math.round((cliConBanca + sumBan + comConBanca) * 100) / 100;
+    totales = `
+      <div class="rev-totales">
+        ${tablaTotalRevHtml('👤 Total de los clientes que jugaron', clientes, sumCli, sumaRev(clientes, 'jugadas'), sumaRev(clientes, 'monto'), true)}
+        ${tablaTotalRevHtml('🏦 Total de las bancas', bancas, sumBan, sumaRev(bancas, 'jugadas'), 0, false)}
+      </div>
+      <div class="rev-cuadre">
+        <span>Clientes <b class="${claseSigno(sumCli)}">${montoConSigno(sumCli)}</b></span>
+        <span>Bancas <b class="${claseSigno(sumBan)}">${montoConSigno(sumBan)}</b></span>
+        <span>Comisión del grupo <b>${formatMontoTabla(comTotal)}</b></span>
+        <span class="rev-cuadre-ok ${Math.abs(dif) <= 0.011 * Math.max(1, todas.length) ? 'pos' : 'neg'}">${Math.abs(dif) <= 0.011 * Math.max(1, todas.length) ? '✅ Cuadra: clientes + bancas + comisión = 0,00' + (dif !== 0 ? ' (diferencia de centavos por redondeo: ' + montoConSigno(dif) + ')' : '') : '⚠️ Diferencia: ' + montoConSigno(dif)}</span>
+        ${sinBanq ? `<span class="rev-aviso">${sinBanq} Marca${sinBanq === 1 ? '' : 's'} sin banqueo no entra${sinBanq === 1 ? '' : 'n'} en las bancas ni en el cuadre.</span>` : ''}
+      </div>`;
+  } else {
+    const jugadores = acumularTotalesRev(todas.map(j => ({ nombre: j.jugador, monto: j.monto, saldo: j.resultadoJugador })));
+    const banqueros = acumularTotalesRev(todas.map(j => ({ nombre: j.banquero, monto: j.monto, saldo: j.resultadoBanquero })));
+    const sumJ = sumaRev(jugadores, 'saldo'), sumB = sumaRev(banqueros, 'saldo');
+    const dif = Math.round((sumJ + sumB + comTotal) * 100) / 100;
+    totales = `
+      <div class="rev-totales">
+        ${tablaTotalRevHtml('👤 Total de los jugadores', jugadores, sumJ, sumaRev(jugadores, 'jugadas'), sumaRev(jugadores, 'monto'), true)}
+        ${tablaTotalRevHtml('🏦 Total de los banqueros', banqueros, sumB, sumaRev(banqueros, 'jugadas'), sumaRev(banqueros, 'monto'), true)}
+      </div>
+      <div class="rev-cuadre">
+        <span>Jugadores <b class="${claseSigno(sumJ)}">${montoConSigno(sumJ)}</b></span>
+        <span>Banqueros <b class="${claseSigno(sumB)}">${montoConSigno(sumB)}</b></span>
+        <span>Comisión del grupo <b>${formatMontoTabla(comTotal)}</b></span>
+        <span class="rev-cuadre-ok ${Math.abs(dif) <= 0.011 * Math.max(1, todas.length) ? 'pos' : 'neg'}">${Math.abs(dif) <= 0.011 * Math.max(1, todas.length) ? '✅ Cuadra: jugadores + banqueros + comisión = 0,00' + (dif !== 0 ? ' (diferencia de centavos por redondeo: ' + montoConSigno(dif) + ')' : '') : '⚠️ Diferencia: ' + montoConSigno(dif)}</span>
+      </div>`;
+  }
+  html += `<div class="rev-totales-tit">📊 Totales${filtro ? ' (solo lo que coincide con la búsqueda)' : ''}</div>
+    <div class="rev-totales-nota">Suma de todo lo que se ve arriba, por cliente y por banca. Es solo para revisar: no se suma a ningún saldo ni comisión.</div>${totales}`;
+  cont.innerHTML = html;
 }
 
 function filaRevTablaMarca(j) {
   const banca = j.sinBanqueo
     ? '<span class="rev-aviso">⚠️ Sin banqueo asignado todavía</span>'
-    : j.banca.map(b => `<div>${escRev(formatNombre(b.nombre))}${b.porcentaje != null && j.banca.length > 1 ? ` <span class="rev-etiqueta">${b.porcentaje}%</span>` : ''}: <span class="${claseSigno(b.monto)}">${montoConSigno(b.monto)}</span></div>`).join('');
-  const tipo = j.tipo === 'tf' ? 'Tabla' : 'Marca';
+    : j.banca.map(b => `<div class="rev-b"><span class="rev-bn">${escRev(nombreBonitoRev(b.nombre))}</span><span>${b.porcentaje != null && j.banca.length > 1 ? `<span class="rev-etiqueta">${b.porcentaje}%</span>` : ''}</span><span class="rev-bm ${claseSigno(b.monto)}">${montoConSigno(b.monto)}</span></div>`).join('');
+  const esTf = j.tipo === 'tf';
   const aviso = j.cuadra === false ? '<div class="rev-aviso">⚠️ No cuadra con la banca</div>' : '';
-  return `<tr class="${j.sinBanqueo ? 'rev-sin-banca' : ''}">
-    <td><b>${escRev(formatNombre(j.cliente))}</b></td>
-    <td><span class="rev-etiqueta">${tipo}</span> ${escRev(j.jugada)}${j.sinComision ? ' <span class="rev-etiqueta">sin comisión</span>' : ''}</td>
+  const clase = j.resultadoCliente > 0 ? 'rev-gano' : (j.resultadoCliente < 0 ? 'rev-perdio' : '');
+  return `<tr class="${clase} ${j.sinBanqueo ? 'rev-sin-banca' : ''}">
+    <td class="rev-cli">${escRev(nombreBonitoRev(j.cliente))}</td>
+    <td><span class="rev-etiqueta ${esTf ? 'rev-tf' : 'rev-marca'}">${esTf ? 'Tabla' : 'Marca'}</span> ${escRev(j.jugada.replace(/^(Marca|Tabla Fija) /, ''))}${j.sinComision ? ' <span class="rev-etiqueta">sin comisión</span>' : ''}</td>
     <td class="num">${formatMontoTabla(j.monto)}</td>
-    <td class="num ${claseSigno(j.resultadoCliente)}">${montoConSigno(j.resultadoCliente)}</td>
+    <td class="num rev-saldo ${claseSigno(j.resultadoCliente)}">${montoConSigno(j.resultadoCliente)}</td>
     <td class="rev-banca">${banca}${aviso}</td>
     <td class="num">${formatMontoTabla(j.comisionGrupo)}</td>
   </tr>`;
@@ -15155,13 +15274,14 @@ function filaRevTablaMarca(j) {
 
 function filaRevAdelantadaCliente(j) {
   const aviso = j.cuadra === false ? '<div class="rev-aviso">⚠️ No cuadra</div>' : '';
-  return `<tr>
-    <td><b>${escRev(formatNombre(j.jugador))}</b></td>
-    <td>${escRev(formatNombre(j.banquero))}</td>
+  const clase = j.resultadoJugador > 0 ? 'rev-gano' : (j.resultadoJugador < 0 ? 'rev-perdio' : '');
+  return `<tr class="${clase}">
+    <td class="rev-cli">${escRev(nombreBonitoRev(j.jugador))}</td>
+    <td>${escRev(nombreBonitoRev(j.banquero))}</td>
     <td>${escRev(j.jugada)}${j.comisionPorcentaje != null && !isNaN(j.comisionPorcentaje) ? ` <span class="rev-etiqueta">${j.comisionPorcentaje}%</span>` : ''}</td>
     <td class="num">${formatMontoTabla(j.monto)}</td>
-    <td class="num ${claseSigno(j.resultadoJugador)}">${montoConSigno(j.resultadoJugador)}</td>
-    <td class="num ${claseSigno(j.resultadoBanquero)}">${montoConSigno(j.resultadoBanquero)}${aviso}</td>
+    <td class="num rev-saldo ${claseSigno(j.resultadoJugador)}">${montoConSigno(j.resultadoJugador)}</td>
+    <td class="num rev-saldo ${claseSigno(j.resultadoBanquero)}">${montoConSigno(j.resultadoBanquero)}${aviso}</td>
     <td class="num">${formatMontoTabla(j.comisionGrupo)}</td>
   </tr>`;
 }
