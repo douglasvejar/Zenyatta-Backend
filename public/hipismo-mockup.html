@@ -8161,7 +8161,13 @@ setInterval(() => {
 // ------------------------------------------------------------------
 function textoJugadaTerciosAdelantada(l) {
   const modTxt = l.modalidad ? ` ${String(l.modalidad).toUpperCase()}` : '';
-  if (l.esCruce || l.cruceGrupoA) {
+  // 11-10-2026 (caso real: en "Revisar" las jugadas "2x9", "5x3", "6x2 10a8"
+  // salían con la columna Jugada VACÍA o solo con "10A8"): la vista previa
+  // recibe las líneas tal cual las parsea el servidor, con el cruce en
+  // `l.cruce` ({gruposA, gruposB}) y SIN `esCruce`/`cruceGrupoA` (esos solo
+  // vienen de la base de datos, en Pendientes) — por eso antes no se
+  // reconocía el cruce y se caía a "grupo" (null) -> texto vacío.
+  if (l.esCruce || l.cruceGrupoA || l.cruce) {
     const a = (l.cruceGrupoA || (l.cruce && l.cruce.gruposA) || []).join('y');
     const b = (l.cruceGrupoB || (l.cruce && l.cruce.gruposB) || []).join('y');
     return `${a} x ${b}${modTxt}`;

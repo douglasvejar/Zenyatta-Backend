@@ -451,7 +451,14 @@ function extraerHipodromoDeTexto(texto) {
   return null;
 }
 
-const CARRERA_HEADER_RE = /^(\d{1,2})\s*(?:ra|da|ta|va|ma|na)\s+carrera$/i;
+// 11-10-2026: además de "1RA CARRERA", el encabezado de cada carrera puede
+// traer el NOMBRE DEL HIPÓDROMO en vez de la palabra "carrera" (plano real:
+// "*1RA RINCONADA*", "*13MA RINCONADA*") — antes esas líneas no se
+// reconocían, las jugadas quedaban sin número de carrera. Se acepta un
+// ordinal pegado al número (1RA, 2DA, 3RA, 4TA, 5TA, 6TA, 7MA, 8VA, 9NA,
+// 10MA, 13MA...) seguido solo de letras/espacios (nunca dígitos ni "x"/"da
+// <banquero>" de una jugada, que no calzan con este patrón).
+const CARRERA_HEADER_RE = /^(\d{1,2})\s*(?:ra|da|ta|va|ma|na|era|er|do|to|vo|mo|no|º|°)\s+(?:carrera|[a-záéíóúñ.\-]+(?:\s+[a-záéíóúñ.\-]+){0,3})$/i;
 
 // -----------------------------------------------------------------
 // parsearPlanoTerciosAdelantadas(texto) -> {
