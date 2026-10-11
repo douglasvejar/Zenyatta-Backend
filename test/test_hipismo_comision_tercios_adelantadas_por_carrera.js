@@ -144,6 +144,16 @@ const handlerPorCarrera = handlerDe('get', '/comisiones-por-carrera');
   const r3 = await invocarRuta(handlerPorCarrera, reqBase(GRUPO_ID));
   check(r3._json.dias.length === 0 && r3._json.totalGeneral === 0, '12) sin nada responde dias: [] y total 0');
 
+  // El % configurado del plano (3%, no el 5% fijo) es lo que se queda el grupo
+  const calc = require(path.join(__dirname, '..', 'src', 'services', 'hipismoTerciosAdelantadasCalc'));
+  const linea = { monto: 100, cruce: { gruposA: [[1]], gruposB: [[3]] } };
+  const rank = h => ({ 1: 1, 2: 2, 3: 3, 4: 4 })[h];
+  const c3pct = calc.resolverLineaTerciosAdelantada(linea, rank, 3);
+  const c5pct = calc.resolverLineaTerciosAdelantada(linea, rank, 5);
+  check(c3pct.comisionGrupo === 3 && c3pct.montoJugadorMostrado === 97, '13) con 3%: el ganador cobra 97 y el grupo se queda 3 (dio ' + c3pct.comisionGrupo + ')');
+  check(c5pct.comisionGrupo === 5 && c5pct.montoJugadorMostrado === 95, '14) con 5%: el ganador cobra 95 y el grupo se queda 5 (sigue igual que Tercios normal)');
+  check(calc.parsearPlanoTerciosAdelantadas('NOTA= TERCIOS ADELANTADOS -3%\n1ra Pedro 100 x Luis 1y2 g').pctSugerido === 3, '15) el 3% de "NOTA= ... -3%" se lee del plano');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron > 0) process.exit(1);
 })().catch(e => { console.error('Error inesperado en la prueba:', e); process.exit(1); });
