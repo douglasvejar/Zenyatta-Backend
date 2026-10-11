@@ -289,6 +289,23 @@
   .pend-acc button { background: transparent; border: 1px solid var(--border-light); border-radius: 6px; padding: 2px 7px; font-size: 13px; line-height: 1.3; cursor: pointer; }
   .pend-acc button:hover { background: var(--card-2); }
   .pend-extra { flex: 0 0 100%; }
+  /* Pendientes de Jugadas entre Tercios Adelantadas (11-10-2026, "dale mejor
+     visualización"): misma tarjeta por carrera que Tablas Fijas/Marcas, pero
+     cada jugada en 2 líneas ordenadas — arriba "jugador vs banquero" con el
+     monto a la derecha, abajo la jugada con gualdrapas (los caballos como en
+     la pista) y el estado + acciones. */
+  .pend-fila.pend-tercios { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 12px; }
+  .pend-tercios .pend-quien { font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+  .pend-tercios .pend-quien b { font-weight: 700; }
+  .pend-tercios .pend-vs { color: var(--text-dim); font-size: 11.5px; margin: 0 5px; text-transform: uppercase; letter-spacing: .04em; }
+  .pend-tercios .pend-monto { font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .pend-tercios .pend-monto.falta { color: var(--danger); font-weight: 600; font-size: 12px; }
+  .pend-tercios .pend-jug { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; min-width: 0; font-size: 13px; }
+  .pend-tercios .pend-jug .pend-x { color: var(--text-dim); font-weight: 700; margin: 0 4px; }
+  .pend-tercios .pend-mod { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--card-2); border: 1px solid var(--border-light); color: var(--text); margin-left: 4px; }
+  .pend-tercios .pend-pie { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .pend-tercios .pend-err { grid-column: 1 / -1; font-size: 12px; color: var(--danger); }
+  .pend-tercios .pend-extra { grid-column: 1 / -1; }
   .check-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .check-fila input { width: auto; }
   .check-fila label { margin: 0; color: var(--text); font-size: 13.5px; }
@@ -8333,29 +8350,50 @@ async function eliminarJugadaTerciosAdelantada(jugadaId, jugadorNombre) {
   cargarClientesReales();
 }
 
+// Jugada con gualdrapas (los caballos como en la pista) — mismo formato de
+// texto que textoJugadaTerciosAdelantada(), pero en HTML para Pendientes.
+function htmlJugadaTerciosAdelantada(l) {
+  const gual = arr => (arr || []).map(n => gualdrapaHTML(n) || `<b>${n}</b>`).join('<span class="pend-x" style="margin:0 1px;">y</span>');
+  const mod = l.modalidad ? `<span class="pend-mod">${String(l.modalidad).toUpperCase()}</span>` : '';
+  if (l.esCruce || l.cruceGrupoA || l.cruce) {
+    const a = l.cruceGrupoA || (l.cruce && l.cruce.gruposA) || [];
+    const b = l.cruceGrupoB || (l.cruce && l.cruce.gruposB) || [];
+    return `${gual(a)}<span class="pend-x">×</span>${gual(b)}${mod}`;
+  }
+  return `${gual(l.grupoCaballos || l.grupo)}${mod}`;
+}
+
 function filaJugadaPendienteTerciosHtml(carrera, j) {
   const tieneError = j.faltaMonto || j.faltaJugador || j.faltaBanquero;
   const etiquetaEstado = tieneError
-    ? '<span class="badge-pendiente" style="background:#fde0e0; color:#7a0606;">falta dato</span>'
-    : '<span class="badge-pendiente">esperando pizarra</span>';
+    ? '<span class="pend-est" style="background:#fde0e0; color:#7a0606; border-color:#f3b5b5;">falta dato</span>'
+    : '<span class="pend-est" title="Esperando la pizarra de su carrera">esperando pizarra</span>';
   let detalleError = '';
   if (tieneError) {
     const faltantes = [];
     if (j.faltaJugador) faltantes.push('jugador');
     if (j.faltaBanquero) faltantes.push('banquero');
     if (j.faltaMonto) faltantes.push('monto');
-    detalleError = `<div style="font-size:13px; margin-top:4px; color:var(--danger);">⚠️ Falta: ${faltantes.join(', ')} — línea original: "${(j.textoOriginal || '').replace(/</g, '&lt;')}"</div>`;
+    detalleError = `<div class="pend-err">⚠️ Falta: ${faltantes.join(', ')} — línea original: "${(j.textoOriginal || '').replace(/</g, '&lt;')}"</div>`;
   }
   const jugadorJsBtn = (j.jugador || '').replace(/'/g, "\\'");
-  const botonesAccion = `<span style="display:inline-flex; gap:6px; margin-left:10px;">
-      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="abrirEdicionTerciosAdelantada('${j.id}')">✏️ Editar</button>
-      <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="eliminarJugadaTerciosAdelantada('${j.id}', '${jugadorJsBtn}')">🗑️ Eliminar</button>
-    </span>`;
   const edicion = JUGADA_TERCIOS_ADELANTADA_EN_EDICION === j.id ? filaEdicionTerciosAdelantadaHtml(j) : '';
-  return `<div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
-    <b>${j.jugador || '(sin jugador)'}</b> vs <b>${j.banquero || '(sin banquero)'}</b> — Carrera ${j.carreraNumero} — ${textoJugadaTerciosAdelantada(j)} ${etiquetaEstado}${botonesAccion}
+  const monto = j.monto != null
+    ? `<div class="pend-monto">${formatMontoTabla(Number(j.monto))}</div>`
+    : '<div class="pend-monto falta">sin monto</div>';
+  return `<div class="pend-fila pend-tercios">
+    <div class="pend-quien"><b>${j.jugador || '(sin jugador)'}</b><span class="pend-vs">vs</span><b>${j.banquero || '(sin banquero)'}</b></div>
+    ${monto}
+    <div class="pend-jug">${htmlJugadaTerciosAdelantada(j)}</div>
+    <div class="pend-pie">
+      ${etiquetaEstado}
+      <span class="pend-acc">
+        <button type="button" title="Editar" aria-label="Editar" onclick="abrirEdicionTerciosAdelantada('${j.id}')">✏️</button>
+        <button type="button" title="Eliminar" aria-label="Eliminar" onclick="eliminarJugadaTerciosAdelantada('${j.id}', '${jugadorJsBtn}')">🗑️</button>
+      </span>
+    </div>
     ${detalleError}
-    ${edicion}
+    ${edicion ? `<div class="pend-extra">${edicion}</div>` : ''}
   </div>`;
 }
 
@@ -8371,11 +8409,11 @@ async function cargarPendientesTerciosAdelantadas() {
     if (!data.carreras.length) {
       cont.innerHTML = '<div class="placeholder-card">Sin jugadas pendientes por ahora.</div>';
     } else {
-      cont.innerHTML = data.carreras.map(c => `
-        <div style="margin-bottom:14px;">
-          <div style="font-weight:700; margin-bottom:4px;">🏟️ ${c.hipodromoNombre} — Carrera ${c.carreraNumero} — ${c.fecha}</div>
+      cont.innerHTML = '<div class="pend-grid">' + data.carreras.map(c => `
+        <div class="pend-carrera">
+          <div class="pend-carrera-cab">🏟️ ${c.hipodromoNombre} · Carrera ${c.carreraNumero}<span class="pend-fecha">${typeof formatFechaCortaDMY === 'function' ? formatFechaCortaDMY(c.fecha) : c.fecha}</span></div>
           ${c.jugadas.map(j => filaJugadaPendienteTerciosHtml(c, j)).join('')}
-        </div>`).join('');
+        </div>`).join('') + '</div>';
     }
   }
   actualizarAlertaTerciosAdelantadas(data.total);
