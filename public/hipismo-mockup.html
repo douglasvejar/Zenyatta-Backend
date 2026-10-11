@@ -11288,7 +11288,9 @@ function encabezadoPozos(filtro) {
 // Pozos") — se saca a una función aparte para poder reusarla sin
 // reescribirla.
 function filaPozoCompleta(j) {
-  const { pozoInicial, liquidado, pozoActual } = j.pozo;
+  // 11-10-2026: todo monto de esta pantalla se redondea a centavos ANTES de mostrarlo (medio centavo sube) — con el ruido de
+  // coma flotante de las sumas, mostrar el número crudo a veces cae 1 centavo abajo (ej. -164,125 salía -164,12).
+  const pozoInicial = redondearCentavos(j.pozo.pozoInicial), liquidado = redondearCentavos(j.pozo.liquidado), pozoActual = redondearCentavos(j.pozo.pozoActual);
   const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
   const color = colorPorPorcentaje(pct);
   const claseFila = color === 'rojo' ? ' class="fila-pozo-rojo"' : '';
@@ -11303,6 +11305,7 @@ function filaPozoCompleta(j) {
 // "Solo Saldos" — mismo estilo pos/neg que usan Balance General y Cierre
 // Final.
 function filaPozoSoloSaldo(nombre, monto) {
+  monto = redondearCentavos(monto);
   const clase = monto > 0 ? 'pos' : (monto < 0 ? 'neg' : '');
   const signo = monto > 0 ? '+' : (monto < 0 ? '-' : '');
   return `<tr><td>${formatNombre(nombre)}</td><td class="num ${clase}">${signo}${formatMontoTabla(monto)}</td></tr>`;
