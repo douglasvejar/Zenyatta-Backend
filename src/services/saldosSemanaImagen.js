@@ -32,7 +32,7 @@ const NEGATIVO = '#b91c1c';
 const FILAS_POR_FOTO = 38;
 const EPS = 0.005;
 
-const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
+const { redondear2: redondear } = require('./redondeo');
 const hayMonto = n => Math.abs(Number(n) || 0) >= EPS;
 
 function escaparXml(t) {

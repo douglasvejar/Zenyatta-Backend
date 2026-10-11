@@ -6658,13 +6658,17 @@ function cerrarAvisoPizarraAnterior() {
 // (30-09-2026, a pedido del usuario: separador de mil + 2 decimales en
 // todos los saldos/reportes/balances de la página) — es-VE da "1.234,56"
 // (antes solo cambiaba el punto por coma, sin separador de mil).
+// 11-10-2026 (revisión de decimales): todo monto se lleva a CENTAVOS con el mismo redondeo del servidor
+// (el medio centavo siempre sube, ver redondearCentavos) ANTES de decidir el signo: un total que debería
+// ser 0 pero trae ruido de coma flotante (-0,0000001) ya no sale como "-$ 0,00".
 function formatMonto(n) {
-  const signo = n < 0 ? '-' : '';
-  const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const v = redondearCentavos(n);
+  const signo = v < 0 ? '-' : '';
+  const abs = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return signo + '$ ' + abs;
 }
 function formatMontoTabla(n) {
-  return Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Math.abs(redondearCentavos(n)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 // Solo estética: en el TEXTO del plano ya calculado, cada nombre se muestra
 // con la primera letra en mayúscula (sin importar cómo lo haya tecleado el
@@ -8599,8 +8603,8 @@ const PIMG_SILK = {
   11: ['#9ca3af', '#111'], 12: ['#a3e635', '#111'], 13: ['#d6b98c', '#111'], 14: ['#7f1d1d', '#fff'], 15: ['#2dd4bf', '#111'], 16: ['#1e3a8a', '#fff']
 };
 function pimgEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-function pimgMonto(v) { return Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function pimgSigno(v) { const n = Math.round(Number(v) * 100) / 100; return (n < 0 ? '-' : '+') + pimgMonto(Math.abs(n)); }
+function pimgMonto(v) { return redondearCentavos(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function pimgSigno(v) { const n = redondearCentavos(v); return (n < 0 ? '-' : '+') + pimgMonto(Math.abs(n)); }
 function pimgSilk(n, px) {
   const num = parseInt(n, 10);
   const c = PIMG_SILK[num] || ['#6b7280', '#fff'];
@@ -10753,12 +10757,13 @@ let DETALLE_CLIENTE_SEMANA_ACTIVA = 'actual';
 let DETALLE_CLIENTE_DATA_ACTUAL = null;
 
 function formatMontoDet(n) {
-  const neg = n < 0;
-  const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const v = redondearCentavos(n);
+  const neg = v < 0;
+  const abs = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (neg ? '-' : '') + abs;
 }
-function claseMontoDet(n) { return n > 0 ? 'detmodal-pos' : (n < 0 ? 'detmodal-neg' : ''); }
-function conSignoDet(n) { return (n > 0 ? '+' : (n < 0 ? '' : '')) + formatMontoDet(n); }
+function claseMontoDet(n) { const v = redondearCentavos(n); return v > 0 ? 'detmodal-pos' : (v < 0 ? 'detmodal-neg' : ''); }
+function conSignoDet(n) { return (redondearCentavos(n) > 0 ? '+' : '') + formatMontoDet(n); }
 function fechaDeIsoDet(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -10767,7 +10772,7 @@ function fechaLegibleDet(iso) {
   const f = fechaDeIsoDet(iso);
   return { dow: DIAS_SEMANA_DET[f.getDay()], texto: `${f.getDate()} de ${MESES_DET[f.getMonth()]}` };
 }
-function totalCarrerasDet(carreras) { return carreras.reduce((acc, c) => acc + c.resultado, 0); }
+function totalCarrerasDet(carreras) { return redondearCentavos(carreras.reduce((acc, c) => acc + c.resultado, 0)); }
 
 // Mismo texto EXACTO que armarJugadaTexto() en hipismo-cliente-portal.html.
 function armarJugadaTextoDetallado(c) {
@@ -11008,7 +11013,7 @@ function renderDetalleClienteModal(data) {
   }
   data.dias.forEach(dia => {
     const f = fechaLegibleDet(dia.fecha);
-    const totalDia = dia.hipodromos.reduce((acc, h) => acc + totalCarrerasDet(h.carreras), 0);
+    const totalDia = redondearCentavos(dia.hipodromos.reduce((acc, h) => acc + totalCarrerasDet(h.carreras), 0));
 
     const wrapDia = document.createElement('div');
     wrapDia.className = 'detmodal-dia';
@@ -12854,7 +12859,7 @@ function mostrarToastTraspaso(msg, esError) {
 }
 
 function totalDetalle(detalle, campo) {
-  return detalle.reduce((s, d) => s + d[campo], 0);
+  return redondearCentavos(detalle.reduce((s, d) => s + d[campo], 0));
 }
 
 function toggleFilaCarrera(id) {
@@ -12893,6 +12898,7 @@ function agruparDetallePorCliente(detalle) {
     c.total += d.comision;
     c.jugadas.push(d);
   });
+  porCliente.forEach(c => { c.total = redondearCentavos(c.total); });
   return Array.from(porCliente.values());
 }
 function filaClienteComisionHtml(c) {
@@ -13424,7 +13430,7 @@ async function pintarComisionesDevueltas(desdeForzado, hastaForzado) {
       // ya vienen sumados UNA sola vez desde el backend) — "no es que vas a
       // doblar el saldo", solo se repite agrupado el mismo monto que ya
       // estaba en cada fila.
-      const redondeo2Carrera = n => Math.round((Number(n) || 0) * 100) / 100;
+      const redondeo2Carrera = n => redondearCentavos(n);
       const porCarreraDetalle = new Map();
       hip.carreras.forEach(c => {
         const clave = c.fecha + '::' + c.carreraNumero;
@@ -13531,7 +13537,7 @@ function agruparComisionesDevueltasPorDestino(data) {
   // de services/hipismoAdelantadasCalc.js (ese vive solo en el backend) —
   // mismo criterio que ya usa este archivo en otros lados (ver
   // Math.round(... * 100) / 100 más arriba, ej. pintarSaldoComisiones).
-  const redondeo2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  const redondeo2 = n => redondearCentavos(n);
   const porDestino = new Map();
   (data.clientes || []).forEach(c => {
     if (!porDestino.has(c.destino)) porDestino.set(c.destino, { destino: c.destino, total: 0, generadores: new Map() });
@@ -13978,7 +13984,7 @@ function textoMontosApostados(data, clientes) {
         texto += `  • ${d.hipodromoNombre} (${ordinalCarrera(d.carreraNumero)}) — ${TIPO_TEXTO_MONTOS[d.tipo] || d.tipo} ${d.detalleTexto}:  ${formatMontoTabla(d.monto)} — ${etiqueta}\n`;
       });
   });
-  const totalGeneral = listaClientes.reduce((s, c) => s + Number(c.total || 0), 0);
+  const totalGeneral = redondearCentavos(listaClientes.reduce((s, c) => s + Number(c.total || 0), 0));
   texto += `\n──────────────────────────────\n*TOTAL APOSTADO: ${formatMontoTabla(totalGeneral)} USD*`;
   return texto;
 }
@@ -14990,7 +14996,7 @@ function mostrarAvisoPozo(lista) {
     caja.style.cssText = 'position:fixed; top:14px; right:14px; z-index:9999; max-width:420px; background:#fff4e5; border:2px solid #e08a00; border-radius:10px; padding:12px 14px; box-shadow:0 6px 24px rgba(0,0,0,.25); color:#5a3a00; font-size:13px;';
     document.body.appendChild(caja);
   }
-  const fmtM = n => Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtM = n => redondearCentavos(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   caja.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">⚠️ Apostó más de lo que le queda</div>` +
     lista.map(x => `<div style="margin-bottom:4px;"><b>${formatNombre(x.nombre)}</b>: apostó ${fmtM(x.apostado)} y su pozo disponible es ${fmtM(x.pozoDisponible)} (se pasa por ${fmtM(x.faltante)})</div>`).join('') +
     `<div style="margin-top:8px; text-align:right;"><button type="button" class="btn-secundario" onclick="document.getElementById('avisoPozoFlotante').remove()">Entendido</button></div>`;
@@ -15146,10 +15152,10 @@ function acumularTotalesRev(items) {
     if (!m.has(k)) m.set(k, { nombre: k, jugadas: 0, monto: 0, saldo: 0 });
     const f = m.get(k); f.jugadas += 1; f.monto += Number(it.monto) || 0; f.saldo += Number(it.saldo) || 0;
   });
-  return Array.from(m.values()).map(f => ({ nombre: f.nombre, jugadas: f.jugadas, monto: Math.round(f.monto * 100) / 100, saldo: Math.round(f.saldo * 100) / 100 }))
+  return Array.from(m.values()).map(f => ({ nombre: f.nombre, jugadas: f.jugadas, monto: redondearCentavos(f.monto), saldo: redondearCentavos(f.saldo) }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
-const sumaRev = (arr, k) => Math.round(arr.reduce((acc, x) => acc + (Number(x[k]) || 0), 0) * 100) / 100;
+const sumaRev = (arr, k) => redondearCentavos(arr.reduce((acc, x) => acc + (Number(x[k]) || 0), 0));
 
 function repintarRev(vista) {
   const data = REV_DATOS[vista];
@@ -15193,7 +15199,7 @@ function repintarRev(vista) {
         const encabezado = esTyM
           ? '<th>Cliente</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo cliente</th><th>Bancas (saldo real)</th><th class="num">Comisión grupo</th>'
           : '<th>Jugador</th><th>Banquero</th><th>Jugada</th><th class="num">Monto</th><th class="num">Saldo jugador</th><th class="num">Saldo banquero</th><th class="num">Comisión grupo</th>';
-        const comCarrera = Math.round(jugadas.reduce((acc, j) => acc + (Number(j.comisionGrupo) || 0), 0) * 100) / 100;
+        const comCarrera = redondearCentavos(jugadas.reduce((acc, j) => acc + (Number(j.comisionGrupo) || 0), 0));
         htmlHip += `
           <div class="rev-carrera">
             <div class="rev-carrera-cab">
@@ -15222,7 +15228,7 @@ function repintarRev(vista) {
     // Cuadre: solo con las jugadas que ya tienen banca (una Marca sin banqueo todavía no tiene lado banca).
     const cliConBanca = sumaRev(conBanca.map(j => ({ v: j.resultadoCliente })), 'v');
     const comConBanca = sumaRev(conBanca, 'comisionGrupo');
-    const dif = Math.round((cliConBanca + sumBan + comConBanca) * 100) / 100;
+    const dif = redondearCentavos(cliConBanca + sumBan + comConBanca);
     totales = `
       <div class="rev-totales">
         ${tablaTotalRevHtml('👤 Total de los clientes que jugaron', clientes, sumCli, sumaRev(clientes, 'jugadas'), sumaRev(clientes, 'monto'), true)}
@@ -15239,7 +15245,7 @@ function repintarRev(vista) {
     const jugadores = acumularTotalesRev(todas.map(j => ({ nombre: j.jugador, monto: j.monto, saldo: j.resultadoJugador })));
     const banqueros = acumularTotalesRev(todas.map(j => ({ nombre: j.banquero, monto: j.monto, saldo: j.resultadoBanquero })));
     const sumJ = sumaRev(jugadores, 'saldo'), sumB = sumaRev(banqueros, 'saldo');
-    const dif = Math.round((sumJ + sumB + comTotal) * 100) / 100;
+    const dif = redondearCentavos(sumJ + sumB + comTotal);
     totales = `
       <div class="rev-totales">
         ${tablaTotalRevHtml('👤 Total de los jugadores', jugadores, sumJ, sumaRev(jugadores, 'jugadas'), sumaRev(jugadores, 'monto'), true)}
@@ -15396,7 +15402,7 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
     jugadoresParaPozo.forEach(j => pozoPorNombre.set(j.nombre, j.pozo ? Number(j.pozo.pozoActual) : 0));
     data.clientes = data.clientes.map(c => ({
       ...c,
-      saldo: Math.round((Number(c.saldo) + (pozoPorNombre.get(c.nombre) || 0)) * 100) / 100
+      saldo: redondearCentavos(Number(c.saldo) + (pozoPorNombre.get(c.nombre) || 0))
     }));
   }
   data.conPozos = conPozos;
@@ -15701,7 +15707,7 @@ async function bqLeerCfgGlobal() {
     BQ_CFG = { marca: m.banqueadores || [], tf: t.banqueadores || [] };
   } catch (e) { /* sin configuración: solo se escribe el resultado del cliente */ }
 }
-function adelFmtSigno(n) { const v = Number(n); return (v > 0 ? '+' : '') + v.toFixed(2).replace('.', ','); }
+function adelFmtSigno(n) { const v = redondearCentavos(n); return (v > 0 ? '+' : '') + v.toFixed(2).replace('.', ','); }
 function adelNum(txt) { const t = String(txt == null ? '' : txt).trim().replace(',', '.'); return t === '' ? NaN : Number(t); }
 function adelCamposEdicionHtml(j, ids) {
   const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -15723,7 +15729,7 @@ function adelCamposEdicionHtml(j, ids) {
   // Tabla Fija sin banqueadores: la contraparte es el ítem TABLAS FIJAS (en blanco = el opuesto exacto del cliente).
   let filaTablas = '';
   if (!contra.length && j.tipo === 'tf') {
-    const prevTf = (j.resultadoCliente != null && j.estado === 'resuelto') ? Math.round(-(Number(j.resultadoCliente) + Number(j.comision || 0)) * 100) / 100 : null;
+    const prevTf = (j.resultadoCliente != null && j.estado === 'resuelto') ? redondearCentavos(-(Number(j.resultadoCliente) + Number(j.comision || 0))) : null;
     filaTablas = `<div><label for="${ids.modo}_tf">Contraparte: TABLAS FIJAS</label><input type="text" inputmode="decimal" id="${ids.modo}_tf" placeholder="${prevTf != null ? 'ahora: ' + adelFmtSigno(prevTf) : 'en blanco = el opuesto del cliente'}" value="${manual && prevTf != null ? String(prevTf).replace('.', ',') : ''}" oninput="adelSumaManual('${ids.modo}')"></div>`;
   }
   return `
@@ -15769,7 +15775,7 @@ function adelSumaManual(modo) {
     else if (otros.some(n => isNaN(n))) { ok = false; texto = '⚠ Falta algún monto de la contraparte (o no es un número).'; }
     else if (!hayContra) texto = 'La contraparte sale sola con el opuesto exacto (sin diferencia).';
     else {
-      const suma = Math.round((c + otros.reduce((a, b) => a + b, 0)) * 100) / 100;
+      const suma = redondearCentavos(c + otros.reduce((a, b) => a + b, 0));
       if (Math.abs(suma) <= 0.005) texto = 'Suma: 0,00 ✅ — cuadra exacto, sin diferencia para el grupo.';
       else texto = suma > 0
         ? `Suma ${adelFmtSigno(suma)} — esa diferencia se RESTA a la comisión del grupo de ese día (queda ${adelFmtSigno(-suma)}).`
@@ -16370,7 +16376,7 @@ function cmeEditar(id) {
   document.getElementById('inpCmeFecha').value = c.fecha;
   document.getElementById('inpCmeCarrera').value = c.carrera || '';
   cmePintarSelects(c.hipodromo || '', c.accion);
-  document.getElementById('txtCmeLineas').value = c.lineas.map(l => `${l.cliente} ${l.monto >= 0 ? '+' : '-'}${Math.abs(l.monto).toFixed(2)}`).join('\n');
+  document.getElementById('txtCmeLineas').value = c.lineas.map(l => `${l.cliente} ${l.monto >= 0 ? '+' : '-'}${Math.abs(redondearCentavos(l.monto)).toFixed(2)}`).join('\n');
   cmeCambioForm();
   document.getElementById('vista-cargaMasivaEspecial').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

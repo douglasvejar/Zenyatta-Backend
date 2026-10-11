@@ -46,7 +46,7 @@ const { rangoSemanaGrupo } = require('./hipismoSemana');
 // 'hoy' en hora de Venezuela (UTC-4), igual que el resto de Hipismo.
 function hoyVenezuela() { return new Date(Date.now() - 4 * 60 * 60 * 1000); }
 
-const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
+const { redondear2: redondear } = require('./redondeo');
 
 // Semana activa del grupo como { desde, hasta } ('YYYY-MM-DD'). Si no se
 // puede leer la configuración cae a Lunes→Domingo (rangoSemanaGrupo ya lo

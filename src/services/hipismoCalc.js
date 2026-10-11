@@ -1269,7 +1269,7 @@ function netearJugadorBanqueroTercios(tickets) {
 // (pp o "a premio" cruzada, caballo "4x3") en su formato de 2 líneas "(caballo) nombre".
 // Sin esta opción todo queda igual que siempre (lo usan las rutas de editar/borrar).
 function montoComoSeEscribe(n) {
-  const v = Math.round(Number(n) * 100) / 100;
+  const v = require('./redondeo').redondear2(n);
   return Number.isInteger(v) ? String(v) : String(v).replace('.', ',');
 }
 function armarSalidaLineasDeTickets(tickets, opciones) {

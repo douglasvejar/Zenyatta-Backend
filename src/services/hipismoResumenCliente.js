@@ -447,7 +447,8 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
             // cuadre también cuando la base viene escalada (banqueo de una
             // Marca), neteada (jugar y banquear en la misma carrera) o
             // fusionada con otras jugadas de la misma carrera.
-            monto: acc.base,
+            // Solo para mostrar ("sobre $X"): a 2 decimales; el % ya se calculó con la base exacta.
+            monto: round2(acc.base),
             resultado: devuelto
           });
 

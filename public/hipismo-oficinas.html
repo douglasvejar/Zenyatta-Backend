@@ -600,7 +600,8 @@ async function api(path, options = {}) {
 const $ = id => document.getElementById(id);
 const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function fechaHoyVenezuela() { return new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10); }
-function fmt(n) { return Number(n || 0).toLocaleString('es-VE', { maximumFractionDigits: 2 }); }
+// 2 decimales siempre para dinero (5,50 y no 5,5); sin "-0".
+function fmt(n) { return redondearCentavos(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function nombreBonito(n) { const t = String(n || '').trim().toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); }
 function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el.className = 'msg ' + (texto ? (ok ? 'ok' : 'error') : ''); }
 

@@ -9,7 +9,8 @@
 //   GET /api/hipismo/oficinas/comision-por-carrera         (Comisión por Carrera)
 // =================================================================
 (function (raiz) {
-  const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  // Mismo redondeo que el servidor: el medio centavo siempre sube (en valor absoluto) y nunca "-0".
+  const r2 = n => { const x = Number(n) || 0; return (x < 0 ? -1 : 1) * Math.round(Math.abs(x) * 100 + 1e-6) / 100 || 0; };
 
   // 1.234,50 (siempre 2 decimales, punto de miles y coma decimal)
   function dinero(n) {

@@ -28,13 +28,15 @@
 // public/app.js (ver el comentario grande ahí): esto es solo para el
 // Plano de WhatsApp (confirmación de tickets, una sola vía), nunca para
 // texto de sábana que se vuelva a parsear.
+const { redondear2 } = require('./redondeo');
+
 function formatMontoPlano(numero) {
-  const redondeado = Math.round(numero * 100) / 100;
+  const redondeado = redondear2(numero);
   return redondeado.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDineroPlano(numero) {
-  const redondeado = Math.round(numero * 100) / 100;
+  const redondeado = redondear2(numero);
   const signo = redondeado < 0 ? '-' : '+';
   return signo + Math.abs(redondeado).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '$';
 }
@@ -135,7 +137,7 @@ function generarTextoTotalesDia(resp) {
     }
     if (Math.abs(c.devolucion) > 0.001) {
       partes.push('*% ' + c.cliente + '*');
-      partes.push('+' + Math.abs(Math.round(c.devolucion * 100) / 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '$');
+      partes.push('+' + Math.abs(redondear2(c.devolucion)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '$');
     }
   });
 

@@ -18,7 +18,7 @@
 const { formatNombre, ordinalCarrera } = require('./hipismoCalc');
 const { agruparSeccionesAdelantadas, parsearRetirados } = require('./hipismoAdelantadasCalc');
 
-const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
+const { redondear2: redondear } = require('./redondeo');
 
 // "TOTALES DE LA CARRERA 11MA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO ZENYATTA"
 // (todo en mayúsculas, como lo pidió el usuario). Si falta la carrera o el

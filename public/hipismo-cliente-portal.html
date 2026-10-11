@@ -339,13 +339,15 @@
 
   let semanaActual = 'actual'; // 'actual' | 'anterior' — los 2 únicos estados que pidió el usuario
 
+  // Dinero a centavos con el mismo redondeo del servidor (medio centavo sube) y sin "-0,00".
+  function aCentavos(n) { const x = Number(n) || 0; return (x < 0 ? -1 : 1) * Math.round(Math.abs(x) * 100 + 1e-6) / 100 || 0; }
   function formatMonto(n) {
-    const neg = n < 0;
-    const abs = Math.abs(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (neg ? '-' : '') + abs;
+    const v = aCentavos(n);
+    const abs = Math.abs(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (v < 0 ? '-' : '') + abs;
   }
-  function claseMonto(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
-  function conSigno(n) { return (n > 0 ? '+' : (n < 0 ? '' : '')) + formatMonto(n); }
+  function claseMonto(n) { const v = aCentavos(n); return v > 0 ? 'pos' : (v < 0 ? 'neg' : ''); }
+  function conSigno(n) { return (aCentavos(n) > 0 ? '+' : '') + formatMonto(n); }
 
   // "Gualdrapa" (manta numerada de cada ejemplar) — 25-09-2026, a pedido
   // del usuario: reemplaza el número suelto por la manta/chaleco de
