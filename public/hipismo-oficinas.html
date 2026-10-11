@@ -173,6 +173,8 @@
   .informe td { padding: 6px 8px; border-bottom: 1px solid #eaf3ed; }
   .informe .num { text-align: right; white-space: nowrap; }
   .informe .pos { color: #15803d; font-weight: 700; } .informe .neg { color: #dc2626; font-weight: 700; }
+  .sp-check { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-weight: 700; cursor: pointer; }
+  .sp-check input { width: auto; margin: 0; }
   .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f1f8f3; }
   .informe .item-tag { font-size: 10px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #f3d9a4; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
   .informe tr.total td { font-weight: 800; border-top: 2px solid #14532d; border-bottom: none; background: rgba(241,248,243,0.78); }
@@ -222,6 +224,7 @@
     <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
     <button type="button" class="tab" data-tab="registro" onclick="irATab('registro')">📚 Registro de Jugadas</button>
     <button type="button" class="tab" data-tab="balance" onclick="irATab('balance')">💰 Balance General</button>
+    <button type="button" class="tab" data-tab="saldospozos" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
     <button type="button" class="tab" data-tab="detalle" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
@@ -322,6 +325,23 @@
         <span class="toast" id="balToast"></span>
       </div>
       <div class="informe" id="balCaptura"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== SALDOS CON POZOS ===================== -->
+  <section class="panel" id="panel-saldospozos">
+    <div class="card">
+      <h2>Saldos con Pozos</h2>
+      <p class="nota">El saldo de cada cliente en el período más su pozo (si tiene). Sin pozo es su saldo real, y con pozo y sin jugadas es el pozo. Por defecto sale sin los % devueltos a clientes y avales; con la casilla de abajo se incluyen, igual que el Balance General.</p>
+      <div id="spPeriodo"></div>
+      <label class="sp-check"><input type="checkbox" id="spIncluirDev" onchange="pintarSaldosPozos()"> Incluir devolución %</label>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('spCaptura','saldos_con_pozos')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('spCaptura','saldos_con_pozos','spToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="copiarSaldosPozosTexto()">📋 Copiar texto</button>
+        <span class="toast" id="spToast"></span>
+      </div>
+      <div class="informe" id="spCaptura" style="max-width:520px; margin-left:auto; margin-right:auto;"><div class="vacio">Cargando…</div></div>
     </div>
   </section>
 
@@ -573,6 +593,7 @@ function irATab(t) {
   if (t === 'clientes') cargarClientes();
   if (t === 'hipodromos') cargarHipodromos();
   if (t === 'balance') cargarBalance();
+  if (t === 'saldospozos') cargarSaldosPozos();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();
 }
@@ -1228,6 +1249,63 @@ function pintarBalance() {
         ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
       </tfoot></table>`);
 }
+// ---------- Saldos con Pozos ----------
+// Misma pantalla y misma cuenta que "Pozos > Saldos + Pozos" de Hipismo Grupos Hípicos (11-10-2026):
+//   saldo del período (Balance General) + pozo base del cliente; por defecto SIN los % devueltos (casilla "Incluir devolución %").
+// Cada monto se redondea a centavos antes de mostrarlo (el medio centavo sube).
+let SALDOS_POZOS = null;
+function redondearCentavos(n) { const x = Number(n) || 0; return (x < 0 ? -1 : 1) * Math.round(Math.abs(x) * 100 + 1e-6) / 100 || 0; }
+async function cargarSaldosPozos() {
+  const caja = $('spCaptura');
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const [cierre] = await Promise.all([api('/api/hipismo/cierre-final?' + queryPeriodo('sp')), cargarClientes()]);
+    SALDOS_POZOS = cierre; pintarSaldosPozos();
+  } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+function filasSaldosPozos() {
+  const d = SALDOS_POZOS; if (!d) return [];
+  const conDev = $('spIncluirDev').checked;
+  const dev = d.devueltoPorCuenta || {};
+  const saldoDe = c => conDev ? Number(c.saldo) || 0 : redondearCentavos((Number(c.saldo) || 0) - (Number(dev[c.nombre]) || 0));
+  const porNombre = new Map();
+  CLIENTES.forEach(j => {
+    const pozo = j.tipo_cuenta === 'avalado' ? redondearCentavos(j.pozo_inicial) : 0;
+    porNombre.set(j.nombre, { nombre: j.nombre, saldo: 0, pozo, esItem: false, esCuentaComision: !!j.es_cuenta_comision });
+  });
+  (d.clientes || []).forEach(c => {
+    const e = porNombre.get(c.nombre);
+    if (e) e.saldo = saldoDe(c);
+    else {
+      const sal = saldoDe(c);
+      if (!conDev && sal === 0) return; // renglón que solo tenía devoluciones
+      porNombre.set(c.nombre, { nombre: c.nombre, saldo: sal, pozo: 0, esItem: true, esCuentaComision: false });
+    }
+  });
+  return Array.from(porNombre.values())
+    .filter(f => conDev || !f.esCuentaComision || f.saldo !== 0 || f.pozo !== 0)
+    .map(f => ({ ...f, total: redondearCentavos(f.saldo + f.pozo) }))
+    .sort((a, b) => nombreBonito(a.nombre).localeCompare(nombreBonito(b.nombre), 'es'));
+}
+function pintarSaldosPozos() {
+  const d = SALDOS_POZOS; if (!d) return;
+  const conDev = $('spIncluirDev').checked;
+  const filas = filasSaldosPozos().map(f => `<tr><td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${celdaSaldo(f.total)}</td></tr>`).join('');
+  ponerInforme('spCaptura', cabeceraInforme('Saldos con Pozos', d, conDev ? 'con devolución %' : 'sin devolución %') + `<table>
+      <thead><tr><th>Cliente</th><th class="num">Saldo + Pozo</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="2" class="vacio">Todavía no hay clientes.</td></tr>'}</tbody></table>`);
+}
+function copiarSaldosPozosTexto() {
+  if (!SALDOS_POZOS) return;
+  const conDev = $('spIncluirDev').checked;
+  let t = `*Saldos + Pozos (${conDev ? 'con' : 'sin'} devolución %)*\n${INF.textoPeriodo(SALDOS_POZOS)}\n\n`;
+  filasSaldosPozos().forEach(f => { t += `• ${nombreBonito(f.nombre)}: ${INF.dineroConSigno(f.total)}\n`; });
+  const aviso = $('spToast');
+  const ok = () => { aviso.textContent = '✅ Texto copiado'; setTimeout(() => { aviso.textContent = ''; }, 2500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok).catch(() => { aviso.textContent = 'No se pudo copiar'; });
+  else aviso.textContent = 'No se pudo copiar';
+}
+
 function verDetalleDe(nombre) {
   irATab('detalle');
   const sel = $('detCliente');
@@ -1457,6 +1535,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   if (!TOKEN || !GRUPO) return;
   $('jFecha').value = fechaHoyVenezuela();
   iniciarPeriodo('bal', cargarBalance);
+  iniciarPeriodo('sp', cargarSaldosPozos);
   iniciarPeriodo('det', cargarListaDetalle);
   iniciarPeriodo('com', cargarComision);
   limpiarTabla();
