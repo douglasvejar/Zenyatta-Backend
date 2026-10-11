@@ -54,8 +54,22 @@ const TABLAS = {
     { id: 'p-otro-grupo', grupo_id: OTRO_GRUPO_ID, hipodromo_nombre: 'Assiniboia', carrera_numero: 1, fecha: FECHA, comision_total: 999 },
     // Mismo grupo, otra fecha — NO debe aparecer al pedir FECHA.
     { id: 'p-otra-fecha', grupo_id: GRUPO_ID, hipodromo_nombre: 'Assiniboia', carrera_numero: 1, fecha: OTRA_FECHA, comision_total: 500 }
-  ]
+  ],
+  // 11-10-2026: Jugadas entre Tercios Adelantadas (tabla propia). Solo las
+  // 'resuelto' con comision_grupo > 0 del grupo/fecha deben contar.
+  tercios_jugadas: []
 };
+const TERCIOS_FILAS = [
+  // Cae en una carrera que YA tiene plano (Assiniboia 3): se suma a sus 6.50.
+  { grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Assiniboia', carrera_numero: 3, estado: 'resuelto', comision_grupo: 2, jugador_nombre: 'Pedro', banquero_nombre: 'Luis', resultado_jugador: 40, resultado_banquero: -40, es_cruce: false, grupo_caballos: [1, 2], modalidad: 'g' },
+  // Carrera sin plano (Churchill Downs 9): debe CREARSE con su comision.
+  { grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Churchill Downs', carrera_numero: 9, estado: 'resuelto', comision_grupo: 1.5, jugador_nombre: 'Ana', banquero_nombre: 'Luis', resultado_jugador: -10, resultado_banquero: 8.5, es_cruce: true, cruce_grupo_a: [1], cruce_grupo_b: [2, 3], modalidad: 'p' },
+  // NO deben contar: pendiente, otro grupo, otra fecha, sin comision.
+  { grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Assiniboia', carrera_numero: 3, estado: 'pendiente', comision_grupo: 77, jugador_nombre: 'X', banquero_nombre: 'Y', resultado_jugador: 0, resultado_banquero: 0, es_cruce: false, grupo_caballos: [1], modalidad: 'g' },
+  { grupo_id: OTRO_GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Assiniboia', carrera_numero: 3, estado: 'resuelto', comision_grupo: 88, jugador_nombre: 'X', banquero_nombre: 'Y', resultado_jugador: 1, resultado_banquero: -1, es_cruce: false, grupo_caballos: [1], modalidad: 'g' },
+  { grupo_id: GRUPO_ID, fecha: OTRA_FECHA, hipodromo_nombre: 'Assiniboia', carrera_numero: 3, estado: 'resuelto', comision_grupo: 66, jugador_nombre: 'X', banquero_nombre: 'Y', resultado_jugador: 1, resultado_banquero: -1, es_cruce: false, grupo_caballos: [1], modalidad: 'g' },
+  { grupo_id: GRUPO_ID, fecha: FECHA, hipodromo_nombre: 'Assiniboia', carrera_numero: 3, estado: 'resuelto', comision_grupo: 0, jugador_nombre: 'X', banquero_nombre: 'Y', resultado_jugador: 1, resultado_banquero: -1, es_cruce: false, grupo_caballos: [1], modalidad: 'g' }
+];
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
@@ -68,6 +82,16 @@ function ejecutarQuery(text, params) {
       .sort((a, b) => a.hipodromo_nombre.localeCompare(b.hipodromo_nombre) || a.carrera_numero - b.carrera_numero)
       .map(p => ({ hipodromo_nombre: p.hipodromo_nombre, carrera_numero: p.carrera_numero, comision_total: p.comision_total }));
     return { rows: filas };
+  }
+
+  // 11-10-2026: comision del grupo en Tercios Adelantadas resueltas.
+  if (/^SELECT j\.jugador_nombre, j\.banquero_nombre, j\.resultado_jugador[\s\S]*?FROM hipismo_tercios_adelantadas_jugadas j JOIN hipismo_tercios_adelantadas_planos p/i.test(sql)) {
+    const [grupoId, desde, hasta] = params;
+    return {
+      rows: (TABLAS.tercios_jugadas)
+        .filter(j => j.grupo_id === grupoId && j.fecha >= desde && j.fecha <= hasta && j.estado === 'resuelto' && j.comision_grupo > 0)
+        .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hipodromo_nombre.localeCompare(b.hipodromo_nombre) || a.carrera_numero - b.carrera_numero)
+    };
   }
 
   // 04-10-2026: "Jugadas entre Tercios Adelantadas" -- ninguna prueba de
@@ -173,6 +197,17 @@ function check(cond, msg) {
   const res4 = await invocarRuta(handlerComisionesPorHipodromo, reqBase(GRUPO_ID));
   check(res4._status === 200, 'sin ?fecha= igual responde 200, usando el default de "hoy"');
   check(typeof res4._json.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(res4._json.fecha), 'el default de fecha tiene forma YYYY-MM-DD');
+
+  // --- 5) Comisión de Tercios Adelantadas (11-10-2026) ---
+  TABLAS.tercios_jugadas = TERCIOS_FILAS;
+  const res5 = await invocarRuta(handlerComisionesPorHipodromo, Object.assign(reqBase(GRUPO_ID), { query: { fecha: FECHA } }));
+  const ass = res5._json.hipodromos.find(h => h.nombre === 'Assiniboia');
+  const chd = res5._json.hipodromos.find(h => h.nombre === 'Churchill Downs');
+  check(ass.carreras.find(c => c.carreraNumero === 3).comision === 8.5, '5a) la carrera 3 de Assiniboia suma 6.50 del plano + 2.00 de Tercios Adelantadas = 8.50 (no cuenta pendiente/otro grupo/otra fecha/sin comision)');
+  check(Math.abs(ass.totalComision - 45.35) < 0.001, '5b) subtotal Assiniboia = 43.35 + 2.00 = 45.35');
+  check(chd.carreras.some(c => c.carreraNumero === 9 && c.comision === 1.5), '5c) la carrera 9 de Churchill Downs (sin plano) aparece con 1.50 de Tercios Adelantadas');
+  check(chd.carreras.map(c => c.carreraNumero).join(',') === '3,7,9', '5d) las carreras de Churchill Downs quedan ordenadas 3,7,9');
+  check(Math.abs(res5._json.totalGeneral - 62.35) < 0.001, '5e) total general = 58.85 + 2.00 + 1.50 = 62.35');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron > 0) process.exit(1);

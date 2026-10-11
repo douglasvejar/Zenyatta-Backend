@@ -4151,6 +4151,43 @@ router.get('/semana-actual', asyncHandler(async (req, res) => {
   res.json({ rango: { desde, hasta }, numeroSemana: numeroSemanaISO(desde) });
 }));
 
+// Comisión que se queda el GRUPO en las Jugadas entre Tercios Adelantadas ya
+// resueltas (11-10-2026, caso real: "las jugadas adelantadas SÍ calculan bien
+// los tercios, pero la comisión que se gana el grupo de esas jugadas no se ve
+// reflejada en la comisión"): Balance General/Cierre Final ya la sumaban
+// (comisionTerciosAdelantadasSemana), pero "Comisión por Carrera de Clientes" y
+// "Comisiones Totales por Hipódromo" solo leían hipismo_planos.comision_total,
+// que NO incluye estas jugadas (viven en su propia tabla). Devuelve una fila por
+// jugada con comisión > 0, con la carrera/hipódromo/fecha a la que pertenece y
+// el cliente que la "generó" (el que ganó: jugador o banquero), igual que el
+// detalle por cliente de los tickets de Tercios.
+async function leerComisionTerciosAdelantadas(grupoId, desde, hasta) {
+  const r = await db.query(
+    `SELECT j.jugador_nombre, j.banquero_nombre, j.resultado_jugador, j.resultado_banquero, j.comision_grupo,
+            j.es_cruce, j.grupo_caballos, j.cruce_grupo_a, j.cruce_grupo_b, j.modalidad,
+            p.fecha, p.hipodromo_nombre, j.carrera_numero
+       FROM hipismo_tercios_adelantadas_jugadas j
+       JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado = 'resuelto' AND j.comision_grupo > 0
+      ORDER BY p.fecha, p.hipodromo_nombre, j.carrera_numero, j.creado_en`,
+    [grupoId, desde, hasta]
+  );
+  return r.rows.map(j => {
+    const caballos = j.es_cruce
+      ? `${(j.cruce_grupo_a || []).join('y')} x ${(j.cruce_grupo_b || []).join('y')}`
+      : (j.grupo_caballos || []).join('y');
+    const gano = Number(j.resultado_jugador) > 0 ? j.jugador_nombre : j.banquero_nombre;
+    return {
+      fecha: fechaComoISO(j.fecha),
+      hipodromoNombre: j.hipodromo_nombre,
+      carreraNumero: j.carrera_numero,
+      comision: Number(j.comision_grupo),
+      cliente: gano,
+      jugada: `${caballos}${j.modalidad ? ' ' + String(j.modalidad).toUpperCase() : ''} (adelantada entre tercios)`
+    };
+  });
+}
+
 router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
@@ -4164,11 +4201,12 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
       ORDER BY fecha DESC, hipodromo_nombre, carrera_numero`,
     [req.grupoId, desde, hasta]
   );
-  if (rPlanos.rows.length === 0) {
+  const comisionesTerciosAdelantadas = await leerComisionTerciosAdelantadas(req.grupoId, desde, hasta);
+  if (rPlanos.rows.length === 0 && comisionesTerciosAdelantadas.length === 0) {
     return res.json({ rango: { desde, hasta }, semana, numeroSemana, dias: [], totalGeneral: 0 });
   }
 
-  const rTickets = await db.query(
+  const rTickets = rPlanos.rows.length === 0 ? { rows: [] } : await db.query(
     `SELECT plano_id, cliente_nombre, banquero_nombre, modalidad, caballo, monto, resultado_jugador, resultado_banquero, sin_comision
        FROM hipismo_tickets WHERE plano_id = ANY($1::uuid[])`,
     [rPlanos.rows.map(p => p.id)]
@@ -4206,8 +4244,34 @@ router.get('/comisiones-por-carrera', asyncHandler(async (req, res) => {
     totalGeneral += comisionCarrera;
   });
 
+  // Jugadas entre Tercios Adelantadas (11-10-2026): su comisión se suma en la
+  // MISMA carrera/hipódromo/día (si esa carrera no tiene plano propio todavía,
+  // se crea igual para que el total no se pierda).
+  comisionesTerciosAdelantadas.forEach(c => {
+    if (!porDia.has(c.fecha)) porDia.set(c.fecha, { fecha: c.fecha, totalComision: 0, hipodromosMap: new Map() });
+    const dia = porDia.get(c.fecha);
+    if (!dia.hipodromosMap.has(c.hipodromoNombre)) {
+      dia.hipodromosMap.set(c.hipodromoNombre, { nombre: c.hipodromoNombre, totalComision: 0, carreras: [] });
+    }
+    const hip = dia.hipodromosMap.get(c.hipodromoNombre);
+    let carrera = hip.carreras.find(x => x.carreraNumero === c.carreraNumero);
+    if (!carrera) {
+      carrera = { planoId: null, carreraNumero: c.carreraNumero, totalComision: 0, detalle: [] };
+      hip.carreras.push(carrera);
+    }
+    carrera.detalle.push({ cliente: c.cliente, jugada: c.jugada, comision: c.comision });
+    carrera.totalComision = round2(carrera.totalComision + c.comision);
+    hip.totalComision = round2(hip.totalComision + c.comision);
+    dia.totalComision = round2(dia.totalComision + c.comision);
+    totalGeneral = round2(totalGeneral + c.comision);
+  });
+
   const dias = Array.from(porDia.values())
-    .map(d => ({ fecha: d.fecha, totalComision: d.totalComision, hipodromos: Array.from(d.hipodromosMap.values()) }))
+    .map(d => ({
+      fecha: d.fecha,
+      totalComision: d.totalComision,
+      hipodromos: Array.from(d.hipodromosMap.values()).map(h => ({ ...h, carreras: h.carreras.slice().sort((a, b) => a.carreraNumero - b.carreraNumero) }))
+    }))
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   res.json({ rango: { desde, hasta }, semana, numeroSemana, dias, totalGeneral });
@@ -4325,6 +4389,22 @@ router.get('/comisiones-por-hipodromo', asyncHandler(async (req, res) => {
     hip.totalComision = round2(hip.totalComision + comisionCarrera);
     totalGeneral = round2(totalGeneral + comisionCarrera);
   });
+
+  // Jugadas entre Tercios Adelantadas (11-10-2026): su comisión se suma a la
+  // misma carrera del mismo hipódromo (o crea la carrera si no tiene plano).
+  const comisionesTerciosAdelantadas = await leerComisionTerciosAdelantadas(req.grupoId, fecha, fecha);
+  comisionesTerciosAdelantadas.forEach(c => {
+    if (!porHipodromo.has(c.hipodromoNombre)) {
+      porHipodromo.set(c.hipodromoNombre, { nombre: c.hipodromoNombre, totalComision: 0, carreras: [] });
+    }
+    const hip = porHipodromo.get(c.hipodromoNombre);
+    const carrera = hip.carreras.find(x => x.carreraNumero === c.carreraNumero);
+    if (carrera) carrera.comision = round2(carrera.comision + c.comision);
+    else hip.carreras.push({ carreraNumero: c.carreraNumero, comision: c.comision });
+    hip.totalComision = round2(hip.totalComision + c.comision);
+    totalGeneral = round2(totalGeneral + c.comision);
+  });
+  porHipodromo.forEach(h => h.carreras.sort((a, b) => a.carreraNumero - b.carreraNumero));
 
   const hipodromos = Array.from(porHipodromo.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
