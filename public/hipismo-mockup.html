@@ -11279,9 +11279,9 @@ function encabezadoPozos(filtro) {
     return '<tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr>';
   }
   if (filtro === 'saldos') {
-    return '<tr><th>Cliente</th><th class="num">Saldo</th></tr>';
+    return '<tr><th>Cliente</th><th class="num" style="text-align:right;">Saldo</th></tr>';
   }
-  return '<tr><th>Cliente</th><th class="num">Saldo + Pozo</th></tr>';
+  return '<tr><th>Cliente</th><th class="num" style="text-align:right;">Saldo + Pozo</th></tr>';
 }
 
 // Misma fila de siempre para un cliente "Avalado" con pozo (filtro "Solo
@@ -11313,6 +11313,15 @@ async function pintarTablaPozos() {
   const tbody = document.querySelector('#tablaPozos tbody');
   if (!tbody) return;
   const filtro = FILTRO_POZOS_ACTUAL;
+  // 11-10-2026, a pedido del usuario: "Saldos + Pozos" (y "Solo Saldos", que también son 2 columnas) más angosta, para que el
+  // nombre quede cerca del saldo y no se pierda tanto espacio. "Solo Pozos" tiene 5 columnas y se queda al ancho completo.
+  const capPozos = document.getElementById('pozosCaptura');
+  if (capPozos) {
+    const angosta = filtro !== 'soloPozos';
+    capPozos.style.maxWidth = angosta ? '440px' : '';
+    capPozos.style.marginLeft = angosta ? 'auto' : '';
+    capPozos.style.marginRight = angosta ? 'auto' : '';
+  }
   const wrapDev = document.getElementById('wrapIncluirDevolucionPozos');
   if (wrapDev) wrapDev.style.display = filtro === 'saldosMasPozos' ? 'block' : 'none';
   const modoCap = document.getElementById('pozosNombreGrupoCaptura');
