@@ -73,7 +73,18 @@ const COMPETENCIAS_API_FOOTBALL = [
   { id: 34, nombre: 'Eliminatorias Conmebol' },
   { id: 3, nombre: 'UEFA Europa League' },
   { id: 848, nombre: 'UEFA Conference League' },
-  { id: 88, nombre: 'Eredivisie' }
+  { id: 88, nombre: 'Eredivisie' },
+  // 11-10-2026 (el usuario confirmó que la cuenta de api-football.com ya
+  // funciona y tiene la clave puesta): las 4 competencias que
+  // football-data.org no cubre y que el sistema ya evalúa con ESPN — Liga
+  // MX, MLS, Copa Libertadores y Copa Sudamericana (ids oficiales de
+  // api-football.com: 262, 253, 13, 11; no se pudieron confirmar contra
+  // /leagues real desde este sandbox — si alguno estuviera mal, el efecto
+  // es el de antes, el partido sigue PENDIENTE, nunca un dato equivocado).
+  { id: 262, nombre: 'Liga MX' },
+  { id: 253, nombre: 'MLS' },
+  { id: 13, nombre: 'Copa Libertadores' },
+  { id: 11, nombre: 'Copa Sudamericana' }
 ];
 
 // RESPALDO (11-10-2026, ticket real "Bayern Munich 1h -210 / Barcelona 1h

@@ -179,29 +179,46 @@ function limpiarClaves() {
     '02-10-2026: también en "sin-cruce" queda marcada la fuente real (api-football.com/API_FOOTBALL_KEY)');
 
   // -----------------------------------------------------------------
-  // Caso E: regresión — una liga que NINGUNA de las 2 fuentes cubre (Liga
-  // MX, de clubes: no está en football-data.org ni en la lista de
-  // api-football.com) sigue siendo 'liga-no-cubierta', aun con AMBAS claves
-  // configuradas. (Hasta el 09-10-2026 esta prueba usaba Europa League; desde
-  // el 10-10-2026 esa ya la cubre api-football.com — ver Caso E2.)
+  // Caso E (actualizado 11-10-2026): Liga MX, MLS, Libertadores y
+  // Sudamericana ahora SÍ las cubre api-football.com (ids 262/253/13/11).
+  // Hasta el 10-10-2026 esta prueba usaba Liga MX como ejemplo de liga
+  // "no cubierta" — ya no hay ninguna liga de LIGAS_SOCCER sin fuente.
+  // Con la clave puesta y el partido en /fixtures, el 1h se completa solo;
+  // si no aparece, queda 'sin-cruce' (no 'liga-no-cubierta').
   // -----------------------------------------------------------------
-  resetFootballData(); resetApiFootball();
-  process.env.FOOTBALL_DATA_API_KEY = 'clave-de-prueba';
-  process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
-  global.fetch = async (url) => {
-    const u = String(url);
-    if (u.includes('site.api.espn.com') && u.includes('/soccer/mex.1/')) {
-      return { ok: true, json: async () => fixtureESPN('Club America', 'Chivas', 1, 0) };
+  for (const [slugEspn, ligaNombre, idLiga, local, visita] of [
+    ['mex.1', 'Liga MX', 262, 'Club America', 'Chivas'],
+    ['usa.1', 'MLS', 253, 'Inter Miami', 'LA Galaxy'],
+    ['conmebol.libertadores', 'Copa Libertadores', 13, 'Flamengo', 'River Plate'],
+    ['conmebol.sudamericana', 'Copa Sudamericana', 11, 'Racing Club', 'Cruzeiro']
+  ]) {
+    for (const conPartido of [true, false]) {
+      resetFootballData(); resetApiFootball();
+      delete process.env.FOOTBALL_DATA_API_KEY;
+      process.env.API_FOOTBALL_KEY = 'clave-de-prueba';
+      global.fetch = async (url) => {
+        const u = String(url);
+        if (u.includes('site.api.espn.com') && u.includes('/soccer/' + slugEspn + '/')) {
+          return { ok: true, json: async () => fixtureESPN(local, visita, 1, 0) };
+        }
+        if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
+        if (u.includes('v3.football.api-sports.io')) {
+          return { ok: true, json: async () => ({ errors: [], response: conPartido ? [{ league: { id: idLiga }, teams: { home: { name: local }, away: { name: visita } }, score: { halftime: { home: 1, away: 0 } } }] : [] }) };
+        }
+        throw new Error('URL inesperada en la prueba: ' + url);
+      };
+      const resE = await obtenerResultadosSoccer('2026-09-25');
+      const claveE = Object.keys(resE).find(k => resE[k].liga === ligaNombre);
+      if (conPartido) {
+        check(claveE && resE[claveE].final1H === true && resE[claveE].homeScore1H === 1 && !resE[claveE].motivoSinPrimeraMitad,
+          ligaNombre + ': el 1h se completa desde api-football.com (id ' + idLiga + ')');
+      } else {
+        check(claveE && resE[claveE].motivoSinPrimeraMitad === 'sin-cruce',
+          ligaNombre + ': sin el partido en /fixtures queda "sin-cruce", ya no "liga-no-cubierta"');
+      }
     }
-    if (u.includes('site.api.espn.com')) return { ok: true, json: async () => ({ events: [] }) };
-    if (u.includes('api.football-data.org')) return { ok: true, json: async () => ({ matches: [] }) };
-    if (u.includes('v3.football.api-sports.io')) return { ok: true, json: async () => ({ errors: [], response: [] }) };
-    throw new Error('URL inesperada en la prueba: ' + url);
-  };
-  const resE = await obtenerResultadosSoccer('2026-09-25');
-  const claveE = Object.keys(resE).find(k => resE[k].liga === 'Liga MX');
-  check(claveE && resE[claveE].motivoSinPrimeraMitad === 'liga-no-cubierta',
-    'Regresión: Liga MX (ninguna de las 2 fuentes de "1h" la cubre) sigue marcándose "liga-no-cubierta", aun con las 2 claves configuradas');
+  }
+  delete process.env.API_FOOTBALL_KEY;
 
   // -----------------------------------------------------------------
   // Caso E2 (10-10-2026): Europa League y Eredivisie AHORA las cubre
