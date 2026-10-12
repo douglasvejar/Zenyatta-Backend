@@ -487,6 +487,11 @@
   .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
   .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
   /* 12-10-2026: fila "TOTAL PIERDEN" / "TOTAL GANAN" al final de cada lista de Balance General. */
+  /* Plano de Pozos: casilla para elegir quién sale en la imagen y en el texto (12-10-2026). */
+  #tablaPozos .col-sel { width: 34px; text-align: center; padding-left: 4px; padding-right: 4px; }
+  #tablaPozos tr.pozo-excluido td:not(.col-sel) { opacity: 0.38; text-decoration: line-through; }
+  .pozos-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .pozos-selector .contador { font-size: 12.5px; color: var(--text-dim); }
   .balance-fila.balance-total { margin-top: 6px; border-width: 2px; font-weight: 800; }
   .balance-fila.balance-total .nombre { font-weight: 800; letter-spacing: 0.3px; }
   /* TOTAL PIERDEN en degradado rojo claro y TOTAL GANAN en degradado verde claro: el número
@@ -2105,6 +2110,15 @@
           <div style="font-size:12px; color:var(--text-dim);">Apagado: sin los % devueltos a clientes y avales. Encendido: con ellos, igual que el Balance General.</div>
         </div>
 
+        <!-- 12-10-2026, a pedido del usuario: "poder elegir quiénes salen en el plano pozo y quiénes no". Cada fila trae
+             una casilla; los desmarcados NO salen en la imagen ni en el texto (se acuerda la selección en este navegador). -->
+        <div class="pozos-selector" id="pozosSelector">
+          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(true)">☑️ Marcar todos</button>
+          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(false)">⬜ Desmarcar todos</button>
+          <button class="btn btn-secundario" type="button" onclick="pozosDesmarcarEnCero()" title="Quita del plano a los clientes que están en $ 0,00">🚫 Quitar los que están en 0</button>
+          <span class="contador" id="pozosContadorSel"></span>
+        </div>
+
         <div class="btn-fila" style="margin-bottom:14px;">
           <button class="btn btn-primario" type="button" onclick="copiarPozosImagen()">📸 Copiar Imagen HD</button>
           <button class="btn btn-secundario" type="button" onclick="copiarPozosTexto()">📋 Copiar Texto (para el grupo)</button>
@@ -2120,8 +2134,8 @@
             </div>
           </div>
           <table id="tablaPozos">
-            <thead id="theadPozos"><tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr></thead>
-            <tbody><tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
+            <thead id="theadPozos"><tr><th class="col-sel"></th><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr></thead>
+            <tbody><tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr></tbody>
           </table>
         </div>
 
@@ -11459,14 +11473,86 @@ function mostrarFiltroPozos(filtro, btn) {
   pintarTablaPozos();
 }
 
+// =================================================================
+// ELEGIR QUIÉN SALE EN EL PLANO DE POZOS (12-10-2026, a pedido del usuario: "poder elegir quiénes
+// salen en el plano pozo y quiénes no"). Cada fila trae una casilla; los clientes desmarcados se
+// quedan en pantalla (tachados, para poder volver a marcarlos) pero NO salen en "Copiar Imagen HD"
+// ni en "Copiar Texto". La lista de excluidos se recuerda en este navegador, por grupo.
+// =================================================================
+function claveExcluidosPozos() {
+  let g = 'x';
+  try { g = (GRUPO && (GRUPO.id || GRUPO.nombre)) || 'x'; } catch (e) { /* sin grupo: clave genérica */ }
+  return 'ludox_pozos_excluidos_' + g;
+}
+function leerExcluidosPozos() {
+  try {
+    const v = JSON.parse(localStorage.getItem(claveExcluidosPozos()) || '[]');
+    return new Set(Array.isArray(v) ? v : []);
+  } catch (e) { return new Set(); }
+}
+let POZOS_EXCLUIDOS = leerExcluidosPozos();
+function guardarExcluidosPozos() {
+  try { localStorage.setItem(claveExcluidosPozos(), JSON.stringify(Array.from(POZOS_EXCLUIDOS))); } catch (e) { /* si el navegador no deja guardar, la selección vale hasta recargar */ }
+}
+function attrNombrePozo(nombre) { return String(nombre).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function celdaSelPozo(nombre) {
+  const marcado = !POZOS_EXCLUIDOS.has(nombre);
+  return `<td class="col-sel"><input type="checkbox" ${marcado ? 'checked' : ''} data-nombre="${attrNombrePozo(nombre)}" onchange="pozosCambiarSeleccion(this)" aria-label="Incluir en el plano"></td>`;
+}
+function pozosCambiarSeleccion(chk) {
+  const nombre = chk.dataset.nombre;
+  if (chk.checked) POZOS_EXCLUIDOS.delete(nombre); else POZOS_EXCLUIDOS.add(nombre);
+  guardarExcluidosPozos();
+  chk.closest('tr').classList.toggle('pozo-excluido', !chk.checked);
+  actualizarContadorSelPozos();
+}
+function pozosSeleccionarTodos(marcar) {
+  document.querySelectorAll('#tablaPozos tbody input[data-nombre]').forEach(chk => {
+    chk.checked = marcar;
+    if (marcar) POZOS_EXCLUIDOS.delete(chk.dataset.nombre); else POZOS_EXCLUIDOS.add(chk.dataset.nombre);
+    chk.closest('tr').classList.toggle('pozo-excluido', !marcar);
+  });
+  guardarExcluidosPozos();
+  actualizarContadorSelPozos();
+}
+function pozosDesmarcarEnCero() {
+  document.querySelectorAll('#tablaPozos tbody tr[data-nombre]').forEach(tr => {
+    const celdas = tr.querySelectorAll('td:not(.col-sel)');
+    const montoTxt = (celdas[celdas.length >= 4 ? 3 : 1] ? celdas[celdas.length >= 4 ? 3 : 1].textContent : '').replace(/[^0-9,]/g, '').replace(',', '.');
+    if (celdas.length >= 2 && Number(montoTxt) === 0) { // (en "Solo Pozos" mira el pozo actual)
+      const chk = tr.querySelector('input[data-nombre]');
+      if (chk && chk.checked) { chk.checked = false; POZOS_EXCLUIDOS.add(chk.dataset.nombre); tr.classList.add('pozo-excluido'); }
+    }
+  });
+  guardarExcluidosPozos();
+  actualizarContadorSelPozos();
+}
+function actualizarContadorSelPozos() {
+  const el = document.getElementById('pozosContadorSel');
+  if (!el) return;
+  const todos = document.querySelectorAll('#tablaPozos tbody input[data-nombre]');
+  const marcados = Array.from(todos).filter(c => c.checked).length;
+  el.textContent = todos.length ? `Salen en el plano: ${marcados} de ${todos.length} cliente(s)` : '';
+  const th = document.getElementById('chkPozosTodos');
+  if (th) { th.checked = todos.length > 0 && marcados === todos.length; th.indeterminate = marcados > 0 && marcados < todos.length; }
+}
+// Antes de sacar la imagen se esconden la columna de casillas y los clientes desmarcados; al terminar se restauran.
+function prepararCapturaPozos() {
+  const tocados = [];
+  document.querySelectorAll('#tablaPozos .col-sel').forEach(el => { tocados.push([el, el.style.display]); el.style.display = 'none'; });
+  document.querySelectorAll('#tablaPozos tbody tr.pozo-excluido').forEach(el => { tocados.push([el, el.style.display]); el.style.display = 'none'; });
+  return () => tocados.forEach(([el, d]) => { el.style.display = d; });
+}
+
 function encabezadoPozos(filtro) {
+  const thSel = '<th class="col-sel"><input type="checkbox" id="chkPozosTodos" checked onchange="pozosSeleccionarTodos(this.checked)" aria-label="Marcar o desmarcar todos"></th>';
   if (filtro === 'soloPozos') {
-    return '<tr><th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr>';
+    return '<tr>' + thSel + '<th>Cliente</th><th class="num">Pozo asignado</th><th class="num">Ganado/perdido jugando</th><th class="num">Pozo actual</th><th>Estado</th></tr>';
   }
   if (filtro === 'saldos') {
-    return '<tr><th>Cliente</th><th class="num" style="text-align:right;">Saldo</th></tr>';
+    return '<tr>' + thSel + '<th>Cliente</th><th class="num" style="text-align:right;">Saldo</th></tr>';
   }
-  return '<tr><th>Cliente</th><th class="num" style="text-align:right;">Saldo + Pozo</th></tr>';
+  return '<tr>' + thSel + '<th>Cliente</th><th class="num" style="text-align:right;">Saldo + Pozo</th></tr>';
 }
 
 // Misma fila de siempre para un cliente "Avalado" con pozo (filtro "Solo
@@ -11483,7 +11569,8 @@ function filaPozoCompleta(j) {
   const signoLiq = liquidado > 0 ? '+' : (liquidado < 0 ? '-' : '');
   const claseActual = pozoActual >= 0 ? 'pos' : 'neg';
   const signoActual = pozoActual < 0 ? '-' : '';
-  return `<tr data-pct="${pct}"${claseFila}><td>${formatNombre(j.nombre)}</td><td class="num">${formatMontoTabla(pozoInicial)}</td><td class="num ${claseLiq}">${signoLiq}${formatMontoTabla(liquidado)}</td><td class="num ${claseActual}">${signoActual}${formatMontoTabla(pozoActual)}</td><td><span class="punto punto-${color}"></span> ${pct}%</td></tr>`;
+  const excl = POZOS_EXCLUIDOS.has(j.nombre);
+  return `<tr data-pct="${pct}" data-nombre="${attrNombrePozo(j.nombre)}"${claseFila ? claseFila.replace('class="', 'class="' + (excl ? 'pozo-excluido ' : '')) : (excl ? ' class="pozo-excluido"' : '')}>${celdaSelPozo(j.nombre)}<td>${formatNombre(j.nombre)}</td><td class="num">${formatMontoTabla(pozoInicial)}</td><td class="num ${claseLiq}">${signoLiq}${formatMontoTabla(liquidado)}</td><td class="num ${claseActual}">${signoActual}${formatMontoTabla(pozoActual)}</td><td><span class="punto punto-${color}"></span> ${pct}%</td></tr>`;
 }
 
 // Fila simple de 2 columnas (Cliente / Monto) para "Saldos + Pozos" y
@@ -11493,7 +11580,7 @@ function filaPozoSoloSaldo(nombre, monto) {
   monto = redondearCentavos(monto);
   const clase = monto > 0 ? 'pos' : (monto < 0 ? 'neg' : '');
   const signo = monto > 0 ? '+' : (monto < 0 ? '-' : '');
-  return `<tr><td>${formatNombre(nombre)}</td><td class="num ${clase}">${signo}${formatMontoTabla(monto)}</td></tr>`;
+  return `<tr data-nombre="${attrNombrePozo(nombre)}"${POZOS_EXCLUIDOS.has(nombre) ? ' class="pozo-excluido"' : ''}>${celdaSelPozo(nombre)}<td>${formatNombre(nombre)}</td><td class="num ${clase}">${signo}${formatMontoTabla(monto)}</td></tr>`;
 }
 
 async function pintarTablaPozos() {
@@ -11515,7 +11602,7 @@ async function pintarTablaPozos() {
   const modoCap = document.getElementById('pozosNombreGrupoCaptura');
   if (modoCap) modoCap.textContent = modoCap.textContent.replace(/ · (con|sin) devolución %$/, '') + (filtro === 'saldosMasPozos' ? (incluirDevolucionPozos() ? ' · con devolución %' : ' · sin devolución %') : '');
   if (thead) thead.innerHTML = encabezadoPozos(filtro);
-  const colspanVacio = filtro === 'soloPozos' ? 5 : 2;
+  const colspanVacio = filtro === 'soloPozos' ? 6 : 3;
 
   if (!CLIENTES_HIPISMO_CACHE.length) {
     tbody.innerHTML = `<tr><td colspan="${colspanVacio}" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes — calcula un plano en "Cargar Planos" y se van a crear solos.</td></tr>`;
@@ -11531,7 +11618,7 @@ async function pintarTablaPozos() {
       .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     tbody.innerHTML = filas.length
       ? filas.map(j => filaPozoCompleta(j)).join('')
-      : `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes "Avalado" con pozo asignado.</td></tr>`;
+      : `<tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes "Avalado" con pozo asignado.</td></tr>`;
     actualizarAlertaPozos();
     return;
   }
@@ -11554,7 +11641,7 @@ async function pintarTablaPozos() {
     const filas = saldosSemana.slice().sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
     tbody.innerHTML = filas.length
       ? filas.map(c => filaPozoSoloSaldo(c.nombre, c.saldo)).join('')
-      : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Nadie tiene jugadas en esta semana.</td></tr>`;
+      : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Nadie tiene jugadas en esta semana.</td></tr>`;
     actualizarAlertaPozos();
     return;
   }
@@ -11594,7 +11681,7 @@ async function pintarTablaPozos() {
     .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
   tbody.innerHTML = filas.length
     ? filas.map(c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual))).join('')
-    : `<tr><td colspan="2" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
+    : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
   actualizarAlertaPozos();
 }
 
@@ -11629,6 +11716,7 @@ function nombresPozoRojoActuales() {
 }
 
 function actualizarAlertaPozos() {
+  actualizarContadorSelPozos();
   const rojos = nombresPozoRojoActuales();
   const flotante = document.getElementById('alertaFlotante');
   const texto = document.getElementById('alertaFlotanteTexto');
@@ -11679,7 +11767,11 @@ async function copiarPozosImagen() {
   }
   try {
     const contenido = document.getElementById('pozosCaptura');
-    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    // Sin la columna de casillas ni los clientes desmarcados (se restauran apenas se saca la foto).
+    const restaurarCaptura = prepararCapturaPozos();
+    let canvas;
+    try { canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true }); }
+    finally { restaurarCaptura(); }
     canvas.toBlob(async blob => {
       if (!blob) { mostrarToastPozos('⚠️ No se pudo generar la imagen.', true); return; }
       try {
@@ -11707,22 +11799,28 @@ function copiarPozosTexto() {
   const titulos = { saldosMasPozos: 'SALDOS + POZOS' + (incluirDevolucionPozos() ? ' (con devolución %)' : ' (sin devolución %)'), soloPozos: 'POZOS', saldos: 'SALDOS' };
   const filas = document.querySelectorAll('#tablaPozos tbody tr');
   let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — Zenyatta 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
+  // 12-10-2026, a pedido del usuario: los saldos van entre *asteriscos* (negritas en WhatsApp) y todos los nombres
+  // en MAYÚSCULAS; los clientes desmarcados (casilla de cada fila) no salen.
+  let incluidos = 0;
   filas.forEach(fila => {
-    const celdas = fila.querySelectorAll('td');
+    const celdas = fila.querySelectorAll('td:not(.col-sel)');
     if (celdas.length < 2) return; // fila de "Cargando…"/vacío (colspan)
-    const nombre = celdas[0].textContent.trim();
+    if (fila.classList.contains('pozo-excluido')) return;
+    const nombre = celdas[0].textContent.trim().toUpperCase();
     if (FILTRO_POZOS_ACTUAL === 'soloPozos') {
       if (fila.dataset.pct === undefined) return;
       const pct = fila.dataset.pct;
       const color = colorPorPorcentaje(parseInt(pct, 10));
       const asignado = celdas[1].textContent.trim();
       const restante = celdas[3].textContent.trim();
-      texto += `${emojiPorColor[color]} ${nombre}: ${restante} de ${asignado} (${pct}% vivo)\n`;
+      texto += `${emojiPorColor[color]} ${nombre}: *${restante}* de ${asignado} (${pct}% vivo)\n`;
     } else {
       const monto = celdas[1].textContent.trim();
-      texto += `• ${nombre}: ${monto}\n`;
+      texto += `• ${nombre}: *${monto}*\n`;
     }
+    incluidos += 1;
   });
+  if (!incluidos) { mostrarToastPozos('No hay ningún cliente marcado para el plano.', true); return; }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(() => mostrarToastPozos('✅ Texto copiado — pegalo en el grupo.'))
       .catch(() => mostrarToastPozos('No se pudo copiar — selecciona el texto a mano.', true));
