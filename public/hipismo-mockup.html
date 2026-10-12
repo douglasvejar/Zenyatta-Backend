@@ -487,8 +487,18 @@
   .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
   .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
   /* 12-10-2026: fila "TOTAL PIERDEN" / "TOTAL GANAN" al final de cada lista de Balance General. */
-  .balance-fila.balance-total { margin-top: 6px; background: var(--card); border-width: 2px; font-weight: 800; }
+  .balance-fila.balance-total { margin-top: 6px; border-width: 2px; font-weight: 800; }
   .balance-fila.balance-total .nombre { font-weight: 800; letter-spacing: 0.3px; }
+  /* TOTAL PIERDEN en degradado rojo claro y TOTAL GANAN en degradado verde claro: el número
+     (rojo / verde oscuro) se lee bien sobre el fondo suave (12-10-2026, pedido del usuario). */
+  #balanceCaptura .balance-fila.balance-total.perdedor { background: linear-gradient(100deg, #fee2e2, #fecaca 80%); border-color: #f87171; }
+  .balance-fila.balance-total.perdedor .nombre { color: #7f1d1d; }
+  .balance-fila.balance-total.perdedor .monto { color: #b91c1c; font-weight: 800; font-size: 1.08em; }
+  #balanceCaptura .balance-fila.balance-total.ganador { background: linear-gradient(100deg, #dcfce7, #bbf7d0 80%); border-color: #4ade80; }
+  .balance-fila.balance-total.ganador .nombre { color: #14532d; }
+  .balance-fila.balance-total.ganador .monto { color: #15803d; font-weight: 800; font-size: 1.08em; }
+  /* Comisión de Balance General: etiqueta y monto juntos, centrados en la barra. */
+  #balanceCaptura .comision-caja { justify-content: center; gap: 18px; }
   /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
      más abajo) — mientras más clientes, más chico cada renglón, para que
      la imagen de WhatsApp nunca se haga gigante ni pierda nitidez. */
