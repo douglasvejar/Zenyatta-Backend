@@ -486,6 +486,9 @@
   .balance-fila .nombre { font-weight: 600; }
   .balance-fila.perdedor .monto { color: var(--danger); font-weight: 700; }
   .balance-fila.ganador .monto { color: var(--ok); font-weight: 700; }
+  /* 12-10-2026: fila "TOTAL PIERDEN" / "TOTAL GANAN" al final de cada lista de Balance General. */
+  .balance-fila.balance-total { margin-top: 6px; background: var(--card); border-width: 2px; font-weight: 800; }
+  .balance-fila.balance-total .nombre { font-weight: 800; letter-spacing: 0.3px; }
   /* Densidad dinámica (26-09-2026, ver aplicarDensidadCaptura() en el JS
      más abajo) — mientras más clientes, más chico cada renglón, para que
      la imagen de WhatsApp nunca se haga gigante ni pierda nitidez. */
@@ -10598,8 +10601,22 @@ async function pintarBalanceGeneral() {
 
   pierden.forEach(c => listaPierden.appendChild(filaBalance(c.nombre, c.saldo, 'perdedor')));
   ganan.forEach(c => listaGanan.appendChild(filaBalance(c.nombre, c.saldo, 'ganador')));
+  // 12-10-2026, a pedido del usuario: "debajo de la celda de los que pierden coloca TOTAL
+  // PIERDEN y la sumatoria de todos los que pierden... igual del lado de los positivos". Se
+  // suma en centavos enteros para que el total nunca difiera ni un centavo de la suma de las
+  // filas que se ven.
+  function filaTotalBalance(texto, lista, clase) {
+    const centavos = lista.reduce((acc, c) => acc + Math.round(redondearCentavos(c.saldo) * 100), 0);
+    const total = centavos / 100;
+    const fila = filaBalance(texto, total, clase);
+    fila.classList.add('balance-total');
+    fila.querySelector('.nombre').textContent = texto;
+    return fila;
+  }
   if (!listaPierden.children.length) listaPierden.innerHTML = '<div class="placeholder-card">Nadie pierde en esta semana.</div>';
+  else listaPierden.appendChild(filaTotalBalance('TOTAL PIERDEN', pierden, 'perdedor'));
   if (!listaGanan.children.length) listaGanan.innerHTML = '<div class="placeholder-card">Nadie gana en esta semana.</div>';
+  else listaGanan.appendChild(filaTotalBalance('TOTAL GANAN', ganan, 'ganador'));
 
   // Misma comisión total que Cierre Final (ver el arreglo en
   // pintarCierreFinal más abajo), para que los 2 reportes cuadren también
@@ -11793,7 +11810,8 @@ function descargarBalanceExcel() {
   // 26-09-2026: ya sin comisionRemateSemana (ver la nota grande de pintarBalanceGeneral) -- el ítem "REMATE" ya va incluido en "entradas" arriba, como cualquier otro cliente.
   // 02-10-2026: comisionSemana ("Comisión") ahora SÍ trae sumada la comisión de Tablas Fijas + Marcas -- "% DE TABLAS FIJAS"/"PORCENTAJE MARCAS" ya no son renglones propios en data.clientes (ver pintarBalanceGeneral).
   const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana);
-  const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['Comisión', Number(comisionTotal.toFixed(2))]];
+  const totalCents = (signo) => entradas.filter(([, v]) => signo < 0 ? v < 0 : v > 0).reduce((acc, [, v]) => acc + Math.round(redondearCentavos(v) * 100), 0) / 100;
+  const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['TOTAL PIERDEN', totalCents(-1)], ['TOTAL GANAN', totalCents(1)], [], ['Comisión', Number(comisionTotal.toFixed(2))]];
   const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
   aplicarFormatoMonedaXlsx(hoja, [1]); // "Saldo" / "Comisión"
