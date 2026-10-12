@@ -11792,6 +11792,17 @@ async function copiarPozosImagen() {
   }
 }
 
+// 12-10-2026, a pedido del usuario: en el texto copiado cada cliente lleva su círculo de color según lo que le queda de
+// pozo (misma regla que "Solo Pozos": 🟢 80% o más, 🟡 zona media, 🔴 menos de 15%). Los clientes Libre o sin pozo
+// salen SIEMPRE en 🟢.
+function circuloPozoDeCliente(nombre) {
+  const j = CLIENTES_HIPISMO_CACHE.find(x => x.nombre === nombre);
+  if (!j || j.tipo_cuenta !== 'avalado' || !j.pozo) return '🟢';
+  const pozoInicial = redondearCentavos(j.pozo.pozoInicial), pozoActual = redondearCentavos(j.pozo.pozoActual);
+  const pct = pozoInicial > 0 ? Math.max(0, Math.min(100, Math.round((pozoActual / pozoInicial) * 100))) : (pozoActual > 0 ? 100 : 0);
+  return { verde: '🟢', amarillo: '🟡', rojo: '🔴' }[colorPorPorcentaje(pct)];
+}
+
 // 27-09-2026 (filtro de Pozos): ya no asume la estructura fija de
 // columnas de "Solo Pozos" — cada filtro arma su propio texto.
 function copiarPozosTexto() {
@@ -11816,7 +11827,7 @@ function copiarPozosTexto() {
       texto += `${emojiPorColor[color]} ${nombre}: *${restante}* de ${asignado} (${pct}% vivo)\n`;
     } else {
       const monto = celdas[1].textContent.trim();
-      texto += `• ${nombre}: *${monto}*\n`;
+      texto += `${circuloPozoDeCliente(fila.dataset.nombre)} ${nombre}: *${monto}*\n`;
     }
     incluidos += 1;
   });
