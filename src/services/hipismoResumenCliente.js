@@ -65,7 +65,8 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // el bloque de Deportes de arriba: un pseudo-hipódromo más dentro de
 // "dias[].hipodromos", con tipo:'traspaso', SOLO puede aparecer en el
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
-const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos de Comisión';
+// 12-10-2026, a pedido del usuario: el bloque dice solo "Traspasos" (antes "Traspasos de Comisión").
+const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos';
 // Texto con el que el cliente ve una línea de Carga Masiva Especial: como una jugada
 // más (sin mencionar "Carga Masiva").
 const TEXTO_JUGADA_CARGA_ESPECIAL = {
