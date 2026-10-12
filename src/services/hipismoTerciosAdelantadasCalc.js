@@ -104,6 +104,7 @@ const {
   parsearPizarra,
   RANK_NO_COLOCO
 } = require('./hipismoCalc');
+const { redondear2 } = require('./redondeo');
 
 // -----------------------------------------------------------------
 // 04-10-2026, CORRECCIÓN del usuario sobre lo anterior (ver mensaje de
@@ -407,13 +408,15 @@ function resolverLineaTerciosAdelantada(linea, rank, pctComision) {
 
   const fraccionJugador = resultado.j * monto;
   const fraccionBanquero = resultado.b * monto;
-  const montoJugadorMostrado = montoMostradoConPct(fraccionJugador, pctComision);
-  const montoBanqueroMostrado = montoMostradoConPct(fraccionBanquero, pctComision);
-  // La comisión del grupo es la diferencia entre la fracción cruda
-  // ganadora y lo que de verdad se le mostró/pagó al que ganó (mismo
-  // patrón que comisionDeLado() en routes/hipismo.js, generalizado a
-  // un % configurable).
-  const comisionGrupo = Math.abs(fraccionJugador) - Math.abs(montoJugadorMostrado) + Math.abs(fraccionBanquero) - Math.abs(montoBanqueroMostrado);
+  // 12-10-2026 (cuadre al centavo): jugador y banquero se redondean primero a centavos y la
+  // comisión del grupo es EXACTAMENTE lo que falta para que jugador + banquero + comisión = 0.
+  // Antes se redondeaba cada uno por separado: con un % que cae en medio centavo
+  // (10,10 x 5% = 0,505) los 3 subían a la vez y quedaba $0,01 de más en la comisión.
+  const montoJugadorMostrado = redondear2(montoMostradoConPct(fraccionJugador, pctComision));
+  const montoBanqueroMostrado = redondear2(montoMostradoConPct(fraccionBanquero, pctComision));
+  // (Equivale a la diferencia entre la fracción cruda ganadora y lo que de verdad se le
+  // mostró/pagó al que ganó, pero calculada sobre los montos YA redondeados.)
+  const comisionGrupo = redondear2(-(montoJugadorMostrado + montoBanqueroMostrado));
 
   return { resultado, decidida: true, montoJugadorMostrado, montoBanqueroMostrado, comisionGrupo };
 }

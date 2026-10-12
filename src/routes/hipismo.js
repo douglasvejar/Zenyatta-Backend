@@ -108,6 +108,7 @@ const {
   asegurarBanqueoAutomaticoMarcas, obtenerBanqueoMarcasGrupo, guardarBanqueoMarcasGrupo, validarBanqueoMarcas,
   obtenerBanqueoTablasFijasGrupo, guardarBanqueoTablasFijasGrupo
 } = require('../services/hipismoMarcasBanqueoAuto');
+const { sanearComisionTerciosAdelantadas } = require('../services/hipismoSanearTerciosAdelantadas');
 const {
   parsearPlanoTerciosAdelantadas, resolverLineaTerciosAdelantada, extraerPctDeTexto, montoBaseTerciosAdelantadaExacto
 } = require('../services/hipismoTerciosAdelantadasCalc');
@@ -4164,6 +4165,7 @@ router.get('/semana-actual', asyncHandler(async (req, res) => {
 // el cliente que la "generó" (el que ganó: jugador o banquero), igual que el
 // detalle por cliente de los tickets de Tercios.
 async function leerComisionTerciosAdelantadas(grupoId, desde, hasta) {
+  await sanearComisionTerciosAdelantadas(grupoId);
   const r = await db.query(
     `SELECT j.jugador_nombre, j.banquero_nombre, j.resultado_jugador, j.resultado_banquero, j.comision_grupo,
             j.es_cruce, j.grupo_caballos, j.cruce_grupo_a, j.cruce_grupo_b, j.modalidad,
@@ -4658,6 +4660,7 @@ function fechaComoISO(v) {
 // jugada (hace falta para deshacerlo y obtener la base decidida, ver
 // montoBaseTerciosAdelantadaExacto).
 async function leerTerciosAdelantadasResueltas(grupoId, desde, hasta) {
+  await sanearComisionTerciosAdelantadas(grupoId);
   const r = await db.query(
     `SELECT j.id, j.jugador_nombre, j.banquero_nombre, j.carrera_numero, j.modalidad, j.monto, j.resultado_jugador, j.resultado_banquero, j.comision_grupo, j.comision_porcentaje, p.hipodromo_nombre, p.fecha
        FROM hipismo_tercios_adelantadas_jugadas j JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id

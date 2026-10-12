@@ -22,6 +22,7 @@ const { obtenerLineasHipismoCliente } = require('./hipismoLineasCliente');
 const { leerHistorial } = require('./historial');
 const db = require('../db');
 const { asegurarBanqueoAutomaticoMarcas } = require('./hipismoMarcasBanqueoAuto');
+const { sanearComisionTerciosAdelantadas } = require('./hipismoSanearTerciosAdelantadas');
 const { round2, montoDecididoExacto, montoBaseComisionExacto, ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
@@ -1259,6 +1260,8 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // 06-10-2026: las Marcas que quedaron sin banquear se banquean solas con
   // MARCAS ZENYATTA/MARCAS SAMMY antes de leer, para que sus ítems salgan.
   await asegurarBanqueoAutomaticoMarcas(grupoId);
+  // 12-10-2026: cuadre al centavo de Tercios Adelantadas ya guardadas (ver el archivo).
+  await sanearComisionTerciosAdelantadas(grupoId);
   // `p.hipodromo_nombre, p.carrera_numero, p.fecha` (02-10-2026, agregadas
   // SOLO para el neteo jugador/banquero de más abajo —
   // netearJugadorBanqueroTercios agrupa por carrera, fecha+hipódromo+
@@ -1833,7 +1836,25 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // menos TODO lo devuelto (Tercios+TF+Marcas). Remate NUNCA entra acá —
   // sigue siendo su propio ítem "REMATE" aparte, nunca "comisión" del
   // grupo (ver la nota grande de comisionRemateSemana más abajo).
-  const comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana + comisionTerciosAdelantadasSemana);
+  let comisionSemana = round2(Number(rComision.rows[0].total) - totalDevueltoSemana + comisionAdelantadasSemana + comisionTerciosAdelantadasSemana);
+
+  // CUADRE AL CENTAVO DE LA COMISIÓN (12-10-2026, a pedido del usuario: "la sumatoria de los que
+  // pierden con los que ganan debe ser exacta a la comisión, tengo diferencias" -- le daban
+  // -1.540,26 de saldos contra 1.540,39 de Comisión). En un balance sano, la suma de TODOS los
+  // saldos de clientes + la Comisión del grupo es EXACTAMENTE 0: la comisión es lo único que no
+  // pertenece a ningún cliente. Cada saldo se redondea por cliente y la comisión se redondea por
+  // su lado (en planos con "cruza jugadas" cada jugador se redondea por separado), así que a veces
+  // quedaban $0,01-$0,02 sueltos que no pertenecen a nadie. Si lo que sobra es solo ese ruido de
+  // centavos, la comisión absorbe la diferencia y el balance cuadra EXACTO. Una diferencia grande
+  // (un error de verdad) NUNCA se tapa: se deja tal cual para que el cuadre nocturno la avise.
+  const TOLERANCIA_CENTAVOS_COMISION = 0.25;
+  const sumaSaldosCentavos = clientes.reduce((acc, c) => acc + Math.round(round2(c.saldo) * 100), 0);
+  const comisionCuadrada = round2(-sumaSaldosCentavos / 100);
+  const difCuadre = round2(comisionSemana - comisionCuadrada);
+  if (difCuadre !== 0 && Math.abs(difCuadre) <= TOLERANCIA_CENTAVOS_COMISION) {
+    if (Math.abs(difCuadre) > 0.05) console.warn(`[cierre-final] la comisión se ajustó $${difCuadre} para cuadrar con la suma de saldos (grupo ${grupoId}, ${desde} a ${hasta}).`);
+    comisionSemana = comisionCuadrada;
+  }
 
   return {
     clientes,
