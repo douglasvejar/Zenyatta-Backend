@@ -490,7 +490,8 @@
   /* Plano de Pozos: casilla para elegir quién sale en la imagen y en el texto (12-10-2026). */
   #tablaPozos .col-sel { width: 34px; text-align: center; padding-left: 4px; padding-right: 4px; }
   #tablaPozos tr.pozo-excluido td:not(.col-sel) { opacity: 0.38; text-decoration: line-through; }
-  .pozos-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .pozos-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; }
+  .pozos-selector .btn.btn-secundario { padding: 2px 8px; font-size: 11.5px; min-height: 0; line-height: 1.5; border-radius: 6px; font-weight: 600; }
   .pozos-selector .contador { font-size: 12.5px; color: var(--text-dim); }
   .balance-fila.balance-total { margin-top: 6px; border-width: 2px; font-weight: 800; }
   .balance-fila.balance-total .nombre { font-weight: 800; letter-spacing: 0.3px; }
@@ -2113,9 +2114,9 @@
         <!-- 12-10-2026, a pedido del usuario: "poder elegir quiénes salen en el plano pozo y quiénes no". Cada fila trae
              una casilla; los desmarcados NO salen en la imagen ni en el texto (se acuerda la selección en este navegador). -->
         <div class="pozos-selector" id="pozosSelector">
-          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(true)">☑️ Marcar todos</button>
-          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(false)">⬜ Desmarcar todos</button>
-          <button class="btn btn-secundario" type="button" onclick="pozosDesmarcarEnCero()" title="Quita del plano a los clientes que están en $ 0,00">🚫 Quitar los que están en 0</button>
+          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(true)">Marcar todos</button>
+          <button class="btn btn-secundario" type="button" onclick="pozosSeleccionarTodos(false)">Desmarcar todos</button>
+          <button class="btn btn-secundario" type="button" onclick="pozosDesmarcarEnCero()" title="Quita del plano a los clientes que están en $ 0,00">Quitar los que están en 0</button>
           <span class="contador" id="pozosContadorSel"></span>
         </div>
 
@@ -6539,7 +6540,7 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   // limpia la caché acá para que cada vez que se entra a la pestaña
   // traiga el dato más fresco (los ajustes de pozo, en cambio, siguen
   // viviendo en CLIENTES_HIPISMO_CACHE, que ya se refresca solo).
-  pozos: () => { SALDOS_SEMANA_POZOS_CACHE = null; pintarTablaPozos(); }
+  pozos: () => { SALDOS_SEMANA_POZOS_CACHE = null; POZOS_SYNC_HECHO = false; pintarTablaPozos(); }
 };
 function semanaActivaDeSelector(idSelector) {
   const btn = document.querySelector('#' + idSelector + ' button.activo');
@@ -11491,8 +11492,30 @@ function leerExcluidosPozos() {
   } catch (e) { return new Set(); }
 }
 let POZOS_EXCLUIDOS = leerExcluidosPozos();
+// 12-10-2026: la lista de desmarcados vive en el SERVIDOR (fija para siempre, en cualquier navegador, hasta que el
+// usuario vuelva a marcar al cliente); el navegador guarda solo una copia por si el servidor no responde. Un cliente
+// nuevo no está en la lista, así que sale marcado solo.
+let POZOS_SYNC_HECHO = false, POZOS_GUARDADO_TIMER = null;
 function guardarExcluidosPozos() {
   try { localStorage.setItem(claveExcluidosPozos(), JSON.stringify(Array.from(POZOS_EXCLUIDOS))); } catch (e) { /* si el navegador no deja guardar, la selección vale hasta recargar */ }
+  clearTimeout(POZOS_GUARDADO_TIMER);
+  POZOS_GUARDADO_TIMER = setTimeout(subirExcluidosPozos, 400);
+}
+async function subirExcluidosPozos() {
+  try {
+    await apiHipismo('/api/hipismo/pozos-plano-excluidos', { method: 'PUT', body: JSON.stringify({ nombres: Array.from(POZOS_EXCLUIDOS) }) });
+  } catch (e) {
+    mostrarToastPozos('⚠️ No se pudo guardar la selección en el servidor (queda en este navegador): ' + e.message, true);
+  }
+}
+async function sincronizarExcluidosPozos() {
+  try {
+    const r = await apiHipismo('/api/hipismo/pozos-plano-excluidos');
+    if (!r || !Array.isArray(r.nombres)) return; // el servidor todavía no tiene la tabla: se sigue con la copia local
+    if (r.nombres.length === 0 && POZOS_EXCLUIDOS.size > 0) { subirExcluidosPozos(); return; } // primera vez: sube lo que ya había elegido
+    POZOS_EXCLUIDOS = new Set(r.nombres);
+    try { localStorage.setItem(claveExcluidosPozos(), JSON.stringify(r.nombres)); } catch (e) { /* sin copia local */ }
+  } catch (e) { /* sin conexión: vale la copia local */ }
 }
 function attrNombrePozo(nombre) { return String(nombre).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 function celdaSelPozo(nombre) {
@@ -11507,6 +11530,7 @@ function pozosCambiarSeleccion(chk) {
   actualizarContadorSelPozos();
 }
 function pozosSeleccionarTodos(marcar) {
+  if (marcar) POZOS_EXCLUIDOS.clear(); // marcar todos = nadie desmarcado (también los que hoy no se ven por el filtro)
   document.querySelectorAll('#tablaPozos tbody input[data-nombre]').forEach(chk => {
     chk.checked = marcar;
     if (marcar) POZOS_EXCLUIDOS.delete(chk.dataset.nombre); else POZOS_EXCLUIDOS.add(chk.dataset.nombre);
@@ -11584,6 +11608,7 @@ function filaPozoSoloSaldo(nombre, monto) {
 }
 
 async function pintarTablaPozos() {
+  if (!POZOS_SYNC_HECHO) { POZOS_SYNC_HECHO = true; await sincronizarExcluidosPozos(); }
   const thead = document.getElementById('theadPozos');
   const tbody = document.querySelector('#tablaPozos tbody');
   if (!tbody) return;

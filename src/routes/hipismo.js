@@ -308,6 +308,43 @@ router.get('/errores', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// PLANO DE POZOS — QUIÉN SALE Y QUIÉN NO (12-10-2026, a pedido del usuario: "al desmarcar un cliente que no quiero
+// que salga debe quedar así fijo para siempre hasta que lo vuelva a marcar; cuando se cree un cliente nuevo sale
+// marcado"). Se guarda en el SERVIDOR, por grupo, SOLO la lista de los desmarcados (tabla hipismo_pozos_excluidos,
+// ver sql/pendiente-12-10-2026.sql): así vale en cualquier navegador/dispositivo y un cliente nuevo, que no está en la
+// lista, sale marcado solo. Si la tabla todavía no existe (falta correr el SQL) responde sinTabla y la pantalla
+// sigue con la copia guardada en el navegador.
+// =================================================================
+router.get('/pozos-plano-excluidos', asyncHandler(async (req, res) => {
+  try {
+    const r = await db.query('SELECT nombre FROM hipismo_pozos_excluidos WHERE grupo_id = $1 ORDER BY nombre', [req.grupoId]);
+    res.json({ nombres: r.rows.map(x => x.nombre) });
+  } catch (e) {
+    if (e && e.code === '42P01') return res.json({ nombres: null, sinTabla: true });
+    throw e;
+  }
+}));
+
+// Body: { nombres: [..] } = la lista COMPLETA de desmarcados (reemplaza la anterior).
+router.put('/pozos-plano-excluidos', asyncHandler(async (req, res) => {
+  const crudos = Array.isArray(req.body && req.body.nombres) ? req.body.nombres : null;
+  if (!crudos) return res.status(400).json({ error: 'Falta la lista de nombres.' });
+  const nombres = Array.from(new Set(crudos.map(n => String(n == null ? '' : n).trim()).filter(Boolean))).slice(0, 5000);
+  try {
+    await db.transaccion(async (client) => {
+      await client.query('DELETE FROM hipismo_pozos_excluidos WHERE grupo_id = $1', [req.grupoId]);
+      if (nombres.length) {
+        await client.query('INSERT INTO hipismo_pozos_excluidos (grupo_id, nombre) SELECT $1, UNNEST($2::text[]) ON CONFLICT DO NOTHING', [req.grupoId, nombres]);
+      }
+    });
+  } catch (e) {
+    if (e && e.code === '42P01') return res.status(503).json({ error: 'Falta correr el SQL pendiente en Supabase (tabla hipismo_pozos_excluidos).', sinTabla: true });
+    throw e;
+  }
+  res.json({ nombres });
+}));
+
+// =================================================================
 // HIPÓDROMOS (Administración > Hipódromos, spec sección 3)
 // =================================================================
 router.get('/hipodromos', asyncHandler(async (req, res) => {

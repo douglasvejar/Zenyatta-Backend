@@ -2141,3 +2141,12 @@ create index if not exists idx_hipismo_oficinas_pendientes_grupo_fecha on hipism
 -- Hipismo Oficinas > Configuración > "Planos para grupos" (10-10-2026): ¿mostrar el plano resuelto al calcular
 -- una jugada? Apagado por defecto (en las oficinas las jugadas son en vivo, no por WhatsApp).
 alter table grupos add column if not exists oficinas_plano_resuelto boolean not null default false;
+
+-- 12-10-2026: Pozos > clientes que NO salen en el plano (imagen/texto). Solo se guardan los desmarcados; un cliente
+-- nuevo no está en la tabla y por eso sale marcado solo.
+create table if not exists hipismo_pozos_excluidos (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  nombre   text not null,
+  creado_en timestamptz not null default now(),
+  primary key (grupo_id, nombre)
+);
