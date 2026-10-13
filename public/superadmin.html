@@ -1158,15 +1158,32 @@
   <!-- ================================================================= -->
   <div class="container" id="vistaPuestaEnMarchaSuperadmin" style="display:none;">
     <style>
-      #vistaPuestaEnMarchaSuperadmin .pm-card { border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; margin-top: 16px; }
-      #vistaPuestaEnMarchaSuperadmin .pm-card h2 { margin: 0 0 4px 0; font-size: 17px; }
-      #vistaPuestaEnMarchaSuperadmin .pm-ayuda { font-size: 12.5px; color: var(--text-dim); margin: 0 0 12px 0; }
+      #vistaPuestaEnMarchaSuperadmin .pm-card { border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 16px; margin-top: 10px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-card h2 { margin: 0 0 2px 0; font-size: 15px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-ayuda { font-size: 12px; color: var(--text-dim); margin: 0 0 8px 0; }
       #vistaPuestaEnMarchaSuperadmin .pm-fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
       #vistaPuestaEnMarchaSuperadmin .pm-fila label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-dim); }
       #vistaPuestaEnMarchaSuperadmin .pm-fila input[type="text"], #vistaPuestaEnMarchaSuperadmin .pm-fila input[type="number"], #vistaPuestaEnMarchaSuperadmin .pm-fila select { padding: 8px 10px; font-size: 13px; }
-      #vistaPuestaEnMarchaSuperadmin .pm-item { display: flex; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--card-border); }
+      #vistaPuestaEnMarchaSuperadmin .pm-item { display: flex; gap: 10px; padding: 5px 2px; border-bottom: 1px solid var(--card-border); }
       #vistaPuestaEnMarchaSuperadmin .pm-lista { max-height: 260px; overflow-y: auto; font-size: 13px; }
       #vistaPuestaEnMarchaSuperadmin .pm-msg { font-size: 13px; margin-top: 6px; min-height: 16px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-estado-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+      #vistaPuestaEnMarchaSuperadmin .pm-estado-cab h2 { margin: 0; }
+      #vistaPuestaEnMarchaSuperadmin .pm-estado-cab button { margin-left: auto; }
+      .pm-estado-pill { font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 999px; }
+      .pm-estado-pill:empty { display: none; }
+      .pm-estado-pill.pm-ok { background: #e7f6ef; color: #0a6b49; }
+      .pm-estado-pill.pm-pend { background: #fef3f2; color: #b42318; }
+      .pm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .pm-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; padding: 4px 11px 4px 7px; border-radius: 999px; cursor: default; white-space: nowrap; }
+      .pm-chip i { font-style: normal; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; background: rgba(255,255,255,.75); }
+      .pm-chip small { font-size: 11px; opacity: .75; font-weight: 400; }
+      .pm-chip-ok { background: #e7f6ef; color: #0a6b49; }
+      .pm-chip-pend { background: #fef3f2; color: #b42318; }
+      .pm-chip-opc { background: #eef0f4; color: #52607a; }
+      .pm-faltan { margin-top: 8px; font-size: 12.5px; color: #b42318; }
+      .pm-faltan > div { padding: 2px 0; }
+      .pm-aviso-esquema { padding: 8px 12px; border: 1px solid var(--danger); border-radius: 10px; margin-bottom: 8px; color: var(--danger); font-size: 12.5px; }
       #vistaPuestaEnMarchaSuperadmin textarea { width: 100%; box-sizing: border-box; min-height: 90px; padding: 8px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--card-border); background: transparent; color: inherit; font-family: inherit; }
     </style>
     <h1>Puesta en Marcha</h1>
@@ -1190,12 +1207,13 @@
 
     <div id="pmPaneles" style="display:none;">
       <div class="pm-card">
-        <h2>Estado del Grupo</h2>
-        <p class="pm-ayuda">Pasos para dejarlo listo. Lo que falta se configura en las secciones de abajo.</p>
+        <div class="pm-estado-cab">
+          <h2>Estado del Grupo</h2>
+          <span id="pmEstadoResumen" class="pm-estado-pill"></span>
+          <button type="button" id="pmBtnPrueba" class="btn-chico" onclick="pmEjecutarPrueba()" title="Solo lee: no crea clientes, planos ni alertas.">Prueba piloto</button>
+        </div>
         <div id="pmChecklist">Cargando…</div>
-        <div style="margin-top:12px;"><button type="button" id="pmBtnPrueba" onclick="pmEjecutarPrueba()">🧪 Ejecutar prueba piloto</button>
-        <span style="font-size:12px; color:var(--text-dim); margin-left:8px;">Solo lee: no crea clientes, planos ni alertas.</span></div>
-        <div id="pmResultadoPrueba" style="margin-top:10px;"></div>
+        <div id="pmResultadoPrueba"></div>
       </div>
 
       <div class="pm-card">
@@ -2246,21 +2264,23 @@ async function pmRecargarTodo() {
 // ---- Checklist y prueba piloto ----
 async function pmCargarChecklist() {
   const cont = document.getElementById('pmChecklist');
+  const pill = document.getElementById('pmEstadoResumen');
   let d;
   try { d = await pmApi('/hipismo/puesta-en-marcha'); }
-  catch (e) { cont.innerHTML = '<div style="color:var(--danger);">No se pudo cargar: ' + pmEsc(e.message) + '</div>'; return; }
-  const icono = { ok: '✅', pendiente: '⚠️', opcional: '➖' };
-  const color = { ok: 'var(--ok)', pendiente: 'var(--danger)', opcional: 'var(--text-dim)' };
-  let html = d.listo
-    ? '<div style="color:var(--ok); font-weight:700; margin-bottom:8px;">✅ Todo lo obligatorio está listo.</div>'
-    : '<div style="color:var(--danger); font-weight:700; margin-bottom:8px;">⚠️ Faltan ' + pmEsc(d.pendientes) + ' paso(s) por hacer.</div>';
+  catch (e) { pill.textContent = ''; cont.innerHTML = '<div style="color:var(--danger);">No se pudo cargar: ' + pmEsc(e.message) + '</div>'; return; }
+  // 13-10-2026: versión compacta — una fila de etiquetas (el detalle va al pasar el mouse) y, debajo, solo el detalle de lo que FALTA.
+  pill.className = 'pm-estado-pill ' + (d.listo ? 'pm-ok' : 'pm-pend');
+  pill.textContent = d.listo ? 'Todo lo obligatorio está listo' : 'Faltan ' + d.pendientes + ' paso(s)';
+  let html = '';
   if (d.esquema && !d.esquema.ok) {
-    html += '<div style="padding:10px 12px; border:2px solid var(--danger); border-radius:8px; margin-bottom:10px; color:var(--danger);"><b>La base de datos no está al día:</b> ' + pmEsc(d.esquema.faltan.join('; ')) + '. Corre <code>sql/schema.sql</code> completo en Supabase.</div>';
+    html += '<div class="pm-aviso-esquema"><b>La base de datos no está al día:</b> ' + pmEsc(d.esquema.faltan.join('; ')) + '. Corre <code>sql/schema.sql</code> completo en Supabase.</div>';
   }
-  html += d.items.map(i =>
-    '<div class="pm-item"><div style="font-size:18px;">' + (icono[i.estado] || '•') + '</div><div style="flex:1;">' +
-    '<div style="font-weight:600; color:' + (color[i.estado] || 'inherit') + ';">' + pmEsc(i.titulo) + (i.estado === 'opcional' ? ' <span style="font-weight:400; font-size:12px;">(opcional)</span>' : '') + '</div>' +
-    '<div style="font-size:12.5px; color:var(--text-dim);">' + pmEsc(i.detalle) + '</div></div></div>').join('');
+  const clase = { ok: 'pm-chip-ok', pendiente: 'pm-chip-pend', opcional: 'pm-chip-opc' };
+  const marca = { ok: '✓', pendiente: '!', opcional: '–' };
+  html += '<div class="pm-chips">' + d.items.map(i =>
+    '<span class="pm-chip ' + (clase[i.estado] || 'pm-chip-opc') + '" title="' + pmEsc(i.detalle) + '"><i>' + (marca[i.estado] || '•') + '</i>' + pmEsc(i.titulo) + (i.estado === 'opcional' ? ' <small>opcional</small>' : '') + '</span>').join('') + '</div>';
+  const faltan = d.items.filter(i => i.estado === 'pendiente');
+  if (faltan.length) html += '<div class="pm-faltan">' + faltan.map(i => '<div><b>' + pmEsc(i.titulo) + ':</b> ' + pmEsc(i.detalle) + '</div>').join('') + '</div>';
   cont.innerHTML = html;
 }
 
@@ -2271,13 +2291,13 @@ async function pmEjecutarPrueba() {
   try {
     const d = await pmApi('/hipismo/puesta-en-marcha/prueba', { method: 'POST' });
     const col = d.ok ? 'var(--ok)' : 'var(--danger)';
-    out.innerHTML = '<div style="padding:10px 12px; border:2px solid ' + col + '; border-radius:8px;">' +
-      '<div style="font-weight:700; color:' + col + '; margin-bottom:6px;">' + (d.ok ? '✅ La prueba piloto pasó completa' : '⚠️ La prueba piloto encontró cosas por revisar') + '</div>' +
-      d.pasos.map(p => '<div style="font-size:13px; margin-bottom:3px;">' + (p.ok ? '✅' : '❌') + ' <b>' + pmEsc(p.titulo) + '</b>: ' + pmEsc(p.detalle) + '</div>').join('') + '</div>';
+    out.innerHTML = '<div style="padding:8px 12px; border:1px solid ' + col + '; border-radius:10px; margin-top:8px;">' +
+      '<div style="font-weight:600; font-size:13px; color:' + col + '; margin-bottom:4px;">' + (d.ok ? 'La prueba piloto pasó completa' : 'La prueba piloto encontró cosas por revisar') + '</div>' +
+      d.pasos.map(p => '<div style="font-size:12.5px; margin-bottom:2px;">' + (p.ok ? '✓' : '✗') + ' <b>' + pmEsc(p.titulo) + '</b>: ' + pmEsc(p.detalle) + '</div>').join('') + '</div>';
   } catch (e) {
     out.innerHTML = '<div style="color:var(--danger);">No se pudo ejecutar: ' + pmEsc(e.message) + '</div>';
   }
-  btn.disabled = false; btn.textContent = '🧪 Ejecutar prueba piloto';
+  btn.disabled = false; btn.textContent = 'Prueba piloto';
 }
 
 // ---- Hipódromos ----
