@@ -40,7 +40,15 @@ router.get('/:token', asyncHandler(async (req, res) => {
   // grande junto a esas columnas en sql/schema.sql): el color del
   // degradado de la tarjeta "Total de la semana" que este grupo haya
   // elegido en Súper-admin, si eligió alguno.
-  const rGrupo = await db.query('SELECT activo, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, tema_color_primario, tema_color_secundario, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, modulo_deportes_habilitado, funciones_habilitadas FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  // 13-10-2026: si la columna funciones_habilitadas todavía no existe, se pide sin ella (el grupo conserva todas las secciones).
+  const SQL_GRUPO_CLIENTE = 'SELECT activo, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, tema_color_primario, tema_color_secundario, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, modulo_deportes_habilitado, funciones_habilitadas FROM grupos WHERE id = $1';
+  let rGrupo;
+  try {
+    rGrupo = await db.query(SQL_GRUPO_CLIENTE, [jugador.grupo_id]);
+  } catch (e) {
+    if (!e || e.code !== '42703') throw e;
+    rGrupo = await db.query(SQL_GRUPO_CLIENTE.replace(', funciones_habilitadas', ''), [jugador.grupo_id]);
+  }
   const grupo = rGrupo.rows[0];
   if (!grupo || !grupo.activo) {
     return res.status(403).json({ error: 'Esta cuenta no está disponible en este momento.' });

@@ -102,7 +102,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   }
 
   // No es el Administrador de ningún grupo — probamos si es un Empleado.
-  const r2 = await db.query(
+  const SQL_EMPLEADO_LOGIN =
     `SELECT e.*, g.activo AS grupo_activo, g.nombre AS grupo_nombre, g.logo_url AS grupo_logo_url, (g.logo_base64 IS NOT NULL) AS grupo_logo_base64,
             g.modulo_deportes_habilitado AS grupo_modulo_deportes_habilitado,
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
@@ -112,9 +112,16 @@ router.post('/login', asyncHandler(async (req, res) => {
             g.tema_color_primario AS grupo_tema_color_primario,
             g.tema_color_secundario AS grupo_tema_color_secundario
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
-      WHERE e.email = $1`,
-    [email]
-  );
+      WHERE e.email = $1`;
+  // 13-10-2026: si la columna grupos.funciones_habilitadas todavía no existe (no corrieron el SQL y la base no dejó crearla sola),
+  // se pide sin ella: el grupo queda con TODAS las secciones, exactamente como antes del panel. Así nadie se queda sin entrar.
+  let r2;
+  try {
+    r2 = await db.query(SQL_EMPLEADO_LOGIN, [email]);
+  } catch (e) {
+    if (!e || e.code !== '42703') throw e;
+    r2 = await db.query(SQL_EMPLEADO_LOGIN.replace('g.funciones_habilitadas AS grupo_funciones_habilitadas,', 'NULL::jsonb AS grupo_funciones_habilitadas,'), [email]);
+  }
   const empleado = r2.rows[0];
   if (!empleado) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
 
