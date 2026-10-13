@@ -687,6 +687,198 @@
   body.tema-superadmin-claro #tablaGrupos tbody tr:hover { background-color: rgba(220,38,38,0.06); }
   body.tema-superadmin-claro .conversacion-fila:hover { background: rgba(220,38,38,0.06); }
   body.tema-superadmin-claro .conversacion-fila.activa { background: rgba(220,38,38,0.1); }
+
+  /* =================================================================
+     REDISEÑO PROFESIONAL DEL SÚPER-ADMIN (13-10-2026, a pedido del usuario: "haz el modo de super admin más profesional").
+     Menú lateral oscuro + contenido sobre fondo gris azulado, un solo color de acento (azul LUDOX) y rojo SOLO para lo que
+     advierte o borra. Va AL FINAL de este <style> a propósito: pisa las reglas de arriba (por orden, misma especificidad) sin
+     tocar una por una — los mismos ids/clases de siempre siguen funcionando. La pantalla de acceso (oscura) no cambia.
+     Para volver al rojo anterior basta con restaurar los valores de las variables de este primer bloque.
+     ================================================================= */
+  body.tema-superadmin-claro {
+    --bg-color: #f3f5f9;
+    --card-bg: #ffffff;
+    --primary: #f3f5f9;
+    --accent: #2457e6;
+    --accent-hover: #1b45bd;
+    --border: rgba(15,23,42,0.09);
+
+    --bg: #f3f5f9;
+    --card: #ffffff;
+    --card-2: #f6f8fb;
+    --card-border: rgba(15,23,42,0.09);
+    --border-light: rgba(15,23,42,0.16);
+    --text: #101828;
+    --text-dim: #5b667a;
+    --accent-cyan: #2457e6;
+    --accent-blue: #1b45bd;
+    --accent-deep: #14307f;
+    --danger: #d92d20;
+    --ok: #12805c;
+    --warning: #b54708;
+    --sa-acento-suave: rgba(36,87,230,0.10);
+    padding: 0;
+  }
+
+  /* ---- Estructura: menú lateral fijo + contenido ---- */
+  body.tema-superadmin-claro #vistaPanel { padding: 28px 32px 48px 284px; min-height: 100vh; box-sizing: border-box; }
+  .sa-sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 252px; background: #0b1226; color: #aab4c8; display: flex; flex-direction: column; z-index: 45; overflow-y: auto; box-sizing: border-box; border-right: 1px solid rgba(255,255,255,0.06); }
+  .sa-marca { display: flex; align-items: center; gap: 11px; padding: 22px 20px 18px; text-decoration: none; }
+  .sa-marca img { width: 34px; height: 34px; object-fit: contain; display: block; }
+  .sa-marca-txt { display: flex; flex-direction: column; line-height: 1.15; }
+  .sa-marca-txt strong { font-family: 'Outfit', sans-serif; color: #fff; font-size: 17px; letter-spacing: 1.6px; font-weight: 600; }
+  .sa-marca-txt small { color: #7f8cab; font-size: 11.5px; letter-spacing: .3px; margin-top: 2px; }
+  .sa-nav { display: flex; flex-direction: column; gap: 2px; padding: 4px 12px 12px; }
+  .sa-nav-titulo { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: #5f6c8a; padding: 16px 10px 6px; font-weight: 600; }
+  .sa-sidebar .sa-nav-item { display: flex; align-items: center; gap: 11px; width: 100%; box-sizing: border-box; background: transparent; color: #aab4c8; border: none; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; font-family: 'Inter', sans-serif; position: relative; transition: background .15s, color .15s; }
+  .sa-sidebar .sa-nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .sa-sidebar .sa-nav-item.activo { background: rgba(56,224,240,0.12); color: #fff; }
+  .sa-sidebar .sa-nav-item.activo .sa-ic { color: #38e0f0; }
+  .sa-sidebar .sa-nav-item:focus-visible { outline: 2px solid #38e0f0; outline-offset: 1px; }
+  .sa-ic { width: 19px; height: 19px; flex-shrink: 0; }
+  .sa-nav-txt { flex: 1; }
+  .sa-sidebar .nav-badge { background: #d92d20; color: #fff; min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; font-size: 11px; font-weight: 600; padding: 0 6px; box-sizing: border-box; margin: 0; }
+  .sa-sidebar .sa-nav-item.nav-alerta-activa .nav-badge { animation: saLatido 1.6s ease-in-out infinite; }
+  @keyframes saLatido { 0%, 100% { box-shadow: 0 0 0 0 rgba(217,45,32,.55); } 50% { box-shadow: 0 0 0 5px rgba(217,45,32,0); } }
+  .sa-pie-nav { margin-top: auto; padding: 12px 12px 16px; border-top: 1px solid rgba(255,255,255,0.07); }
+  .sa-sesion { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #7f8cab; padding: 4px 12px 10px; }
+  .sa-punto-ok { width: 8px; height: 8px; border-radius: 50%; background: #34d399; display: inline-block; }
+  .sa-sidebar .sa-salir:hover { background: rgba(217,45,32,0.16); color: #fff; }
+
+  /* ---- Tarjetas de cada pantalla y encabezados ---- */
+  body.tema-superadmin-claro #vistaPanel .container { max-width: 1180px; margin: 0 auto 24px; padding: 28px 32px; border-radius: 16px; background: #fff; border: 1px solid var(--card-border); box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,23,42,.05); }
+  body.tema-superadmin-claro #vistaPanel h1 { text-align: left; font-size: 23px; font-weight: 600; letter-spacing: -.2px; margin: 0 0 4px; color: var(--text); }
+  body.tema-superadmin-claro #vistaPanel h2 { font-size: 15.5px; font-weight: 600; letter-spacing: -.1px; color: var(--text); }
+  body.tema-superadmin-claro #vistaPanel p.subtitulo { text-align: left; margin: 0 0 22px; font-size: 13.5px; color: var(--text-dim); line-height: 1.5; max-width: 760px; }
+  .sa-encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .sa-encabezado > div { min-width: 0; flex: 1; }
+  .sa-encabezado > button { flex-shrink: 0; }
+  .sa-cargando, .sa-vacio-mini { color: var(--text-dim); font-size: 13px; padding: 14px 4px; }
+  body.tema-superadmin-claro label { font-weight: 500; font-size: 12.5px; color: #475467; }
+
+  /* ---- Botones ---- */
+  body.tema-superadmin-claro button:not([class]) { background: var(--accent); color: #fff; border-radius: 9px; font-weight: 600; padding: 10px 18px; box-shadow: 0 1px 2px rgba(16,24,40,.12); transition: background .15s, box-shadow .15s; }
+  body.tema-superadmin-claro button:not([class]):hover { background: var(--accent-hover); }
+  body.tema-superadmin-claro button.btn-secundario { background: #fff; color: #344054; border: 1px solid #d0d5dd; font-weight: 500; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+  body.tema-superadmin-claro button.btn-secundario:hover { background: #f2f4f7; }
+  body.tema-superadmin-claro button.btn-chico { padding: 6px 12px; font-size: 12.5px; font-weight: 500; border-radius: 8px; }
+  body.tema-superadmin-claro button.btn-chico:not(.btn-secundario):not(.btn-peligro):not(.btn-peligro-suave) { background: var(--accent); color: #fff; }
+  body.tema-superadmin-claro button.btn-peligro { background: #d92d20; color: #fff; }
+  body.tema-superadmin-claro button.btn-peligro:hover { background: #b42318; }
+  body.tema-superadmin-claro button.btn-peligro-suave { background: #fff; color: #b42318; border: 1px solid #fecdca; font-weight: 500; }
+  body.tema-superadmin-claro button.btn-peligro-suave:hover { background: #fef3f2; }
+
+  /* ---- Campos ---- */
+  body.tema-superadmin-claro input[type="text"],
+  body.tema-superadmin-claro input[type="email"],
+  body.tema-superadmin-claro input[type="password"],
+  body.tema-superadmin-claro input[type="date"],
+  body.tema-superadmin-claro input[type="search"],
+  body.tema-superadmin-claro select { background: #fff; border: 1px solid #d0d5dd; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; color: var(--text); width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; transition: border-color .15s, box-shadow .15s; }
+  body.tema-superadmin-claro input:focus, body.tema-superadmin-claro select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(36,87,230,.14); }
+  body.tema-superadmin-claro input::placeholder { color: #98a2b3; }
+
+  /* ---- Cajas de "crear" y "diccionario" ---- */
+  body.tema-superadmin-claro .box-nuevo-grupo { background: #f8fafc; border: 1px solid #e4e9f1; border-radius: 14px; padding: 20px 22px; margin-bottom: 22px; }
+  body.tema-superadmin-claro .box-nuevo-grupo h2, body.tema-superadmin-claro .box-diccionario h2 { color: var(--text); margin-top: 0; }
+  body.tema-superadmin-claro .box-diccionario { background: #f8fafc; border: 1px solid #e4e9f1; border-radius: 14px; padding: 20px 22px; margin: 28px 0 8px; }
+  body.tema-superadmin-claro .box-diccionario p { color: var(--text-dim) !important; }
+  body.tema-superadmin-claro .modal-seccion { border-top: 1px solid #e4e9f1; margin-top: 16px; padding-top: 14px; }
+
+  /* ---- Lista de Grupos ---- */
+  .sa-barra-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }
+  body.tema-superadmin-claro .sa-barra-filtros input[type="search"] { flex: 1 1 260px; width: auto; min-width: 200px; }
+  body.tema-superadmin-claro .sa-barra-filtros select { flex: 0 0 auto; width: auto; min-width: 170px; }
+  .sa-contador { margin-left: auto; font-size: 12.5px; color: var(--text-dim); white-space: nowrap; }
+  body.tema-superadmin-claro table { border-collapse: collapse; }
+  body.tema-superadmin-claro table th { background: transparent; color: var(--text-dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: .7px; font-weight: 600; border: none; border-bottom: 1px solid var(--border-light); }
+  body.tema-superadmin-claro table td { border: none; border-bottom: 1px solid var(--border); }
+  body.tema-superadmin-claro tr:nth-child(even) { background-color: transparent; }
+  body.tema-superadmin-claro table.sa-tabla th { padding: 10px 14px; }
+  body.tema-superadmin-claro table.sa-tabla td { padding: 12px 14px; vertical-align: middle; }
+  body.tema-superadmin-claro #tablaGrupos tbody tr { cursor: pointer; transition: background .12s; }
+  body.tema-superadmin-claro #tablaGrupos tbody tr:hover { background-color: #f5f8ff; }
+  .sa-th-acc { text-align: right; }
+  .sa-acciones { text-align: right; white-space: nowrap; }
+  .sa-fecha { color: var(--text-dim); white-space: nowrap; }
+  .sa-grupo-cel { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .sa-grupo-txt { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+  .sa-grupo-txt strong { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+  .sa-grupo-txt small { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+  .sa-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--sa-acento-suave); color: var(--accent); font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 15px; }
+  .sa-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .sa-chip { display: inline-block; font-size: 11.5px; font-weight: 500; padding: 2px 9px; border-radius: 999px; background: #eef2f6; color: #475467; white-space: nowrap; }
+  .sa-chip-h { background: #e8f0ff; color: #1b45bd; }
+  .sa-chip-o { background: #f0e9ff; color: #6535c4; }
+  .sa-chip-nada { background: #fef3f2; color: #b42318; }
+  body.tema-superadmin-claro .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  body.tema-superadmin-claro .badge.activo { background: #e7f6ef; color: #0a6b49; }
+  body.tema-superadmin-claro .badge.inactivo { background: #eef0f4; color: #52607a; }
+  .sa-punto { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; flex-shrink: 0; font-style: normal; }
+  #vacioGrupos { text-align: center; color: var(--text-dim); padding: 28px 10px; font-size: 13.5px; }
+
+  /* ---- Panel general ---- */
+  .sa-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(188px, 1fr)); gap: 14px; margin: 4px 0 24px; }
+  body.tema-superadmin-claro button.sa-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; background: #fff; color: var(--text); border: 1px solid var(--border-light); border-radius: 14px; padding: 16px 18px; font-weight: 400; box-shadow: none; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; font-family: 'Inter', sans-serif; }
+  body.tema-superadmin-claro button.sa-kpi:hover { background: #fff; border-color: var(--accent); box-shadow: 0 6px 18px rgba(36,87,230,.10); transform: translateY(-1px); }
+  .sa-kpi-etq { font-size: 12.5px; color: var(--text-dim); font-weight: 500; }
+  .sa-kpi-val { font-family: 'Outfit', sans-serif; font-size: 30px; font-weight: 600; line-height: 1.15; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .sa-kpi-det { font-size: 12px; color: var(--text-dim); }
+  .sa-kpi-val.sa-val-largo { font-size: 22px; padding: 5px 0 4px; }
+  .sa-kpi.sa-tono-ok .sa-kpi-val { color: var(--ok); }
+  .sa-kpi.sa-tono-aviso .sa-kpi-val { color: var(--warning); }
+  .sa-kpi.sa-tono-peligro .sa-kpi-val { color: var(--danger); }
+  .sa-dos-col { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .sa-panel { border: 1px solid var(--border-light); border-radius: 14px; padding: 18px 20px 12px; background: #fff; margin-bottom: 0; min-width: 0; }
+  .sa-panel > h2 { margin: 0 0 8px; }
+  body.tema-superadmin-claro button.sa-fila-aten, body.tema-superadmin-claro button.sa-fila-grupo { display: flex; align-items: center; gap: 12px; width: 100%; background: transparent; color: var(--text); border: none; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 4px; font-size: 13.5px; font-weight: 400; text-align: left; box-shadow: none; cursor: pointer; font-family: 'Inter', sans-serif; }
+  body.tema-superadmin-claro button.sa-fila-aten:first-child, body.tema-superadmin-claro button.sa-fila-grupo:first-child { border-top: none; }
+  body.tema-superadmin-claro button.sa-fila-aten:hover, body.tema-superadmin-claro button.sa-fila-grupo:hover { background: #f5f8ff; }
+  .sa-fila-aten > span:nth-child(2) { flex: 1; }
+  .sa-fila-aten.sa-tono-aviso .sa-punto { color: #f79009; }
+  .sa-fila-aten.sa-tono-peligro .sa-punto { color: var(--danger); }
+  .sa-flecha { font-size: 12px; color: var(--accent); font-weight: 600; }
+  .sa-fila-grupo .sa-grupo-txt { flex: 1; }
+  .sa-todo-ok { display: flex; align-items: center; gap: 10px; color: var(--ok); font-size: 13.5px; padding: 14px 4px; font-weight: 500; }
+  .sa-punto.sa-punto-ok { color: #12b76a; }
+  .sa-mod-fila { display: grid; grid-template-columns: 210px 1fr 80px; align-items: center; gap: 14px; padding: 9px 0; font-size: 13.5px; }
+  .sa-mod-nombre { color: var(--text); font-weight: 500; }
+  .sa-mod-pista { height: 9px; border-radius: 999px; background: #eceff4; overflow: hidden; display: block; }
+  .sa-mod-barra { display: block; height: 100%; border-radius: 999px; background: var(--accent); min-width: 3px; transition: width .4s; }
+  .sa-mod-barra.sa-barra-h { background: #5b8cff; }
+  .sa-mod-barra.sa-barra-o { background: #8b5cf6; }
+  .sa-mod-num { color: var(--text-dim); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- Detalle del grupo (ventana) y pestañas ---- */
+  body.tema-superadmin-claro .modal-fondo { background: rgba(11,18,38,0.55); backdrop-filter: blur(2px); }
+  body.tema-superadmin-claro .modal-caja { border-radius: 18px; box-shadow: 0 24px 70px rgba(11,18,38,.35); }
+  body.tema-superadmin-claro #modalDetalleFondo .modal-caja h2 { font-size: 18px; font-weight: 600; }
+  body.tema-superadmin-claro .detalle-tabs-nav { background: #f8fafc; padding: 12px 10px; }
+  body.tema-superadmin-claro .detalle-tab-btn { border-radius: 9px; font-weight: 500; color: #475467; }
+  body.tema-superadmin-claro .detalle-tab-btn:hover { background: #eef2f7; color: var(--text); }
+  body.tema-superadmin-claro .detalle-tab-btn.activa { background: var(--sa-acento-suave); color: var(--accent); font-weight: 600; }
+  body.tema-superadmin-claro .conversacion-fila:hover { background: #f5f8ff; }
+  body.tema-superadmin-claro .conversacion-fila.activa { background: var(--sa-acento-suave); }
+  body.tema-superadmin-claro .banner-whatsapp-caido { max-width: 1180px; border-radius: 12px; background: #fef3f2; border-color: #fecdca; color: #7a271a; }
+
+  /* ---- Pantallas angostas: el menú pasa a una barra superior que se desliza ---- */
+  @media (max-width: 920px) {
+    body.tema-superadmin-claro #vistaPanel { padding: 0 0 32px; }
+    .sa-sidebar { position: sticky; top: 0; bottom: auto; width: 100%; height: auto; flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; padding: 8px 10px; gap: 6px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .sa-marca { padding: 0 8px 0 4px; flex-shrink: 0; }
+    .sa-marca img { width: 26px; height: 26px; }
+    .sa-marca-txt small { display: none; }
+    .sa-nav { flex-direction: row; padding: 0; gap: 2px; }
+    .sa-nav-titulo, .sa-sesion { display: none; }
+    .sa-sidebar .sa-nav-item { width: auto; padding: 8px 10px; white-space: nowrap; flex-shrink: 0; }
+    .sa-pie-nav { margin: 0 0 0 auto; padding: 0; border: none; flex-shrink: 0; }
+    body.tema-superadmin-claro #vistaPanel .container { margin: 12px; padding: 18px 16px; border-radius: 14px; }
+    body.tema-superadmin-claro .banner-whatsapp-caido { margin: 10px 12px; }
+    .sa-dos-col { grid-template-columns: 1fr; }
+    .sa-mod-fila { grid-template-columns: 1fr 70px; }
+    .sa-mod-fila .sa-mod-pista { grid-column: 1 / -1; grid-row: 2; }
+    .sa-contador { margin-left: 0; width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -715,7 +907,7 @@
 <!-- ================================================================= -->
 <div id="vistaAcceso" class="acceso-shell">
   <div class="container">
-    <h1>🔑 Súper-admin</h1>
+    <h1>Súper-admin</h1>
     <p class="subtitulo">Ludox Venezuela 🇻🇪 — administración de Grupos</p>
     <div class="campo">
       <label>Clave de Súper-admin</label>
@@ -730,16 +922,28 @@
 <!-- PANEL PRINCIPAL: listar / crear / activar-desactivar Grupos.       -->
 <!-- ================================================================= -->
 <div id="vistaPanel" style="display:none;">
-  <div class="topbar">
-    <span>🔑 Sesión de Súper-admin activa</span>
-    <button type="button" class="btn-secundario" id="btnVerGrupos" onclick="mostrarSeccionSuperadmin('grupos')">📋 Grupos</button>
-    <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerAlertas" onclick="mostrarSeccionSuperadmin('alertas')">🔔 Alertas<span id="alertasBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
-    <button type="button" class="btn-secundario" id="btnVerWhatsappQr" onclick="mostrarSeccionSuperadmin('whatsappqr')">📶 Vincular WhatsApp</button>
-    <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerMensajesContacto" onclick="mostrarSeccionSuperadmin('contacto')">✉️ Contacto<span id="contactoBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
-    <button type="button" class="btn-secundario" id="btnVerPuestaEnMarcha" onclick="mostrarSeccionSuperadmin('puestaenmarcha')">🚀 Puesta en Marcha</button>
-    <button type="button" class="btn-secundario btn-topbar-alerta" id="btnVerPagos" onclick="mostrarSeccionSuperadmin('pagos')">💳 Pagos<span id="pagosBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
-    <button type="button" class="btn-secundario" onclick="salir()">Cerrar sesión</button>
-  </div>
+  <aside class="sa-sidebar" id="saSidebar">
+    <a class="sa-marca" href="index.html" title="Ir a la página principal">
+      <img src="img/logo-ludox-icono.png" alt="">
+      <span class="sa-marca-txt"><strong>LUDOX</strong><small>Súper-admin</small></span>
+    </a>
+    <nav class="sa-nav">
+    <div class="sa-nav-titulo">General</div>
+    <button type="button" class="sa-nav-item" id="btnVerInicio" onclick="mostrarSeccionSuperadmin('inicio')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="sa-nav-txt">Panel general</span></button>
+    <button type="button" class="sa-nav-item" id="btnVerGrupos" onclick="mostrarSeccionSuperadmin('grupos')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3.2 3.2 0 010 5.6"/><path d="M18 14.3c1.8.8 3 2.6 3 4.7"/></svg><span class="sa-nav-txt">Grupos</span></button>
+    <button type="button" class="sa-nav-item" id="btnVerPuestaEnMarcha" onclick="mostrarSeccionSuperadmin('puestaenmarcha')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg><span class="sa-nav-txt">Puesta en marcha</span></button>
+    <div class="sa-nav-titulo">Cobros y soporte</div>
+    <button type="button" class="sa-nav-item" id="btnVerPagos" onclick="mostrarSeccionSuperadmin('pagos')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span class="sa-nav-txt">Pagos</span><span id="pagosBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
+    <button type="button" class="sa-nav-item" id="btnVerAlertas" onclick="mostrarSeccionSuperadmin('alertas')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0112 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 004 0"/></svg><span class="sa-nav-txt">Alertas</span><span id="alertasBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
+    <button type="button" class="sa-nav-item" id="btnVerMensajesContacto" onclick="mostrarSeccionSuperadmin('contacto')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span class="sa-nav-txt">Contacto</span><span id="contactoBadgeSuperadmin" class="nav-badge" style="display:none;">0</span></button>
+    <div class="sa-nav-titulo">Sistema</div>
+    <button type="button" class="sa-nav-item" id="btnVerWhatsappQr" onclick="mostrarSeccionSuperadmin('whatsappqr')"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="19" r="1"/></svg><span class="sa-nav-txt">Vincular WhatsApp</span></button>
+    </nav>
+    <div class="sa-pie-nav">
+      <span class="sa-sesion"><i class="sa-punto-ok"></i>Sesión activa</span>
+      <button type="button" class="sa-nav-item sa-salir" onclick="salir()"><svg class="sa-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/></svg><span class="sa-nav-txt">Cerrar sesión</span></button>
+    </div>
+  </aside>
 
   <!-- ================================================================= -->
   <!-- BANNER "sesión de WhatsApp caída" (18-09-2026) — pedido del dueño: -->
@@ -760,12 +964,43 @@
     </span>
   </div>
 
-  <div class="container" id="vistaGrupos">
-    <h1>Administración de Grupos</h1>
-    <p class="subtitulo">Crear nuevos Grupos y activar/desactivar los que ya existen — el "interruptor manual" de la plataforma.</p>
+  <!-- 13-10-2026: PANEL GENERAL — pantalla de entrada del Súper-admin con los indicadores de toda la plataforma. -->
+  <div class="container sa-vista" id="vistaInicio" style="display:none;">
+    <div class="sa-encabezado">
+      <div>
+        <h1>Panel general</h1>
+        <p class="subtitulo" id="inicioFecha">Resumen de toda la plataforma</p>
+      </div>
+      <button type="button" class="btn-secundario btn-chico" onclick="cargarInicioSuperadmin()">Actualizar</button>
+    </div>
+    <div class="sa-kpis" id="inicioKpis"><div class="sa-cargando">Cargando indicadores...</div></div>
+    <div class="sa-dos-col">
+      <section class="sa-panel">
+        <h2>Requiere atención</h2>
+        <div id="inicioAtencion"></div>
+      </section>
+      <section class="sa-panel">
+        <h2>Grupos recientes</h2>
+        <div id="inicioRecientes"></div>
+      </section>
+    </div>
+    <section class="sa-panel">
+      <h2>Módulos contratados</h2>
+      <div id="inicioModulos"></div>
+    </section>
+  </div>
 
-    <div class="box-nuevo-grupo">
-      <h2>➕ Crear Grupo nuevo</h2>
+  <div class="container sa-vista" id="vistaGrupos">
+    <div class="sa-encabezado">
+      <div>
+        <h1>Grupos</h1>
+        <p class="subtitulo">Crea Grupos nuevos y activa o desactiva los que ya existen — el "interruptor manual" de la plataforma.</p>
+      </div>
+      <button type="button" id="btnNuevoGrupo" onclick="alternarCrearGrupo()">Nuevo grupo</button>
+    </div>
+
+    <div class="box-nuevo-grupo" id="boxNuevoGrupo" style="display:none;">
+      <h2>Crear Grupo nuevo</h2>
       <div class="inputs-inline">
         <div>
           <label>Nombre del negocio</label>
@@ -783,7 +1018,7 @@
       </div>
       <!-- 13-10-2026, a pedido del usuario: "a la hora de crear un grupo... poder elegir qué puede usar y qué no" (por sección). -->
       <div class="modal-seccion">
-        <h3 style="margin:0 0 4px;">🧩 Qué incluye este grupo</h3>
+        <h3 style="margin:0 0 4px;">Qué incluye este grupo</h3>
         <div class="fx-modulos-nuevo">
           <label><input type="checkbox" id="nuevoModDeportes" checked onchange="fxMostrarModulosNuevo()"> ⚽ Deportes</label>
           <label><input type="checkbox" id="nuevoModHipismo" onchange="fxMostrarModulosNuevo()"> 🐎 Hipismo (Grupos Hípicos)</label>
@@ -797,11 +1032,24 @@
       <small style="display:block; margin-top:6px; color:var(--text-dim);">El Grupo nuevo queda <strong>inactivo</strong> por defecto — actívalo desde la tabla de abajo cuando ya hayas arreglado el cobro con ese cliente.</small>
     </div>
 
-    <h2>Grupos existentes</h2>
-    <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Haz clic en un Grupo para ver su detalle (jugadores activos, saldo, último inicio de sesión, y cambiar su contraseña).</p>
-    <table id="tablaGrupos">
+    <div class="sa-barra-filtros">
+      <input type="search" id="filtroGrupoTexto" placeholder="Buscar por nombre o correo" oninput="renderTablaGrupos()" autocomplete="off">
+      <select id="filtroGrupoEstado" onchange="renderTablaGrupos()">
+        <option value="">Todos los estados</option>
+        <option value="activo">Activos</option>
+        <option value="inactivo">Inactivos</option>
+      </select>
+      <select id="filtroGrupoModulo" onchange="renderTablaGrupos()">
+        <option value="">Todos los módulos</option>
+        <option value="deportes">Con Deportes</option>
+        <option value="hipismo">Con Hipismo</option>
+        <option value="oficinas">Con Hipismo Oficinas</option>
+      </select>
+      <span class="sa-contador" id="contadorGrupos"></span>
+    </div>
+    <table id="tablaGrupos" class="sa-tabla">
       <thead>
-        <tr><th>Nombre</th><th>Email</th><th>Estado</th><th>Creado</th><th>Acción</th></tr>
+        <tr><th>Grupo</th><th>Módulos</th><th>Estado</th><th>Creado</th><th class="sa-th-acc">Acciones</th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -814,7 +1062,7 @@
     <!-- código — ver src/services/diccionarioEquipos.js.               -->
     <!-- ============================================================= -->
     <div class="box-diccionario">
-      <h2>📖 Diccionario global de equipos</h2>
+      <h2>Diccionario global de equipos</h2>
       <p style="margin-top:-6px; color:var(--warning); font-size:13px;">Apodos que van a funcionar para <strong>todos los Grupos</strong> de la plataforma (no solo el que lo pida). Esto es distinto del cajón "Registrar Equipo Nuevo" que cada Grupo tiene en su propia Sábana — ese sigue siendo privado de cada uno.</p>
       <div class="inputs-inline-dic">
         <div>
@@ -849,12 +1097,12 @@
   <!-- chat.js. Se muestra en vez de "Grupos" al tocar el botón del topbar. -->
   <!-- ============================================================= -->
   <div class="container" id="vistaAlertasSuperadmin" style="display:none;">
-    <h1>🔔 Alertas de todos los Grupos</h1>
+    <h1>Alertas de todos los Grupos</h1>
     <p class="subtitulo">Jugadas AMBIGUA (VARIOS DEPORTES) que ningún grupo pudo resolver solo — ver src/services/evaluador.js. Resolverla acá elige el deporte correcto para la PRÓXIMA vez que ese grupo reprocese esa sábana.</p>
 
     <div id="listaAlertasSuperadmin"></div>
     <div id="vacioAlertasSuperadmin" style="display:none; text-align:center; color:var(--text-dim); padding:20px;">No hay alertas todavía. 🎉</div>
-    <h2 style="margin-top:28px;">🛠️ Errores del servidor (todos los Grupos)</h2>
+    <h2 style="margin-top:28px;">Errores del servidor (todos los Grupos)</h2>
     <p class="subtitulo">Fallas internas (500/503) con la ruta y el grupo donde pasaron, para enterarte sin que nadie las reporte. Se borran solas a los 30 días.</p>
     <div style="overflow-x:auto;">
       <table style="width:100%; font-size:13px;">
@@ -873,7 +1121,7 @@
   <!-- en routes/superadmin.js (lee, con clave).                          -->
   <!-- ================================================================= -->
   <div class="container" id="vistaMensajesContacto" style="display:none;">
-    <h1>✉️ Mensajes de contacto</h1>
+    <h1>Mensajes de contacto</h1>
     <p class="subtitulo">Lo que manda la gente desde el botón "Contacto" del portal de bienvenida — todavía no son Grupos, son consultas para contratar el servicio.</p>
 
     <div id="listaMensajesContacto"></div>
@@ -890,7 +1138,7 @@
   <!-- routes/superadmin.js (acá se revisa).                              -->
   <!-- ================================================================= -->
   <div class="container" id="vistaPagosSuperadmin" style="display:none;">
-    <h1>💳 Pagos de los Grupos</h1>
+    <h1>Pagos de los Grupos</h1>
     <p class="subtitulo">Lo que cada Grupo reportó como pago de su suscripción semanal a la plataforma — confirmar o rechazar acá no toca ningún saldo ni ticket de ese Grupo.</p>
 
     <div id="listaPagosSuperadmin"></div>
@@ -921,7 +1169,7 @@
       #vistaPuestaEnMarchaSuperadmin .pm-msg { font-size: 13px; margin-top: 6px; min-height: 16px; }
       #vistaPuestaEnMarchaSuperadmin textarea { width: 100%; box-sizing: border-box; min-height: 90px; padding: 8px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--card-border); background: transparent; color: inherit; font-family: inherit; }
     </style>
-    <h1>🚀 Puesta en Marcha</h1>
+    <h1>Puesta en Marcha</h1>
     <p class="subtitulo">Elige el Grupo y déjalo armado como lo quiere el cliente. Cada Grupo tiene su propia configuración: nada de lo que cargues acá afecta a otros Grupos.</p>
 
     <div class="pm-fila">
@@ -942,7 +1190,7 @@
 
     <div id="pmPaneles" style="display:none;">
       <div class="pm-card">
-        <h2>✅ Estado del Grupo</h2>
+        <h2>Estado del Grupo</h2>
         <p class="pm-ayuda">Pasos para dejarlo listo. Lo que falta se configura en las secciones de abajo.</p>
         <div id="pmChecklist">Cargando…</div>
         <div style="margin-top:12px;"><button type="button" id="pmBtnPrueba" onclick="pmEjecutarPrueba()">🧪 Ejecutar prueba piloto</button>
@@ -951,7 +1199,7 @@
       </div>
 
       <div class="pm-card">
-        <h2>🏇 1. Hipódromos</h2>
+        <h2>1. Hipódromos</h2>
         <p class="pm-ayuda">Los hipódromos donde juega este Grupo.</p>
         <div id="pmListaHipodromos" class="pm-lista"></div>
         <div class="pm-fila" style="margin-top:10px;">
@@ -964,7 +1212,7 @@
       </div>
 
       <div class="pm-card">
-        <h2>👥 2. Clientes</h2>
+        <h2>2. Clientes</h2>
         <p class="pm-ayuda">Los clientes del Grupo y el % propio de cada uno. Los banqueadores del paso 3 tienen que existir acá primero.</p>
         <div id="pmListaClientes" class="pm-lista"></div>
         <div class="pm-fila" style="margin-top:10px;">
@@ -987,14 +1235,14 @@
       </div>
 
       <div class="pm-card">
-        <h2>🏦 3. Banqueo de Marcas y Tablas Fijas</h2>
+        <h2>3. Banqueo de Marcas y Tablas Fijas</h2>
         <p class="pm-ayuda">Quién banquea por defecto en este Grupo (hasta 4 banqueadores, los % deben sumar 100). Sin banqueadores, las Marcas se banquean a mano y las Tablas Fijas juegan contra el ítem TABLAS FIJAS.</p>
         <div id="pmBanqMarcas"></div>
         <div id="pmBanqTf"></div>
       </div>
 
       <div class="pm-card">
-        <h2>📅 4. Fecha de semana</h2>
+        <h2>4. Fecha de semana</h2>
         <p class="pm-ayuda">Día en que empieza y día en que cierra la semana de este Grupo. Lunes → Domingo es lo normal.</p>
         <div class="pm-fila">
           <label>Empieza<select id="pmSemInicio"></select></label>
@@ -1018,7 +1266,7 @@
   <!-- que el vínculo se pierda alguna vez y haya que re-escanear.       -->
   <!-- ================================================================= -->
   <div class="container" id="vistaWhatsappQr" style="display:none;">
-    <h1>📶 Vincular WhatsApp (bot central)</h1>
+    <h1>Vincular WhatsApp (bot central)</h1>
     <p class="subtitulo">Este es el ÚNICO número de WhatsApp que necesitas vincular — después lo agregas como miembro al grupo de WhatsApp de cada cliente al que le actives la sábana automática (ver "Sábana automática por WhatsApp" en el detalle de cada Grupo). No es un QR por cliente, es uno solo para toda la plataforma.</p>
 
     <div id="whatsappQrEstadoTexto" style="font-weight:600; margin-bottom:14px;">Consultando estado…</div>
@@ -1167,29 +1415,29 @@
     <div id="detalleContenido" style="display:none;">
       <div class="detalle-tabs-envoltorio">
         <nav class="detalle-tabs-nav">
-          <button type="button" class="detalle-tab-btn" data-tab="resumen" onclick="mostrarPestanaDetalleGrupo('resumen')">📊 Resumen</button>
-          <button type="button" class="detalle-tab-btn" data-tab="balance" onclick="mostrarPestanaDetalleGrupo('balance')">💰 Balance por Cliente</button>
-          <button type="button" class="detalle-tab-btn" data-tab="sabanas" onclick="mostrarPestanaDetalleGrupo('sabanas')">📁 Sábanas</button>
+          <button type="button" class="detalle-tab-btn" data-tab="resumen" onclick="mostrarPestanaDetalleGrupo('resumen')">Resumen</button>
+          <button type="button" class="detalle-tab-btn" data-tab="balance" onclick="mostrarPestanaDetalleGrupo('balance')">Balance por Cliente</button>
+          <button type="button" class="detalle-tab-btn" data-tab="sabanas" onclick="mostrarPestanaDetalleGrupo('sabanas')">Sábanas</button>
           <!-- "⬇️ Descargar" (21-09-2026, a pedido del usuario: "esto se
                puede usar tanto del grupo como desde super admin") — mismo
                reporte "📅 Saldos Semana" (imagen HD/PDF/Excel) que ve el
                propio Grupo en su pestaña ⬇️ Descargar, de solo lectura,
                para CUALQUIER grupo elegido acá. Ver
                GET /api/superadmin/grupos/:id/saldos-semana. -->
-          <button type="button" class="detalle-tab-btn" data-tab="descargar" onclick="mostrarPestanaDetalleGrupo('descargar')">⬇️ Descargar</button>
+          <button type="button" class="detalle-tab-btn" data-tab="descargar" onclick="mostrarPestanaDetalleGrupo('descargar')">Descargar</button>
           <!-- "🎯 Módulos" (22-09-2026, a pedido del usuario: "donde le
                coloco si el grupo tiene deportes o hipismo? a los grupos
                que ya estan creados se le puede colocar?") — qué
                producto(s) tiene contratados este grupo. Ver la nota
                grande en sql/schema.sql y claude/plan-modulo-hipismo.md. -->
-          <button type="button" class="detalle-tab-btn" data-tab="modulos" onclick="mostrarPestanaDetalleGrupo('modulos')">🎯 Módulos</button>
-          <button type="button" class="detalle-tab-btn" data-tab="funciones" onclick="mostrarPestanaDetalleGrupo('funciones')">🧩 Funciones</button>
-          <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">🖼️ Logo</button>
-          <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">📲 WhatsApp</button>
-          <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">💳 Comisión</button>
-          <button type="button" class="detalle-tab-btn" data-tab="muestra" onclick="mostrarPestanaDetalleGrupo('muestra')">📝 Sábana de muestra</button>
-          <button type="button" class="detalle-tab-btn" data-tab="mantenimiento" onclick="mostrarPestanaDetalleGrupo('mantenimiento')">🗑️ Mantenimiento</button>
-          <button type="button" class="detalle-tab-btn" data-tab="seguridad" onclick="mostrarPestanaDetalleGrupo('seguridad')">🔑 Seguridad</button>
+          <button type="button" class="detalle-tab-btn" data-tab="modulos" onclick="mostrarPestanaDetalleGrupo('modulos')">Módulos</button>
+          <button type="button" class="detalle-tab-btn" data-tab="funciones" onclick="mostrarPestanaDetalleGrupo('funciones')">Funciones</button>
+          <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">Logo</button>
+          <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">WhatsApp</button>
+          <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">Comisión</button>
+          <button type="button" class="detalle-tab-btn" data-tab="muestra" onclick="mostrarPestanaDetalleGrupo('muestra')">Sábana de muestra</button>
+          <button type="button" class="detalle-tab-btn" data-tab="mantenimiento" onclick="mostrarPestanaDetalleGrupo('mantenimiento')">Mantenimiento</button>
+          <button type="button" class="detalle-tab-btn" data-tab="seguridad" onclick="mostrarPestanaDetalleGrupo('seguridad')">Seguridad</button>
         </nav>
 
         <div class="detalle-tabs-paneles">
@@ -1203,7 +1451,7 @@
 
             <!-- SALDO DE LA BANCA POR RANGO DE FECHAS (01-09-2026) -->
             <div class="modal-seccion">
-              <h3>💰 Saldo de la banca</h3>
+              <h3>Saldo de la banca</h3>
               <div class="inputs-inline" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
                 <div class="campo">
                   <label>Rango:</label>
@@ -1228,7 +1476,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>🕓 Último inicio de sesión</h3>
+              <h3>Último inicio de sesión</h3>
               <div class="detalle-fila"><span class="etiqueta">Fecha y hora</span><span class="valor" id="detalleLoginFecha"></span></div>
               <div class="detalle-fila"><span class="etiqueta">Dispositivo</span><span class="valor" id="detalleLoginDispositivo"></span></div>
               <div class="detalle-fila"><span class="etiqueta">Dirección IP</span><span class="valor" id="detalleLoginIp"></span></div>
@@ -1242,7 +1490,7 @@
                ocultables de esa pantalla, para mantener esta ficha resumida.
                GET /api/superadmin/grupos/:id/balance-clientes. -->
           <div class="detalle-tab-panel" data-tab-panel="balance">
-            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">💰 Balance por Cliente</h3>
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">Balance por Cliente</h3>
             <p class="bc-desc">Mismo cálculo que Balance General del propio Grupo — de solo lectura.</p>
             <div class="bc-filtros">
               <div class="bc-campo">
@@ -1287,7 +1535,7 @@
                sabana-dia + /fechas-con-datos (esta última ya existía, se
                reusa la misma que usa "🗑️ Mantenimiento"). -->
           <div class="detalle-tab-panel" data-tab-panel="sabanas">
-            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">📁 Sábanas</h3>
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">Sábanas</h3>
             <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Elige una fecha con datos para ver los tickets y el resumen por cliente de ese día — de solo lectura (para editar un ticket, hace falta entrar como ese Grupo).</p>
             <div class="cambiar-password-inline" style="margin-bottom:10px;">
               <select id="sabanasFechaSelect" onchange="cargarSabanaDiaDetalle()" style="flex:1;">
@@ -1304,7 +1552,7 @@
                Cliente"/"📁 Sábanas" de arriba (de carga perezosa, ver
                mostrarPestanaDetalleGrupo). -->
           <div class="detalle-tab-panel" data-tab-panel="descargar">
-            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">⬇️ Descargar — 📅 Saldos Semana</h3>
+            <h3 style="margin-top:0; color:var(--accent-cyan); font-size:14px;">Descargar — 📅 Saldos Semana</h3>
             <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismo reporte semanal que ve el propio Grupo en su pestaña ⬇️ Descargar — de solo lectura.</p>
 
             <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;">
@@ -1362,7 +1610,7 @@
 
           <div class="detalle-tab-panel" data-tab-panel="modulos">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>⚽ Módulo Deportes</h3>
+              <h3>Módulo Deportes</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Apuestas deportivas (parleys y jugadas directas) — el producto original, todo lo que ya usa este panel hasta ahora.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Estado</span>
@@ -1372,7 +1620,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>🐎 Módulo Hipismo Grupos Hípicos</h3>
+              <h3>Módulo Hipismo Grupos Hípicos</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Apuestas a carreras de caballos (planos, tercios, 10/N). Producto nuevo, todavía en mockup de front-end (<code>hipismo-mockup.html</code>) — prender este interruptor deja registrado que el grupo contrató el servicio, para cuando el módulo tenga backend real.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Estado</span>
@@ -1385,7 +1633,7 @@
             <!-- Hipismo Oficinas (09-10-2026): mismos cálculos que Grupos Hípicos, pero las jugadas se cargan
                  en una tabla (jugador, jugó/dio, tipo, caballo, monto) en vez de pegar un plano. -->
             <div class="modal-seccion">
-              <h3>🏢 Módulo Hipismo Oficinas</h3>
+              <h3>Módulo Hipismo Oficinas</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Mismos cálculos que Hipismo Grupos Hípicos (comparte clientes e hipódromos), pero las jugadas se cargan en una tabla y cada carrera debe cuadrar (lo que jugaron = lo que dieron).</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Estado</span>
@@ -1403,7 +1651,7 @@
                  apagado, hipismo-mockup.html oculta el checkbox "Cruzar
                  jugadas" de Cargar Planos y manda siempre cruzaJugadas=false. -->
             <div class="modal-seccion">
-              <h3>🔀 Cruzar jugadas (Hipismo)</h3>
+              <h3>Cruzar jugadas (Hipismo)</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Si el grupo cruza jugadas: al sumar todo lo que un cliente ganó y perdió en el plano, si el saldo queda positivo se le quita el 5% solo a ese saldo; si queda negativo, pierde completo, sin descuento. No todos los grupos trabajan así — acá decides si ESTE grupo puede usarlo. Vale para los dos módulos de Hipismo (Grupos Hípicos y Oficinas).</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Estado</span>
@@ -1417,7 +1665,7 @@
           <!-- ========================= 🖼️ LOGO ========================= -->
           <div class="detalle-tab-panel" data-tab-panel="logo">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>🖼️ Logo del Grupo</h3>
+              <h3>Logo del Grupo</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Se muestra arriba de todo en la página que ven los Clientes (su link individual). Sube la imagen directo desde acá — PNG, JPG, WEBP o GIF, hasta 4MB. No hace falta pegar ningún link externo.</p>
               <img id="logoPreview" style="display:none; max-width:180px; max-height:90px; margin:8px 0; border-radius:6px; border:1px solid var(--border);">
               <div class="cambiar-password-inline">
@@ -1443,7 +1691,7 @@
                  generaron) + selector de color libre para afinar el tono
                  exacto del logo de cada grupo. -->
             <div class="modal-seccion">
-              <h3>🎨 Colores Reportes Cliente</h3>
+              <h3>Colores Reportes Cliente</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Elige el color de la tarjeta "Total de la semana" que ve el Cliente en su link de Hipismo — para que combine con el logo de este grupo. El resto de la página no cambia.</p>
 
               <div class="tema-cliente-preview" id="temaClientePreview">
@@ -1472,7 +1720,7 @@
                nav de pestañas con 3 entradas del mismo tema. -->
           <div class="detalle-tab-panel" data-tab-panel="whatsapp">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>📱 Teléfonos de WhatsApp</h3>
+              <h3>Teléfonos de WhatsApp</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Hasta 3 números. Cuando un Cliente presiona "⚠️ Tengo diferencia" en su link, se le abre WhatsApp hacia el PRIMERO de esta lista (el más antiguo) — el orden importa.</p>
               <div id="listaTelefonosGrupo"></div>
               <div class="cambiar-password-inline" style="margin-top:8px;">
@@ -1485,7 +1733,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>📲 Sábana automática por WhatsApp</h3>
+              <h3>Sábana automática por WhatsApp</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Servicio aparte (plus): con esto prendido, "Resumen por Cliente" del Grupo se carga solo a medida que llegan mensajes "SABANA DE JUGADAS" al grupo de WhatsApp vinculado — sin esto, el Grupo sigue 100% manual. Requiere además que el bot esté activado en el servidor (<code>WHATSAPP_BOT_ACTIVADO</code>, ver README.md). El bot nunca le manda nada al grupo de WhatsApp por su cuenta (18-09-2026) — el resumen sale solo cuando el Grupo aprieta "📤 Enviar resumen ahora" en su panel, o con un comando de chat.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Servicio</span>
@@ -1514,7 +1762,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>✈️ Sábana automática por Telegram</h3>
+              <h3>Sábana automática por Telegram</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Alternativa oficial a WhatsApp (sin riesgo de baneo): el bot lee los mensajes "SABANA DE JUGADAS" del grupo de Telegram, los carga, responde el listado ya calculado y atiende los comandos (solo administradores del grupo de Telegram). Requiere <code>TELEGRAM_BOT_ACTIVADO</code> y <code>TELEGRAM_BOT_TOKEN</code> en el servidor (ver .env.example). Dos formas de usarlo: <b>(a)</b> un grupo de Telegram propio de este grupo (genera el código y un administrador escribe <code>/vincular CODIGO</code>), o <b>(b)</b> tu <b>grupo central</b> (<code>TELEGRAM_CENTRAL_CHAT_ID</code>): solo activa el servicio aquí y manda la sábana allá con el nombre de este grupo en la primera línea — no hace falta vincular nada.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Servicio</span>
@@ -1541,7 +1789,7 @@
             </div>
 
             <div class="modal-seccion">
-              <h3>📟 Comandos por WhatsApp</h3>
+              <h3>Comandos por WhatsApp</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Quién puede mandarle al bot "act" (actualizar sábana), "saldo final", "corte semana" o "saldo total semana &lt;nombre&gt;" por el chat. Esto NO afecta quién puede mandar "SABANA DE JUGADAS" (eso lo sigue aceptando cualquiera del grupo vinculado) — es un candado aparte, solo para estos 4 comandos.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Comandos</span>
@@ -1561,7 +1809,7 @@
           <!-- ========================= 💳 COMISIÓN ========================= -->
           <div class="detalle-tab-panel" data-tab-panel="comision">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>💰 Modelo de comisión (%)</h3>
+              <h3>Modelo de comisión (%)</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Cómo se calcula el % que cobra cada cliente por sus propias jugadas. "Plano" usa el % fijo de Administración &gt; Jugador de siempre, uno por cliente. "Por tipo de jugada" usa UN solo juego de niveles para TODO el grupo (ej. directas 2%, parleys de 2 logros 3%, de 3 logros 5%...) sin importar el % de cada jugador — cada ticket usa el nivel que le toque según cuántos logros tenga, y se suman todos al final.</p>
               <div class="cambiar-password-inline">
                 <select id="modeloComisionSelect" onchange="cambiarModeloComisionUI()" style="flex:1;">
@@ -1583,7 +1831,7 @@
           <!-- ========================= 📝 SÁBANA DE MUESTRA ========================= -->
           <div class="detalle-tab-panel" data-tab-panel="muestra">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>📝 Sábana de muestra</h3>
+              <h3>Sábana de muestra</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Pega acá un mensaje real de ejemplo de cómo este grupo escribe su sábana (jugadas, tickets, etc.). Es solo de referencia para ti — no se usa para procesar nada, ninguna jugada real se lee de acá.</p>
               <textarea id="sabanaMuestraInput" rows="6" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" placeholder="Pega acá un mensaje de ejemplo de la sábana de este grupo..."></textarea>
               <button type="button" class="btn-secundario" onclick="guardarSabanaMuestra()" style="margin-top:8px;">Guardar</button>
@@ -1595,7 +1843,7 @@
           <!-- ========================= 🗑️ MANTENIMIENTO ========================= -->
           <div class="detalle-tab-panel" data-tab-panel="mantenimiento">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
-              <h3>🗑️ Borrar jugadas / sábana por fecha</h3>
+              <h3>Borrar jugadas / sábana por fecha</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Marca las fechas que quieras borrar por completo para este grupo (sábana y Polla de esos días). <strong>Esto no se puede deshacer.</strong></p>
               <div id="listaFechasBorrar" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:8px;"></div>
               <button type="button" class="btn-peligro" onclick="borrarFechasSeleccionadas()">Borrar fechas marcadas</button>
@@ -1614,7 +1862,7 @@
                    NINGUNA clave recuperable guardada, ni cifrada — se
                    revirtió esa misma ronda. La única forma de ayudar a un
                    grupo con su clave es restablecerla, acá abajo. -->
-              <h3>🔑 Cambiar contraseña</h3>
+              <h3>Cambiar contraseña</h3>
               <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Fija una contraseña nueva para este grupo (no hace falta saber la anterior).</p>
               <div class="cambiar-password-inline">
                 <input type="password" id="passwordNueva" placeholder="Contraseña nueva para este Grupo">
@@ -1639,7 +1887,7 @@
 <div class="modal-fondo" id="modalCapturaSaldosSemana">
   <div class="modal-caja" style="max-width:1100px;">
     <button type="button" class="modal-cerrar" onclick="cerrarCapturaSaldosSemana()">✕</button>
-    <h2 style="margin-top:0;">📅 Imagen de Saldos Semana</h2>
+    <h2 style="margin-top:0;">Imagen de Saldos Semana</h2>
     <p id="capturaSaldosSemanaEstado" style="color:var(--text-dim); font-size:13px;">Generando imagen...</p>
     <div style="overflow:auto; max-height:60vh; border:1px solid var(--border); border-radius:8px; background:var(--card-2, #121a30); text-align:center;">
       <img id="capturaSaldosSemanaImg" style="max-width:100%; display:none;" alt="Saldos de la semana">
@@ -1658,7 +1906,7 @@
 <div class="modal-fondo" id="modalExportarExcelSaldosSemana">
   <div class="modal-caja" style="max-width:520px;">
     <button type="button" class="modal-cerrar" onclick="cerrarExportarExcelSaldosSemana()">✕</button>
-    <h2 style="margin-top:0;">📊 Exportar Saldos Semana a Excel</h2>
+    <h2 style="margin-top:0;">Exportar Saldos Semana a Excel</h2>
     <p style="color:var(--text-dim); font-size:13px; margin-top:-6px;">Elige qué columnas quieres que traiga el archivo — el nombre del cliente y su % (si tiene) siempre se incluyen.</p>
     <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;">
       <label style="font-weight:normal; display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="xlsColSaldoSemana" checked style="width:auto;"> Saldo Semana</label>
@@ -1777,7 +2025,7 @@ function mostrarPanel() {
   document.body.classList.add('tema-superadmin-claro');
   cargarGrupos();
   cargarDiccionarioGlobal();
-  mostrarSeccionSuperadmin('grupos');
+  mostrarSeccionSuperadmin('inicio');
 
   // El badge de Alertas y el de la bandeja de chat se revisan juntos cada
   // 25s SIEMPRE, sin importar si se está viendo "Grupos" o "Alertas" — ver
@@ -1883,14 +2131,22 @@ function descartarBannerWhatsappCaido() {
 // simplemente muestra/oculta los 2 contenedores de arriba. El chat de
 // soporte YA NO vive acá — ver la bandeja de chat flotante más abajo.
 // =================================================================
+const SA_BOTON_DE_SECCION = { inicio: 'btnVerInicio', grupos: 'btnVerGrupos', puestaenmarcha: 'btnVerPuestaEnMarcha', pagos: 'btnVerPagos', alertas: 'btnVerAlertas', contacto: 'btnVerMensajesContacto', whatsappqr: 'btnVerWhatsappQr' };
+const SA_VISTA_DE_SECCION = { inicio: 'vistaInicio', grupos: 'vistaGrupos', alertas: 'vistaAlertasSuperadmin', contacto: 'vistaMensajesContacto', pagos: 'vistaPagosSuperadmin', whatsappqr: 'vistaWhatsappQr', puestaenmarcha: 'vistaPuestaEnMarchaSuperadmin' };
 function mostrarSeccionSuperadmin(nombre) {
-  document.getElementById('vistaGrupos').style.display = nombre === 'grupos' ? 'block' : 'none';
-  document.getElementById('vistaAlertasSuperadmin').style.display = nombre === 'alertas' ? 'block' : 'none';
-  document.getElementById('vistaMensajesContacto').style.display = nombre === 'contacto' ? 'block' : 'none';
-  document.getElementById('vistaPagosSuperadmin').style.display = nombre === 'pagos' ? 'block' : 'none';
-  document.getElementById('vistaWhatsappQr').style.display = nombre === 'whatsappqr' ? 'block' : 'none';
-  document.getElementById('vistaPuestaEnMarchaSuperadmin').style.display = nombre === 'puestaenmarcha' ? 'block' : 'none';
-  document.getElementById('btnVerGrupos').style.background = nombre === 'grupos' ? '' : '#7f8c8d';
+  // 13-10-2026 (rediseño): menú lateral + "Panel general". Cada sección sigue siendo el mismo contenedor de siempre.
+  Object.keys(SA_VISTA_DE_SECCION).forEach(function (k) {
+    const el = document.getElementById(SA_VISTA_DE_SECCION[k]);
+    if (el) el.style.display = k === nombre ? 'block' : 'none';
+  });
+  Object.keys(SA_BOTON_DE_SECCION).forEach(function (k) {
+    const b = document.getElementById(SA_BOTON_DE_SECCION[k]);
+    if (b) { b.classList.toggle('activo', k === nombre); if (k === nombre) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  });
+  try { window.scrollTo(0, 0); } catch (e) { /* no crítico */ }
+  if (nombre === 'inicio') {
+    cargarInicioSuperadmin();
+  }
   if (nombre === 'alertas') {
     cargarAlertasSuperadmin();
     marcarAlertasLeidasSuperadmin();
@@ -2454,8 +2710,8 @@ setInterval(revisarInactividadSuperadmin, 30000);
 
 function badgeEstado(activo) {
   return activo
-    ? '<span class="badge activo">✅ Activo</span>'
-    : '<span class="badge inactivo">⛔ Inactivo</span>';
+    ? '<span class="badge activo"><i class="sa-punto"></i>Activo</span>'
+    : '<span class="badge inactivo"><i class="sa-punto"></i>Inactivo</span>';
 }
 
 function formatFecha(iso) {
@@ -2464,29 +2720,11 @@ function formatFecha(iso) {
 }
 
 async function cargarGrupos() {
-  const tbody = document.querySelector('#tablaGrupos tbody');
   try {
     const grupos = await apiSuperadmin('/api/superadmin/grupos');
     ULTIMOS_GRUPOS = grupos;
     fxIniciarSelectorNuevo();
-    tbody.innerHTML = '';
-    document.getElementById('vacioGrupos').style.display = grupos.length === 0 ? 'block' : 'none';
-    grupos.forEach(g => {
-      const tr = document.createElement('tr');
-      tr.onclick = () => abrirDetalleGrupo(g.id, g.nombre);
-      tr.innerHTML =
-        '<td><strong>' + g.nombre + '</strong></td>' +
-        '<td>' + g.email + '</td>' +
-        '<td>' + badgeEstado(g.activo) + '</td>' +
-        '<td>' + formatFecha(g.creado_en) + '</td>' +
-        '<td style="white-space:nowrap;">' +
-        '<button type="button" class="btn-chico ' + (g.activo ? 'btn-secundario' : '') + '" onclick="event.stopPropagation(); toggleActivo(\'' + g.id + '\', ' + (!g.activo) + ')">' +
-          (g.activo ? 'Desactivar' : 'Activar') +
-        '</button> ' +
-        '<button type="button" class="btn-chico btn-peligro" onclick="event.stopPropagation(); eliminarGrupo(\'' + g.id + '\')">🗑️ Eliminar</button>' +
-        '</td>';
-      tbody.appendChild(tr);
-    });
+    renderTablaGrupos();
   } catch (e) {
     // Si el secreto guardado dejó de servir (ej. se cambió el .env del
     // servidor), se vuelve a pedir en vez de dejar la tabla rota.
@@ -2497,6 +2735,148 @@ async function cargarGrupos() {
       alert('No se pudo cargar la lista de grupos: ' + e.message);
     }
   }
+}
+
+// 13-10-2026 (rediseño): la lista de Grupos con buscador y filtros. Los datos son los mismos de siempre
+// (ULTIMOS_GRUPOS); solo cambia cómo se ven y que se pueden filtrar sin volver a pedirlos al servidor.
+function saEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function saInicial(nombre) { const t = String(nombre || '').trim(); return t ? t.charAt(0).toUpperCase() : '?'; }
+function saModulosDe(g) {
+  return {
+    deportes: g.modulo_deportes_habilitado !== false, // el servidor viejo no lo mandaba: se asume que sí (así era por defecto)
+    hipismo: !!g.modulo_hipismo_habilitado,
+    oficinas: !!g.modulo_hipismo_oficinas_habilitado
+  };
+}
+function saChipsModulos(g) {
+  const m = saModulosDe(g);
+  const chips = [];
+  if (m.deportes) chips.push('<span class="sa-chip">Deportes</span>');
+  if (m.hipismo) chips.push('<span class="sa-chip sa-chip-h">Hipismo</span>');
+  if (m.oficinas) chips.push('<span class="sa-chip sa-chip-o">Oficinas</span>');
+  return chips.length ? chips.join('') : '<span class="sa-chip sa-chip-nada">Ninguno</span>';
+}
+function renderTablaGrupos() {
+  const tbody = document.querySelector('#tablaGrupos tbody');
+  if (!tbody) return;
+  const todos = ULTIMOS_GRUPOS || [];
+  const texto = ((document.getElementById('filtroGrupoTexto') || {}).value || '').trim().toLowerCase();
+  const fEstado = (document.getElementById('filtroGrupoEstado') || {}).value || '';
+  const fModulo = (document.getElementById('filtroGrupoModulo') || {}).value || '';
+  const grupos = todos.filter(function (g) {
+    if (texto && String(g.nombre || '').toLowerCase().indexOf(texto) === -1 && String(g.email || '').toLowerCase().indexOf(texto) === -1) return false;
+    if (fEstado === 'activo' && !g.activo) return false;
+    if (fEstado === 'inactivo' && g.activo) return false;
+    if (fModulo && !saModulosDe(g)[fModulo]) return false;
+    return true;
+  });
+  tbody.innerHTML = '';
+  const vacio = document.getElementById('vacioGrupos');
+  vacio.style.display = grupos.length === 0 ? 'block' : 'none';
+  vacio.textContent = todos.length === 0 ? 'Todavía no hay ningún Grupo creado.' : 'Ningún Grupo coincide con la búsqueda.';
+  const activos = todos.filter(function (g) { return g.activo; }).length;
+  const cont = document.getElementById('contadorGrupos');
+  if (cont) cont.textContent = (grupos.length === todos.length ? todos.length + ' grupos' : grupos.length + ' de ' + todos.length + ' grupos') + ' · ' + activos + ' activos';
+  grupos.forEach(function (g) {
+    const tr = document.createElement('tr');
+    tr.onclick = function () { abrirDetalleGrupo(g.id, g.nombre); };
+    tr.innerHTML =
+      '<td data-col="Grupo"><div class="sa-grupo-cel"><span class="sa-avatar">' + saEsc(saInicial(g.nombre)) + '</span><span class="sa-grupo-txt"><strong>' + saEsc(g.nombre) + '</strong><small>' + saEsc(g.email) + '</small></span></div></td>' +
+      '<td data-col="Módulos"><div class="sa-chips">' + saChipsModulos(g) + '</div></td>' +
+      '<td data-col="Estado">' + badgeEstado(g.activo) + '</td>' +
+      '<td data-col="Creado" class="sa-fecha">' + formatFecha(g.creado_en) + '</td>' +
+      '<td data-col="Acciones" class="sa-acciones">' +
+      '<button type="button" class="btn-chico ' + (g.activo ? 'btn-secundario' : '') + '" onclick="event.stopPropagation(); toggleActivo(\'' + g.id + '\', ' + (!g.activo) + ')">' + (g.activo ? 'Desactivar' : 'Activar') + '</button> ' +
+      '<button type="button" class="btn-chico btn-peligro-suave" onclick="event.stopPropagation(); eliminarGrupo(\'' + g.id + '\')">Eliminar</button>' +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function alternarCrearGrupo() {
+  const box = document.getElementById('boxNuevoGrupo');
+  const abrir = box.style.display === 'none';
+  box.style.display = abrir ? 'block' : 'none';
+  document.getElementById('btnNuevoGrupo').textContent = abrir ? 'Cerrar' : 'Nuevo grupo';
+  if (abrir) { const i = document.getElementById('nuevoNombre'); if (i) i.focus(); }
+}
+
+// =================================================================
+// PANEL GENERAL (13-10-2026, rediseño): indicadores de toda la plataforma. Solo LEE lo que el panel ya consultaba
+// (lista de grupos, conteos de pagos/alertas/contacto, estado de WhatsApp, errores del servidor) — no calcula nada nuevo.
+// =================================================================
+async function saPedir(ruta) {
+  try { return await apiSuperadmin(ruta); } catch (e) { return null; }
+}
+function saNumero(x) { return typeof x === 'number' ? x : 0; }
+function saKpi(etiqueta, valor, detalle, tono, seccion) {
+  return '<button type="button" class="sa-kpi sa-tono-' + tono + '" onclick="mostrarSeccionSuperadmin(\'' + seccion + '\')">' +
+    '<span class="sa-kpi-etq">' + saEsc(etiqueta) + '</span>' +
+    '<span class="sa-kpi-val' + (String(valor).length > 6 ? ' sa-val-largo' : '') + '">' + saEsc(valor) + '</span>' +
+    '<span class="sa-kpi-det">' + saEsc(detalle) + '</span></button>';
+}
+async function cargarInicioSuperadmin() {
+  const fecha = document.getElementById('inicioFecha');
+  if (fecha) { try { fecha.textContent = 'Resumen de toda la plataforma · ' + new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { /* no crítico */ } }
+  const r = await Promise.all([
+    saPedir('/api/superadmin/grupos'),
+    saPedir('/api/superadmin/pagos/conteo-pendientes'),
+    saPedir('/api/superadmin/alertas/conteo-no-leidas'),
+    saPedir('/api/superadmin/mensajes-contacto/conteo-no-leidos'),
+    saPedir('/api/superadmin/whatsapp-estado'),
+    saPedir('/api/superadmin/errores-servidor?limite=200')
+  ]);
+  const grupos = Array.isArray(r[0]) ? r[0] : [];
+  if (Array.isArray(r[0])) ULTIMOS_GRUPOS = r[0];
+  const pagos = r[1] ? saNumero(r[1].total) : null;
+  const alertas = r[2] ? saNumero(r[2].total) : null;
+  const mensajes = r[3] ? saNumero(r[3].total) : null;
+  const wa = r[4];
+  const errores = Array.isArray(r[5]) ? r[5] : null;
+  const hace24 = Date.now() - 24 * 3600 * 1000;
+  const errores24 = errores ? errores.filter(function (e) { return new Date(e.creado_en).getTime() >= hace24; }).length : null;
+  const activos = grupos.filter(function (g) { return g.activo; }).length;
+  const inactivos = grupos.length - activos;
+
+  const kpis = [];
+  kpis.push(saKpi('Grupos activos', String(activos), 'de ' + grupos.length + ' en total', 'ok', 'grupos'));
+  kpis.push(saKpi('Por activar', String(inactivos), inactivos === 1 ? 'grupo inactivo' : 'grupos inactivos', inactivos > 0 ? 'aviso' : 'neutro', 'grupos'));
+  kpis.push(saKpi('Pagos por confirmar', pagos === null ? '—' : String(pagos), pagos ? 'esperan tu revisión' : 'sin pendientes', pagos ? 'aviso' : 'neutro', 'pagos'));
+  kpis.push(saKpi('Alertas sin leer', alertas === null ? '—' : String(alertas), alertas ? 'jugadas por resolver' : 'todo al día', alertas ? 'aviso' : 'neutro', 'alertas'));
+  kpis.push(saKpi('Mensajes de contacto', mensajes === null ? '—' : String(mensajes), mensajes ? 'sin leer' : 'sin mensajes nuevos', mensajes ? 'aviso' : 'neutro', 'contacto'));
+  kpis.push(saKpi('WhatsApp', wa ? (wa.conectado ? 'Conectado' : 'Sin conexión') : '—', wa ? (wa.conectado ? 'sesión vinculada' : 'vincula el número') : 'sin datos', wa ? (wa.conectado ? 'ok' : 'peligro') : 'neutro', 'whatsappqr'));
+  kpis.push(saKpi('Errores del servidor', errores24 === null ? '—' : String(errores24), 'en las últimas 24 horas', errores24 ? 'peligro' : 'neutro', 'alertas'));
+  document.getElementById('inicioKpis').innerHTML = kpis.join('');
+
+  const atencion = [];
+  if (inactivos > 0) atencion.push(['grupos', inactivos + (inactivos === 1 ? ' grupo inactivo espera activación' : ' grupos inactivos esperan activación'), 'aviso']);
+  if (pagos) atencion.push(['pagos', pagos + (pagos === 1 ? ' pago pendiente de confirmar' : ' pagos pendientes de confirmar'), 'aviso']);
+  if (alertas) atencion.push(['alertas', alertas + (alertas === 1 ? ' alerta de jugadas sin leer' : ' alertas de jugadas sin leer'), 'aviso']);
+  if (mensajes) atencion.push(['contacto', mensajes + (mensajes === 1 ? ' mensaje de contacto sin leer' : ' mensajes de contacto sin leer'), 'aviso']);
+  if (wa && !wa.conectado) atencion.push(['whatsappqr', 'WhatsApp sin conexión: las sábanas automáticas no se envían', 'peligro']);
+  if (errores24) atencion.push(['alertas', errores24 + (errores24 === 1 ? ' error del servidor en las últimas 24 horas' : ' errores del servidor en las últimas 24 horas'), 'peligro']);
+  document.getElementById('inicioAtencion').innerHTML = atencion.length
+    ? atencion.map(function (a) { return '<button type="button" class="sa-fila-aten sa-tono-' + a[2] + '" onclick="mostrarSeccionSuperadmin(\'' + a[0] + '\')"><i class="sa-punto"></i><span>' + saEsc(a[1]) + '</span><span class="sa-flecha">Ver</span></button>'; }).join('')
+    : '<div class="sa-todo-ok"><i class="sa-punto sa-punto-ok"></i>Todo en orden: no hay nada pendiente.</div>';
+
+  document.getElementById('inicioRecientes').innerHTML = grupos.length
+    ? grupos.slice(0, 6).map(function (g) {
+        return '<button type="button" class="sa-fila-grupo" onclick="abrirDetalleGrupo(\'' + g.id + '\', ' + saEsc(JSON.stringify(String(g.nombre))).replace(/'/g, '&#39;') + ')">' +
+          '<span class="sa-avatar">' + saEsc(saInicial(g.nombre)) + '</span>' +
+          '<span class="sa-grupo-txt"><strong>' + saEsc(g.nombre) + '</strong><small>Creado ' + formatFecha(g.creado_en) + '</small></span>' +
+          badgeEstado(g.activo) + '</button>';
+      }).join('')
+    : '<div class="sa-vacio-mini">Todavía no hay ningún Grupo creado.</div>';
+
+  const conteo = { deportes: 0, hipismo: 0, oficinas: 0 };
+  grupos.forEach(function (g) { const m = saModulosDe(g); if (m.deportes) conteo.deportes++; if (m.hipismo) conteo.hipismo++; if (m.oficinas) conteo.oficinas++; });
+  const filas = [['Deportes', conteo.deportes, ''], ['Hipismo (Grupos Hípicos)', conteo.hipismo, 'sa-barra-h'], ['Hipismo Oficinas', conteo.oficinas, 'sa-barra-o']];
+  document.getElementById('inicioModulos').innerHTML = grupos.length
+    ? filas.map(function (f) {
+        const pct = Math.round((f[1] / grupos.length) * 100);
+        return '<div class="sa-mod-fila"><span class="sa-mod-nombre">' + f[0] + '</span><span class="sa-mod-pista"><span class="sa-mod-barra ' + f[2] + '" style="width:' + pct + '%"></span></span><span class="sa-mod-num">' + f[1] + ' de ' + grupos.length + '</span></div>';
+      }).join('')
+    : '<div class="sa-vacio-mini">Sin datos todavía.</div>';
 }
 
 

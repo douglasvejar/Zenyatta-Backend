@@ -61,7 +61,7 @@ router.use('/grupos/:id/jugadores', comoGrupo, require('./jugadores'));
 
 // Lista todos los grupos (para ver cuáles están activos/inactivos).
 router.get('/grupos', asyncHandler(async (req, res) => {
-  const r = await db.query('SELECT id, nombre, email, activo, creado_en, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos ORDER BY creado_en DESC');
+  const r = await db.query('SELECT id, nombre, email, activo, creado_en, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos ORDER BY creado_en DESC');
   res.json(r.rows);
 }));
 
