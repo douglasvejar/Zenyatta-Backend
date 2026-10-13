@@ -1239,6 +1239,91 @@
   .cal-sem-dia.en-rango { background: #bfe6cb; border-radius: 0; }
   .cal-sem-dia.extremo { background: var(--accent); color: #fff; font-weight: 800; border-radius: 6px; }
   .cal-sem-vacio { visibility: hidden; }
+
+  /* ===============================================================
+     VERSIÓN MÓVIL (13-10-2026) — a pedido del usuario ("hagamos la
+     versión 1": la misma página, pero que en teléfono se vea como app).
+     TODO esto vive dentro de @media (max-width: 860px) (o está oculto
+     por defecto): en computadora la página queda EXACTAMENTE igual.
+     Barra de navegación inferior (Pozos · Saldos · [Cargar] · Clientes ·
+     Menú) y el menú completo se abre como hoja desde abajo, con buscador. */
+  .mov-nav, .mov-backdrop, .mov-cab { display: none; }
+  .mov-oculto { display: none !important; }
+  .mov-abierto { display: flex !important; }
+  @media (max-width: 860px) {
+    html { -webkit-text-size-adjust: 100%; }
+    body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+    .topbar { padding: 10px 14px 0; flex-wrap: wrap; gap: 8px; }
+    .marca .logo-emoji { font-size: 22px; }
+    .marca h1 { font-size: 17px; }
+    .selector-modulo { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .selector-modulo::-webkit-scrollbar { display: none; }
+    .selector-modulo button { padding: 7px 12px; font-size: 12.5px; white-space: nowrap; }
+    .app-shell { padding: 10px 12px; gap: 10px; align-items: stretch; }
+    .main { width: 100%; max-width: 100%; }
+    .card { padding: 14px; border-radius: 16px; }
+    .card h2 { font-size: 17px; }
+    input, select, textarea { font-size: 16px; }
+
+    /* El menú lateral pasa a ser una hoja que sube desde abajo. */
+    .sidebar-admin {
+      position: fixed; left: 0; right: 0; bottom: 0; top: 56px; width: auto;
+      z-index: 10001; border-radius: 22px 22px 0 0; border: none;
+      padding: 0 12px calc(24px + env(safe-area-inset-bottom));
+      overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+      transform: translateY(105%); visibility: hidden;
+      transition: transform .26s ease, visibility 0s linear .26s;
+      box-shadow: 0 -10px 40px rgba(15,60,35,0.30);
+    }
+    body.mov-menu-abierto .sidebar-admin { transform: none; visibility: visible; transition: transform .26s ease; }
+    .mov-backdrop { position: fixed; inset: 0; background: rgba(10,30,20,0.45); z-index: 10000; }
+    body.mov-menu-abierto .mov-backdrop { display: block; }
+    .nav-children { display: none; }
+    .nav-item { padding: 13px 12px; font-size: 15px; border-radius: 10px; }
+    .nav-child { padding: 12px 12px; font-size: 14.5px; }
+    .nav-parent { font-weight: 800; }
+    .nav-parent { gap: 8px; }
+    .nav-parent .nav-lbl { flex: 1; text-align: left; }
+    /* Tablas anchas: se deslizan de lado dentro de su tarjeta, sin ensanchar toda la página. */
+    .main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .main .subnav button { white-space: normal; }
+    .mov-cab {
+      display: block; position: sticky; top: 0; z-index: 2; background: var(--primary);
+      padding: 14px 0 10px; margin-bottom: 4px;
+    }
+    .mov-cab-fila { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .mov-cab-fila b { font-family: 'Outfit', sans-serif; font-size: 19px; color: #0f2a1a; }
+    .mov-cab-cerrar { width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(15,60,35,0.10); color: #0f2a1a; font-size: 18px; cursor: pointer; }
+    .mov-buscar { width: 100%; border: 1px solid var(--card-border); border-radius: 14px; padding: 12px 14px; background: #ffffff; color: var(--text); font-family: inherit; }
+
+    /* Barra inferior fija. */
+    .mov-nav {
+      display: flex; align-items: center; justify-content: space-around;
+      position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+      height: 64px; padding: 0 6px; z-index: 9000;
+      background: #ffffff; border: 1px solid var(--card-border); border-radius: 24px;
+      box-shadow: 0 10px 30px rgba(15,60,35,0.22);
+    }
+    .mov-nav button {
+      flex: 1; min-height: 52px; background: none; border: none; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; color: var(--text-dim);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mov-nav button .mov-ic { font-size: 21px; line-height: 1; }
+    .mov-nav button.activo { color: var(--accent); }
+    .mov-nav button.activo .mov-ic { transform: translateY(-1px); }
+    .mov-nav .mov-fab { flex: 0 0 60px; min-height: 0; height: 60px; width: 60px; margin-top: -34px; border-radius: 50%; color: #ffffff; background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); box-shadow: 0 10px 22px rgba(22,163,74,0.40); gap: 0; }
+    .mov-nav .mov-fab .mov-ic { font-size: 24px; }
+    .mov-nav .mov-fab.activo { color: #ffffff; box-shadow: 0 0 0 4px rgba(22,163,74,0.22), 0 10px 22px rgba(22,163,74,0.40); }
+    .mov-nav .mov-fab span:last-child { font-size: 10px; }
+
+    /* Alertas flotantes y chat: suben para no quedar tapadas por la barra. */
+    .alerta-flotante { bottom: calc(86px + env(safe-area-inset-bottom)); }
+    .alerta-flotante.alerta-adelantadas { bottom: calc(140px + env(safe-area-inset-bottom)); }
+    .alerta-flotante.alerta-tercios-adelantadas { bottom: calc(194px + env(safe-area-inset-bottom)); }
+    .chat-widget { bottom: calc(86px + env(safe-area-inset-bottom)); right: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -1320,9 +1405,23 @@
   </div>
 </div>
 
+<!-- Versión móvil (13-10-2026): fondo oscuro para el menú-hoja y barra inferior. Solo se ven en pantallas <= 860px. -->
+<div class="mov-backdrop" id="movBackdrop" onclick="movCerrarMenu()"></div>
+<nav class="mov-nav" id="movNav" aria-label="Navegación principal">
+  <button type="button" data-mov-vista="pozos" onclick="movIr('pozos')"><span class="mov-ic">💰</span><span>Pozos</span></button>
+  <button type="button" data-mov-vista="detalladoCliente" onclick="movIr('detalladoCliente')"><span class="mov-ic">📊</span><span>Saldos</span></button>
+  <button type="button" class="mov-fab" data-mov-vista="cargarPlanos" onclick="movIr('cargarPlanos')" aria-label="Cargar planos"><span class="mov-ic">📥</span><span>Cargar</span></button>
+  <button type="button" data-mov-vista="clientes" onclick="movIr('clientes')"><span class="mov-ic">👤</span><span>Clientes</span></button>
+  <button type="button" id="movBtnMenu" onclick="movAbrirMenu()"><span class="mov-ic">☰</span><span>Menú</span></button>
+</nav>
+
 <div class="app-shell">
 
   <nav class="sidebar-admin" id="sidebar">
+    <div class="mov-cab">
+      <div class="mov-cab-fila"><b>Menú</b><button type="button" class="mov-cab-cerrar" onclick="movCerrarMenu()" aria-label="Cerrar menú">✕</button></div>
+      <input type="search" class="mov-buscar" id="movBuscar" placeholder="Buscar pantalla…" oninput="movFiltrarMenu(this.value)" autocomplete="off">
+    </div>
     <button type="button" class="nav-item nav-parent" onclick="toggleGrupo('apuestas')">🏁<span class="nav-lbl"> Apuestas </span><span id="caretApuestas">▾</span></button>
     <div class="nav-children" id="grupoApuestas">
       <button type="button" class="nav-item nav-child nav-item-active" data-vista="cargarPlanos" onclick="mostrarVista('cargarPlanos', this)">📥<span class="nav-lbl"> Cargar Planos</span></button>
@@ -6298,6 +6397,7 @@ function aplicarFuncionesGrupoHipismo() {
     const primero = Array.from(document.querySelectorAll('.nav-item[data-vista]')).find(b => b.style.display !== 'none');
     if (primero) primero.click();
   }
+  if (typeof sincronizarNavMovil === 'function') sincronizarNavMovil();
 }
 // Trae la lista al día del servidor (por si el Súper-admin la cambió después del login) y vuelve a aplicar.
 async function refrescarFuncionesGrupoHip() {
@@ -6521,6 +6621,7 @@ function mostrarVista(id, btn) {
   // filtro (semana/fecha) que ya tenía elegido, así siempre refleja el
   // estado real más reciente sin depender de que el operador se acuerde
   // de refrescar.
+  if (typeof movAlCambiarVista === 'function') movAlCambiarVista(id);
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
 const REFRESCAR_AL_ENTRAR_VISTA = {
@@ -6598,9 +6699,83 @@ function semanaActivaDeSelector(idSelector) {
   const btn = document.querySelector('#' + idSelector + ' button.activo');
   return (btn && btn.dataset.semana) || 'actual';
 }
+
+// =================================================================
+// VERSIÓN MÓVIL (13-10-2026) — barra inferior + menú en hoja. En
+// computadora estas funciones no hacen nada visible (los elementos
+// están ocultos por CSS). Los botones llaman al MISMO botón del menú
+// lateral (.click()), así se respeta todo lo de siempre: secciones
+// apagadas por grupo, refrescos al entrar, alertas, etc.
+// =================================================================
+function movEsMovil() { return window.matchMedia('(max-width: 860px)').matches; }
+function movNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function movAbrirMenu() {
+  document.body.classList.add('mov-menu-abierto');
+  document.body.style.overflow = 'hidden';
+  const act = document.querySelector('#sidebar .nav-item-active');
+  const cont = act && act.closest('.nav-children');
+  if (cont && getComputedStyle(cont).display === 'none') cont.style.display = 'flex';
+  const sb = document.getElementById('sidebar'); if (sb) sb.scrollTop = 0;
+  sincronizarNavMovil();
+}
+function movCerrarMenu() {
+  document.body.classList.remove('mov-menu-abierto');
+  document.body.style.overflow = '';
+  const q = document.getElementById('movBuscar');
+  if (q && q.value) { q.value = ''; movFiltrarMenu(''); }
+  sincronizarNavMovil();
+}
+function movIr(vista) {
+  const b = document.querySelector('#sidebar .nav-item[data-vista="' + vista + '"]');
+  if (b && b.style.display !== 'none') b.click();
+}
+function movAlCambiarVista(id) {
+  if (!movEsMovil()) return;
+  movCerrarMenu();
+  sincronizarNavMovil(id);
+  window.scrollTo(0, 0);
+}
+function sincronizarNavMovil(id) {
+  if (!id) {
+    const v = document.querySelector('.vista.activa');
+    id = v ? v.id.replace(/^vista-/, '') : '';
+  }
+  let enBarra = false;
+  document.querySelectorAll('#movNav [data-mov-vista]').forEach(b => {
+    const vista = b.dataset.movVista;
+    const habilitada = (typeof vistaHabilitadaHip !== 'function') || vistaHabilitadaHip(vista);
+    b.style.display = habilitada ? '' : 'none';
+    const activo = vista === id;
+    b.classList.toggle('activo', activo);
+    if (activo) enBarra = true;
+  });
+  const m = document.getElementById('movBtnMenu');
+  if (m) m.classList.toggle('activo', document.body.classList.contains('mov-menu-abierto') || !enBarra);
+}
+function movFiltrarMenu(texto) {
+  const q = movNorm(texto).trim();
+  const sb = document.getElementById('sidebar'); if (!sb) return;
+  sb.querySelectorAll('.mov-oculto, .mov-abierto').forEach(e => e.classList.remove('mov-oculto', 'mov-abierto'));
+  if (!q) return;
+  const coincide = b => movNorm(b.textContent).includes(q);
+  sb.querySelectorAll('.nav-children').forEach(cont => {
+    const hijos = Array.from(cont.querySelectorAll('.nav-item[data-vista]')).filter(b => b.style.display !== 'none');
+    const hay = hijos.filter(coincide);
+    hijos.forEach(b => { if (!coincide(b)) b.classList.add('mov-oculto'); });
+    const padre = cont.previousElementSibling;
+    if (hay.length) cont.classList.add('mov-abierto');
+    else { cont.classList.add('mov-oculto'); if (padre) padre.classList.add('mov-oculto'); }
+  });
+  sb.querySelectorAll(':scope > .nav-item:not(.nav-parent)').forEach(b => { if (!coincide(b)) b.classList.add('mov-oculto'); });
+  sb.querySelectorAll(':scope > hr').forEach(h => h.classList.add('mov-oculto'));
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') movCerrarMenu(); });
+window.addEventListener('resize', () => { if (!movEsMovil() && document.body.classList.contains('mov-menu-abierto')) movCerrarMenu(); });
+document.addEventListener('DOMContentLoaded', () => sincronizarNavMovil());
+
 function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
-  el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
+  el.style.display = (getComputedStyle(el).display === 'none') ? 'flex' : 'none';
 }
 
 // (24-09-2026, segunda vuelta) El rail "Mesa de Operador" ya no se
