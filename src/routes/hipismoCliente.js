@@ -27,6 +27,7 @@ const express = require('express');
 const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { construirResumenClienteHipismo } = require('../services/hipismoResumenCliente');
+const { funcionHabilitada } = require('../services/funcionesGrupo');
 
 const router = express.Router();
 
@@ -39,13 +40,17 @@ router.get('/:token', asyncHandler(async (req, res) => {
   // grande junto a esas columnas en sql/schema.sql): el color del
   // degradado de la tarjeta "Total de la semana" que este grupo haya
   // elegido en Súper-admin, si eligió alguno.
-  const rGrupo = await db.query('SELECT activo, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, tema_color_primario, tema_color_secundario, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, modulo_deportes_habilitado FROM grupos WHERE id = $1', [jugador.grupo_id]);
+  const rGrupo = await db.query('SELECT activo, nombre, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, tema_color_primario, tema_color_secundario, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, modulo_deportes_habilitado, funciones_habilitadas FROM grupos WHERE id = $1', [jugador.grupo_id]);
   const grupo = rGrupo.rows[0];
   if (!grupo || !grupo.activo) {
     return res.status(403).json({ error: 'Esta cuenta no está disponible en este momento.' });
   }
   if (!grupo.modulo_hipismo_habilitado && !grupo.modulo_hipismo_oficinas_habilitado) {
     return res.status(403).json({ error: 'El módulo de Hipismo no está disponible para este grupo.' });
+  }
+  // 13-10-2026 (funciones por sección): "Link del cliente" apagado por el Súper-admin para este grupo.
+  if (!funcionHabilitada(grupo, 'hip_link_cliente')) {
+    return res.status(403).json({ error: 'El link de cliente no está disponible para este grupo.' });
   }
 
   const resultado = await construirResumenClienteHipismo(jugador, grupo, req.query.semana);

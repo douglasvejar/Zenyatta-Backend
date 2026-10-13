@@ -216,6 +216,24 @@
   }
   .banner-whatsapp-caido button.btn-chico { flex-shrink: 0; }
 
+  /* ---- Funciones por sección (13-10-2026): selector de qué puede usar cada grupo ---- */
+  .fx-barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 8px 0 12px; }
+  .fx-barra label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 3px; }
+  .fx-barra select { min-width: 220px; }
+  .fx-modulo { border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; overflow: hidden; }
+  .fx-modulo-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 12px; background: var(--card-2); }
+  .fx-modulo-cab strong { flex: 1; font-size: 14px; }
+  .fx-modulo-cab .fx-cuenta { font-size: 12px; color: var(--text-dim); }
+  .fx-modulo-cab button { padding: 4px 10px; font-size: 12px; font-weight: normal; border-radius: 5px; }
+  .fx-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 14px; padding: 10px 12px; }
+  .fx-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.35; cursor: pointer; padding: 4px 2px; }
+  .fx-item input { margin-top: 3px; flex-shrink: 0; }
+  .fx-item small { display: block; color: var(--text-dim); font-size: 11.5px; }
+  .fx-item.fx-apagado span.fx-nombre { color: var(--text-dim); text-decoration: line-through; }
+  .fx-nota { color: var(--text-dim); font-size: 12px; margin: 4px 0 0; }
+  .fx-modulos-nuevo { display: flex; flex-wrap: wrap; gap: 18px; margin: 6px 0 4px; font-size: 14px; }
+  .fx-modulos-nuevo label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .fx-estado-guardado { font-size: 13px; margin-left: 8px; }
   .box-nuevo-grupo { background-color: rgba(56,224,240,0.05); border: 1px solid rgba(56,224,240,0.25); padding: 18px; border-radius: 8px; margin-bottom: 25px; }
   .box-nuevo-grupo h2 { margin-top: 0; color: var(--accent-cyan); }
   .inputs-inline { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
@@ -763,6 +781,17 @@
         </div>
         <button type="button" onclick="crearGrupo()">Crear</button>
       </div>
+      <!-- 13-10-2026, a pedido del usuario: "a la hora de crear un grupo... poder elegir qué puede usar y qué no" (por sección). -->
+      <div class="modal-seccion">
+        <h3 style="margin:0 0 4px;">🧩 Qué incluye este grupo</h3>
+        <div class="fx-modulos-nuevo">
+          <label><input type="checkbox" id="nuevoModDeportes" checked onchange="fxMostrarModulosNuevo()"> ⚽ Deportes</label>
+          <label><input type="checkbox" id="nuevoModHipismo" onchange="fxMostrarModulosNuevo()"> 🐎 Hipismo (Grupos Hípicos)</label>
+          <label><input type="checkbox" id="nuevoModOficinas"> 🏢 Hipismo Oficinas</label>
+        </div>
+        <p class="fx-nota">Dentro de cada módulo marca solo las secciones que va a poder usar. Todo marcado = el grupo usa todo (y las secciones nuevas que agreguemos más adelante le llegan solas). Lo puedes cambiar después en el detalle del grupo, pestaña 🧩 Funciones.</p>
+        <div id="selectorFuncionesNuevo"></div>
+      </div>
       <div id="formError"></div>
       <div id="formOk"></div>
       <small style="display:block; margin-top:6px; color:var(--text-dim);">El Grupo nuevo queda <strong>inactivo</strong> por defecto — actívalo desde la tabla de abajo cuando ya hayas arreglado el cobro con ese cliente.</small>
@@ -1154,6 +1183,7 @@
                producto(s) tiene contratados este grupo. Ver la nota
                grande en sql/schema.sql y claude/plan-modulo-hipismo.md. -->
           <button type="button" class="detalle-tab-btn" data-tab="modulos" onclick="mostrarPestanaDetalleGrupo('modulos')">🎯 Módulos</button>
+          <button type="button" class="detalle-tab-btn" data-tab="funciones" onclick="mostrarPestanaDetalleGrupo('funciones')">🧩 Funciones</button>
           <button type="button" class="detalle-tab-btn" data-tab="logo" onclick="mostrarPestanaDetalleGrupo('logo')">🖼️ Logo</button>
           <button type="button" class="detalle-tab-btn" data-tab="whatsapp" onclick="mostrarPestanaDetalleGrupo('whatsapp')">📲 WhatsApp</button>
           <button type="button" class="detalle-tab-btn" data-tab="comision" onclick="mostrarPestanaDetalleGrupo('comision')">💳 Comisión</button>
@@ -1320,6 +1350,16 @@
                existiera (todos arrancan con Deportes=✅ / Hipismo=🚫, sin
                que haya que tocarlos a mano — ver default en
                sql/schema.sql). -->
+          <!-- ========================= 🧩 FUNCIONES POR SECCIÓN (13-10-2026) ========================= -->
+          <div class="detalle-tab-panel" data-tab-panel="funciones">
+            <p style="margin-top:0; color:var(--text-dim); font-size:12px;">Qué secciones puede usar este grupo, dentro de los módulos que tiene contratados (pestaña 🎯 Módulos). Lo apagado desaparece del menú y el servidor lo rechaza. Los empleados solo ven lo que el grupo tiene Y el administrador del grupo les permitió.</p>
+            <div id="selectorFuncionesDetalle"></div>
+            <div style="margin-top:12px;">
+              <button type="button" id="btnGuardarFunciones" onclick="fxGuardarDetalle()">Guardar funciones</button>
+              <span class="fx-estado-guardado" id="fxEstadoGuardado"></span>
+            </div>
+          </div>
+
           <div class="detalle-tab-panel" data-tab-panel="modulos">
             <div class="modal-seccion" style="margin-top:0; padding-top:0; border-top:none;">
               <h3>⚽ Módulo Deportes</h3>
@@ -2428,6 +2468,7 @@ async function cargarGrupos() {
   try {
     const grupos = await apiSuperadmin('/api/superadmin/grupos');
     ULTIMOS_GRUPOS = grupos;
+    fxIniciarSelectorNuevo();
     tbody.innerHTML = '';
     document.getElementById('vacioGrupos').style.display = grupos.length === 0 ? 'block' : 'none';
     grupos.forEach(g => {
@@ -2458,6 +2499,170 @@ async function cargarGrupos() {
   }
 }
 
+
+// =================================================================
+// FUNCIONES POR SECCIÓN (13-10-2026, a pedido del usuario: "un panel de control donde, a la hora de crear un grupo,
+// pueda elegir qué puede usar y qué no" — por sección). El catálogo vive en el servidor (src/services/funcionesGrupo.js,
+// GET /api/superadmin/funciones-catalogo); acá solo se pinta. Un mismo selector sirve para "Crear Grupo" y para la pestaña
+// "🧩 Funciones" del detalle. Todo marcado = el grupo tiene TODO (se guarda NULL, así lo nuevo que agreguemos le llega solo).
+// =================================================================
+let FX_CATALOGO = null;
+const FX_SELECTORES = {};
+const FX_ICONO_MODULO = { deportes: '⚽', hipismo: '🐎' };
+
+async function fxCargarCatalogo() {
+  if (!FX_CATALOGO) FX_CATALOGO = await apiSuperadmin('/api/superadmin/funciones-catalogo');
+  return FX_CATALOGO;
+}
+function fxEsc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+// lista inicial: null/undefined = todas marcadas; array = solo esas.
+async function fxMontarSelector(idCont, opciones) {
+  const cont = document.getElementById(idCont);
+  if (!cont) return null;
+  const cat = await fxCargarCatalogo();
+  const sel = { idCont, marcadas: new Set(cat.funciones.map(f => f.clave)), cat, excluirGrupoId: (opciones && opciones.excluirGrupoId) || null };
+  FX_SELECTORES[idCont] = sel;
+  const paquetes = Object.entries(cat.paquetes).map(([k, p]) => '<option value="' + fxEsc(k) + '">' + fxEsc(p.nombre) + '</option>').join('');
+  const grupos = (ULTIMOS_GRUPOS || []).filter(g => g.id !== sel.excluirGrupoId).map(g => '<option value="' + fxEsc(g.id) + '">' + fxEsc(g.nombre) + '</option>').join('');
+  let html = '<div class="fx-barra">' +
+    '<div><label>Paquete (marca varias de una vez)</label><select data-fx="paquete"><option value="">— Elegir un paquete —</option>' + paquetes + '</select></div>' +
+    '<div><label>Copiar de otro grupo</label><select data-fx="copiar"><option value="">— Elegir un grupo —</option>' + grupos + '</select></div>' +
+    '</div>';
+  Object.keys(cat.modulos).forEach(mod => {
+    const items = cat.funciones.filter(f => f.modulo === mod);
+    html += '<div class="fx-modulo" data-fx-modulo="' + mod + '"><div class="fx-modulo-cab"><strong>' + (FX_ICONO_MODULO[mod] || '') + ' ' + fxEsc(cat.modulos[mod]) + '</strong>' +
+      '<span class="fx-cuenta" data-fx="cuenta"></span>' +
+      '<button type="button" class="btn-chico" data-fx="todo">Marcar todo</button>' +
+      '<button type="button" class="btn-chico btn-secundario" data-fx="nada">Quitar todo</button></div><div class="fx-lista">' +
+      items.map(f => '<label class="fx-item" title="' + fxEsc(f.descripcion) + '"><input type="checkbox" data-fx-clave="' + fxEsc(f.clave) + '"><span><span class="fx-nombre">' + fxEsc(f.nombre) + '</span><small>' + fxEsc(f.descripcion) + '</small></span></label>').join('') +
+      '</div></div>';
+  });
+  cont.innerHTML = html;
+  cont.onchange = (ev) => {
+    const t = ev.target;
+    if (t.dataset && t.dataset.fxClave) {
+      if (t.checked) sel.marcadas.add(t.dataset.fxClave); else sel.marcadas.delete(t.dataset.fxClave);
+      fxPintar(idCont);
+    } else if (t.dataset && t.dataset.fx === 'paquete' && t.value) {
+      fxAplicarPaquete(idCont, t.value); t.value = '';
+    } else if (t.dataset && t.dataset.fx === 'copiar' && t.value) {
+      const id = t.value; t.value = '';
+      fxCopiarDe(idCont, id);
+    }
+  };
+  cont.onclick = (ev) => {
+    const b = ev.target.closest('button[data-fx]');
+    if (!b) return;
+    const mod = b.closest('[data-fx-modulo]').dataset.fxModulo;
+    cat.funciones.filter(f => f.modulo === mod).forEach(f => { if (b.dataset.fx === 'todo') sel.marcadas.add(f.clave); else sel.marcadas.delete(f.clave); });
+    fxPintar(idCont);
+  };
+  fxPintar(idCont);
+  return sel;
+}
+
+function fxPintar(idCont) {
+  const sel = FX_SELECTORES[idCont];
+  const cont = document.getElementById(idCont);
+  if (!sel || !cont) return;
+  cont.querySelectorAll('input[data-fx-clave]').forEach(cb => {
+    cb.checked = sel.marcadas.has(cb.dataset.fxClave);
+    cb.closest('.fx-item').classList.toggle('fx-apagado', !cb.checked);
+  });
+  cont.querySelectorAll('[data-fx-modulo]').forEach(bloque => {
+    const mod = bloque.dataset.fxModulo;
+    const todas = sel.cat.funciones.filter(f => f.modulo === mod);
+    const on = todas.filter(f => sel.marcadas.has(f.clave)).length;
+    bloque.querySelector('[data-fx="cuenta"]').textContent = on + ' de ' + todas.length + ' secciones';
+  });
+}
+
+// Un paquete solo toca los módulos que menciona (ej. "Deportes básico" no cambia Hipismo).
+function fxAplicarPaquete(idCont, clavePaquete) {
+  const sel = FX_SELECTORES[idCont];
+  const paq = sel && sel.cat.paquetes[clavePaquete];
+  if (!paq) return;
+  const modulosTocados = new Set(paq.claves.map(c => (sel.cat.funciones.find(f => f.clave === c) || {}).modulo));
+  sel.cat.funciones.forEach(f => {
+    if (!modulosTocados.has(f.modulo)) return;
+    if (paq.claves.includes(f.clave)) sel.marcadas.add(f.clave); else sel.marcadas.delete(f.clave);
+  });
+  fxPintar(idCont);
+}
+
+async function fxCopiarDe(idCont, grupoId) {
+  const sel = FX_SELECTORES[idCont];
+  if (!sel) return;
+  try {
+    const d = await apiSuperadmin('/api/superadmin/grupos/' + grupoId + '/detalle');
+    if (Array.isArray(d.funcionesHabilitadas)) { sel.marcadas = new Set(d.funcionesHabilitadas); fxPintar(idCont); }
+  } catch (e) { alert('No se pudieron copiar las funciones de ese grupo: ' + e.message); }
+}
+
+function fxEstaTodoMarcado(idCont) {
+  const sel = FX_SELECTORES[idCont];
+  return !!sel && sel.cat.funciones.every(f => sel.marcadas.has(f.clave));
+}
+// null = todas (se guarda NULL); array = solo esas.
+function fxValorParaGuardar(idCont) {
+  const sel = FX_SELECTORES[idCont];
+  if (!sel) return null;
+  return fxEstaTodoMarcado(idCont) ? null : sel.cat.funciones.filter(f => sel.marcadas.has(f.clave)).map(f => f.clave);
+}
+
+// ---- Crear grupo ----
+async function fxIniciarSelectorNuevo() {
+  try {
+    if (!FX_SELECTORES.selectorFuncionesNuevo) await fxMontarSelector('selectorFuncionesNuevo');
+    else await fxMontarSelectorRefrescarGrupos('selectorFuncionesNuevo');
+    fxMostrarModulosNuevo();
+  } catch (e) { /* el panel de creación sigue funcionando sin el selector (se crea con todas las secciones) */ }
+}
+async function fxMontarSelectorRefrescarGrupos(idCont) {
+  const sel = FX_SELECTORES[idCont], cont = document.getElementById(idCont);
+  if (!sel || !cont) return;
+  const el = cont.querySelector('select[data-fx="copiar"]');
+  if (el) el.innerHTML = '<option value="">— Elegir un grupo —</option>' + (ULTIMOS_GRUPOS || []).filter(g => g.id !== sel.excluirGrupoId).map(g => '<option value="' + fxEsc(g.id) + '">' + fxEsc(g.nombre) + '</option>').join('');
+}
+// Cada módulo apagado esconde su bloque de secciones (sus casillas siguen marcadas: si después se activa, entra completo).
+function fxMostrarModulosNuevo() {
+  const cont = document.getElementById('selectorFuncionesNuevo');
+  if (!cont) return;
+  const dep = document.getElementById('nuevoModDeportes').checked;
+  const hip = document.getElementById('nuevoModHipismo').checked;
+  cont.querySelectorAll('[data-fx-modulo]').forEach(b => {
+    const mod = b.dataset.fxModulo;
+    b.style.display = ((mod === 'deportes' && dep) || (mod === 'hipismo' && hip)) ? '' : 'none';
+  });
+}
+
+// ---- Detalle del grupo ----
+async function fxPintarDetalle(d) {
+  try {
+    const sel = await fxMontarSelector('selectorFuncionesDetalle', { excluirGrupoId: GRUPO_DETALLE_ID });
+    if (!sel) return;
+    sel.marcadas = new Set(Array.isArray(d.funcionesHabilitadas) ? d.funcionesHabilitadas : sel.cat.funciones.map(f => f.clave));
+    fxPintar('selectorFuncionesDetalle');
+    document.getElementById('fxEstadoGuardado').textContent = '';
+  } catch (e) {
+    document.getElementById('selectorFuncionesDetalle').innerHTML = '<p class="fx-nota">No se pudo cargar el catálogo de funciones: ' + fxEsc(e.message) + '</p>';
+  }
+}
+async function fxGuardarDetalle() {
+  const est = document.getElementById('fxEstadoGuardado');
+  est.style.color = 'var(--text-dim)';
+  est.textContent = 'Guardando…';
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/funciones', { method: 'PUT', body: JSON.stringify({ funciones: fxValorParaGuardar('selectorFuncionesDetalle') }) });
+    est.style.color = '#16a34a';
+    est.textContent = r.funcionesPersonalizadas ? '✅ Guardado (' + r.funcionesHabilitadas.length + ' secciones)' : '✅ Guardado: el grupo usa todas las secciones';
+  } catch (e) {
+    est.style.color = '#dc2626';
+    est.textContent = '⚠️ ' + e.message;
+  }
+}
+
 async function crearGrupo() {
   const nombre = document.getElementById('nuevoNombre').value.trim();
   const email = document.getElementById('nuevoEmail').value.trim();
@@ -2471,10 +2676,23 @@ async function crearGrupo() {
   }
 
   try {
-    await apiSuperadmin('/api/superadmin/grupos', { method: 'POST', body: JSON.stringify({ nombre, email, password }) });
+    const cuerpo = {
+      nombre, email, password,
+      moduloDeportes: document.getElementById('nuevoModDeportes').checked,
+      moduloHipismo: document.getElementById('nuevoModHipismo').checked,
+      moduloOficinas: document.getElementById('nuevoModOficinas').checked
+    };
+    if (!cuerpo.moduloDeportes && !cuerpo.moduloHipismo && !cuerpo.moduloOficinas) {
+      document.getElementById('formError').textContent = 'Marca al menos un módulo para este grupo.';
+      return;
+    }
+    const funciones = FX_SELECTORES.selectorFuncionesNuevo ? fxValorParaGuardar('selectorFuncionesNuevo') : null;
+    if (funciones !== null) cuerpo.funciones = funciones;
+    await apiSuperadmin('/api/superadmin/grupos', { method: 'POST', body: JSON.stringify(cuerpo) });
     document.getElementById('nuevoNombre').value = '';
     document.getElementById('nuevoEmail').value = '';
     document.getElementById('nuevoPassword').value = '';
+    if (FX_SELECTORES.selectorFuncionesNuevo) { FX_SELECTORES.selectorFuncionesNuevo.marcadas = new Set(FX_SELECTORES.selectorFuncionesNuevo.cat.funciones.map(f => f.clave)); fxPintar('selectorFuncionesNuevo'); }
     document.getElementById('formOk').textContent = '✅ Grupo "' + nombre + '" creado (inactivo). Actívalo abajo cuando corresponda.';
     cargarGrupos();
   } catch (e) {
@@ -3455,6 +3673,7 @@ async function abrirDetalleGrupo(id, nombre) {
     GRUPO_MODULO_OFICINAS_HABILITADO = !!d.moduloHipismoOficinasHabilitado;
     GRUPO_HIPISMO_CRUZAR_HABILITADO = !!d.hipismoCruzarHabilitado;
     pintarEstadoModulos();
+    fxPintarDetalle(d);
 
     GRUPO_WHATSAPP_HABILITADO = !!d.whatsappHabilitado;
     document.getElementById('whatsappJidInputSuperadmin').value = d.whatsappGrupoJid || '';

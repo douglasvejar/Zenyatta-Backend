@@ -9,9 +9,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { firmarSesionGrupo, firmarSesionEmpleado } = require('../middleware/auth');
+const { firmarSesionGrupo, firmarSesionEmpleado, requiereGrupo } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const { urlLogoGrupo, temaColorGrupo } = require('../services/logoGrupo');
+const { funcionesEfectivas } = require('../services/funcionesGrupo');
 
 const router = express.Router();
 
@@ -87,6 +88,8 @@ router.post('/login', asyncHandler(async (req, res) => {
         // igual que los 2 de arriba, para que hipismo-mockup.html sepa,
         // sin otra llamada aparte, si este Grupo tiene permitido cruzar.
         hipismoCruzarHabilitado: grupo.hipismo_cruzar_habilitado,
+        // 13-10-2026 (funciones por sección, ver services/funcionesGrupo.js): lista de secciones que tiene este grupo.
+        funcionesHabilitadas: funcionesEfectivas(grupo),
         // 29-09-2026: ya no se manda grupo.logo_url crudo (podía ser un
         // archivo subido, no una URL externa, desde este mismo cambio) --
         // ver services/logoGrupo.js. "SELECT *" de arriba ya trae
@@ -105,6 +108,7 @@ router.post('/login', asyncHandler(async (req, res) => {
             g.modulo_hipismo_habilitado AS grupo_modulo_hipismo_habilitado,
             g.modulo_hipismo_oficinas_habilitado AS grupo_modulo_hipismo_oficinas_habilitado,
             g.hipismo_cruzar_habilitado AS grupo_hipismo_cruzar_habilitado,
+            g.funciones_habilitadas AS grupo_funciones_habilitadas,
             g.tema_color_primario AS grupo_tema_color_primario,
             g.tema_color_secundario AS grupo_tema_color_secundario
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
@@ -146,11 +150,18 @@ router.post('/login', asyncHandler(async (req, res) => {
       moduloHipismoHabilitado: empleado.grupo_modulo_hipismo_habilitado,
       moduloHipismoOficinasHabilitado: !!empleado.grupo_modulo_hipismo_oficinas_habilitado,
       hipismoCruzarHabilitado: empleado.grupo_hipismo_cruzar_habilitado,
+      funcionesHabilitadas: funcionesEfectivas(empleado.grupo_funciones_habilitadas),
       logoUrl: urlLogoGrupo(empleado.grupo_id, empleado, { campoUrl: 'grupo_logo_url', campoBase64: 'grupo_logo_base64' }),
       temaColorPrimario: temaEmpleado.colorPrimario,
       temaColorSecundario: temaEmpleado.colorSecundario
     }
   });
 }));
+
+// 13-10-2026 (funciones por sección, ver services/funcionesGrupo.js): las pantallas piden esto al cargar para tener las
+// secciones al día aunque la sesión sea vieja (el Súper-admin pudo cambiarlas después del login).
+router.get('/funciones', requiereGrupo, (req, res) => {
+  res.json({ funcionesHabilitadas: funcionesEfectivas(req.grupo) });
+});
 
 module.exports = router;

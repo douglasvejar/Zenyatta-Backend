@@ -50,6 +50,13 @@ setTimeout(() => {
     .catch((err) => console.error('[db] NO SE PUDO CONECTAR a PostgreSQL — revisar DATABASE_URL en Railway. Motivo real:', err.message));
 }, 2000);
 
+// AUTO-ARREGLO DE ESQUEMA AL ARRANCAR (13-10-2026): la columna grupos.funciones_habilitadas (funciones por sección, ver
+// services/funcionesGrupo.js y sql/schema.sql) se crea sola, sin depender de que alguien se acuerde de correr el SQL
+// antes del despliegue. Es idempotente ("if not exists") y, si la base no deja alterar la tabla, solo avisa en el log
+// (el SQL de sql/schema.sql sigue siendo la vía oficial y requiereGrupo() tiene un respaldo sin esa columna).
+pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas jsonb')
+  .catch((err) => console.warn('[db] No se pudo asegurar la columna grupos.funciones_habilitadas (corre sql/schema.sql en Supabase):', err.message));
+
 async function query(text, params) {
   return pool.query(text, params);
 }

@@ -28,6 +28,7 @@ const db = require('../db');
 const bcrypt = require('bcryptjs');
 const { requiereGrupo, requierePermiso, requiereAdministrador } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
+const { rutaHipismoPermitida } = require('../services/funcionesGrupo');
 // CHAT DE SOPORTE (26-09-2026, "activa el modulo de mensajes... para el
 // modulo de hipismo") — MISMO servicio y MISMA tabla (mensajes_chat, por
 // grupo_id) que ya usa Deportes (ver services/chat.js y la sección "CHAT
@@ -228,6 +229,16 @@ function requiereModuloHipismo(req, res, next) {
   next();
 }
 router.use(requiereModuloHipismo);
+
+// 13-10-2026 (funciones por sección, ver services/funcionesGrupo.js): candado de servidor por sección. Solo aplica a un
+// grupo con el módulo de Hipismo completo (el de Oficinas, aparte, tiene su propio interruptor y usa las lecturas compartidas).
+// Lo que no está en REGLAS_RUTAS_HIPISMO (lecturas compartidas, alertas, chat, ajustes) queda libre.
+function requiereFuncionHipismo(req, res, next) {
+  if (!req.grupo || req.superadminGrupoId || !req.grupo.modulo_hipismo_habilitado) return next();
+  if (rutaHipismoPermitida(req.grupo, req.method, req.path)) return next();
+  return res.status(403).json({ error: 'Esta función no está habilitada para tu grupo. Pídele al administrador de la plataforma que la active.' });
+}
+router.use(requiereFuncionHipismo);
 
 // =================================================================
 // ALERTAS DE HIPISMO (23-09-2026, duodécima-tercera ronda, a pedido del

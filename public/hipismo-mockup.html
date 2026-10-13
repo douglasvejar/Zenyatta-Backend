@@ -6263,9 +6263,59 @@ function aplicarPermisoCruzarJugadas() {
   }
 }
 
+// =================================================================
+// FUNCIONES POR SECCIÓN (13-10-2026, a pedido del usuario: "poder elegir qué puede usar y qué no" cada grupo, por sección).
+// El Súper-admin elige las secciones de cada grupo (grupos.funciones_habilitadas); acá se ocultan del menú las apagadas.
+// El candado de verdad está en el servidor (services/funcionesGrupo.js, router de hipismo.js) — esto es solo para no mostrar
+// botones que darían error. SECCION_DE_VISTA_HIP se genera del catálogo (src/services/funcionesGrupo.js); el test
+// test_funciones_grupo.js verifica que coincidan. Una sesión vieja no trae la lista: se asume "todas" y se refresca al cargar.
+// =================================================================
+const SECCION_DE_VISTA_HIP = {"cargarPlanos": "hip_planos", "validarPlano": "hip_planos", "eliminarPlanos": "hip_planos", "planosEliminados": "hip_planos", "traspasosJugadas": "hip_planos", "montosApostados": "hip_planos", "cargaMasivaEspecial": "hip_carga_masiva", "cargarRemate": "hip_remates", "cargarRemateManual": "hip_remates", "jugadasAdelantadas": "hip_adelantadas", "terciosAdelantadas": "hip_adelantadas", "revTablasMarcas": "hip_adelantadas", "revAdelantadasClientes": "hip_adelantadas", "banqueoMarcas": "hip_adelantadas", "cargarWinners": "hip_winners", "eliminarWinners": "hip_winners", "pozos": "hip_pozos", "detalladoCliente": "hip_saldos", "semanaPorDias": "hip_saldos", "balanceGeneral": "hip_saldos", "cierreFinal": "hip_saldos", "grupoClientes": "hip_grupo_clientes", "comisionesPorCarrera": "hip_comisiones", "comisionesTotalesPorHipodromo": "hip_comisiones", "comisionesDevueltasPorHipodromo": "hip_comisiones", "comisionesDevueltas": "hip_comisiones", "saldoComisiones": "hip_comisiones", "comisionesSinDevoluciones": "hip_comisiones", "clientes": "hip_clientes", "avales": "hip_clientes", "registroSaldos": "hip_clientes", "retiros": "hip_finanzas", "traspasos": "hip_finanzas", "gastos": "hip_finanzas", "hipodromos": "hip_hipodromos", "pizarras": "hip_hipodromos", "revisarJugadas": "hip_revisar", "fechaSemana": "hip_ajustes_calculo", "cabezaPie": "hip_ajustes_calculo", "eliminarJornada": "hip_mantenimiento", "alertasHipismo": "hip_alertas"};
+function seccionHabilitadaHip(clave) {
+  if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
+  return GRUPO.funcionesHabilitadas.includes(clave);
+}
+function vistaHabilitadaHip(vista) {
+  const sec = SECCION_DE_VISTA_HIP[vista];
+  return !sec || seccionHabilitadaHip(sec);
+}
+function aplicarFuncionesGrupoHipismo() {
+  if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return;
+  document.querySelectorAll('.nav-item[data-vista]').forEach(b => { b.style.display = vistaHabilitadaHip(b.dataset.vista) ? '' : 'none'; });
+  // Un grupo del menú (Apuestas, Saldos…) sin ningún botón visible se esconde entero, con su flecha.
+  document.querySelectorAll('.nav-children').forEach(cont => {
+    const hijos = Array.from(cont.querySelectorAll('.nav-item[data-vista]'));
+    if (!hijos.length) return;
+    const hayVisible = hijos.some(b => b.style.display !== 'none');
+    cont.style.display = hayVisible ? '' : 'none';
+    const padre = cont.previousElementSibling;
+    if (padre && padre.classList.contains('nav-parent')) padre.style.display = hayVisible ? '' : 'none';
+  });
+  // La pantalla con la que se abre (Cargar Planos) puede estar apagada: se pasa a la primera que sí tenga.
+  const activo = document.querySelector('.vista.activa');
+  const idActivo = activo ? activo.id.replace(/^vista-/, '') : null;
+  if (idActivo && !vistaHabilitadaHip(idActivo)) {
+    const primero = Array.from(document.querySelectorAll('.nav-item[data-vista]')).find(b => b.style.display !== 'none');
+    if (primero) primero.click();
+  }
+}
+// Trae la lista al día del servidor (por si el Súper-admin la cambió después del login) y vuelve a aplicar.
+async function refrescarFuncionesGrupoHip() {
+  try {
+    const r = await apiHipismo('/api/auth/funciones');
+    if (r && Array.isArray(r.funcionesHabilitadas) && GRUPO) {
+      GRUPO.funcionesHabilitadas = r.funcionesHabilitadas;
+      try { localStorage.setItem('zenyatta_grupo', JSON.stringify(GRUPO)); } catch (e) { /* sin copia local */ }
+      aplicarFuncionesGrupoHipismo();
+    }
+  } catch (e) { /* sin conexión: se queda con lo que traía la sesión */ }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!GRUPO) return;
   actualizarSelectorModulo();
+  aplicarFuncionesGrupoHipismo();
+  refrescarFuncionesGrupoHip();
   aplicarPermisoCruzarJugadas();
   const nombreEl = document.getElementById('topbarNombreGrupo');
   if (nombreEl) nombreEl.textContent = GRUPO.nombre || '';
@@ -6443,6 +6493,8 @@ function pintarLogosGrupo() {
 // Navegación (sidebar + subnav) — solo maqueta visual
 // ------------------------------------------------------------------
 function mostrarVista(id, btn) {
+  // 13-10-2026: una sección apagada para este grupo no se abre (ni por la alerta flotante ni a mano).
+  if (typeof vistaHabilitadaHip === 'function' && !vistaHabilitadaHip(id)) return;
   document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
   document.getElementById('vista-' + id).classList.add('activa');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('nav-item-active'));

@@ -19,6 +19,7 @@
 // expire el token de 30 días.
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const { funcionHabilitada } = require('../services/funcionesGrupo');
 
 // Todas las "secciones" del panel del Grupo que se pueden habilitar o no
 // para un empleado — cada clave corresponde 1 a 1 con un botón del menú
@@ -76,7 +77,16 @@ function firmarSesionEmpleado(empleado) {
 // grupo fue desactivado por el súper-admin, o el empleado fue
 // desactivado/borrado por su Administrador, el token deja de servir
 // aunque todavía no haya expirado.
-const SELECT_GRUPO_SESION = 'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado FROM grupos WHERE id = $1';
+const SELECT_GRUPO_SESION = 'SELECT id, nombre, email, activo, whatsapp_grupo_jid, whatsapp_habilitado, moneda_modo, logo_url, (logo_base64 IS NOT NULL) AS logo_base64, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, funciones_habilitadas FROM grupos WHERE id = $1';
+
+async function consultarGrupoSesion(grupoId) {
+  try {
+    return await db.query(SELECT_GRUPO_SESION, [grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return db.query(SELECT_GRUPO_SESION.replace(', funciones_habilitadas', ''), [grupoId]);
+    throw e;
+  }
+}
 
 async function requiereGrupo(req, res, next) {
   try {
@@ -87,7 +97,7 @@ async function requiereGrupo(req, res, next) {
     // del servidor (nunca viene de un header ni del cuerpo). Con esa marca se
     // actúa como el administrador de ese grupo, aunque esté desactivado.
     if (req.superadminGrupoId) {
-      const rs = await db.query(SELECT_GRUPO_SESION, [req.superadminGrupoId]);
+      const rs = await consultarGrupoSesion(req.superadminGrupoId);
       const g = rs.rows[0];
       if (!g) return res.status(404).json({ error: 'Grupo no encontrado.' });
       req.grupoId = g.id;
@@ -116,15 +126,9 @@ async function requiereGrupo(req, res, next) {
     // contratado (ver requiereModuloHipismo ahí), y el propio panel
     // (grupo.html/hipismo-mockup.html) las lee del login para decidir el
     // selector "⚽ Deportes / 🐎 Hipismo" — ver claude/plan-modulo-hipismo.md.
-    const res2 = await db.query(
-      // logo_base64 (29-09-2026) sumado junto a logo_url -- ver
-      // services/logoGrupo.js: hace falta traer las 2 columnas para poder
-      // armar la URL del logo (GET /api/imagenes/logo-grupo/:grupoId) sin
-      // otra consulta aparte, sea que el grupo tenga el archivo nuevo o
-      // una logo_url legacy.
-      SELECT_GRUPO_SESION,
-      [payload.grupoId]
-    );
+    // 13-10-2026: respaldo si la columna funciones_habilitadas todavía no existe (no correron el SQL): se pide sin ella y
+    // el grupo queda con TODAS las secciones, igual que antes.
+    const res2 = await consultarGrupoSesion(payload.grupoId);
     const grupo = res2.rows[0];
     if (!grupo) return res.status(401).json({ error: 'Sesión inválida.' });
     if (!grupo.activo) return res.status(403).json({ error: 'Esta cuenta está desactivada. Contacta al administrador de la plataforma.' });
@@ -163,6 +167,11 @@ async function requiereGrupo(req, res, next) {
 // routes/*.js — ver PERMISOS_VALIDOS arriba para las claves válidas.
 function requierePermiso(clave) {
   return function (req, res, next) {
+    // 13-10-2026 (funciones por sección, ver services/funcionesGrupo.js): primero lo que el GRUPO tiene contratado —
+    // vale también para el Administrador. Las claves fuera del catálogo (ej. 'hipismo', 'pagos') no se restringen acá.
+    if (req.grupo && !req.superadminGrupoId && !funcionHabilitada(req.grupo, clave)) {
+      return res.status(403).json({ error: 'Esta función no está habilitada para tu grupo. Pídele al administrador de la plataforma que la active.' });
+    }
     if (req.rol === 'administrador') return next();
     if (Array.isArray(req.permisos) && req.permisos.includes(clave)) return next();
     return res.status(403).json({ error: 'No tienes permiso para esto. Pídele al administrador de tu grupo que te lo habilite.' });
@@ -175,6 +184,10 @@ function requierePermiso(clave) {
 // de las claves dadas.
 function requiereAlgunoDe(...claves) {
   return function (req, res, next) {
+    // 13-10-2026: igual que requierePermiso(): el grupo debe tener contratada AL MENOS UNA de las secciones.
+    if (req.grupo && !req.superadminGrupoId && !claves.some(c => funcionHabilitada(req.grupo, c))) {
+      return res.status(403).json({ error: 'Esta función no está habilitada para tu grupo. Pídele al administrador de la plataforma que la active.' });
+    }
     if (req.rol === 'administrador') return next();
     if (Array.isArray(req.permisos) && claves.some(c => req.permisos.includes(c))) return next();
     return res.status(403).json({ error: 'No tienes permiso para esto. Pídele al administrador de tu grupo que te lo habilite.' });

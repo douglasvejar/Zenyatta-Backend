@@ -2150,3 +2150,7 @@ create table if not exists hipismo_pozos_excluidos (
   creado_en timestamptz not null default now(),
   primary key (grupo_id, nombre)
 );
+
+-- 13-10-2026: FUNCIONES POR SECCIÓN de cada grupo (panel del Súper-admin; catálogo en src/services/funcionesGrupo.js).
+-- NULL = el grupo tiene TODAS las secciones (los grupos que ya existen no cambian en nada); un array JSON = solo esas claves.
+alter table grupos add column if not exists funciones_habilitadas jsonb;

@@ -17,6 +17,8 @@ const alertasService = require('../services/alertas');
 const chatService = require('../services/chat');
 const mantenimientoGrupo = require('../services/mantenimientoGrupo');
 const telefonosService = require('../services/telefonos');
+const funcionesGrupo = require('../services/funcionesGrupo');
+const { funcionesEfectivas } = funcionesGrupo;
 // 19-09-2026, a pedido del usuario: "quiero desde super admin pulsar el
 // grupo y poder ver, balances del grupo detallado por clientes y sus
 // saldos, tambien sus sabanas" — obtenerSabanaDeFecha() ya es 100%
@@ -72,10 +74,24 @@ router.post('/grupos', asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'Faltan nombre, email o password.' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
+    // 13-10-2026 (panel de funciones por sección, ver services/funcionesGrupo.js): al crear el grupo se pueden elegir de una vez
+    // los módulos (moduloDeportes/moduloHipismo/moduloOficinas) y las secciones (funciones: [claves] — o paquete: 'completo', …).
+    // Sin nada de eso se crea como siempre (Deportes sí, Hipismo no, todas las secciones).
+    const b = req.body;
+    let funciones = null;
+    if (Array.isArray(b.funciones)) funciones = funcionesGrupo.normalizarFunciones(b.funciones);
+    else if (b.paquete && funcionesGrupo.PAQUETES[b.paquete]) funciones = funcionesGrupo.normalizarFunciones(funcionesGrupo.PAQUETES[b.paquete].claves);
+    const cols = ['nombre', 'email', 'password_hash', 'activo'];
+    const vals = [nombre, email, passwordHash, false];
+    const agregar = (col, v) => { cols.push(col); vals.push(v); };
+    if (typeof b.moduloDeportes === 'boolean') agregar('modulo_deportes_habilitado', b.moduloDeportes);
+    if (typeof b.moduloHipismo === 'boolean') agregar('modulo_hipismo_habilitado', b.moduloHipismo);
+    if (typeof b.moduloOficinas === 'boolean') agregar('modulo_hipismo_oficinas_habilitado', b.moduloOficinas);
+    if (funciones !== null) agregar('funciones_habilitadas', JSON.stringify(funciones));
     const r = await db.query(
-      `INSERT INTO grupos (nombre, email, password_hash, activo) VALUES ($1, $2, $3, false)
+      `INSERT INTO grupos (${cols.join(', ')}) VALUES (${vals.map((_, i) => '$' + (i + 1)).join(', ')})
        RETURNING id, nombre, email, activo, creado_en`,
-      [nombre, email, passwordHash]
+      vals
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -83,6 +99,37 @@ router.post('/grupos', asyncHandler(async (req, res) => {
     console.error(e);
     res.status(500).json({ error: 'No se pudo crear el grupo.' });
   }
+}));
+
+// Catálogo de secciones + paquetes para el panel (13-10-2026).
+router.get('/funciones-catalogo', (req, res) => {
+  res.json({
+    modulos: funcionesGrupo.MODULOS,
+    funciones: funcionesGrupo.FUNCIONES.map(f => ({ clave: f.clave, modulo: f.modulo, nombre: f.nombre, descripcion: f.descripcion })),
+    paquetes: Object.fromEntries(Object.entries(funcionesGrupo.PAQUETES).map(([k, p]) => [k, { nombre: p.nombre, claves: p.claves }]))
+  });
+});
+
+// Guarda las secciones de un grupo. Body: { funciones: [claves] } o { funciones: null } (= todas, como antes) o { paquete: 'completo' }.
+router.put('/grupos/:id/funciones', asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  let valor;
+  if (b.paquete) {
+    if (!funcionesGrupo.PAQUETES[b.paquete]) return res.status(400).json({ error: 'Paquete desconocido.' });
+    valor = funcionesGrupo.normalizarFunciones(funcionesGrupo.PAQUETES[b.paquete].claves);
+  } else if (b.funciones === null) {
+    valor = null;
+  } else if (Array.isArray(b.funciones)) {
+    valor = funcionesGrupo.normalizarFunciones(b.funciones);
+  } else {
+    return res.status(400).json({ error: 'Falta la lista de funciones.' });
+  }
+  const r = await db.query(
+    'UPDATE grupos SET funciones_habilitadas = $1::jsonb WHERE id = $2 RETURNING id, funciones_habilitadas',
+    [valor === null ? null : JSON.stringify(valor), req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ funcionesHabilitadas: funcionesEfectivas(r.rows[0]), funcionesPersonalizadas: Array.isArray(r.rows[0].funciones_habilitadas) });
 }));
 
 // Activa o desactiva un grupo (el interruptor manual).
@@ -173,6 +220,13 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
   const grupo = grupoRes.rows[0];
   if (!grupo) return res.status(404).json({ error: 'Grupo no encontrado.' });
 
+  // 13-10-2026: funciones por sección (NULL = todas). Consulta aparte y a prueba de que la columna aún no exista.
+  let funcionesGuardadas = null;
+  try {
+    const rf = await db.query('SELECT funciones_habilitadas FROM grupos WHERE id = $1', [id]);
+    funcionesGuardadas = rf.rows[0] ? rf.rows[0].funciones_habilitadas : null;
+  } catch (e) { funcionesGuardadas = null; }
+
   const jugadoresActivosRes = await db.query(
     'SELECT COUNT(*)::int AS total FROM jugadores WHERE grupo_id = $1 AND activo = true',
     [id]
@@ -230,6 +284,9 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     moduloDeportesHabilitado: grupo.modulo_deportes_habilitado,
     moduloHipismoHabilitado: grupo.modulo_hipismo_habilitado,
     moduloHipismoOficinasHabilitado: !!grupo.modulo_hipismo_oficinas_habilitado,
+    // (13-10-2026) funciones por sección: lista efectiva de claves encendidas y si fue personalizada (NULL = todas).
+    funcionesHabilitadas: funcionesEfectivas(funcionesGuardadas),
+    funcionesPersonalizadas: Array.isArray(funcionesGuardadas),
     // (24-09-2026, a pedido del usuario) "Cruzar jugadas" de Hipismo —
     // ver la nota grande junto a esta columna en sql/schema.sql. Exclusivo
     // del Súper-admin, igual que moduloHipismoHabilitado arriba.

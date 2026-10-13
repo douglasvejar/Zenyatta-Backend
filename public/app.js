@@ -169,7 +169,16 @@ const ETIQUETAS_PERMISOS = {
 // Se usa como guarda ANTES de llamar a una ruta gateada por permiso, en
 // vez de tocar api()/cerrarSesion() (que sí deben seguir cerrando sesión
 // ante un 403 real de sesión inválida).
+// 13-10-2026 (funciones por sección, ver src/services/funcionesGrupo.js): secciones de Deportes que el Súper-admin puede apagar
+// para un grupo (= las claves de permiso, menos 'pagos'). Si la sesión no trae la lista (sesión vieja) se asume "todas".
+const SECCIONES_DEPORTES_APAGABLES = ['sabana', 'sabanas', 'whatsapp', 'equipos', 'jugador', 'porcentajes', 'balanceGeneral', 'transferencias', 'polla', 'alertas', 'descargar'];
+function funcionDelGrupoActiva(clave) {
+  if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
+  if (!SECCIONES_DEPORTES_APAGABLES.includes(clave)) return true;
+  return GRUPO.funcionesHabilitadas.includes(clave);
+}
 function tienePermiso(clave) {
+  if (!funcionDelGrupoActiva(clave)) return false;
   if (!GRUPO || GRUPO.rol !== 'empleado') return true;
   // Defensivo (no debería pasar para un Empleado, ver auth.js): sin un
   // array de permisos no hay nada que negar.
@@ -2579,6 +2588,8 @@ function mostrarApp() {
   // 'sabana', esto da null/'sabana' y no cambia el arranque de siempre).
   const vistaInicialEmpleado = aplicarPermisosEmpleado();
   mostrarVista(vistaInicialEmpleado || 'sabana');
+  // 13-10-2026: trae al día las secciones del grupo (el Súper-admin pudo cambiarlas después del login) y vuelve a aplicar.
+  refrescarFuncionesGrupo();
 
   // El badge de Alertas y el de la bandeja de chat se revisan cada 25s
   // SIEMPRE (no solo en la pestaña Sábana como la Pizarra en Vivo) — así,
@@ -2724,6 +2735,21 @@ const MAPA_VISTA_PERMISO = {
   descargar: 'descargar'
 };
 
+async function refrescarFuncionesGrupo() {
+  try {
+    const r = await api('/api/auth/funciones');
+    if (r && Array.isArray(r.funcionesHabilitadas) && GRUPO) {
+      const antes = JSON.stringify(GRUPO.funcionesHabilitadas || null);
+      GRUPO.funcionesHabilitadas = r.funcionesHabilitadas;
+      try { localStorage.setItem('zenyatta_grupo', JSON.stringify(GRUPO)); } catch (e) { /* sin copia local */ }
+      if (antes !== JSON.stringify(GRUPO.funcionesHabilitadas)) {
+        const vista = aplicarPermisosEmpleado();
+        if (vista) mostrarVista(vista);
+      }
+    }
+  } catch (e) { /* sin conexión: se queda con lo que traía la sesión */ }
+}
+
 function aplicarPermisosEmpleado() {
   // "💱 Moneda" y "👥 Empleados" (18-09-2026) quedan ocultos para
   // CUALQUIER Empleado, sin excepción — no tienen un permiso propio en
@@ -2736,16 +2762,18 @@ function aplicarPermisosEmpleado() {
     if (navEmpleados) navEmpleados.style.display = 'none';
   }
 
-  // Un Administrador ve todo — nada más que hacer. Tampoco hay nada que
-  // ocultar si, por lo que sea, GRUPO.permisos no es un array (defensivo:
-  // esto no debería pasar para un Empleado, ver routes/auth.js).
-  if (!GRUPO || GRUPO.rol !== 'empleado' || !Array.isArray(GRUPO.permisos)) return null;
+  // Un Administrador ve todo — nada más que hacer — SALVO que el Súper-admin le haya apagado secciones al grupo
+  // (13-10-2026, GRUPO.funcionesHabilitadas). Tampoco hay nada que ocultar si, por lo que sea, GRUPO.permisos no es
+  // un array (defensivo: esto no debería pasar para un Empleado, ver routes/auth.js).
+  const hayPermisosEmpleado = !!(GRUPO && GRUPO.rol === 'empleado' && Array.isArray(GRUPO.permisos));
+  const hayFuncionesGrupo = !!(GRUPO && Array.isArray(GRUPO.funcionesHabilitadas));
+  if (!hayPermisosEmpleado && !hayFuncionesGrupo) return null;
 
   let primeraVistaPermitida = null;
   VISTAS.forEach(vista => {
     const clavePermiso = MAPA_VISTA_PERMISO[vista];
     if (!clavePermiso) return; // 'monedaGrupo'/'empleados' ya se ocultaron arriba
-    const permitido = GRUPO.permisos.includes(clavePermiso);
+    const permitido = funcionDelGrupoActiva(clavePermiso) && (!hayPermisosEmpleado || GRUPO.permisos.includes(clavePermiso));
     const boton = document.getElementById(NAV_IDS[vista]);
     if (boton) boton.style.display = permitido ? '' : 'none';
     if (permitido && !primeraVistaPermitida) primeraVistaPermitida = vista;
