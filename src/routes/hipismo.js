@@ -179,7 +179,7 @@ async function rechazarClientesInexistentes(req, res, nombres) {
 // para la sábana de Deportes (papelera recuperable, nunca borrado
 // definitivo, para un sistema contable).
 const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
-const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo } = require('../services/hipismoAlertaPozo');
+const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo } = require('../services/hipismoAlertaPozo');
 // construirResumenClienteHipismo (24-09-2026) — la nueva pestaña "Saldos >
 // Detallado por Cliente" pide EXACTAMENTE la misma respuesta que ya arma
 // GET /api/hipismo-cliente/:token (el portal público) para un cliente
@@ -851,7 +851,7 @@ function mezclarAdelantadasEnBalance(totalesFinales, comisionTotal, resueltas) {
 // POST /planos/calcular: calcula SIN guardar — para la vista previa del
 // botón "Calcular" antes de decidir si se guarda de verdad.
 const calcularPlanoHandler = asyncHandler(async (req, res) => {
-  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
+  const { texto, pizarra, cruzaJugadas, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision, validarPozo } = req.body;
   if (!pizarra || !pizarra.trim()) return res.status(400).json({ error: 'Falta la Pizarra (orden de llegada).' });
 
   const fechaFinal = fecha || fechaHoyVenezuela();
@@ -956,8 +956,22 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
   const comisionesPropias = await obtenerComisionesPropias(req.grupoId, entradasApostadas.map(e => e.nombre));
   agregarPorcentajeDevuelto(balance.totales, comisionesPropias, entradasApostadas);
 
+  // VALIDAR PLANO (14-10-2026): solo si la pantalla lo pide (validarPozo:true) se revisa, jugada por jugada,
+  // qué Tercios no le alcanzan al cliente con su pozo disponible. Opcional a propósito: "Cargar Planos" no
+  // paga esa consulta extra. Nunca rompe el cálculo: si falla, se avisa y el resultado sale igual.
+  let validacionPozo = null;
+  if (validarPozo) {
+    try {
+      validacionPozo = { revisado: true, clientes: await validarTerciosContraPozo(req.grupoId, resultado.tickets) };
+    } catch (e) {
+      console.warn('[validar plano] no se pudo revisar el pozo:', e.message);
+      validacionPozo = { revisado: false, clientes: [], error: 'No se pudo revisar el pozo de los clientes.' };
+    }
+  }
+
   res.json({
     textoResultado,
+    validacionPozo,
     // Datos para "Copiar en imagen" (07-10-2026): mismas fuentes que el texto de arriba.
     datosImagen: armarDatosImagenPlano({
       grupoNombre: req.grupo.nombre, hipodromoNombre: hipodromoNombre || '', carreraNumero, fecha: fechaFinal, ret, pizarra,

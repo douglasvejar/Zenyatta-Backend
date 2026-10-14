@@ -59,8 +59,53 @@ async function detectarApuestasSobrePozo(grupoId, apuestas) {
   return sobre;
 }
 
+// VALIDAR PLANO (14-10-2026, a pedido del usuario: "en validar plano se pega el plano sin calcular... y
+// aparte de dar el resultado indicas qué tercios no pueden jugar porque se pasan del pozo y no les
+// alcanza"). A diferencia de la alerta de arriba (que solo avisa el total), acá se mira JUGADA POR JUGADA,
+// en el orden en que vienen en el plano: cada cliente con pozo (avalado) va "gastando" su pozo disponible y
+// la jugada que ya no le cabe queda como "no alcanza" (esa NO gasta pozo, así una jugada más chica que viene
+// después todavía puede caber). Solo mira lo que se pasa: los libres y las cuentas de comisión no tienen pozo
+// que cuidar. NO guarda nada ni deja alertas: es solo una vista previa.
+// tickets: [{ clienteNombre, modalidad, caballo, monto }]
+// Devuelve [{ nombre, apostado, pozoDisponible, faltante, juegan:[...], noAlcanzan:[...] }] solo de los que
+// tienen al menos una jugada que no les alcanza.
+async function validarTerciosContraPozo(grupoId, tickets) {
+  const porCliente = new Map();
+  (tickets || []).forEach(t => {
+    const nombre = (t && t.clienteNombre ? String(t.clienteNombre) : '').trim();
+    const monto = Math.abs(Number(t && t.monto));
+    if (!nombre || !Number.isFinite(monto) || monto <= 0) return;
+    if (!porCliente.has(nombre)) porCliente.set(nombre, []);
+    porCliente.get(nombre).push({ modalidad: t.modalidad, caballo: t.caballo, monto: round2(monto) });
+  });
+  if (!porCliente.size) return [];
+
+  const r = await db.query(
+    `SELECT * FROM jugadores
+      WHERE grupo_id = $1 AND nombre = ANY($2) AND tipo_cuenta = 'avalado' AND COALESCE(es_cuenta_comision, false) = false`,
+    [grupoId, Array.from(porCliente.keys())]
+  );
+  const salida = [];
+  for (const jugador of r.rows) {
+    const pozo = await calcularPozoJugador(grupoId, jugador);
+    const disponible = round2(pozo.pozoDisponible);
+    const tope = Math.max(0, disponible);
+    let gastado = 0;
+    const juegan = [];
+    const noAlcanzan = [];
+    for (const j of porCliente.get(jugador.nombre)) {
+      if (gastado + j.monto <= tope + 0.005) { gastado = round2(gastado + j.monto); juegan.push(j); }
+      else noAlcanzan.push(j);
+    }
+    if (!noAlcanzan.length) continue;
+    const apostado = round2(juegan.concat(noAlcanzan).reduce((a, j) => a + j.monto, 0));
+    salida.push({ nombre: jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - tope), juegan, noAlcanzan });
+  }
+  return salida;
+}
+
 function mensajeApuestaSobrePozo(s, etiqueta) {
   return `${s.nombre} apostó ${fmt(s.apostado)}${etiqueta ? ' en ' + etiqueta : ''} y su pozo disponible es ${fmt(s.pozoDisponible)} (se pasa por ${fmt(s.faltante)}).`;
 }
 
-module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo };
+module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo };

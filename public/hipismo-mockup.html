@@ -1567,6 +1567,21 @@
   #inpPizarra { background-color: #ffffff; background-image: conic-gradient(#d9e4ee 25%, #ffffff 0 50%, #d9e4ee 0 75%, #ffffff 0); background-size: 16px 16px; color: #0a1c2e; font-weight: 800; letter-spacing: .06em; border: 1.5px solid #9fb4c6; }
   #inpPizarra::placeholder { color: #5c7186; font-weight: 600; letter-spacing: 0; }
   #inpPizarra:focus { border-color: #4f5bd5; box-shadow: 0 0 0 3px rgba(79,91,213,.22); outline: none; }
+  /* Validar Plano: Tercios que no alcanzan el pozo */
+  .vp-pozo { margin-top: 14px; border-radius: 16px; padding: 14px 16px; font-size: 14px; }
+  .vp-pozo-ok { background: #e6f7ee; border: 1.5px solid #34b27b; color: #0f5132; }
+  .vp-pozo-aviso { background: #fff4e5; border: 1.5px solid #e08a00; color: #5a3a00; }
+  .vp-pozo-mal { background: #fff1f0; border: 1.5px solid #e5534b; color: #5c1a16; }
+  .vp-titulo { font-weight: 800; font-size: 15px; margin-bottom: 10px; }
+  .vp-cli { background: rgba(255,255,255,.85); border: 1px solid #f0c4c0; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .vp-cli-cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 6px; }
+  .vp-cli-cab > span { color: #6b4a47; font-size: 13px; }
+  .vp-rojo { color: #c0261c; }
+  .vp-lin { font-variant-numeric: tabular-nums; padding: 3px 0; }
+  .vp-no { color: #b42318; font-weight: 700; }
+  .vp-si { color: #17803f; }
+  #vista-validarPlano .fila { flex-wrap: wrap; }
+  #vista-validarPlano textarea { width: 100%; }
 </style>
 </head>
 <body>
@@ -1908,7 +1923,7 @@
           </div>
           <div style="position:relative;">
             <label for="inpPizarra">Pizarra (llegada)</label>
-            <input type="text" id="inpPizarra" value="" placeholder="Ej: 6.10.4.8.2" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
+            <input type="text" id="inpPizarra" value="" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
             <!-- 29-09-2026: burbuja flotante (position:absolute, no suma
                  altura a la fila del grid -- a pedido del usuario: "pon un
                  texto mas corto, o colocalo en una burbuja que se cierre
@@ -1992,9 +2007,47 @@
     <!-- ============ VALIDAR PLANO (pendiente) ============ -->
     <section class="vista" id="vista-validarPlano">
       <div class="card">
-        <h2>✅ Validar Plano <span class="badge-pendiente">Pendiente de definir</span></h2>
-        <p class="desc">Todavía falta que me expliques qué hace exactamente esta sección — la dejé como espacio reservado en el menú para no perder el orden que diste.</p>
-        <div class="placeholder-card">Sin definir todavía</div>
+        <h2>✅ Validar Plano</h2>
+        <p class="desc">Pega el plano tal cual lo mandaron (sin calcular), pon la pizarra y dale <b>Validar y calcular</b>. Te doy el resultado de siempre y, aparte, qué <b>Tercios no pueden jugar</b> porque se pasan del pozo del cliente. No guarda nada ni toca ningún saldo.</p>
+
+        <div class="fila">
+          <div>
+            <label for="vpHipodromo">Hipódromo</label>
+            <select id="vpHipodromo"><option value="">(cargando…)</option></select>
+          </div>
+          <div>
+            <label for="vpCarrera">Carrera</label>
+            <select id="vpCarrera"></select>
+          </div>
+          <div>
+            <label for="vpFecha">Fecha</label>
+            <input type="date" id="vpFecha">
+          </div>
+          <div>
+            <label for="vpRet">Ret — opcional</label>
+            <input type="text" id="vpRet">
+          </div>
+          <div>
+            <label for="vpPizarra">Pizarra (llegada)</label>
+            <input type="text" id="vpPizarra" title="Aceptado con punto, guion, coma o barra: 6.10.4.8.2 / 6-10-4-8-2 / 6,10,4,8,2 / 6/10/4/8/2">
+          </div>
+          <div>
+            <label for="vpSinComision" title="Valores &quot;a premio&quot; sin comisión, igual que en Cargar Planos. Déjalo vacío si ninguno aplica.">Sin comisión (a premio)</label>
+            <input type="text" id="vpSinComision" title="Déjalo vacío si ninguno aplica">
+          </div>
+        </div>
+
+        <label for="vpTexto" style="display:block; margin-top:12px;">Plano (pega las jugadas)</label>
+        <textarea id="vpTexto" rows="12"></textarea>
+
+        <div class="btn-fila" style="margin-top:12px;">
+          <button class="btn btn-primario" type="button" id="vpBtn" onclick="validarPlanoPozo()">✅ Validar y calcular</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarValidarPlano()">Limpiar</button>
+        </div>
+
+        <div id="vpAviso" class="resultado-vacio">El resultado y los Tercios que no alcanzan van a aparecer acá.</div>
+        <div id="vpPozo" class="vp-pozo" style="display:none;"></div>
+        <pre class="resultado-caja" id="vpResultado" style="display:none;"></pre>
       </div>
     </section>
 
@@ -13207,9 +13260,22 @@ let HIPODROMOS = []; // hipódromos reales de ESTE grupo, cargados de la base (c
 // se guarda el mensaje real del error para mostrarlo en vez de mentir.
 let errorCargaHipodromos = null;
 
+// 14-10-2026 (a pedido del usuario: "ordename los hipódromos por país y después orden alfabético"):
+// primero Venezuela, luego Estados Unidos (y cualquier otro país al final), y dentro de cada país de la A a la Z.
+// Se ordena una sola vez al cargar la lista, así TODOS los selectores de hipódromo salen igual.
+const ORDEN_PAIS_HIPODROMO = { VE: 0, US: 1 };
+function ordenarHipodromos(lista) {
+  return (Array.isArray(lista) ? lista.slice() : []).sort((a, b) => {
+    const pa = ORDEN_PAIS_HIPODROMO[a.pais] != null ? ORDEN_PAIS_HIPODROMO[a.pais] : 9;
+    const pb = ORDEN_PAIS_HIPODROMO[b.pais] != null ? ORDEN_PAIS_HIPODROMO[b.pais] : 9;
+    if (pa !== pb) return pa - pb;
+    return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+  });
+}
+
 async function cargarHipodromos() {
   try {
-    HIPODROMOS = await apiHipismo('/api/hipismo/hipodromos');
+    HIPODROMOS = ordenarHipodromos(await apiHipismo('/api/hipismo/hipodromos'));
     errorCargaHipodromos = null;
   } catch (e) {
     HIPODROMOS = [];
@@ -13320,6 +13386,7 @@ function poblarSelectHipodromo() {
   poblarSelectHipodromoTerciosAdelantadas();
   poblarSelectHipodromoWinners();
   poblarSelectHipodromoRevisar();
+  poblarSelectHipodromoValidar();
 }
 
 // "Jugadas Adelantadas" (23-09-2026) usa el mismo listado real de
@@ -13380,6 +13447,110 @@ function poblarSelectHipodromoRemateManual() {
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
   sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+
+// ------------------------------------------------------------------
+// "✅ VALIDAR PLANO" (14-10-2026, a pedido del usuario: "se pega el plano sin calcular, y allí lo calcula
+// y aparte de dar el resultado indicas qué tercios no pueden jugar porque se pasan del pozo y no les
+// alcanza"). Usa el MISMO cálculo de Cargar Planos (POST /planos/calcular, vista previa: no guarda nada)
+// pidiéndole además validarPozo:true: el servidor revisa jugada por jugada, en el orden del plano, si el
+// pozo disponible de cada cliente (avalado) le alcanza (services/hipismoAlertaPozo.js).
+// ------------------------------------------------------------------
+let validandoPlano = false;
+function poblarSelectHipodromoValidar() {
+  const sel = document.getElementById('vpHipodromo');
+  if (!sel) return;
+  const valorPrevio = sel.value;
+  if (HIPODROMOS.length === 0) {
+    sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
+    return;
+  }
+  const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais] || ''} ${h.nombre}</option>`).join('');
+  if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
+}
+function vpEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function vpMonto(n) { return redondearCentavos(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function vpLinea(j) { return `${j.modalidad || ''}${j.caballo != null && j.caballo !== '' ? ' (' + j.caballo + ')' : ''} · ${vpMonto(j.monto)}`; }
+let VP_TEXTO_AVISO = '';
+function pintarValidacionPozo(v) {
+  const caja = document.getElementById('vpPozo');
+  VP_TEXTO_AVISO = '';
+  if (!v) { caja.style.display = 'none'; return; }
+  caja.style.display = 'block';
+  if (!v.revisado) {
+    caja.className = 'vp-pozo vp-pozo-aviso';
+    caja.innerHTML = '⚠️ ' + vpEsc(v.error || 'No se pudo revisar el pozo de los clientes.') + ' El resultado de abajo sí es correcto.';
+    return;
+  }
+  if (!v.clientes.length) {
+    caja.className = 'vp-pozo vp-pozo-ok';
+    caja.innerHTML = '✅ <b>Todos los Tercios alcanzan</b> con el pozo disponible de cada cliente.';
+    return;
+  }
+  caja.className = 'vp-pozo vp-pozo-mal';
+  const lineasTxt = [];
+  const tarjetas = v.clientes.map(c => {
+    lineasTxt.push(`${c.nombre} (pozo ${vpMonto(c.pozoDisponible)}): NO ALCANZA ${c.noAlcanzan.map(vpLinea).join(' / ')}`);
+    return `<div class="vp-cli">
+      <div class="vp-cli-cab"><b>${vpEsc(formatNombre(c.nombre))}</b><span>pozo disponible <b>${vpMonto(c.pozoDisponible)}</b> · apostó <b>${vpMonto(c.apostado)}</b> · se pasa por <b class="vp-rojo">${vpMonto(c.faltante)}</b></span></div>
+      ${c.noAlcanzan.map(j => `<div class="vp-lin vp-no">❌ No puede jugar: ${vpEsc(vpLinea(j))}</div>`).join('')}
+      ${c.juegan.map(j => `<div class="vp-lin vp-si">✅ Sí alcanza: ${vpEsc(vpLinea(j))}</div>`).join('')}
+    </div>`;
+  }).join('');
+  VP_TEXTO_AVISO = 'TERCIOS QUE NO ALCANZAN SU POZO:\n' + lineasTxt.join('\n');
+  caja.innerHTML = `<div class="vp-titulo">⚠️ Tercios que NO pueden jugar (se pasan del pozo)</div>${tarjetas}
+    <div style="margin-top:8px;"><button type="button" class="btn btn-secundario" onclick="copiarAvisoValidar()">Copiar esta lista</button></div>`;
+}
+function copiarAvisoValidar() {
+  if (!VP_TEXTO_AVISO) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(VP_TEXTO_AVISO).catch(() => {});
+}
+async function validarPlanoPozo() {
+  if (validandoPlano) return;
+  const aviso = document.getElementById('vpAviso');
+  const res = document.getElementById('vpResultado');
+  const btn = document.getElementById('vpBtn');
+  const hipodromoNombre = document.getElementById('vpHipodromo').value;
+  const pizarra = document.getElementById('vpPizarra').value.trim();
+  const texto = document.getElementById('vpTexto').value;
+  document.getElementById('vpPozo').style.display = 'none';
+  res.style.display = 'none';
+  aviso.style.display = 'block';
+  if (!hipodromoNombre) { aviso.textContent = 'Elige un hipódromo primero.'; return; }
+  if (!texto.trim()) { aviso.textContent = 'Pega el plano primero.'; return; }
+  if (!pizarra) { aviso.textContent = 'Falta la Pizarra (orden de llegada).'; return; }
+  validandoPlano = true; btn.disabled = true;
+  aviso.textContent = 'Calculando (no se guarda nada)…';
+  const payload = {
+    texto, pizarra, hipodromoNombre, validarPozo: true,
+    cruzaJugadas: puedeCruzarJugadas() && CRUZAR_ACTIVO,
+    carreraNumero: document.getElementById('vpCarrera').value,
+    ret: document.getElementById('vpRet').value,
+    fecha: document.getElementById('vpFecha').value,
+    valoresSinComision: document.getElementById('vpSinComision').value
+  };
+  try {
+    const data = await apiHipismo('/api/hipismo/planos/calcular', { method: 'POST', body: JSON.stringify(payload) });
+    let salida = data.textoResultado;
+    if (data.sinReconocer && data.sinReconocer.length) salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
+    aviso.style.display = 'none';
+    pintarValidacionPozo(data.validacionPozo);
+    res.textContent = salida;
+    res.style.display = 'block';
+  } catch (e) {
+    aviso.textContent = e.message;
+  } finally {
+    validandoPlano = false; btn.disabled = false;
+  }
+}
+function limpiarValidarPlano() {
+  ['vpTexto', 'vpPizarra', 'vpRet', 'vpSinComision'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('vpPozo').style.display = 'none';
+  document.getElementById('vpResultado').style.display = 'none';
+  const a = document.getElementById('vpAviso');
+  a.style.display = 'block';
+  a.textContent = 'El resultado y los Tercios que no alcanzan van a aparecer acá.';
 }
 
 async function crearHipodromo() {
@@ -17407,7 +17578,9 @@ poblarCarreras('selCarreraRemate');
 poblarCarreras('selCarreraRemateManual');
 poblarCarreras('selCarreraWinners');
 poblarCarreras('selCarreraRevisar');
+poblarCarreras('vpCarrera');
 document.getElementById('inpFecha').value = fechaLocalHoy();
+document.getElementById('vpFecha').value = fechaLocalHoy();
 pintarFechaGrandePlano();
 document.getElementById('inpFechaRemate').value = fechaLocalHoy();
 document.getElementById('inpFechaRemateManual').value = fechaLocalHoy();
