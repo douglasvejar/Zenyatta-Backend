@@ -1550,6 +1550,17 @@
   .cme-tile.editando .cme-tile-edit { display: block; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--cr-borde); font-size: 14px; }
   .cme-tile.editando .cme-b-editar { display: none; }
   @media (max-width: 860px) { .cme-grid { grid-template-columns: minmax(0, 1fr); } .cme-tile-sub, .cme-tile-m { display: inline-block; } .cme-tile-m { margin-left: 10px; } }
+
+  /* Menú lateral: letras de alto contraste (opción 5, elegida el 14-10-2026) */
+  .sidebar-admin .nav-item { color: #0a1c2e; font-weight: 700; }
+  .sidebar-admin .nav-parent { color: #0a1c2e; font-weight: 800; }
+  .sidebar-admin .nav-child { color: #0a1c2e; font-weight: 600; }
+  .sidebar-admin .nav-item .cr-ic, .sidebar-admin .nav-child .cr-ic-hijo { color: #12304a; }
+  .sidebar-admin .nav-parent [id^="caret"] { color: #12304a; }
+  .sidebar-admin .nav-item:hover { color: #0a1c2e; background: rgba(79,91,213,0.10); }
+  .sidebar-admin .nav-item:hover .cr-ic, .sidebar-admin .nav-child:hover .cr-ic-hijo { color: #4f5bd5; }
+  .sidebar-admin .nav-item.nav-item-active, .sidebar-admin .nav-child.nav-item-active { background: #4f5bd5; color: #ffffff; font-weight: 700; box-shadow: 0 8px 18px rgba(79,91,213,0.35); }
+  .sidebar-admin .nav-item.nav-item-active .cr-ic, .sidebar-admin .nav-child.nav-item-active .cr-ic-hijo { color: #ffffff; }
 </style>
 </head>
 <body>
