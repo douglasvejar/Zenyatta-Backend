@@ -1533,6 +1533,15 @@
     #bgInput { height: 44px; font-size: 16px; }
     .bg-resultados { position: fixed; left: 10px; right: 10px; top: auto; max-height: 60vh; margin-top: 8px; }
   }
+
+  /* Carga Masiva Especial: lista del día, compacta */
+  .cme-fila { display: flex; align-items: center; gap: 10px; padding: 5px 10px; margin-bottom: 4px; border-radius: 12px; background: rgba(255,255,255,0.7); border: 1px solid var(--cr-borde); font-size: 12.5px; }
+  .cme-fila .cme-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cme-fila .cme-m { flex: none; font-weight: 600; white-space: nowrap; }
+  .cme-fila .cme-b { flex: none; display: inline-flex; gap: 4px; }
+  .cme-fila .cme-b .btn { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; }
+  .cme-fila .cme-b .btn .cr-ic { width: 15px; height: 15px; }
+  @media (max-width: 860px) { .cme-fila { flex-wrap: wrap; row-gap: 2px; } .cme-fila .cme-t { flex: 1 1 100%; white-space: normal; } .cme-fila .cme-m { flex: 1 1 auto; } }
 </style>
 </head>
 <body>
@@ -3317,8 +3326,8 @@
         </div>
       </div>
       <div class="card">
-        <h2>Cargas recientes</h2>
-        <p class="desc">Edita una carga para corregirla (se reemplazan todas sus líneas) o elimínala (los saldos vuelven a como estaban).</p>
+        <h2 id="cmeTituloLista">Cargas del día</h2>
+        <p class="desc" style="margin-bottom:8px;">Solo se muestran las del día elegido en "Fecha de carga". Edita una para corregirla (se reemplazan todas sus líneas) o elimínala (los saldos vuelven a como estaban).</p>
         <div id="listaCme"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
@@ -17177,30 +17186,55 @@ function cmePintarSelects(hipSel, accionSel) {
 async function entrarCargaMasivaEspecial() {
   const f = document.getElementById('inpCmeFecha');
   if (f && !f.value) f.value = fechaLocalHoy();
+  if (f && !f.dataset.listaEnlazada) { f.dataset.listaEnlazada = '1'; f.addEventListener('change', cmeRefrescarLista); }
   await cmeCargarDatos();
+}
+
+function cmeFechaLista() {
+  const f = document.getElementById('inpCmeFecha');
+  return (f && f.value) || fechaLocalHoy();
 }
 
 async function cmeCargarDatos() {
   const cont = document.getElementById('listaCme');
   try {
-    const d = await apiHipismo('/api/hipismo/cargas-especiales');
+    const d = await apiHipismo('/api/hipismo/cargas-especiales?fecha=' + encodeURIComponent(cmeFechaLista()));
     CME.acciones = d.acciones; CME.cargas = d.cargas;
   } catch (e) {
     cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${cmeEsc(e.message)}</div>`;
     return;
   }
   cmePintarSelects();
+  cmePintarLista();
+}
+
+// Al cambiar la "Fecha de carga" solo se vuelve a pedir la lista de ese día (los selectores y el texto escrito no se tocan).
+async function cmeRefrescarLista() {
+  try {
+    const d = await apiHipismo('/api/hipismo/cargas-especiales?fecha=' + encodeURIComponent(cmeFechaLista()));
+    CME.cargas = d.cargas;
+  } catch (e) { return; }
+  cmePintarLista();
+}
+
+function cmePintarLista() {
+  const cont = document.getElementById('listaCme');
+  const fecha = cmeFechaLista();
+  const tit = document.getElementById('cmeTituloLista');
+  if (tit) tit.textContent = `Cargas del ${formatFechaCortaDMY(fecha)}${CME.cargas.length ? ' (' + CME.cargas.length + ')' : ''}`;
   if (!CME.cargas.length) {
-    cont.innerHTML = '<div class="placeholder-card">Todavía no has hecho ninguna carga masiva especial.</div>';
+    cont.innerHTML = '<div class="placeholder-card" style="padding:10px;">No hay cargas masivas especiales de este día.</div>';
     return;
   }
+  const icLapiz = crSvg(CR_ICONOS_VISTA.cargarRemateManual, 'cr-ic');
+  const icBasura = crSvg(CR_ICONOS_VISTA.eliminarPlanos, 'cr-ic');
   cont.innerHTML = CME.cargas.map(c => `
-    <div class="balance-fila" style="margin-bottom:4px; flex-wrap:wrap; gap:6px;">
-      <span class="nombre">💼 ${formatFechaCortaDMY(c.fecha)} · ${cmeEsc(c.hipodromo || 'Todos los hipódromos')}${c.carrera ? ' · Carrera ' + cmeEsc(c.carrera) : ''} · ${cmeEsc(cmeNombreAccion(c.accion))} — ${c.lineas.length} línea(s)
-        <span class="pos">${formatMonto(c.ganan)}</span> / <span class="neg">${formatMonto(c.pierden)}</span></span>
-      <span class="btn-fila" style="gap:6px;">
-        <button class="btn btn-secundario" type="button" onclick="cmeEditar('${c.id}')">✏️ Editar</button>
-        <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="cmeEliminar('${c.id}')">🗑️ Eliminar</button>
+    <div class="cme-fila">
+      <span class="cme-t"><b>${cmeEsc(c.hipodromo || 'Todos los hipódromos')}</b>${c.carrera ? ' · C' + cmeEsc(c.carrera) : ''} · ${cmeEsc(cmeNombreAccion(c.accion))} · ${c.lineas.length} línea(s)</span>
+      <span class="cme-m"><span class="pos">${formatMonto(c.ganan)}</span> / <span class="neg">${formatMonto(c.pierden)}</span></span>
+      <span class="cme-b">
+        <button class="btn btn-secundario" type="button" title="Editar" aria-label="Editar" onclick="cmeEditar('${c.id}')">${icLapiz}</button>
+        <button class="btn btn-secundario" type="button" title="Eliminar" aria-label="Eliminar" style="color:var(--danger);" onclick="cmeEliminar('${c.id}')">${icBasura}</button>
       </span>
     </div>`).join('');
 }

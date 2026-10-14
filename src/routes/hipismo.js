@@ -5283,11 +5283,16 @@ async function evaluarCargaEspecial(req, body) {
 }
 
 router.get('/cargas-especiales', asyncHandler(async (req, res) => {
+  // 14-10-2026, a pedido del usuario ("solo debe mostrar las del día"): con ?fecha=YYYY-MM-DD solo vienen las cargas de ese
+  // día (la pantalla pide el día que tiene elegido en "Fecha de carga"). Sin fecha, las 50 más recientes como siempre.
+  const fechaFiltro = /^\d{4}-\d{2}-\d{2}$/.test(String((req.query && req.query.fecha) || '')) ? req.query.fecha : null;
+  const paramsCargas = [req.grupoId];
+  if (fechaFiltro) paramsCargas.push(fechaFiltro);
   const rCargas = await db.query(
     `SELECT id, fecha, carrera, codigo_nombre, hipodromo_nombre, creado_en
-       FROM hipismo_cargas_especiales WHERE grupo_id = $1
+       FROM hipismo_cargas_especiales WHERE grupo_id = $1${fechaFiltro ? ' AND fecha = $2' : ''}
       ORDER BY fecha DESC, creado_en DESC LIMIT 50`,
-    [req.grupoId]
+    paramsCargas
   );
   const ids = rCargas.rows.map(c => c.id);
   const rLineas = ids.length
