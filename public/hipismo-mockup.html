@@ -1324,6 +1324,159 @@
     .alerta-flotante.alerta-tercios-adelantadas { bottom: calc(194px + env(safe-area-inset-bottom)); }
     .chat-widget { bottom: calc(86px + env(safe-area-inset-bottom)); right: 12px; }
   }
+
+  /* ===============================================================
+     ESTILO CRISTAL (13-10-2026) — a pedido del usuario ("me gusta este,
+     hazlo"): fondo con degradados suaves, paneles de vidrio translúcido,
+     menú flotante, botones en píldora y Cargar Planos con pasos, datos
+     alineados y barra de acciones. Casi todo el módulo cambia solo
+     redefiniendo las variables de color de :root (el resto del CSS ya
+     las usa); los ids, clases y funciones siguen igual. Va al FINAL del
+     <style> para ganarle a las reglas anteriores (incluida la móvil). */
+  :root {
+    --bg-color: #eef6fb;
+    --primary: rgba(255,255,255,0.62);
+    --accent: #4f5bd5; --accent-hover: #3f49b8;
+    --accent-grass: #0e9aa7; --accent-lime: #4f5bd5; --accent-deep: #12304a;
+    --text: #12304a; --text-dim: #5d7a90;
+    --card: rgba(255,255,255,0.72); --card-2: rgba(255,255,255,0.82);
+    --card-border: rgba(40,90,130,0.12); --border: rgba(40,90,130,0.12); --border-light: rgba(40,90,130,0.20);
+    --ok: #0f9d6a; --danger: #e0475b;
+    --cr-vidrio: rgba(255,255,255,0.62); --cr-borde: rgba(255,255,255,0.88);
+    --cr-sombra: 0 10px 40px rgba(30,80,120,0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+  body {
+    background: radial-gradient(900px 600px at 6% 0%, #b9f1e2 0, transparent 60%),
+                radial-gradient(800px 600px at 100% 4%, #d4d6ff 0, transparent 60%),
+                radial-gradient(900px 700px at 72% 105%, #bfe3ff 0, transparent 60%), #eef6fb;
+    background-attachment: fixed;
+  }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+  .cr-ic { width: 18px; height: 18px; flex: none; }
+
+  /* Barra superior */
+  .topbar { padding: 16px 18px 0; }
+  .marca .logo-emoji { font-size: 0; width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(79,91,213,0.32); }
+  .marca .logo-emoji::after { content: "L"; font-size: 19px; font-weight: 800; color: #ffffff; font-family: 'Outfit', sans-serif; }
+  .marca h1 { font-size: 19px; color: var(--accent-deep); }
+  .selector-modulo { background: var(--cr-vidrio); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid var(--cr-borde); box-shadow: 0 6px 20px rgba(30,80,120,0.08); }
+  .selector-modulo button { color: var(--text-dim); }
+  .selector-modulo button.activo { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: #ffffff; box-shadow: 0 6px 14px rgba(79,91,213,0.30); }
+
+  /* Menú */
+  .sidebar-admin { background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 22px; box-shadow: var(--cr-sombra); padding: 14px 10px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; color: #3b5a72; border-radius: 14px; }
+  .nav-item:hover { background: rgba(255,255,255,0.75); color: var(--accent-deep); }
+  .nav-item.nav-item-active { background: rgba(255,255,255,0.95); color: var(--accent); box-shadow: 0 6px 18px rgba(79,91,213,0.16); }
+  .nav-parent { justify-content: flex-start; font-family: 'Outfit', sans-serif; font-weight: 700; }
+  .nav-parent .nav-lbl { flex: 1; text-align: left; }
+  .nav-parent [id^="caret"] { margin-left: auto; font-size: 12px; color: var(--text-dim); }
+  .nav-children { padding-left: 0; margin: 2px 0 6px 21px; border-left: 1px solid rgba(40,90,130,0.14); gap: 1px; }
+  .nav-child { font-weight: 500; font-size: 13.5px; color: #4a6a80; padding: 9px 12px 9px 16px; margin-left: -1px; }
+  .nav-child.nav-item-active { font-weight: 700; color: var(--accent); }
+  .sidebar-admin hr { border-top-color: rgba(40,90,130,0.12); }
+
+  /* Tarjetas */
+  .main .vista > .card { background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 22px; box-shadow: var(--cr-sombra); padding: 22px; }
+  .card .card { background: rgba(255,255,255,0.72); border: 1px solid rgba(255,255,255,0.92); border-radius: 16px; box-shadow: 0 4px 14px rgba(30,80,120,0.06); }
+  .card h2 { font-size: 20px; color: var(--accent-deep); letter-spacing: -0.2px; }
+
+  /* Campos y botones */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), select, textarea { background: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.95); box-shadow: inset 0 1px 3px rgba(30,80,120,0.12), 0 0 0 1px rgba(40,90,130,0.10); border-radius: 12px; padding: 10px 12px; color: var(--text); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid rgba(79,91,213,0.55); outline-offset: 1px; }
+  label { color: var(--text-dim); font-weight: 700; }
+  button.btn { border-radius: 12px; padding: 11px 20px; }
+  .btn-primario { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: #ffffff; box-shadow: 0 10px 22px rgba(79,91,213,0.30); }
+  .btn-primario:hover { filter: brightness(1.07); }
+  .btn-secundario { background: rgba(255,255,255,0.88); color: #27506b; border: 1px solid #ffffff !important; box-shadow: 0 4px 12px rgba(30,80,120,0.10); }
+  .btn-secundario:hover { background: #ffffff; }
+  .subnav button { border-radius: 999px; background: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.95); }
+  .subnav button.activo { box-shadow: 0 6px 14px rgba(79,91,213,0.28); }
+
+  /* Tablas */
+  th { background: rgba(255,255,255,0.45); color: var(--text-dim); }
+  tbody tr:hover td { background: rgba(79,91,213,0.05); }
+  .resultado-caja { background: rgba(255,255,255,0.78); border-radius: 14px; color: var(--text); }
+  .fecha-grande-plano { background: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.95); border-radius: 999px; padding: 6px 14px; font-size: 14px; margin: 4px 0 0; color: var(--text-dim); }
+
+  /* ----- Cargar Planos ----- */
+  #vista-cargarPlanos > .card.cp-pagina { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cp-cabecera { grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 2px 4px; }
+  .cp-cabecera h2 { margin: 0; font-size: 30px; letter-spacing: -0.6px; }
+  .cp-pasos { display: inline-flex; list-style: none; margin: 0; padding: 5px; gap: 4px; border-radius: 999px; background: var(--cr-vidrio); border: 1px solid var(--cr-borde); box-shadow: 0 6px 20px rgba(30,80,120,0.08); }
+  .cp-pasos li { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 13.5px; color: var(--text-dim); }
+  .cp-pasos li b { width: 22px; height: 22px; border-radius: 50%; background: rgba(40,90,130,0.10); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .cp-pasos li.hecho { color: var(--ok); }
+  .cp-pasos li.hecho b { background: #d6f3e7; color: var(--ok); }
+  .cp-pasos li.actual { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: #ffffff; box-shadow: 0 8px 18px rgba(79,91,213,0.30); }
+  .cp-pasos li.actual b { background: rgba(255,255,255,0.28); color: #ffffff; }
+  #selectorPlanoCompacto { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; align-items: start; margin: 0; padding: 16px 18px; background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 22px; box-shadow: var(--cr-sombra); }
+  #selectorPlanoCompacto > div { min-width: 0; }
+  #selectorPlanoCompacto label { font-size: 12px; margin-bottom: 5px; }
+  #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { padding: 10px 12px; font-size: 14.5px; height: 42px; }
+  #selectorPlanoCompacto > div:nth-child(1) { grid-column: 1 / 5; grid-row: 1; }
+  #selectorPlanoCompacto > div:nth-child(2) { grid-column: 5 / 7; grid-row: 1; }
+  #selectorPlanoCompacto > div:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
+  #selectorPlanoCompacto > div:nth-child(5) { grid-column: 10 / 13; grid-row: 1; }
+  #selectorPlanoCompacto > #filaCruzar { grid-column: 1 / 4; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(4) { grid-column: 4 / 7; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(8) { grid-column: 7 / 13; grid-row: 2; }
+  #selectorPlanoCompacto > #notaCruzarDesactivado { grid-column: 1 / -1; grid-row: 3; }
+  #selectorPlanoCompacto > #filaCruzar { display: flex; align-items: center; gap: 10px; height: 42px; margin: 21px 0 0; }
+  #selectorPlanoCompacto #filaCruzar label { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  #chkCruzar { -webkit-appearance: none; appearance: none; width: 40px; height: 23px; border-radius: 999px; background: #c5d4df; position: relative; cursor: pointer; flex: none; transition: background .2s; border: 0; padding: 0; box-shadow: none; }
+  #chkCruzar::after { content: ""; position: absolute; left: 3px; top: 3px; width: 17px; height: 17px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .2s; }
+  #chkCruzar:checked { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); }
+  #chkCruzar:checked::after { transform: translateX(17px); }
+  .btn-lista-sin-comision { color: var(--accent); font-size: 12px; margin-top: 5px; }
+  .panel-sin-comision { background: rgba(255,255,255,0.97); border-radius: 14px; }
+  .chip-sin-comision.chip-activo { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); border-color: transparent; }
+  .cp-panel { background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 22px; box-shadow: var(--cr-sombra); padding: 16px 18px; min-width: 0; }
+  .cp-panel-cab { display: flex; align-items: center; gap: 9px; font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: var(--accent-deep); margin: 0 0 6px; }
+  .cp-panel-cab .cr-ic { color: var(--text-dim); }
+  .cp-ayuda { margin: 0 0 10px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+  #txtPlano { height: 340px; border-radius: 14px; background: rgba(255,255,255,0.6); font-size: 13.5px; line-height: 1.8; resize: vertical; }
+  #cpResultado .resultado-vacio { margin-top: 4px; }
+  #cpResultado .resultado-caja { margin-top: 4px; }
+  .cp-acciones { grid-column: 1 / -1; position: sticky; bottom: 18px; z-index: 20; justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 9px; margin: 0; width: max-content; max-width: 100%; border-radius: 999px; background: rgba(255,255,255,0.80); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--cr-borde); box-shadow: 0 14px 40px rgba(30,80,120,0.18); }
+  .cp-acciones .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; font-size: 14px; border-radius: 999px; }
+  .cp-toast-zona { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+  .cp-toast-zona .toast-copiado { margin: 0; background: #ffffff; border-radius: 999px; padding: 5px 12px; box-shadow: 0 6px 18px rgba(30,80,120,0.18); }
+  .cp-toast-zona .toast-copiado:empty { display: none; }
+  @media (max-width: 1100px) {
+    #vista-cargarPlanos > .card.cp-pagina { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .marca .logo-emoji { width: 34px; height: 34px; }
+    .marca .logo-emoji::after { font-size: 17px; }
+    .sidebar-admin { background: #f4f9fc; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 22px 22px 0 0; }
+    .mov-cab { background: #f4f9fc; }
+    .mov-cab-fila b { color: var(--accent-deep); }
+    .mov-cab-cerrar { background: rgba(40,90,130,0.10); color: var(--accent-deep); }
+    .mov-nav { background: rgba(255,255,255,0.82); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--cr-borde); box-shadow: 0 14px 34px rgba(30,80,120,0.22); }
+    .mov-nav .mov-fab { box-shadow: 0 10px 22px rgba(79,91,213,0.38); }
+    .mov-nav .mov-fab.activo { box-shadow: 0 0 0 4px rgba(79,91,213,0.20), 0 10px 22px rgba(79,91,213,0.38); }
+    .main .vista > .card { padding: 16px; border-radius: 20px; }
+    .cp-cabecera h2 { font-size: 26px; }
+    .cp-pasos { width: 100%; justify-content: space-between; overflow-x: auto; }
+    .cp-pasos { padding: 4px; gap: 2px; }
+    .cp-pasos li { padding: 6px 8px; font-size: 12px; gap: 5px; }
+    .cp-pasos li b { width: 20px; height: 20px; font-size: 11px; }
+    #selectorPlanoCompacto { grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 14px; gap: 10px; align-items: start; }
+    #selectorPlanoCompacto > div:nth-child(n), #selectorPlanoCompacto > #filaCruzar, #selectorPlanoCompacto > #notaCruzarDesactivado { grid-row: auto; grid-column: span 6; }
+    #selectorPlanoCompacto > div:nth-child(2), #selectorPlanoCompacto > div:nth-child(3), #selectorPlanoCompacto > div:nth-child(4), #selectorPlanoCompacto > div:nth-child(5) { grid-column: span 3; }
+    #selectorPlanoCompacto label { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #selectorPlanoCompacto > #filaCruzar { margin: 0; height: auto; min-height: 36px; }
+    #txtPlano { height: 240px; }
+    .cp-acciones { bottom: calc(86px + env(safe-area-inset-bottom)); width: calc(100% - 66px); justify-self: start; border-radius: 26px; padding: 6px; gap: 5px; }
+    .cp-acciones .btn { height: 40px; padding: 0 9px; gap: 6px; min-width: 0; justify-content: center; font-size: 14px; flex: 1 1 auto; }
+    .cp-acciones .btn.btn-secundario { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; font-size: 0; gap: 0; }
+    .cp-acciones .btn.btn-secundario .cr-ic { width: 18px; height: 18px; }
+    .cp-acciones #btnCalcularPlano, .cp-acciones #btnConfirmarPlano { flex: 1 1 100px; }
+    .alerta-flotante { bottom: calc(150px + env(safe-area-inset-bottom)); }
+    .alerta-flotante.alerta-adelantadas { bottom: calc(204px + env(safe-area-inset-bottom)); }
+    .alerta-flotante.alerta-tercios-adelantadas { bottom: calc(258px + env(safe-area-inset-bottom)); }
+  }
 </style>
 </head>
 <body>
@@ -1620,9 +1773,18 @@
 
     <!-- ============ CARGAR PLANOS (funcional, con las reglas confirmadas) ============ -->
     <section class="vista activa" id="vista-cargarPlanos">
-      <div class="card">
-        <h2>📥 Cargar Planos</h2>
-        <div id="fechaGrandePlano" class="fecha-grande-plano"></div>
+      <div class="card cp-pagina">
+        <div class="cp-cabecera">
+          <div>
+            <h2>Cargar plano</h2>
+            <div id="fechaGrandePlano" class="fecha-grande-plano"></div>
+          </div>
+          <!-- Pasos (estilo Cristal, 13-10-2026): solo muestran en qué punto va el operador; no cambian ninguna regla.
+               actualizarPasosCP() los marca leyendo los mismos campos de siempre. -->
+          <ol class="cp-pasos" id="cpPasos" aria-label="Pasos para cargar un plano">
+            <li><b>1</b>Carrera</li><li><b>2</b>Plano</li><li><b>3</b>Calcular</li><li><b>4</b>Confirmar</li>
+          </ol>
+        </div>
 
         <div id="selectorPlanoCompacto">
           <div>
@@ -1669,7 +1831,7 @@
           <div style="position:relative;">
             <label for="inpSinComision" title="Jugadas 'a premio' (10a1...10a9, con o sin decimales) — a las que elijas acá el ganador se le paga NETO, SIN el 5% de comisión, solo para las jugadas de ESTA carrera. Elige mínimo 3 valores separados por coma, ej: 2, 3, 1.75">Valores "a premio" SIN comisión</label>
             <input type="text" id="inpSinComision" placeholder="Ej: 2, 3, 1.75 (déjalo vacío si ninguno aplica)">
-            <button type="button" class="btn-lista-sin-comision" onclick="toggleListaSinComision()">📋 Elegir de la lista (10a5 al 10a1)</button>
+            <button type="button" class="btn-lista-sin-comision" onclick="toggleListaSinComision()">Elegir de la lista (10a5 al 10a1)</button>
             <div id="panelSinComision" class="panel-sin-comision">
               <div class="panel-sin-comision-grid" id="gridSinComision"></div>
               <div class="panel-sin-comision-pie">
@@ -1688,30 +1850,13 @@
              "Jugadas entre Tercios Adelantadas" (mismas reglas de
              #zonaPlanoAdelantadas en el <style> — reusadas acá también vía
              #zonaPlanoCargarPlanos). -->
-        <div>
-          <label for="txtPlano">Plano (pega aquí las jugadas — puedes pegar el mensaje completo, con encabezado y pie incluidos: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado)</label>
+        <div id="bloquePlano" class="cp-panel">
+          <label for="txtPlano" class="cp-panel-cab"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Plano</label>
+          <p class="cp-ayuda">Pega las jugadas — puedes pegar el mensaje completo, con encabezado y pie: el sistema lee solo las jugadas y arma el encabezado/pie siempre con el formato configurado.</p>
           <div id="zonaPlanoCargarPlanos">
             <div class="captura-logo-fondo" id="logoFondoCargarPlanos"></div>
             <textarea id="txtPlano" rows="14"></textarea>
           </div>
-        </div>
-
-        <div class="btn-fila">
-          <button class="btn btn-primario" type="button" id="btnCalcularPlano" onclick="calcularPlano()">🧮 Calcular</button>
-          <!-- Aparece SOLO despues de un Calcular exitoso (vista previa) —
-               ver calcularPlano()/confirmarPlano() mas abajo. Mientras no
-               se le de click acá, el plano NO se guarda ni afecta saldos
-               (25-09-2026, a pedido del usuario). -->
-          <button class="btn btn-primario" type="button" id="btnConfirmarPlano" style="display:none;" onclick="confirmarPlano()">✔️ Confirmar Plano</button>
-          <button class="btn btn-secundario" type="button" onclick="limpiarPlano()">🧹 Limpiar</button>
-          <button class="btn btn-secundario" type="button" onclick="copiarResultado()">📋 Copiar en texto</button>
-          <!-- 07-10-2026: "Copiar en imagen" arma una tarjeta con las jugadas, el logo del
-               grupo y quiénes ganan/pierden (siempre UNA sola imagen, se adapta sola a la
-               cantidad de jugadas) y la copia junto al texto "TOTALES DE LA CARRERA ...". -->
-          <button class="btn btn-secundario" type="button" id="btnCopiarImagenPlano" onclick="copiarPlanoEnImagen()">📸 Copiar en imagen</button>
-          <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarMensajePlanoImagen()" title="Copia solo el texto que acompaña a la imagen (TOTALES DE LA CARRERA ... EN EL HIPÓDROMO ... EN EL GRUPO ...)">📝 Solo el mensaje</button>
-          <span class="toast-copiado" id="toastCopiado">Copiado ✅</span>
-          <span class="toast-copiado" id="toastPlanoImagen" style="flex-basis:100%; margin-left:0;"></span>
         </div>
 
         <!-- Mismo logo de fondo, ahora detrás de "donde te doy el
@@ -1721,6 +1866,8 @@
              fondo azul/verde es semántico: indica vista previa vs. ya
              confirmado), igual que no se retiñe .balance-fila en los
              cuadres de Balance General. -->
+        <div id="cpResultado" class="cp-panel">
+        <div class="cp-panel-cab"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>Resultado</div>
         <div id="zonaResultadoLogoFondo">
           <div class="captura-logo-fondo" id="resultadoLogoFondo"></div>
           <div class="captura-contenido">
@@ -1729,6 +1876,24 @@
             <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
           </div>
         </div>
+        </div>
+        <div class="btn-fila cp-acciones">
+          <div class="cp-toast-zona"><span class="toast-copiado" id="toastCopiado">Copiado ✅</span><span class="toast-copiado" id="toastPlanoImagen"></span></div>
+          <button class="btn btn-primario" type="button" id="btnCalcularPlano" onclick="calcularPlano()"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg> Calcular</button>
+          <!-- Aparece SOLO despues de un Calcular exitoso (vista previa) —
+               ver calcularPlano()/confirmarPlano() mas abajo. Mientras no
+               se le de click acá, el plano NO se guarda ni afecta saldos
+               (25-09-2026, a pedido del usuario). -->
+          <button class="btn btn-primario" type="button" id="btnConfirmarPlano" style="display:none;" onclick="confirmarPlano()"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Confirmar plano</button>
+          <button class="btn btn-secundario" type="button" onclick="limpiarPlano()" title="Limpiar"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Limpiar</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarResultado()" title="Copiar texto"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg> Copiar texto</button>
+          <!-- 07-10-2026: "Copiar en imagen" arma una tarjeta con las jugadas, el logo del
+               grupo y quiénes ganan/pierden (siempre UNA sola imagen, se adapta sola a la
+               cantidad de jugadas) y la copia junto al texto "TOTALES DE LA CARRERA ...". -->
+          <button class="btn btn-secundario" type="button" id="btnCopiarImagenPlano" onclick="copiarPlanoEnImagen()" title="Copiar imagen"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg> Copiar imagen</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarMensajePlanoImagen()" title="Copia solo el texto que acompaña a la imagen (TOTALES DE LA CARRERA ... EN EL HIPÓDROMO ... EN EL GRUPO ...)"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg> Solo el mensaje</button>
+        </div>
+
       </div>
     </section>
 
@@ -3879,7 +4044,7 @@ function pintarFechaGrandePlano() {
   // domingo) que contiene la fecha elegida.
   const { inicioSemana, finSemana } = semanaConfigDeFecha(fecha);
 
-  el.textContent = `📅 ${nombreDia} ${formatDiaMesCorto(fecha)} — Semana del ${formatDiaMesCorto(inicioSemana)} al ${formatDiaMesCorto(finSemana)}`;
+  el.textContent = `${nombreDia} ${formatDiaMesCorto(fecha)} — Semana del ${formatDiaMesCorto(inicioSemana)} al ${formatDiaMesCorto(finSemana)}`;
 }
 
 async function apiHipismo(path, options = {}) {
@@ -6772,6 +6937,77 @@ function movFiltrarMenu(texto) {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') movCerrarMenu(); });
 window.addEventListener('resize', () => { if (!movEsMovil() && document.body.classList.contains('mov-menu-abierto')) movCerrarMenu(); });
 document.addEventListener('DOMContentLoaded', () => sincronizarNavMovil());
+
+// =================================================================
+// ESTILO CRISTAL (13-10-2026) — íconos de línea en el menú, títulos sin
+// emoji y los "pasos" de Cargar Planos. Solo cambia la presentación: no
+// toca ningún dato ni función existente. Si algo falla aquí, la página
+// sigue funcionando (todo va dentro de try/catch).
+// =================================================================
+const CR_ICONOS = {
+  planos: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+  pozos: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  saldos: '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
+  com: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M3 13h18"/>',
+  admin: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  ajustes: '<path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
+  salida: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>'
+};
+const CR_EMOJI_INICIO = /^[\p{Extended_Pictographic}️‍\s]+/u;
+function crIcono(clave) {
+  return '<svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + CR_ICONOS[clave] + '</svg>';
+}
+function quitarEmojiInicial(el) {
+  const n = el.firstChild;
+  if (n && n.nodeType === 3) n.textContent = n.textContent.replace(CR_EMOJI_INICIO, '');
+}
+function aplicarEstiloCristalMenu() {
+  document.querySelectorAll('#sidebar .nav-item').forEach(b => {
+    quitarEmojiInicial(b);
+    if (b.classList.contains('nav-child') || b.querySelector('.cr-ic')) return;
+    const m = /toggleGrupo\('(\w+)'\)/.exec(b.getAttribute('onclick') || '');
+    let clave = null;
+    if (m) clave = { apuestas: 'planos', saldos: 'saldos', comisiones: 'com', admin: 'admin', ajustes: 'ajustes' }[m[1]] || null;
+    else if (b.dataset.vista === 'pozos') clave = 'pozos';
+    else if (/cerrarSesion/.test(b.getAttribute('onclick') || '')) clave = 'salida';
+    if (clave) b.insertAdjacentHTML('afterbegin', crIcono(clave));
+  });
+  document.querySelectorAll('.vista h2').forEach(quitarEmojiInicial);
+}
+function actualizarPasosCP() {
+  const ol = document.getElementById('cpPasos');
+  if (!ol) return;
+  const val = id => { const e = document.getElementById(id); return e ? String(e.value || '') : ''; };
+  const caja = document.getElementById('resultadoCaja');
+  const aviso = document.getElementById('avisoResultado');
+  const hechos = [
+    !!(val('selHipodromo') && val('selCarrera') && val('inpFecha')),
+    !!val('txtPlano').trim(),
+    !!(caja && caja.style.display !== 'none' && caja.textContent.trim() !== ''),
+    !!(aviso && aviso.style.display !== 'none' && aviso.classList.contains('aviso-confirmado'))
+  ];
+  const actual = hechos.findIndex(x => !x);
+  ol.querySelectorAll('li').forEach((li, i) => {
+    li.classList.toggle('hecho', hechos[i]);
+    li.classList.toggle('actual', i === actual);
+    li.querySelector('b').textContent = hechos[i] ? '✓' : String(i + 1);
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    aplicarEstiloCristalMenu();
+    ['txtPlano', 'selHipodromo', 'selCarrera', 'inpFecha', 'inpPizarra'].forEach(id => {
+      const e = document.getElementById(id);
+      if (e) ['input', 'change'].forEach(ev => e.addEventListener(ev, actualizarPasosCP));
+    });
+    const mo = new MutationObserver(actualizarPasosCP);
+    ['resultadoCaja', 'avisoResultado', 'btnConfirmarPlano', 'selHipodromo', 'selCarrera'].forEach(id => {
+      const e = document.getElementById(id);
+      if (e) mo.observe(e, { attributes: true, childList: true, characterData: true, subtree: true });
+    });
+    actualizarPasosCP();
+  } catch (e) { /* solo presentación: si falla, la página sigue igual */ }
+});
 
 function toggleGrupo(nombre) {
   const el = document.getElementById('grupo' + nombre.charAt(0).toUpperCase() + nombre.slice(1));
