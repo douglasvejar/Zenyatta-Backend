@@ -356,6 +356,39 @@ router.put('/pozos-plano-excluidos', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// CRUZAR JUGADAS AUTOMÁTICO (14-10-2026, a pedido del usuario: "saca el boton de cruzar jugadas, colocalo en ajustes...
+// encendido o apagado cumple la funcion automatico todas las carreras"). Ya no es un casillero de Cargar Planos: es una
+// preferencia del grupo (Ajustes > Preferencias) que vale para todas las carreras, usuarios y dispositivos. Por defecto
+// encendido. Sigue mandando el Súper-admin: si apagó "cruzar" para el grupo (hipismo_cruzar_habilitado) no se puede cambiar.
+// Sin la columna (falta correr el SQL) el GET responde sinColumna y el PUT 503; la pantalla sigue con la copia del navegador.
+// =================================================================
+router.get('/cruzar-config', asyncHandler(async (req, res) => {
+  try {
+    const r = await db.query('SELECT hipismo_cruzar_automatico FROM grupos WHERE id = $1', [req.grupoId]);
+    const fila = r.rows && r.rows[0];
+    res.json({ activo: fila ? fila.hipismo_cruzar_automatico !== false : true });
+  } catch (e) {
+    if (e && e.code === '42703') return res.json({ activo: null, sinColumna: true });
+    throw e;
+  }
+}));
+
+router.put('/cruzar-config', asyncHandler(async (req, res) => {
+  const activo = req.body && req.body.activo;
+  if (typeof activo !== 'boolean') return res.status(400).json({ error: 'Falta indicar si cruzar jugadas va encendido o apagado.' });
+  if (req.grupo && req.grupo.hipismo_cruzar_habilitado === false) {
+    return res.status(403).json({ error: 'Cruzar jugadas está desactivado para este grupo por el Súper-admin.' });
+  }
+  try {
+    await db.query('UPDATE grupos SET hipismo_cruzar_automatico = $1 WHERE id = $2', [activo, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(503).json({ error: 'Falta correr el SQL pendiente en Supabase (columna grupos.hipismo_cruzar_automatico).', sinColumna: true });
+    throw e;
+  }
+  res.json({ activo });
+}));
+
+// =================================================================
 // HIPÓDROMOS (Administración > Hipódromos, spec sección 3)
 // =================================================================
 router.get('/hipodromos', asyncHandler(async (req, res) => {

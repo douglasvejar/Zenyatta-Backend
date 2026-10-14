@@ -2154,3 +2154,8 @@ create table if not exists hipismo_pozos_excluidos (
 -- 13-10-2026: FUNCIONES POR SECCIÓN de cada grupo (panel del Súper-admin; catálogo en src/services/funcionesGrupo.js).
 -- NULL = el grupo tiene TODAS las secciones (los grupos que ya existen no cambian en nada); un array JSON = solo esas claves.
 alter table grupos add column if not exists funciones_habilitadas jsonb;
+
+-- 14-10-2026: CRUZAR JUGADAS AUTOMÁTICO (Hipismo > Ajustes > Preferencias). true = todos los planos del grupo se cruzan solos
+-- (comportamiento de siempre); false = cada jugada se paga sola. Vale para todas las carreras. Lo sigue limitando el Súper-admin
+-- con hipismo_cruzar_habilitado.
+alter table grupos add column if not exists hipismo_cruzar_automatico boolean not null default true;

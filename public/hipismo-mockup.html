@@ -1418,13 +1418,9 @@
   #selectorPlanoCompacto > div:nth-child(2) { grid-column: 5 / 7; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(5) { grid-column: 10 / 13; grid-row: 1; }
-  #selectorPlanoCompacto > div:nth-child(4) { grid-column: 1 / 3; grid-row: 2; }
-  #selectorPlanoCompacto > #filaCruzar { grid-column: 3 / 6; grid-row: 2; }
-  #selectorPlanoCompacto > div:nth-child(8) { grid-column: 6 / 13; grid-row: 2; }
-  #selectorPlanoCompacto > #notaCruzarDesactivado { grid-column: 1 / -1; grid-row: 3; }
-  #selectorPlanoCompacto > #filaCruzar { display: flex; align-items: center; gap: 8px; height: 34px; margin: 0; padding: 0 2px; }
-  #selectorPlanoCompacto #filaCruzar label { margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text); white-space: nowrap; }
-  #selectorPlanoCompacto > div:nth-child(8) .btn-lista-sin-comision { position: absolute; right: 2px; top: -1px; margin: 0; padding: 0; background: none; border: 0; cursor: pointer; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  #selectorPlanoCompacto > div:nth-child(4) { grid-column: 1 / 4; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(6) { grid-column: 4 / 13; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(6) .btn-lista-sin-comision { position: absolute; right: 2px; top: -1px; margin: 0; padding: 0; background: none; border: 0; cursor: pointer; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
   #chkCruzar { -webkit-appearance: none; appearance: none; width: 34px; height: 20px; border-radius: 999px; background: #c5d4df; position: relative; cursor: pointer; flex: none; transition: background .2s; border: 0; padding: 0; box-shadow: none; }
   #chkCruzar::after { content: ""; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .2s; }
   #chkCruzar:checked { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); }
@@ -1464,11 +1460,10 @@
     .cp-pasos li { padding: 6px 8px; font-size: 12px; gap: 5px; }
     .cp-pasos li b { width: 20px; height: 20px; font-size: 11px; }
     #selectorPlanoCompacto { grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 10px 12px 12px; gap: 8px; align-items: end; }
-    #selectorPlanoCompacto > div:nth-child(n), #selectorPlanoCompacto > #filaCruzar, #selectorPlanoCompacto > #notaCruzarDesactivado { grid-row: auto; grid-column: span 6; }
+    #selectorPlanoCompacto > div:nth-child(n) { grid-row: auto; grid-column: span 6; }
     #selectorPlanoCompacto > div:nth-child(2), #selectorPlanoCompacto > div:nth-child(3), #selectorPlanoCompacto > div:nth-child(4), #selectorPlanoCompacto > div:nth-child(5) { grid-column: span 3; }
     #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { height: 38px; font-size: 14px; }
-    #selectorPlanoCompacto > #filaCruzar { height: 30px; }
-    #selectorPlanoCompacto > div:nth-child(8) .btn-lista-sin-comision { position: static; display: block; margin-top: 4px; }
+    #selectorPlanoCompacto > div:nth-child(6) .btn-lista-sin-comision { position: static; display: block; margin-top: 4px; }
     #txtPlano { height: 240px; }
     .cp-acciones { bottom: calc(86px + env(safe-area-inset-bottom)); width: calc(100% - 66px); justify-self: start; border-radius: 26px; padding: 6px; gap: 5px; }
     .cp-acciones .btn { height: 40px; padding: 0 9px; gap: 6px; min-width: 0; justify-content: center; font-size: 14px; flex: 1 1 auto; }
@@ -1487,6 +1482,21 @@
   .nav-child { gap: 10px; }
   .mov-nav .cr-ic-barra { width: 23px; height: 23px; }
   .mov-nav .mov-fab .cr-ic-barra { width: 26px; height: 26px; }
+
+  /* Cruzar jugadas: ahora vive en Ajustes > Preferencias */
+  .cp-chip-cruzar { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 6px 12px; border-radius: 999px; background: var(--cr-vidrio); border: 1px solid var(--cr-borde); font-size: 12.5px; font-weight: 600; color: var(--text-dim); text-decoration: none; cursor: pointer; }
+  .cp-chip-cruzar b { color: var(--ok); }
+  .cp-chip-cruzar.apagado b { color: var(--text-dim); }
+  .cp-chip-cruzar:hover { background: #ffffff; color: var(--accent-deep); }
+  #vista-preferencias .pref-fila { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px; border-radius: 16px; background: rgba(255,255,255,0.7); border: 1px solid var(--cr-borde); }
+  #vista-preferencias .pref-texto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  #vista-preferencias .pref-texto b { font-family: 'Outfit', sans-serif; font-size: 16px; color: var(--accent-deep); }
+  #vista-preferencias .pref-texto span { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+  #vista-preferencias .pref-estado { margin: 10px 2px 0; font-size: 12.5px; color: var(--text-dim); }
+  #vista-preferencias #chkCruzar { width: 46px; height: 26px; }
+  #vista-preferencias #chkCruzar::after { width: 20px; height: 20px; }
+  #vista-preferencias #chkCruzar:checked::after { transform: translateX(20px); }
+  #vista-preferencias #chkCruzar:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -1762,6 +1772,7 @@
          en el PATCH nuevo de routes/grupo.js). -->
     <button type="button" class="nav-item nav-parent" id="navParentAjustesHip" onclick="toggleGrupo('ajustes')">⚙️<span class="nav-lbl"> Ajustes </span><span id="caretAjustes">▾</span></button>
     <div class="nav-children" id="grupoAjustes">
+      <button type="button" class="nav-item nav-child" data-vista="preferencias" onclick="mostrarVista('preferencias', this)"><span class="nav-lbl"> Preferencias</span></button>
       <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
       <button type="button" class="nav-item nav-child" data-vista="seguridad" onclick="mostrarVista('seguridad', this)">🔒<span class="nav-lbl"> Seguridad</span></button>
     </div>
@@ -1788,6 +1799,7 @@
           <div>
             <h2>Cargar plano</h2>
             <div id="fechaGrandePlano" class="fecha-grande-plano"></div>
+            <a href="#" id="cpChipCruzar" class="cp-chip-cruzar" onclick="irAPreferenciasCruzar(); return false;" title="Se cambia en Ajustes > Preferencias">Cruzar jugadas: <b>…</b></a>
           </div>
           <!-- Pasos (estilo Cristal, 13-10-2026): solo muestran en qué punto va el operador; no cambian ninguna regla.
                actualizarPasosCP() los marca leyendo los mismos campos de siempre. -->
@@ -1829,15 +1841,6 @@
               <button type="button" class="burbuja-pizarra-anterior-cerrar" onclick="cerrarAvisoPizarraAnterior()" title="Cerrar" aria-label="Cerrar aviso">×</button>
             </div>
           </div>
-          <div class="check-fila" id="filaCruzar">
-            <input type="checkbox" id="chkCruzar" checked>
-            <label for="chkCruzar" title="Se activa/desactiva por grupo desde Súper-admin">Cruzar jugadas</label>
-          </div>
-          <!-- Nota visible SOLO cuando Súper-admin apagó "Cruzar jugadas"
-               para este grupo (ver aplicarPermisoCruzarJugadas más abajo) —
-               reemplaza al checkbox de arriba para que quede claro que no
-               es una casilla que el operador se olvidó de tildar. -->
-          <p id="notaCruzarDesactivado" style="display:none; grid-column: 1 / -1; margin:0; font-size:12px; color:var(--text-dim);">🔀 Cruzar jugadas: <b>desactivado por Súper-admin</b> para este grupo — cada jugada de este plano se paga sola.</p>
           <div style="position:relative;">
             <label for="inpSinComision" title="Jugadas 'a premio' (10a1...10a9, con o sin decimales) — a las que elijas acá el ganador se le paga NETO, SIN el 5% de comisión, solo para las jugadas de ESTA carrera. Elige mínimo 3 valores separados por coma, ej: 2, 3, 1.75">Valores "a premio" SIN comisión</label>
             <input type="text" id="inpSinComision" placeholder="Ej: 2, 3, 1.75 (déjalo vacío si ninguno aplica)">
@@ -3523,6 +3526,22 @@ Pizarra: [se llena al calcular]
          acá) salen de PERMISOS_VALIDOS en middleware/auth.js vía GET
          /api/empleados/permisos-disponibles — si el backend agrega un
          permiso nuevo el día de mañana, el checklist lo muestra solo. -->
+    <section class="vista" id="vista-preferencias">
+      <div class="card">
+        <h2>Preferencias</h2>
+        <p class="desc">Opciones del grupo. Se guardan en el servidor: valen para todas las carreras, para todos los usuarios y en cualquier dispositivo.</p>
+        <div class="pref-fila">
+          <div class="pref-texto">
+            <b>Cruzar jugadas</b>
+            <span>Encendido: cada plano que calcules se cruza automáticamente, en todas las carreras. Apagado: cada jugada de los planos se paga sola.</span>
+          </div>
+          <input type="checkbox" id="chkCruzar" role="switch" aria-label="Cruzar jugadas" onchange="cambiarCruzarAutomatico(this.checked)">
+        </div>
+        <p id="prefCruzarEstado" class="pref-estado"></p>
+        <p id="prefCruzarBloqueado" class="pref-estado" style="display:none;">Cruzar jugadas está <b>desactivado por Súper-admin</b> para este grupo — cada jugada se paga sola y no se puede cambiar desde aquí.</p>
+      </div>
+    </section>
+
     <section class="vista" id="vista-usuarios">
       <div class="card">
         <h2>👥 Usuarios</h2>
@@ -6515,6 +6534,59 @@ function cerrarBienvenidaHip() {
 // todavía no lo trae, queda `undefined`, y se trata como "sí puede"
 // (=== false es la única forma de apagarlo) para no romper a nadie hasta
 // que cierre sesión y vuelva a entrar una vez.
+// (14-10-2026, a pedido del usuario: "saca el boton de cruzar jugadas, colocalo en ajustes... encendido o apagado cumple
+// la funcion automatico todas las carreras") — el interruptor ya no está en Cargar Planos: vive en Ajustes > Preferencias y
+// vale para TODAS las carreras. Se guarda por grupo en el servidor (grupos.hipismo_cruzar_automatico); mientras no se corra
+// el SQL (o sin conexión) queda la copia guardada en este navegador. El Súper-admin sigue pudiendo apagarlo del todo.
+let CRUZAR_ACTIVO = true;
+function claveCruzarAutomatico() {
+  let g = 'x';
+  try { g = (GRUPO && (GRUPO.id || GRUPO.nombre)) || 'x'; } catch (e) { /* clave genérica */ }
+  return 'ludox_cruzar_automatico_' + g;
+}
+function pintarEstadoCruzar() {
+  const bloqueado = !puedeCruzarJugadas();
+  const on = !bloqueado && CRUZAR_ACTIVO;
+  const chk = document.getElementById('chkCruzar');
+  if (chk) { chk.checked = on; chk.disabled = bloqueado; }
+  const chip = document.getElementById('cpChipCruzar');
+  if (chip) {
+    chip.classList.toggle('apagado', !on);
+    chip.querySelector('b').textContent = bloqueado ? 'desactivado por Súper-admin' : (on ? 'activado' : 'apagado');
+  }
+  const st = document.getElementById('prefCruzarEstado');
+  if (st && !bloqueado) st.textContent = on ? 'Activado: todos los planos que calcules se cruzan solos.' : 'Apagado: cada jugada se paga sola.';
+  const bl = document.getElementById('prefCruzarBloqueado');
+  if (bl) bl.style.display = bloqueado ? 'block' : 'none';
+  if (st) st.style.display = bloqueado ? 'none' : 'block';
+}
+async function sincronizarCruzarServidor() {
+  if (!puedeCruzarJugadas()) return;
+  try {
+    const r = await apiHipismo('/api/hipismo/cruzar-config');
+    if (!r || typeof r.activo !== 'boolean') return; // el servidor todavía no tiene la columna: vale la copia local
+    CRUZAR_ACTIVO = r.activo;
+    try { localStorage.setItem(claveCruzarAutomatico(), r.activo ? '1' : '0'); } catch (e) { /* sin copia local */ }
+    pintarEstadoCruzar();
+  } catch (e) { /* sin conexión: vale la copia local */ }
+}
+async function cambiarCruzarAutomatico(valor) {
+  if (!puedeCruzarJugadas()) { pintarEstadoCruzar(); return; }
+  CRUZAR_ACTIVO = !!valor;
+  try { localStorage.setItem(claveCruzarAutomatico(), CRUZAR_ACTIVO ? '1' : '0'); } catch (e) { /* sin copia local */ }
+  pintarEstadoCruzar();
+  const st = document.getElementById('prefCruzarEstado');
+  try {
+    const r = await apiHipismo('/api/hipismo/cruzar-config', { method: 'PUT', body: JSON.stringify({ activo: CRUZAR_ACTIVO }) });
+    if (st) st.textContent = (CRUZAR_ACTIVO ? 'Activado' : 'Apagado') + ' — guardado para todo el grupo.';
+  } catch (e) {
+    if (st) st.textContent = (CRUZAR_ACTIVO ? 'Activado' : 'Apagado') + ' — quedó guardado solo en este navegador (' + e.message + ')';
+  }
+}
+function irAPreferenciasCruzar() {
+  mostrarVista('preferencias', document.querySelector('.nav-item[data-vista="preferencias"]'));
+}
+
 function puedeCruzarJugadas() {
   return GRUPO && GRUPO.hipismoCruzarHabilitado !== false;
 }
@@ -6523,17 +6595,15 @@ function puedeCruzarJugadas() {
 // cuando corresponda. Se llama una vez al cargar la página — el permiso
 // no cambia mientras el operador tiene la pantalla abierta.
 function aplicarPermisoCruzarJugadas() {
-  const fila = document.getElementById('filaCruzar');
-  const nota = document.getElementById('notaCruzarDesactivado');
-  const chk = document.getElementById('chkCruzar');
-  if (!fila || !nota || !chk) return;
   if (puedeCruzarJugadas()) {
-    fila.style.display = '';
-    nota.style.display = 'none';
+    let guardado = null;
+    try { guardado = localStorage.getItem(claveCruzarAutomatico()); } catch (e) { guardado = null; }
+    CRUZAR_ACTIVO = guardado === null ? true : guardado === '1';
+    pintarEstadoCruzar();
+    sincronizarCruzarServidor();
   } else {
-    chk.checked = false;
-    fila.style.display = 'none';
-    nota.style.display = 'block';
+    CRUZAR_ACTIVO = false;
+    pintarEstadoCruzar();
   }
 }
 
@@ -6805,6 +6875,7 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   alertasHipismo: () => pintarAlertasHipismo(),
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
+  preferencias: () => sincronizarCruzarServidor(),
   // "Tablas Fijas y Marcas" (06-10-2026) — recuerda quién banquea las Marcas.
   jugadasAdelantadas: () => bqResumenAdelantadas(),
   // "Banqueo de Marcas" (06-10-2026) — configuración del grupo.
@@ -6963,7 +7034,7 @@ const CR_ICONOS = {
   ajustes: '<path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
   salida: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>'
 };
-const CR_ICONOS_VISTA = {"cargarPlanos": "<path d=\"M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2\"/>", "cargaMasivaEspecial": "<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "validarPlano": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.5l2.7 2.7L16 9.5\"/>", "eliminarPlanos": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "cargarRemate": "<path d=\"M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a3 3 0 003 3M16 6h4v1a3 3 0 01-3 3M12 13v4M8 21h8M10 17h4\"/>", "cargarRemateManual": "<path d=\"M4 20l1-4L16.500 4.500a2.100 2.100 0 013 3L8 19z\"/><path d=\"M14 7l3 3\"/>", "traspasosJugadas": "<path d=\"M17 3l4 4-4 4M3 11V9a2 2 0 012-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 01-2 2H3\"/>", "jugadasAdelantadas": "<path d=\"M3 6l8 6-8 6zM13 6l8 6-8 6z\"/>", "terciosAdelantadas": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/>", "montosApostados": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M14.500 9.500c-.5-1-1.500-1.500-2.500-1.500-1.400 0-2.500.8-2.500 2 0 2.800 5 1.400 5 4 0 1.200-1.100 2-2.500 2-1.100 0-2.100-.5-2.600-1.500M12 6v2M12 16v2\"/>", "cargarWinners": "<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"M8.500 14.500L7 21l5-3 5 3-1.500-6.500\"/>", "eliminarWinners": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "pozos": "<ellipse cx=\"12\" cy=\"6\" rx=\"7\" ry=\"3\"/><path d=\"M5 6v6c0 1.700 3.100 3 7 3s7-1.300 7-3V6M5 12v6c0 1.700 3.100 3 7 3s7-1.300 7-3v-6\"/>", "detalladoCliente": "<path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2z\"/><path d=\"M9 8h6M9 12h6\"/>", "semanaPorDias": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/>", "balanceGeneral": "<path d=\"M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3z\"/><path d=\"M8 9h7M8 13h7\"/>", "cierreFinal": "<path d=\"M5 21V4M5 4h11l-2 4 2 4H5\"/>", "grupoClientes": "<path d=\"M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z\"/>", "revTablasMarcas": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M3 15h18M9 4v16\"/>", "revAdelantadasClientes": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/>", "comisionesPorCarrera": "<path d=\"M3 17l6-6 4 4 8-8M15 7h6v6\"/>", "comisionesTotalesPorHipodromo": "<path d=\"M3 20h18M5 20V9l7-5 7 5v11M9 20v-5h6v5\"/>", "comisionesDevueltasPorHipodromo": "<path d=\"M9 14L4 9l5-5\"/><path d=\"M4 9h10a6 6 0 010 12h-3\"/>", "comisionesDevueltas": "<path d=\"M19 5L5 19\"/><circle cx=\"7\" cy=\"7\" r=\"2.500\"/><circle cx=\"17\" cy=\"17\" r=\"2.500\"/>", "saldoComisiones": "<path d=\"M3 7a2 2 0 012-2h13v4M3 7v11a2 2 0 002 2h15V9H5a2 2 0 01-2-2z\"/><circle cx=\"16.500\" cy=\"14.500\" r=\"1\"/>", "comisionesSinDevoluciones": "<rect x=\"5\" y=\"3\" width=\"14\" height=\"18\" rx=\"2\"/><path d=\"M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2\"/>", "clientes": "<circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21c0-4 3.600-7 8-7s8 3 8 7\"/>", "registroSaldos": "<path d=\"M3 12h4l3-8 4 16 3-8h4\"/>", "avales": "<path d=\"M12 3l8 3v6c0 4.500-3.300 8-8 9-4.700-1-8-4.500-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "retiros": "<path d=\"M12 20V5M6 11l6-6 6 6M5 21h14\"/>", "traspasos": "<path d=\"M4 8h15l-4-4M20 16H5l4 4\"/>", "gastos": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 10h18M7 15h4\"/>", "hipodromos": "<path d=\"M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z\"/><circle cx=\"12\" cy=\"10\" r=\"2.500\"/>", "pizarras": "<rect x=\"5\" y=\"4\" width=\"14\" height=\"17\" rx=\"2\"/><path d=\"M9 4h6v3H9zM9 12h6M9 16h4\"/>", "revisarJugadas": "<circle cx=\"11\" cy=\"11\" r=\"6.500\"/><path d=\"M16 16l5 5\"/>", "fechaSemana": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4\"/>", "banqueoMarcas": "<path d=\"M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18\"/>", "cabezaPie": "<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"2\"/><path d=\"M4 8h16M4 16h16\"/>", "planosEliminados": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8M10 12h4\"/>", "eliminarJornada": "<path d=\"M12 3c1 3.500 5 5.500 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.500 1 2 2 2-1-3 0-5 1-8z\"/>", "alertasHipismo": "<path d=\"M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4\"/>", "usuarios": "<circle cx=\"9\" cy=\"8\" r=\"4\"/><path d=\"M2 21c0-3.500 3-6 7-6s7 2.500 7 6M19 8v6M16 11h6\"/>", "seguridad": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 018 0v4\"/>"};
+const CR_ICONOS_VISTA = {"preferencias": "<path d=\"M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2\"/><circle cx=\"14\" cy=\"6\" r=\"2\"/><circle cx=\"8\" cy=\"12\" r=\"2\"/><circle cx=\"16\" cy=\"18\" r=\"2\"/>", "cargarPlanos": "<path d=\"M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2\"/>", "cargaMasivaEspecial": "<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "validarPlano": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.5l2.7 2.7L16 9.5\"/>", "eliminarPlanos": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "cargarRemate": "<path d=\"M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a3 3 0 003 3M16 6h4v1a3 3 0 01-3 3M12 13v4M8 21h8M10 17h4\"/>", "cargarRemateManual": "<path d=\"M4 20l1-4L16.500 4.500a2.100 2.100 0 013 3L8 19z\"/><path d=\"M14 7l3 3\"/>", "traspasosJugadas": "<path d=\"M17 3l4 4-4 4M3 11V9a2 2 0 012-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 01-2 2H3\"/>", "jugadasAdelantadas": "<path d=\"M3 6l8 6-8 6zM13 6l8 6-8 6z\"/>", "terciosAdelantadas": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/>", "montosApostados": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M14.500 9.500c-.5-1-1.500-1.500-2.500-1.500-1.400 0-2.500.8-2.500 2 0 2.800 5 1.400 5 4 0 1.200-1.100 2-2.500 2-1.100 0-2.100-.5-2.600-1.500M12 6v2M12 16v2\"/>", "cargarWinners": "<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"M8.500 14.500L7 21l5-3 5 3-1.500-6.500\"/>", "eliminarWinners": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "pozos": "<ellipse cx=\"12\" cy=\"6\" rx=\"7\" ry=\"3\"/><path d=\"M5 6v6c0 1.700 3.100 3 7 3s7-1.300 7-3V6M5 12v6c0 1.700 3.100 3 7 3s7-1.300 7-3v-6\"/>", "detalladoCliente": "<path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2z\"/><path d=\"M9 8h6M9 12h6\"/>", "semanaPorDias": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/>", "balanceGeneral": "<path d=\"M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3z\"/><path d=\"M8 9h7M8 13h7\"/>", "cierreFinal": "<path d=\"M5 21V4M5 4h11l-2 4 2 4H5\"/>", "grupoClientes": "<path d=\"M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z\"/>", "revTablasMarcas": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M3 15h18M9 4v16\"/>", "revAdelantadasClientes": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/>", "comisionesPorCarrera": "<path d=\"M3 17l6-6 4 4 8-8M15 7h6v6\"/>", "comisionesTotalesPorHipodromo": "<path d=\"M3 20h18M5 20V9l7-5 7 5v11M9 20v-5h6v5\"/>", "comisionesDevueltasPorHipodromo": "<path d=\"M9 14L4 9l5-5\"/><path d=\"M4 9h10a6 6 0 010 12h-3\"/>", "comisionesDevueltas": "<path d=\"M19 5L5 19\"/><circle cx=\"7\" cy=\"7\" r=\"2.500\"/><circle cx=\"17\" cy=\"17\" r=\"2.500\"/>", "saldoComisiones": "<path d=\"M3 7a2 2 0 012-2h13v4M3 7v11a2 2 0 002 2h15V9H5a2 2 0 01-2-2z\"/><circle cx=\"16.500\" cy=\"14.500\" r=\"1\"/>", "comisionesSinDevoluciones": "<rect x=\"5\" y=\"3\" width=\"14\" height=\"18\" rx=\"2\"/><path d=\"M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2\"/>", "clientes": "<circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21c0-4 3.600-7 8-7s8 3 8 7\"/>", "registroSaldos": "<path d=\"M3 12h4l3-8 4 16 3-8h4\"/>", "avales": "<path d=\"M12 3l8 3v6c0 4.500-3.300 8-8 9-4.700-1-8-4.500-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "retiros": "<path d=\"M12 20V5M6 11l6-6 6 6M5 21h14\"/>", "traspasos": "<path d=\"M4 8h15l-4-4M20 16H5l4 4\"/>", "gastos": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 10h18M7 15h4\"/>", "hipodromos": "<path d=\"M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z\"/><circle cx=\"12\" cy=\"10\" r=\"2.500\"/>", "pizarras": "<rect x=\"5\" y=\"4\" width=\"14\" height=\"17\" rx=\"2\"/><path d=\"M9 4h6v3H9zM9 12h6M9 16h4\"/>", "revisarJugadas": "<circle cx=\"11\" cy=\"11\" r=\"6.500\"/><path d=\"M16 16l5 5\"/>", "fechaSemana": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4\"/>", "banqueoMarcas": "<path d=\"M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18\"/>", "cabezaPie": "<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"2\"/><path d=\"M4 8h16M4 16h16\"/>", "planosEliminados": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8M10 12h4\"/>", "eliminarJornada": "<path d=\"M12 3c1 3.500 5 5.500 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.500 1 2 2 2-1-3 0-5 1-8z\"/>", "alertasHipismo": "<path d=\"M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4\"/>", "usuarios": "<circle cx=\"9\" cy=\"8\" r=\"4\"/><path d=\"M2 21c0-3.500 3-6 7-6s7 2.500 7 6M19 8v6M16 11h6\"/>", "seguridad": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 018 0v4\"/>"};
 const CR_EMOJI_INICIO = /^[\p{Extended_Pictographic}️‍\s]+/u;
 function crSvg(trazos, clase) {
   return '<svg class="' + clase + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + trazos + '</svg>';
@@ -7302,7 +7373,7 @@ async function calcularPlano() {
   // quede en el checkbox (que además ya está oculto y forzado a
   // unchecked por aplicarPermisoCruzarJugadas) — evita que quede
   // prendido por sesión vieja en memoria, DevTools, etc.
-  const cruzar = puedeCruzarJugadas() && document.getElementById('chkCruzar').checked;
+  const cruzar = puedeCruzarJugadas() && CRUZAR_ACTIVO;
   const texto = document.getElementById('txtPlano').value;
   // Valores "a premio" sin comisión (24-09-2026, a pedido del usuario) —
   // se elige ANTES de calcular, por carrera: texto separado por comas
