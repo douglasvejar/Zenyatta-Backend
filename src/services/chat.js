@@ -51,6 +51,14 @@ function validarAdjunto(adjunto) {
   return { datos, tipo, nombre: nombre ? String(nombre).slice(0, 200) : 'archivo' };
 }
 
+// AVISO A TELEGRAM (14-10-2026, a pedido del usuario: "cuando un grupo me envíe un mensaje por la bandeja de
+// mensajes me llegue al Telegram indicándome el grupo y yo poder responderle por allá"): chat.js no sabe de
+// Telegram — telegramBot.js registra acá una función (mismo patrón que registrarNotificadorProblemas en
+// whatsappBot.js) y se la llama SOLO cuando escribe un Grupo. Nunca frena ni rompe el envío: corre aparte y
+// cualquier error queda en el log.
+let notificadorMensajes = null;
+function registrarNotificadorMensajes(fn) { notificadorMensajes = typeof fn === 'function' ? fn : null; }
+
 async function enviarMensaje(grupoId, remitente, texto, adjunto) {
   const textoFinal = (texto || '').trim();
   const adjuntoFinal = validarAdjunto(adjunto);
@@ -65,7 +73,13 @@ async function enviarMensaje(grupoId, remitente, texto, adjunto) {
      RETURNING id, grupo_id, remitente, texto, (adjunto_datos IS NOT NULL) AS tiene_adjunto, adjunto_tipo, adjunto_nombre, creado_en`,
     [grupoId, remitente, textoFinal, adjuntoFinal ? adjuntoFinal.datos : null, adjuntoFinal ? adjuntoFinal.tipo : null, adjuntoFinal ? adjuntoFinal.nombre : null]
   );
-  return r.rows[0];
+  const fila = r.rows[0];
+  if (remitente === 'grupo' && notificadorMensajes) {
+    Promise.resolve()
+      .then(() => notificadorMensajes({ grupoId, mensaje: fila }))
+      .catch(e => console.error('[chat] No se pudo avisar el mensaje por Telegram:', e && e.message));
+  }
+  return fila;
 }
 
 // 10-10-2026 (aviso de Supabase "Egress Exceeded"): la lista YA NO trae
@@ -145,6 +159,7 @@ async function marcarLeidosSuperadmin(grupoId) {
 
 module.exports = {
   enviarMensaje,
+  registrarNotificadorMensajes,
   listarMensajes,
   obtenerAdjunto,
   listarConversaciones,

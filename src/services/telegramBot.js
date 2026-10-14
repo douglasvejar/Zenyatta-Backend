@@ -328,6 +328,94 @@ function recibirTexto(ctx, chatId, usuario, texto) {
   return procesarTexto(ctx, chatId, usuario, texto);
 }
 
+// ---- CHAT DE SOPORTE <-> TELEGRAM (14-10-2026) -----------------------------
+// A pedido del usuario: "cuando un grupo me envíe un mensaje por la bandeja de mensajes me llegue el
+// mensaje al Telegram indicándome el grupo y yo poderle responder por allí y lo vea en la plataforma,
+// así puedo tener una conversación más fluida en caso de no estar en la PC".
+//   - Un Grupo escribe en su bandeja (services/chat.js, remitente 'grupo') -> llega al destino de avisos del
+//     dueño (su chat privado con el bot o el grupo central) como "💬 MENSAJE — NOMBRE DEL GRUPO" + el texto.
+//   - El dueño usa "Responder" (reply) sobre ese mensaje de Telegram -> se guarda como mensaje del
+//     'superadmin' en el hilo de ESE grupo (el grupo lo ve en su bandeja y el panel de Súper-admin también).
+// A qué grupo pertenece un mensaje se sabe por una memoria (id del mensaje de Telegram -> grupo) y, si el
+// servidor se reinició y la memoria se perdió, por el nombre que va en la primera línea. Sin cambios de SQL.
+const MARCA_CHAT = '💬 MENSAJE — ';
+const grupoPorMensajeTelegram = new Map(); // "chat:message_id" -> { grupoId, nombre }
+const claveMensaje = (chatId, messageId) => String(chatId) + ':' + String(messageId);
+
+function describirAdjunto(m) {
+  if (!m || !m.tiene_adjunto) return '';
+  const tipo = String(m.adjunto_tipo || '');
+  const que = tipo.startsWith('image/') ? 'una foto' : tipo.startsWith('video/') ? 'un video' : tipo.startsWith('audio/') ? 'una nota de voz' : 'un archivo';
+  return '📎 Adjuntó ' + que + (m.adjunto_nombre && !tipo.startsWith('audio/') ? ' (' + m.adjunto_nombre + ')' : '') + ' — míralo en la plataforma.';
+}
+
+async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
+  const destino = destinoAvisos();
+  if (!destino || !apiActual) return { enviado: false };
+  const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
+  const nombre = (r.rows[0] && r.rows[0].nombre) || 'GRUPO';
+  const partes = [MARCA_CHAT + String(nombre).toUpperCase()];
+  if (mensaje && mensaje.texto) partes.push(mensaje.texto);
+  const adj = describirAdjunto(mensaje);
+  if (adj) partes.push(adj);
+  partes.push('↩️ Responde a este mensaje para contestarle.');
+  // El encabezado va en negrita para que se distinga; el texto del grupo se manda tal cual.
+  const texto = partes[0].replace(/^(.*)$/, '*$1*') + '\n' + partes.slice(1).join('\n');
+  const enviados = await apiActual.enviarTexto(destino, texto);
+  (enviados || []).forEach(m => {
+    if (!m || m.message_id == null) return;
+    grupoPorMensajeTelegram.set(claveMensaje(destino, m.message_id), { grupoId, nombre });
+    if (grupoPorMensajeTelegram.size > 1000) grupoPorMensajeTelegram.delete(grupoPorMensajeTelegram.keys().next().value);
+  });
+  return { enviado: true };
+}
+
+// Devuelve true si el mensaje era una respuesta a un aviso del chat de soporte (ya se atendió o se explicó
+// por qué no), false si no tiene nada que ver y debe seguir el flujo normal.
+async function responderChatDeGrupo({ api }, mensaje, texto) {
+  const citado = mensaje.reply_to_message;
+  const chatId = mensaje.chat.id;
+  const usuario = mensaje.from || null;
+  if (!citado || !citado.from || !citado.from.is_bot) return false;
+  const conocido = grupoPorMensajeTelegram.get(claveMensaje(chatId, citado.message_id));
+  const encabezado = String(citado.text || '').match(/^💬 MENSAJE — (.+)/);
+  if (!conocido && !encabezado) return false;
+
+  // Solo el dueño: su chat privado de avisos, o un administrador del grupo central.
+  const esPrivadoDeAvisos = String(chatId) === String(process.env.TELEGRAM_AVISOS_CHAT_ID || '') && mensaje.chat.type === 'private';
+  let autorizado = esPrivadoDeAvisos;
+  if (!autorizado && esCentral(chatId)) {
+    try { autorizado = await api.esAdministrador(chatId, usuario && usuario.id); } catch (e) { autorizado = false; }
+  }
+  if (!autorizado) return true; // alguien ajeno respondiendo: se ignora sin hacer nada
+
+  if (!texto) {
+    await responder(api, chatId, '⚠️ Por ahora solo puedo enviarle al grupo mensajes de *texto*. Para mandarle una foto o un archivo, usa la plataforma.');
+    return true;
+  }
+  let destino = conocido;
+  if (!destino) {
+    const r = await db.query('SELECT id, nombre FROM grupos WHERE activo = true');
+    const { grupo, ambiguos } = resolverGrupoPorNombre(encabezado[1], r.rows);
+    if (!grupo) {
+      await responder(api, chatId, ambiguos.length > 1
+        ? '⚠️ No pude saber a cuál grupo responder (varios se llaman parecido). Responde desde la plataforma. No se envió nada.'
+        : '⚠️ No encontré el grupo "' + encabezado[1] + '". Responde desde la plataforma. No se envió nada.');
+      return true;
+    }
+    destino = { grupoId: grupo.id, nombre: grupo.nombre };
+  }
+  try {
+    const chatService = require('./chat');
+    await chatService.enviarMensaje(destino.grupoId, 'superadmin', texto);
+    await chatService.marcarLeidosSuperadmin(destino.grupoId);
+    await responder(api, chatId, '✅ Enviado a *' + String(destino.nombre).toUpperCase() + '* — lo verá en su bandeja de mensajes.');
+  } catch (e) {
+    await responder(api, chatId, '⚠️ No se pudo enviar a ' + destino.nombre + ': ' + e.message);
+  }
+  return true;
+}
+
 // ---- Entrada: una actualización de Telegram -----------------------------
 async function manejarActualizacion(update, ctxExterno) {
   const ctx = ctxPorDefecto(ctxExterno);
@@ -341,6 +429,10 @@ async function manejarActualizacion(update, ctxExterno) {
   }
   if (mensaje.from && mensaje.from.is_bot) return;
   const texto = mensaje.text || mensaje.caption;
+  // Respuesta (reply) a un aviso del chat de soporte: se manda a la bandeja de ese grupo.
+  if (mensaje.reply_to_message && !/^\s*\/\w+/.test(texto || '')) {
+    if (await responderChatDeGrupo(ctx, mensaje, texto)) return;
+  }
   if (!texto) return;
 
   const chatId = mensaje.chat.id;
@@ -356,7 +448,7 @@ async function manejarActualizacion(update, ctxExterno) {
     }
     if (nombreCmd === 'start' || nombreCmd === 'help' || nombreCmd === 'ayuda') {
       return responder(api, chatId, esPrivado
-        ? 'Hola 👋 Soy el bot de sábanas. Tu ID de chat es *' + chatId + '* (si quieres recibir aquí los avisos del sistema, ese número va en la variable TELEGRAM_AVISOS_CHAT_ID del servidor). Para vincular un grupo: agrégame al grupo y un administrador escribe */vincular CODIGO*.'
+        ? 'Hola 👋 Soy el bot de sábanas. Tu ID de chat es *' + chatId + '* (si quieres recibir aquí los avisos del sistema, ese número va en la variable TELEGRAM_AVISOS_CHAT_ID del servidor). Para vincular un grupo: agrégame al grupo y un administrador escribe */vincular CODIGO*. Cuando un grupo te escriba por su bandeja de mensajes, te llega aquí: responde (Reply) a ese mensaje y el grupo lo ve en la plataforma.'
         : 'Hola 👋 Para vincular este grupo, un administrador escribe */vincular CODIGO* (el código lo genera el administrador de la plataforma).');
     }
     if (nombreCmd === 'vincular') {
@@ -535,6 +627,7 @@ async function iniciarBotTelegram({ fetchImpl, token } = {}) {
   try { await apiActual.quitarWebhook(); } catch (e) { /* si no había webhook, nada que quitar */ }
   console.log('[telegramBot] Conectado como @' + estado.usuario + '.');
   require('./whatsappBot').registrarNotificadorProblemas(notificarProblemaDeBot);
+  require('./chat').registrarNotificadorMensajes(avisarMensajeDeGrupo);
 
   const resumenAuto = process.env.TELEGRAM_RESUMEN_AUTOMATICO !== 'false';
   const cierreNocturno = process.env.TELEGRAM_CIERRE_NOCTURNO !== 'false';
@@ -552,6 +645,7 @@ async function iniciarBotTelegram({ fetchImpl, token } = {}) {
 }
 
 function detenerBotTelegram() {
+  try { require('./chat').registrarNotificadorMensajes(null); } catch (e) { /* nada que quitar */ }
   detenido = true;
   estado.activo = false;
   estado.conectado = false;
@@ -567,7 +661,7 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
-  manejarActualizacion, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
+  manejarActualizacion, avisarMensajeDeGrupo, responderChatDeGrupo, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
   jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };
