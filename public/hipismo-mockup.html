@@ -1411,6 +1411,8 @@
   .cp-pasos li.actual { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: #ffffff; box-shadow: 0 8px 18px rgba(79,91,213,0.30); }
   .cp-pasos li.actual b { background: rgba(255,255,255,0.28); color: #ffffff; }
   #selectorPlanoCompacto { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px 10px; align-items: end; margin: 0; padding: 10px 14px 12px; background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 18px; box-shadow: var(--cr-sombra); }
+  /* El panel "Elegir de la lista" se abre hacia abajo: el selector tiene que quedar POR ENCIMA de los paneles Plano/Resultado (cada panel de vidrio crea su propia capa). */
+  #selectorPlanoCompacto { position: relative; z-index: 40; }
   #selectorPlanoCompacto > div { min-width: 0; }
   #selectorPlanoCompacto label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 3px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { padding: 0 10px; font-size: 13.5px; height: 34px; border-radius: 10px; background-color: rgba(255,255,255,0.85); }
