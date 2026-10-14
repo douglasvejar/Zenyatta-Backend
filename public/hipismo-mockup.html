@@ -1978,7 +1978,8 @@
           <!-- 07-10-2026: "Copiar en imagen" arma una tarjeta con las jugadas, el logo del
                grupo y quiénes ganan/pierden (siempre UNA sola imagen, se adapta sola a la
                cantidad de jugadas) y la copia junto al texto "TOTALES DE LA CARRERA ...". -->
-          <button class="btn btn-secundario" type="button" id="btnCopiarImagenPlano" onclick="copiarPlanoEnImagen()" title="Copiar imagen con su pie de foto (TOTALES DE LA CARRERA...). Si WhatsApp pega solo la imagen, pulsa de nuevo en menos de 1 minuto y se copia solo el pie de foto."><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg> Copiar imagen</button>
+          <button class="btn btn-secundario" type="button" id="btnCopiarImagenPlano" onclick="copiarPlanoEnImagen()" title="Copiar imagen"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg> Copiar imagen</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarMensajePlanoImagen()" title="Copia solo el texto que acompaña a la imagen (TOTALES DE LA CARRERA ... EN EL HIPÓDROMO ... EN EL GRUPO ...)"><svg class="cr-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg> Solo el mensaje</button>
         </div>
 
       </div>
@@ -9405,7 +9406,7 @@ setInterval(() => {
 // Al copiar, el portapapeles lleva la imagen Y el texto de acompañamiento
 // (image/png + text/plain). Algunas versiones de WhatsApp Web/Escritorio no
 // ponen solas el texto como pie de foto, por eso el mismo texto también va
-// escrito en la propia imagen (arriba) y, en Cargar Planos, el mismo botón vuelto a pulsar copia solo el pie de foto.
+// escrito en la propia imagen (arriba) y existe el botón "📝 Solo el mensaje".
 // Nunca se muestra la comisión del grupo ni los banqueadores reales de
 // Marcas/TF (igual que en el texto del plano).
 // ------------------------------------------------------------------
@@ -9681,7 +9682,6 @@ async function copiarImagenDeDatosPlano(datos, btn, avisar) {
   }
 }
 
-let ULTIMA_COPIA_IMAGEN_PLANO = { datos: null, t: 0 };
 async function copiarPlanoEnImagen() {
   const caja = document.getElementById('resultadoCaja');
   const d = ULTIMOS_DATOS_IMAGEN_PLANO;
@@ -9689,19 +9689,7 @@ async function copiarPlanoEnImagen() {
     mostrarToastPlanoImagen('Primero dale "Calcular" al plano.', true);
     return;
   }
-  // UN SOLO BOTÓN (14-10-2026): la primera vez copia la imagen junto con su pie de foto en el
-  // portapapeles. Si WhatsApp pega solo la imagen (según la versión no usa el texto como pie), se
-  // vuelve a pulsar el MISMO botón (antes de 1 minuto) y se copia solo el pie de foto para pegarlo.
-  const ya = ULTIMA_COPIA_IMAGEN_PLANO;
-  if (ya.datos === d && Date.now() - ya.t < 60000) {
-    ULTIMA_COPIA_IMAGEN_PLANO = { datos: null, t: 0 };
-    copiarMensajePlanoImagen();
-    return;
-  }
-  let huboError = false;
-  const avisar = (txt, esError) => { if (esError) huboError = true; mostrarToastPlanoImagen(txt + (esError ? '' : ' · Si WhatsApp no pone el pie de foto, vuelve a pulsar este botón y se copia solo el texto.'), esError); };
-  await copiarImagenDeDatosPlano(d, document.getElementById('btnCopiarImagenPlano'), avisar);
-  if (!huboError) ULTIMA_COPIA_IMAGEN_PLANO = { datos: d, t: Date.now() };
+  await copiarImagenDeDatosPlano(d, document.getElementById('btnCopiarImagenPlano'), mostrarToastPlanoImagen);
 }
 
 // Solo el texto de acompañamiento ("TOTALES DE LA CARRERA ... EN EL GRUPO ..."),
