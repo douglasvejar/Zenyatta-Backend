@@ -1356,8 +1356,11 @@
 
   /* Barra superior */
   .topbar { padding: 16px 18px 0; }
-  .marca .logo-emoji { font-size: 0; width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(79,91,213,0.32); }
-  .marca .logo-emoji::after { content: "L"; font-size: 19px; font-weight: 800; color: #ffffff; font-family: 'Outfit', sans-serif; }
+  /* Logo real de Ludox girando junto al título (reemplaza la "L") */
+  .marca .logo-emoji { font-size: 0; width: 42px; height: 42px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: none; box-shadow: none; border-radius: 0; perspective: 420px; }
+  .marca .logo-emoji img { width: 100%; height: 100%; object-fit: contain; display: block; transform-style: preserve-3d; animation: logoGiroTopbar 6s linear infinite; filter: drop-shadow(0 4px 8px rgba(37,99,235,0.35)); will-change: transform; }
+  @keyframes logoGiroTopbar { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .marca .logo-emoji img { animation: none; } }
   .marca h1 { font-size: 19px; color: var(--accent-deep); }
   .selector-modulo { background: var(--cr-vidrio); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid var(--cr-borde); box-shadow: 0 6px 20px rgba(30,80,120,0.08); }
   .selector-modulo button { color: var(--text-dim); }
@@ -1452,8 +1455,7 @@
     #vista-cargarPlanos > .card.cp-pagina { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 860px) {
-    .marca .logo-emoji { width: 34px; height: 34px; }
-    .marca .logo-emoji::after { font-size: 17px; }
+    .marca .logo-emoji { width: 36px; height: 36px; }
     .sidebar-admin { background: #f4f9fc; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 22px 22px 0 0; }
     .mov-cab { background: #f4f9fc; }
     .mov-cab-fila b { color: var(--accent-deep); }
@@ -1623,7 +1625,7 @@
 
 <div class="topbar">
   <div class="marca">
-    <span class="logo-emoji">🏇</span>
+    <span class="logo-emoji"><img src="img/logo-ludox-icono.png" alt="Ludox" width="42" height="42"></span>
     <div>
       <h1>Ludox — Panel del Grupo</h1>
       <div class="sub" id="topbarNombreGrupo">Zenyatta 🇻🇪</div>
