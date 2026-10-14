@@ -1534,14 +1534,22 @@
     .bg-resultados { position: fixed; left: 10px; right: 10px; top: auto; max-height: 60vh; margin-top: 8px; }
   }
 
-  /* Carga Masiva Especial: lista del día, compacta */
-  .cme-fila { display: flex; align-items: center; gap: 10px; padding: 5px 10px; margin-bottom: 4px; border-radius: 12px; background: rgba(255,255,255,0.7); border: 1px solid var(--cr-borde); font-size: 12.5px; }
-  .cme-fila .cme-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cme-fila .cme-m { flex: none; font-weight: 600; white-space: nowrap; }
-  .cme-fila .cme-b { flex: none; display: inline-flex; gap: 4px; }
-  .cme-fila .cme-b .btn { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; }
-  .cme-fila .cme-b .btn .cr-ic { width: 15px; height: 15px; }
-  @media (max-width: 860px) { .cme-fila { flex-wrap: wrap; row-gap: 2px; } .cme-fila .cme-t { flex: 1 1 100%; white-space: normal; } .cme-fila .cme-m { flex: 1 1 auto; } }
+  /* Carga Masiva Especial: cargas del día en cuadros (2-3 por fila); el que se edita se expande */
+  .cme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; align-items: start; }
+  .cme-tile { padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,0.75); border: 1px solid var(--cr-borde); font-size: 12.5px; min-width: 0; }
+  .cme-tile-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cme-tile-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .cme-chip { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(79,91,213,0.12); color: var(--accent); font-size: 11px; font-weight: 700; }
+  .cme-tile-sub { margin-top: 2px; color: var(--text-dim); }
+  .cme-tile-m { margin-top: 2px; font-weight: 600; white-space: nowrap; }
+  .cme-b { flex: none; display: inline-flex; gap: 4px; }
+  .cme-b .btn { width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+  .cme-b .btn .cr-ic { width: 14px; height: 14px; }
+  .cme-tile-edit { display: none; }
+  .cme-tile.editando { grid-column: 1 / -1; background: #ffffff; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,91,213,0.14), 0 14px 34px rgba(30,80,120,0.14); padding: 12px 14px; }
+  .cme-tile.editando .cme-tile-edit { display: block; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--cr-borde); font-size: 14px; }
+  .cme-tile.editando .cme-b-editar { display: none; }
+  @media (max-width: 860px) { .cme-grid { grid-template-columns: minmax(0, 1fr); } .cme-tile-sub, .cme-tile-m { display: inline-block; } .cme-tile-m { margin-left: 10px; } }
 </style>
 </head>
 <body>
@@ -3302,6 +3310,8 @@
       <div class="card">
         <h2>💼 Carga Masiva Especial <span id="cmeTituloEdicion" style="font-size:14px; font-weight:500; color:var(--text-dim);"></span></h2>
         <p class="desc">Crea saldos de varias cuentas a la vez. Elige el hipódromo y la acción, y escribe una línea por cuenta con el formato <code>NOMBRE +Monto</code> o <code>NOMBRE -Monto</code>. La suma de todas las líneas tiene que dar <b>0</b>, y cada nombre tiene que estar escrito exactamente como en Clientes (si no, te avisa y no deja confirmar). También acepta las cuentas del grupo: <code>% TABLAS Y MARCAS</code>, <code>% TERCIOS ADELANTADAS</code>, <code>REMATE</code>, <code>WINNERS</code>, <code>TABLAS FIJAS</code> y <code>MARCAS</code>.</p>
+        <p id="cmeAvisoEdicion" class="desc" style="display:none; margin:0 0 6px; color:var(--accent);">Editando una carga: el formulario se abrió dentro de su cuadro, más abajo.</p>
+        <div id="cmeFormHogar"><div id="cmeFormWrap">
         <div class="fila">
           <div style="flex:1 1 220px;">
             <label for="selCmeHipodromo">🏟️ Hipódromo *</label>
@@ -3324,6 +3334,7 @@
           <button class="btn btn-secundario" type="button" onclick="cmePrevisualizar()">🧮 Calcular</button>
           <button class="btn btn-primario" type="button" id="btnCmeAplicar" onclick="cmeAplicar()" disabled>✅ Confirmar carga</button>
         </div>
+        </div></div>
       </div>
       <div class="card">
         <h2 id="cmeTituloLista">Cargas del día</h2>
@@ -17210,6 +17221,7 @@ async function cmeCargarDatos() {
 
 // Al cambiar la "Fecha de carga" solo se vuelve a pedir la lista de ese día (los selectores y el texto escrito no se tocan).
 async function cmeRefrescarLista() {
+  if (CME.editandoId) return; // editando: el cuadro con el formulario no se repinta
   try {
     const d = await apiHipismo('/api/hipismo/cargas-especiales?fecha=' + encodeURIComponent(cmeFechaLista()));
     CME.cargas = d.cargas;
@@ -17219,6 +17231,9 @@ async function cmeRefrescarLista() {
 
 function cmePintarLista() {
   const cont = document.getElementById('listaCme');
+  // El formulario puede estar dentro de un cuadro (modo edición): se guarda en su sitio antes de repintar la lista.
+  const hogar = document.getElementById('cmeFormHogar'), wrap = document.getElementById('cmeFormWrap');
+  if (hogar && wrap && !hogar.contains(wrap)) hogar.appendChild(wrap);
   const fecha = cmeFechaLista();
   const tit = document.getElementById('cmeTituloLista');
   if (tit) tit.textContent = `Cargas del ${formatFechaCortaDMY(fecha)}${CME.cargas.length ? ' (' + CME.cargas.length + ')' : ''}`;
@@ -17228,15 +17243,38 @@ function cmePintarLista() {
   }
   const icLapiz = crSvg(CR_ICONOS_VISTA.cargarRemateManual, 'cr-ic');
   const icBasura = crSvg(CR_ICONOS_VISTA.eliminarPlanos, 'cr-ic');
-  cont.innerHTML = CME.cargas.map(c => `
-    <div class="cme-fila">
-      <span class="cme-t"><b>${cmeEsc(c.hipodromo || 'Todos los hipódromos')}</b>${c.carrera ? ' · C' + cmeEsc(c.carrera) : ''} · ${cmeEsc(cmeNombreAccion(c.accion))} · ${c.lineas.length} línea(s)</span>
-      <span class="cme-m"><span class="pos">${formatMonto(c.ganan)}</span> / <span class="neg">${formatMonto(c.pierden)}</span></span>
-      <span class="cme-b">
-        <button class="btn btn-secundario" type="button" title="Editar" aria-label="Editar" onclick="cmeEditar('${c.id}')">${icLapiz}</button>
-        <button class="btn btn-secundario" type="button" title="Eliminar" aria-label="Eliminar" style="color:var(--danger);" onclick="cmeEliminar('${c.id}')">${icBasura}</button>
-      </span>
-    </div>`).join('');
+  cont.innerHTML = '<div class="cme-grid">' + CME.cargas.map(c => `
+    <div class="cme-tile" id="cmeTile-${c.id}">
+      <div class="cme-tile-cab">
+        <span class="cme-tile-t"><b>${cmeEsc(c.hipodromo || 'Todos los hipódromos')}</b>${c.carrera ? '<span class="cme-chip">C' + cmeEsc(c.carrera) + '</span>' : ''}</span>
+        <span class="cme-b">
+          <button class="btn btn-secundario cme-b-editar" type="button" title="Editar" aria-label="Editar" onclick="cmeEditar('${c.id}')">${icLapiz}</button>
+          <button class="btn btn-secundario" type="button" title="Eliminar" aria-label="Eliminar" style="color:var(--danger);" onclick="cmeEliminar('${c.id}')">${icBasura}</button>
+        </span>
+      </div>
+      <div class="cme-tile-sub">${cmeEsc(cmeNombreAccion(c.accion))} · ${c.lineas.length} línea(s)</div>
+      <div class="cme-tile-m"><span class="pos">${formatMonto(c.ganan)}</span> / <span class="neg">${formatMonto(c.pierden)}</span></div>
+      <div class="cme-tile-edit"></div>
+    </div>`).join('') + '</div>';
+  cmeColocarForm();
+}
+
+// Modo edición: el cuadro de la carga se expande (ocupa toda la fila) y el formulario se muda adentro, con todo lo que hace
+// falta (hipódromo, acción, fecha, carrera, texto, Calcular y Confirmar). Al cancelar o guardar, vuelve arriba.
+function cmeColocarForm() {
+  const hogar = document.getElementById('cmeFormHogar'), wrap = document.getElementById('cmeFormWrap');
+  if (!hogar || !wrap) return;
+  document.querySelectorAll('#listaCme .cme-tile.editando').forEach(t => t.classList.remove('editando'));
+  const tile = CME.editandoId ? document.getElementById('cmeTile-' + CME.editandoId) : null;
+  const aviso = document.getElementById('cmeAvisoEdicion');
+  if (tile) {
+    tile.classList.add('editando');
+    tile.querySelector('.cme-tile-edit').appendChild(wrap);
+    if (aviso) aviso.style.display = 'block';
+  } else {
+    if (!hogar.contains(wrap)) hogar.appendChild(wrap);
+    if (aviso) aviso.style.display = 'none';
+  }
 }
 
 function cmeLimpiar() {
@@ -17248,6 +17286,7 @@ function cmeLimpiar() {
   document.getElementById('selCmeAccion').value = '';
   document.getElementById('selCmeHipodromo').value = '';
   cmeCambioForm();
+  cmeColocarForm();
 }
 
 function cmeCuerpo() {
@@ -17325,7 +17364,9 @@ function cmeEditar(id) {
   cmePintarSelects(c.hipodromo || '', c.accion);
   document.getElementById('txtCmeLineas').value = c.lineas.map(l => `${l.cliente} ${l.monto >= 0 ? '+' : '-'}${Math.abs(redondearCentavos(l.monto)).toFixed(2)}`).join('\n');
   cmeCambioForm();
-  document.getElementById('vista-cargaMasivaEspecial').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  cmeColocarForm();
+  const t = document.getElementById('cmeTile-' + id);
+  if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function cmeEliminar(id) {
