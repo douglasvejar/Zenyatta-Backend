@@ -33,7 +33,7 @@ check(Object.values(F.PAQUETES).every(p => p.claves.every(c => claves.includes(c
 // 2) todas las pantallas del menú de Hipismo caen en una sección (salvo las libres a propósito)
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
 const vistas = Array.from(new Set(Array.from(html.matchAll(/class="nav-item[^"]*"[^>]*data-vista="([A-Za-z]+)"/g)).map(m => m[1])));
-const LIBRES = ['usuarios', 'seguridad'];
+const LIBRES = ['usuarios', 'seguridad', 'preferencias']; // 14-10-2026: Ajustes > Preferencias es libre para todo grupo (Cruzar jugadas)
 const sinSeccion = vistas.filter(v => !F.seccionDeVistaHipismo(v) && !LIBRES.includes(v));
 check(vistas.length > 40, `2a) se leyeron ${vistas.length} pantallas del menú de Hipismo`);
 check(sinSeccion.length === 0, `2b) toda pantalla del menú tiene sección (o es libre a propósito) — sin sección: ${sinSeccion.join(', ') || 'ninguna'}`);

@@ -172,7 +172,7 @@ function rutaHipismoPermitida(grupo, metodo, ruta) {
   return secciones.some(c => funcionHabilitada(grupo, c));
 }
 
-// Vista del menú (data-vista) -> clave de sección, o null si no está restringida (ej. usuarios, seguridad).
+// Vista del menú (data-vista) -> clave de sección, o null si no está restringida (ej. usuarios, seguridad, preferencias).
 function seccionDeVistaHipismo(vista) {
   const f = FUNCIONES_HIPISMO.find(x => (x.vistas || []).includes(vista));
   return f ? f.clave : null;
