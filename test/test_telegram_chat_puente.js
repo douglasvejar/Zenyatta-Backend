@@ -137,11 +137,11 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   const n = MENSAJES.length;
   await telegramBot.manejarActualizacion(respuesta({ chat: -100999, tipo: 'supergroup', from: { id: 43, is_bot: false }, citadoId: 1, citadoTexto: '💬 MENSAJE — ZENYATTA\nHola', texto: 'no soy admin' }), ctx3);
   check(MENSAJES.length === n, '5b) quien no es administrador del central no puede');
-  // el aviso también va al central si no hay chat privado configurado
+  // el aviso NUNCA va al grupo central (ahí están las sábanas), aunque no haya chat privado configurado
   chatService.registrarNotificadorMensajes(telegramBot.avisarMensajeDeGrupo);
   await chatService.enviarMensaje('g2', 'grupo', 'Buenas');
   await espera(30);
-  check(api3.enviados.some(e => e.chatId === '-100999' && /DEPORTES BERNAL/.test(e.texto)), '5c) sin chat privado, el aviso sale en el grupo central');
+  check(!api3.enviados.some(e => e.chatId === '-100999' && /DEPORTES BERNAL/.test(e.texto)) && api3.enviados.every(e => !/💬 MENSAJE/.test(e.texto)), '5c) con solo el grupo central configurado, el mensaje de un grupo NO se manda al central');
 
   // 6) Sin destino configurado no pasa nada (ni se rompe el envío del mensaje)
   delete process.env.TELEGRAM_CENTRAL_CHAT_ID;

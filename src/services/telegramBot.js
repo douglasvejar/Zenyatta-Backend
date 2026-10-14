@@ -419,7 +419,10 @@ async function avisarMensajeEnTema({ grupoId, nombre, texto }) {
 
 async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
   const enTemas = !!chatSoporte();
-  let destino = enTemas ? chatSoporte() : destinoAvisos();
+  // Los mensajes de los grupos NUNCA van al grupo central (ahí están las sábanas): solo al grupo de soporte con
+  // temas (un chat por grupo) o, si no hay, al chat privado del dueño con el bot (TELEGRAM_AVISOS_CHAT_ID).
+  const privadoDelDueno = () => String(process.env.TELEGRAM_AVISOS_CHAT_ID || '').trim() || null;
+  let destino = enTemas ? chatSoporte() : privadoDelDueno();
   if (!destino || !apiActual) return { enviado: false };
   const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
   const nombre = (r.rows[0] && r.rows[0].nombre) || 'GRUPO';
@@ -434,7 +437,7 @@ async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
       // El grupo de soporte falló (no tiene Temas activados, el bot no puede administrarlos, etc.): si hay un chat de
       // avisos, el mensaje sale ahí como siempre en vez de perderse.
       console.error('[telegramBot] No se pudo usar el grupo de soporte con temas (' + e.message + ').');
-      destino = destinoAvisos();
+      destino = privadoDelDueno();
       if (!destino) throw e;
     }
   }
