@@ -417,13 +417,17 @@ async function avisarMensajeEnTema({ grupoId, nombre, texto }) {
   return { enviado: true };
 }
 
-async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
+async function entregarMensajeDeGrupo({ grupoId, mensaje }) {
   const enTemas = !!chatSoporte();
   // Los mensajes de los grupos NUNCA van al grupo central (ahí están las sábanas): solo al grupo de soporte con
   // temas (un chat por grupo) o, si no hay, al chat privado del dueño con el bot (TELEGRAM_AVISOS_CHAT_ID).
   const privadoDelDueno = () => String(process.env.TELEGRAM_AVISOS_CHAT_ID || '').trim() || null;
   let destino = enTemas ? chatSoporte() : privadoDelDueno();
-  if (!destino || !apiActual) return { enviado: false };
+  if (!destino || !apiActual) {
+    const sin = new Error(!apiActual ? 'El bot de Telegram no está conectado.' : 'No hay adónde mandarlo: falta TELEGRAM_SOPORTE_CHAT_ID (grupo de soporte con Temas) o TELEGRAM_AVISOS_CHAT_ID (tu chat privado con el bot) en el servidor.');
+    sin.faltaDestino = true;
+    throw sin;
+  }
   const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
   const nombre = (r.rows[0] && r.rows[0].nombre) || 'GRUPO';
   if (enTemas) {
@@ -455,6 +459,35 @@ async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
     if (grupoPorMensajeTelegram.size > 1000) grupoPorMensajeTelegram.delete(grupoPorMensajeTelegram.keys().next().value);
   });
   return { enviado: true };
+}
+
+// Explica en cristiano por qué Telegram no dejó entregar el mensaje y qué revisar.
+function explicarFalloChat(e) {
+  const m = String((e && e.message) || '');
+  if (e && e.faltaDestino) return m;
+  if (/not a forum|forum/i.test(m)) return 'Ese grupo de Telegram no tiene los Temas activados: en Telegram abre el grupo > Editar > Temas > activar.';
+  if (/not enough rights|CHAT_ADMIN_REQUIRED|rights to create/i.test(m)) return 'El bot no tiene permiso para crear temas: hazlo administrador del grupo de soporte con el permiso "Administrar temas".';
+  if (/chat not found|group chat was upgraded|bot was kicked|bot is not a member/i.test(m)) return 'El bot no encuentra ese chat: revisa que esté agregado como administrador y que el número TELEGRAM_SOPORTE_CHAT_ID sea el correcto (los grupos empiezan con -100).';
+  return 'Motivo de Telegram: ' + m;
+}
+
+// Lo que se registra como notificador: entrega el mensaje y, si no se pudo, te lo dice (con el motivo) en vez de
+// perderlo en silencio — el aviso de problema sale una vez cada 12 horas por motivo, igual que los demás avisos.
+async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
+  try {
+    return await entregarMensajeDeGrupo({ grupoId, mensaje });
+  } catch (e) {
+    console.error('[telegramBot] No se pudo avisar el mensaje de un grupo por Telegram:', e.message);
+    let nombre = null;
+    try { const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]); nombre = r.rows[0] && r.rows[0].nombre; } catch (_) { /* sin nombre */ }
+    await avisarProblema({
+      grupoNombre: nombre,
+      titulo: 'Este grupo te escribió en su bandeja de mensajes, pero no pude mandártelo por Telegram.',
+      detalle: explicarFalloChat(e) + '\nMientras tanto, el mensaje está en la plataforma (Súper-admin > Contacto/Mensajes).',
+      clave: 'chat-telegram|' + explicarFalloChat(e)
+    }).catch(() => {});
+    return { enviado: false };
+  }
 }
 
 // Mensaje escrito DENTRO de un tema del grupo de soporte: va a la bandeja del grupo dueño de ese tema.

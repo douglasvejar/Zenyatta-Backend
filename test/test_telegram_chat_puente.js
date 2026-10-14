@@ -141,7 +141,8 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   chatService.registrarNotificadorMensajes(telegramBot.avisarMensajeDeGrupo);
   await chatService.enviarMensaje('g2', 'grupo', 'Buenas');
   await espera(30);
-  check(!api3.enviados.some(e => e.chatId === '-100999' && /DEPORTES BERNAL/.test(e.texto)) && api3.enviados.every(e => !/💬 MENSAJE/.test(e.texto)), '5c) con solo el grupo central configurado, el mensaje de un grupo NO se manda al central');
+  check(api3.enviados.every(e => !/💬 MENSAJE/.test(e.texto)), '5c) con solo el grupo central configurado, el mensaje del grupo NO se manda al central');
+  check(api3.enviados.some(e => e.chatId === '-100999' && /PROBLEMA/.test(e.texto) && /DEPORTES BERNAL/.test(e.texto) && /TELEGRAM_SOPORTE_CHAT_ID/.test(e.texto)), '5d) en su lugar el central recibe UN aviso de problema que dice qué variable falta');
 
   // 6) Sin destino configurado no pasa nada (ni se rompe el envío del mensaje)
   delete process.env.TELEGRAM_CENTRAL_CHAT_ID;
@@ -227,6 +228,21 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   await chatService.enviarMensaje('g5', 'grupo', 'mensaje con foro caído');
   await espera(40);
   check(enviadosF.length === 1 && enviadosF[0].c === String(DUENO_CHAT) && /SINFORO/.test(enviadosF[0].t), '11) si no se puede crear el tema, el mensaje igual llega al chat de avisos');
+  delete process.env.TELEGRAM_SOPORTE_CHAT_ID;
+
+  // 12) Si Telegram rechaza crear el tema y no hay chat privado de respaldo, te lo dice con el motivo (en el chat de avisos)
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+  process.env.TELEGRAM_CENTRAL_CHAT_ID = '-100999';
+  process.env.TELEGRAM_SOPORTE_CHAT_ID = '-100888';
+  const avisosG = [];
+  telegramBot._usarCliente({ enviarTexto: async (c, t, op = {}) => { avisosG.push({ c: String(c), t, tema: op.threadId }); return [{ message_id: 1 }]; },
+    crearTemaForo: async () => { throw new Error('Bad Request: not enough rights to create a topic'); }, esAdministrador: async () => true });
+  GRUPOS.push({ id: 'g6', nombre: 'ConFallo', activo: true });
+  await chatService.enviarMensaje('g6', 'grupo', 'hola');
+  await espera(60);
+  check(avisosG.some(a => a.c === '-100999' && /CONFALLO/.test(a.t) && /PROBLEMA/.test(a.t)), '12a) si Telegram falla, te avisa del problema con el nombre del grupo');
+  check(avisosG.some(a => /Administrar temas/.test(a.t)), '12b) y explica el motivo en cristiano (permiso Administrar temas)');
+  delete process.env.TELEGRAM_CENTRAL_CHAT_ID;
   delete process.env.TELEGRAM_SOPORTE_CHAT_ID;
 
   console.log(`\n${ok} pruebas OK, ${mal} fallaron.`);
