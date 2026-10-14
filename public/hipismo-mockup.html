@@ -11928,13 +11928,14 @@ function renderDetalleClienteModal(data) {
       // nota grande en services/hipismoResumenCliente.js) — este render
       // ya era genérico por `hip.tipo`, así que no hizo falta tocarlo acá,
       // solo corregir el comentario que decía lo contrario.
-      const esTraspaso = hip.tipo === 'traspaso';
+      const esDevolucion = hip.tipo === 'devolucion';
+      const esTraspaso = hip.tipo === 'traspaso' || esDevolucion;
       const headerHip = document.createElement('div');
       headerHip.className = 'detmodal-hip-header';
       headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
       headerHip.innerHTML = `
         <span class="detmodal-flecha">▾</span>
-        <span>${esDeportes ? '⚽' : (esTraspaso ? '🔄' : (BANDERAS_DET[hip.pais] || '🏁'))}</span>
+        <span>${esDeportes ? '⚽' : (esDevolucion ? '💰' : (esTraspaso ? '🔄' : (BANDERAS_DET[hip.pais] || '🏁')))}</span>
         <span class="nombre-hip">${hip.nombre}</span>
         <span class="saldo-hip ${claseMontoDet(subtotalHip)}">${conSignoDet(subtotalHip)}</span>`;
       bloqueHip.appendChild(headerHip);
@@ -12005,18 +12006,12 @@ function renderDetalleClienteModal(data) {
             const esRemateManual = c.tipo === 'remate_resultado' && c.modo === 'manual';
             const montoMostrado = c.tipo === 'remate_resultado' ? c.poolTotal : c.monto;
             const etiquetaMonto = c.tipo === 'comision' ? 'sobre' : (c.tipo === 'remate_resultado' ? 'pool' : (c.tipo === 'winner_contraparte' ? 'de' : 'con'));
-            // "incluir % en sus jugadas" (29-09-2026) — cuando esta jugada
-            // ya trae la comisión propia del cliente sumada/restada
-            // adentro del resultado (ver comisionPropiaIncluida en
-            // services/hipismoResumenCliente.js), se avisa con una notita
-            // aparte, sin tocar el número del resultado en sí.
-            const notaComisionIncluida = c.comisionPropiaIncluida
-              ? `<span class="monto-jugado">incluye % = ${conSignoDet(c.comisionPropiaIncluida)}</span>`
-              : '';
+            // 14-10-2026: la devolución (% incluido) ya NO va por jugada; sale toda
+            // junta en el ítem "Devolución (cliente)" al final del día.
             fila.innerHTML = `
               <span class="num-carrera">${c.carrera ? c.carrera + 'ª' : ''}</span>
               <span class="jugada-txt">${armarJugadaTextoDetallado(c)}</span>
-              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga' || esRemateManual) ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}${notaComisionIncluida}</span>
+              <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga' || esRemateManual) ? '' : `<span class="monto-jugado">${etiquetaMonto} ${formatMontoDet(montoMostrado)}</span>`}</span>
               <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
               <span></span>`;
             bodyCarrera.appendChild(fila);

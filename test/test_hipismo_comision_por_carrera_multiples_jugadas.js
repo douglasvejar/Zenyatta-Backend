@@ -156,14 +156,19 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   // El usuario confirmó (misma decisión que para Legolas): la comisión
   // completa de la carrera cae en la PRIMERA línea que aparece, $0 en
   // las demás líneas de esa misma carrera.
-  check(lineas[0].comisionPropiaIncluida === comisionCorrecta,
-    `La PRIMERA jugada de la carrera se lleva la comisión COMPLETA de la carrera (3,90), no solo la suya individual (0,38): obtenido ${lineas[0].comisionPropiaIncluida}`);
-  check(!lineas[1].comisionPropiaIncluida && !lineas[2].comisionPropiaIncluida && !lineas[3].comisionPropiaIncluida,
-    'Las otras 3 jugadas de la MISMA carrera NO llevan ninguna comisión adicional (ya se asignó completa a la primera) -- quedan con su resultado crudo, sin la notita "incluye %"');
-
-  const sumaResultadosLineas = round2(lineas.reduce((acc, c) => acc + c.resultado, 0));
-  check(sumaResultadosLineas === esperadoTotalSemana,
-    `La suma de las 4 líneas mostradas (23,75+23,75+99,75+${round2(99.75 + comisionCorrecta)}) da exactamente el mismo total que resumen.totalSemana -- no hay plata que aparezca ni desaparezca, solo se reubicó en qué línea se muestra: obtenido ${sumaResultadosLineas}`);
+  // 14-10-2026: las 4 jugadas salen con su resultado normal y la comisión
+  // completa (3,90) va en UN solo ítem "Devolución (SAMMY)" al final del día.
+  check(lineas.every(c => !c.comisionPropiaIncluida),
+    'Ninguna de las 4 jugadas lleva la devolución metida adentro (salen con su resultado normal)');
+  const sumaCrudo = round2(lineas.reduce((acc, c) => acc + c.resultado, 0));
+  check(sumaCrudo === round2(23.75 + 23.75 + 99.75 + 99.75),
+    `Las 4 jugadas suman su resultado normal (247,00): obtenido ${sumaCrudo}`);
+  const bloqueDev = dia.hipodromos.find(h => h.tipo === 'devolucion');
+  check(!!bloqueDev && bloqueDev.carreras.length === 1 && bloqueDev.carreras[0].resultado === comisionCorrecta,
+    `Sale UN solo ítem Devolución con la comisión exacta (3,90): obtenido ${bloqueDev && JSON.stringify(bloqueDev.carreras)}`);
+  const sumaTodo = round2(dia.hipodromos.reduce((acc, h) => acc + h.carreras.reduce((x, c) => x + c.resultado, 0), 0));
+  check(sumaTodo === esperadoTotalSemana,
+    `Jugadas + ítem Devolución suman exactamente resumen.totalSemana (no aparece ni desaparece plata): obtenido ${sumaTodo}`);
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exitCode = 1;

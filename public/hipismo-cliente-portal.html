@@ -621,7 +621,7 @@
       const chip = document.createElement('div');
       chip.className = 'chip-hip';
       chip.innerHTML = `
-        <span class="bandera">${info.tipo === 'deportes' ? '⚽' : (info.tipo === 'traspaso' ? '🔄' : (BANDERAS[info.pais] || '🏁'))}</span>
+        <span class="bandera">${info.tipo === 'deportes' ? '⚽' : (info.tipo === 'devolucion' ? '💰' : (info.tipo === 'traspaso' ? '🔄' : (BANDERAS[info.pais] || '🏁')))}</span>
         <span class="nombre">${nombre}</span>
         <span class="monto ${claseMonto(info.monto)}">${conSigno(info.monto)}</span>`;
       chipsWrap.appendChild(chip);
@@ -679,13 +679,14 @@
         // ese caso, ver la nota grande en services/hipismoResumenCliente.js)
         // — este render ya era genérico por `hip.tipo`, no hizo falta
         // tocarlo, solo corregir el comentario que decía lo contrario.
-        const esTraspaso = hip.tipo === 'traspaso';
+        const esDevolucion = hip.tipo === 'devolucion';
+        const esTraspaso = hip.tipo === 'traspaso' || esDevolucion;
         const headerHip = document.createElement('div');
         headerHip.className = 'hip-header';
         headerHip.onclick = (ev) => { ev.stopPropagation(); bloqueHip.classList.toggle('colapsado'); };
         headerHip.innerHTML = `
           <span class="flecha-toggle">▾</span>
-          <span class="bandera">${esDeportes ? '⚽' : (esTraspaso ? '🔄' : (BANDERAS[hip.pais] || '🏁'))}</span>
+          <span class="bandera">${esDeportes ? '⚽' : (esDevolucion ? '💰' : (esTraspaso ? '🔄' : (BANDERAS[hip.pais] || '🏁')))}</span>
           <span class="nombre-hip">${hip.nombre}</span>
           <span class="saldo-hip ${claseMonto(subtotalHip)}">${conSigno(subtotalHip)}</span>`;
         bloqueHip.appendChild(headerHip);
@@ -748,15 +749,12 @@
             lineasCarrera.forEach(c => {
               const filaCarrera = document.createElement('div');
               filaCarrera.className = 'carrera-fila';
-              // "incluir % en sus jugadas" (29-09-2026) — ver la nota
-              // grande EXACTA en public/hipismo-mockup.html.
-              const notaComisionIncluida = c.comisionPropiaIncluida
-                ? `<span class="monto-jugado">incluye % = ${conSigno(c.comisionPropiaIncluida)}</span>`
-                : '';
+              // 14-10-2026: la devolución ya NO va por jugada, sale toda junta en el
+              // ítem "Devolución (cliente)" al final del día (ver hip.tipo 'devolucion').
               filaCarrera.innerHTML = `
                 <span class="num-carrera">${c.carrera ? c.carrera + 'ª' : ''}</span>
                 <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga') ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}${notaComisionIncluida}</span>
+                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga') ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
                 <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
                 <span></span>`;
               bodyCarrera.appendChild(filaCarrera);

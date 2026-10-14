@@ -67,6 +67,7 @@ const NOMBRE_BLOQUE_DEPORTES = 'Deportes';
 // resumen de una cuenta de comisión (nunca en el de un cliente normal).
 // 12-10-2026, a pedido del usuario: el bloque dice solo "Traspasos" (antes "Traspasos de Comisión").
 const NOMBRE_BLOQUE_TRASPASOS = 'Traspasos';
+const NOMBRE_BLOQUE_DEVOLUCION = 'Devolución';
 // Texto con el que el cliente ve una línea de Carga Masiva Especial: como una jugada
 // más (sin mencionar "Carga Masiva").
 const TEXTO_JUGADA_CARGA_ESPECIAL = {
@@ -569,6 +570,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   // que es donde se corta esa cuenta aparte para este mismo cliente).
   const pctPropioIncluido = jugador.incluir_porcentaje_en_jugadas ? (Number(jugador.comision_propia) || 0) : 0;
   let comisionPropiaIncluidaSemana = 0;
+  const devolucionPorDia = new Map(); // fecha ISO -> comisión propia incluida ese día (ver nota 14-10-2026 más abajo)
 
   // COMISIÓN EXACTA POR CARRERA, REDONDEADA 1 SOLA VEZ (03-10-2026, casos
   // reales "Legolas" Y "Sammy": Balance General y el propio link nunca
@@ -728,7 +730,19 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
         carrerasConComisionPropia.delete(claveCarrera);
       }
     }
+    // 14-10-2026, a pedido del usuario ("en los link ... toda esa devolución
+    // en vez de salir por jugada, salga al final de sus jugadas un ítem
+    // 'Devolución (nombre del cliente)' ... el cálculo es igual, solo que
+    // ahora lo pondrás todo allí en vez de por carrera"): la jugada se
+    // muestra con su resultado normal (-5% etc., `linea.resultado`) y la
+    // comisión propia exacta de la carrera se acumula POR DÍA en
+    // devolucionPorDia para armar UN solo ítem "Devolución (CLIENTE)" al
+    // final de ese día. Los TOTALES no cambian: resultadoFinal (jugada +
+    // devolución) sigue sumándose igual a totalSemana/totalHoy.
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
+    if (comisionIncluida) {
+      devolucionPorDia.set(fechaIso, round2((devolucionPorDia.get(fechaIso) || 0) + comisionIncluida));
+    }
 
     const carrera = {
       carrera: linea.carreraNumero,
@@ -736,7 +750,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       modalidad: linea.modalidad,
       monto: linea.monto,
       rol: linea.rol,
-      resultado: resultadoFinal,
+      resultado: linea.resultado,
       tipo: linea.tipo,
       ganoRemate: linea.ganoRemate,
       subtipo: linea.subtipo,
@@ -756,7 +770,6 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       cruceGrupoA: linea.cruceGrupoA,
       cruceGrupoB: linea.cruceGrupoB
     };
-    if (comisionIncluida) carrera.comisionPropiaIncluida = comisionIncluida;
     if (linea.modalidad === 'pp') {
       carrera.caballoA = linea.caballoA;
       carrera.caballoB = linea.caballoB;
@@ -907,6 +920,20 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       if (fechaIso === hoyIso) totalHoy += resultado;
     });
   }
+
+  // ÍTEM "DEVOLUCIÓN (CLIENTE)" (14-10-2026): un solo ítem al final de cada
+  // día con toda la comisión propia que antes iba metida en cada jugada
+  // (ver devolucionPorDia arriba). Ya está sumada en totalSemana/totalHoy.
+  devolucionPorDia.forEach((monto, fechaIso) => {
+    if (!monto) return;
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const nombreDev = `${NOMBRE_BLOQUE_DEVOLUCION} (${jugador.nombre})`;
+    porDia.get(fechaIso).set(nombreDev, {
+      nombre: nombreDev,
+      tipo: 'devolucion',
+      carreras: [{ tipo: 'devolucion', nota: 'Total devuelto del día', resultado: monto }]
+    });
+  });
 
   const dias = Array.from(porDia.entries())
     .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))

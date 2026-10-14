@@ -347,10 +347,21 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const hipPedroFicha = diaPedroFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
   const lineaJugadorPedro = hipPedroFicha.carreras.find(c => c.rol === 'jugador');
   const lineaBanqueroPedro = hipPedroFicha.carreras.find(c => c.rol === 'banquero');
-  check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoPedroNeto && lineaJugadorPedro.comisionPropiaIncluida === esperadoComisionNetaPedro,
-    'La línea de PEDRO como JUGADOR (primera de la carrera dual) se lleva la comisión NETA completa (-297,50) y el campo comisionPropiaIncluida=2,50');
+  // 14-10-2026: la devolución ya NO va dentro de cada jugada; las líneas
+  // salen con su resultado normal y toda la devolución en UN ítem aparte.
+  const esperadoJugadorCrudo = round2(esperadoPedroNeto - esperadoComisionNetaPedro);
+  check(!!lineaJugadorPedro && lineaJugadorPedro.resultado === esperadoJugadorCrudo && !lineaJugadorPedro.comisionPropiaIncluida,
+    `La línea de PEDRO como JUGADOR sale con su resultado normal (${esperadoJugadorCrudo}), sin la devolución metida adentro: obtenido ${lineaJugadorPedro && lineaJugadorPedro.resultado}`);
   check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && !lineaBanqueroPedro.comisionPropiaIncluida,
-    'La línea de PEDRO como BANQUERO de OTRO (misma carrera dual) NO recibe comisión adicional (ya se asignó completa a la línea de jugador) -- queda en 47,50 sin el campo comisionPropiaIncluida');
+    'La línea de PEDRO como BANQUERO de OTRO queda en 47,50 sin devolución');
+  const bloqueDevPedro = diaPedroFicha.hipodromos.find(h => h.tipo === 'devolucion');
+  check(!!bloqueDevPedro && bloqueDevPedro.nombre === 'Devolución (PEDRO)' && bloqueDevPedro.carreras.length === 1 && bloqueDevPedro.carreras[0].resultado === esperadoComisionNetaPedro,
+    `Al final del día sale UN solo ítem "Devolución (PEDRO)" con toda la devolución (${esperadoComisionNetaPedro}): obtenido ${bloqueDevPedro && JSON.stringify(bloqueDevPedro.carreras)}`);
+  check(diaPedroFicha.hipodromos[diaPedroFicha.hipodromos.length - 1].tipo === 'devolucion',
+    'El ítem Devolución es el ÚLTIMO bloque del día');
+  const sumaDiaPedro = round2(diaPedroFicha.hipodromos.reduce((acc, h) => acc + h.carreras.reduce((x, c) => x + c.resultado, 0), 0));
+  check(sumaDiaPedro === fichaPedro.resumen.totalSemana,
+    `La suma de todo lo mostrado en el día (jugadas + devolución) da el mismo totalSemana: ${sumaDiaPedro} vs ${fichaPedro.resumen.totalSemana}`);
   const lineaAvalPedro = hipPedroFicha.carreras.find(c => c.tipo === 'comision');
   check(!!lineaAvalPedro && lineaAvalPedro.clienteOrigen === 'OTRO' && lineaAvalPedro.porcentaje === 2 && lineaAvalPedro.resultado === 1,
     'ARREGLO "Mrmoney" (03-10-2026): aparece una línea de comisión aparte en la propia ficha de PEDRO por avalar a OTRO (2% de 50 = 1,00), antes invisible acá');
@@ -363,6 +374,7 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   const diaMariaFicha = fichaMaria.dias.find(d => d.fecha === FECHA);
   const hipMariaFicha = diaMariaFicha.hipodromos.find(h => h.nombre === 'La Rinconada');
   const lineaMaria = hipMariaFicha.carreras.find(c => c.rol === 'jugador');
+  check(!fichaMaria.dias.some(d => d.hipodromos.some(h => h.tipo === 'devolucion')), 'MARIA (toggle OFF): no aparece ningún ítem Devolución');
   check(!!lineaMaria && lineaMaria.resultado === -300 && !lineaMaria.comisionPropiaIncluida,
     'La línea de MARIA no trae el campo comisionPropiaIncluida (no aplica con el toggle OFF)');
 
