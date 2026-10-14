@@ -2159,3 +2159,6 @@ alter table grupos add column if not exists funciones_habilitadas jsonb;
 -- (comportamiento de siempre); false = cada jugada se paga sola. Vale para todas las carreras. Lo sigue limitando el Súper-admin
 -- con hipismo_cruzar_habilitado.
 alter table grupos add column if not exists hipismo_cruzar_automatico boolean not null default true;
+
+-- Chat de soporte por Telegram (14-10-2026): tema del grupo de soporte que corresponde a cada grupo.
+alter table grupos add column if not exists telegram_soporte_tema_id bigint;

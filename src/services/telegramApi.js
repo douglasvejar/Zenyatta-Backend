@@ -105,15 +105,17 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
   // Manda un texto (formato WhatsApp convertido a HTML), partido en varios
   // mensajes si es muy largo. Si Telegram rechaza el HTML, reintenta en texto
   // plano para que un aviso nunca se pierda por una etiqueta mal formada.
-  async function enviarTexto(chatId, texto) {
+  // `opciones.threadId`: en un grupo con TEMAS (foro) el mensaje va dentro de ese tema (14-10-2026).
+  async function enviarTexto(chatId, texto, opciones = {}) {
     const trozos = partirTexto(texto);
     const enviados = [];
+    const tema = opciones && opciones.threadId ? { message_thread_id: Number(opciones.threadId) } : {};
     for (const trozo of trozos) {
       try {
-        enviados.push(await llamar('sendMessage', { chat_id: chatId, text: formatearParaTelegram(trozo), parse_mode: 'HTML', disable_web_page_preview: true }));
+        enviados.push(await llamar('sendMessage', { chat_id: chatId, ...tema, text: formatearParaTelegram(trozo), parse_mode: 'HTML', disable_web_page_preview: true }));
       } catch (e) {
         if (/parse entities|can't parse/i.test(e.message || '')) {
-          enviados.push(await llamar('sendMessage', { chat_id: chatId, text: trozo, disable_web_page_preview: true }));
+          enviados.push(await llamar('sendMessage', { chat_id: chatId, ...tema, text: trozo, disable_web_page_preview: true }));
         } else {
           throw e;
         }
@@ -158,6 +160,8 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
     enviarTexto,
     enviarFoto,
     esAdministrador,
+    // Crea un tema (un "chat" aparte) dentro de un grupo con Temas activados. Devuelve { message_thread_id, name, ... }.
+    crearTemaForo: (chatId, nombre) => llamar('createForumTopic', { chat_id: chatId, name: String(nombre || 'Grupo').slice(0, 128) }),
     obtenerYo: () => llamar('getMe'),
     obtenerActualizaciones: (offset, timeoutSeg = 30) => llamar('getUpdates', { offset, timeout: timeoutSeg, allowed_updates: ['message', 'edited_message'] }, { timeoutMs: (timeoutSeg + 15) * 1000 }),
     quitarWebhook: () => llamar('deleteWebhook', { drop_pending_updates: false })

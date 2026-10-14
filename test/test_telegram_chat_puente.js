@@ -13,11 +13,26 @@ const GRUPOS = [
   { id: 'g2', nombre: 'Deportes Bernal', activo: true }
 ];
 const MENSAJES = [];
+let SIN_COLUMNA_TEMA = false;
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (/^SELECT nombre FROM grupos WHERE id = \$1/i.test(sql)) {
     const g = GRUPOS.find(x => x.id === params[0]);
     return { rows: g ? [{ nombre: g.nombre }] : [] };
+  }
+  if (/telegram_soporte_tema_id/i.test(sql) && SIN_COLUMNA_TEMA) { const e = new Error('column "telegram_soporte_tema_id" does not exist'); e.code = '42703'; throw e; }
+  if (/^SELECT telegram_soporte_tema_id FROM grupos WHERE id = \$1/i.test(sql)) {
+    const g = GRUPOS.find(x => x.id === params[0]);
+    return { rows: g ? [{ telegram_soporte_tema_id: g.tema || null }] : [] };
+  }
+  if (/^UPDATE grupos SET telegram_soporte_tema_id = \$1 WHERE id = \$2/i.test(sql)) {
+    const g = GRUPOS.find(x => x.id === params[1]); if (g) g.tema = params[0]; return { rows: [] };
+  }
+  if (/^UPDATE grupos SET telegram_soporte_tema_id = NULL WHERE id = \$1/i.test(sql)) {
+    const g = GRUPOS.find(x => x.id === params[0]); if (g) g.tema = null; return { rows: [] };
+  }
+  if (/^SELECT id, nombre FROM grupos WHERE telegram_soporte_tema_id = \$1/i.test(sql)) {
+    return { rows: GRUPOS.filter(g => Number(g.tema) === Number(params[0])).map(g => ({ id: g.id, nombre: g.nombre })) };
   }
   if (/^SELECT id, nombre FROM grupos WHERE activo = true/i.test(sql)) return { rows: GRUPOS.filter(g => g.activo).map(g => ({ id: g.id, nombre: g.nombre })) };
   if (/^INSERT INTO mensajes_chat/i.test(sql)) {
@@ -133,6 +148,86 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   const m = await chatService.enviarMensaje('g1', 'grupo', 'sin destino');
   await espera(30);
   check(m && m.texto === 'sin destino', '6) sin destino de avisos configurado, el mensaje se guarda igual');
+
+  // ===== UN CHAT POR GRUPO (temas de un grupo de soporte) =====
+  delete process.env.TELEGRAM_CENTRAL_CHAT_ID;
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+  process.env.TELEGRAM_SOPORTE_CHAT_ID = '-100777';
+  let siguienteTema = 10; const enviadosT = []; let temaCaido = null;
+  const apiT = {
+    enviarTexto: async (chatId, texto, op = {}) => {
+      if (temaCaido && op.threadId === temaCaido) throw new Error('Bad Request: message thread not found');
+      enviadosT.push({ chatId: String(chatId), texto, tema: op.threadId }); return [{ message_id: enviadosT.length }];
+    },
+    crearTemaForo: async (chatId, nombre) => { const id = siguienteTema++; apiT.temasCreados.push({ chatId: String(chatId), nombre, id }); return { message_thread_id: id }; },
+    temasCreados: [],
+    esAdministrador: async (c, u) => u === 42
+  };
+  const ctxT = telegramBot._usarCliente(apiT);
+  await chatService.enviarMensaje('g1', 'grupo', 'Primer mensaje de Zenyatta');
+  await espera(30);
+  check(apiT.temasCreados.length === 1 && apiT.temasCreados[0].nombre === 'Zenyatta' && apiT.temasCreados[0].chatId === '-100777', '7a) el primer mensaje de un grupo crea SU tema con el nombre del grupo');
+  const tz = apiT.temasCreados[0].id;
+  check(enviadosT.length === 2 && enviadosT.every(e => e.tema === tz) && /Este es el chat de \*?ZENYATTA/.test(enviadosT[0].texto) && /Primer mensaje/.test(enviadosT[1].texto), '7b) manda una presentación y el mensaje dentro de ese tema');
+  check(GRUPOS[0].tema === tz, '7c) guarda el número del tema en el grupo');
+  await chatService.enviarMensaje('g1', 'grupo', 'Segundo mensaje');
+  await espera(30);
+  check(apiT.temasCreados.length === 1 && enviadosT[enviadosT.length - 1].tema === tz, '7d) el segundo mensaje usa el MISMO tema (no crea otro)');
+  await chatService.enviarMensaje('g2', 'grupo', 'Hola desde Bernal');
+  await espera(30);
+  check(apiT.temasCreados.length === 2 && apiT.temasCreados[1].nombre === 'Deportes Bernal' && enviadosT[enviadosT.length - 1].tema === apiT.temasCreados[1].id, '7e) otro grupo recibe SU propio tema');
+  // 2 mensajes casi juntos de un grupo nuevo no crean 2 temas
+  GRUPOS.push({ id: 'g3', nombre: 'Nuevo', activo: true });
+  await Promise.all([chatService.enviarMensaje('g3', 'grupo', 'a'), chatService.enviarMensaje('g3', 'grupo', 'b')]);
+  await espera(60);
+  check(apiT.temasCreados.filter(t => t.nombre === 'Nuevo').length === 1, '7f) dos mensajes seguidos de un grupo nuevo crean un solo tema');
+
+  // 8) Escribir dentro del tema responde a ESE grupo (sin usar Responder)
+  const enTema = (tema, texto, from = { id: 42, is_bot: false }) => ({ update_id: uid++, message: { message_id: 900 + uid, chat: { id: -100777, type: 'supergroup' }, from, text: texto, message_thread_id: tema, is_topic_message: true } });
+  await telegramBot.manejarActualizacion(enTema(tz, 'Respondo desde el tema'), ctxT);
+  const rt = MENSAJES.filter(m => m.remitente === 'superadmin' && m.texto === 'Respondo desde el tema');
+  check(rt.length === 1 && rt[0].grupo_id === 'g1', '8a) lo escrito en el tema de Zenyatta llega a la bandeja de Zenyatta');
+  check(enviadosT[enviadosT.length - 1].texto === '✅ Enviado' && enviadosT[enviadosT.length - 1].tema === tz, '8b) confirma "✅ Enviado" dentro del mismo tema');
+  const nB = MENSAJES.length;
+  await telegramBot.manejarActualizacion(enTema(tz, 'intruso', { id: 99, is_bot: false }), ctxT);
+  check(MENSAJES.length === nB, '8c) quien no es administrador del grupo de soporte no puede');
+  await telegramBot.manejarActualizacion(enTema(tz, '/id'), ctxT);
+  check(MENSAJES.length === nB, '8d) un comando con "/" dentro del tema no se manda al grupo');
+  await telegramBot.manejarActualizacion(enTema(9999, 'tema ajeno'), ctxT);
+  check(MENSAJES.length === nB, '8e) un tema que no es de ningún grupo se ignora');
+  // sin memoria (reinicio): el tema se reconoce por la base
+  const ctxT2 = telegramBot._usarCliente(apiT);
+  await telegramBot.manejarActualizacion(enTema(apiT.temasCreados[1].id, 'Bernal, ya te contesto'), ctxT2);
+  check(MENSAJES.some(m => m.remitente === 'superadmin' && m.texto === 'Bernal, ya te contesto' && m.grupo_id === 'g2'), '8f) el tema de otro grupo responde a ESE grupo');
+
+  // 9) Si borraron el tema en Telegram, se crea de nuevo y se reenvía
+  temaCaido = tz;
+  await chatService.enviarMensaje('g1', 'grupo', 'Mensaje con tema borrado');
+  await espera(60);
+  const nuevoTz = GRUPOS[0].tema;
+  check(nuevoTz !== tz && enviadosT.some(e => e.tema === nuevoTz && /Mensaje con tema borrado/.test(e.texto)), '9) con el tema borrado se crea otro y el mensaje no se pierde');
+
+  // 10) Sin la columna en la base: igual funciona (en memoria)
+  SIN_COLUMNA_TEMA = true;
+  GRUPOS.push({ id: 'g4', nombre: 'SinColumna', activo: true });
+  await chatService.enviarMensaje('g4', 'grupo', 'sin columna');
+  await espera(40);
+  check(apiT.temasCreados.some(t => t.nombre === 'SinColumna') && enviadosT.some(e => /sin columna/.test(e.texto)), '10a) sin la columna en la base, el mensaje igual sale en un tema');
+  const t4 = apiT.temasCreados.find(t => t.nombre === 'SinColumna').id;
+  await telegramBot.manejarActualizacion(enTema(t4, 'respuesta sin columna'), ctxT);
+  check(MENSAJES.some(m => m.remitente === 'superadmin' && m.texto === 'respuesta sin columna' && m.grupo_id === 'g4'), '10b) y se le puede responder (memoria)');
+  SIN_COLUMNA_TEMA = false;
+  // 11) Si el grupo de soporte no sirve (sin Temas), el mensaje sale en el chat de avisos
+  process.env.TELEGRAM_AVISOS_CHAT_ID = String(DUENO_CHAT);
+  const enviadosF = [];
+  const apiF = { enviarTexto: async (c, t, op = {}) => { enviadosF.push({ c: String(c), t, tema: op.threadId }); return [{ message_id: enviadosF.length }]; },
+    crearTemaForo: async () => { throw new Error('Bad Request: the chat is not a forum'); }, esAdministrador: async () => true };
+  telegramBot._usarCliente(apiF);
+  GRUPOS.push({ id: 'g5', nombre: 'SinForo', activo: true });
+  await chatService.enviarMensaje('g5', 'grupo', 'mensaje con foro caído');
+  await espera(40);
+  check(enviadosF.length === 1 && enviadosF[0].c === String(DUENO_CHAT) && /SINFORO/.test(enviadosF[0].t), '11) si no se puede crear el tema, el mensaje igual llega al chat de avisos');
+  delete process.env.TELEGRAM_SOPORTE_CHAT_ID;
 
   console.log(`\n${ok} pruebas OK, ${mal} fallaron.`);
   process.exit(mal ? 1 : 0);

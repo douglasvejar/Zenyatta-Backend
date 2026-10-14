@@ -349,11 +349,95 @@ function describirAdjunto(m) {
   return '📎 Adjuntó ' + que + (m.adjunto_nombre && !tipo.startsWith('audio/') ? ' (' + m.adjunto_nombre + ')' : '') + ' — míralo en la plataforma.';
 }
 
+// UN CHAT POR GRUPO (14-10-2026, a pedido del usuario: "quiero que estos mensajes me lleguen individual por
+// grupo, un chat por cada grupo que me escriba"): Telegram no deja que un bot cree chats privados, pero sí
+// TEMAS dentro de un grupo propio (un supergrupo con "Temas" activados). Con TELEGRAM_SOPORTE_CHAT_ID=<id de ese
+// grupo>, el bot crea UN TEMA por cada grupo que le escribe (con el nombre del grupo), manda ahí sus mensajes y
+// todo lo que el dueño escriba dentro de ese tema le llega a ESA bandeja, sin tener que usar "Responder".
+// El número del tema se guarda en grupos.telegram_soporte_tema_id (sql/pendiente-14-10-2026.sql); si esa columna
+// todavía no existe, se recuerda en memoria (tras un reinicio se crearía otro tema).
+const chatSoporte = () => String(process.env.TELEGRAM_SOPORTE_CHAT_ID || '').split(',')[0].trim() || null;
+const temaDeGrupo = new Map();   // grupoId -> id del tema
+const grupoDeTema = new Map();   // id del tema -> { grupoId, nombre }
+const temasCreandose = new Map(); // grupoId -> Promise (evita crear 2 temas si llegan 2 mensajes juntos)
+let avisadoSinColumnaTema = false;
+const faltaColumnaTema = e => e && (e.code === '42703' || /telegram_soporte_tema_id/i.test(e.message || ''));
+
+function recordarTema(grupoId, nombre, temaId) {
+  temaDeGrupo.set(grupoId, temaId);
+  grupoDeTema.set(String(temaId), { grupoId, nombre });
+  if (grupoDeTema.size > 2000) grupoDeTema.delete(grupoDeTema.keys().next().value);
+}
+async function olvidarTema(grupoId) {
+  const t = temaDeGrupo.get(grupoId);
+  temaDeGrupo.delete(grupoId);
+  if (t != null) grupoDeTema.delete(String(t));
+  try { await db.query('UPDATE grupos SET telegram_soporte_tema_id = NULL WHERE id = $1', [grupoId]); } catch (e) { /* sin columna: nada que limpiar */ }
+}
+// Devuelve { temaId, nuevo }. Crea el tema la primera vez.
+async function obtenerTemaDeGrupo(grupoId, nombre) {
+  if (temaDeGrupo.has(grupoId)) return { temaId: temaDeGrupo.get(grupoId), nuevo: false };
+  try {
+    const r = await db.query('SELECT telegram_soporte_tema_id FROM grupos WHERE id = $1', [grupoId]);
+    const guardado = r.rows[0] && r.rows[0].telegram_soporte_tema_id;
+    if (guardado) { recordarTema(grupoId, nombre, Number(guardado)); return { temaId: Number(guardado), nuevo: false }; }
+  } catch (e) {
+    if (!faltaColumnaTema(e)) throw e;
+    if (!avisadoSinColumnaTema) { avisadoSinColumnaTema = true; console.warn('[telegramBot] Falta la columna grupos.telegram_soporte_tema_id (corre el SQL pendiente): los temas del chat de soporte se recuerdan solo en memoria.'); }
+  }
+  if (temasCreandose.has(grupoId)) return temasCreandose.get(grupoId).then(r => ({ temaId: r.temaId, nuevo: false }));
+  const promesa = (async () => {
+    const tema = await apiActual.crearTemaForo(chatSoporte(), nombre);
+    const temaId = Number(tema.message_thread_id);
+    recordarTema(grupoId, nombre, temaId);
+    try { await db.query('UPDATE grupos SET telegram_soporte_tema_id = $1 WHERE id = $2', [temaId, grupoId]); } catch (e) { if (!faltaColumnaTema(e)) console.error('[telegramBot] No se pudo guardar el tema del grupo:', e.message); }
+    return { temaId, nuevo: true };
+  })();
+  temasCreandose.set(grupoId, promesa);
+  try { return await promesa; } finally { temasCreandose.delete(grupoId); }
+}
+
+async function avisarMensajeEnTema({ grupoId, nombre, texto }) {
+  const chat = chatSoporte();
+  let { temaId, nuevo } = await obtenerTemaDeGrupo(grupoId, nombre);
+  const mandar = async () => {
+    if (nuevo) await apiActual.enviarTexto(chat, '💬 Este es el chat de *' + String(nombre).toUpperCase() + '*. Todo lo que escribas aquí le llega a su bandeja de mensajes.', { threadId: temaId });
+    await apiActual.enviarTexto(chat, texto, { threadId: temaId });
+  };
+  try {
+    await mandar();
+  } catch (e) {
+    // El tema se borró o se cerró desde Telegram: se crea de nuevo y se reenvía.
+    if (!/thread not found|topic|TOPIC/i.test(e.message || '')) throw e;
+    await olvidarTema(grupoId);
+    ({ temaId, nuevo } = await obtenerTemaDeGrupo(grupoId, nombre));
+    nuevo = true;
+    await mandar();
+  }
+  return { enviado: true };
+}
+
 async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
-  const destino = destinoAvisos();
+  const enTemas = !!chatSoporte();
+  let destino = enTemas ? chatSoporte() : destinoAvisos();
   if (!destino || !apiActual) return { enviado: false };
   const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
   const nombre = (r.rows[0] && r.rows[0].nombre) || 'GRUPO';
+  if (enTemas) {
+    const cuerpo = ['💬 *' + String(nombre).toUpperCase() + '*'];
+    if (mensaje && mensaje.texto) cuerpo.push(mensaje.texto);
+    const adjTema = describirAdjunto(mensaje);
+    if (adjTema) cuerpo.push(adjTema);
+    try {
+      return await avisarMensajeEnTema({ grupoId, nombre, texto: cuerpo.join('\n') });
+    } catch (e) {
+      // El grupo de soporte falló (no tiene Temas activados, el bot no puede administrarlos, etc.): si hay un chat de
+      // avisos, el mensaje sale ahí como siempre en vez de perderse.
+      console.error('[telegramBot] No se pudo usar el grupo de soporte con temas (' + e.message + ').');
+      destino = destinoAvisos();
+      if (!destino) throw e;
+    }
+  }
   const partes = [MARCA_CHAT + String(nombre).toUpperCase()];
   if (mensaje && mensaje.texto) partes.push(mensaje.texto);
   const adj = describirAdjunto(mensaje);
@@ -368,6 +452,39 @@ async function avisarMensajeDeGrupo({ grupoId, mensaje }) {
     if (grupoPorMensajeTelegram.size > 1000) grupoPorMensajeTelegram.delete(grupoPorMensajeTelegram.keys().next().value);
   });
   return { enviado: true };
+}
+
+// Mensaje escrito DENTRO de un tema del grupo de soporte: va a la bandeja del grupo dueño de ese tema.
+// Devuelve true si lo atendió (o lo ignoró a propósito), false si ese tema no es de ningún grupo.
+async function responderDesdeTema({ api }, mensaje, texto) {
+  const chatId = mensaje.chat.id;
+  const temaId = mensaje.message_thread_id;
+  const usuario = mensaje.from || null;
+  let destino = grupoDeTema.get(String(temaId));
+  if (!destino) {
+    try {
+      const r = await db.query('SELECT id, nombre FROM grupos WHERE telegram_soporte_tema_id = $1', [temaId]);
+      if (r.rows[0]) { destino = { grupoId: r.rows[0].id, nombre: r.rows[0].nombre }; grupoDeTema.set(String(temaId), destino); temaDeGrupo.set(destino.grupoId, Number(temaId)); }
+    } catch (e) { if (!faltaColumnaTema(e)) throw e; }
+  }
+  if (!destino) return false;
+  let autorizado = false;
+  try { autorizado = await api.esAdministrador(chatId, usuario && usuario.id); } catch (e) { autorizado = false; }
+  if (!autorizado) return true;
+  const opciones = { threadId: temaId };
+  if (!texto) {
+    await api.enviarTexto(chatId, '⚠️ Por ahora solo puedo enviarle al grupo mensajes de *texto*. Para mandarle una foto o un archivo, usa la plataforma.', opciones).catch(() => {});
+    return true;
+  }
+  try {
+    const chatService = require('./chat');
+    await chatService.enviarMensaje(destino.grupoId, 'superadmin', texto);
+    await chatService.marcarLeidosSuperadmin(destino.grupoId);
+    await api.enviarTexto(chatId, '✅ Enviado', opciones).catch(() => {});
+  } catch (e) {
+    await api.enviarTexto(chatId, '⚠️ No se pudo enviar a ' + destino.nombre + ': ' + e.message, opciones).catch(() => {});
+  }
+  return true;
 }
 
 // Devuelve true si el mensaje era una respuesta a un aviso del chat de soporte (ya se atendió o se explicó
@@ -429,6 +546,10 @@ async function manejarActualizacion(update, ctxExterno) {
   }
   if (mensaje.from && mensaje.from.is_bot) return;
   const texto = mensaje.text || mensaje.caption;
+  // Escrito dentro de un tema del grupo de soporte (un chat por grupo): se manda a la bandeja de ese grupo.
+  if (mensaje.message_thread_id && chatSoporte() && String(mensaje.chat.id) === chatSoporte() && !/^\s*\/\w+/.test(texto || '')) {
+    if (await responderDesdeTema(ctx, mensaje, texto)) return;
+  }
   // Respuesta (reply) a un aviso del chat de soporte: se manda a la bandeja de ese grupo.
   if (mensaje.reply_to_message && !/^\s*\/\w+/.test(texto || '')) {
     if (await responderChatDeGrupo(ctx, mensaje, texto)) return;
@@ -661,7 +782,7 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
-  manejarActualizacion, avisarMensajeDeGrupo, responderChatDeGrupo, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
+  manejarActualizacion, avisarMensajeDeGrupo, responderChatDeGrupo, responderDesdeTema, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
   jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };
