@@ -1563,6 +1563,10 @@
   .sidebar-admin .nav-item:hover .cr-ic, .sidebar-admin .nav-child:hover .cr-ic-hijo { color: #4f5bd5; }
   .sidebar-admin .nav-item.nav-item-active, .sidebar-admin .nav-child.nav-item-active { background: #4f5bd5; color: #ffffff; font-weight: 700; box-shadow: 0 8px 18px rgba(79,91,213,0.35); }
   .sidebar-admin .nav-item.nav-item-active .cr-ic, .sidebar-admin .nav-child.nav-item-active .cr-ic-hijo { color: #ffffff; }
+  /* Casilla de la pizarra (llegada): fondo de bandera de cuadros, claro para que se lea el número */
+  #inpPizarra { background-color: #ffffff; background-image: conic-gradient(#d9e4ee 25%, #ffffff 0 50%, #d9e4ee 0 75%, #ffffff 0); background-size: 16px 16px; color: #0a1c2e; font-weight: 800; letter-spacing: .06em; border: 1.5px solid #9fb4c6; }
+  #inpPizarra::placeholder { color: #5c7186; font-weight: 600; letter-spacing: 0; }
+  #inpPizarra:focus { border-color: #4f5bd5; box-shadow: 0 0 0 3px rgba(79,91,213,.22); outline: none; }
 </style>
 </head>
 <body>
