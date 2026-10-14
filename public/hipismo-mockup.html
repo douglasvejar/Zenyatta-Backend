@@ -1410,24 +1410,25 @@
   .cp-pasos li.hecho b { background: #d6f3e7; color: var(--ok); }
   .cp-pasos li.actual { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: #ffffff; box-shadow: 0 8px 18px rgba(79,91,213,0.30); }
   .cp-pasos li.actual b { background: rgba(255,255,255,0.28); color: #ffffff; }
-  #selectorPlanoCompacto { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; align-items: start; margin: 0; padding: 16px 18px; background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 22px; box-shadow: var(--cr-sombra); }
+  #selectorPlanoCompacto { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px 10px; align-items: end; margin: 0; padding: 10px 14px 12px; background: var(--cr-vidrio); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--cr-borde); border-radius: 18px; box-shadow: var(--cr-sombra); }
   #selectorPlanoCompacto > div { min-width: 0; }
-  #selectorPlanoCompacto label { font-size: 12px; margin-bottom: 5px; }
-  #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { padding: 10px 12px; font-size: 14.5px; height: 42px; }
+  #selectorPlanoCompacto label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 3px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { padding: 0 10px; font-size: 13.5px; height: 34px; border-radius: 10px; background-color: rgba(255,255,255,0.85); }
   #selectorPlanoCompacto > div:nth-child(1) { grid-column: 1 / 5; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(2) { grid-column: 5 / 7; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(5) { grid-column: 10 / 13; grid-row: 1; }
-  #selectorPlanoCompacto > #filaCruzar { grid-column: 1 / 4; grid-row: 2; }
-  #selectorPlanoCompacto > div:nth-child(4) { grid-column: 4 / 7; grid-row: 2; }
-  #selectorPlanoCompacto > div:nth-child(8) { grid-column: 7 / 13; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(4) { grid-column: 1 / 3; grid-row: 2; }
+  #selectorPlanoCompacto > #filaCruzar { grid-column: 3 / 6; grid-row: 2; }
+  #selectorPlanoCompacto > div:nth-child(8) { grid-column: 6 / 13; grid-row: 2; }
   #selectorPlanoCompacto > #notaCruzarDesactivado { grid-column: 1 / -1; grid-row: 3; }
-  #selectorPlanoCompacto > #filaCruzar { display: flex; align-items: center; gap: 10px; height: 42px; margin: 21px 0 0; }
-  #selectorPlanoCompacto #filaCruzar label { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
-  #chkCruzar { -webkit-appearance: none; appearance: none; width: 40px; height: 23px; border-radius: 999px; background: #c5d4df; position: relative; cursor: pointer; flex: none; transition: background .2s; border: 0; padding: 0; box-shadow: none; }
-  #chkCruzar::after { content: ""; position: absolute; left: 3px; top: 3px; width: 17px; height: 17px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .2s; }
+  #selectorPlanoCompacto > #filaCruzar { display: flex; align-items: center; gap: 8px; height: 34px; margin: 0; padding: 0 2px; }
+  #selectorPlanoCompacto #filaCruzar label { margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text); white-space: nowrap; }
+  #selectorPlanoCompacto > div:nth-child(8) .btn-lista-sin-comision { position: absolute; right: 2px; top: -1px; margin: 0; padding: 0; background: none; border: 0; cursor: pointer; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  #chkCruzar { -webkit-appearance: none; appearance: none; width: 34px; height: 20px; border-radius: 999px; background: #c5d4df; position: relative; cursor: pointer; flex: none; transition: background .2s; border: 0; padding: 0; box-shadow: none; }
+  #chkCruzar::after { content: ""; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .2s; }
   #chkCruzar:checked { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); }
-  #chkCruzar:checked::after { transform: translateX(17px); }
+  #chkCruzar:checked::after { transform: translateX(14px); }
   .btn-lista-sin-comision { color: var(--accent); font-size: 12px; margin-top: 5px; }
   .panel-sin-comision { background: rgba(255,255,255,0.97); border-radius: 14px; }
   .chip-sin-comision.chip-activo { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); border-color: transparent; }
@@ -1462,11 +1463,12 @@
     .cp-pasos { padding: 4px; gap: 2px; }
     .cp-pasos li { padding: 6px 8px; font-size: 12px; gap: 5px; }
     .cp-pasos li b { width: 20px; height: 20px; font-size: 11px; }
-    #selectorPlanoCompacto { grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 14px; gap: 10px; align-items: start; }
+    #selectorPlanoCompacto { grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 10px 12px 12px; gap: 8px; align-items: end; }
     #selectorPlanoCompacto > div:nth-child(n), #selectorPlanoCompacto > #filaCruzar, #selectorPlanoCompacto > #notaCruzarDesactivado { grid-row: auto; grid-column: span 6; }
     #selectorPlanoCompacto > div:nth-child(2), #selectorPlanoCompacto > div:nth-child(3), #selectorPlanoCompacto > div:nth-child(4), #selectorPlanoCompacto > div:nth-child(5) { grid-column: span 3; }
-    #selectorPlanoCompacto label { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #selectorPlanoCompacto > #filaCruzar { margin: 0; height: auto; min-height: 36px; }
+    #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { height: 38px; font-size: 14px; }
+    #selectorPlanoCompacto > #filaCruzar { height: 30px; }
+    #selectorPlanoCompacto > div:nth-child(8) .btn-lista-sin-comision { position: static; display: block; margin-top: 4px; }
     #txtPlano { height: 240px; }
     .cp-acciones { bottom: calc(86px + env(safe-area-inset-bottom)); width: calc(100% - 66px); justify-self: start; border-radius: 26px; padding: 6px; gap: 5px; }
     .cp-acciones .btn { height: 40px; padding: 0 9px; gap: 6px; min-width: 0; justify-content: center; font-size: 14px; flex: 1 1 auto; }
