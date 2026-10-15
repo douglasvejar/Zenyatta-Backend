@@ -211,9 +211,12 @@
      para diferenciar una carrera de otra al leer. */
   .carrera-bloque { margin-top: 12px; border: 1px solid rgba(20,83,45,0.18); border-top: 3px solid var(--accent-deep); border-radius: 6px; overflow: hidden; }
   .carrera-bloque:first-child { margin-top: 0; }
-  .carrera-header { display: flex; align-items: center; gap: 6px; padding: 2px 7px; cursor: pointer; user-select: none; background: rgba(127,127,127,0.06); }
-  .carrera-header .nombre-carrera { font-weight: 800; font-size: 11.5px; flex: 1; color: var(--accent-deep); }
-  .carrera-header .total-carrera { font-weight: 800; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .carrera-header { display: flex; align-items: center; gap: 6px; padding: 4px 7px; cursor: pointer; user-select: none; background: rgba(127,127,127,0.06); }
+  .carrera-header .nombre-carrera { font-weight: 800; font-size: 12.5px; flex: 1; color: var(--accent-deep); }
+  /* Total carrera más grande y resaltado (15-10-2026, a pedido del usuario). */
+  .carrera-header .total-carrera { font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; padding: 2px 10px; border-radius: 99px; background: rgba(127,127,127,0.14); }
+  .carrera-header .total-carrera.pos { background: #d9f5e3; }
+  .carrera-header .total-carrera.neg { background: #fde2e2; }
   .carrera-body { padding: 0 5px; }
   .carrera-header .flecha-toggle { font-size: 9px; }
   .carrera-bloque.colapsado .carrera-body { display: none; }
