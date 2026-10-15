@@ -951,7 +951,8 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   devolucionPorDia.forEach((monto, fechaIso) => {
     if (!monto) return;
     if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
-    const nombreDev = `${NOMBRE_BLOQUE_DEVOLUCION} (${jugador.nombre})`;
+    // 15-10-2026: solo "Devolución" (el cliente ya sabe que es suyo, sale en su propio link).
+    const nombreDev = NOMBRE_BLOQUE_DEVOLUCION;
     porDia.get(fechaIso).set(nombreDev, {
       nombre: nombreDev,
       tipo: 'devolucion',

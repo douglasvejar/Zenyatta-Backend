@@ -355,8 +355,8 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(!!lineaBanqueroPedro && lineaBanqueroPedro.resultado === esperadoBanqueoPedro && !lineaBanqueroPedro.comisionPropiaIncluida,
     'La línea de PEDRO como BANQUERO de OTRO queda en 47,50 sin devolución');
   const bloqueDevPedro = diaPedroFicha.hipodromos.find(h => h.tipo === 'devolucion');
-  check(!!bloqueDevPedro && bloqueDevPedro.nombre === 'Devolución (PEDRO)' && bloqueDevPedro.carreras.length === 1 && bloqueDevPedro.carreras[0].resultado === esperadoComisionNetaPedro,
-    `Al final del día sale UN solo ítem "Devolución (PEDRO)" con toda la devolución (${esperadoComisionNetaPedro}): obtenido ${bloqueDevPedro && JSON.stringify(bloqueDevPedro.carreras)}`);
+  check(!!bloqueDevPedro && bloqueDevPedro.nombre === 'Devolución' && bloqueDevPedro.carreras.length === 1 && bloqueDevPedro.carreras[0].resultado === esperadoComisionNetaPedro,
+    `Al final del día sale UN solo ítem "Devolución" con toda la devolución (${esperadoComisionNetaPedro}): obtenido ${bloqueDevPedro && JSON.stringify(bloqueDevPedro.carreras)}`);
   check(diaPedroFicha.hipodromos[diaPedroFicha.hipodromos.length - 1].tipo === 'devolucion',
     'El ítem Devolución es el ÚLTIMO bloque del día');
   const sumaDiaPedro = round2(diaPedroFicha.hipodromos.reduce((acc, h) => acc + h.carreras.reduce((x, c) => x + c.resultado, 0), 0));
