@@ -157,6 +157,10 @@ function ejecutarQuery(text, params) {
   // grande de comisionAdelantadasSemana en GET /cierre-final): nueva
   // consulta de /semana-por-dias para sumar también la comisión de
   // Tablas Fijas/Marcas por día.
+  // 15-10-2026: ítem "REMATE" por día (consulta nueva de /semana-por-dias) — esta prueba no tiene remates.
+  if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_remates WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3 GROUP BY fecha/i.test(sql)) return { rows: [] };
+  // 15-10-2026: espejo del ítem "TABLAS FIJAS" por día (consulta nueva de /semana-por-dias) — esta prueba no lo usa.
+  if (/^SELECT p\.fecha AS fecha, j\.resultado_cliente, j\.comision\s+FROM hipismo_adelantadas_jugadas j/i.test(sql)) return { rows: [] };
   if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
     const [grupoId] = params;
     return {

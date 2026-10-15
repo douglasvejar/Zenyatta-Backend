@@ -108,6 +108,8 @@ function ejecutarQuery(text, params) {
     });
     return { rows: Array.from(porFecha.entries()).map(([fecha, total]) => ({ fecha, total })) };
   }
+  // 15-10-2026: espejo del ítem "TABLAS FIJAS" por día (consulta nueva de /semana-por-dias) — esta prueba no tiene Tablas Fijas.
+  if (/^SELECT p\.fecha AS fecha, j\.resultado_cliente, j\.comision\s+FROM hipismo_adelantadas_jugadas j/i.test(sql)) return { rows: [] };
   if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p\.id = j\.plano_id\s+WHERE j\.grupo_id = \$1 AND p\.fecha BETWEEN \$2 AND \$3 AND j\.estado IN/i.test(sql)) {
     return { rows: [] };
   }
@@ -220,7 +222,10 @@ function check(cond, msg) {
 
   // --- clientes: orden alfabético + porDia alineado a "dias" filtrado/reordenado ---
   const nombres = res._json.clientes.map(c => c.nombre);
-  check(JSON.stringify(nombres) === JSON.stringify(['ANA', 'BANCO', 'BANCO2', 'CARLOS']), 'Clientes en orden alfabético: ANA, BANCO, BANCO2, CARLOS');
+  // 15-10-2026: ahora también sale el renglón "REMATE" (el resultado de cada remate), igual que en Balance General.
+  check(JSON.stringify(nombres) === JSON.stringify(['ANA', 'BANCO', 'BANCO2', 'CARLOS', 'REMATE']), 'Clientes en orden alfabético: ANA, BANCO, BANCO2, CARLOS y el renglón REMATE (igual que Balance General)');
+  const filaRemate = res._json.clientes.find(c => c.nombre === 'REMATE');
+  check(!!filaRemate && filaRemate.totalSemana === 20, `El renglón REMATE suma el resultado del remate (20,00): ${filaRemate && filaRemate.totalSemana}`);
   const carlos = res._json.clientes.find(c => c.nombre === 'CARLOS');
   check(JSON.stringify(carlos.porDia) === JSON.stringify([0, 100, 50]), 'CARLOS: 0 el miércoles, +100 el domingo (remate), +50 el lunes (ticket) — mismo orden que "dias"');
   check(carlos.totalSemana === 150, 'Total semanal de CARLOS = 50 (lunes) + 100 (domingo) = 150');

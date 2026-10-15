@@ -289,6 +289,10 @@ function ejecutarQuery(text, params) {
   if (/^SELECT cliente_nombre, monto, fecha FROM hipismo_winners/i.test(sql)) return { rows: [] };
   if (/^SELECT cliente_nombre, monto, fecha FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [] };
   if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_planos/i.test(sql)) return { rows: [] };
+  // 15-10-2026: ítem "REMATE" por día (consulta nueva de /semana-por-dias) — esta prueba no tiene remates.
+  if (/^SELECT fecha, COALESCE\(SUM\(comision_total\), 0\) AS total\s+FROM hipismo_remates WHERE grupo_id = \$1 AND fecha BETWEEN \$2 AND \$3 GROUP BY fecha/i.test(sql)) return { rows: [] };
+  // 15-10-2026: espejo del ítem "TABLAS FIJAS" por día (consulta nueva de /semana-por-dias) — esta prueba no lo usa.
+  if (/^SELECT p\.fecha AS fecha, j\.resultado_cliente, j\.comision\s+FROM hipismo_adelantadas_jugadas j/i.test(sql)) return { rows: [] };
   if (/^SELECT p\.fecha AS fecha, j\.comision\s+FROM hipismo_adelantadas_jugadas j/i.test(sql)) return { rows: [] };
 
   // ---- Jugadas entre Tercios Adelantadas ----

@@ -6259,7 +6259,38 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     acumularDia(t.banquero_nombre, t.fecha, t.resultado_banquero);
   });
   rApuestasRemate.rows.forEach(a => acumularDia(a.cliente_nombre, a.fecha, a.resultado));
-  rWinners.rows.forEach(w => acumularDia(w.cliente_nombre, w.fecha, w.monto));
+  // ÍTEM "WINNERS" (15-10-2026, a pedido del usuario: "agrega winners a semana por días"): igual que
+  // en Cierre Final/Balance General (ver la nota grande del ítem "WINNERS" en construirCierreFinalHipismo),
+  // cada monto que gana o pierde un cliente en Winners tiene su espejo exacto (-monto) en el renglón
+  // "WINNERS", así esta tabla también suma 0 con la comisión y coincide con el Balance General.
+  rWinners.rows.forEach(w => {
+    acumularDia(w.cliente_nombre, w.fecha, w.monto);
+    acumularDia(NOMBRE_ITEM_WINNERS, w.fecha, -Number(w.monto));
+  });
+  // ÍTEM "TABLAS FIJAS" (15-10-2026): espejo de cada Tabla Fija SIN banqueadores del grupo, NETO de su
+  // comisión (misma fórmula que construirCierreFinalHipismo). Consulta aparte para no tocar la de arriba.
+  const rTablasFijasEspejo = await db.query(
+    `SELECT p.fecha AS fecha, j.resultado_cliente, j.comision
+       FROM hipismo_adelantadas_jugadas j
+       JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id
+      WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')
+        AND j.tipo = 'tf' AND j.banqueadores IS NULL`,
+    [req.grupoId, desde, hasta]
+  );
+  rTablasFijasEspejo.rows.forEach(j => {
+    const comisionTf = j.comision != null ? Number(j.comision) : 0;
+    acumularDia(NOMBRE_ITEM_TABLAS_FIJAS, j.fecha, -(Number(j.resultado_cliente) + comisionTf));
+  });
+  // ÍTEM "REMATE" (15-10-2026): el resultado de cada remate (hipismo_remates.comision_total) es su propio
+  // renglón, igual que en Cierre Final.
+  const rRemateEspejo = await db.query(
+    `SELECT fecha, COALESCE(SUM(comision_total), 0) AS total
+       FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha`,
+    [req.grupoId, desde, hasta]
+  );
+  rRemateEspejo.rows.forEach(r => {
+    if (Number(r.total)) acumularDia(NOMBRE_ITEM_REMATE, r.fecha, Number(r.total));
+  });
   rTerciosAdelantadasDia.forEach(j => {
     acumularDia(j.jugador_nombre, j.fecha, j.resultado_jugador);
     acumularDia(j.banquero_nombre, j.fecha, j.resultado_banquero);
@@ -6542,8 +6573,10 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   // no se tapa) se deja el cálculo propio de arriba.
   let comisionSemanaFinal = comisionSemana;
   let comisionPorDiaFinal = comisionPorDia;
+  let cierreReferencia = null; // Cierre Final/Balance General de esta misma semana (se reusa en la guardia de abajo)
   try {
     const cierre = await construirCierreFinalHipismo(req.grupoId, desde, hasta);
+    cierreReferencia = cierre;
     const dif = round2(Number(cierre.comisionSemana) - comisionSemana);
     if (Number.isFinite(dif) && dif !== 0 && Math.abs(dif) <= 0.25) {
       let idxUltimo = -1;
@@ -6555,6 +6588,39 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
     }
   } catch (e) {
     console.error('[semana-por-dias] No se pudo cuadrar la comisión con Cierre Final:', e.message);
+  }
+
+  // GUARDIA CONTRA DESCUADRES (15-10-2026, "esos errores no pueden volver a pasar"): esta tabla y el
+  // Balance General deben dar EXACTAMENTE lo mismo para cada renglón. Si algún día un renglón difiere
+  // (un tipo de jugada nuevo que una pantalla cuenta y la otra no), no se queda callado: queda en el
+  // log y le llega un aviso al dueño por Telegram (una vez cada 12 horas por el mismo descuadre).
+  try {
+    const cierreGuardia = cierreReferencia;
+    if (!cierreGuardia) throw new Error('sin Cierre Final de referencia');
+    const saldoCierrePorNombre = new Map((cierreGuardia.clientes || []).map(c => [c.nombre, round2(c.saldo)]));
+    const totalDiasPorNombre = new Map(clientes.map(c => [c.nombre, c.totalSemana]));
+    const diferencias = [];
+    new Set([...saldoCierrePorNombre.keys(), ...totalDiasPorNombre.keys()]).forEach(nombre => {
+      const a = saldoCierrePorNombre.get(nombre) || 0;
+      const b = totalDiasPorNombre.get(nombre) || 0;
+      if (Math.abs(round2(a - b)) > 0.001) diferencias.push({ nombre, balance: a, semanaPorDias: b });
+    });
+    const difComision = round2(Number(cierreGuardia.comisionSemana) - comisionSemanaFinal);
+    if (diferencias.length || Math.abs(difComision) > 0.001) {
+      console.error('[semana-por-dias] DESCUADRE contra Balance General (grupo ' + req.grupoId + ', ' + desde + ' a ' + hasta + '):', JSON.stringify({ diferencias, difComision }));
+      try {
+        const { avisarProblema } = require('../services/telegramBot');
+        const detalle = diferencias.slice(0, 8).map(d => `${d.nombre}: Balance ${d.balance} / Semana por Días ${d.semanaPorDias}`).join('\n') + (Math.abs(difComision) > 0.001 ? `\nComisión: diferencia ${difComision}` : '');
+        await avisarProblema({
+          grupoNombre: req.grupo && req.grupo.nombre,
+          titulo: 'Semana por Días no coincide con Balance General',
+          detalle: detalle + `\nSemana ${desde} a ${desde === hasta ? desde : hasta}. Enviar captura para revisarlo.`,
+          clave: 'descuadre-semana-por-dias|' + req.grupoId + '|' + desde + '|' + JSON.stringify(diferencias.map(d => d.nombre))
+        });
+      } catch (e2) { /* un aviso que falla nunca rompe la tabla */ }
+    }
+  } catch (e) {
+    console.error('[semana-por-dias] No se pudo comparar con Balance General:', e.message);
   }
 
   res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias: diasConDatos, clientes, comisionPorDia: comisionPorDiaFinal, comisionSemana: comisionSemanaFinal });

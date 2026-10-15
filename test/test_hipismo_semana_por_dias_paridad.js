@@ -75,10 +75,14 @@ const TABLAS = {
     { id: PLANO_PEDRO, grupo_id: GRUPO_ID, fecha: FECHA_PROPIO, cruza_jugadas: false, comision_total: 0 }
   ],
   hipismo_remate_apuestas: [],
-  hipismo_remates: [],
-  hipismo_adelantadas_jugadas: [],
+  // 15-10-2026: "WINNERS", "REMATE" y "TABLAS FIJAS" son renglones sintéticos del Balance General; Semana por
+  // Días debe traerlos IGUAL (si no, la tabla no suma 0 con la comisión y no coincide con el Balance).
+  hipismo_remates: [{ id: 'remate-1', grupo_id: GRUPO_ID, fecha: FECHA_PROPIO, comision_total: 20 }],
+  hipismo_adelantadas_jugadas: [
+    { id: 'tf-1', grupo_id: GRUPO_ID, tipo: 'tf', cliente_nombre: 'TFCLI', resultado_cliente: -100, comision: 5, banqueadores: null, monto: 100, gano: false, sin_comision: false, estado: 'resuelto', fecha: FECHA_PROPIO, hipodromo_nombre: 'La Rinconada', carrera_numero: 3 }
+  ],
   hipismo_adelantadas_planos: [],
-  hipismo_winners: [],
+  hipismo_winners: [{ grupo_id: GRUPO_ID, cliente_nombre: 'WINCLI', monto: 400, fecha: FECHA_PROPIO }],
   // TRASPASO DE COMISIÓN (26-09-2026): CARLOS nunca jugó nada esta
   // semana — su ÚNICO movimiento es este traspaso manual de +30.
   hipismo_comisiones_ajustes: [
@@ -107,10 +111,10 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (sql === "SELECT j.cliente_nombre, j.tipo, j.resultado_cliente, j.comision, j.banqueadores, j.monto, j.gano, j.sin_comision, p.fecha, p.hipodromo_nombre, j.carrera_numero FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.fecha >= p2 && j.fecha <= p3) };
   }
   if (sql === "SELECT cliente_nombre, monto FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.fecha >= p2 && w.fecha <= p3).map(w => ({ cliente_nombre: w.cliente_nombre, monto: w.monto })) };
   }
   if (sql === "SELECT cliente_nombre, COALESCE(SUM(monto), 0) AS total FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY cliente_nombre") {
     const filas = TABLAS.hipismo_comisiones_ajustes.filter(a => a.grupo_id === grupoId && a.fecha >= p2 && a.fecha <= p3);
@@ -119,7 +123,7 @@ function ejecutarQuery(text, params) {
     return { rows: Object.keys(mapa).map(nombre => ({ cliente_nombre: nombre, total: mapa[nombre] })) };
   }
   if (sql === "SELECT COALESCE(SUM(comision_total), 0) AS total FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
-    return { rows: [{ total: 0 }] };
+    return { rows: [{ total: TABLAS.hipismo_remates.filter(r => r.grupo_id === grupoId && r.fecha >= p2 && r.fecha <= p3).reduce((a, r) => a + Number(r.comision_total), 0) }] };
   }
   if (sql === "SELECT COALESCE(SUM(comision_total), 0) AS total FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
     return { rows: [{ total: 0 }] };
@@ -133,10 +137,10 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (sql === "SELECT j.cliente_nombre, j.resultado_cliente, j.banqueadores, j.monto, j.gano, j.sin_comision, p.fecha, p.hipodromo_nombre, j.carrera_numero FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.fecha >= p2 && j.fecha <= p3) };
   }
   if (sql === "SELECT cliente_nombre, monto, fecha FROM hipismo_winners WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.fecha >= p2 && w.fecha <= p3) };
   }
   if (sql === "SELECT cliente_nombre, monto, fecha FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3") {
     const filas = TABLAS.hipismo_comisiones_ajustes.filter(a => a.grupo_id === grupoId && a.fecha >= p2 && a.fecha <= p3);
@@ -146,10 +150,14 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (sql === "SELECT fecha, COALESCE(SUM(comision_total), 0) AS total FROM hipismo_remates WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3 GROUP BY fecha") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_remates.filter(r => r.grupo_id === grupoId && r.fecha >= p2 && r.fecha <= p3).map(r => ({ fecha: r.fecha, total: r.comision_total })) };
   }
   if (sql === "SELECT p.fecha AS fecha, j.comision FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p ON p.id = j.plano_id WHERE j.grupo_id = $1 AND p.fecha BETWEEN $2 AND $3 AND j.estado IN ('resuelto','falta_banqueo','sin_decidir')") {
-    return { rows: [] };
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.fecha >= p2 && j.fecha <= p3).map(j => ({ fecha: j.fecha, comision: j.comision })) };
+  }
+
+  if (sql.startsWith("SELECT p.fecha AS fecha, j.resultado_cliente, j.comision FROM hipismo_adelantadas_jugadas j")) {
+    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && j.fecha >= p2 && j.fecha <= p3 && j.tipo === 'tf' && j.banqueadores == null) };
   }
 
   // ---- compartida: obtenerComisionesPropias (28-09-2026, 2 consultas:
@@ -309,6 +317,18 @@ function check(cond, msg) {
   const idxViernes = resDias._json.dias.findIndex(d => d.fecha === FECHA_TRASPASO);
   check(idxViernes >= 0, '16) el viernes 25 (día del traspaso) aparece entre los días con datos');
   check(!!carlosDias && carlosDias.porDia[idxViernes] === 30, `17) la columna de CARLOS el viernes 25 debía ser +30,00, dio ${carlosDias && carlosDias.porDia[idxViernes]}`);
+
+  // 15-10-2026 ("esos errores no pueden volver a pasar"): CADA renglón del Balance General (incluidos los
+  // sintéticos WINNERS, REMATE y TABLAS FIJAS) debe existir en Semana por Días con EXACTAMENTE el mismo total,
+  // y al revés. Si mañana una pantalla cuenta algo que la otra no, esta prueba falla.
+  const nombresCierre = resCierre._json.clientes.map(c => c.nombre);
+  const nombresDias = resDias._json.clientes.map(c => c.nombre);
+  check(JSON.stringify([...nombresCierre].sort()) === JSON.stringify([...nombresDias].sort()),
+    `20) los mismos renglones en ambas pantallas: Balance [${nombresCierre.join(', ')}] vs Semana por Días [${nombresDias.join(', ')}]`);
+  nombresCierre.forEach(n => check(saldoCierre(n) === totalDias(n), `21) ${n}: Balance ${saldoCierre(n)} = Semana por Días ${totalDias(n)}`));
+  check(totalDias('WINNERS') === -400, `22) WINNERS (espejo de +400 de WINCLI) = -400,00 en Semana por Días: ${totalDias('WINNERS')}`);
+  check(totalDias('REMATE') === 20, `23) REMATE = 20,00 en Semana por Días: ${totalDias('REMATE')}`);
+  check(totalDias('TABLAS FIJAS') === 95, `24) TABLAS FIJAS (espejo neto de la tabla fija) = +95,00 en Semana por Días: ${totalDias('TABLAS FIJAS')}`);
 
   // 15-10-2026: la comisión de Semana por Días debe ser IGUAL a la de Balance General/Cierre
   // Final (antes sumaba la comisión cruda y quedaba $0,01-$0,02 distinta), y la suma de las
