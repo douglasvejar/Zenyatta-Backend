@@ -213,17 +213,6 @@
   .carrera-body { padding: 0 5px; }
   .carrera-header .flecha-toggle { font-size: 9px; }
   .carrera-bloque.colapsado .carrera-body { display: none; }
-
-  /* Carreras alternadas (15-10-2026, a pedido del usuario): una más oscura y
-     la siguiente más clara, sucesivamente, para que cada carrera se vea como
-     una tabla distinta. Se alterna con :nth-child dentro del hipódromo. */
-  .carrera-bloque { border-style: solid; }
-  .carrera-bloque:nth-child(odd) { background: #d3e6d9; border-color: rgba(21,90,50,0.32); }
-  .carrera-bloque:nth-child(odd) .carrera-header { background: #b9d6c2; }
-  .carrera-bloque:nth-child(odd) .carrera-fila { border-top-color: rgba(21,90,50,0.22); }
-  .carrera-bloque:nth-child(odd) .num-carrera { background: #f4faf6; }
-  .carrera-bloque:nth-child(even) { background: #f7fbf8; border-color: rgba(21,90,50,0.20); }
-  .carrera-bloque:nth-child(even) .carrera-header { background: #e6f1e9; }
   .carrera-bloque.colapsado .flecha-toggle { transform: rotate(-90deg); }
 
   .carrera-fila {
