@@ -233,6 +233,17 @@
   .carrera-fila .resultado { text-align: right; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; line-height: 1.15; font-variant-numeric: tabular-nums; align-self: center; }
   .carrera-fila .monto-jugado { display: block; font-size: 9.5px; line-height: 1.1; color: var(--text-dim); font-weight: 500; text-align: right; }
 
+  /* Jugadas repetidas juntas con flechita (15-10-2026): se despliega el detalle de cada vez. */
+  .carrera-fila.con-desglose { cursor: pointer; }
+  .carrera-fila .flecha-desglose { display: inline-block; margin-right: 5px; font-size: 14px; line-height: 1; color: var(--accent-deep); transform: rotate(-90deg); transition: transform .15s; vertical-align: -1px; }
+  .carrera-fila.abierto .flecha-desglose { transform: rotate(0deg); }
+  .desglose-veces { display: none; margin: 0 0 4px 34px; padding: 3px 8px; background: rgba(22,163,74,0.07); border-left: 3px solid var(--accent-grass); border-radius: 0 6px 6px 0; }
+  .desglose-veces.visible { display: block; }
+  .desglose-fila { display: flex; gap: 10px; align-items: baseline; padding: 2px 0; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .desglose-n { color: var(--text-dim); font-weight: 600; flex: 1; }
+  .desglose-monto { color: var(--text-dim); }
+  .desglose-res { font-weight: 800; min-width: 62px; text-align: right; font-family: 'Outfit', sans-serif; }
+
   /* "Gualdrapa" (manta/chaleco numerado de cada ejemplar) — 25-09-2026, a
      pedido del usuario. Misma definición visual EXACTA copiada en
      public/hipismo-mockup.html (mismo criterio "hermana" que ya usa
@@ -767,18 +778,53 @@
 
             const bodyCarrera = document.createElement('div');
             bodyCarrera.className = 'carrera-body';
+            // JUGADAS REPETIDAS EN UNA SOLA FILA (15-10-2026, a pedido del usuario:
+            // "que el cliente lo vea más corto... una flechita... si lo jugó 3 veces
+            // no le pongas el x3, solo la jugada... al darle clic se desglosa la
+            // cantidad de veces que la jugó con su monto"). Las filas IDÉNTICAS de
+            // una misma carrera (mismo texto de jugada, rol, tipo y pizarra) se
+            // juntan en una sola, con la suma de sus resultados y de sus montos; si
+            // son 2 o más sale una flechita junto al pago que despliega cada vez
+            // que se jugó con su monto y su resultado. Los totales NO cambian
+            // (el total de la carrera sigue sumando todas las filas originales).
+            // Remates, comisiones, cruces y cargas nunca se juntan.
+            const NO_AGRUPAR = ['comision', 'cruce_ajuste', 'carga', 'remate', 'traspaso', 'devolucion'];
+            const grupos = [];
+            const porClave = new Map();
             lineasCarrera.forEach(c => {
+              if (NO_AGRUPAR.indexOf(c.tipo) !== -1) { grupos.push({ items: [c] }); return; }
+              const clave = [armarJugadaTexto(c), c.rol || '', c.tipo || '', c.pizarra || ''].join('|');
+              if (!porClave.has(clave)) { const g = { items: [] }; porClave.set(clave, g); grupos.push(g); }
+              porClave.get(clave).items.push(c);
+            });
+            grupos.forEach(g => {
+              const c = g.items[0];
+              const varias = g.items.length > 1;
+              const sumaResultado = Math.round(g.items.reduce((acc, x) => acc + Math.round((Number(x.resultado) || 0) * 100), 0)) / 100;
+              const sumaMonto = Math.round(g.items.reduce((acc, x) => acc + Math.round((Number(x.monto) || 0) * 100), 0)) / 100;
               const filaCarrera = document.createElement('div');
-              filaCarrera.className = 'carrera-fila';
+              filaCarrera.className = 'carrera-fila' + (varias ? ' con-desglose' : '');
               // 14-10-2026: la devolución ya NO va por jugada, sale toda junta en el
               // ítem "Devolución (cliente)" al final del día (ver hip.tipo 'devolucion').
               filaCarrera.innerHTML = `
                 <span class="num-carrera">${c.carrera ? c.carrera + 'ª' : ''}</span>
                 <span class="jugada-txt">${armarJugadaTexto(c)}</span>
-                <span class="resultado ${claseMonto(c.resultado)}">${conSigno(c.resultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga') ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(c.monto)}</span>`}</span>
+                <span class="resultado ${claseMonto(sumaResultado)}">${varias ? '<span class="flecha-desglose">▾</span>' : ''}${conSigno(sumaResultado)}${(c.tipo === 'cruce_ajuste' || c.tipo === 'carga') ? '' : `<span class="monto-jugado">${c.tipo === 'comision' ? 'sobre' : 'con'} ${formatMonto(sumaMonto)}</span>`}</span>
                 <span class="pizarra-txt">${c.pizarra ? `Pizarra: ${c.pizarra}` : ''}</span>
                 <span></span>`;
               bodyCarrera.appendChild(filaCarrera);
+              if (varias) {
+                const desglose = document.createElement('div');
+                desglose.className = 'desglose-veces';
+                desglose.innerHTML = g.items.map((x, i) => `
+                  <div class="desglose-fila">
+                    <span class="desglose-n">Jugada ${i + 1}</span>
+                    <span class="desglose-monto">con ${formatMonto(x.monto)}</span>
+                    <span class="desglose-res ${claseMonto(x.resultado)}">${conSigno(x.resultado)}</span>
+                  </div>`).join('');
+                bodyCarrera.appendChild(desglose);
+                filaCarrera.onclick = (ev) => { ev.stopPropagation(); filaCarrera.classList.toggle('abierto'); desglose.classList.toggle('visible'); };
+              }
             });
             bloqueCarrera.appendChild(bodyCarrera);
             bodyHip.appendChild(bloqueCarrera);
