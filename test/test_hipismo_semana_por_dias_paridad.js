@@ -309,6 +309,15 @@ function check(cond, msg) {
   const idxViernes = resDias._json.dias.findIndex(d => d.fecha === FECHA_TRASPASO);
   check(idxViernes >= 0, '16) el viernes 25 (día del traspaso) aparece entre los días con datos');
   check(!!carlosDias && carlosDias.porDia[idxViernes] === 30, `17) la columna de CARLOS el viernes 25 debía ser +30,00, dio ${carlosDias && carlosDias.porDia[idxViernes]}`);
+
+  // 15-10-2026: la comisión de Semana por Días debe ser IGUAL a la de Balance General/Cierre
+  // Final (antes sumaba la comisión cruda y quedaba $0,01-$0,02 distinta), y la suma de las
+  // columnas por día debe dar ese mismo total.
+  check(resDias._json.comisionSemana === resCierre._json.comisionSemana,
+    `18) la comisión de /semana-por-dias (${resDias._json.comisionSemana}) coincide con /cierre-final (${resCierre._json.comisionSemana})`);
+  const sumaComisionDias = Math.round((resDias._json.comisionPorDia || []).reduce((acc, m) => acc + Math.round(m * 100), 0)) / 100;
+  check(sumaComisionDias === resDias._json.comisionSemana,
+    `19) la suma de comisionPorDia (${sumaComisionDias}) da el total de la semana (${resDias._json.comisionSemana})`);
 })().then(() => {
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   if (fallaron > 0) process.exit(1);

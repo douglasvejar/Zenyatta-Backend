@@ -6532,7 +6532,32 @@ router.get('/semana-por-dias', asyncHandler(async (req, res) => {
   const comisionSemana = round2(Array.from(todasLasFechasConComision)
     .reduce((acc, fechaIso) => acc + (comisionBrutaPorFecha[fechaIso] || 0) - (devueltoPorFecha[fechaIso] || 0), 0));
 
-  res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias: diasConDatos, clientes, comisionPorDia, comisionSemana });
+  // CUADRE AL CENTAVO CON BALANCE GENERAL (15-10-2026, a pedido del usuario: "Semana por Días
+  // dice Comisión 152,10 y el Balance General 152,08, hay diferencia"). Balance General
+  // (construirCierreFinalHipismo) ajusta la comisión para que la suma de TODOS los saldos más la
+  // comisión dé exactamente 0 (ver CUADRE AL CENTAVO DE LA COMISIÓN en ese archivo); esta tabla
+  // sumaba la comisión cruda y quedaba $0,01-$0,02 distinta. Ahora se toma la comisión final del
+  // Cierre Final y la diferencia (solo si es ruido de centavos) se carga al último día con comisión,
+  // así la suma de los días también da el total. Si falla o la diferencia es grande (un error real,
+  // no se tapa) se deja el cálculo propio de arriba.
+  let comisionSemanaFinal = comisionSemana;
+  let comisionPorDiaFinal = comisionPorDia;
+  try {
+    const cierre = await construirCierreFinalHipismo(req.grupoId, desde, hasta);
+    const dif = round2(Number(cierre.comisionSemana) - comisionSemana);
+    if (Number.isFinite(dif) && dif !== 0 && Math.abs(dif) <= 0.25) {
+      let idxUltimo = -1;
+      comisionPorDia.forEach((m, i) => { if (m) idxUltimo = i; });
+      if (idxUltimo >= 0) {
+        comisionPorDiaFinal = comisionPorDia.map((m, i) => (i === idxUltimo ? round2(m + dif) : m));
+        comisionSemanaFinal = round2(comisionSemana + dif);
+      }
+    }
+  } catch (e) {
+    console.error('[semana-por-dias] No se pudo cuadrar la comisión con Cierre Final:', e.message);
+  }
+
+  res.json({ rango: { desde, hasta }, numeroSemana, esSemanaActual, dias: diasConDatos, clientes, comisionPorDia: comisionPorDiaFinal, comisionSemana: comisionSemanaFinal });
 }));
 
 // =================================================================
