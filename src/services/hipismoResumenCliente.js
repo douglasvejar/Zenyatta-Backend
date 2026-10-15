@@ -210,6 +210,7 @@ function hoyVenezuela() { return new Date(Date.now() - 4 * 60 * 60 * 1000); }
 // normal", arreglado unas líneas más abajo ese mismo día.
 // =================================================================
 async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre, desde, hasta, hoyIso) {
+  const paisPorNombreHip = await obtenerPaisPorNombreHipodromo(grupoId);
   // Candidatos: clientes reales (nunca otra cuenta de comisión) cuyo %
   // propio y/o % de algún avalador resuelve a ESTA ficha puntual — el
   // destino ya quedó enlazado acá en jugadores.cuenta_comision_id la
@@ -432,7 +433,7 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
           if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
           const hipMap = porDia.get(fechaIso);
           const hipNombre = linea.hipodromoNombre;
-          if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: linea.pais, carreras: [] });
+          if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: paisDeHipodromo(paisPorNombreHip, hipNombre, linea.pais), carreras: [] });
 
           hipMap.get(hipNombre).carreras.push({
             tipo: 'comision',
@@ -463,6 +464,28 @@ async function calcularDevueltoDestinoHipismo(grupoId, destinoId, destinoNombre,
   }
 
   return { porDia, totalSemana, totalHoy, cantidadJugadas };
+}
+
+// PAÍS DE CADA HIPÓDROMO POR NOMBRE (15-10-2026, a pedido del usuario: "en los
+// links, en balance por hipódromo, todos salen con la bandera de Venezuela").
+// Causa: el país de cada jugada venía de un JOIN por hipodromo_id, y cuando un
+// plano/jugada no tenía ese id (o no se encontraba) se asumía 'VE' para todo.
+// Ahora se busca el país en hipismo_hipodromos por NOMBRE (sin importar
+// mayúsculas) y solo si no aparece se usa el que ya traía la línea.
+async function obtenerPaisPorNombreHipodromo(grupoId) {
+  const mapa = new Map();
+  try {
+    const r = await db.query('SELECT nombre, pais FROM hipismo_hipodromos WHERE grupo_id = $1', [grupoId]);
+    r.rows.forEach(row => {
+      if (row.nombre && row.pais) mapa.set(String(row.nombre).trim().toLowerCase(), row.pais);
+    });
+  } catch (e) {
+    // sin país por nombre: se queda con el país que traía cada línea
+  }
+  return mapa;
+}
+function paisDeHipodromo(mapa, nombre, paisLinea) {
+  return mapa.get(String(nombre || '').trim().toLowerCase()) || paisLinea;
 }
 
 async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
@@ -541,6 +564,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
 // grupo: fila de "grupos" (necesita .nombre, .logo_url, .modulo_deportes_habilitado).
 // semanaParam: 'actual' (default) | 'anterior'.
 async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
+  const paisPorNombreHip = await obtenerPaisPorNombreHipodromo(jugador.grupo_id);
   // Cuenta de comisión ("{nombre} - PORCENTAJE", ver la nota grande de
   // construirResumenCuentaComisionHipismo arriba) — nunca tiene jugadas
   // propias, así que su saldo se arma con una lógica completamente
@@ -677,7 +701,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
     const hipMap = porDia.get(fechaIso);
     const hipNombre = linea.hipodromoNombre;
-    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: linea.pais, carreras: [] });
+    if (!hipMap.has(hipNombre)) hipMap.set(hipNombre, { nombre: hipNombre, pais: paisDeHipodromo(paisPorNombreHip, hipNombre, linea.pais), carreras: [] });
 
     // Remate/Winner/cruce_ajuste nunca traen `.rol` en absoluto (ver
     // obtenerLineasHipismoCliente en services/hipismoLineasCliente.js),
@@ -852,7 +876,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     const nombreBloque = l.hipodromoNombre || textoJugada.replace(/^[^A-Za-zÁÉÍÓÚáéíóú]+/, '');
     const existente = Array.from(hipMap.keys()).find(k => String(k).trim().toUpperCase() === nombreBloque.trim().toUpperCase());
     const claveBloque = existente !== undefined ? existente : nombreBloque;
-    if (!hipMap.has(claveBloque)) hipMap.set(claveBloque, { nombre: claveBloque, carreras: [] });
+    if (!hipMap.has(claveBloque)) hipMap.set(claveBloque, { nombre: claveBloque, pais: paisPorNombreHip.get(String(claveBloque).trim().toLowerCase()), carreras: [] });
     hipMap.get(claveBloque).carreras.push({
       carrera: l.carrera ? Number(l.carrera) : 0,
       tipo: 'carga',
