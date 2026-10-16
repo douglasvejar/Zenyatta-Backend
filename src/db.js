@@ -57,6 +57,11 @@ setTimeout(() => {
 pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas jsonb')
   .catch((err) => console.warn('[db] No se pudo asegurar la columna grupos.funciones_habilitadas (corre sql/schema.sql en Supabase):', err.message));
 
+// HIPÓDROMOS PREDETERMINADOS (15-10-2026): los grupos que todavía no recibieron la lista (3 de Venezuela + 48 de USA) la reciben
+// una sola vez al arrancar (marca grupos.hipismo_hipodromos_iniciales), sin depender de correr el SQL. Ver
+// services/hipismoHipodromosDefecto.js. Nunca tumba el arranque: si algo falla, solo avisa en el log.
+require('./services/hipismoHipodromosDefecto').sembrarGruposExistentes({ query: (t, p) => pool.query(t, p) });
+
 async function query(text, params) {
   return pool.query(text, params);
 }

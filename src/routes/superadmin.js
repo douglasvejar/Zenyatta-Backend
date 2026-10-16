@@ -18,6 +18,7 @@ const chatService = require('../services/chat');
 const mantenimientoGrupo = require('../services/mantenimientoGrupo');
 const telefonosService = require('../services/telefonos');
 const funcionesGrupo = require('../services/funcionesGrupo');
+const { sembrarHipodromosDefecto } = require('../services/hipismoHipodromosDefecto');
 const { funcionesEfectivas } = funcionesGrupo;
 // 19-09-2026, a pedido del usuario: "quiero desde super admin pulsar el
 // grupo y poder ver, balances del grupo detallado por clientes y sus
@@ -93,6 +94,9 @@ router.post('/grupos', asyncHandler(async (req, res) => {
        RETURNING id, nombre, email, activo, creado_en`,
       vals
     );
+    // 15-10-2026: el grupo nuevo ya nace con los hipódromos predeterminados (3 de Venezuela + 48 de USA). Si falla no tumba la
+    // creación del grupo: el arranque del servidor se los vuelve a intentar (db.js).
+    try { await sembrarHipodromosDefecto(db, r.rows[0].id); } catch (e2) { console.warn('[superadmin] No se pudieron cargar los hipódromos predeterminados del grupo nuevo:', e2.message); }
     res.status(201).json(r.rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un grupo con ese email.' });
