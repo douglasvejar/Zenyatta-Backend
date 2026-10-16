@@ -392,7 +392,7 @@ router.put('/cruzar-config', asyncHandler(async (req, res) => {
 // TEMA DEL PANEL (15-10-2026, a pedido del usuario: "que cada grupo pueda elegir un tema... asi cada grupo ve su pantalla
 // personalizada"). Cada grupo escoge el estilo visual completo de su panel de Hipismo (Ajustes > Preferencias). Lo guarda el
 // administrador del grupo en grupos.hipismo_tema y vale para todos sus usuarios y dispositivos. Los colores de la imagen del
-// plano NO dependen de esto (se editan aparte, en Ajustes > Plano por foto). Sin la columna (falta correr el SQL) el GET
+// plano NO dependen de esto (los configura solo el Súper-admin para cada grupo, junto al logo). Sin la columna (falta correr el SQL) el GET
 // responde sinColumna y el PUT 503; la pantalla sigue con la copia guardada en el navegador.
 // =================================================================
 const { TEMAS_HIPISMO, TEMA_HIPISMO_DEFECTO, normalizarTemaHipismo } = require('../services/hipismoTemas');
