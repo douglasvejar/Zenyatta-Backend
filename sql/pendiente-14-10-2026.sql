@@ -10,3 +10,6 @@ alter table grupos add column if not exists hipismo_cruzar_automatico boolean no
 -- Número del tema de Telegram (grupo de soporte con Temas) que le corresponde a cada grupo. Sin esto el bot igual
 -- funciona, pero tras reiniciar el servidor crearía un tema nuevo por grupo.
 alter table grupos add column if not exists telegram_soporte_tema_id bigint;
+
+-- 15-10-2026: tema visual del panel de Hipismo (Ajustes > Preferencias)
+alter table grupos add column if not exists hipismo_tema text;

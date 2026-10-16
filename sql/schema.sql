@@ -2162,3 +2162,7 @@ alter table grupos add column if not exists hipismo_cruzar_automatico boolean no
 
 -- Chat de soporte por Telegram (14-10-2026): tema del grupo de soporte que corresponde a cada grupo.
 alter table grupos add column if not exists telegram_soporte_tema_id bigint;
+
+-- Tema visual del panel de Hipismo que eligió cada grupo (15-10-2026). Sin esto el panel igual funciona con el estilo
+-- por defecto (Cristal) y recuerda la elección solo en el navegador.
+alter table grupos add column if not exists hipismo_tema text;

@@ -6,7 +6,12 @@
 <title>Ludox Hipismo 🇻🇪 — Panel del Grupo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script>
+// Tema del panel (15-10-2026): se pone ANTES de pintar para que no parpadee el estilo de siempre. Usa la copia guardada en
+// este navegador; al abrir el panel se confirma con lo que el grupo tiene guardado en el servidor.
+(function () { try { var g = JSON.parse(localStorage.getItem('zenyatta_grupo') || 'null'); var t = localStorage.getItem('ludox_hipismo_tema_' + ((g && (g.id || g.nombre)) || 'x')); if (t && /^[a-z]{3,12}$/.test(t)) document.documentElement.setAttribute('data-tema', t); } catch (e) {} })();
+</script>
 <style>
   :root {
     /* Mismo lenguaje visual que el panel de Deportes (grupo.html), pero en
@@ -1582,6 +1587,198 @@
   .vp-si { color: #17803f; }
   #vista-validarPlano .fila { flex-wrap: wrap; }
   #vista-validarPlano textarea { width: 100%; }
+
+  /* ===============================================================
+     TEMAS DEL PANEL (15-10-2026, a pedido del usuario: "que cada grupo pueda elegir un tema... asi cada grupo ve su
+     pantalla personalizada"). El administrador de cada grupo elige el estilo en Ajustes > Preferencias; se guarda en
+     grupos.hipismo_tema y se pone en <html data-tema="...">. "cristal" es el estilo de siempre (sin cambios). Los demás
+     solo redefinen las variables de color y las reglas de abajo; los ids, clases y funciones no cambian. Los colores de la
+     imagen del plano NO salen de aquí (se editan aparte, en Ajustes > Plano por foto). */
+  html[data-tema="noche"] {
+    --bg-color: #060a13; --primary: rgba(14,22,40,0.78);
+    --accent: #3b82ff; --accent-hover: #2563eb; --accent-grass: #22d3ee; --accent-lime: #3b82ff; --accent-deep: #eaf1ff;
+    --text: #dbe6ff; --text-dim: #8fa3c9; --card: rgba(16,26,46,0.82); --card-2: rgba(22,34,60,0.92);
+    --card-border: rgba(120,160,255,0.16); --border: rgba(120,160,255,0.16); --border-light: rgba(120,160,255,0.28);
+    --ok: #34d399; --danger: #ff6b6b; --warning: #facc15;
+    --cr-vidrio: rgba(14,22,40,0.74); --cr-borde: rgba(120,160,255,0.16); --cr-sombra: 0 14px 44px rgba(0,0,0,0.45), inset 0 1px 0 rgba(150,190,255,0.08);
+    --t-fondo: radial-gradient(900px 600px at 6% 0%, rgba(34,211,238,0.14) 0, transparent 60%), radial-gradient(800px 600px at 100% 4%, rgba(59,130,255,0.18) 0, transparent 60%), #060a13;
+    --t-in: rgba(255,255,255,0.06); --t-solido: #0f1a30; --t-nav: #cfdcf7; --t-nav-ic: #8fa3c9; --t-on-accent: #04101f;
+    --t-btn2-bg: rgba(255,255,255,0.08); --t-btn2-fg: #dbe6ff; --t-acc-rgb: 59,130,255; --t-fila: rgba(255,255,255,0.05); --t-esquema: dark;
+  }
+  html[data-tema="club"] {
+    --bg-color: #0a1a14; --primary: rgba(16,40,31,0.80);
+    --accent: #d8b45a; --accent-hover: #c19a3d; --accent-grass: #e6c776; --accent-lime: #c9a145; --accent-deep: #f4e8c4;
+    --text: #e9efe9; --text-dim: #9db3a6; --card: rgba(18,44,34,0.86); --card-2: rgba(24,56,43,0.94);
+    --card-border: rgba(216,180,90,0.22); --border: rgba(216,180,90,0.22); --border-light: rgba(216,180,90,0.36);
+    --ok: #5fd49a; --danger: #f08a7a; --warning: #e6b24a;
+    --cr-vidrio: rgba(16,40,31,0.80); --cr-borde: rgba(216,180,90,0.24); --cr-sombra: 0 14px 44px rgba(0,0,0,0.45), inset 0 1px 0 rgba(216,180,90,0.10);
+    --t-fondo: radial-gradient(900px 600px at 0% 0%, rgba(216,180,90,0.10) 0, transparent 60%), radial-gradient(900px 700px at 100% 100%, rgba(40,110,80,0.30) 0, transparent 60%), #0a1a14;
+    --t-in: rgba(255,255,255,0.06); --t-solido: #10281f; --t-nav: #e4ece6; --t-nav-ic: #b9a56a; --t-on-accent: #11261c;
+    --t-btn2-bg: rgba(216,180,90,0.10); --t-btn2-fg: #f1e4bf; --t-acc-rgb: 216,180,90; --t-fila: rgba(216,180,90,0.06); --t-esquema: dark;
+    --t-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  }
+  html[data-tema="pasto"] {
+    --bg-color: #f3f9f4; --primary: rgba(255,255,255,0.88);
+    --accent: #16a34a; --accent-hover: #15803d; --accent-grass: #16a34a; --accent-lime: #65a30d; --accent-deep: #14532d;
+    --text: #15321f; --text-dim: #587264; --card: rgba(255,255,255,0.92); --card-2: #f1f8f3;
+    --card-border: rgba(15,60,35,0.12); --border: rgba(15,60,35,0.12); --border-light: rgba(15,60,35,0.20);
+    --ok: #16a34a; --danger: #dc2626; --warning: #d97706;
+    --cr-vidrio: rgba(255,255,255,0.90); --cr-borde: rgba(15,60,35,0.10); --cr-sombra: 0 8px 28px rgba(15,60,35,0.08);
+    --t-fondo: radial-gradient(900px 600px at 0% 0%, #d9f2df 0, transparent 60%), radial-gradient(800px 600px at 100% 100%, #e6f3c9 0, transparent 60%), #f3f9f4;
+    --t-in: #ffffff; --t-solido: #ffffff; --t-nav: #14321f; --t-nav-ic: #3f7a55; --t-on-accent: #ffffff;
+    --t-btn2-bg: #ffffff; --t-btn2-fg: #14532d; --t-acc-rgb: 22,163,74; --t-fila: rgba(22,163,74,0.05); --t-esquema: light;
+  }
+  html[data-tema="pastel"] {
+    --bg-color: #f6f2ff; --primary: rgba(255,255,255,0.78);
+    --accent: #7c5cff; --accent-hover: #6a47f0; --accent-grass: #8b6cff; --accent-lime: #ff7eb3; --accent-deep: #2b2350;
+    --text: #2b2350; --text-dim: #7a7399; --card: rgba(255,255,255,0.82); --card-2: rgba(255,255,255,0.92);
+    --card-border: rgba(124,92,255,0.14); --border: rgba(124,92,255,0.14); --border-light: rgba(124,92,255,0.24);
+    --ok: #14a673; --danger: #e5486b; --warning: #e08a00;
+    --cr-vidrio: rgba(255,255,255,0.78); --cr-borde: rgba(255,255,255,0.95); --cr-sombra: 0 14px 40px rgba(124,92,255,0.12), inset 0 1px 0 rgba(255,255,255,0.95);
+    --t-fondo: radial-gradient(800px 560px at 4% 0%, #c9f3e4 0, transparent 60%), radial-gradient(800px 560px at 100% 6%, #ffd9e6 0, transparent 60%), radial-gradient(900px 640px at 60% 108%, #d6e4ff 0, transparent 60%), #f6f2ff;
+    --t-in: rgba(255,255,255,0.92); --t-solido: #ffffff; --t-nav: #2b2350; --t-nav-ic: #8a7fb5; --t-on-accent: #ffffff;
+    --t-btn2-bg: rgba(255,255,255,0.92); --t-btn2-fg: #4a3d8f; --t-acc-rgb: 124,92,255; --t-fila: rgba(124,92,255,0.06); --t-esquema: light;
+    --t-radio: 26px;
+  }
+  html[data-tema="mono"] {
+    --bg-color: #f7f7f5; --primary: #ffffff;
+    --accent: #111111; --accent-hover: #000000; --accent-grass: #1f1f1f; --accent-lime: #3a3a3a; --accent-deep: #111111;
+    --text: #1a1a1a; --text-dim: #6b6b68; --card: #ffffff; --card-2: #fafaf8;
+    --card-border: #e3e3df; --border: #e3e3df; --border-light: #cfcfca;
+    --ok: #1a7f4b; --danger: #c62828; --warning: #b26a00;
+    --cr-vidrio: #ffffff; --cr-borde: #e3e3df; --cr-sombra: none;
+    --t-fondo: #f7f7f5;
+    --t-in: #ffffff; --t-solido: #ffffff; --t-nav: #1a1a1a; --t-nav-ic: #6b6b68; --t-on-accent: #ffffff;
+    --t-btn2-bg: #ffffff; --t-btn2-fg: #111111; --t-acc-rgb: 17,17,17; --t-fila: rgba(0,0,0,0.035); --t-esquema: light;
+    --t-radio: 8px;
+  }
+
+  /* Reglas comunes de los temas (todo sale de las variables de arriba) */
+  html[data-tema]:not([data-tema="cristal"]) { color-scheme: var(--t-esquema, light); }
+  html[data-tema]:not([data-tema="cristal"]) body { background: var(--t-fondo); background-attachment: fixed; color: var(--text); }
+  html[data-tema]:not([data-tema="cristal"]) .marca h1, html[data-tema]:not([data-tema="cristal"]) .card h2, html[data-tema]:not([data-tema="cristal"]) .cp-panel-cab { color: var(--accent-deep); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin,
+  html[data-tema]:not([data-tema="cristal"]) .selector-modulo { background: var(--cr-vidrio); border-color: var(--cr-borde); }
+  html[data-tema]:not([data-tema="cristal"]) .selector-modulo button { color: var(--text-dim); }
+  html[data-tema]:not([data-tema="cristal"]) .selector-modulo button.activo { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: var(--t-on-accent); box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-parent,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-child { color: var(--t-nav); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item .cr-ic,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-child .cr-ic-hijo,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-parent [id^="caret"],
+  html[data-tema]:not([data-tema="cristal"]) .nav-child .cr-ic-hijo { color: var(--t-nav-ic); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item:hover { color: var(--accent-deep); background: rgba(var(--t-acc-rgb), 0.12); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item:hover .cr-ic,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-child:hover .cr-ic-hijo { color: var(--accent); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item.nav-item-active,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-child.nav-item-active { background: var(--accent); color: var(--t-on-accent); box-shadow: 0 8px 18px rgba(var(--t-acc-rgb), 0.28); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-item.nav-item-active .cr-ic,
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin .nav-child.nav-item-active .cr-ic-hijo { color: var(--t-on-accent); }
+  html[data-tema]:not([data-tema="cristal"]) .nav-children { border-left-color: var(--card-border); }
+  html[data-tema]:not([data-tema="cristal"]) .sidebar-admin hr { border-top-color: var(--card-border); }
+  html[data-tema]:not([data-tema="cristal"]) .main .vista > .card,
+  html[data-tema]:not([data-tema="cristal"]) .cp-panel,
+  html[data-tema]:not([data-tema="cristal"]) #selectorPlanoCompacto,
+  html[data-tema]:not([data-tema="cristal"]) .cp-acciones,
+  html[data-tema]:not([data-tema="cristal"]) .cp-pasos { background: var(--cr-vidrio); border-color: var(--cr-borde); box-shadow: var(--cr-sombra); }
+  html[data-tema]:not([data-tema="cristal"]) #vista-cargarPlanos > .card.cp-pagina { background: none; border: 0; box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) .card .card,
+  html[data-tema]:not([data-tema="cristal"]) .cme-tile,
+  html[data-tema]:not([data-tema="cristal"]) #vista-preferencias .pref-fila,
+  html[data-tema]:not([data-tema="cristal"]) .cp-chip-cruzar { background: var(--t-fila); border-color: var(--cr-borde); box-shadow: none; color: var(--text); }
+  html[data-tema]:not([data-tema="cristal"]) .cp-chip-cruzar:hover { background: rgba(var(--t-acc-rgb), 0.14); color: var(--accent-deep); }
+  html[data-tema]:not([data-tema="cristal"]) .cme-tile.editando,
+  html[data-tema]:not([data-tema="cristal"]) .panel-sin-comision,
+  html[data-tema]:not([data-tema="cristal"]) .bg-resultados,
+  html[data-tema]:not([data-tema="cristal"]) .cp-toast-zona .toast-copiado { background: var(--t-solido); color: var(--text); border-color: var(--cr-borde); }
+  html[data-tema]:not([data-tema="cristal"]) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+  html[data-tema]:not([data-tema="cristal"]) select,
+  html[data-tema]:not([data-tema="cristal"]) textarea,
+  html[data-tema]:not([data-tema="cristal"]) #bgInput,
+  html[data-tema]:not([data-tema="cristal"]) #txtPlano,
+  html[data-tema]:not([data-tema="cristal"]) #selectorPlanoCompacto input:not([type="checkbox"]),
+  html[data-tema]:not([data-tema="cristal"]) #selectorPlanoCompacto select { background-color: var(--t-in); color: var(--text); border: 1px solid var(--card-border); box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) #bgInput:focus { background: var(--t-solido); border-color: var(--accent); }
+  html[data-tema]:not([data-tema="cristal"]) input::placeholder, html[data-tema]:not([data-tema="cristal"]) textarea::placeholder { color: var(--text-dim); opacity: .8; }
+  html[data-tema]:not([data-tema="cristal"]) select option { background: var(--t-solido); color: var(--text); }
+  html[data-tema]:not([data-tema="cristal"]) input:focus-visible, html[data-tema]:not([data-tema="cristal"]) select:focus-visible, html[data-tema]:not([data-tema="cristal"]) textarea:focus-visible { outline-color: var(--accent); }
+  html[data-tema]:not([data-tema="cristal"]) label { color: var(--text-dim); }
+  html[data-tema]:not([data-tema="cristal"]) .btn-primario { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: var(--t-on-accent); box-shadow: 0 10px 22px rgba(var(--t-acc-rgb), 0.28); }
+  html[data-tema]:not([data-tema="cristal"]) .btn-secundario { background: var(--t-btn2-bg); color: var(--t-btn2-fg); border: 1px solid var(--card-border) !important; box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) .btn-secundario:hover { background: rgba(var(--t-acc-rgb), 0.16); }
+  html[data-tema]:not([data-tema="cristal"]) .subnav button { background: var(--t-fila); border-color: var(--card-border); color: var(--text); }
+  html[data-tema]:not([data-tema="cristal"]) .subnav button.activo { background: var(--accent); color: var(--t-on-accent); box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) th { background: var(--t-fila); color: var(--text-dim); }
+  html[data-tema]:not([data-tema="cristal"]) td { color: var(--text); border-color: var(--card-border); }
+  html[data-tema]:not([data-tema="cristal"]) tbody tr:hover td { background: rgba(var(--t-acc-rgb), 0.08); }
+  html[data-tema]:not([data-tema="cristal"]) .resultado-caja,
+  html[data-tema]:not([data-tema="cristal"]) .fecha-grande-plano { background: var(--t-fila); color: var(--text); border-color: var(--card-border); }
+  html[data-tema]:not([data-tema="cristal"]) .cp-pasos li b { background: rgba(var(--t-acc-rgb), 0.16); }
+  html[data-tema]:not([data-tema="cristal"]) .cp-pasos li.actual { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); color: var(--t-on-accent); box-shadow: none; }
+  html[data-tema]:not([data-tema="cristal"]) .cp-pasos li.hecho b { background: rgba(var(--t-acc-rgb), 0.22); color: var(--ok); }
+  html[data-tema]:not([data-tema="cristal"]) .bg-item.activo, html[data-tema]:not([data-tema="cristal"]) .bg-item:hover { background: rgba(var(--t-acc-rgb), 0.12); }
+  html[data-tema]:not([data-tema="cristal"]) .bg-item .bg-ic { background: rgba(var(--t-acc-rgb), 0.14); color: var(--accent); }
+  html[data-tema]:not([data-tema="cristal"]) .bg-item.activo .bg-ic, html[data-tema]:not([data-tema="cristal"]) .bg-item:hover .bg-ic { background: var(--accent); color: var(--t-on-accent); }
+  html[data-tema]:not([data-tema="cristal"]) .cme-chip { background: rgba(var(--t-acc-rgb), 0.16); color: var(--accent); }
+  html[data-tema]:not([data-tema="cristal"]) #chkCruzar { background: rgba(var(--t-acc-rgb), 0.28); }
+  html[data-tema]:not([data-tema="cristal"]) #chkCruzar:checked { background: linear-gradient(135deg, var(--accent-grass), var(--accent-lime)); }
+  html[data-tema]:not([data-tema="cristal"]) .buscador-global .bg-atajo { background: rgba(var(--t-acc-rgb), 0.14); color: var(--text-dim); }
+  html[data-tema]:not([data-tema="cristal"]) .fila-carrera-comision,
+  html[data-tema]:not([data-tema="cristal"]) .gc-buscador-miembros input[type="text"],
+  html[data-tema]:not([data-tema="cristal"]) .gc-dropdown-miembros,
+  html[data-tema]:not([data-tema="cristal"]) .chat-burbuja.otro,
+  html[data-tema]:not([data-tema="cristal"]) .mov-buscar { background: var(--t-solido); color: var(--text); border-color: var(--card-border); }
+  /* Rojos/verdes de saldo: en fondo oscuro se aclaran para que se lean */
+  html[data-tema="noche"] .verde, html[data-tema="club"] .verde { color: var(--ok); }
+  html[data-tema="noche"] .rojo, html[data-tema="club"] .rojo { color: var(--danger); }
+  html[data-tema="noche"] .fila-carrera-comision .info-carrera .hipodromo, html[data-tema="club"] .fila-carrera-comision .info-carrera .hipodromo,
+  html[data-tema="noche"] .nombre-cliente, html[data-tema="club"] .nombre-cliente,
+  html[data-tema="noche"] .bloque-hipodromo .titulo-hipodromo, html[data-tema="club"] .bloque-hipodromo .titulo-hipodromo,
+  html[data-tema="noche"] .chip-jugador, html[data-tema="club"] .chip-jugador { color: var(--text); }
+  /* Cajas de colores fijos que vienen "claras" de fábrica: en fondo oscuro se vuelven paneles tenues */
+  html[data-tema="noche"] [style*="background:#fff"], html[data-tema="noche"] [style*="background: #fff"], html[data-tema="noche"] [style*="background:white"], html[data-tema="noche"] [style*="background: white"],
+  html[data-tema="club"] [style*="background:#fff"], html[data-tema="club"] [style*="background: #fff"], html[data-tema="club"] [style*="background:white"], html[data-tema="club"] [style*="background: white"] { background: var(--t-solido) !important; color: var(--text) !important; }
+  html[data-tema="noche"] [style*="background:#f"], html[data-tema="noche"] [style*="background: #f"], html[data-tema="club"] [style*="background:#f"], html[data-tema="club"] [style*="background: #f"] { background: var(--t-fila) !important; color: var(--text) !important; }
+  /* Tema Club: títulos con serif y filete dorado */
+  html[data-tema="club"] .marca h1, html[data-tema="club"] .card h2, html[data-tema="club"] .cp-cabecera h2, html[data-tema="club"] #vista-preferencias .pref-texto b { font-family: var(--t-serif); letter-spacing: 0; }
+  html[data-tema="club"] .main .vista > .card { border-top: 2px solid var(--accent); }
+  /* Tema Pastel: más redondo */
+  html[data-tema="pastel"] .main .vista > .card, html[data-tema="pastel"] .cp-panel, html[data-tema="pastel"] .sidebar-admin { border-radius: var(--t-radio); }
+  html[data-tema="pastel"] .nav-item { border-radius: 16px; }
+  /* Tema Mono: esquinas casi rectas, sin vidrio ni sombras, botones planos */
+  html[data-tema="mono"] .main .vista > .card, html[data-tema="mono"] .cp-panel, html[data-tema="mono"] .sidebar-admin, html[data-tema="mono"] #selectorPlanoCompacto, html[data-tema="mono"] .card .card { border-radius: var(--t-radio); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  html[data-tema="mono"] .btn-primario, html[data-tema="mono"] .btn-secundario, html[data-tema="mono"] button.btn { border-radius: 6px; box-shadow: none; }
+  html[data-tema="mono"] .btn-primario { background: #111111; }
+  html[data-tema="mono"] .cp-acciones .btn { border-radius: 8px; }
+  html[data-tema="mono"] .nav-item { border-radius: 6px; }
+  html[data-tema="mono"] .sidebar-admin .nav-item.nav-item-active, html[data-tema="mono"] .sidebar-admin .nav-child.nav-item-active { background: #111111; box-shadow: none; }
+  html[data-tema="mono"] .selector-modulo button.activo, html[data-tema="mono"] .cp-pasos li.actual, html[data-tema="mono"] .subnav button.activo { background: #111111; }
+  @media (max-width: 860px) {
+    html[data-tema]:not([data-tema="cristal"]) .sidebar-admin, html[data-tema]:not([data-tema="cristal"]) .mov-cab { background: var(--t-solido); }
+    html[data-tema]:not([data-tema="cristal"]) .mov-nav { background: var(--t-solido); border-color: var(--cr-borde); }
+    html[data-tema]:not([data-tema="cristal"]) .mov-cab-fila b, html[data-tema]:not([data-tema="cristal"]) .mov-cab-cerrar { color: var(--accent-deep); }
+    html[data-tema]:not([data-tema="cristal"]) .mov-cab-cerrar { background: rgba(var(--t-acc-rgb), 0.14); }
+  }
+
+  /* Selector de tema (Ajustes > Preferencias) */
+  #temaLista { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+  .tema-opcion { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 16px; border: 2px solid var(--card-border); background: var(--t-fila, rgba(255,255,255,0.6)); color: var(--text); cursor: pointer; text-align: left; font: inherit; transition: border-color .15s, transform .15s; }
+  .tema-opcion:hover { transform: translateY(-2px); border-color: var(--border-light); }
+  .tema-opcion:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tema-opcion.elegido { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--t-acc-rgb, 79,91,213), 0.18); }
+  .tema-opcion[disabled] { opacity: .55; cursor: not-allowed; transform: none; }
+  .tema-mini { display: grid; grid-template-columns: 34% 1fr; gap: 5px; height: 84px; padding: 6px; border-radius: 10px; overflow: hidden; }
+  .tema-mini i { display: block; border-radius: 6px; }
+  .tema-mini .tm-m { display: flex; flex-direction: column; gap: 4px; padding: 5px; }
+  .tema-mini .tm-m u { display: block; height: 6px; border-radius: 3px; text-decoration: none; opacity: .75; }
+  .tema-mini .tm-m u:nth-child(2) { width: 70%; }
+  .tema-mini .tm-p { display: flex; flex-direction: column; gap: 5px; padding: 6px; }
+  .tema-mini .tm-p u { display: block; height: 7px; border-radius: 4px; text-decoration: none; }
+  .tema-mini .tm-p b { display: block; width: 46%; height: 12px; border-radius: 6px; margin-top: auto; }
+  .tema-nombre { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--accent-deep); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .tema-nombre em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--t-on-accent, #fff); }
+  .tema-desc { font-size: 12px; color: var(--text-dim); line-height: 1.35; }
 </style>
 </head>
 <body>
@@ -3674,6 +3871,11 @@ Pizarra: [se llena al calcular]
         </div>
         <p id="prefCruzarEstado" class="pref-estado"></p>
         <p id="prefCruzarBloqueado" class="pref-estado" style="display:none;">Cruzar jugadas está <b>desactivado por Súper-admin</b> para este grupo — cada jugada se paga sola y no se puede cambiar desde aquí.</p>
+      
+        <h3 style="margin:22px 0 4px;">Tema del panel</h3>
+        <p class="desc" style="margin:0;">Elige cómo se ve el panel de este grupo. Lo ven todos los usuarios del grupo, en cualquier dispositivo. (Los colores de la foto del plano se editan aparte, en Ajustes &gt; Plano por foto.)</p>
+        <div id="temaLista" role="radiogroup" aria-label="Tema del panel"></div>
+        <p id="temaEstado" class="pref-estado"></p>
       </div>
     </section>
 
@@ -6718,6 +6920,76 @@ async function cambiarCruzarAutomatico(valor) {
     if (st) st.textContent = (CRUZAR_ACTIVO ? 'Activado' : 'Apagado') + ' — quedó guardado solo en este navegador (' + e.message + ')';
   }
 }
+// =================================================================
+// TEMA DEL PANEL (15-10-2026): cada grupo elige el estilo visual completo de su panel. El administrador lo cambia en Ajustes >
+// Preferencias; se guarda por grupo en el servidor (grupos.hipismo_tema) y vale para todos sus usuarios y dispositivos. Mientras
+// no se corra el SQL (o sin conexión) queda la copia guardada en este navegador. Los estilos viven en el CSS como html[data-tema].
+// =================================================================
+const TEMAS_HIP_UI = [
+  { id: 'cristal', nombre: 'Cristal', desc: 'Claro, con vidrio translúcido y degradados suaves. El de siempre.', fondo: '#eaf4fb', menu: '#ffffff', barra: '#9db4c6', panel: '#ffffff', acc: '#4f5bd5' },
+  { id: 'noche', nombre: 'Noche', desc: 'Oscuro tecnológico, azul y cian. Cómodo de noche.', fondo: '#060a13', menu: '#101a30', barra: '#5d7199', panel: '#14213d', acc: '#3b82ff' },
+  { id: 'club', nombre: 'Club hípico', desc: 'Verde profundo con dorado y títulos con serif.', fondo: '#0a1a14', menu: '#12291f', barra: '#a8935a', panel: '#16362a', acc: '#d8b45a' },
+  { id: 'pasto', nombre: 'Pasto', desc: 'Claro y verde, limpio para jornadas largas.', fondo: '#f1f8f2', menu: '#ffffff', barra: '#8fb59c', panel: '#ffffff', acc: '#16a34a' },
+  { id: 'pastel', nombre: 'Pastel', desc: 'Lila, menta y rosa; esquinas muy redondas.', fondo: '#f1ecff', menu: '#ffffff', barra: '#b7aae6', panel: '#ffffff', acc: '#7c5cff' },
+  { id: 'mono', nombre: 'Monocromo', desc: 'Blanco y negro, líneas finas, sin adornos.', fondo: '#f7f7f5', menu: '#ffffff', barra: '#b5b5b0', panel: '#ffffff', acc: '#111111' }
+];
+let TEMA_HIP_ACTUAL = 'cristal';
+function claveTemaHip() {
+  let g = 'x';
+  try { g = (GRUPO && (GRUPO.id || GRUPO.nombre)) || 'x'; } catch (e) { /* clave genérica */ }
+  return 'ludox_hipismo_tema_' + g;
+}
+function temaHipValido(id) { return TEMAS_HIP_UI.some(t => t.id === id); }
+function aplicarTemaHip(id) {
+  if (!temaHipValido(id)) id = 'cristal';
+  TEMA_HIP_ACTUAL = id;
+  document.documentElement.setAttribute('data-tema', id);
+  pintarTemasHip();
+}
+function puedeCambiarTemaHip() { return !(GRUPO && GRUPO.rol === 'empleado'); }
+function pintarTemasHip() {
+  const cont = document.getElementById('temaLista');
+  if (!cont) return;
+  const puede = puedeCambiarTemaHip();
+  cont.innerHTML = TEMAS_HIP_UI.map(t => {
+    const elegido = t.id === TEMA_HIP_ACTUAL;
+    return `<button type="button" class="tema-opcion${elegido ? ' elegido' : ''}" role="radio" aria-checked="${elegido}" data-tema-id="${t.id}"${puede ? '' : ' disabled'} onclick="elegirTemaHip('${t.id}')">` +
+      `<span class="tema-mini" style="background:${t.fondo};"><i class="tm-m" style="background:${t.menu};"><u style="background:${t.barra};"></u><u style="background:${t.barra};"></u><u style="background:${t.acc};"></u></i>` +
+      `<i class="tm-p" style="background:${t.panel};"><u style="background:${t.barra};"></u><u style="background:${t.barra};width:72%;"></u><b style="background:${t.acc};"></b></i></span>` +
+      `<span class="tema-nombre">${t.nombre}${elegido ? '<em>En uso</em>' : ''}</span><span class="tema-desc">${t.desc}</span></button>`;
+  }).join('');
+  const st = document.getElementById('temaEstado');
+  if (st && !puede && !st.textContent) st.textContent = 'Solo el administrador del grupo puede cambiar el tema.';
+}
+async function sincronizarTemaServidor() {
+  let local = null;
+  try { local = localStorage.getItem(claveTemaHip()); } catch (e) { local = null; }
+  if (temaHipValido(local)) aplicarTemaHip(local); else pintarTemasHip();
+  try {
+    const r = await apiHipismo('/api/hipismo/tema-config');
+    if (!r || !temaHipValido(r.tema)) return; // el servidor todavía no tiene la columna: vale la copia local
+    // Si el servidor aún no tiene nada guardado devuelve el tema por defecto; no pisa una elección local anterior.
+    if (r.tema === 'cristal' && temaHipValido(local) && local !== 'cristal') return;
+    try { localStorage.setItem(claveTemaHip(), r.tema); } catch (e) { /* sin copia local */ }
+    aplicarTemaHip(r.tema);
+  } catch (e) { /* sin conexión: vale la copia local */ }
+}
+async function elegirTemaHip(id) {
+  if (!puedeCambiarTemaHip() || !temaHipValido(id)) return;
+  const anterior = TEMA_HIP_ACTUAL;
+  aplicarTemaHip(id);
+  try { localStorage.setItem(claveTemaHip(), id); } catch (e) { /* sin copia local */ }
+  const st = document.getElementById('temaEstado');
+  const nombre = (TEMAS_HIP_UI.find(t => t.id === id) || {}).nombre || id;
+  try {
+    await apiHipismo('/api/hipismo/tema-config', { method: 'PUT', body: JSON.stringify({ tema: id }) });
+    if (st) st.textContent = 'Tema ' + nombre + ' — guardado para todo el grupo.';
+  } catch (e) {
+    if (e && /sinColumna|SQL/i.test(String(e.message || ''))) { if (st) st.textContent = 'Tema ' + nombre + ' — quedó guardado solo en este navegador (falta correr el SQL del tema en Supabase).'; }
+    else if (st) { st.textContent = 'No se pudo guardar para el grupo: ' + (e && e.message ? e.message : e); aplicarTemaHip(anterior); try { localStorage.setItem(claveTemaHip(), anterior); } catch (e2) { /* sin copia local */ } }
+  }
+}
+
 function irAPreferenciasCruzar() {
   mostrarVista('preferencias', document.querySelector('.nav-item[data-vista="preferencias"]'));
 }
@@ -6797,6 +7069,7 @@ document.addEventListener('DOMContentLoaded', () => {
   aplicarFuncionesGrupoHipismo();
   refrescarFuncionesGrupoHip();
   aplicarPermisoCruzarJugadas();
+  sincronizarTemaServidor();
   const nombreEl = document.getElementById('topbarNombreGrupo');
   if (nombreEl) nombreEl.textContent = GRUPO.nombre || '';
 });
@@ -7010,7 +7283,7 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   alertasHipismo: () => pintarAlertasHipismo(),
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
-  preferencias: () => sincronizarCruzarServidor(),
+  preferencias: () => { sincronizarCruzarServidor(); sincronizarTemaServidor(); },
   // "Tablas Fijas y Marcas" (06-10-2026) — recuerda quién banquea las Marcas.
   jugadasAdelantadas: () => bqResumenAdelantadas(),
   // "Banqueo de Marcas" (06-10-2026) — configuración del grupo.

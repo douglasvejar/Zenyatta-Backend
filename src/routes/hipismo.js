@@ -389,6 +389,38 @@ router.put('/cruzar-config', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// TEMA DEL PANEL (15-10-2026, a pedido del usuario: "que cada grupo pueda elegir un tema... asi cada grupo ve su pantalla
+// personalizada"). Cada grupo escoge el estilo visual completo de su panel de Hipismo (Ajustes > Preferencias). Lo guarda el
+// administrador del grupo en grupos.hipismo_tema y vale para todos sus usuarios y dispositivos. Los colores de la imagen del
+// plano NO dependen de esto (se editan aparte, en Ajustes > Plano por foto). Sin la columna (falta correr el SQL) el GET
+// responde sinColumna y el PUT 503; la pantalla sigue con la copia guardada en el navegador.
+// =================================================================
+const { TEMAS_HIPISMO, TEMA_HIPISMO_DEFECTO, normalizarTemaHipismo } = require('../services/hipismoTemas');
+router.get('/tema-config', asyncHandler(async (req, res) => {
+  try {
+    const r = await db.query('SELECT hipismo_tema FROM grupos WHERE id = $1', [req.grupoId]);
+    const fila = r.rows && r.rows[0];
+    res.json({ tema: normalizarTemaHipismo(fila && fila.hipismo_tema), temas: TEMAS_HIPISMO });
+  } catch (e) {
+    if (e && e.code === '42703') return res.json({ tema: null, temas: TEMAS_HIPISMO, sinColumna: true });
+    throw e;
+  }
+}));
+
+router.put('/tema-config', asyncHandler(async (req, res) => {
+  if (req.rol !== 'administrador') return res.status(403).json({ error: 'Solo el administrador del grupo puede cambiar el tema.' });
+  const tema = req.body && typeof req.body.tema === 'string' ? req.body.tema.trim() : '';
+  if (!TEMAS_HIPISMO.includes(tema)) return res.status(400).json({ error: 'Ese tema no existe.' });
+  try {
+    await db.query('UPDATE grupos SET hipismo_tema = $1 WHERE id = $2', [tema, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(503).json({ error: 'Falta correr el SQL pendiente en Supabase (columna grupos.hipismo_tema).', sinColumna: true });
+    throw e;
+  }
+  res.json({ tema });
+}));
+
+// =================================================================
 // HIPÓDROMOS (Administración > Hipódromos, spec sección 3)
 // =================================================================
 router.get('/hipodromos', asyncHandler(async (req, res) => {
