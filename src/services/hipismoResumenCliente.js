@@ -45,7 +45,7 @@ const { obtenerComisionesPropias, obtenerAjustesComision } = require('./hipismoC
 // devuelto sobre su lado jugador Y su lado banquero por separado, nunca
 // neteados, justo la inconsistencia que el usuario pidió corregir en TODOS
 // los reportes que tocan % devuelto.
-const { calcularAjustesCruce, netearJugadorBanqueroTercios } = require('./hipismoCalc');
+const { calcularAjustesCruce, netearJugadorBanqueroTercios, calcularNetoBaseCarreraTercios, nuevoAcumuladorNeto } = require('./hipismoCalc');
 // numeroSemanaISO (03-10-2026, a pedido del usuario: nombrar la carpeta
 // de "Copiar Imagen HD" como "Semana (cliente), (del día al día, semana
 // X del año)" -- mismo cálculo EXACTO que ya usan Cierre Final/Balance
@@ -668,11 +668,12 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       // explícito del usuario, ver la nota grande de montoBaseComisionExacto
       // en hipismoAdelantadasCalc.js).
       if (linea.sinComision) return;
-      if (!porCarreraPropia.has(clave)) porCarreraPropia.set(clave, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
+      if (!porCarreraPropia.has(clave)) porCarreraPropia.set(clave, nuevoAcumuladorNeto());
       const acc = porCarreraPropia.get(clave);
       const decidido = montoDecididoExacto(linea.resultado, linea.sinComision);
-      if (linea.rol === 'jugador') { acc.decididoJugador += decidido; acc.sumaJugador += Number(linea.resultado); }
-      else { acc.decididoBanquero += decidido; acc.sumaBanquero += Number(linea.resultado); }
+      const res = Number(linea.resultado);
+      if (linea.rol === 'jugador') { acc.decididoJugador += decidido; acc.sumaJugador += res; if (res > 0) acc.ganadoJugador += decidido; else if (res < 0) acc.perdidoJugador += decidido; }
+      else { acc.decididoBanquero += decidido; acc.sumaBanquero += res; if (res > 0) acc.ganadoBanquero += decidido; else if (res < 0) acc.perdidoBanquero += decidido; }
     });
     // Misma regla EXACTA que netearJugadorBanqueroTercios en hipismoCalc.js
     // (ver la nota grande "Neteo real" ahí, caso Loba 03-10-2026): resta
@@ -682,10 +683,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // lado -- ver la nota grande de arriba, caso "Sammy".
     const baseTerciosPorCarrera = new Map();
     porCarreraPropia.forEach((acc, clave) => {
-      const ganoLosDosLados = acc.sumaJugador > 0 && acc.sumaBanquero > 0;
-      const netoExacto = ganoLosDosLados
-        ? (acc.decididoJugador + acc.decididoBanquero)
-        : Math.abs(acc.decididoJugador - acc.decididoBanquero);
+      const { netoExacto } = calcularNetoBaseCarreraTercios(acc);
       baseTerciosPorCarrera.set(clave, Math.abs(netoExacto));
     });
     new Set([...baseTerciosPorCarrera.keys(), ...otrosPorCarrera.keys()]).forEach(clave => {

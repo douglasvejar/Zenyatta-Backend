@@ -1180,6 +1180,34 @@ function calcularAjustesCruce(tickets) {
 // más abajo (routes/hipismo.js, hipismoResumenCliente.js) multiplique
 // sobre el valor exacto y redondee él mismo una sola vez — `neto` (ya
 // redondeado) se deja también, para quien solo necesite mostrarlo.
+// 17-10-2026, a pedido del usuario ("cuando cruzas jugadas ... debe pagar el 1%
+// de 80$": ganó 30+50+40 jugando = base 120 y perdió 40 banqueando -> el % sale
+// de 120 - 40 = 80): el neto de UNA carrera para UN nombre se arma con los
+// montos DECIDIDOS (exactos, sin redondear) separando ganado y perdido de
+// cada lado. Primero se netea cada lado por dentro (si en la misma carrera
+// ganó una jugada y perdió otra como jugador, o como banquero, se restan: ej.
+// Santa Anita 4ª de Loba, ganó 100 y perdió 250 = base 150 y NO 350); luego
+// se combinan los 2 lados con la regla de siempre: si GANÓ en los 2 lados
+// se suman completos (caso Loba 03-10-2026), en cualquier otro caso se
+// restan. `dual` = true cuando hay que usar este neto en vez de sumar
+// ticket por ticket (hay los 2 lados, o un lado con ganadas Y perdidas).
+function nuevoAcumuladorNeto() {
+  return {
+    decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0,
+    ganadoJugador: 0, perdidoJugador: 0, ganadoBanquero: 0, perdidoBanquero: 0
+  };
+}
+function calcularNetoBaseCarreraTercios(v) {
+  const sj = v.ganadoJugador - v.perdidoJugador;
+  const sb = v.ganadoBanquero - v.perdidoBanquero;
+  const a = Math.abs(sj);
+  const b = Math.abs(sb);
+  const ladosConActividad = (v.decididoJugador > 0 && v.decididoBanquero > 0);
+  const mezclaUnLado = (v.ganadoJugador > 0 && v.perdidoJugador > 0) || (v.ganadoBanquero > 0 && v.perdidoBanquero > 0);
+  const netoExacto = (sj > 0 && sb > 0) ? (a + b) : Math.abs(a - b);
+  return { netoExacto, dual: ladosConActividad || mezclaUnLado };
+}
+
 function netearJugadorBanqueroTercios(tickets) {
   const porCarrera = new Map();
   (tickets || []).forEach(t => {
@@ -1189,7 +1217,7 @@ function netearJugadorBanqueroTercios(tickets) {
     const clave = `${t.fecha}::${t.hipodromoNombre}::${t.carreraNumero}`;
     if (!porCarrera.has(clave)) porCarrera.set(clave, new Map());
     const porNombre = porCarrera.get(clave);
-    if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
+    if (!porNombre.has(t.clienteNombre)) porNombre.set(t.clienteNombre, nuevoAcumuladorNeto());
     // sinComision (04-10-2026, a pedido EXPLÍCITO del usuario -- ver la
     // nota grande de montoBaseComisionExacto en hipismoAdelantadasCalc.js):
     // un ticket "a premio SIN comisión" no aporta NADA a la base de %
@@ -1205,44 +1233,26 @@ function netearJugadorBanqueroTercios(tickets) {
     // la base SIN excluir sinComision (ver esos fallbacks en
     // hipismoResumenCliente.js, ya protegidos aparte por la misma razón).
     if (!t.sinComision) {
-      porNombre.get(t.clienteNombre).decididoJugador += montoDecididoExacto(t.resultadoJugador, t.sinComision);
-      porNombre.get(t.clienteNombre).sumaJugador += rj;
+      const aj = porNombre.get(t.clienteNombre);
+      const dj = montoDecididoExacto(t.resultadoJugador, t.sinComision);
+      aj.decididoJugador += dj;
+      aj.sumaJugador += rj;
+      if (rj > 0) aj.ganadoJugador += dj; else if (rj < 0) aj.perdidoJugador += dj;
     }
-    if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, { decididoJugador: 0, decididoBanquero: 0, sumaJugador: 0, sumaBanquero: 0 });
+    if (!porNombre.has(t.banqueroNombre)) porNombre.set(t.banqueroNombre, nuevoAcumuladorNeto());
     if (!t.sinComision) {
-      porNombre.get(t.banqueroNombre).decididoBanquero += montoDecididoExacto(t.resultadoBanquero, t.sinComision);
-      porNombre.get(t.banqueroNombre).sumaBanquero += rb;
+      const ab = porNombre.get(t.banqueroNombre);
+      const db = montoDecididoExacto(t.resultadoBanquero, t.sinComision);
+      ab.decididoBanquero += db;
+      ab.sumaBanquero += rb;
+      if (rb > 0) ab.ganadoBanquero += db; else if (rb < 0) ab.perdidoBanquero += db;
     }
   });
   const resultado = new Map();
   porCarrera.forEach((porNombre, clave) => {
     const netos = new Map();
     porNombre.forEach((v, nombre) => {
-      const dual = v.decididoJugador > 0 && v.decididoBanquero > 0;
-      // Neteo real (03-10-2026, a pedido del usuario, caso real de "Loba" --
-      // ver la nota grande EXACTA más arriba). La regla de SIEMPRE restar
-      // (02-10-2026) se queda igual para los casos ya confirmados y
-      // probados -- jugó y perdió / banqueó y perdió (ej. GG en
-      // test_hipismo_resumen_cuenta_comision.js: pierde 100 jugando Y
-      // pierde 60 banqueando -- sigue neteando a 40, NUNCA sumando a 160),
-      // y jugó y perdió / banqueó y ganó (el caso GG original) -- en
-      // cualquiera de esos 2, al menos un lado es una pérdida real, y esa
-      // plata perdida de un lado puede salir del mismo bolsillo que lo
-      // banqueado del otro, así que restar sigue teniendo sentido. La
-      // ÚNICA excepción nueva es cuando GANÓ en los 2 lados a la vez (jugó
-      // Y ganó, banqueó Y ganó -- caso real de Loba, Belmont 3ra, llegada
-      // 7.1.9.11: ganó $475 jugando el 7 en "2/3" y ganó $475 banqueando a
-      // Legolas que perdió el 4 en "3N"): ahí NO hay ninguna pérdida de
-      // ningún lado que explique un descuento -- son 2 ganancias reales e
-      // independientes, y restarlas le daba $0 de % en vez del % completo
-      // de las 2. El usuario confirmó: si ganó en los 2 lados, cada lado
-      // se suma completo (nunca se cancelan entre sí); en cualquier otro
-      // caso (con al menos una pérdida de por medio), se sigue restando
-      // igual que siempre.
-      const ganoLosDosLados = v.sumaJugador > 0 && v.sumaBanquero > 0;
-      const netoExacto = dual
-        ? (ganoLosDosLados ? (v.decididoJugador + v.decididoBanquero) : Math.abs(v.decididoJugador - v.decididoBanquero))
-        : (v.decididoJugador + v.decididoBanquero); // uno de los 2 es 0 -- sumar o restar da igual
+      const { netoExacto, dual } = calcularNetoBaseCarreraTercios(v);
       netos.set(nombre, {
         decididoJugador: round2(v.decididoJugador),
         decididoBanquero: round2(v.decididoBanquero),
@@ -1372,7 +1382,7 @@ function armarTextoSinResolver({ tickets }) {
 module.exports = {
   calcularPlano, armarTextoResultado, armarTextoSinResolver, normalizarPlanoSinResolver, formatNombre, formatMontoTabla, PIE_PLANO_DEFECTO,
   resolverModalidad, parsearPizarra, recalcularTicket, recalcularTotalesPlano, armarSalidaLineasDeTickets,
-  calcularAjustesCruce, netearJugadorBanqueroTercios,
+  calcularAjustesCruce, netearJugadorBanqueroTercios, calcularNetoBaseCarreraTercios, nuevoAcumuladorNeto,
   ordinalCarrera, limpiarEncabezadoYPie,
   // 24-09-2026 (jugadas mixtas + formato compacto "Grupo Gorila"):
   resolverModalidadCompuesta, resolverModalidadMultiCaballo, normalizarModalidadCombo,

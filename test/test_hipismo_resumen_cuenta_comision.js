@@ -264,6 +264,10 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   // en una sola: decididoJugador = 100+80 = 180, decididoBanquero = 28.5/0.95
   // = 30, neto = |180-30| = 150 → 1% = 1.50 (nunca 1.00+0.80+0.30=2.10 por
   // separado, la misma regla del caso "GG" aplicada acá).
+  // 17-10-2026 (el usuario pidió netear TAMBIÉN dentro de un mismo lado: "cuando
+  // cruzas jugadas ... debe pagar el 1% de 80$"): los 2 tickets de PEDRO como
+  // jugador (perdió 100, ganó 76 = base 80) se restan primero: -100+80 = -20;
+  // como banquero ganó +30; neto = |20 - 30| = 10 -> 1% = 0.10.
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO', banquero_nombre: 'PEDRO', modalidad: '1/2', caballo: '5', monto: 30, resultado_jugador: -30, resultado_banquero: 28.5 });
 
   // Remate: PEDRO apuesta 60 → 1% de 60 = 0.60.
@@ -286,7 +290,7 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   // Tercios de PEDRO en la carrera 5 (jugó 2 tickets, banqueó 1) quedan
   // NETEADAS en una sola comisión de 1.50 (ver la nota grande junto a esos
   // tickets, arriba) en vez de sumarse por separado (1.00+0.80+0.30=2.10).
-  const esperadoPedro = round2(1.50 - 0.50);
+  const esperadoPedro = round2(0.10 - 0.50); // 17-10-2026: neteo dentro de un mismo lado (antes 1.50 - 0.50)
   check(resumenPedro.resumen.totalSemana === esperadoPedro,
     `El saldo de "PEDRO - PORCENTAJE" ya NO es 0 — 1%% sobre el NETO de lo que PEDRO jugó Y banqueó en la carrera 5 (nunca sobre la suma de las 2 posiciones por separado), más el traspaso: ${esperadoPedro} (obtenido: ${resumenPedro.resumen.totalSemana})`);
   check(resumenPedro.modulos.hipismo === true && resumenPedro.modulos.deportes === false,
