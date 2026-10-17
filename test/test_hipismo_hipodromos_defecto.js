@@ -14,17 +14,20 @@ function check(c, msg) { if (c) { pasaron++; console.log('OK:', msg); } else { f
 function crearDb({ sinColumna = false } = {}) {
   const grupos = new Map(); // id -> { marca }
   const hip = []; // { grupo_id, nombre, pais }
-  const insertar = (gid, nombre, pais) => { if (!hip.some(h => h.grupo_id === gid && h.nombre.toLowerCase() === nombre.toLowerCase())) hip.push({ grupo_id: gid, nombre, pais }); };
+  const insertar = (gid, nombre, pais) => { if (!hip.some(h => h.grupo_id === gid && h.nombre.toLowerCase() === nombre.toLowerCase()) && !m.yaTieneEquivalente(hip.filter(h => h.grupo_id === gid).map(h => h.nombre), nombre)) hip.push({ grupo_id: gid, nombre, pais }); };
+  // (el SQL real evalúa el "ya tiene equivalente" contra lo que había ANTES de la consulta, no contra lo que inserta la misma consulta)
   const db = {
     grupos, hip,
     async query(text, params) {
       const sql = text.replace(/\s+/g, ' ').trim();
       if (/^ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_hipodromos_iniciales/i.test(sql)) return { rows: [] };
+      if (/^create or replace function hipismo_norm_hipodromo/i.test(sql)) return { rows: [] };
       if (/^INSERT INTO hipismo_hipodromos \(grupo_id, nombre, pais\) SELECT \$1::uuid, h\.nombre, h\.pais FROM unnest/i.test(sql)) {
-        params[1].forEach((n, i) => insertar(params[0], n, params[2][i])); return { rows: [] };
+        const antes = hip.filter(h => h.grupo_id === params[0]).map(h => h.nombre);
+        params[1].forEach((n, i) => { if (!m.yaTieneEquivalente(antes, n)) insertar(params[0], n, params[2][i]); }); return { rows: [] };
       }
       if (/^INSERT INTO hipismo_hipodromos \(grupo_id, nombre, pais\) SELECT g\.id, h\.nombre, h\.pais FROM grupos g CROSS JOIN unnest/i.test(sql)) {
-        for (const [id, g] of grupos) if (!g.marca) params[0].forEach((n, i) => insertar(id, n, params[1][i])); return { rows: [] };
+        for (const [id, g] of grupos) if (!g.marca) { const antes = hip.filter(h => h.grupo_id === id).map(h => h.nombre); params[0].forEach((n, i) => { if (!m.yaTieneEquivalente(antes, n)) insertar(id, n, params[1][i]); }); } return { rows: [] };
       }
       if (/^UPDATE grupos SET hipismo_hipodromos_iniciales = true WHERE id = \$1/i.test(sql)) {
         if (sinColumna) { const e = new Error('column does not exist'); e.code = '42703'; throw e; }
@@ -47,6 +50,15 @@ function crearDb({ sinColumna = false } = {}) {
   check(L.filter(h => h.pais === 'VE').length === 3 && L.filter(h => h.pais === 'US').length === 48, '4) cada uno con su país (VE / US)');
   ['Belmont Park', 'Remington Park', 'Saratoga Race Course', 'Saratoga Raceway', 'Yonkers Raceway'].forEach(n => check(m.USA.includes(n), `5) incluye ${n}`));
 
+  // No duplicar: nombres que el grupo ya tenía creados a su manera
+  const eq = (ex, n) => m.yaTieneEquivalente(ex, n);
+  check(eq(['Remington'], 'Remington Park') && eq(['remington park'], 'Remington Park') && eq(['REMINGTON  PARK'], 'Remington Park'), '5b) "Remington", "remington park" y "REMINGTON  PARK" cubren a Remington Park');
+  check(eq(['Rinconada'], 'La Rinconada') && eq(['LA RINCONADA'], 'La Rinconada') && eq(['la-rinconada'], 'La Rinconada'), '5c) "Rinconada" / "LA RINCONADA" / "la-rinconada" cubren a La Rinconada');
+  check(eq(['Belmont'], 'Belmont Park') && eq(['Santa Anita'], 'Santa Anita Park') && eq(['Gulfstream'], 'Gulfstream Park') && eq(['Churchill'], 'Churchill Downs'), '5d) nombres cortos conocidos cubren al de la lista (Belmont, Santa Anita, Gulfstream, Churchill)');
+  check(eq(['Balmont'], 'Belmont Park') === false && eq(['Park'], 'Belmont Park') === false && eq(['Sara'], 'Saratoga Raceway') === false, '5e) no confunde nombres distintos ni cubre por letras sueltas (Sara no cubre Saratoga)');
+  check(eq(['Saratoga Race Course'], 'Saratoga Raceway') === false && eq(['Saratoga Raceway'], 'Saratoga Race Course') === false, '5f) Saratoga Race Course y Saratoga Raceway son distintos entre sí');
+  check(eq(['Valencia'], 'Valencia') && eq(['Rancho Alegre'], 'Rancho Alegre') && eq(['Ñandú'], 'Nandu') && eq([''], 'Del Mar') === false, '5g) Valencia y Rancho Alegre exactos; acentos y vacíos bien tratados');
+
   // Grupo nuevo
   let db = crearDb();
   db.grupos.set('g1', { marca: false });
@@ -60,6 +72,12 @@ function crearDb({ sinColumna = false } = {}) {
   await m.sembrarGruposExistentes(db);
   const deA = db.hip.filter(h => h.grupo_id === 'a'), deB = db.hip.filter(h => h.grupo_id === 'b');
   check(deA.length === 52 && deB.length === 51, '7) grupos existentes: A conserva sus 2 y recibe el resto (52); B recibe 51');
+  // grupo con nombres propios equivalentes: no se duplican
+  db.grupos.set('e', { marca: false });
+  db.hip.push({ grupo_id: 'e', nombre: 'Remington', pais: 'US' }, { grupo_id: 'e', nombre: 'Rinconada', pais: 'VE' }, { grupo_id: 'e', nombre: 'Belmont', pais: 'US' });
+  await m.sembrarGruposExistentes(db);
+  const deE = db.hip.filter(h => h.grupo_id === 'e').map(h => h.nombre);
+  check(deE.length === 51 && deE.includes('Remington') && !deE.includes('Remington Park') && !deE.includes('La Rinconada') && !deE.includes('Belmont Park'), '7b) un grupo con "Remington", "Rinconada" y "Belmont" ya creados NO recibe duplicados (51 en total, con los suyos)');
   check(deA.filter(h => h.nombre.toLowerCase() === 'la rinconada').length === 1 && deA.some(h => h.nombre === 'LA RINCONADA'), '8) si ya tenían "La Rinconada" se respeta la suya, sin duplicar');
   db.hip.splice(db.hip.findIndex(h => h.grupo_id === 'b' && h.nombre === 'Del Mar'), 1); // B borra uno a propósito
   await m.sembrarGruposExistentes(db);

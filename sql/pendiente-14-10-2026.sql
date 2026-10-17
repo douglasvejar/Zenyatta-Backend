@@ -16,9 +16,12 @@ alter table grupos add column if not exists hipismo_tema text;
 
 -- 15-10-2026: HIPÓDROMOS PREDETERMINADOS. Todos los grupos arrancan con 3 hipódromos de Venezuela y 48 de USA ya cargados
 -- (después cada grupo los renombra, borra o agrega más). La marca hipismo_hipodromos_iniciales hace que esto se haga UNA sola vez
--- por grupo: correr este SQL otra vez NO vuelve a crear los que un grupo borró a propósito. Si un grupo ya tenía uno con el mismo
--- nombre se respeta el suyo. Contenido generado por services/hipismoHipodromosDefecto.js (una prueba verifica que coincida).
+-- por grupo: correr este SQL otra vez NO vuelve a crear los que un grupo borró a propósito. Si un grupo ya tenía uno igual o equivalente
+-- ("Remington" ~ "Remington Park", "Rinconada" ~ "La Rinconada") se respeta el suyo y NO se duplica. Contenido generado por services/hipismoHipodromosDefecto.js (una prueba verifica que coincida).
 alter table grupos add column if not exists hipismo_hipodromos_iniciales boolean not null default false;
+create or replace function hipismo_norm_hipodromo(t text) returns text language sql immutable as $$
+  select trim(regexp_replace(trim(regexp_replace(translate(lower(coalesce(t, '')), 'áàäéèëíìïóòöúùüñ', 'aaaeeeiiiooouuun'), '[^a-z0-9]+', ' ', 'g')), '^(la|el|los|las) ', ''))
+$$;
 do $$
 begin
   insert into hipismo_hipodromos (grupo_id, nombre, pais)
@@ -78,6 +81,12 @@ begin
     ('Yonkers Raceway', 'US')
   ) as h(nombre, pais)
   where not g.hipismo_hipodromos_iniciales
+    and not exists (
+      select 1 from hipismo_hipodromos x
+      where x.grupo_id = g.id
+        and hipismo_norm_hipodromo(x.nombre) <> ''
+        and (hipismo_norm_hipodromo(x.nombre) = hipismo_norm_hipodromo(h.nombre)
+             or hipismo_norm_hipodromo(h.nombre) like hipismo_norm_hipodromo(x.nombre) || ' %'))
   on conflict do nothing;
   update grupos set hipismo_hipodromos_iniciales = true where not hipismo_hipodromos_iniciales;
 end $$;
