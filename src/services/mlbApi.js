@@ -42,8 +42,17 @@ async function obtenerResultadosAPIs(fechaISO) {
             a5 += (inn.away && inn.away.runs) || 0;
           });
         }
-        const finalizado = g.status.abstractGameState === 'Final' || g.status.codedState === 'F';
-        const suspendido = !finalizado && /suspend|postpon/i.test(g.status.detailedState || '');
+        // CORREGIDO (17-10-2026, caso real: "Over Indians (6.5)-110" de WISTON salió PERDIDA con "0 carreras totales"
+        // aunque el juego se suspendió): la API de MLB marca los juegos POSPUESTOS (codedGameState "D", detailedState
+        // "Postponed"), cancelados ("C") y suspendidos ("U") con abstractGameState "Final" y SIN marcador. Antes se
+        // creía "finalizado" solo por ese abstractGameState y la guarda `!finalizado` hacía que `suspendido` nunca se
+        // activara: el juego se evaluaba como terminado 0-0 y todo Over perdía. Ahora esos estados nunca cuentan como
+        // finalizados, aunque la API diga "Final" (el nombre real del campo es codedGameState; "codedState" no existe).
+        const estadoDetalladoApi = g.status.detailedState || '';
+        const codigoEstado = g.status.codedGameState || g.status.statusCode || '';
+        const noSeJugo = /suspend|postpon|cancel/i.test(estadoDetalladoApi) || ['D', 'C', 'U'].includes(codigoEstado);
+        const finalizado = !noSeJugo && (g.status.abstractGameState === 'Final' || codigoEstado === 'F');
+        const suspendido = noSeJugo;
 
         const currentInning = (g.linescore && g.linescore.currentInning) || 0;
         const inningState = (g.linescore && g.linescore.inningState) || '';
