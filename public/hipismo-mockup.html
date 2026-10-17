@@ -1653,6 +1653,19 @@
     --t-radio: 8px;
   }
 
+  html[data-tema="clasico"] {
+    --bg-color: #f3f9f4; --primary: #eaf6ee;
+    --accent: #16a34a; --accent-hover: #15803d; --accent-grass: #16a34a; --accent-lime: #65a30d; --accent-deep: #14532d;
+    --text: #15321f; --text-dim: #587264; --card: #ffffff; --card-2: #f1f8f3;
+    --card-border: rgba(15,60,35,0.12); --border: rgba(15,60,35,0.10); --border-light: rgba(15,60,35,0.18);
+    --ok: #16a34a; --danger: #dc2626; --warning: #d97706;
+    --cr-vidrio: #ffffff; --cr-borde: rgba(15,60,35,0.12); --cr-sombra: none;
+    --t-fondo: #f3f9f4;
+    --t-in: #ffffff; --t-solido: #ffffff; --t-nav: #2f4d3c; --t-nav-ic: #2f4d3c; --t-on-accent: #ffffff;
+    --t-btn2-bg: #ffffff; --t-btn2-fg: #14532d; --t-acc-rgb: 22,163,74; --t-fila: #f1f8f3; --t-esquema: light;
+    --t-radio: 12px;
+  }
+
   /* Reglas comunes de los temas (todo sale de las variables de arriba) */
   html[data-tema]:not([data-tema="cristal"]) { color-scheme: var(--t-esquema, light); }
   html[data-tema]:not([data-tema="cristal"]) body { background: var(--t-fondo); background-attachment: fixed; color: var(--text); }
@@ -1760,6 +1773,24 @@
     html[data-tema]:not([data-tema="cristal"]) .mov-cab-fila b, html[data-tema]:not([data-tema="cristal"]) .mov-cab-cerrar { color: var(--accent-deep); }
     html[data-tema]:not([data-tema="cristal"]) .mov-cab-cerrar { background: rgba(var(--t-acc-rgb), 0.14); }
   }
+
+  /* Tema Clásico (17-10-2026, a pedido del usuario: "agrega ese formato a los temas", con captura del menú de siempre):
+     menú plano con iconos de emoji (cada título guarda su emoji en data-emoji, ver quitarEmojiInicial), botón verde en el
+     ítem activo, títulos de grupo con la flecha a la derecha, hijos con sangría y tarjetas planas de esquinas suaves. */
+  html[data-tema="clasico"]:not(.x) .sidebar-admin { background: var(--primary); border-radius: 12px; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--card-border); }
+  html[data-tema="clasico"]:not(.x) .selector-modulo { background: #ffffff; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; border-color: var(--card-border); }
+  html[data-tema="clasico"]:not(.x) .main .vista > .card, html[data-tema="clasico"]:not(.x) .cp-panel, html[data-tema="clasico"]:not(.x) #selectorPlanoCompacto, html[data-tema="clasico"]:not(.x) .card .card, html[data-tema="clasico"]:not(.x) .cp-acciones, html[data-tema="clasico"]:not(.x) .cp-pasos { border-radius: 12px; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-item { display: block; border-radius: 6px; font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif; color: #2f4d3c; gap: 0; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-parent { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-parent .nav-lbl { flex: 0 1 auto; text-align: center; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-parent [id^="caret"] { margin-left: 0; color: #2f4d3c; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-children { padding-left: 14px; margin: 2px 0 0; border-left: 0; gap: 2px; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-child { font-size: 13px; font-weight: 500; padding: 8px 12px; margin-left: 0; color: #2f4d3c; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-item > .cr-ic { display: none; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-item[data-emoji]::before { content: attr(data-emoji); margin-right: 6px; font-size: 14px; line-height: 1; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-item:hover { background: rgba(15,60,35,0.08); color: #0f2a1a; }
+  html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-item.nav-item-active, html[data-tema="clasico"]:not(.x) .sidebar-admin .nav-child.nav-item-active { background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 60%); color: #ffffff; box-shadow: none; font-weight: 600; }
+  html[data-tema="clasico"]:not(.x) .vista h2[data-emoji]::before { content: attr(data-emoji) " "; }
 
   /* Selector de tema (Ajustes > Preferencias) */
   #temaLista { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
@@ -6927,6 +6958,7 @@ async function cambiarCruzarAutomatico(valor) {
 // =================================================================
 const TEMAS_HIP_UI = [
   { id: 'cristal', nombre: 'Cristal', desc: 'Claro, con vidrio translúcido y degradados suaves. El de siempre.', fondo: '#eaf4fb', menu: '#ffffff', barra: '#9db4c6', panel: '#ffffff', acc: '#4f5bd5' },
+  { id: 'clasico', nombre: 'Clásico', desc: 'El menú de siempre: iconos de emoji y botón verde. Claro y plano.', fondo: '#f3f9f4', menu: '#eaf6ee', barra: '#16a34a', panel: '#ffffff', acc: '#16a34a' },
   { id: 'noche', nombre: 'Noche', desc: 'Oscuro tecnológico, azul y cian. Cómodo de noche.', fondo: '#060a13', menu: '#101a30', barra: '#5d7199', panel: '#14213d', acc: '#3b82ff' },
   { id: 'club', nombre: 'Club hípico', desc: 'Verde profundo con dorado y títulos con serif.', fondo: '#0a1a14', menu: '#12291f', barra: '#a8935a', panel: '#16362a', acc: '#d8b45a' },
   { id: 'pasto', nombre: 'Pasto', desc: 'Claro y verde, limpio para jornadas largas.', fondo: '#f1f8f2', menu: '#ffffff', barra: '#8fb59c', panel: '#ffffff', acc: '#16a34a' },
@@ -7450,7 +7482,12 @@ function crSvg(trazos, clase) {
 function crIcono(clave) { return crSvg(CR_ICONOS[clave], 'cr-ic'); }
 function quitarEmojiInicial(el) {
   const n = el.firstChild;
-  if (n && n.nodeType === 3) n.textContent = n.textContent.replace(CR_EMOJI_INICIO, '');
+  if (n && n.nodeType === 3) {
+    // 17-10-2026: el emoji se guarda en data-emoji para que el tema "Clásico" lo vuelva a mostrar (el resto de temas lo ignora).
+    const m = CR_EMOJI_INICIO.exec(n.textContent);
+    if (m && m[0].trim()) el.dataset.emoji = m[0].trim();
+    n.textContent = n.textContent.replace(CR_EMOJI_INICIO, '');
+  }
 }
 function aplicarEstiloCristalMenu() {
   document.querySelectorAll('#sidebar .nav-item').forEach(b => {

@@ -79,7 +79,7 @@ function check(c, m) { if (c) { pasaron++; console.log('OK:', m); } else { falla
   r = await invocar(get, { ...admin });
   check(r.salida.tema === 'cristal', '9) un valor guardado que ya no existe cae a Cristal');
   r = await invocar(get, { ...admin });
-  check(r.salida.temas.includes('pastel') && r.salida.temas.length === 6, '10) el servidor informa los 6 temas');
+  check(r.salida.temas.includes('pastel') && r.salida.temas.includes('clasico') && r.salida.temas.length === 7, '10) el servidor informa los 7 temas (incluye Clásico)');
   const html = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
   const { TEMAS_HIPISMO } = require(path.join(__dirname, '..', 'src', 'services', 'hipismoTemas'));
   const enPanel = [...html.matchAll(/\{ id: '([a-z]+)', nombre:/g)].map(m => m[1]);
