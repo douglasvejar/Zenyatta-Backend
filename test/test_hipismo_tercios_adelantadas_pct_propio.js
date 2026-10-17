@@ -24,6 +24,10 @@
 //     genera NADA.
 //   - BANCOT: banquero del resto (sin % propio).
 // =================================================================
+// 17-10-2026: la prueba usa semana 'anterior' con jugadas del 02-10-2026; se fija "hoy" al 08-10-2026
+// para que no dependa del día en que se corra (si no, la semana 'anterior' se mueve y falla sin razón).
+(function () { const R = Date; const off = new R('2026-10-08T15:00:00Z').getTime() - R.now();
+  global.Date = class extends R { constructor(...a) { if (a.length === 0) super(R.now() + off); else super(...a); } static now() { return R.now() + off; } }; })();
 const Module = require('module');
 const path = require('path');
 const originalLoad = Module._load;
