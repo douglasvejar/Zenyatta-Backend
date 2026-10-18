@@ -1724,6 +1724,13 @@
   html[data-tema]:not([data-tema="cristal"]) .subnav button.activo { background: var(--accent); color: var(--t-on-accent); box-shadow: none; }
   html[data-tema]:not([data-tema="cristal"]) th { background: var(--t-fila); color: var(--text-dim); }
   html[data-tema]:not([data-tema="cristal"]) td { color: var(--text); border-color: var(--card-border); }
+  /* 18-10-2026 ("los saldos en Cierre Final y Saldos + Pozos se ven en negro; verde positivo, rojo negativo, con su signo"):
+     la regla de arriba ponía color de texto a TODA celda y le ganaba a .pos/.neg (por especificidad), así que en los temas
+     los saldos salían negros. Los saldos positivos vuelven a verde y los negativos a rojo en cualquier tema. */
+  html[data-tema]:not([data-tema="cristal"]) td.pos, html[data-tema]:not([data-tema="cristal"]) td .pos,
+  html[data-tema]:not([data-tema="cristal"]) td.verde, html[data-tema]:not([data-tema="cristal"]) td .verde { color: var(--ok); font-weight: 700; }
+  html[data-tema]:not([data-tema="cristal"]) td.neg, html[data-tema]:not([data-tema="cristal"]) td .neg,
+  html[data-tema]:not([data-tema="cristal"]) td.rojo, html[data-tema]:not([data-tema="cristal"]) td .rojo { color: var(--danger); font-weight: 700; }
   html[data-tema]:not([data-tema="cristal"]) tbody tr:hover td { background: rgba(var(--t-acc-rgb), 0.08); }
   html[data-tema]:not([data-tema="cristal"]) .resultado-caja,
   html[data-tema]:not([data-tema="cristal"]) .fecha-grande-plano { background: var(--t-fila); color: var(--text); border-color: var(--card-border); }
