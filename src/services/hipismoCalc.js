@@ -1187,9 +1187,9 @@ function calcularAjustesCruce(tickets) {
 // cada lado. Primero se netea cada lado por dentro (si en la misma carrera
 // ganó una jugada y perdió otra como jugador, o como banquero, se restan: ej.
 // Santa Anita 4ª de Loba, ganó 100 y perdió 250 = base 150 y NO 350); luego
-// se combinan los 2 lados con la regla de siempre: si GANÓ en los 2 lados
-// se suman completos (caso Loba 03-10-2026), en cualquier otro caso se
-// restan. `dual` = true cuando hay que usar este neto en vez de sumar
+// se combinan los 2 lados: si GANÓ en los 2 lados o PERDIÓ en los 2 se
+// suman completos (Loba 03-10-2026 / Candelita 19-10-2026); solo se restan
+// cuando gana en un lado y pierde en el otro. `dual` = true cuando hay que usar este neto en vez de sumar
 // ticket por ticket (hay los 2 lados, o un lado con ganadas Y perdidas).
 function nuevoAcumuladorNeto() {
   return {
@@ -1204,7 +1204,15 @@ function calcularNetoBaseCarreraTercios(v) {
   const b = Math.abs(sb);
   const ladosConActividad = (v.decididoJugador > 0 && v.decididoBanquero > 0);
   const mezclaUnLado = (v.ganadoJugador > 0 && v.perdidoJugador > 0) || (v.ganadoBanquero > 0 && v.perdidoBanquero > 0);
-  const netoExacto = (sj > 0 && sb > 0) ? (a + b) : Math.abs(a - b);
+  // 19-10-2026, a pedido del usuario (caso real Candelita, La Rinconada 2ª del
+  // 18-10: perdió 1.000 jugando y 400 banqueando = 1.400 perdidos, y el % salía
+  // sobre 600): "restas solo cuando una la pierde y la otra la gana (así como
+  // le sacas los totales en la carrera)... pero si las dos las gana o las dos
+  // las pierde se suman". Solo se RESTA cuando los 2 lados terminan con signo
+  // contrario (cruce real: gana en uno y pierde en el otro); con el mismo signo
+  // (ganó los 2 o perdió los 2) no hay nada que se cancele y se SUMAN.
+  const mismoSigno = (sj > 0 && sb > 0) || (sj < 0 && sb < 0);
+  const netoExacto = mismoSigno ? (a + b) : Math.abs(a - b);
   return { netoExacto, dual: ladosConActividad || mezclaUnLado };
 }
 

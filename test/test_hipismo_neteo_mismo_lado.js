@@ -364,8 +364,12 @@ async function invocarRuta(handler, req) {
       tickets: [tk('P','X',500,475,-500), tk('Y','P',500,-500,475)] },
     { nombre: 'solo perdidas jugando se suman (100 + 50)', esperado: 1.50,
       tickets: [tk('P','X',100,-100,95), tk('P','X',50,-50,47.5)] },
-    { nombre: 'jugo perdido 100 y banqueo perdido 60 -> se resta (caso GG)', esperado: 0.40,
-      tickets: [tk('P','X',100,-100,95), tk('Y','P',60,57,-60)] }
+    { nombre: 'jugo perdido 100 y banqueo GANADO 60 -> cruce real, se resta (caso GG)', esperado: 0.40,
+      tickets: [tk('P','X',100,-100,95), tk('Y','P',60,-60,57)] },
+    { nombre: 'jugo perdido 100 y banqueo perdido 60 -> perdio en los 2 lados, se SUMAN (19-10-2026, Candelita)', esperado: 1.60,
+      tickets: [tk('P','X',100,-100,95), tk('Y','P',60,57,-60)] },
+    { nombre: 'Candelita La Rinconada 2a: perdio 500+500 jugando y 400 banqueando -> 1400', esperado: 14.00,
+      tickets: [tk('P','X',500,-500,475), tk('P','X',500,-500,475), tk('Y','P',400,380,-400)] }
   ];
   for (const incl of [false, true]) for (const cruza of [true, false]) for (const esc of escenarios) {
     TABLAS.jugadores = [jug('j-P', 'P', { comision_propia: 1, incluir_porcentaje_en_jugadas: incl, cuenta_comision_id: incl ? null : 'j-P-cta' }), jug('j-X', 'X'), jug('j-Y', 'Y')];

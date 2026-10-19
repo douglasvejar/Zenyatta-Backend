@@ -393,7 +393,7 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   //     lado jugador Y el lado banquero de GG cuando coincidían en la
   //     MISMA carrera, en vez de sobre el neto. GG juega y pierde 100 en
   //     la carrera 5 (plano-1) -- decidido 100 -- Y banquea a OTRO2 en esa
-  //     MISMA carrera, perdiendo 60 como banquero -- decidido 60. Neto =
+  //     MISMA carrera, GANANDO 60 como banquero (cruce real: pierde en un lado y gana en el otro; si perdiera en los 2 se sumarían, 19-10-2026) -- decidido 60. Neto =
   //     |100 - 60| = 40. Con 1%% propio, el devuelto correcto es 0.40, NUNCA
   //     1.00 + 0.60 = 1.60 (que es lo que daba antes de este arreglo). ---
   TABLAS.jugadores.push({
@@ -406,9 +406,9 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   });
   // Ticket A: GG juega y pierde 100 (decidido = 100).
   TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'GG', banquero_nombre: 'BANCOX', modalidad: '1/2', caballo: '4', monto: 100, resultado_jugador: -100, resultado_banquero: 95 });
-  // Ticket B, MISMA carrera: GG banquea a OTRO2, que gana -- GG pierde 60
-  // como banquero (decidido = 60).
-  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO2', banquero_nombre: 'GG', modalidad: '9x2', caballo: '6', monto: 60, resultado_jugador: 60, resultado_banquero: -60 });
+  // Ticket B, MISMA carrera: GG banquea a OTRO2, que pierde -- GG gana 60
+  // como banquero (decidido = 60, ahora GANADO: cruce real).
+  TABLAS.hipismo_tickets.push({ plano_id: 'plano-1', grupo_id: GRUPO_ID, cliente_nombre: 'OTRO2', banquero_nombre: 'GG', modalidad: '9x2', caballo: '6', monto: 60, resultado_jugador: -60, resultado_banquero: 57 });
 
   const cuentaGG = { id: 'cta-gg', grupo_id: GRUPO_ID, nombre: 'GG - PORCENTAJE', es_cuenta_comision: true, modulos_anclados: false };
   const resumenGG = await construirResumenClienteHipismo(cuentaGG, grupo, 'actual');
