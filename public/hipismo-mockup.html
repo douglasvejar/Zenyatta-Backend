@@ -2904,6 +2904,7 @@
         </div>
         <div class="modal-detalle-acciones">
           <button class="btn btn-primario" type="button" onclick="copiarDetalleClienteImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-primario" type="button" id="btnPdfDetalleCliente" onclick="descargarPDFDetalleCliente()">📄 Descargar PDF</button>
           <span class="toast-copiado" id="toastDetalleCliente"></span>
         </div>
       </div>
@@ -12421,7 +12422,8 @@ async function descargarPDFTodosLosClientes() {
   }
 }
 
-function construirPDFTodosLosClientes(lista, resultados, semana) {
+function construirPDFTodosLosClientes(lista, resultados, semana, opciones) {
+  const sinResumen = !!(opciones && opciones.sinResumen);   // PDF de UN solo cliente (modal): sin hoja-resumen
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
   const W = pdf.internal.pageSize.getWidth();
@@ -12455,6 +12457,7 @@ function construirPDFTodosLosClientes(lista, resultados, semana) {
   const espacio = (h) => { if (y + h > H - 46) nuevaPagina(); };
 
   // ---- Hoja-resumen con TODOS los clientes ----
+  if (!sinResumen) {
   const primero = resultados.find(r => r && r.rango);
   const rangoTxt = primero ? `${formatFechaCortaDMY(primero.rango.desde)} al ${formatFechaCortaDMY(primero.rango.hasta)}${primero.esSemanaActual ? ' (semana actual)' : ' (semana cerrada)'}` : (semana === 'anterior' ? 'Semana anterior' : 'Semana actual');
   texto('Detallado por Cliente', MARGEN, y + 14, { tam: 18, bold: true });
@@ -12479,13 +12482,15 @@ function construirPDFTodosLosClientes(lista, resultados, semana) {
   linea(y - 6, [150, 150, 150], 0.8); y += 4;
   texto(`Suma de ${lista.length} clientes`, MARGEN, y + 4, { tam: 9.5, bold: true });
   texto(conSignoDet(granTotal), X_DER, y + 4, { tam: 10, bold: true, color: colorMonto(granTotal), align: 'right' });
+  }
 
   // ---- Un bloque por cliente (cada uno en página nueva) ----
   const X_JUG = MARGEN + 16, X_PIZ = 330, X_MONTO = X_DER - 74;
   lista.forEach((c, i) => {
     const r = resultados[i];
     const nombre = limpiarTextoPDF(formatNombre(c.nombre));
-    pdf.addPage(); y = MARGEN; tituloPagina = nombre;
+    if (!(sinResumen && i === 0)) pdf.addPage();
+    y = MARGEN; tituloPagina = nombre;
     if (!r || r.error || !r.resumen) {
       texto(nombre, MARGEN, y + 14, { tam: 16, bold: true });
       y += 34;
@@ -12567,6 +12572,27 @@ function construirPDFTodosLosClientes(lista, resultados, semana) {
     texto(`Página ${p} de ${total}`, X_DER, H - 22, { tam: 7.5, color: GRIS, align: 'right' });
   }
   return pdf;
+}
+
+// PDF de UN solo cliente (19-10-2026, a pedido del usuario: al abrir un
+// cliente, igual que "Copiar Imagen HD", poder bajar su PDF). Usa los datos
+// que el modal YA tiene cargados (DETALLE_CLIENTE_DATA_ACTUAL: semana
+// actual/anterior o el rango personalizado que esté elegido) y el mismo
+// dibujo que el PDF de todos los clientes, sin la hoja-resumen.
+function descargarPDFDetalleCliente() {
+  const data = DETALLE_CLIENTE_DATA_ACTUAL;
+  if (!data || !data.jugador || !data.resumen) { mostrarToastDetalleCliente('Todavía se está cargando el detalle — espera un momento.', true); return; }
+  if (typeof window.jspdf === 'undefined') { mostrarToastDetalleCliente('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true); return; }
+  try {
+    const nombre = data.jugador.nombre;
+    const pdf = construirPDFTodosLosClientes([{ nombre, saldo: data.resumen.totalSemana }], [data], DETALLE_CLIENTE_SEMANA_ACTIVA, { sinResumen: true });
+    const desde = formatFechaCortaParaCarpeta(data.rango.desde);
+    const hasta = formatFechaCortaParaCarpeta(data.rango.hasta);
+    pdf.save(`detallado_${limpiarParaNombreArchivo(formatNombre(nombre)).replace(/\s+/g, '_')}_${desde}_al_${hasta}.pdf`);
+    mostrarToastDetalleCliente('✅ PDF descargado.');
+  } catch (e) {
+    mostrarToastDetalleCliente('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  }
 }
 
 function mostrarToastDetalleCliente(msg, esError) {
