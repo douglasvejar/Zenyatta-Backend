@@ -2845,6 +2845,8 @@
              abajo. -->
         <div class="fila" style="margin:10px 0;">
           <button type="button" class="btn" onclick="verificarCuadreSaldos()">🔍 Verificar Cuadre de Saldos</button>
+          <button type="button" class="btn btn-primario" id="btnPdfTodosClientes" onclick="descargarPDFTodosLosClientes()">📄 Descargar PDF de todos los clientes</button>
+          <span class="toast-copiado" id="toastPdfTodos"></span>
         </div>
         <div class="card" id="panelCuadreSaldos" style="display:none; margin-bottom:14px;">
           <div id="cuadreSaldosContenido"></div>
@@ -11911,6 +11913,7 @@ async function pintarDetalladoCliente(semana) {
   const clientes = data.clientes
     .filter(c => !c.nombre.endsWith(' - PORCENTAJE'))
     .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  DETALLADO_CLIENTE_LISTA = clientes.map(c => ({ nombre: c.nombre, saldo: c.saldo }));
   grid.innerHTML = '';
   if (!clientes.length) {
     grid.innerHTML = '<div class="placeholder-card" style="grid-column:1/-1;">No hay clientes con jugadas en esta semana.</div>';
@@ -12344,6 +12347,226 @@ function renderDetalleClienteModal(data) {
     wrapDia.appendChild(body);
     cont.appendChild(wrapDia);
   });
+}
+
+// ------------------------------------------------------------------
+// "📄 Descargar PDF de todos los clientes" (19-10-2026, a pedido del
+// usuario: "agregale un boton a todos los clientes que pueda descargar en
+// pdf... asi descargo un solo archivo pdf con todo"). Pide, uno por uno
+// (4 a la vez), el MISMO GET /clientes/:nombre/detalle-semana que usa el
+// modal de cada cliente (y su link personal), con la MISMA semana que
+// muestra la grilla (DETALLADO_CLIENTE_SEMANA_ACTIVA), y arma UN SOLO PDF:
+// una hoja-resumen con todos los clientes y sus saldos, y después cada
+// cliente en su propia página (día -> hipódromo -> carrera -> jugadas, con
+// el total de cada nivel y verde(+)/rojo(-) con signo). El PDF se dibuja
+// con TEXTO real (no es una foto), así que se puede buscar/copiar y pesa
+// poco aunque sean muchos clientes. Los emojis no existen en las fuentes
+// de un PDF -- se quitan, y el número de ejemplar sale como "#5".
+// ------------------------------------------------------------------
+let DETALLADO_CLIENTE_LISTA = [];   // [{nombre, saldo}] de la grilla ya pintada
+let PDF_TODOS_GENERANDO = false;
+
+function limpiarTextoPDF(s) {
+  let t = String(s == null ? '' : s)
+    .replace(/<span class="gualdrapa">[\s\S]*?<text[^>]*>(\d+)<\/text>[\s\S]*?<\/span>/g, '#$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ');
+  t = t.replace(/[\u{1F000}-\u{1FFFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, '');
+  t = t.replace(/[^\x20-\x7E -ÿ–—‘’“”•…]/g, '');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+async function descargarPDFTodosLosClientes() {
+  if (PDF_TODOS_GENERANDO) return;
+  const toast = document.getElementById('toastPdfTodos');
+  const msg = (t, err) => { if (toast) { toast.textContent = t; toast.style.color = err ? 'var(--danger)' : 'var(--ok)'; toast.classList.add('visible'); } };
+  if (typeof window.jspdf === 'undefined') { msg('⚠️ No se pudo cargar la herramienta de PDF (revisa la conexión).', true); return; }
+  if (!DETALLADO_CLIENTE_LISTA.length) { msg('Todavía no hay clientes cargados en la grilla.', true); return; }
+  const btn = document.getElementById('btnPdfTodosClientes');
+  PDF_TODOS_GENERANDO = true;
+  if (btn) btn.disabled = true;
+  try {
+    const semana = DETALLADO_CLIENTE_SEMANA_ACTIVA === 'anterior' ? 'anterior' : 'actual';
+    const lista = DETALLADO_CLIENTE_LISTA.slice();
+    const resultados = new Array(lista.length);
+    let hechos = 0, siguiente = 0;
+    msg(`Descargando datos… 0/${lista.length}`);
+    const trabajador = async () => {
+      while (siguiente < lista.length) {
+        const i = siguiente++;
+        try {
+          resultados[i] = await apiHipismo(`/api/hipismo/clientes/${encodeURIComponent(lista[i].nombre)}/detalle-semana?semana=${semana}`);
+        } catch (e) {
+          resultados[i] = { error: e.message };
+        }
+        hechos++;
+        msg(`Descargando datos… ${hechos}/${lista.length}`);
+      }
+    };
+    await Promise.all([trabajador(), trabajador(), trabajador(), trabajador()]);
+    msg('Armando el PDF…');
+    await new Promise(r => setTimeout(r, 30));
+    const pdf = construirPDFTodosLosClientes(lista, resultados, semana);
+    const rango = resultados.find(r => r && r.rango);
+    const sufijo = rango ? `${formatFechaCortaParaCarpeta(rango.rango.desde)}_al_${formatFechaCortaParaCarpeta(rango.rango.hasta)}` : semana;
+    pdf.save(`detallado_todos_los_clientes_${sufijo}.pdf`);
+    const fallidos = resultados.filter(r => r && r.error).length;
+    msg(fallidos ? `✅ PDF descargado (${fallidos} cliente(s) no cargaron, salen marcados).` : `✅ PDF descargado: ${lista.length} clientes.`, !!fallidos);
+  } catch (e) {
+    msg('⚠️ No se pudo generar el PDF: ' + e.message, true);
+  } finally {
+    PDF_TODOS_GENERANDO = false;
+    if (btn) btn.disabled = false;
+    setTimeout(() => { if (toast) toast.classList.remove('visible'); }, 6000);
+  }
+}
+
+function construirPDFTodosLosClientes(lista, resultados, semana) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+  const W = pdf.internal.pageSize.getWidth();
+  const H = pdf.internal.pageSize.getHeight();
+  const MARGEN = 36, X_DER = W - MARGEN, ANCHO = W - 2 * MARGEN;
+  const VERDE = [22, 132, 62], ROJO = [200, 36, 36], GRIS = [110, 110, 110], NEGRO = [25, 25, 25];
+  let y = MARGEN;
+  let tituloPagina = '';
+
+  let nombreGrupo = '';
+  try { nombreGrupo = limpiarTextoPDF((JSON.parse(localStorage.getItem('zenyatta_grupo') || '{}') || {}).nombre || ''); } catch (e) { /* sin nombre de grupo */ }
+
+  const colorMonto = (n) => { const v = redondearCentavos(n); return v > 0 ? VERDE : (v < 0 ? ROJO : NEGRO); };
+  const texto = (t, x, yy, { tam = 9, bold = false, color = NEGRO, align = 'left' } = {}) => {
+    pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+    pdf.setFontSize(tam);
+    pdf.setTextColor(color[0], color[1], color[2]);
+    pdf.text(String(t), x, yy, { align });
+  };
+  const linea = (yy, color = [215, 215, 215], grosor = 0.5) => {
+    pdf.setDrawColor(color[0], color[1], color[2]); pdf.setLineWidth(grosor); pdf.line(MARGEN, yy, X_DER, yy);
+  };
+  const nuevaPagina = () => {
+    pdf.addPage();
+    y = MARGEN;
+    if (tituloPagina) {
+      texto(tituloPagina + ' (continuación)', MARGEN, y + 8, { tam: 8.5, color: GRIS });
+      y += 18;
+    }
+  };
+  const espacio = (h) => { if (y + h > H - 46) nuevaPagina(); };
+
+  // ---- Hoja-resumen con TODOS los clientes ----
+  const primero = resultados.find(r => r && r.rango);
+  const rangoTxt = primero ? `${formatFechaCortaDMY(primero.rango.desde)} al ${formatFechaCortaDMY(primero.rango.hasta)}${primero.esSemanaActual ? ' (semana actual)' : ' (semana cerrada)'}` : (semana === 'anterior' ? 'Semana anterior' : 'Semana actual');
+  texto('Detallado por Cliente', MARGEN, y + 14, { tam: 18, bold: true });
+  y += 22;
+  texto(`${nombreGrupo ? nombreGrupo + '  -  ' : ''}${rangoTxt}`, MARGEN, y + 8, { tam: 10, color: GRIS });
+  y += 26;
+  texto('CLIENTE', MARGEN, y, { tam: 8, bold: true, color: GRIS });
+  texto('TOTAL SEMANA', X_DER, y, { tam: 8, bold: true, color: GRIS, align: 'right' });
+  y += 5; linea(y, [150, 150, 150], 0.8); y += 13;
+  let granTotal = 0;
+  lista.forEach((c, i) => {
+    const r = resultados[i];
+    const total = r && r.resumen ? r.resumen.totalSemana : c.saldo;
+    if (!(r && r.error)) granTotal += Number(total) || 0;
+    espacio(16);
+    texto(limpiarTextoPDF(formatNombre(c.nombre)), MARGEN, y, { tam: 10 });
+    if (r && r.error) texto('no se pudo cargar', X_DER, y, { tam: 9, color: GRIS, align: 'right' });
+    else texto(conSignoDet(total), X_DER, y, { tam: 10, bold: true, color: colorMonto(total), align: 'right' });
+    y += 4; linea(y, [235, 235, 235]); y += 12;
+  });
+  espacio(24);
+  linea(y - 6, [150, 150, 150], 0.8); y += 4;
+  texto(`Suma de ${lista.length} clientes`, MARGEN, y + 4, { tam: 9.5, bold: true });
+  texto(conSignoDet(granTotal), X_DER, y + 4, { tam: 10, bold: true, color: colorMonto(granTotal), align: 'right' });
+
+  // ---- Un bloque por cliente (cada uno en página nueva) ----
+  const X_JUG = MARGEN + 16, X_PIZ = 330, X_MONTO = X_DER - 74;
+  lista.forEach((c, i) => {
+    const r = resultados[i];
+    const nombre = limpiarTextoPDF(formatNombre(c.nombre));
+    pdf.addPage(); y = MARGEN; tituloPagina = nombre;
+    if (!r || r.error || !r.resumen) {
+      texto(nombre, MARGEN, y + 14, { tam: 16, bold: true });
+      y += 34;
+      texto(`No se pudo cargar el detalle: ${limpiarTextoPDF(r && r.error)}`, MARGEN, y, { tam: 10, color: ROJO });
+      return;
+    }
+    const rg = r.rango ? `${formatFechaCortaDMY(r.rango.desde)} al ${formatFechaCortaDMY(r.rango.hasta)}` : '';
+    texto(nombre, MARGEN, y + 14, { tam: 16, bold: true });
+    texto(conSignoDet(r.resumen.totalSemana), X_DER, y + 14, { tam: 16, bold: true, color: colorMonto(r.resumen.totalSemana), align: 'right' });
+    y += 24;
+    texto(`${rg}${nombreGrupo ? '  -  ' + nombreGrupo : ''}   Total de la semana`, MARGEN, y + 6, { tam: 8.5, color: GRIS });
+    y += 14; linea(y, [120, 120, 120], 1); y += 14;
+    if (!r.dias || !r.dias.length) { texto('No hay jugadas cargadas en esta semana.', MARGEN, y, { tam: 10, color: GRIS }); return; }
+
+    const dias = r.dias.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    dias.forEach(dia => {
+      const f = fechaLegibleDet(dia.fecha);
+      const totalDia = redondearCentavos(dia.hipodromos.reduce((acc, h) => acc + totalCarrerasDet(h.carreras), 0));
+      espacio(40);
+      pdf.setFillColor(238, 241, 245); pdf.rect(MARGEN, y - 11, ANCHO, 17, 'F');
+      texto(`${f.dow} ${f.texto}`, MARGEN + 6, y + 1, { tam: 10.5, bold: true });
+      texto(conSignoDet(totalDia), X_DER - 6, y + 1, { tam: 10.5, bold: true, color: colorMonto(totalDia), align: 'right' });
+      y += 20;
+      dia.hipodromos.forEach(hip => {
+        const subtotal = totalCarrerasDet(hip.carreras);
+        espacio(36);
+        texto(limpiarTextoPDF(hip.nombre) || 'Otras jugadas', MARGEN + 6, y, { tam: 10, bold: true });
+        texto(conSignoDet(subtotal), X_DER - 6, y, { tam: 10, bold: true, color: colorMonto(subtotal), align: 'right' });
+        y += 3; linea(y, [200, 200, 200]); y += 11;
+
+        const filaPDF = (izq, piz, monto, resultado) => {
+          const lineasTxt = pdf.setFont('helvetica', 'normal') && pdf.setFontSize(8.5) && pdf.splitTextToSize(izq || '', (piz ? X_PIZ : X_MONTO - 8) - X_JUG - 6);
+          const lineasPiz = piz ? pdf.splitTextToSize(piz, X_MONTO - 8 - X_PIZ - 4) : [];
+          const n = Math.max(lineasTxt.length, lineasPiz.length, 1);
+          espacio(n * 10.5 + 4);
+          pdf.setFontSize(8.5);
+          lineasTxt.forEach((l, k) => texto(l, X_JUG, y + k * 10.5, { tam: 8.5 }));
+          lineasPiz.forEach((l, k) => texto(l, X_PIZ, y + k * 10.5, { tam: 7.5, color: GRIS }));
+          if (monto) texto(monto, X_MONTO, y, { tam: 7.5, color: GRIS, align: 'right' });
+          texto(conSignoDet(resultado), X_DER - 6, y, { tam: 9, bold: true, color: colorMonto(resultado), align: 'right' });
+          y += n * 10.5 + 3;
+        };
+
+        if (hip.tipo === 'deportes') {
+          hip.carreras.forEach(t => filaPDF(`${limpiarTextoPDF(t.ticket || '')} ${limpiarTextoPDF(t.detalle || '')} [${limpiarTextoPDF(t.estado || '')}]`, '', `arriesga ${formatMontoDet(t.monto)}`, t.resultado));
+        } else if (hip.tipo === 'traspaso' || hip.tipo === 'devolucion') {
+          hip.carreras.forEach(t => filaPDF(limpiarTextoPDF(t.nota || 'Traspaso'), '', '', t.resultado));
+        } else {
+          const nums = Array.from(new Set(hip.carreras.map(x => x.carrera))).sort((a, b) => a - b);
+          nums.forEach(num => {
+            const ls = hip.carreras.filter(x => x.carrera === num);
+            const totalC = totalCarrerasDet(ls);
+            espacio(30);
+            texto(num ? `${num}ª Carrera` : 'Otras jugadas', MARGEN + 10, y, { tam: 8.5, bold: true, color: GRIS });
+            texto(`Total carrera: ${conSignoDet(totalC)}`, X_DER - 6, y, { tam: 8.5, bold: true, color: colorMonto(totalC), align: 'right' });
+            y += 11;
+            ls.forEach(x => {
+              const esRem = x.tipo === 'remate_resultado';
+              const montoMostrado = esRem ? x.poolTotal : x.monto;
+              const etiqueta = x.tipo === 'comision' ? 'sobre' : (esRem ? 'pool' : (x.tipo === 'winner_contraparte' ? 'de' : 'con'));
+              const sinMonto = x.tipo === 'cruce_ajuste' || x.tipo === 'carga' || (esRem && x.modo === 'manual');
+              filaPDF(limpiarTextoPDF(armarJugadaTextoDetallado(x)), x.pizarra ? `Pizarra: ${limpiarTextoPDF(x.pizarra)}` : '', sinMonto ? '' : `${etiqueta} ${formatMontoDet(montoMostrado)}`, x.resultado);
+            });
+            y += 2;
+          });
+        }
+        y += 6;
+      });
+      y += 6;
+    });
+  });
+
+  // ---- Pie de página en todas ----
+  const total = pdf.internal.getNumberOfPages();
+  const hoy = new Date().toLocaleDateString('es-VE');
+  for (let p = 1; p <= total; p++) {
+    pdf.setPage(p);
+    texto(`${nombreGrupo ? nombreGrupo + '  -  ' : ''}Generado el ${hoy}`, MARGEN, H - 22, { tam: 7.5, color: GRIS });
+    texto(`Página ${p} de ${total}`, X_DER, H - 22, { tam: 7.5, color: GRIS, align: 'right' });
+  }
+  return pdf;
 }
 
 function mostrarToastDetalleCliente(msg, esError) {
