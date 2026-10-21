@@ -616,8 +616,9 @@
   #listaPizarras .pz-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
   #listaPizarras .pz-tipo { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 6px; background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); color: var(--text, #15321f); white-space: nowrap; }
   #listaPizarras .pz-bolas { display: inline-flex; gap: 4px; align-items: center; }
-  #listaPizarras .pz-bolas i { font-style: normal; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12.5px; border: 1.5px solid var(--card-border); color: var(--text, #15321f); background: var(--card-2, #f1f8f3); font-variant-numeric: tabular-nums; }
-  #listaPizarras .pz-bolas i:first-child { background: var(--accent-grass, #16a34a); border-color: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
+  #listaPizarras .pz-bolas i { font-style: normal; display: inline-flex; align-items: center; padding: 1px 3px 1px 0; border-radius: 8px; border: 1.5px solid transparent; }
+  #listaPizarras .pz-bolas i .gualdrapa { margin: 0 0 0 3px; }
+  #listaPizarras .pz-bolas i.pz-1 { border-color: var(--accent-grass, #16a34a); background: rgba(var(--t-acc-rgb, 22,163,74), 0.12); }
   #listaPizarras .pz-pend { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(245,158,11,0.16); color: #b45309; }
   #listaPizarras .pz-meta { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
   #listaPizarras .pz-acc { display: flex; gap: 4px; }
@@ -16584,7 +16585,7 @@ function tarjetaPizarraHtml(f) {
   const bolas = f.pendiente ? [] : String(f.pizarra || '').split(/[\s.,\-]+/).filter(Boolean);
   const estadoHtml = f.pendiente
     ? '<span class="pz-pend">⏳ Pendiente de pizarra</span>'
-    : `<span class="pz-bolas" title="Pizarra: ${String(f.pizarra).replace(/"/g, '&quot;')}">${bolas.map(n => `<i>${n}</i>`).join('')}</span>`;
+    : `<span class="pz-bolas" title="Pizarra: ${String(f.pizarra).replace(/"/g, '&quot;')}">${bolas.map((n, i) => `<i class="${i === 0 ? 'pz-1' : ''}" title="${i + 1}º lugar">${gualdrapaHTML(n) || n}</i>`).join('')}</span>`;
   const hipodromoJs = f.hipodromoNombre.replace(/'/g, "\\'");
   return `
     <div class="pz-mod">
