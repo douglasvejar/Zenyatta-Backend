@@ -575,6 +575,35 @@
   #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo span:last-child { font-weight: 600; }
   #comisionesHipodromoCaptura .bloque-hipodromo .subtotal-hipodromo { margin: 0; padding: 9px 14px; border-top: none; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 
+  /* ==== Mejor vista del detalle de un plano en "Eliminar Planos" (21-10-2026) ==== */
+  #listaEliminarPlanos .ep-plano { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); max-width: 920px; }
+  #listaEliminarPlanos .ep-cab { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 13px 18px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
+  #listaEliminarPlanos .ep-cab-titulo { font-weight: 800; font-size: 16px; }
+  #listaEliminarPlanos .ep-carrera { font-weight: 600; font-size: 13px; background: rgba(255,255,255,0.22); border-radius: 999px; padding: 2px 11px; margin-left: 8px; white-space: nowrap; }
+  #listaEliminarPlanos .ep-cab-fecha { font-size: 13px; font-weight: 600; opacity: .95; }
+  #listaEliminarPlanos .ep-datos { display: flex; gap: 10px; padding: 12px 18px; background: var(--card-2, #f1f8f3); border-bottom: 1px solid var(--card-border); }
+  #listaEliminarPlanos .ep-dato { display: flex; flex-direction: column; min-width: 120px; padding: 6px 14px; border-radius: 10px; background: var(--t-solido, #fff); border: 1px solid var(--card-border); }
+  #listaEliminarPlanos .ep-dato span { font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-dim); }
+  #listaEliminarPlanos .ep-dato b { font-size: 16px; font-variant-numeric: tabular-nums; color: var(--text, #15321f); }
+  #listaEliminarPlanos .ep-tabla-wrap { overflow-x: auto; }
+  #listaEliminarPlanos table.ep-tabla { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #listaEliminarPlanos .ep-tabla thead th { background: #1f2a26; color: #fff; padding: 9px 12px; font-size: 11.5px; letter-spacing: .3px; border-bottom: none; }
+  #listaEliminarPlanos .ep-tabla thead th.num { text-align: right; }
+  #listaEliminarPlanos .ep-tabla td { padding: 10px 12px; border-bottom: 1px solid var(--card-border); color: var(--text, #15321f); vertical-align: middle; }
+  #listaEliminarPlanos .ep-tabla td.ep-nombre { font-weight: 700; }
+  #listaEliminarPlanos .ep-tabla td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #listaEliminarPlanos .ep-tabla td.pos { color: var(--ok, #16a34a); font-weight: 800; }
+  #listaEliminarPlanos .ep-tabla td.neg { color: var(--danger, #dc2626); font-weight: 800; }
+  #listaEliminarPlanos .ep-tabla td.ep-acc { text-align: right; width: 1%; white-space: nowrap; }
+  #listaEliminarPlanos .ep-vacio { color: var(--text-dim); font-weight: 400; }
+  #listaEliminarPlanos .ep-btn-editar { padding: 4px 12px; font-size: 12.5px; border-radius: 999px; }
+  #listaEliminarPlanos .ep-fila-edicion td { background: var(--card-2, #f1f8f3); }
+  #listaEliminarPlanos .ep-fila-edicion .fila { display: flex; flex-wrap: wrap; gap: 8px; }
+  #listaEliminarPlanos .ep-fila-edicion .fila input { flex: 1; min-width: 150px; }
+  #listaEliminarPlanos .ep-pie { margin-top: 14px; max-width: 920px; justify-content: flex-end; }
+  #listaEliminarPlanos .ep-btn-eliminar { color: var(--danger, #dc2626); border-color: var(--danger, #dc2626); }
+  #listaEliminarPlanos .ep-btn-eliminar:hover { background: var(--danger, #dc2626); color: #fff; }
+
   /* "Comisiones Totales por Hipódromo" (24-09-2026) — lista plana en el
      MISMO formato que pegó el usuario como ejemplo (título, total
      general, y por cada hipódromo un subtítulo "Carrera | Comisión" con
@@ -16153,25 +16182,42 @@ async function pintarEliminarPlanosDetallePlano() {
   }
   const { plano, tickets } = data;
   const volver = `<div class="btn-fila" style="margin-bottom:10px;"><button class="btn btn-secundario" type="button" onclick="volverAPlanosEliminarPlanos()">&lsaquo; Volver a los planos</button></div>`;
+  // MEJOR VISTA (21-10-2026, a pedido del usuario: "dale mejor vista a esto"):
+  // cabecera del plano con hipódromo/carrera/fecha y 2 datos clave (comisión
+  // y tickets), una tabla de tickets (Jugador | Banquero | Monto | Resultado
+  // jugador | Resultado banquero | Editar) con verde/rojo y signo, y el botón
+  // de eliminar aparte, a la derecha. FIX de paso: la fecha salía rota
+  // ("18T04:00:00.000Z/10/2026") porque plano.fecha llega como timestamp ISO.
+  const fechaIso = String(plano.fecha || '').slice(0, 10);
+  const fechaTxt = fechaIso ? `${fechaLegibleDet(fechaIso).dow} ${formatFechaCortaDMY(fechaIso)}` : '';
+  const claseRes = v => (Number(v) > 0 ? 'pos' : (Number(v) < 0 ? 'neg' : ''));
   const filasTickets = tickets.map(t => `
-    <div style="padding:8px 0; border-bottom:1px solid var(--card-border);">
-      <b>${t.cliente_nombre}</b>${t.banquero_nombre ? ` vs ${t.banquero_nombre}` : ''} — ${formatMontoTabla(t.monto)}
-      <span style="color:var(--text-dim); font-size:12px;"> (jugador ${textoResultadoConSigno(t.resultado_jugador)}${t.banquero_nombre ? `, banquero ${textoResultadoConSigno(t.resultado_banquero)}` : ''})</span>
-      <span style="display:inline-flex; gap:6px; margin-left:10px;">
-        <button class="btn btn-secundario" type="button" style="padding:2px 8px; font-size:12px;" onclick="abrirEdicionTicket('${t.id}')">✏️ Editar</button>
-      </span>
-      ${ELIMINAR_PLANOS_TICKET_EN_EDICION === t.id ? filaEdicionTicketHtml(plano.id, t) : ''}
-    </div>`).join('');
+    <tr>
+      <td class="ep-nombre">${formatNombre(t.cliente_nombre)}</td>
+      <td class="ep-nombre">${t.banquero_nombre ? formatNombre(t.banquero_nombre) : '<span class="ep-vacio">—</span>'}</td>
+      <td class="num">${formatMontoTabla(t.monto)}</td>
+      <td class="num ${claseRes(t.resultado_jugador)}">${textoResultadoConSigno(t.resultado_jugador)}</td>
+      <td class="num ${t.banquero_nombre ? claseRes(t.resultado_banquero) : ''}">${t.banquero_nombre ? textoResultadoConSigno(t.resultado_banquero) : '<span class="ep-vacio">—</span>'}</td>
+      <td class="ep-acc"><button class="btn btn-secundario ep-btn-editar" type="button" onclick="abrirEdicionTicket('${t.id}')">✏️ Editar</button></td>
+    </tr>
+    ${ELIMINAR_PLANOS_TICKET_EN_EDICION === t.id ? `<tr class="ep-fila-edicion"><td colspan="6">${filaEdicionTicketHtml(plano.id, t)}</td></tr>` : ''}`).join('');
   cont.innerHTML = `${volver}
-    <div class="card" style="padding:14px; margin-bottom:12px;">
-      <div style="font-weight:700; margin-bottom:4px;">🏟️ ${plano.hipodromo_nombre} — ${ordinalCarrera(plano.carrera_numero)} Carrera — 📅 ${formatFechaCortaDMY(plano.fecha)}</div>
-      <div style="color:var(--text-dim); font-size:13px;">Comisión total: ${formatMontoTabla(plano.comision_total)} — ${tickets.length} ticket${tickets.length === 1 ? '' : 's'}</div>
+    <div class="ep-plano">
+      <div class="ep-cab">
+        <div class="ep-cab-titulo">🏟️ ${plano.hipodromo_nombre} <span class="ep-carrera">${ordinalCarrera(plano.carrera_numero)} Carrera</span></div>
+        <div class="ep-cab-fecha">📅 ${fechaTxt}</div>
+      </div>
+      <div class="ep-datos">
+        <div class="ep-dato"><span>Comisión total</span><b>${formatMontoTabla(plano.comision_total)}</b></div>
+        <div class="ep-dato"><span>Tickets</span><b>${tickets.length}</b></div>
+      </div>
+      ${tickets.length ? `<div class="ep-tabla-wrap"><table class="ep-tabla">
+        <thead><tr><th>Jugador</th><th>Banquero</th><th class="num">Monto</th><th class="num">Result. jugador</th><th class="num">Result. banquero</th><th></th></tr></thead>
+        <tbody>${filasTickets}</tbody>
+      </table></div>` : '<div class="placeholder-card">Este plano no tiene tickets.</div>'}
     </div>
-    <div class="card" style="padding:14px;">
-      ${filasTickets || '<div class="placeholder-card">Este plano no tiene tickets.</div>'}
-    </div>
-    <div class="btn-fila" style="margin-top:12px;">
-      <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarPlanoDesdeDetalle('${plano.id}')">🗑️ Eliminar este plano</button>
+    <div class="btn-fila ep-pie">
+      <button class="btn btn-secundario ep-btn-eliminar" type="button" onclick="eliminarPlanoDesdeDetalle('${plano.id}')">🗑️ Eliminar este plano</button>
     </div>`;
 }
 
