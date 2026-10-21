@@ -631,8 +631,16 @@
   #registroSaldosAnios .rs-tabla tbody tr { cursor: pointer; }
   #registroSaldosAnios .rs-tabla tbody tr:hover td { background: rgba(var(--t-acc-rgb, 22,163,74), 0.12); }
   #registroSaldosAnios .rs-tabla td:first-child { font-weight: 700; color: var(--text, #15321f); }
-  #registroSaldosAnios .rs-tabla td:nth-child(3), #registroSaldosAnios .rs-tabla th:nth-child(3) { border-left: 2px solid var(--card-border); font-weight: 700; }
+  #registroSaldosAnios .rs-tabla td:nth-child(3) { border-left: 2px solid var(--card-border); font-weight: 700; }
   #registroSaldosAnios .rs-tabla td:last-child { font-weight: 700; border-left: 2px solid var(--card-border); }
+  #registroSaldosAnios .rs-tabla thead tr.rs-grupos th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; text-align: center; padding: 6px 12px; background: #2c3a35; border-left: 1px solid rgba(255,255,255,0.18); }
+  #registroSaldosAnios .rs-tabla thead tr.rs-grupos th:first-child { text-align: left; border-left: none; }
+  #registroSaldosAnios .rs-tabla thead tr.rs-grupos th.rs-g-item { background: #1f6b3c; }
+  #registroSaldosAnios .rs-tabla thead tr.rs-grupos th.rs-g-com { background: #6b4e1f; }
+  #registroSaldosAnios .rs-tabla thead th { position: static; }
+  #registroSaldosAnios .rs-tabla thead th:first-child { position: sticky; left: 0; z-index: 2; background: #1f2a26; }
+  #registroSaldosAnios .rs-tabla td:nth-child(4) { border-left: 2px solid var(--card-border); }
+  #registroSaldosAnios .rs-tabla td:nth-child(14) { border-left: 2px solid var(--card-border); }
   #registroSaldosAnios .rs-tabla tr.rs-total td { background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff) !important; font-weight: 800; border-bottom: none; }
   #registroSaldosAnios .rs-tabla tr.rs-total td[style] { color: var(--t-on-accent, #fff) !important; }
 
@@ -16911,7 +16919,7 @@ const TIPOS_ALERTA_TEXTO = {
 // o una modalidad se abre el detalle de ese año por semana o por mes
 // (granularidad=semana|mes&anio=AAAA), calculado con el mismo servicio.
 let REGISTRO_SALDOS_DATA = null;          // resumen por años
-let REGISTRO_SALDOS_ORDEN = { clave: 'comisionNeta', desc: true };
+let REGISTRO_SALDOS_ORDEN = { clave: 'nombre', desc: false }; // A-Z por defecto (21-10-2026)
 let REGISTRO_ANIOS_ABIERTOS = new Set();
 let REGISTRO_DET_CACHE = {};              // `${g}-${anio}` -> JSON
 let REGISTRO_DET_ESTADO = null;           // { tipo: 'cliente'|'modalidad', clave, anio, g }
@@ -17006,8 +17014,13 @@ function pintarRegistroSaldos() {
         return desc ? -r : r;
       });
       html += `<div class="rs-sec"><h4>👥 Clientes <small>${lista.length} cliente${lista.length === 1 ? '' : 's'} · Toca un cliente para ver todo su detalle por semana y por mes. Toca un título de columna para ordenar.</small></h4>
-        <div class="rs-wrap"><table class="rs-tabla"><thead><tr><th style="cursor:pointer;" onclick="ordenarRegistroSaldos('nombre')">Cliente${flecha('nombre')}</th>` +
-        REGISTRO_COLS.map(([k, tt]) => `<th class="num" style="cursor:pointer;" onclick="ordenarRegistroSaldos('${k}')">${tt}${flecha(k)}</th>`).join('') + '</tr></thead><tbody>' +
+        <div class="rs-wrap"><table class="rs-tabla"><thead>
+          <tr class="rs-grupos"><th rowspan="2" style="cursor:pointer;" onclick="ordenarRegistroSaldos('nombre')">Cliente${flecha('nombre')}</th>
+            <th colspan="2" class="rs-g-res">Cómo va en el año</th>
+            <th colspan="10" class="rs-g-item">Ese saldo, desglosado por ítem →</th>
+            <th colspan="3" class="rs-g-com">Comisión</th></tr>
+          <tr>` +
+        REGISTRO_COLS.map(([k, tt]) => `<th class="num" style="cursor:pointer;" onclick="ordenarRegistroSaldos('${k}')">${k === 'saldo' ? 'Saldo del año' : (k === 'otros' ? 'Otros (% y ajustes)' : tt)}${flecha(k)}</th>`).join('') + '</tr></thead><tbody>' +
         (lista.length ? lista.map(c => `<tr onclick="abrirRegistroDetalle('cliente', '${jsq(c.nombre)}', ${p.clave})"><td>${formatNombre(c.nombre)}</td>` +
           REGISTRO_COLS.map(([k, , m]) => celdaRegistro(c.periodos[i][k], m, REGISTRO_CON_SIGNO.has(k))).join('') + '</tr>').join('')
           : `<tr><td colspan="${REGISTRO_COLS.length + 1}" style="text-align:center; color:var(--text-dim);">Sin clientes con movimiento.</td></tr>`) +
