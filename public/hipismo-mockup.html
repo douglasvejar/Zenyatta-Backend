@@ -598,6 +598,34 @@
   #listaEliminarPlanos .ep-carrera-com { flex: 1; font-size: 13px; color: var(--text-dim); }
   #listaEliminarPlanos .ep-carrera-com b { color: var(--text, #15321f); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
+  /* ==== Mejor vista de "Pizarras" (21-10-2026) ==== */
+  #listaPizarras .pz-dia-banda { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 11px 18px; border-radius: 12px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); margin: 18px 0 12px; }
+  #listaPizarras .pz-dia-banda:first-child { margin-top: 4px; }
+  #listaPizarras .pz-dia-t { font-weight: 800; font-size: 16px; }
+  #listaPizarras .pz-dia-d { font-size: 13px; font-weight: 600; opacity: .95; }
+  #listaPizarras .pz-hips { display: grid; grid-template-columns: repeat(auto-fit, minmax(580px, 1fr)); gap: 14px; align-items: start; }
+  @media (max-width: 560px) { #listaPizarras .pz-hips { grid-template-columns: 1fr; } }
+  #listaPizarras .pz-hip { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); }
+  #listaPizarras .pz-hip-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px; background: var(--card-2, #f1f8f3); border-left: 4px solid var(--accent-grass, #16a34a); }
+  #listaPizarras .pz-hip-nombre { font-weight: 800; font-size: 14.5px; color: var(--text, #15321f); }
+  #listaPizarras .pz-hip-n { font-size: 11.5px; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
+  #listaPizarras .pz-carrera { display: flex; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--card-border); align-items: flex-start; }
+  #listaPizarras .pz-num { flex: none; min-width: 40px; text-align: center; font-weight: 800; font-size: 13px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); border-radius: 999px; padding: 3px 0; margin-top: 4px; }
+  #listaPizarras .pz-mods { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  #listaPizarras .pz-mod { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+  #listaPizarras .pz-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+  #listaPizarras .pz-tipo { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 6px; background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); color: var(--text, #15321f); white-space: nowrap; }
+  #listaPizarras .pz-bolas { display: inline-flex; gap: 4px; align-items: center; }
+  #listaPizarras .pz-bolas i { font-style: normal; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12.5px; border: 1.5px solid var(--card-border); color: var(--text, #15321f); background: var(--card-2, #f1f8f3); font-variant-numeric: tabular-nums; }
+  #listaPizarras .pz-bolas i:first-child { background: var(--accent-grass, #16a34a); border-color: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
+  #listaPizarras .pz-pend { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(245,158,11,0.16); color: #b45309; }
+  #listaPizarras .pz-meta { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #listaPizarras .pz-acc { display: flex; gap: 4px; }
+  #listaPizarras .pz-acc .btn { padding: 4px 9px; font-size: 12px; width: auto; }
+  #listaPizarras .pz-todas { align-self: flex-start; }
+  #listaPizarras .pz-todas .btn { padding: 4px 10px; font-size: 12px; width: auto; }
+  #listaPizarras .pz-edit { padding: 10px; border: 1px dashed var(--card-border); border-radius: 10px; background: var(--card-2, #f1f8f3); }
+
   /* ==== Mejor vista del detalle de un plano en "Eliminar Planos" (21-10-2026) ==== */
   #listaEliminarPlanos .ep-plano { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); max-width: 920px; }
   #listaEliminarPlanos .ep-cab { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 13px 18px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
@@ -16504,6 +16532,10 @@ function renderPizarras() {
     cont.innerHTML = '<div class="placeholder-card">No hay planos ni remates cargados en ese rango.</div>';
     return;
   }
+  // MEJOR VISTA (21-10-2026, "mejora esta vista"): banda por día, un cuadro
+  // por hipódromo (2 por fila si caben) y cada carrera con su número en
+  // píldora, la pizarra en bolitas (la 1ª, ganadora, resaltada) y los
+  // botones Editar/Eliminar a la derecha. Mismas funciones y mismos ids.
   const porDia = new Map();
   PIZARRAS_ACTUAL.forEach(f => {
     if (!porDia.has(f.fecha)) porDia.set(f.fecha, []);
@@ -16516,7 +16548,10 @@ function renderPizarras() {
       if (!porHipodromo.has(f.hipodromoNombre)) porHipodromo.set(f.hipodromoNombre, []);
       porHipodromo.get(f.hipodromoNombre).push(f);
     });
-    let htmlDia = `<div style="font-weight:700; margin:16px 0 8px;">📅 ${formatFechaCortaDMY(fecha)}</div>`;
+    const fechaIso = String(fecha).slice(0, 10);
+    const carrerasDia = new Set(porDia.get(fecha).map(f => `${f.hipodromoNombre}|${f.carreraNumero}`)).size;
+    const pendientesDia = porDia.get(fecha).filter(f => f.pendiente).length;
+    let htmlDia = `<div class="pz-dia-banda"><span class="pz-dia-t">📅 ${fechaLegibleDet(fechaIso).dow} ${formatFechaCortaDMY(fechaIso)}</span><span class="pz-dia-d">${porHipodromo.size} hipódromo${porHipodromo.size === 1 ? '' : 's'} · ${carrerasDia} carrera${carrerasDia === 1 ? '' : 's'}${pendientesDia ? ` · ${pendientesDia} pendiente${pendientesDia === 1 ? '' : 's'} de pizarra` : ''}</span></div><div class="pz-hips">`;
     Array.from(porHipodromo.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(hipodromoNombre => {
       const porCarrera = new Map();
       porHipodromo.get(hipodromoNombre).forEach(f => {
@@ -16532,38 +16567,43 @@ function renderPizarras() {
         // a las que aplicar.
         const claveTodas = `todas:${fecha}:${hipodromoNombre}:${numCarrera}`;
         const botonTodas = modalidades.length > 1 && PIZARRAS_EDITANDO !== claveTodas
-          ? `<div style="margin:6px 0 10px;"><button class="btn btn-secundario" type="button" onclick="abrirAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${numCarrera})">🔁 Aplicar una misma pizarra a todas las modalidades de esta carrera</button></div>`
+          ? `<div class="pz-todas"><button class="btn btn-secundario" type="button" onclick="abrirAplicarATodasPizarra('${fecha}', '${hipodromoJs}', ${numCarrera})">🔁 Misma pizarra para todas las modalidades</button></div>`
           : '';
         const formTodas = PIZARRAS_EDITANDO === claveTodas ? formAplicarATodasHtml(fecha, hipodromoNombre, numCarrera, modalidades) : '';
-        return `<div style="margin-bottom:12px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">${ordinalCarrera(numCarrera)} Carrera</div>${tarjetas}${botonTodas}${formTodas}</div>`;
+        return `<div class="pz-carrera"><span class="pz-num">${numCarrera}ª</span><div class="pz-mods">${tarjetas}${botonTodas}${formTodas}</div></div>`;
       }).join('');
-      htmlDia += `<div style="margin-bottom:14px;"><h3 style="margin:0 0 8px; font-size:14px;">🏟️ ${hipodromoNombre}</h3>${carrerasHtml}</div>`;
+      htmlDia += `<div class="pz-hip"><div class="pz-hip-cab"><span class="pz-hip-nombre">🏟️ ${hipodromoNombre}</span><span class="pz-hip-n">${porCarrera.size} carrera${porCarrera.size === 1 ? '' : 's'}</span></div>${carrerasHtml}</div>`;
     });
-    html += htmlDia;
+    html += htmlDia + '</div>';
   });
   cont.innerHTML = html;
 }
 
 function tarjetaPizarraHtml(f) {
   if (PIZARRAS_EDITANDO === `${f.tipo}:${f.id}`) return formEditarPizarraHtml(f);
+  const bolas = f.pendiente ? [] : String(f.pizarra || '').split(/[\s.,\-]+/).filter(Boolean);
   const estadoHtml = f.pendiente
-    ? '<span style="color:var(--text-dim);">⏳ Pendiente de pizarra</span>'
-    : `Pizarra: <b>${f.pizarra}</b>`;
+    ? '<span class="pz-pend">⏳ Pendiente de pizarra</span>'
+    : `<span class="pz-bolas" title="Pizarra: ${String(f.pizarra).replace(/"/g, '&quot;')}">${bolas.map(n => `<i>${n}</i>`).join('')}</span>`;
   const hipodromoJs = f.hipodromoNombre.replace(/'/g, "\\'");
   return `
-    <div class="balance-fila" style="margin-bottom:4px;">
-      <span class="nombre">${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo} — ${estadoHtml} <span style="color:var(--text-dim); font-size:12px;">(${f.cantidad} jugada${f.cantidad === 1 ? '' : 's'}, ${formatMontoTabla(f.montoTotal)})</span></span>
-      <span class="btn-fila" style="gap:6px;">
+    <div class="pz-mod">
+      <div class="pz-info">
+        <span class="pz-tipo">${TIPO_TEXTO_PIZARRA[f.tipo] || f.tipo}</span>
+        ${estadoHtml}
+        <span class="pz-meta">${f.cantidad} jugada${f.cantidad === 1 ? '' : 's'} · ${formatMontoTabla(f.montoTotal)}</span>
+      </div>
+      <div class="pz-acc">
         <button class="btn btn-secundario" type="button" onclick="abrirEdicionPizarra('${f.tipo}', '${f.id}')">✏️ ${f.pendiente ? 'Cargar pizarra' : 'Editar'}</button>
         ${f.pendiente ? '' : `<button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarPizarra('${f.tipo}', '${f.id}', '${hipodromoJs}', ${f.carreraNumero})">🗑️ Eliminar</button>`}
-      </span>
+      </div>
     </div>`;
 }
 
 function formEditarPizarraHtml(f) {
   const valorActual = (f.pizarra || '').replace(/"/g, '&quot;');
   return `
-    <div style="margin:4px 0 10px; padding:10px; border:1px dashed var(--card-border); border-radius:8px;">
+    <div class="pz-edit">
       <div class="fila" style="margin-bottom:6px;">
         <input type="text" id="editPizarra_${f.tipo}_${f.id}" placeholder="Ej. 6.10.4.8.2" value="${valorActual}">
       </div>
