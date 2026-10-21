@@ -598,6 +598,19 @@
   #listaEliminarPlanos .ep-carrera-com { flex: 1; font-size: 13px; color: var(--text-dim); }
   #listaEliminarPlanos .ep-carrera-com b { color: var(--text, #15321f); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
+  /* ==== Detalle de Registro de Saldos (cliente o modalidad, por semana/mes) — 21-10-2026 ==== */
+  #registroDetalleCuerpo .rs-det-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: 12px; }
+  #registroDetalleCuerpo table.rs-det { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; white-space: nowrap; }
+  #registroDetalleCuerpo .rs-det thead th { background: #1f2a26; color: #fff; padding: 9px 12px; font-size: 11.5px; letter-spacing: .3px; border: none; }
+  #registroDetalleCuerpo .rs-det td { padding: 8px 12px; border-bottom: 1px solid var(--card-border); font-variant-numeric: tabular-nums; background: var(--t-solido, #fff); }
+  #registroDetalleCuerpo .rs-det tbody tr:nth-child(even) td { background: var(--card-2, #f4faf6); }
+  #registroDetalleCuerpo .rs-det tbody tr:hover td { background: rgba(var(--t-acc-rgb, 22,163,74), 0.12); }
+  #registroDetalleCuerpo .rs-det th:first-child, #registroDetalleCuerpo .rs-det td:first-child { position: sticky; left: 0; z-index: 1; font-weight: 700; }
+  #registroDetalleCuerpo .rs-det thead th:first-child { background: #1f2a26; z-index: 2; }
+  #registroDetalleCuerpo table.rs-det td.rs-det-total, #registroDetalleCuerpo .rs-det th:nth-child(2) { font-weight: 800; border-left: 2px solid var(--card-border); border-right: 2px solid var(--card-border); }
+  #registroDetalleCuerpo .rs-det tbody tr.rs-det-pie td { background: var(--accent-grass, #16a34a) !important; color: var(--t-on-accent, #fff) !important; font-weight: 800; border-bottom: none; }
+  #registroDetalleCuerpo .rs-det tr.rs-det-pie td[style] { color: var(--t-on-accent, #fff) !important; }
+
   /* ==== Mejor vista de "Registro de Saldos" (21-10-2026) ==== */
   #registroSaldosAnios .rs-anio { border: 1px solid var(--card-border); border-radius: 14px; margin-bottom: 16px; background: var(--t-solido, #fff); overflow: hidden; }
   #registroSaldosAnios .rs-anio-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 18px; cursor: pointer; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
@@ -641,7 +654,7 @@
   #registroSaldosAnios .rs-tabla thead th:first-child { position: sticky; left: 0; z-index: 2; background: #1f2a26; }
   #registroSaldosAnios .rs-tabla td:nth-child(4) { border-left: 2px solid var(--card-border); }
   #registroSaldosAnios .rs-tabla td:nth-child(14) { border-left: 2px solid var(--card-border); }
-  #registroSaldosAnios .rs-tabla tr.rs-total td { background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff) !important; font-weight: 800; border-bottom: none; }
+  #registroSaldosAnios .rs-tabla tbody tr.rs-total td { background: var(--accent-grass, #16a34a) !important; color: var(--t-on-accent, #fff) !important; font-weight: 800; border-bottom: none; }
   #registroSaldosAnios .rs-tabla tr.rs-total td[style] { color: var(--t-on-accent, #fff) !important; }
 
   /* ==== Mejor vista de "Pizarras" (21-10-2026) ==== */
@@ -4342,7 +4355,7 @@ Pizarra: [se llena al calcular]
 
       <!-- Detalle de un cliente o de una modalidad, por semana o por mes -->
       <div id="modalRegistroDetalle" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.45); overflow:auto; padding:24px 12px;" onclick="if (event.target === this) cerrarRegistroDetalle()">
-        <div style="background:var(--card, #fff); max-width:1250px; margin:0 auto; border-radius:12px; padding:18px 20px; box-shadow:0 10px 40px rgba(0,0,0,.3);">
+        <div style="background:var(--t-solido, #fff); max-width:1250px; margin:0 auto; border-radius:12px; padding:18px 20px; box-shadow:0 10px 40px rgba(0,0,0,.3);">
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
             <h3 id="registroDetalleTitulo" style="margin:0; flex:1; min-width:200px;"></h3>
             <div class="subnav" id="selectorRegistroDetalle" style="margin:0;">
@@ -17078,21 +17091,26 @@ async function pintarRegistroDetalle() {
     const c = d.clientes.find(x => x.nombre === est.clave);
     if (!c) { cuerpo.innerHTML = '<div class="placeholder-card">Este cliente no tiene movimientos en ese año.</div>'; return; }
     const filas = d.periodos.map((p, i) => ({ etq: p.etiqueta, f: c.periodos[i] })).filter(x => x.f.jugadas > 0 || CAMPOS_REGISTRO_ALGUNO(x.f));
-    cuerpo.innerHTML = `<table style="font-size:12.5px; white-space:nowrap;"><thead><tr><th>${est.g === 'semana' ? 'Semana' : 'Mes'}</th>` +
+    cuerpo.innerHTML = `<div class="rs-det-wrap"><table class="rs-det"><thead><tr><th>${est.g === 'semana' ? 'Semana' : 'Mes'}</th>` +
       REGISTRO_COLS.map(([, tt]) => `<th class="num">${tt}</th>`).join('') + '</tr></thead><tbody>' +
       (filas.length ? filas.map(x => `<tr><td>${x.etq}</td>` + REGISTRO_COLS.map(([k, , m]) => celdaRegistro(x.f[k], m, REGISTRO_CON_SIGNO.has(k))).join('') + '</tr>').join('')
         : `<tr><td colspan="${REGISTRO_COLS.length + 1}" style="text-align:center; color:var(--text-dim);">Sin movimiento.</td></tr>`) +
-      filaTotalRegistro('TOTAL ' + est.anio, c.total) + '</tbody></table>';
+      filaTotalRegistro('TOTAL ' + est.anio, c.total).replace('<tr style="font-weight:700; background:var(--card-2);">', '<tr class="rs-det-pie">') + '</tbody></table></div>';
   } else {
     const k = est.clave;
     const filas = d.clientes.map(c => ({ nombre: c.nombre, vals: c.periodos.map(f => f[k]), total: c.total[k] })).filter(x => x.total !== 0 || x.vals.some(v => v !== 0));
     filas.sort((a, b) => b.total - a.total);
     const tot = d.periodos.map((p, i) => d.totales[i][k]);
-    cuerpo.innerHTML = `<p class="desc" style="margin:0 0 8px;">Cada cliente en esta modalidad (positivo = ganó). Ordenado del que más ganó al que más perdió.</p><table style="font-size:12.5px; white-space:nowrap;"><thead><tr><th>Cliente</th>` +
-      d.periodos.map(p => `<th class="num">${p.etiqueta}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>' +
-      (filas.length ? filas.map(x => `<tr><td>${formatNombre(x.nombre)}</td>` + x.vals.map(v => celdaRegistro(v, true, true)).join('') + celdaRegistro(x.total, true, true).replace('<td class="num"', '<td class="num" data-total="1"') + '</tr>').join('')
-        : `<tr><td colspan="${d.periodos.length + 2}" style="text-align:center; color:var(--text-dim);">Nadie jugó esta modalidad en ${est.anio}.</td></tr>`) +
-      `<tr style="font-weight:700; background:var(--card-2);"><td>TOTAL</td>` + tot.map(v => celdaRegistro(v, true, true)).join('') + celdaRegistro(d.totalGeneral[k], true, true) + '</tr></tbody></table>';
+    // 21-10-2026: solo se muestran los períodos con movimiento en esta modalidad (antes salían las ~40
+    // semanas del año, casi todas en "—"), el nombre y el TOTAL quedan fijos a la izquierda al desplazarse.
+    const idx = d.periodos.map((p, i) => i).filter(i => tot[i] !== 0 || filas.some(x => x.vals[i] !== 0));
+    const ocultos = d.periodos.length - idx.length;
+    cuerpo.innerHTML = `<p class="desc" style="margin:0 0 8px;">Cada cliente en esta modalidad (positivo = ganó). Ordenado del que más ganó al que más perdió.${ocultos ? ` Se ocultan los ${ocultos} períodos sin movimiento.` : ''}</p>
+      <div class="rs-det-wrap"><table class="rs-det"><thead><tr><th>Cliente</th><th class="num">Total ${est.anio}</th>` +
+      idx.map(i => `<th class="num">${d.periodos[i].etiqueta}</th>`).join('') + '</tr></thead><tbody>' +
+      (filas.length ? filas.map(x => `<tr><td>${formatNombre(x.nombre)}</td>` + celdaRegistro(x.total, true, true).replace('<td class="num"', '<td class="num rs-det-total" data-total="1"') + idx.map(i => celdaRegistro(x.vals[i], true, true)).join('') + '</tr>').join('')
+        : `<tr><td colspan="${idx.length + 2}" style="text-align:center; color:var(--text-dim);">Nadie jugó esta modalidad en ${est.anio}.</td></tr>`) +
+      `<tr class="rs-det-pie"><td>TOTAL</td>` + celdaRegistro(d.totalGeneral[k], true, true) + idx.map(i => celdaRegistro(tot[i], true, true)).join('') + '</tr></tbody></table></div>';
   }
 }
 
