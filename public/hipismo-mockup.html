@@ -607,6 +607,7 @@
   #registroSaldosAnios .rs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 14px 18px 4px; }
   #registroSaldosAnios .rs-kpi { border: 1px solid var(--card-border); border-radius: 12px; padding: 9px 14px; background: var(--card-2, #f1f8f3); }
   #registroSaldosAnios .rs-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-dim); font-weight: 700; }
+  #registroSaldosAnios .rs-kpi small { display: block; font-size: 11px; color: var(--text-dim); margin-top: 1px; }
   #registroSaldosAnios .rs-kpi b { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--text, #15321f); }
   #registroSaldosAnios .rs-kpi b.pos, #registroSaldosAnios .rs-pos { color: #1a7a3a; }
   #registroSaldosAnios .rs-kpi b.neg, #registroSaldosAnios .rs-neg { color: #b32d2d; }
@@ -16985,10 +16986,9 @@ function pintarRegistroSaldos() {
         <span class="rs-anio-hint">${abierto ? 'Toca para cerrar' : 'Toca para abrir'}</span>
       </div>
       <div class="rs-kpis">
-        <div class="rs-kpi"><span>Comisión generada</span><b>${formatMonto(t.comisionGenerada)}</b></div>
-        <div class="rs-kpi"><span>% devuelto</span><b>${formatMonto(t.devuelto)}</b></div>
-        <div class="rs-kpi"><span>Comisión neta</span><b class="${clsN(t.comisionNeta)}">${formatMonto(t.comisionNeta)}</b></div>
-        <div class="rs-kpi"><span>Comisión del grupo (Balance General)</span><b>${formatMonto(t.comisionGrupo)}</b></div>
+        <div class="rs-kpi"><span>Comisión bruta generada</span><b>${formatMonto(t.comisionGenerada)}</b></div>
+        <div class="rs-kpi"><span>% devuelto a los clientes</span><b>${formatMonto(t.devuelto)}</b></div>
+        <div class="rs-kpi"><span>Comisión real que le queda al grupo</span><b class="${clsN(t.comisionNeta)}">${formatMonto(t.comisionNeta)}</b><small>Bruta − % devuelto · igual al Balance General</small></div>
       </div>`;
     if (abierto) {
       // --- por modalidad de juego: una tarjeta por modalidad

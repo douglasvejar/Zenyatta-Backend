@@ -244,6 +244,7 @@ async function construirRegistroSaldosHipismo(grupoId, parametros = {}, hoy) {
   // --- 1) saldo oficial + jugadas, período por período (misma cuenta de Balance General).
   // Solo los períodos con movimiento: sin movimiento todo es 0 y no hace falta consultar.
   const devueltoPorPeriodo = periodos.map(() => new Map()); // dueño -> % devuelto
+  const devueltoTotalPorPeriodo = periodos.map(() => null); // total REAL devuelto (el mismo de Cierre Final), si se pudo leer
   for (let i = 0; i < periodos.length; i++) {
     if (!actividad[i]) continue;
     const p = periodos[i];
@@ -260,6 +261,20 @@ async function construirRegistroSaldosHipismo(grupoId, parametros = {}, hoy) {
       f.saldo = round2(c.saldo);
       f.jugadas = Number(c.jugadas || 0);
     });
+    // 21-10-2026, a pedido del usuario: "el % devuelto debe mostrar TODOS los % que se le devuelven a los
+    // clientes, ya validados" y "la comisión real que le queda al grupo". Antes solo se sumaba el saldo de
+    // las cuentas "NOMBRE - PORCENTAJE" enlazadas y quedaba muy por debajo (faltaba el % que va dentro de
+    // las jugadas del propio cliente, etc.). Ahora se usa lo MISMO que Cierre Final/Balance General:
+    // `devueltoPorCuenta` (cada ficha con lo que se le devolvió) y `totalDevueltoSemana`.
+    if (cierre.devueltoPorCuenta && typeof cierre.devueltoPorCuenta === 'object') {
+      const m = new Map();
+      Object.entries(cierre.devueltoPorCuenta).forEach(([cuenta, monto]) => {
+        const dueno = duenoDeCuenta.get(cuenta) || cuenta;
+        m.set(dueno, round2((m.get(dueno) || 0) + Number(monto || 0)));
+      });
+      devueltoPorPeriodo[i] = m;
+      devueltoTotalPorPeriodo[i] = round2(Number(cierre.totalDevueltoSemana || 0));
+    }
   }
   devueltoPorPeriodo.forEach((m, i) => m.forEach((monto, dueno) => { fila(dueno, i).devuelto = monto; }));
 
@@ -286,6 +301,14 @@ async function construirRegistroSaldosHipismo(grupoId, parametros = {}, hoy) {
     clientes.forEach(c => CAMPOS.forEach(k => { t[k] += c.periodos[i][k]; }));
     CAMPOS.forEach(k => { t[k] = round2(t[k]); });
     t.comisionGrupo = comisionGrupoPorPeriodo[i];
+    // Totales REALES del período (los mismos de Balance General): % devuelto = todo lo devuelto a los
+    // clientes; comisión neta = la comisión que de verdad le queda al grupo; comisión generada = la
+    // bruta (neta + devuelto), así bruta − devuelto = neta siempre.
+    if (devueltoTotalPorPeriodo[i] !== null) {
+      t.devuelto = devueltoTotalPorPeriodo[i];
+      t.comisionNeta = t.comisionGrupo;
+      t.comisionGenerada = round2(t.comisionGrupo + t.devuelto);
+    }
     return t;
   });
   const totalGeneral = filaVacia();

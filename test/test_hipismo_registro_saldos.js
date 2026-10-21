@@ -132,6 +132,19 @@ const por = (d, n) => d.clientes.find(c => c.nombre === n);
   check(futuro.periodos.length === 0 && futuro.clientes.length === 0, '5k) un año futuro responde vacío sin fallar');
   check(reg.normalizarParametros({ anio: '1800' }).anio === null && reg.normalizarParametros({ anio: '2026' }).anio === 2026, '5l) el año inválido se descarta');
 
+  // 6) 21-10-2026: "% devuelto" = TODO lo devuelto a los clientes (el total de Cierre Final, incluso el que
+  // cae en la ficha del propio cliente) y "comisión neta" = la comisión real que le queda al grupo.
+  CIERRES['2026-10-01'] = { comisionSemana: 10, totalDevueltoSemana: 5.5, devueltoPorCuenta: { 'ANA - PORCENTAJE': 4, BETO: 1.5 },
+    clientes: [{ nombre: 'ANA', jugadas: 3, saldo: 139 }, { nombre: 'BETO', jugadas: 2, saldo: -120 }, { nombre: 'ANA - PORCENTAJE', jugadas: 0, saldo: 4 }] };
+  const r6 = await reg.construirRegistroSaldosHipismo(GRUPO_ID, { granularidad: 'mes', cantidad: 2 }, hoy);
+  const tOct = r6.totales[1];
+  check(tOct.devuelto === 5.5, `6a) % devuelto del período = total real de Cierre Final (5,5) — salió ${tOct.devuelto}`);
+  check(tOct.comisionNeta === 10 && tOct.comisionGrupo === 10, `6b) comisión neta = comisión real que queda al grupo (10) — salió ${tOct.comisionNeta}`);
+  check(tOct.comisionGenerada === 15.5, `6c) comisión generada = neta + devuelto (15,5) — salió ${tOct.comisionGenerada}`);
+  check(por(r6, 'ANA').periodos[1].devuelto === 4 && por(r6, 'BETO').periodos[1].devuelto === 1.5, '6d) cada cliente: % devuelto de su cuenta X - PORCENTAJE (ANA 4) o el que cae en su propia ficha (BETO 1,5)');
+  check(r6.totalGeneral.devuelto === round2suma([r6.totales[0].devuelto, 5.5]), '6e) el total general suma los períodos');
+  function round2suma(a) { return Math.round(a.reduce((x, y) => x + y, 0) * 100) / 100; }
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   process.exit(fallaron ? 1 : 0);
 })();
