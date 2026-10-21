@@ -575,6 +575,29 @@
   #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo span:last-child { font-weight: 600; }
   #comisionesHipodromoCaptura .bloque-hipodromo .subtotal-hipodromo { margin: 0; padding: 9px 14px; border-top: none; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 
+  /* ==== Mejor vista de las listas de "Eliminar Planos": días y carreras (21-10-2026) ==== */
+  #listaEliminarPlanos .ep-dias { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; max-width: 920px; }
+  #listaEliminarPlanos .ep-dia-card { border: 1px solid var(--card-border); border-left: 4px solid var(--accent-grass, #16a34a); border-radius: 12px; padding: 12px 14px; background: var(--t-solido, #fff); cursor: pointer; transition: transform .12s, box-shadow .12s; }
+  #listaEliminarPlanos .ep-dia-card:hover, #listaEliminarPlanos .ep-dia-card:focus-visible { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.10); outline: none; }
+  #listaEliminarPlanos .ep-dia-dow { font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-dim); font-weight: 700; }
+  #listaEliminarPlanos .ep-dia-fecha { font-size: 18px; font-weight: 800; color: var(--text, #15321f); font-variant-numeric: tabular-nums; margin: 2px 0 8px; }
+  #listaEliminarPlanos .ep-dia-pie { display: flex; justify-content: space-between; align-items: center; }
+  #listaEliminarPlanos .ep-pildora { background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); color: var(--text, #15321f); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+  #listaEliminarPlanos .ep-ver { color: var(--text-dim); font-size: 13px; font-weight: 600; }
+  #listaEliminarPlanos .ep-dia-banda { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 18px; border-radius: 12px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); max-width: 920px; margin-bottom: 12px; }
+  #listaEliminarPlanos .ep-dia-banda-t { font-weight: 800; font-size: 16px; }
+  #listaEliminarPlanos .ep-dia-banda-d { font-size: 13px; font-weight: 600; opacity: .95; }
+  #listaEliminarPlanos .ep-hips { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; max-width: 920px; }
+  #listaEliminarPlanos .ep-hip-card { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); }
+  #listaEliminarPlanos .ep-hip-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px; background: var(--card-2, #f1f8f3); border-left: 4px solid var(--accent-grass, #16a34a); }
+  #listaEliminarPlanos .ep-hip-nombre { font-weight: 800; font-size: 14px; color: var(--text, #15321f); }
+  #listaEliminarPlanos .ep-hip-n { font-size: 11.5px; font-weight: 600; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #listaEliminarPlanos .ep-carrera-fila { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--card-border); cursor: pointer; }
+  #listaEliminarPlanos .ep-carrera-fila:hover, #listaEliminarPlanos .ep-carrera-fila:focus-visible { background: rgba(var(--t-acc-rgb, 22,163,74), 0.09); outline: none; }
+  #listaEliminarPlanos .ep-carrera-num { min-width: 38px; text-align: center; font-weight: 800; font-size: 13px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); border-radius: 999px; padding: 2px 0; }
+  #listaEliminarPlanos .ep-carrera-com { flex: 1; font-size: 13px; color: var(--text-dim); }
+  #listaEliminarPlanos .ep-carrera-com b { color: var(--text, #15321f); font-variant-numeric: tabular-nums; margin-left: 4px; }
+
   /* ==== Mejor vista del detalle de un plano en "Eliminar Planos" (21-10-2026) ==== */
   #listaEliminarPlanos .ep-plano { border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); max-width: 920px; }
   #listaEliminarPlanos .ep-cab { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 13px 18px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
@@ -16054,11 +16077,17 @@ async function pintarEliminarPlanosDias() {
     cont.innerHTML = '<div class="placeholder-card">Todavía no hay planos guardados.</div>';
     return;
   }
-  cont.innerHTML = dias.map(d => `
-    <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarDiaEliminarPlanos('${d.fecha}')">
-      <span class="nombre">📅 ${formatFechaCortaDMY(d.fecha)} <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— ${d.cantidad} plano${d.cantidad === 1 ? '' : 's'}</span></span>
-      <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
-    </div>`).join('');
+  // MEJOR VISTA (21-10-2026): un cuadro por día (día de la semana, fecha,
+  // cantidad de planos) en vez de una fila ancha por día.
+  cont.innerHTML = `<div class="ep-dias">${dias.map(d => {
+    const iso = String(d.fecha).slice(0, 10);
+    return `
+    <div class="ep-dia-card" role="button" tabindex="0" onclick="seleccionarDiaEliminarPlanos('${d.fecha}')" onkeydown="if (event.key === 'Enter') seleccionarDiaEliminarPlanos('${d.fecha}')">
+      <div class="ep-dia-dow">${fechaLegibleDet(iso).dow}</div>
+      <div class="ep-dia-fecha">${formatFechaCortaDMY(iso)}</div>
+      <div class="ep-dia-pie"><span class="ep-pildora">${d.cantidad} plano${d.cantidad === 1 ? '' : 's'}</span><span class="ep-ver">Ver &rsaquo;</span></div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function seleccionarDiaEliminarPlanos(fecha) {
@@ -16093,19 +16122,33 @@ async function pintarEliminarPlanosDia() {
     if (!porHipodromo.has(p.hipodromo_nombre)) porHipodromo.set(p.hipodromo_nombre, []);
     porHipodromo.get(p.hipodromo_nombre).push(p);
   });
-  let html = volver + `<div style="font-weight:700; margin-bottom:8px;">📅 ${formatFechaCortaDMY(ELIMINAR_PLANOS_DIA)}</div>`;
+  // MEJOR VISTA (21-10-2026, a pedido del usuario: "mejora esta vista"): banda
+  // con el día y sus totales y, debajo, un cuadro por hipódromo (2 por fila
+  // cuando caben) con sus carreras como renglones clickeables.
+  const fechaDiaIso = String(ELIMINAR_PLANOS_DIA).slice(0, 10);
+  const comisionDia = redondearCentavos(planos.reduce((acc, p) => acc + Number(p.comision_total || 0), 0));
+  let html = volver + `
+    <div class="ep-dia-banda">
+      <span class="ep-dia-banda-t">📅 ${fechaLegibleDet(fechaDiaIso).dow} ${formatFechaCortaDMY(fechaDiaIso)}</span>
+      <span class="ep-dia-banda-d">${planos.length} plano${planos.length === 1 ? '' : 's'} · ${porHipodromo.size} hipódromo${porHipodromo.size === 1 ? '' : 's'} · comisión ${formatMontoTabla(comisionDia)}</span>
+    </div>
+    <div class="ep-hips">`;
   Array.from(porHipodromo.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(hipodromoNombre => {
-    const carrerasHtml = porHipodromo.get(hipodromoNombre)
-      .slice()
-      .sort((a, b) => a.carrera_numero - b.carrera_numero)
-      .map(p => `
-        <div class="balance-fila" style="margin-bottom:6px; cursor:pointer;" onclick="seleccionarPlanoEliminarPlanos('${p.id}')">
-          <span class="nombre">${ordinalCarrera(p.carrera_numero)} Carrera <span style="color:var(--text-dim); font-weight:400; font-size:12px;">— comisión ${formatMontoTabla(p.comision_total)}</span></span>
-          <span style="color:var(--text-dim); font-size:13px;">Ver &rsaquo;</span>
-        </div>`)
-      .join('');
-    html += `<div style="margin-bottom:14px;"><h3 style="margin:0 0 8px; font-size:14px;">🏟️ ${hipodromoNombre}</h3>${carrerasHtml}</div>`;
+    const lista = porHipodromo.get(hipodromoNombre).slice().sort((a, b) => a.carrera_numero - b.carrera_numero);
+    const subtotal = redondearCentavos(lista.reduce((acc, p) => acc + Number(p.comision_total || 0), 0));
+    const carrerasHtml = lista.map(p => `
+        <div class="ep-carrera-fila" role="button" tabindex="0" onclick="seleccionarPlanoEliminarPlanos('${p.id}')" onkeydown="if (event.key === 'Enter') seleccionarPlanoEliminarPlanos('${p.id}')">
+          <span class="ep-carrera-num">${p.carrera_numero}ª</span>
+          <span class="ep-carrera-com"><span>Comisión</span> <b>${formatMontoTabla(p.comision_total)}</b></span>
+          <span class="ep-ver">Ver &rsaquo;</span>
+        </div>`).join('');
+    html += `
+      <div class="ep-hip-card">
+        <div class="ep-hip-cab"><span class="ep-hip-nombre">🏟️ ${hipodromoNombre}</span><span class="ep-hip-n">${lista.length} carrera${lista.length === 1 ? '' : 's'} · ${formatMontoTabla(subtotal)}</span></div>
+        ${carrerasHtml}
+      </div>`;
   });
+  html += '</div>';
   cont.innerHTML = html;
 }
 
