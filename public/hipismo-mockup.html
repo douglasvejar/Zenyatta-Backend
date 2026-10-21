@@ -16967,12 +16967,16 @@ function pintarRegistroSaldos() {
   const flecha = c => REGISTRO_SALDOS_ORDEN.clave === c ? (REGISTRO_SALDOS_ORDEN.desc ? ' ▼' : ' ▲') : '';
   const { clave, desc } = REGISTRO_SALDOS_ORDEN;
   const bloques = [];
+  const aniosVaciosOcultos = [];
   // del año más nuevo al más viejo
   for (let i = d.periodos.length - 1; i >= 0; i--) {
     const p = d.periodos[i];
     const abierto = REGISTRO_ANIOS_ABIERTOS.has(p.clave);
     const t = d.totales[i];
     const activos = d.clientes.filter(c => c.periodos[i].jugadas > 0 || c.periodos[i].saldo !== 0).length;
+    // Un año sin ningún movimiento (todo en 0) no aporta nada: se oculta, salvo que sea el único.
+    const anioVacio = activos === 0 && ['comisionGenerada', 'devuelto', 'comisionNeta', 'comisionGrupo', 'saldo'].every(k => !Number(t[k]));
+    if (anioVacio && d.periodos.length > 1) { aniosVaciosOcultos.push(p.etiqueta); continue; }
     const clsN = n => (n > 0 ? 'pos' : (n < 0 ? 'neg' : ''));
     let html = `<div class="rs-anio">
       <div class="rs-anio-cab" onclick="toggleRegistroAnio('${p.clave}')">
@@ -17012,6 +17016,7 @@ function pintarRegistroSaldos() {
     html += '</div>';
     bloques.push(html);
   }
+  if (aniosVaciosOcultos.length) bloques.push(`<div class="resultado-vacio" style="margin-top:4px;">Sin movimientos registrados en ${aniosVaciosOcultos.join(', ')}.</div>`);
   cont.innerHTML = bloques.join('');
 }
 function CAMPOS_REGISTRO_ALGUNO(f) {
