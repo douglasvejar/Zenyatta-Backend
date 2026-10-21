@@ -489,36 +489,72 @@
   /* ==== Mejor formato de "Comisiones Devueltas por Cliente" (21-10-2026) ====
      Una banda por DÍA + una tabla limpia (Hipódromo | C | Jugada | Monto |
      Devol.) + "TOTAL DEL PERIODO". Escopeado a #listaComisionesDevueltas. */
-  #listaComisionesDevueltas .cd-pct { font-weight: 500; color: var(--text-dim); font-size: 12.5px; }
-  #listaComisionesDevueltas .cd-detalle { padding: 6px 14px 14px; }
-  #listaComisionesDevueltas .cd-dia { margin-top: 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--t-solido, #fff); }
-  #listaComisionesDevueltas .cd-dia-banda { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 14px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); font-weight: 700; font-size: 13.5px; }
-  #listaComisionesDevueltas .cd-dia-banda b { font-variant-numeric: tabular-nums; }
-  #listaComisionesDevueltas .cd-tabla-wrap { overflow-x: auto; }
-  #listaComisionesDevueltas table.cd-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
-  #listaComisionesDevueltas .cd-tabla thead th.num { text-align: right; }
-  #listaComisionesDevueltas .cd-capturando .flecha-expandir { display: none; }
-  #listaComisionesDevueltas .cd-tabla thead th { background: #1f2a26; color: #fff; padding: 8px 10px; font-size: 11.5px; letter-spacing: .3px; border-bottom: none; }
-  #listaComisionesDevueltas .cd-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--card-border); vertical-align: top; color: var(--text, #15321f); }
-  #listaComisionesDevueltas .cd-tabla tbody tr:nth-child(even) td { background: rgba(var(--t-acc-rgb, 22,163,74), 0.05); }
-  #listaComisionesDevueltas .cd-tabla td.cd-hip { font-weight: 600; white-space: nowrap; }
-  #listaComisionesDevueltas .cd-tabla .cd-c { text-align: center; width: 34px; font-weight: 700; }
-  #listaComisionesDevueltas .cd-tabla td.cd-jug { color: var(--text-dim); min-width: 160px; }
-  #listaComisionesDevueltas .cd-tabla td.num { white-space: nowrap; }
-  #listaComisionesDevueltas .cd-tabla td.pos { color: var(--ok, #16a34a); font-weight: 800; }
-  #listaComisionesDevueltas .cd-tabla tr.fila-total-comision td { background: var(--card-2, #f1f8f3); font-weight: 800; color: var(--text, #15321f); border-top: 1px solid var(--card-border); }
-  #listaComisionesDevueltas .cd-tabla tr.fila-total-comision td.pos { color: var(--ok, #16a34a); }
-  #listaComisionesDevueltas .cd-total-periodo { margin-top: 12px; padding: 11px 16px; border-radius: 10px; background: #1f2a26; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .3px; font-variant-numeric: tabular-nums; }
-  #listaComisionesDevueltas .cd-acciones { margin-top: 10px; text-align: right; }
-  #listaComisionesDevueltas .cd-acciones button { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-2, #f1f8f3); color: var(--text, #15321f); cursor: pointer; }
-  #listaComisionesDevueltas .cd-acciones button:hover { background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); }
-  #listaComisionesDevueltas .cd-cabecera-captura { display: none; }
+  #listaComisionesDevueltas .cd-pct ,
+  #listaMontosApostados .cd-pct { font-weight: 500; color: var(--text-dim); font-size: 12.5px; }
+  #listaComisionesDevueltas .cd-detalle ,
+  #listaMontosApostados .cd-detalle { padding: 6px 14px 14px; }
+  #listaComisionesDevueltas .cd-dia ,
+  #listaMontosApostados .cd-dia { margin-top: 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--card-border); background: var(--t-solido, #fff); }
+  #listaComisionesDevueltas .cd-dia-banda ,
+  #listaMontosApostados .cd-dia-banda { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 14px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); font-weight: 700; font-size: 13.5px; }
+  #listaComisionesDevueltas .cd-dia-banda b ,
+  #listaMontosApostados .cd-dia-banda b { font-variant-numeric: tabular-nums; }
+  #listaComisionesDevueltas .cd-tabla-wrap ,
+  #listaMontosApostados .cd-tabla-wrap { overflow-x: auto; }
+  #listaComisionesDevueltas table.cd-tabla ,
+  #listaMontosApostados table.cd-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #listaComisionesDevueltas .cd-tabla thead th.num ,
+  #listaMontosApostados .cd-tabla thead th.num { text-align: right; }
+  #listaComisionesDevueltas .cd-capturando .flecha-expandir ,
+  #listaMontosApostados .cd-capturando .flecha-expandir { display: none; }
+  #listaMontosApostados .cd-tabla td.cd-res { white-space: nowrap; font-weight: 700; }
+  /* Columnas de ancho fijo para que las tablas de todos los días queden alineadas entre sí */
+  #listaComisionesDevueltas table.cd-tabla, #listaMontosApostados table.cd-tabla { table-layout: fixed; }
+  #listaComisionesDevueltas .cd-tabla th:nth-child(1), #listaMontosApostados .cd-tabla th:nth-child(1) { width: 25%; }
+  #listaComisionesDevueltas .cd-tabla th.cd-c, #listaMontosApostados .cd-tabla th.cd-c { width: 44px; }
+  #listaComisionesDevueltas .cd-tabla th.num, #listaMontosApostados .cd-tabla th.num { width: 96px; }
+  #listaMontosApostados .cd-tabla th:last-child { width: 132px; }
+  #listaComisionesDevueltas .cd-tabla thead th ,
+  #listaMontosApostados .cd-tabla thead th { background: #1f2a26; color: #fff; padding: 8px 10px; font-size: 11.5px; letter-spacing: .3px; border-bottom: none; }
+  #listaComisionesDevueltas .cd-tabla td ,
+  #listaMontosApostados .cd-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--card-border); vertical-align: top; color: var(--text, #15321f); }
+  #listaComisionesDevueltas .cd-tabla tbody tr:nth-child(even) td ,
+  #listaMontosApostados .cd-tabla tbody tr:nth-child(even) td { background: rgba(var(--t-acc-rgb, 22,163,74), 0.05); }
+  #listaComisionesDevueltas .cd-tabla td.cd-hip ,
+  #listaMontosApostados .cd-tabla td.cd-hip { font-weight: 600; white-space: nowrap; }
+  #listaComisionesDevueltas .cd-tabla .cd-c ,
+  #listaMontosApostados .cd-tabla .cd-c { text-align: center; width: 34px; font-weight: 700; }
+  #listaComisionesDevueltas .cd-tabla td.cd-jug ,
+  #listaMontosApostados .cd-tabla td.cd-jug { color: var(--text-dim); min-width: 160px; }
+  #listaComisionesDevueltas .cd-tabla td.num ,
+  #listaMontosApostados .cd-tabla td.num { white-space: nowrap; }
+  #listaComisionesDevueltas .cd-tabla td.pos ,
+  #listaMontosApostados .cd-tabla td.pos { color: var(--ok, #16a34a); font-weight: 800; }
+  #listaComisionesDevueltas .cd-tabla tr.fila-total-comision td ,
+  #listaMontosApostados .cd-tabla tr.fila-total-comision td { background: var(--card-2, #f1f8f3); font-weight: 800; color: var(--text, #15321f); border-top: 1px solid var(--card-border); }
+  #listaComisionesDevueltas .cd-tabla tr.fila-total-comision td.pos ,
+  #listaMontosApostados .cd-tabla tr.fila-total-comision td.pos { color: var(--ok, #16a34a); }
+  #listaComisionesDevueltas .cd-total-periodo ,
+  #listaMontosApostados .cd-total-periodo { margin-top: 12px; padding: 11px 16px; border-radius: 10px; background: #1f2a26; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .3px; font-variant-numeric: tabular-nums; }
+  #listaComisionesDevueltas .cd-acciones ,
+  #listaMontosApostados .cd-acciones { margin-top: 10px; text-align: right; }
+  #listaComisionesDevueltas .cd-acciones button ,
+  #listaMontosApostados .cd-acciones button { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-2, #f1f8f3); color: var(--text, #15321f); cursor: pointer; }
+  #listaComisionesDevueltas .cd-acciones button:hover ,
+  #listaMontosApostados .cd-acciones button:hover { background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); }
+  #listaComisionesDevueltas .cd-cabecera-captura ,
+  #listaMontosApostados .cd-cabecera-captura { display: none; }
   /* Mientras se saca la foto de un cliente: sin botón y con encabezado del grupo */
-  #listaComisionesDevueltas .cd-capturando .cd-acciones { display: none; }
-  #listaComisionesDevueltas .cd-capturando { background: #fff !important; }
-  #listaComisionesDevueltas .cd-capturando .cd-cabecera-captura { display: block; margin: 4px 0 6px; padding: 14px 18px; border-radius: 12px; background: #1f2a26; color: #fff; }
-  #listaComisionesDevueltas .cd-cab-titulo { font-weight: 800; font-size: 17px; }
-  #listaComisionesDevueltas .cd-cab-sub { font-size: 12.5px; opacity: .85; margin-top: 3px; }
+  #listaComisionesDevueltas .cd-capturando .cd-acciones ,
+  #listaMontosApostados .cd-capturando .cd-acciones { display: none; }
+  #listaComisionesDevueltas .cd-capturando ,
+  #listaMontosApostados .cd-capturando { background: #fff !important; }
+  #listaComisionesDevueltas .cd-capturando .cd-cabecera-captura ,
+  #listaMontosApostados .cd-capturando .cd-cabecera-captura { display: block; margin: 4px 0 6px; padding: 14px 18px; border-radius: 12px; background: #1f2a26; color: #fff; }
+  #listaComisionesDevueltas .cd-cab-titulo ,
+  #listaMontosApostados .cd-cab-titulo { font-weight: 800; font-size: 17px; }
+  #listaComisionesDevueltas .cd-cab-sub ,
+  #listaMontosApostados .cd-cab-sub { font-size: 12.5px; opacity: .85; margin-top: 3px; }
 
   /* ==== Mejor vista de "Comisiones Totales por Hipódromo" (21-10-2026, a
      pedido del usuario: "dale mejor vista y no lo hagas tan ancho") ====
@@ -2814,6 +2850,8 @@
         <div class="btn-fila" style="margin:14px 0;">
           <button class="btn btn-secundario" type="button" onclick="copiarMontosApostadosTexto()">📋 Copiar Texto</button>
           <button class="btn btn-secundario" type="button" onclick="copiarMontosApostadosImagen()">📸 Copiar Imagen HD</button>
+          <button class="btn btn-secundario" type="button" onclick="expandirTodoMontosApostados(true)">▾ Expandir todo</button>
+          <button class="btn btn-secundario" type="button" onclick="expandirTodoMontosApostados(false)">▸ Colapsar todo</button>
           <span class="toast-copiado" id="toastMontosApostados"></span>
         </div>
 
@@ -15762,31 +15800,95 @@ function renderMontosApostados() {
   cont.innerHTML = '';
   clientes.forEach(cliente => {
     const idCliente = 'montoCli' + (idMontoApostadoSeq++);
-    const filasDetalle = cliente.detalle
+    // MEJOR FORMATO (21-10-2026, a pedido del usuario: "aquí el mismo formato
+    // que le diste a Comisiones Devueltas por Cliente"): banda por DÍA con
+    // su total apostado y UNA tabla limpia (Hipódromo | C | Jugada | Monto |
+    // Resultado), "TOTAL APOSTADO" al final y botón de imagen por cliente.
+    const detalleOrdenado = cliente.detalle
       .slice()
-      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero)
-      .map(d => `<tr>${esRangoVarios ? `<td>${formatFechaCortaDMY(d.fecha)}</td>` : ''}<td>${d.hipodromoNombre}</td><td>${ordinalCarrera(d.carreraNumero)}</td><td>${TIPO_TEXTO_MONTOS[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td><td>${etiquetaGanoMontosApostados(d.gano, true)}</td></tr>`)
-      .join('');
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.hipodromoNombre.localeCompare(b.hipodromoNombre, 'es') || a.carreraNumero - b.carreraNumero);
+    const porDia = new Map();
+    detalleOrdenado.forEach(d => { const k = d.fecha || ''; if (!porDia.has(k)) porDia.set(k, []); porDia.get(k).push(d); });
+    let htmlDias = '';
+    porDia.forEach((filasDia, fecha) => {
+      const totalDia = filasDia.reduce((acc, d) => redondearCentavos(acc + d.monto), 0);
+      const cuerpo = filasDia.map(d => `<tr><td class="cd-hip">${d.hipodromoNombre}</td><td class="cd-c">${d.carreraNumero}</td><td class="cd-jug">${TIPO_TEXTO_MONTOS[d.tipo] || d.tipo} — ${d.detalleTexto}</td><td class="num">${formatMontoTabla(d.monto)}</td><td class="cd-res">${etiquetaGanoMontosApostados(d.gano, true)}</td></tr>`).join('');
+      const etiquetaDia = fecha ? `${fechaLegibleDet(fecha).dow} ${formatFechaCortaDMY(fecha).slice(0, 5)}` : 'Sin fecha';
+      htmlDias += `
+        <div class="cd-dia">
+          <div class="cd-dia-banda"><span>${etiquetaDia}</span><span>Apostado del día: <b>${formatMontoTabla(totalDia)}</b></span></div>
+          <div class="cd-tabla-wrap"><table class="cd-tabla">
+            <thead><tr><th>Hipódromo</th><th class="cd-c">C</th><th>Jugada</th><th class="num">Monto</th><th>Resultado</th></tr></thead>
+            <tbody>${cuerpo}</tbody>
+          </table></div>
+        </div>`;
+    });
     const fila = document.createElement('div');
     fila.className = 'fila-carrera-comision';
     fila.id = idCliente;
     fila.innerHTML = `
+      <div class="cd-cabecera-captura"></div>
       <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idCliente}')">
         <span class="flecha-expandir">▶</span>
         <div class="info-carrera">
-          <div class="hipodromo">👤 ${formatNombre(cliente.nombre)}</div>
-          <div class="detalle-fecha">${cliente.detalle.length} jugada${cliente.detalle.length === 1 ? '' : 's'}</div>
+          <div class="hipodromo">👤 ${formatNombre(cliente.nombre)} <span class="cd-pct">— ${cliente.detalle.length} jugada${cliente.detalle.length === 1 ? '' : 's'}</span></div>
+          <div class="detalle-fecha">Total apostado</div>
         </div>
         <div class="monto-carrera">${formatMontoTabla(cliente.total)}</div>
       </div>
-      <div class="detalle-carrera">
-        <table>
-          <thead><tr>${esRangoVarios ? '<th>Fecha</th>' : ''}<th>Hipódromo</th><th>Carrera</th><th>Jugada</th><th class="num">Monto</th><th>Resultado</th></tr></thead>
-          <tbody>${filasDetalle}</tbody>
-        </table>
+      <div class="detalle-carrera cd-detalle">
+        ${htmlDias}
+        <div class="cd-total-periodo">TOTAL APOSTADO: ${formatMontoTabla(cliente.total)}</div>
+        <div class="cd-acciones"><button type="button" onclick="copiarImagenClienteMontos('${idCliente}')">📸 Copiar imagen de este cliente</button></div>
       </div>`;
     cont.appendChild(fila);
   });
+}
+
+// "Expandir todo / Colapsar todo" de Montos Apostados (21-10-2026).
+function expandirTodoMontosApostados(abrir) {
+  document.querySelectorAll('#listaMontosApostados > .fila-carrera-comision').forEach(el => el.classList.toggle('expandida', !!abrir));
+}
+
+// Imagen de UN cliente de Montos Apostados (21-10-2026) — mismo mecanismo
+// que copiarImagenClienteDevolucion(): abre la tarjeta si estaba cerrada,
+// pone un encabezado con el grupo y el rango solo para la foto, captura y
+// deja todo como estaba.
+async function copiarImagenClienteMontos(idCliente) {
+  const tarjeta = document.getElementById(idCliente);
+  if (!tarjeta) return;
+  if (typeof html2canvas !== 'function') { mostrarToastMontosApostados('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true); return; }
+  const estabaAbierta = tarjeta.classList.contains('expandida');
+  tarjeta.classList.add('expandida', 'cd-capturando');
+  const cab = tarjeta.querySelector('.cd-cabecera-captura');
+  const nombreGrupoCap = (document.getElementById('montosApostadosNombreGrupoCaptura') || {}).textContent || '';
+  const rangoCap = (document.getElementById('montosApostadosFechaCaptura') || {}).textContent || '';
+  if (cab) cab.innerHTML = `<div class="cd-cab-titulo">${nombreGrupoCap.replace(/^.*?Montos Apostados\s*[—-]?\s*/, '').trim() || 'Montos Apostados'}</div><div class="cd-cab-sub">Detalle de montos apostados — ${rangoCap}</div>`;
+  try {
+    const nombreCliente = ((tarjeta.querySelector('.hipodromo') || {}).textContent || 'cliente').split('—')[0];
+    const canvas = await html2canvas(tarjeta, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    await new Promise(resolve => canvas.toBlob(async blob => {
+      if (!blob) { mostrarToastMontosApostados('⚠️ No se pudo generar la imagen.', true); resolve(); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        mostrarToastMontosApostados('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'montos_' + limpiarParaNombreArchivo(nombreCliente).replace(/\s+/g, '_') + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        mostrarToastMontosApostados('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+      resolve();
+    }, 'image/png'));
+  } catch (e) {
+    mostrarToastMontosApostados('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  } finally {
+    tarjeta.classList.remove('cd-capturando');
+    if (!estabaAbierta) tarjeta.classList.remove('expandida');
+    if (cab) cab.innerHTML = '';
+  }
 }
 
 function mostrarToastMontosApostados(msg, esError) {
