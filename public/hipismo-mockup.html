@@ -520,6 +520,25 @@
   #listaComisionesDevueltas .cd-cab-titulo { font-weight: 800; font-size: 17px; }
   #listaComisionesDevueltas .cd-cab-sub { font-size: 12.5px; opacity: .85; margin-top: 3px; }
 
+  /* ==== Mejor vista de "Comisiones Totales por Hipódromo" (21-10-2026, a
+     pedido del usuario: "dale mejor vista y no lo hagas tan ancho") ====
+     Tarjeta angosta y centrada; cada hipódromo es su propia mini-tarjeta
+     (nombre, carreras en renglones alternados con la comisión a la derecha,
+     subtotal al pie) y se acomodan en 2 columnas cuando caben. Escopeado a
+     #comisionesHipodromoCaptura para no tocar "Comisiones Devueltas por
+     Hipódromo", que reusa .bloque-hipodromo. */
+  #comisionesHipodromoCaptura { max-width: 700px; margin-left: auto; margin-right: auto; }
+  #comisionesHipodromoCaptura #listaComisionesPorHipodromo { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; align-items: start; }
+  #comisionesHipodromoCaptura .bloque-hipodromo { margin: 0; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; background: var(--t-solido, #fff); }
+  #comisionesHipodromoCaptura .bloque-hipodromo .titulo-hipodromo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0; padding: 10px 14px; background: var(--card-2, #f1f8f3); border-left: 4px solid var(--accent-grass, #16a34a); color: var(--text, #15321f); font-size: 14px; }
+  #comisionesHipodromoCaptura .bloque-hipodromo .titulo-hipodromo .hip-n { font-size: 11.5px; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
+  #comisionesHipodromoCaptura .bloque-hipodromo .cabecera-columnas { display: flex; justify-content: space-between; margin: 0; padding: 6px 14px; font-size: 11px; border-bottom: 1px solid var(--card-border); }
+  #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--text, #15321f); }
+  #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo:nth-of-type(odd) { background: rgba(var(--t-acc-rgb, 22,163,74), 0.06); }
+  #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo span:first-child { font-weight: 700; }
+  #comisionesHipodromoCaptura .bloque-hipodromo .fila-carrera-hipodromo span:last-child { font-weight: 600; }
+  #comisionesHipodromoCaptura .bloque-hipodromo .subtotal-hipodromo { margin: 0; padding: 9px 14px; border-top: none; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+
   /* "Comisiones Totales por Hipódromo" (24-09-2026) — lista plana en el
      MISMO formato que pegó el usuario como ejemplo (título, total
      general, y por cada hipódromo un subtítulo "Carrera | Comisión" con
@@ -14980,8 +14999,8 @@ async function pintarComisionesPorHipodromo(fechaForzada) {
 
   cont.innerHTML = data.hipodromos.map(hip => `
     <div class="bloque-hipodromo">
-      <div class="titulo-hipodromo">🏟️ ${hip.nombre}</div>
-      <div class="cabecera-columnas">Carrera | Comisión</div>
+      <div class="titulo-hipodromo"><span>🏟️ ${hip.nombre}</span><span class="hip-n">${hip.carreras.length} carrera${hip.carreras.length === 1 ? '' : 's'}</span></div>
+      <div class="cabecera-columnas"><span>Carrera</span><span>Comisión</span></div>
       ${hip.carreras.map(c => `<div class="fila-carrera-hipodromo"><span>${ordinalFemenino(c.carreraNumero)}</span><span>$${formatMontoTabla(c.comision)}</span></div>`).join('')}
       <div class="subtotal-hipodromo"><span>Subtotal ${hip.nombre}</span><span>$${formatMontoTabla(hip.totalComision)}</span></div>
     </div>
