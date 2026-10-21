@@ -433,6 +433,59 @@
   .fila-cliente-comision.expandida .detalle-cliente-jugadas { display: block; }
   .detalle-cliente-jugadas table { font-size: 12.5px; }
 
+  /* ==== Mejor formato de "Comisión por Carrera de Clientes" (21-10-2026, a
+     pedido del usuario: "dale a esto mejor formato") ====
+     Escopeado a #comisionesPorCarreraCaptura para NO tocar las demás
+     pantallas que reusan .fila-carrera-comision. Todo sale de las variables
+     del tema (con respaldo), así que se ve bien en los 7 temas y en la
+     imagen/PDF que se descarga.
+       DÍA        = banda de color sólido con la fecha y el total en una píldora
+       HIPÓDROMO  = cabecera suave con filete de color a la izquierda
+       CARRERA    = renglón limpio (sin caja), con su total en una píldora
+       CLIENTE    = renglones alternados, nombre a la izquierda y monto a la
+                    derecha con cifras tabulares (los montos quedan alineados) */
+  #comisionesPorCarreraCaptura .fila-carrera-comision { border-radius: 12px; margin-bottom: 12px; box-shadow: none; }
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera {
+    background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); padding: 13px 18px;
+  }
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera:hover { filter: brightness(1.05); background: var(--accent-grass, #16a34a); }
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera .flecha-expandir,
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera .detalle-fecha { color: var(--t-on-accent, #fff); opacity: .85; }
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera .info-carrera .hipodromo { color: var(--t-on-accent, #fff); font-size: 15px; letter-spacing: .2px; }
+  #comisionesPorCarreraCaptura #listaComisionesPorCarrera > .fila-carrera-comision > .cabecera-carrera .monto-carrera {
+    background: rgba(255,255,255,0.22); color: var(--t-on-accent, #fff); border-radius: 999px; padding: 4px 14px; font-size: 15px;
+  }
+  #comisionesPorCarreraCaptura .comision-nivel-hipodromos { padding: 10px 12px 2px; margin-top: 0; }
+  #comisionesPorCarreraCaptura .comision-nivel-hipodromos > .fila-carrera-comision { border-radius: 10px; }
+  #comisionesPorCarreraCaptura .comision-nivel-hipodromos > .fila-carrera-comision > .cabecera-carrera {
+    background: var(--card-2, #f1f8f3); border-left: 4px solid var(--accent-grass, #16a34a); padding: 10px 14px;
+  }
+  #comisionesPorCarreraCaptura .comision-nivel-hipodromos > .fila-carrera-comision > .cabecera-carrera .info-carrera .hipodromo { font-size: 14px; color: var(--text, #15321f); }
+  #comisionesPorCarreraCaptura .comision-nivel-hipodromos > .fila-carrera-comision > .cabecera-carrera .monto-carrera { font-size: 14.5px; }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras { padding: 4px 0 6px; margin-top: 0; }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras > .fila-carrera-comision {
+    border: none; border-top: 1px solid var(--card-border); border-radius: 0; margin: 0; background: transparent;
+  }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras > .fila-carrera-comision:first-child { border-top: none; }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras > .fila-carrera-comision > .cabecera-carrera { background: transparent; padding: 9px 12px; }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras > .fila-carrera-comision > .cabecera-carrera:hover { background: rgba(var(--t-acc-rgb, 22,163,74), 0.07); }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras .info-carrera .hipodromo { font-size: 13px; font-weight: 700; color: var(--text, #15321f); }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras .monto-carrera {
+    background: rgba(var(--t-acc-rgb, 22,163,74), 0.13); border-radius: 999px; padding: 2px 11px; font-size: 13px;
+  }
+  #comisionesPorCarreraCaptura .comision-nivel-carreras > .fila-carrera-comision > .detalle-carrera { padding: 0 12px 10px 36px; }
+  #comisionesPorCarreraCaptura .fila-cliente-comision { border-top: none; border-radius: 8px; }
+  #comisionesPorCarreraCaptura .fila-cliente-comision:nth-child(odd) { background: rgba(var(--t-acc-rgb, 22,163,74), 0.06); }
+  #comisionesPorCarreraCaptura .fila-cliente-comision .cabecera-cliente,
+  #comisionesPorCarreraCaptura .fila-cliente-comision.sin-expandir { padding: 7px 10px; }
+  #comisionesPorCarreraCaptura .fila-cliente-comision.sin-expandir { padding-left: 24px; }
+  #comisionesPorCarreraCaptura .nombre-cliente { font-size: 13px; font-weight: 600; color: var(--text, #15321f); }
+  #comisionesPorCarreraCaptura .monto-cliente { font-variant-numeric: tabular-nums; font-size: 13.5px; min-width: 70px; text-align: right; color: var(--ok, var(--accent-grass)); }
+  #comisionesPorCarreraCaptura .detalle-cliente-jugadas { padding: 0 10px 8px 24px; }
+  .barra-expandir-comisiones { display: flex; gap: 8px; margin: 0 0 10px; }
+  .barra-expandir-comisiones button { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-2, #f1f8f3); color: var(--text, #15321f); cursor: pointer; }
+  .barra-expandir-comisiones button:hover { background: rgba(var(--t-acc-rgb, 22,163,74), 0.14); }
+
   /* "Comisiones Totales por Hipódromo" (24-09-2026) — lista plana en el
      MISMO formato que pegó el usuario como ejemplo (título, total
      general, y por cada hipódromo un subtítulo "Carrera | Comisión" con
@@ -3161,6 +3214,11 @@
           <button class="btn btn-secundario" type="button" onclick="descargarComisionesPorCarreraPDF()">📄 Descargar en PDF</button>
           <button class="btn btn-secundario" type="button" onclick="descargarComisionesPorCarreraExcel()">📊 Descargar en Excel</button>
           <span class="toast-copiado" id="toastComisionesPorCarrera"></span>
+        </div>
+
+        <div class="barra-expandir-comisiones">
+          <button type="button" onclick="expandirTodoComisionesPorCarrera(true)">▾ Expandir todo</button>
+          <button type="button" onclick="expandirTodoComisionesPorCarrera(false)">▸ Colapsar todo</button>
         </div>
 
         <div id="comisionesPorCarreraCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px; padding:18px 20px;">
@@ -14609,6 +14667,13 @@ function filaClienteComisionHtml(c) {
     </div>`;
 }
 
+// "Expandir todo / Colapsar todo" (21-10-2026): abre o cierra de una vez
+// todos los niveles (día, hipódromo, carrera y clientes con varias jugadas).
+function expandirTodoComisionesPorCarrera(abrir) {
+  document.querySelectorAll('#listaComisionesPorCarrera .fila-carrera-comision, #listaComisionesPorCarrera .fila-cliente-comision[id]')
+    .forEach(el => el.classList.toggle('expandida', !!abrir));
+}
+
 async function pintarComisionesPorCarrera() {
   const cont = document.getElementById('listaComisionesPorCarrera');
   cont.innerHTML = '<div class="resultado-vacio">Cargando comisiones...</div>';
@@ -14641,8 +14706,8 @@ async function pintarComisionesPorCarrera() {
       <div class="cabecera-carrera" onclick="toggleFilaCarrera('${idDia}')">
         <span class="flecha-expandir">▶</span>
         <div class="info-carrera">
-          <div class="hipodromo">📅 ${formatFechaCortaDMY(dia.fecha)}</div>
-          <div class="detalle-fecha">${dia.hipodromos.length} hipódromo${dia.hipodromos.length === 1 ? '' : 's'}</div>
+          <div class="hipodromo">📅 ${fechaLegibleDet(dia.fecha).dow} ${formatFechaCortaDMY(dia.fecha)}</div>
+          <div class="detalle-fecha">${dia.hipodromos.length} hipódromo${dia.hipodromos.length === 1 ? '' : 's'} · ${dia.hipodromos.reduce((n, h) => n + h.carreras.length, 0)} carreras</div>
         </div>
         <div class="monto-carrera">+${formatMontoTabla(dia.totalComision)}</div>
       </div>
