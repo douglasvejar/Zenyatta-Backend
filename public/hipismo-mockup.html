@@ -598,6 +598,43 @@
   #listaEliminarPlanos .ep-carrera-com { flex: 1; font-size: 13px; color: var(--text-dim); }
   #listaEliminarPlanos .ep-carrera-com b { color: var(--text, #15321f); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
+  /* ==== Mejor vista de "Registro de Saldos" (21-10-2026) ==== */
+  #registroSaldosAnios .rs-anio { border: 1px solid var(--card-border); border-radius: 14px; margin-bottom: 16px; background: var(--t-solido, #fff); overflow: hidden; }
+  #registroSaldosAnios .rs-anio-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 18px; cursor: pointer; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); }
+  #registroSaldosAnios .rs-anio-t { font-size: 22px; font-weight: 800; }
+  #registroSaldosAnios .rs-anio-pill { background: rgba(255,255,255,0.22); border-radius: 999px; padding: 3px 12px; font-size: 12.5px; font-weight: 700; }
+  #registroSaldosAnios .rs-anio-hint { margin-left: auto; font-size: 12px; opacity: .9; }
+  #registroSaldosAnios .rs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 14px 18px 4px; }
+  #registroSaldosAnios .rs-kpi { border: 1px solid var(--card-border); border-radius: 12px; padding: 9px 14px; background: var(--card-2, #f1f8f3); }
+  #registroSaldosAnios .rs-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-dim); font-weight: 700; }
+  #registroSaldosAnios .rs-kpi b { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--text, #15321f); }
+  #registroSaldosAnios .rs-kpi b.pos, #registroSaldosAnios .rs-pos { color: #1a7a3a; }
+  #registroSaldosAnios .rs-kpi b.neg, #registroSaldosAnios .rs-neg { color: #b32d2d; }
+  #registroSaldosAnios .rs-sec { padding: 8px 18px 6px; }
+  #registroSaldosAnios .rs-sec h4 { margin: 10px 0 8px; font-size: 15px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+  #registroSaldosAnios .rs-sec h4 small { font-weight: 400; font-size: 12px; color: var(--text-dim); }
+  #registroSaldosAnios .rs-mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  #registroSaldosAnios .rs-mod { border: 1px solid var(--card-border); border-left: 4px solid var(--card-border); border-radius: 10px; padding: 9px 12px; cursor: pointer; background: var(--t-solido, #fff); transition: transform .12s, box-shadow .12s; }
+  #registroSaldosAnios .rs-mod:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.10); }
+  #registroSaldosAnios .rs-mod.pos { border-left-color: #1a7a3a; }
+  #registroSaldosAnios .rs-mod.neg { border-left-color: #b32d2d; }
+  #registroSaldosAnios .rs-mod span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--text-dim); }
+  #registroSaldosAnios .rs-mod b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  #registroSaldosAnios .rs-mod.cero b { color: var(--text-dim); font-weight: 600; }
+  #registroSaldosAnios .rs-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: 12px; margin-bottom: 14px; }
+  #registroSaldosAnios table.rs-tabla { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; white-space: nowrap; }
+  #registroSaldosAnios .rs-tabla thead th { background: #1f2a26; color: #fff; padding: 9px 12px; font-size: 11.5px; letter-spacing: .3px; border: none; position: sticky; top: 0; }
+  #registroSaldosAnios .rs-tabla thead th:first-child, #registroSaldosAnios .rs-tabla tbody td:first-child, #registroSaldosAnios .rs-tabla tfoot td:first-child { position: sticky; left: 0; z-index: 1; }
+  #registroSaldosAnios .rs-tabla td { padding: 9px 12px; border-bottom: 1px solid var(--card-border); font-variant-numeric: tabular-nums; background: var(--t-solido, #fff); }
+  #registroSaldosAnios .rs-tabla tbody tr:nth-child(even) td { background: var(--card-2, #f4faf6); }
+  #registroSaldosAnios .rs-tabla tbody tr { cursor: pointer; }
+  #registroSaldosAnios .rs-tabla tbody tr:hover td { background: rgba(var(--t-acc-rgb, 22,163,74), 0.12); }
+  #registroSaldosAnios .rs-tabla td:first-child { font-weight: 700; color: var(--text, #15321f); }
+  #registroSaldosAnios .rs-tabla td:nth-child(3), #registroSaldosAnios .rs-tabla th:nth-child(3) { border-left: 2px solid var(--card-border); font-weight: 700; }
+  #registroSaldosAnios .rs-tabla td:last-child { font-weight: 700; border-left: 2px solid var(--card-border); }
+  #registroSaldosAnios .rs-tabla tr.rs-total td { background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff) !important; font-weight: 800; border-bottom: none; }
+  #registroSaldosAnios .rs-tabla tr.rs-total td[style] { color: var(--t-on-accent, #fff) !important; }
+
   /* ==== Mejor vista de "Pizarras" (21-10-2026) ==== */
   #listaPizarras .pz-dia-banda { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 11px 18px; border-radius: 12px; background: var(--accent-grass, #16a34a); color: var(--t-on-accent, #fff); margin: 18px 0 12px; }
   #listaPizarras .pz-dia-banda:first-child { margin-top: 4px; }
@@ -16936,34 +16973,41 @@ function pintarRegistroSaldos() {
     const abierto = REGISTRO_ANIOS_ABIERTOS.has(p.clave);
     const t = d.totales[i];
     const activos = d.clientes.filter(c => c.periodos[i].jugadas > 0 || c.periodos[i].saldo !== 0).length;
-    let html = `<div style="border:1px solid var(--border, #ddd); border-radius:10px; margin-bottom:14px;">
-      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 14px; cursor:pointer;" onclick="toggleRegistroAnio('${p.clave}')">
-        <div style="font-size:20px; font-weight:800; min-width:90px;">${abierto ? '▾' : '▸'} ${p.etiqueta}</div>
-        <div style="font-size:13px;">Clientes activos: <b>${activos}</b></div>
-        <div style="font-size:13px;">Comisión generada: <b>${formatMonto(t.comisionGenerada)}</b></div>
-        <div style="font-size:13px;">% devuelto: <b>${formatMonto(t.devuelto)}</b></div>
-        <div style="font-size:13px;">Comisión neta: <b style="color:${t.comisionNeta >= 0 ? '#1a7a3a' : '#b32d2d'};">${formatMonto(t.comisionNeta)}</b></div>
-        <div style="font-size:13px;">Comisión del grupo (Balance General): <b>${formatMonto(t.comisionGrupo)}</b></div>
+    const clsN = n => (n > 0 ? 'pos' : (n < 0 ? 'neg' : ''));
+    let html = `<div class="rs-anio">
+      <div class="rs-anio-cab" onclick="toggleRegistroAnio('${p.clave}')">
+        <span class="rs-anio-t">${abierto ? '▾' : '▸'} ${p.etiqueta}</span>
+        <span class="rs-anio-pill">${activos} cliente${activos === 1 ? '' : 's'} activo${activos === 1 ? '' : 's'}</span>
+        <span class="rs-anio-hint">${abierto ? 'Toca para cerrar' : 'Toca para abrir'}</span>
+      </div>
+      <div class="rs-kpis">
+        <div class="rs-kpi"><span>Comisión generada</span><b>${formatMonto(t.comisionGenerada)}</b></div>
+        <div class="rs-kpi"><span>% devuelto</span><b>${formatMonto(t.devuelto)}</b></div>
+        <div class="rs-kpi"><span>Comisión neta</span><b class="${clsN(t.comisionNeta)}">${formatMonto(t.comisionNeta)}</b></div>
+        <div class="rs-kpi"><span>Comisión del grupo (Balance General)</span><b>${formatMonto(t.comisionGrupo)}</b></div>
       </div>`;
     if (abierto) {
-      // --- por modalidad de juego
-      html += `<div style="padding:0 14px 6px;"><h4 style="margin:8px 0 4px;">🎯 Por modalidad de juego <span style="font-weight:400; font-size:12px; color:var(--text-dim);">(positivo = los clientes ganaron en esa modalidad). Toca una para ver el detalle por semana y por mes.</span></h4>
-        <div style="overflow-x:auto;"><table style="font-size:12.5px; white-space:nowrap; max-width:560px;"><thead><tr><th>Modalidad</th><th class="num">Resultado de los clientes</th></tr></thead><tbody>` +
-        REGISTRO_MODALIDADES.map(([k, etq]) => `<tr style="cursor:pointer;" onclick="abrirRegistroDetalle('modalidad', '${k}', ${p.clave})"><td>▸ ${etq}</td>${celdaRegistro(t[k], true, true)}</tr>`).join('') +
-        `</tbody></table></div></div>`;
+      // --- por modalidad de juego: una tarjeta por modalidad
+      html += `<div class="rs-sec"><h4>🎯 Por modalidad de juego <small>Positivo = los clientes ganaron en esa modalidad. Toca una para ver el detalle por semana y por mes.</small></h4>
+        <div class="rs-mods">` +
+        REGISTRO_MODALIDADES.map(([k, etq]) => {
+          const v = Number(t[k]) || 0;
+          return `<div class="rs-mod ${v > 0 ? 'pos' : (v < 0 ? 'neg' : 'cero')}" onclick="abrirRegistroDetalle('modalidad', '${k}', ${p.clave})"><span>${etq}<i style="font-style:normal;">›</i></span><b class="${v > 0 ? 'rs-pos' : (v < 0 ? 'rs-neg' : '')}">${v === 0 ? '—' : (v < 0 ? '-' : '+') + formatMontoTabla(Math.abs(v))}</b></div>`;
+        }).join('') +
+        `</div></div>`;
       // --- por cliente
       let lista = d.clientes.filter(c => (!buscar || c.nombre.toUpperCase().includes(buscar)) && (c.periodos[i].jugadas > 0 || CAMPOS_REGISTRO_ALGUNO(c.periodos[i])));
       lista = lista.slice().sort((a, b) => {
         const r = clave === 'nombre' ? a.nombre.localeCompare(b.nombre, 'es') : (a.periodos[i][clave] - b.periodos[i][clave]);
         return desc ? -r : r;
       });
-      html += `<div style="padding:0 14px 14px;"><h4 style="margin:10px 0 4px;">👥 Clientes <span style="font-weight:400; font-size:12px; color:var(--text-dim);">Toca un cliente para ver todo su detalle por semana y por mes.</span></h4>
-        <div style="overflow-x:auto;"><table style="font-size:12.5px; white-space:nowrap;"><thead><tr><th style="cursor:pointer;" onclick="ordenarRegistroSaldos('nombre')">Cliente${flecha('nombre')}</th>` +
+      html += `<div class="rs-sec"><h4>👥 Clientes <small>${lista.length} cliente${lista.length === 1 ? '' : 's'} · Toca un cliente para ver todo su detalle por semana y por mes. Toca un título de columna para ordenar.</small></h4>
+        <div class="rs-wrap"><table class="rs-tabla"><thead><tr><th style="cursor:pointer;" onclick="ordenarRegistroSaldos('nombre')">Cliente${flecha('nombre')}</th>` +
         REGISTRO_COLS.map(([k, tt]) => `<th class="num" style="cursor:pointer;" onclick="ordenarRegistroSaldos('${k}')">${tt}${flecha(k)}</th>`).join('') + '</tr></thead><tbody>' +
-        (lista.length ? lista.map(c => `<tr style="cursor:pointer;" onclick="abrirRegistroDetalle('cliente', '${jsq(c.nombre)}', ${p.clave})"><td>▸ ${formatNombre(c.nombre)}</td>` +
+        (lista.length ? lista.map(c => `<tr onclick="abrirRegistroDetalle('cliente', '${jsq(c.nombre)}', ${p.clave})"><td>${formatNombre(c.nombre)}</td>` +
           REGISTRO_COLS.map(([k, , m]) => celdaRegistro(c.periodos[i][k], m, REGISTRO_CON_SIGNO.has(k))).join('') + '</tr>').join('')
           : `<tr><td colspan="${REGISTRO_COLS.length + 1}" style="text-align:center; color:var(--text-dim);">Sin clientes con movimiento.</td></tr>`) +
-        filaTotalRegistro('TOTAL (todos los clientes)', t) + '</tbody></table></div></div>';
+        filaTotalRegistro('TOTAL (todos los clientes)', t).replace('<tr style="font-weight:700; background:var(--card-2);">', '<tr class="rs-total" style="cursor:default;">') + '</tbody></table></div></div>';
     }
     html += '</div>';
     bloques.push(html);
