@@ -421,6 +421,39 @@ router.put('/tema-config', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// ORDEN DE LA LISTA DE POZOS (23-10-2026, a pedido del usuario: "los pozos cuando carguen la lista yo elegir si ordenarlo en orden
+// alfabetico o ordenarlo desde el que menos tenga al que mas tenga... esto lo hace cada grupo desde ajustes"). Se guarda por grupo en
+// grupos.hipismo_pozos_orden: 'alfabetico' (por defecto) o 'menor_mayor' (del que menos tiene al que más tiene, según el monto que
+// muestra cada lista). Solo el administrador lo cambia. Sin la columna (falta correr el SQL) el GET responde sinColumna y el PUT 503;
+// la pantalla sigue con la copia guardada en el navegador.
+// =================================================================
+const POZOS_ORDENES = ['alfabetico', 'menor_mayor'];
+router.get('/pozos-config', asyncHandler(async (req, res) => {
+  try {
+    const r = await db.query('SELECT hipismo_pozos_orden FROM grupos WHERE id = $1', [req.grupoId]);
+    const fila = r.rows && r.rows[0];
+    const v = fila && fila.hipismo_pozos_orden;
+    res.json({ orden: POZOS_ORDENES.includes(v) ? v : 'alfabetico', ordenes: POZOS_ORDENES });
+  } catch (e) {
+    if (e && e.code === '42703') return res.json({ orden: null, ordenes: POZOS_ORDENES, sinColumna: true });
+    throw e;
+  }
+}));
+
+router.put('/pozos-config', asyncHandler(async (req, res) => {
+  if (req.rol !== 'administrador') return res.status(403).json({ error: 'Solo el administrador del grupo puede cambiar el orden de Pozos.' });
+  const orden = req.body && typeof req.body.orden === 'string' ? req.body.orden.trim() : '';
+  if (!POZOS_ORDENES.includes(orden)) return res.status(400).json({ error: 'Ese orden no existe.' });
+  try {
+    await db.query('UPDATE grupos SET hipismo_pozos_orden = $1 WHERE id = $2', [orden, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(503).json({ error: 'Falta correr el SQL pendiente en Supabase (columna grupos.hipismo_pozos_orden).', sinColumna: true });
+    throw e;
+  }
+  res.json({ orden });
+}));
+
+// =================================================================
 // HIPÓDROMOS (Administración > Hipódromos, spec sección 3)
 // =================================================================
 router.get('/hipodromos', asyncHandler(async (req, res) => {

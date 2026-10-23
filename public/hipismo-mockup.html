@@ -4208,6 +4208,14 @@ Pizarra: [se llena al calcular]
         <p class="desc" style="margin:0;">Elige cómo se ve el panel de este grupo. Lo ven todos los usuarios del grupo, en cualquier dispositivo.</p>
         <div id="temaLista" role="radiogroup" aria-label="Tema del panel"></div>
         <p id="temaEstado" class="pref-estado"></p>
+
+        <h3 style="margin:22px 0 4px;">Orden de la lista de Pozos</h3>
+        <p class="desc" style="margin:0 0 10px;">Elige cómo sale ordenada la lista en la pantalla Pozos (y en la imagen y el texto que copias). Lo ven todos los usuarios del grupo.</p>
+        <div class="subnav" id="pozosOrdenOpciones" role="radiogroup" aria-label="Orden de la lista de Pozos" style="margin-bottom:6px;">
+          <button type="button" role="radio" data-orden="alfabetico" onclick="elegirPozosOrden('alfabetico')">🔤 Orden alfabético (A a Z)</button>
+          <button type="button" role="radio" data-orden="menor_mayor" onclick="elegirPozosOrden('menor_mayor')">📈 Del que menos tiene al que más tiene</button>
+        </div>
+        <p id="pozosOrdenEstado" class="pref-estado"></p>
       </div>
     </section>
 
@@ -7323,6 +7331,76 @@ async function elegirTemaHip(id) {
   }
 }
 
+// =================================================================
+// ORDEN DE LA LISTA DE POZOS (23-10-2026): cada grupo elige en Ajustes > Preferencias si la lista de Pozos sale en orden alfabético
+// (por defecto) o del que menos tiene al que más tiene (según el monto que muestra cada lista: pozo actual, saldo, o saldo + pozo).
+// Se guarda por grupo en el servidor (grupos.hipismo_pozos_orden); sin el SQL queda la copia de este navegador.
+// =================================================================
+let POZOS_ORDEN = 'alfabetico';
+function claveOrdenPozos() {
+  let g = 'x';
+  try { g = (GRUPO && (GRUPO.id || GRUPO.nombre)) || 'x'; } catch (e) { /* clave genérica */ }
+  return 'ludox_hipismo_pozos_orden_' + g;
+}
+function ordenPozosValido(v) { return v === 'alfabetico' || v === 'menor_mayor'; }
+function puedeCambiarOrdenPozos() { return !(GRUPO && GRUPO.rol === 'empleado'); }
+function pintarOrdenPozosOpciones() {
+  const puede = puedeCambiarOrdenPozos();
+  document.querySelectorAll('#pozosOrdenOpciones button').forEach(b => {
+    const on = b.dataset.orden === POZOS_ORDEN;
+    b.classList.toggle('activo', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.disabled = !puede;
+  });
+  const st = document.getElementById('pozosOrdenEstado');
+  if (st && !puede && !st.textContent) st.textContent = 'Solo el administrador del grupo puede cambiar el orden.';
+}
+// Ordena las filas de Pozos según la preferencia del grupo. montoDe = el monto que muestra esa lista; nombreDe = el nombre visible.
+function ordenarFilasPozos(filas, montoDe, nombreDe) {
+  const porNombre = (a, b) => nombreDe(a).localeCompare(nombreDe(b), 'es');
+  if (POZOS_ORDEN === 'menor_mayor') return filas.slice().sort((a, b) => (montoDe(a) - montoDe(b)) || porNombre(a, b));
+  return filas.slice().sort(porNombre);
+}
+async function sincronizarOrdenPozosServidor() {
+  let local = null;
+  try { local = localStorage.getItem(claveOrdenPozos()); } catch (e) { local = null; }
+  if (ordenPozosValido(local)) POZOS_ORDEN = local;
+  pintarOrdenPozosOpciones();
+  try {
+    const r = await apiHipismo('/api/hipismo/pozos-config');
+    if (!r || !ordenPozosValido(r.orden)) return; // el servidor todavía no tiene la columna: vale la copia local
+    // Si el servidor aún no tiene nada guardado devuelve 'alfabetico'; no pisa una elección local anterior.
+    if (r.orden === 'alfabetico' && ordenPozosValido(local) && local !== 'alfabetico') return;
+    const cambio = r.orden !== POZOS_ORDEN;
+    POZOS_ORDEN = r.orden;
+    try { localStorage.setItem(claveOrdenPozos(), r.orden); } catch (e) { /* sin copia local */ }
+    pintarOrdenPozosOpciones();
+    if (cambio && typeof pintarTablaPozos === 'function' && document.querySelector('#tablaPozos tbody')) pintarTablaPozos();
+  } catch (e) { /* sin conexión: vale la copia local */ }
+}
+async function elegirPozosOrden(orden) {
+  if (!puedeCambiarOrdenPozos() || !ordenPozosValido(orden)) return;
+  const anterior = POZOS_ORDEN;
+  POZOS_ORDEN = orden;
+  try { localStorage.setItem(claveOrdenPozos(), orden); } catch (e) { /* sin copia local */ }
+  pintarOrdenPozosOpciones();
+  pintarTablaPozos();
+  const st = document.getElementById('pozosOrdenEstado');
+  const nombre = orden === 'alfabetico' ? 'Orden alfabético' : 'Del que menos tiene al que más tiene';
+  try {
+    await apiHipismo('/api/hipismo/pozos-config', { method: 'PUT', body: JSON.stringify({ orden }) });
+    if (st) st.textContent = nombre + ' — guardado para todo el grupo.';
+  } catch (e) {
+    if (e && /sinColumna|SQL/i.test(String(e.message || ''))) { if (st) st.textContent = nombre + ' — quedó guardado solo en este navegador (falta correr el SQL de Pozos en Supabase).'; }
+    else if (st) {
+      st.textContent = 'No se pudo guardar para el grupo: ' + (e && e.message ? e.message : e);
+      POZOS_ORDEN = anterior;
+      try { localStorage.setItem(claveOrdenPozos(), anterior); } catch (e2) { /* sin copia local */ }
+      pintarOrdenPozosOpciones(); pintarTablaPozos();
+    }
+  }
+}
+
 function irAPreferenciasCruzar() {
   mostrarVista('preferencias', document.querySelector('.nav-item[data-vista="preferencias"]'));
 }
@@ -7403,6 +7481,7 @@ document.addEventListener('DOMContentLoaded', () => {
   refrescarFuncionesGrupoHip();
   aplicarPermisoCruzarJugadas();
   sincronizarTemaServidor();
+  sincronizarOrdenPozosServidor();
   const nombreEl = document.getElementById('topbarNombreGrupo');
   if (nombreEl) nombreEl.textContent = GRUPO.nombre || '';
 });
@@ -7616,7 +7695,7 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   alertasHipismo: () => pintarAlertasHipismo(),
   // "Fecha de Semana" (05-10-2026) — lee la semana guardada del grupo.
   fechaSemana: () => cargarFechaSemana(),
-  preferencias: () => { sincronizarCruzarServidor(); sincronizarTemaServidor(); },
+  preferencias: () => { sincronizarCruzarServidor(); sincronizarTemaServidor(); sincronizarOrdenPozosServidor(); },
   // "Tablas Fijas y Marcas" (06-10-2026) — recuerda quién banquea las Marcas.
   jugadasAdelantadas: () => bqResumenAdelantadas(),
   // "Banqueo de Marcas" (06-10-2026) — configuración del grupo.
@@ -13334,8 +13413,8 @@ async function pintarTablaPozos() {
   // los clientes con pozos y cuanto les queda de pozo") — igual que la
   // tabla de siempre, pero ya NO se listan los "Libre (sin pozo)".
   if (filtro === 'soloPozos') {
-    const filas = CLIENTES_HIPISMO_CACHE.filter(j => j.tipo_cuenta === 'avalado' && j.pozo)
-      .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const filas = ordenarFilasPozos(CLIENTES_HIPISMO_CACHE.filter(j => j.tipo_cuenta === 'avalado' && j.pozo),
+      j => redondearCentavos(j.pozo.pozoActual), j => j.nombre);
     tbody.innerHTML = filas.length
       ? filas.map(j => filaPozoCompleta(j)).join('')
       : `<tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes "Avalado" con pozo asignado.</td></tr>`;
@@ -13358,7 +13437,7 @@ async function pintarTablaPozos() {
   // clientes pero sin sumarle los pozos") — misma lista de
   // data.clientes de /cierre-final que Balance General, sin tocar nada.
   if (filtro === 'saldos') {
-    const filas = saldosSemana.slice().sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+    const filas = ordenarFilasPozos(saldosSemana, c => redondearCentavos(c.saldo), c => formatNombre(c.nombre));
     tbody.innerHTML = filas.length
       ? filas.map(c => filaPozoSoloSaldo(c.nombre, c.saldo)).join('')
       : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Nadie tiene jugadas en esta semana.</td></tr>`;
@@ -13396,9 +13475,9 @@ async function pintarTablaPozos() {
     }
   });
   // Una cuenta "X - PORCENTAJE" es un cliente más en la lista; sin devolución % se queda en 0 y no se muestra.
-  const filas = Array.from(porNombre.values())
-    .filter(c => conDevolucion || !c.esCuentaComision || c.saldo !== 0 || c.pozoActual !== 0)
-    .sort((a, b) => formatNombre(a.nombre).localeCompare(formatNombre(b.nombre), 'es'));
+  const filas = ordenarFilasPozos(
+    Array.from(porNombre.values()).filter(c => conDevolucion || !c.esCuentaComision || c.saldo !== 0 || c.pozoActual !== 0),
+    c => redondearCentavos(c.saldo + c.pozoActual), c => formatNombre(c.nombre));
   tbody.innerHTML = filas.length
     ? filas.map(c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual))).join('')
     : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;

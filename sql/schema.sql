@@ -2243,3 +2243,6 @@ begin
   on conflict do nothing;
   update grupos set hipismo_hipodromos_iniciales = true where not hipismo_hipodromos_iniciales;
 end $$;
+
+-- 23-10-2026: orden de la lista de Pozos por grupo ('alfabetico' o 'menor_mayor'; vacío = alfabético).
+alter table grupos add column if not exists hipismo_pozos_orden text;
