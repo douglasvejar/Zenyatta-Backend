@@ -57,13 +57,13 @@ const TABLAS = { grupos: [GRUPO_CON_TEMA, GRUPO_SIN_TEMA], empleados: [EMPLEADO_
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
-  if (sql === 'SELECT * FROM grupos WHERE email = $1') {
+  if (sql.startsWith('SELECT * FROM grupos WHERE lower(email) = lower($1)')) {
     const [email] = params;
-    return { rows: TABLAS.grupos.filter(g => g.email === email) };
+    return { rows: TABLAS.grupos.filter(g => g.email.toLowerCase() === String(email).toLowerCase()).slice(0, 1) };
   }
   if (sql.startsWith('SELECT e.*, g.activo AS grupo_activo')) {
     const [email] = params;
-    const fila = TABLAS.empleados.find(e => e.email === email);
+    const fila = TABLAS.empleados.find(e => e.email.toLowerCase() === String(email).toLowerCase());
     if (!fila) return { rows: [] };
     const g = TABLAS.grupos.find(x => x.id === fila.grupo_id);
     return {

@@ -70,10 +70,15 @@ router.get('/grupos', asyncHandler(async (req, res) => {
 // una vez que arreglaste el cobro con ese cliente.
 router.post('/grupos', asyncHandler(async (req, res) => {
   try {
-    const { nombre, email, password } = req.body;
+    const { nombre, password } = req.body;
+    // 24-10-2026: el usuario (email) no distingue mayúsculas, así que se guarda en minúsculas y sin espacios sobrados;
+    // así no se pueden crear dos cuentas que solo difieran en mayúsculas.
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : req.body.email;
     if (!nombre || !email || !password) {
       return res.status(400).json({ error: 'Faltan nombre, email o password.' });
     }
+    const dup = await db.query('SELECT 1 FROM grupos WHERE lower(email) = $1 LIMIT 1', [email]);
+    if (dup.rows && dup.rows.length) return res.status(409).json({ error: 'Ya existe un grupo con ese email.' });
     const passwordHash = await bcrypt.hash(password, 10);
     // 13-10-2026 (panel de funciones por sección, ver services/funcionesGrupo.js): al crear el grupo se pueden elegir de una vez
     // los módulos (moduloDeportes/moduloHipismo/moduloOficinas) y las secciones (funciones: [claves] — o paquete: 'completo', …).

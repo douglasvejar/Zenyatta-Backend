@@ -13,6 +13,7 @@ let grupoFila = { id: 'g1', funciones_habilitadas: null };
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (/^ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas/i.test(sql)) return { rows: [] };
+  if (/^SELECT 1 FROM grupos WHERE lower\(email\) = \$1/i.test(sql)) return { rows: [] };
   consultas.push({ sql, params });
   if (/^INSERT INTO grupos/i.test(sql)) return { rows: [{ id: 'nuevo', nombre: params[0], email: params[1], activo: false, creado_en: '2026-10-13' }] };
   if (/^UPDATE grupos SET funciones_habilitadas/i.test(sql)) {

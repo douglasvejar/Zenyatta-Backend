@@ -17,10 +17,14 @@ const { funcionesEfectivas } = require('../services/funcionesGrupo');
 const router = express.Router();
 
 router.post('/login', asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  // 24-10-2026, a pedido del usuario: "los usuarios para iniciar sesión en Ludox no son sensibles a mayúsculas y minúsculas...
+  // las claves sí". El usuario (email) se compara sin distinguir mayúsculas ni espacios sobrados; la clave sigue exacta (bcrypt).
+  // Si por datos viejos hubiera dos cuentas que solo difieren en mayúsculas, gana la que coincide exacto.
+  const email = typeof req.body.email === 'string' ? req.body.email.trim() : req.body.email;
   if (!email || !password) return res.status(400).json({ error: 'Faltan email o password.' });
 
-  const r = await db.query('SELECT * FROM grupos WHERE email = $1', [email]);
+  const r = await db.query('SELECT * FROM grupos WHERE lower(email) = lower($1) ORDER BY (email = $1) DESC, creado_en LIMIT 1', [email]);
   const grupo = r.rows[0];
 
   if (grupo) {
@@ -112,7 +116,9 @@ router.post('/login', asyncHandler(async (req, res) => {
             g.tema_color_primario AS grupo_tema_color_primario,
             g.tema_color_secundario AS grupo_tema_color_secundario
        FROM empleados e JOIN grupos g ON g.id = e.grupo_id
-      WHERE e.email = $1`;
+      WHERE lower(e.email) = lower($1)
+      ORDER BY (e.email = $1) DESC, e.creado_en
+      LIMIT 1`;
   // 13-10-2026: si la columna grupos.funciones_habilitadas todavía no existe (no corrieron el SQL y la base no dejó crearla sola),
   // se pide sin ella: el grupo queda con TODAS las secciones, exactamente como antes del panel. Así nadie se queda sin entrar.
   let r2;

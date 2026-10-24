@@ -115,9 +115,9 @@ const EMPLEADO_SIN_MODULOS = { id: 'e3', grupo_id: 'g3', nombre: 'Empleado Tres'
 
 function ejecutarQueryAuth(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
-  if (/^SELECT \* FROM grupos WHERE email = \$1/i.test(sql)) {
+  if (/^SELECT \* FROM grupos WHERE lower\(email\) = lower\(\$1\)/i.test(sql)) {
     const [email] = params;
-    const fila = [GRUPO_ACTIVO, GRUPO_INACTIVO, GRUPO_SIN_MODULOS].find(g => g.email === email);
+    const fila = [GRUPO_ACTIVO, GRUPO_INACTIVO, GRUPO_SIN_MODULOS].find(g => g.email.toLowerCase() === String(email).toLowerCase());
     return { rows: fila ? [fila] : [] };
   }
   if (/^UPDATE grupos SET ultimo_login_en/i.test(sql)) return { rows: [] };
@@ -131,7 +131,7 @@ function ejecutarQueryAuth(text, params) {
   // pegado justo después de "grupo_nombre", sin nada en el medio).
   if (/^SELECT e\.\*, g\.activo AS grupo_activo, g\.nombre AS grupo_nombre.*FROM empleados e JOIN grupos g/i.test(sql)) {
     const [email] = params;
-    const empleado = [EMPLEADO_ACTIVO, EMPLEADO_INACTIVO, EMPLEADO_SIN_MODULOS].find(e => e.email === email);
+    const empleado = [EMPLEADO_ACTIVO, EMPLEADO_INACTIVO, EMPLEADO_SIN_MODULOS].find(e => e.email.toLowerCase() === String(email).toLowerCase());
     if (!empleado) return { rows: [] };
     const grupoDelEmpleado = [GRUPO_ACTIVO, GRUPO_INACTIVO, GRUPO_SIN_MODULOS].find(g => g.id === empleado.grupo_id);
     return {

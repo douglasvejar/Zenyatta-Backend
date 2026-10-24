@@ -59,6 +59,7 @@ let siguienteIdGrupo = 1;
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
 
+  if (/^SELECT 1 FROM grupos WHERE lower\(email\) = \$1/i.test(sql)) return { rows: [] };
   if (/^INSERT INTO grupos \(nombre, email, password_hash, activo\)/i.test(sql)) {
     const [nombre, email, passwordHash] = params;
     const fila = { id: 'grupo-nuevo-' + (siguienteIdGrupo++), nombre, email, password_hash: passwordHash, activo: false, creado_en: '2026-09-25T00:00:00Z' };
