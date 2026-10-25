@@ -88,7 +88,7 @@ function generarTextoListadoSabana(resp, opciones = {}) {
   // sábana (opciones.nombreGrupo, que whatsappBot.js completa desde
   // grupos.nombre antes de llamar esta función), con el nombre viejo como
   // respaldo solo si por algún motivo no se pasó ninguno.
-  partes.push('*' + (opciones.nombreGrupo || 'Deportes Zenyatta') + '*');
+  partes.push('*' + (opciones.nombreGrupo || 'Ludox') + '*');
   partes.push('🏀⚽🏈⚾');
   const fechaFmt = formatFechaPlano(resp.fecha);
   if (fechaFmt) partes.push(fechaFmt);

@@ -7587,7 +7587,7 @@ function aplicarPermisoCruzarJugadas() {
 // botones que darían error. SECCION_DE_VISTA_HIP se genera del catálogo (src/services/funcionesGrupo.js); el test
 // test_funciones_grupo.js verifica que coincidan. Una sesión vieja no trae la lista: se asume "todas" y se refresca al cargar.
 // =================================================================
-const SECCION_DE_VISTA_HIP = {"cargarPlanos": "hip_planos", "validarPlano": "hip_planos", "eliminarPlanos": "hip_planos", "planosEliminados": "hip_planos", "traspasosJugadas": "hip_planos", "montosApostados": "hip_planos", "cargaMasivaEspecial": "hip_carga_masiva", "cargarRemate": "hip_remates", "cargarRemateManual": "hip_remates", "jugadasAdelantadas": "hip_adelantadas", "terciosAdelantadas": "hip_adelantadas", "revTablasMarcas": "hip_adelantadas", "revAdelantadasClientes": "hip_adelantadas", "banqueoMarcas": "hip_adelantadas", "cargarWinners": "hip_winners", "eliminarWinners": "hip_winners", "pozos": "hip_pozos", "detalladoCliente": "hip_saldos", "semanaPorDias": "hip_saldos", "balanceGeneral": "hip_saldos", "cierreFinal": "hip_saldos", "grupoClientes": "hip_grupo_clientes", "comisionesPorCarrera": "hip_comisiones", "comisionesTotalesPorHipodromo": "hip_comisiones", "comisionesDevueltasPorHipodromo": "hip_comisiones", "comisionesDevueltas": "hip_comisiones", "saldoComisiones": "hip_comisiones", "comisionesSinDevoluciones": "hip_comisiones", "comisionesSocios": "hip_comisiones", "balanceSocios": "hip_saldos", "clientes": "hip_clientes", "avales": "hip_clientes", "registroSaldos": "hip_clientes", "retiros": "hip_finanzas", "traspasos": "hip_finanzas", "gastos": "hip_finanzas", "hipodromos": "hip_hipodromos", "pizarras": "hip_hipodromos", "revisarJugadas": "hip_revisar", "fechaSemana": "hip_ajustes_calculo", "cabezaPie": "hip_ajustes_calculo", "eliminarJornada": "hip_mantenimiento", "alertasHipismo": "hip_alertas"};
+const SECCION_DE_VISTA_HIP = {"cargarPlanos":"hip_planos","validarPlano":"hip_planos","eliminarPlanos":"hip_planos","planosEliminados":"hip_planos","traspasosJugadas":"hip_planos","montosApostados":"hip_planos","cargaMasivaEspecial":"hip_carga_masiva","cargarRemate":"hip_remates","cargarRemateManual":"hip_remates","jugadasAdelantadas":"hip_adelantadas","terciosAdelantadas":"hip_adelantadas","revTablasMarcas":"hip_adelantadas","revAdelantadasClientes":"hip_adelantadas","banqueoMarcas":"hip_adelantadas","cargarWinners":"hip_winners","eliminarWinners":"hip_winners","pozos":"hip_pozos","detalladoCliente":"hip_saldos","semanaPorDias":"hip_saldos","balanceGeneral":"hip_saldos","cierreFinal":"hip_saldos","balanceSocios":"hip_saldos","grupoClientes":"hip_grupo_clientes","comisionesPorCarrera":"hip_comisiones","comisionesTotalesPorHipodromo":"hip_comisiones","comisionesDevueltasPorHipodromo":"hip_comisiones","comisionesDevueltas":"hip_comisiones","saldoComisiones":"hip_comisiones","comisionesSinDevoluciones":"hip_comisiones","comisionesSocios":"hip_comisiones","clientes":"hip_clientes","avales":"hip_clientes","registroSaldos":"hip_clientes","retiros":"hip_finanzas","traspasos":"hip_finanzas","gastos":"hip_finanzas","hipodromos":"hip_hipodromos","pizarras":"hip_hipodromos","revisarJugadas":"hip_revisar","fechaSemana":"hip_ajustes_calculo","cabezaPie":"hip_ajustes_calculo","eliminarJornada":"hip_mantenimiento","alertasHipismo":"hip_alertas"};
 function seccionHabilitadaHip(clave) {
   if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
   return GRUPO.funcionesHabilitadas.includes(clave);
@@ -15372,7 +15372,7 @@ function mostrarToastComisionesPorCarrera(msg, esError) {
 // línea (con "* " adelante, como pidió en su ejemplo), y el subtotal del
 // hipódromo queda separado por una línea en blanco al final del bloque.
 function textoComisionesPorCarrera(data) {
-  let texto = `📈 *Comisión por Carrera de Clientes*\n*Total semana: $${formatMontoTabla(data.totalGeneral)}*\n`;
+  let texto = `📈 *Comisión por Carrera de Clientes* — ${nombreGrupoTexto()} 🇻🇪\n*Total semana: $${formatMontoTabla(data.totalGeneral)}*\n`;
   if (data.rango) texto += `📅 ${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}\n`;
   data.dias.forEach(dia => {
     texto += `\n📅 *${formatFechaCortaDMY(dia.fecha)}*\n`;
@@ -15553,7 +15553,7 @@ function mostrarToastComisionesHipodromo(msg, esError) {
 // llevan separador de mil, a pedido del usuario — "$X.XX" pasó a "$X,XX"
 // con "." de millar cuando el monto llega a 4 cifras.)
 function textoComisionesPorHipodromo(data) {
-  let texto = `🏇 *Comisiones por Hipódromo / Carrera*\n*Total: $${formatMontoTabla(data.totalGeneral)}*\n`;
+  let texto = `🏇 *Comisiones por Hipódromo / Carrera* — ${nombreGrupoTexto()} 🇻🇪\n*Total: $${formatMontoTabla(data.totalGeneral)}*\n`;
   data.hipodromos.forEach(hip => {
     texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Comisión*\n`;
     hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${formatMontoTabla(c.comision)}\n`; });
@@ -15975,7 +15975,7 @@ function pintarCodigosComisionesDevueltas(data) {
 
 function textoComisionesDevueltas(data) {
   const destinatarios = agruparComisionesDevueltasPorDestino(data);
-  let texto = `*Destinatarios de Devolucion - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
+  let texto = `*Destinatarios de Devolucion — ${nombreGrupoTexto()} 🇻🇪*\n*${data.desde} a ${data.hasta}*\n────────────────────────────────\n`;
   destinatarios.forEach(d => {
     texto += `\n🔀 *${d.destino}* — Total: *${formatMontoTabla(d.total)}*\n`;
     Array.from(d.generadores.entries())
@@ -16090,7 +16090,7 @@ function mostrarToastComisionesDevueltasHipodromo(msg, esError) {
 }
 
 function textoComisionesDevueltasPorHipodromo(data) {
-  let texto = `↩️ *Comisiones Devueltas por Hipódromo / Carrera*\n*Total devuelto: $${formatMontoTabla(data.totalGeneral)}*\n`;
+  let texto = `↩️ *Comisiones Devueltas por Hipódromo / Carrera* — ${nombreGrupoTexto()} 🇻🇪\n*Total devuelto: $${formatMontoTabla(data.totalGeneral)}*\n`;
   data.hipodromos.forEach(hip => {
     texto += `\n🏟️ *${hip.nombre}*\n*Carrera | Devuelto*\n`;
     hip.carreras.forEach(c => { texto += `${ordinalFemenino(c.carreraNumero)} $${formatMontoTabla(c.devuelto)}\n`; });
@@ -16407,7 +16407,7 @@ function mostrarToastMontosApostados(msg, esError) {
 function textoMontosApostados(data, clientes) {
   const listaClientes = clientes.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const rangoTexto = data.desde === data.hasta ? data.desde : `${data.desde} a ${data.hasta}`;
-  let texto = `*Montos Apostados - ${rangoTexto}*\n────────────────────────────────\n`;
+  let texto = `*Montos Apostados — ${nombreGrupoTexto()} 🇻🇪*\n*${rangoTexto}*\n────────────────────────────────\n`;
   listaClientes.forEach(c => {
     texto += `\n👤 *${c.nombre}* — Total: *${formatMontoTabla(c.total)}*\n`;
     c.detalle
@@ -17962,7 +17962,7 @@ async function pintarComisionesSinDevoluciones(desdeForzado, hastaForzado) {
 function textoComisionesSinDevoluciones(data) {
   const todos = (data.clientes || []).filter(c => c.saldo !== 0).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  let texto = `*Grupo sin Devoluciones${data.conPozos ? ' (con Pozos)' : ''} - ${data.desde} a ${data.hasta}*\n────────────────────────────────\n\n`;
+  let texto = `*Grupo sin Devoluciones${data.conPozos ? ' (con Pozos)' : ''} — ${nombreGrupoTexto()} 🇻🇪*\n*${data.desde} a ${data.hasta}*\n────────────────────────────────\n\n`;
   todos.forEach(c => {
     const signo = c.saldo > 0 ? '+' : '';
     texto += `  • ${formatNombre(c.nombre)}:  ${signo}${formatMontoTabla(c.saldo)}\n`;

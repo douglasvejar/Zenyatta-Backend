@@ -217,5 +217,5 @@ if (process.env.DATABASE_URL) {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('Deportes Zenyatta backend corriendo en http://localhost:' + PORT);
+  console.log('Ludox backend corriendo en http://localhost:' + PORT);
 });

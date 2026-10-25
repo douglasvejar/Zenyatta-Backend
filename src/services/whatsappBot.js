@@ -134,10 +134,10 @@ const {
 async function obtenerNombreGrupo(grupoId) {
   try {
     const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
-    return (r.rows[0] && r.rows[0].nombre) || 'Deportes Zenyatta';
+    return (r.rows[0] && r.rows[0].nombre) || 'Ludox';
   } catch (e) {
     console.error('[whatsappBot] No se pudo leer el nombre del grupo ' + grupoId + ' (se usa un nombre genérico):', e.message);
-    return 'Deportes Zenyatta';
+    return 'Ludox';
   }
 }
 
