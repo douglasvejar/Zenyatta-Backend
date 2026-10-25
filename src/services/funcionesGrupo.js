@@ -52,7 +52,7 @@ const FUNCIONES_HIPISMO = [
     vistas: ['detalladoCliente', 'semanaPorDias', 'balanceGeneral', 'cierreFinal'] },
   { clave: 'hip_grupo_clientes', modulo: 'hipismo', nombre: 'Grupos de Clientes', descripcion: 'Agrupar clientes y sus cuadres.', vistas: ['grupoClientes'] },
   { clave: 'hip_comisiones', modulo: 'hipismo', nombre: 'Comisiones', descripcion: 'Comisión por carrera, por hipódromo, devueltas, saldo de comisiones y grupo sin devoluciones.',
-    vistas: ['comisionesPorCarrera', 'comisionesTotalesPorHipodromo', 'comisionesDevueltasPorHipodromo', 'comisionesDevueltas', 'saldoComisiones', 'comisionesSinDevoluciones'] },
+    vistas: ['comisionesPorCarrera', 'comisionesTotalesPorHipodromo', 'comisionesDevueltasPorHipodromo', 'comisionesDevueltas', 'saldoComisiones', 'comisionesSinDevoluciones', 'comisionesSocios'] },
   { clave: 'hip_clientes', modulo: 'hipismo', nombre: 'Clientes, Avales y Registro de Saldos', descripcion: 'Ficha de clientes, avales y depósitos, registro de saldos.',
     vistas: ['clientes', 'avales', 'registroSaldos'] },
   { clave: 'hip_finanzas', modulo: 'hipismo', nombre: 'Retiros, Traspasos de Saldo y Gastos', descripcion: 'Movimientos de dinero del grupo.', vistas: ['retiros', 'traspasos', 'gastos'] },
@@ -143,6 +143,8 @@ const REGLAS_RUTAS_HIPISMO = [
   // Clientes / finanzas
   [['POST'], /^\/comisiones\/traspaso$/, ['hip_clientes', 'hip_finanzas']],
   [TODOS, /^\/traspasos-saldo/, ['hip_finanzas', 'hip_clientes']],
+  [TODOS, /^\/retiros/, ['hip_finanzas']],
+  [['GET'], /^\/comisiones-socios/, ['hip_comisiones', 'hip_saldos']],
   [['GET'], /^\/registro-saldos/, ['hip_clientes', 'hip_saldos']],
   // Hipódromos y pizarras
   [ESCRIBIR, /^\/hipodromos/, ['hip_hipodromos']],

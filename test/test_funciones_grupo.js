@@ -33,10 +33,14 @@ check(Object.values(F.PAQUETES).every(p => p.claves.every(c => claves.includes(c
 // 2) todas las pantallas del menú de Hipismo caen en una sección (salvo las libres a propósito)
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
 const vistas = Array.from(new Set(Array.from(html.matchAll(/class="nav-item[^"]*"[^>]*data-vista="([A-Za-z]+)"/g)).map(m => m[1])));
-const LIBRES = ['usuarios', 'seguridad', 'preferencias']; // 14-10-2026: Ajustes > Preferencias es libre para todo grupo (Cruzar jugadas)
+const LIBRES = ['usuarios', 'seguridad', 'preferencias', 'socios']; // 14-10-2026: Ajustes > Preferencias es libre para todo grupo (Cruzar jugadas); 25-10-2026: Ajustes > Socios también (solo el Administrador guarda, lo exige el servidor)
 const sinSeccion = vistas.filter(v => !F.seccionDeVistaHipismo(v) && !LIBRES.includes(v));
 check(vistas.length > 40, `2a) se leyeron ${vistas.length} pantallas del menú de Hipismo`);
 check(sinSeccion.length === 0, `2b) toda pantalla del menú tiene sección (o es libre a propósito) — sin sección: ${sinSeccion.join(', ') || 'ninguna'}`);
+check(JSON.stringify(F.seccionesDeRutaHipismo('GET', '/comisiones-socios')) === JSON.stringify(['hip_comisiones', 'hip_saldos']), '2c-socios) /comisiones-socios lo habilita Comisiones o Saldos');
+check(F.seccionDeVistaHipismo('comisionesSocios') === 'hip_comisiones', '2c-socios) la pantalla Comisiones por Avales y Socios es de la sección Comisiones');
+check(F.seccionesDeRutaHipismo('POST', '/retiros') && F.seccionesDeRutaHipismo('POST', '/retiros').includes('hip_finanzas'), '2c-retiros) /retiros lo habilita Retiros, Traspasos y Gastos');
+check(!F.rutaHipismoPermitida({ funciones_habilitadas: ['hip_planos'] }, 'POST', '/retiros'), '2c-retiros) sin esa sección el servidor rechaza /retiros');
 const sobrantes = F.FUNCIONES_HIPISMO.flatMap(f => f.vistas || []).filter(v => !vistas.includes(v));
 check(sobrantes.length === 0, `2c) el catálogo no menciona pantallas que ya no existen — sobran: ${sobrantes.join(', ') || 'ninguna'}`);
 

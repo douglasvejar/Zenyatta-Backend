@@ -61,6 +61,18 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas js
 pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS pago_diario boolean NOT NULL DEFAULT false')
   .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.pago_diario (corre sql/schema.sql en Supabase):', err.message));
 
+// 25-10-2026: socios de Hipismo y "Avalado por" del cliente (ver sql/schema.sql). Se crean solos, en orden (la columna del cliente
+// apunta a la tabla), y si la base no deja alterar solo avisan en el log.
+pool.query(`create table if not exists hipismo_socios (
+    id uuid primary key default gen_random_uuid(),
+    grupo_id uuid not null references grupos(id) on delete cascade,
+    nombre text not null,
+    porcentaje numeric not null default 0,
+    creado_en timestamptz not null default now(),
+    unique (grupo_id, nombre))`)
+  .then(() => pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS hipismo_socio_id uuid REFERENCES hipismo_socios(id) ON DELETE SET NULL'))
+  .catch((err) => console.warn('[db] No se pudo asegurar hipismo_socios / jugadores.hipismo_socio_id (corre sql/schema.sql en Supabase):', err.message));
+
 // HIPÓDROMOS PREDETERMINADOS (15-10-2026): los grupos que todavía no recibieron la lista (3 de Venezuela + 48 de USA) la reciben
 // una sola vez al arrancar (marca grupos.hipismo_hipodromos_iniciales), sin depender de correr el SQL. Ver
 // services/hipismoHipodromosDefecto.js. Nunca tumba el arranque: si algo falla, solo avisa en el log.

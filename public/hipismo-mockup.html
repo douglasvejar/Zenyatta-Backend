@@ -819,6 +819,19 @@
   .comision-caja { margin-top: 16px; background: linear-gradient(100deg, var(--warning), #f59e0b 75%); border: none; border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 3px 10px rgba(217,119,6,0.25); }
   .comision-caja .etiqueta { font-family: 'Outfit', sans-serif; font-size: 15px; color: #2b1c02; font-weight: 800; letter-spacing: 0.2px; }
   .comision-caja .monto { font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 800; color: #2b1c02; }
+  /* Comisiones por Avales y Socios (25-10-2026) */
+  .socio-tarjeta { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; background: #fff; }
+  .socio-tarjeta .socio-cab { background: #15321f; color: #fff; padding: 9px 14px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14.5px; letter-spacing: 0.4px; display: flex; justify-content: space-between; gap: 10px; }
+  .socio-tarjeta .socio-cab .pct { font-weight: 600; opacity: 0.8; font-size: 12.5px; }
+  .socio-tarjeta .socio-fila { display: flex; justify-content: space-between; gap: 10px; padding: 6px 14px; font-size: 13.5px; border-top: 1px solid #eef1ee; color: #1f2a24; }
+  .socio-tarjeta .socio-fila.ajuste { color: #7a5a14; font-style: italic; }
+  .socio-tarjeta .socio-fila .monto { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .socio-tarjeta .socio-total { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px; background: #e9f3ec; border-top: 2px solid #15321f; font-weight: 800; font-size: 13.5px; color: #15321f; }
+  .socio-tarjeta .socio-vacio { padding: 10px 14px; color: #7b8a80; font-size: 13px; }
+  .socios-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; align-items: start; }
+  .socios-cuadre { margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .socios-cuadre.ok { background: #e6f5ea; color: #14602b; }
+  .socios-cuadre.mal { background: #fdeaea; color: #9b1c1c; }
 
   .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
   .pill-verde { background: rgba(22,163,74,0.12); color: var(--ok); border: 1px solid rgba(22,163,74,0.32); }
@@ -2320,6 +2333,8 @@
            comisiones un boton que diga grupo sin devoluciones" — ver
            vista-comisionesSinDevoluciones más abajo. -->
       <button type="button" class="nav-item nav-child" data-vista="comisionesSinDevoluciones" onclick="mostrarVista('comisionesSinDevoluciones', this)">🧮<span class="nav-lbl"> Grupo sin Devoluciones</span></button>
+      <!-- 25-10-2026: "Comisiones por Avales y Socios" -- solo se muestra si el grupo creó socios en Ajustes > Socios (ver actualizarVisibilidadSocios). -->
+      <button type="button" class="nav-item nav-child" id="navComisionesSocios" data-vista="comisionesSocios" style="display:none;" onclick="mostrarVista('comisionesSocios', this)">🤝<span class="nav-lbl"> Comisiones por Avales y Socios</span></button>
     </div>
 
     <hr>
@@ -2385,6 +2400,7 @@
     <button type="button" class="nav-item nav-parent" id="navParentAjustesHip" onclick="toggleGrupo('ajustes')">⚙️<span class="nav-lbl"> Ajustes </span><span id="caretAjustes">▾</span></button>
     <div class="nav-children" id="grupoAjustes">
       <button type="button" class="nav-item nav-child" data-vista="preferencias" onclick="mostrarVista('preferencias', this)"><span class="nav-lbl"> Preferencias</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="socios" onclick="mostrarVista('socios', this)">🤝<span class="nav-lbl"> Socios</span></button>
       <button type="button" class="nav-item nav-child" data-vista="usuarios" onclick="mostrarVista('usuarios', this)">👥<span class="nav-lbl"> Usuarios</span></button>
       <button type="button" class="nav-item nav-child" data-vista="seguridad" onclick="mostrarVista('seguridad', this)">🔒<span class="nav-lbl"> Seguridad</span></button>
     </div>
@@ -3915,6 +3931,74 @@
         <h2>Retiros registrados</h2>
         <p class="desc">Ordenados por día, el más reciente primero. Si te equivocaste, puedes editar o eliminar un retiro: el saldo del cliente y de PAGOS A CLIENTES se corrige solo.</p>
         <div id="listaRetiros"><div class="resultado-vacio">Cargando…</div></div>
+      </div>
+    </section>
+
+    <!-- ============ SOCIOS (Ajustes) y COMISIONES POR AVALES Y SOCIOS (25-10-2026) ============
+         A pedido del usuario: en Ajustes > Socios se crean los socios del grupo (la distribución debe dar EXACTAMENTE 100%); al crear/editar
+         un cliente se elige "Avalado por" (un solo socio); y en Comisiones aparece "Comisiones por Avales y Socios" con cuánto produjo cada
+         cliente en comisión (ya devolviendo los %), ordenado por a quién pertenece, y la suma es EXACTAMENTE la comisión de Balance General
+         y Cierre Final. Un grupo sin socios no ve nada de esto y calcula como siempre. -->
+    <section class="vista" id="vista-socios">
+      <div class="card">
+        <h2>🤝 Socios</h2>
+        <p class="desc">Crea los socios del grupo y cuánto le toca a cada uno del total de la comisión. <b>La suma tiene que dar exactamente 100%.</b> Después, al crear o editar un cliente, respondes "¿Pertenece a un socio?" y eliges el socio, y aparece la pestaña <b>Comisiones &gt; Comisiones por Avales y Socios</b>. Si no creas socios, el grupo calcula como siempre.</p>
+        <div id="sociosFilas"></div>
+        <div class="btn-fila" style="margin-top:10px;">
+          <button class="btn btn-secundario" type="button" onclick="agregarFilaSocio()">+ Agregar socio</button>
+        </div>
+        <div id="sociosSuma" class="socios-cuadre" style="margin-top:10px;"></div>
+        <div class="btn-fila" style="margin-top:12px;">
+          <button class="btn btn-primario" type="button" id="btnGuardarSocios" onclick="guardarSocios()">💾 Guardar socios</button>
+        </div>
+        <div id="msgSocios" class="desc" style="margin-top:10px;"></div>
+      </div>
+      <div class="card" id="cardAsignarSocios" style="display:none;">
+        <h2>Clientes de cada socio</h2>
+        <p class="desc">Marca los clientes y elige el socio, o cambia el socio de uno directo en su fila. Un cliente pertenece a <b>un solo socio</b>. También lo puedes elegir en la ficha del cliente ("¿Pertenece a un socio?"). No cambia ningún saldo: solo agrupa la lista.</p>
+        <div class="fila" style="align-items:flex-end;">
+          <div><label for="inpBuscarClienteSocio">Buscar cliente</label><input type="text" id="inpBuscarClienteSocio" placeholder="Escribe para filtrar…" autocomplete="off" oninput="pintarAsignacionSocios()"></div>
+          <div><label for="selAsignarSocioMasivo">Asignar los marcados a</label><select id="selAsignarSocioMasivo"></select></div>
+          <div style="flex:0; min-width:auto;"><button class="btn btn-primario" type="button" onclick="asignarSocioMarcados()">Asignar</button></div>
+        </div>
+        <div id="listaAsignarSocios" style="margin-top:10px;"></div>
+        <div id="msgAsignarSocios" class="desc" style="margin-top:8px;"></div>
+      </div>
+    </section>
+
+    <section class="vista" id="vista-comisionesSocios">
+      <div class="card">
+        <h2>🤝 Comisiones por Avales y Socios</h2>
+        <p class="desc">Cuánto produjo cada cliente en comisión (ya descontando los % que se le devuelven), ordenado por el socio que lo avala. La suma de todo es exactamente la <b>comisión</b> que ves en Balance General y Cierre Final. "Por Socio" reparte esa comisión total según el % de cada socio (Ajustes &gt; Socios).</p>
+        <div class="subnav" id="selectorSemanaSocios">
+          <button type="button" class="activo" data-semana="actual" onclick="cambiarSemanaSocios('actual', this)">Semana actual</button>
+          <button type="button" data-semana="anterior" onclick="cambiarSemanaSocios('anterior', this)">🗓️ Semana anterior</button>
+          <button type="button" data-semana="hace2" onclick="cambiarSemanaSocios('hace2', this)">🗓️ Hace 2 semanas</button>
+        </div>
+        <div class="fila" style="align-items:flex-end; margin-top:10px;">
+          <div><label for="inpDesdeSocios">Desde</label><input type="date" id="inpDesdeSocios"></div>
+          <div><label for="inpHastaSocios">Hasta</label><input type="date" id="inpHastaSocios"></div>
+          <div style="flex:0; min-width:auto;"><button class="btn btn-primario" type="button" onclick="buscarComisionesSocios()">🔎 Buscar</button></div>
+        </div>
+        <div class="btn-fila" style="margin:14px 0;">
+          <button class="btn btn-primario" type="button" onclick="copiarComisionesSociosImagen()">📸 Generar Imagen</button>
+          <button class="btn btn-secundario" type="button" onclick="copiarComisionesSociosTexto()">📋 Copiar Texto</button>
+          <span class="toast-copiado" id="toastComisionesSocios"></span>
+        </div>
+        <div id="comisionesSociosCaptura" style="background:#fff; border:1px solid var(--card-border); border-radius:10px;">
+          <div class="captura-logo-fondo" id="comisionesSociosLogoFondo"></div>
+          <div class="captura-contenido" style="padding:18px 20px;">
+            <div class="encabezado-captura">
+              <div class="logo-grupo js-logo-grupo">🏇</div>
+              <div>
+                <div class="titulo" id="comisionesSociosTitulo">🤝 Comisiones por Avales y Socios</div>
+                <div class="fecha" id="comisionesSociosFecha"></div>
+              </div>
+            </div>
+            <div id="comisionesSociosCuerpo"><div class="placeholder-card">Cargando…</div></div>
+          </div>
+        </div>
+        <div id="comisionesSociosCuadre" class="socios-cuadre"></div>
       </div>
     </section>
 
@@ -7452,7 +7536,7 @@ function aplicarPermisoCruzarJugadas() {
 // botones que darían error. SECCION_DE_VISTA_HIP se genera del catálogo (src/services/funcionesGrupo.js); el test
 // test_funciones_grupo.js verifica que coincidan. Una sesión vieja no trae la lista: se asume "todas" y se refresca al cargar.
 // =================================================================
-const SECCION_DE_VISTA_HIP = {"cargarPlanos": "hip_planos", "validarPlano": "hip_planos", "eliminarPlanos": "hip_planos", "planosEliminados": "hip_planos", "traspasosJugadas": "hip_planos", "montosApostados": "hip_planos", "cargaMasivaEspecial": "hip_carga_masiva", "cargarRemate": "hip_remates", "cargarRemateManual": "hip_remates", "jugadasAdelantadas": "hip_adelantadas", "terciosAdelantadas": "hip_adelantadas", "revTablasMarcas": "hip_adelantadas", "revAdelantadasClientes": "hip_adelantadas", "banqueoMarcas": "hip_adelantadas", "cargarWinners": "hip_winners", "eliminarWinners": "hip_winners", "pozos": "hip_pozos", "detalladoCliente": "hip_saldos", "semanaPorDias": "hip_saldos", "balanceGeneral": "hip_saldos", "cierreFinal": "hip_saldos", "grupoClientes": "hip_grupo_clientes", "comisionesPorCarrera": "hip_comisiones", "comisionesTotalesPorHipodromo": "hip_comisiones", "comisionesDevueltasPorHipodromo": "hip_comisiones", "comisionesDevueltas": "hip_comisiones", "saldoComisiones": "hip_comisiones", "comisionesSinDevoluciones": "hip_comisiones", "clientes": "hip_clientes", "avales": "hip_clientes", "registroSaldos": "hip_clientes", "retiros": "hip_finanzas", "traspasos": "hip_finanzas", "gastos": "hip_finanzas", "hipodromos": "hip_hipodromos", "pizarras": "hip_hipodromos", "revisarJugadas": "hip_revisar", "fechaSemana": "hip_ajustes_calculo", "cabezaPie": "hip_ajustes_calculo", "eliminarJornada": "hip_mantenimiento", "alertasHipismo": "hip_alertas"};
+const SECCION_DE_VISTA_HIP = {"cargarPlanos": "hip_planos", "validarPlano": "hip_planos", "eliminarPlanos": "hip_planos", "planosEliminados": "hip_planos", "traspasosJugadas": "hip_planos", "montosApostados": "hip_planos", "cargaMasivaEspecial": "hip_carga_masiva", "cargarRemate": "hip_remates", "cargarRemateManual": "hip_remates", "jugadasAdelantadas": "hip_adelantadas", "terciosAdelantadas": "hip_adelantadas", "revTablasMarcas": "hip_adelantadas", "revAdelantadasClientes": "hip_adelantadas", "banqueoMarcas": "hip_adelantadas", "cargarWinners": "hip_winners", "eliminarWinners": "hip_winners", "pozos": "hip_pozos", "detalladoCliente": "hip_saldos", "semanaPorDias": "hip_saldos", "balanceGeneral": "hip_saldos", "cierreFinal": "hip_saldos", "grupoClientes": "hip_grupo_clientes", "comisionesPorCarrera": "hip_comisiones", "comisionesTotalesPorHipodromo": "hip_comisiones", "comisionesDevueltasPorHipodromo": "hip_comisiones", "comisionesDevueltas": "hip_comisiones", "saldoComisiones": "hip_comisiones", "comisionesSinDevoluciones": "hip_comisiones", "comisionesSocios": "hip_comisiones", "clientes": "hip_clientes", "avales": "hip_clientes", "registroSaldos": "hip_clientes", "retiros": "hip_finanzas", "traspasos": "hip_finanzas", "gastos": "hip_finanzas", "hipodromos": "hip_hipodromos", "pizarras": "hip_hipodromos", "revisarJugadas": "hip_revisar", "fechaSemana": "hip_ajustes_calculo", "cabezaPie": "hip_ajustes_calculo", "eliminarJornada": "hip_mantenimiento", "alertasHipismo": "hip_alertas"};
 function seccionHabilitadaHip(clave) {
   if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
   return GRUPO.funcionesHabilitadas.includes(clave);
@@ -7464,6 +7548,7 @@ function vistaHabilitadaHip(vista) {
 function aplicarFuncionesGrupoHipismo() {
   if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return;
   document.querySelectorAll('.nav-item[data-vista]').forEach(b => { b.style.display = vistaHabilitadaHip(b.dataset.vista) ? '' : 'none'; });
+  if (typeof actualizarVisibilidadSocios === 'function') actualizarVisibilidadSocios(); // "Comisiones por Avales y Socios" solo si hay socios
   // Un grupo del menú (Apuestas, Saldos…) sin ningún botón visible se esconde entero, con su flecha.
   document.querySelectorAll('.nav-children').forEach(cont => {
     const hijos = Array.from(cont.querySelectorAll('.nav-item[data-vista]'));
@@ -7769,6 +7854,9 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   revAdelantadasClientes: () => cargarRev('revAdelantadasClientes'),
   // "Grupo sin Devoluciones" (01-10-2026) — ver pintarComisionesSinDevoluciones() más abajo.
   comisionesSinDevoluciones: () => pintarComisionesSinDevoluciones(),
+  // "Socios" y "Comisiones por Avales y Socios" (25-10-2026)
+  socios: () => entrarSocios(),
+  comisionesSocios: () => pintarComisionesSocios(),
   montosApostados: () => pintarMontosApostados(),
   // "Pizarras" (01-10-2026) — ver pintarPizarras() más abajo.
   pizarras: () => pintarPizarras(),
@@ -10654,6 +10742,7 @@ async function cargarClientesReales() {
   // un cliente (pintarFichaCliente()) y la lista de posibles avales sin
   // tener que pedir /api/jugadores de nuevo.
   CLIENTES_HIPISMO_CACHE = jugadores;
+  cargarSociosHipismo(); // 25-10-2026: socios del grupo (para "¿Pertenece a un socio?" y el menú)
   refrescarListaClientesExistentes();
   poblarSelectPozoAjusteCliente();
   pintarTablaPozos();
@@ -10921,6 +11010,7 @@ function abrirCrearCliente() {
         <tbody id="nvoCteAvalesTbody">${filasAvalesPorcentajeHtml([])}</tbody>
       </table>
       ${datalistFichasComisionHtml('datalistFichasComision')}
+      ${htmlPerteneceASocio('nvoCteSocio', null)}
       <div class="btn-fila" style="margin-top:14px;">
         <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
         <button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">Cancelar</button>
@@ -11080,6 +11170,7 @@ async function guardarNuevoCliente() {
     activo: document.getElementById('nvoCteActivo').checked,
     tipoCuenta: document.getElementById('nvoCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
     pagoDiario: document.getElementById('nvoCteTipoCuenta').value === 'pago_diario',
+    ...socioIdDeFormulario('nvoCteSocio'),
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia,
     incluirPorcentajeEnJugadas,
@@ -11248,6 +11339,7 @@ async function pintarFichaCliente() {
         <tbody id="detCteAvalesTbody">${filasAvalesPorcentajeHtml(j.avalesPorcentaje || [])}</tbody>
       </table>
       ${datalistFichasComisionHtml('datalistFichasComision')}
+      ${htmlPerteneceASocio('detCteSocio', j.hipismo_socio_id)}
       <div class="btn-fila" style="margin-top:14px; justify-content:space-between;">
         <button class="btn btn-primario" type="button" onclick="guardarDetalleCliente('${j.id}')">💾 Guardar cambios</button>
         <!-- "Eliminar cliente" desde la ficha (29-09-2026, a pedido del
@@ -11309,6 +11401,7 @@ async function guardarDetalleCliente(id) {
     activo: document.getElementById('detCteActivo').checked,
     tipoCuenta: document.getElementById('detCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
     pagoDiario: document.getElementById('detCteTipoCuenta').value === 'pago_diario',
+    ...socioIdDeFormulario('detCteSocio'),
     // El pozo NO lo toca este formulario — se conserva tal cual estaba
     // (se edita aparte, con el ajuste +/- de abajo).
     pozoInicial: j ? j.pozo_inicial : 0,
@@ -17749,6 +17842,300 @@ function textoComisionesSinDevoluciones(data) {
   });
   texto += `\n──────────────────────────────\n*COMISIÓN DEL GRUPO: ${formatMontoTabla(data.comisionGrupo)} USD*`;
   return texto;
+}
+
+// =================================================================
+// SOCIOS (Ajustes > Socios) y COMISIONES POR AVALES Y SOCIOS (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
+// llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se crean
+// en Ajustes; la distribución debe dar exactamente 100%); esa ventana muestra cuánto produjo cada cliente en comisión (ya devolviendo
+// los %) ordenado por a quién pertenece, y debe dar exacto a la comisión de Balance General y Cierre; un grupo que no crea socios
+// calcula como hoy"). Backend: GET/PUT /api/hipismo/socios, PUT /api/hipismo/socios/asignar, GET /api/hipismo/comisiones-socios
+// (services/hipismoSocios.js). El menú "Comisiones por Avales y Socios" y el campo "Avalado por" solo aparecen si el grupo tiene socios.
+// =================================================================
+let SOCIOS_HIPISMO = [];
+let SOCIOS_EDITANDO = [];
+let SOCIOS_SIN_TABLA = false;
+let COMISIONES_SOCIOS_ACTUAL = null;
+let SEMANA_SOCIOS = 'actual';
+let RANGO_MANUAL_SOCIOS = null;
+
+async function cargarSociosHipismo() {
+  try {
+    const r = await apiHipismo('/api/hipismo/socios');
+    SOCIOS_HIPISMO = Array.isArray(r.socios) ? r.socios : [];
+    SOCIOS_SIN_TABLA = !!r.sinTabla;
+  } catch (e) { /* sin conexión o sección apagada: se queda con lo que había */ }
+  actualizarVisibilidadSocios();
+}
+// El botón del menú solo se ve si el grupo tiene socios (y la sección Comisiones está encendida para el grupo).
+function actualizarVisibilidadSocios() {
+  const b = document.getElementById('navComisionesSocios');
+  if (!b) return;
+  const visible = SOCIOS_HIPISMO.length > 0 && (typeof vistaHabilitadaHip !== 'function' || vistaHabilitadaHip('comisionesSocios'));
+  b.style.display = visible ? '' : 'none';
+  const cont = b.parentElement;
+  if (cont && cont.classList.contains('nav-children') && visible) cont.style.display = '';
+  if (typeof sincronizarNavMovil === 'function') { try { sincronizarNavMovil(); } catch (e) { /* menú móvil aún no listo */ } }
+}
+// Pregunta "¿Pertenece a un socio?" de la ficha del cliente (crear y editar). Es un bloque APARTE de "¿Quién lo avala?" (los avaladores
+// con %, que siguen igual y SÍ afectan los saldos): esto solo sirve para agrupar la comisión del cliente en "Comisiones por Avales y
+// Socios" y no cambia ningún saldo. Sin socios en el grupo no se muestra nada.
+function htmlPerteneceASocio(idSelect, socioIdActual) {
+  if (!SOCIOS_HIPISMO.length) return '';
+  const ops = ['<option value="">No pertenece a ningún socio</option>'].concat(SOCIOS_HIPISMO.map(s =>
+    `<option value="${s.id}" ${String(s.id) === String(socioIdActual || '') ? 'selected' : ''}>${escaparHtmlChat(s.nombre)}</option>`));
+  return `<hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
+      <div style="font-weight:700; margin-bottom:4px;">🤝 ¿Pertenece a un socio?</div>
+      <p class="desc" style="margin-top:-2px;">Solo sirve para armar la lista de "Comisiones por Avales y Socios". No cambia el saldo del cliente ni sus avaladores.</p>
+      <div class="fila"><div><select id="${idSelect}">${ops.join('')}</select></div></div>`;
+}
+function socioIdDeFormulario(idSelect) {
+  const el = document.getElementById(idSelect);
+  return el ? { socioId: el.value || null } : {};
+}
+
+// ---------- Ajustes > Socios ----------
+async function entrarSocios() {
+  await cargarSociosHipismo();
+  SOCIOS_EDITANDO = SOCIOS_HIPISMO.map(s => ({ id: s.id, nombre: s.nombre, porcentaje: s.porcentaje }));
+  if (!CLIENTES_HIPISMO_CACHE.length) await cargarClientesReales();
+  document.getElementById('msgSocios').textContent = SOCIOS_SIN_TABLA ? 'Falta correr el SQL pendiente en Supabase (tabla hipismo_socios) para poder guardar socios.' : '';
+  pintarFilasSocios();
+  pintarAsignacionSocios();
+}
+function sumaSociosEditando() {
+  return SOCIOS_EDITANDO.reduce((a, s) => a + Math.round((Number(s.porcentaje) || 0) * 10000), 0) / 10000;
+}
+function pintarSumaSocios() {
+  const el = document.getElementById('sociosSuma');
+  const btn = document.getElementById('btnGuardarSocios');
+  if (!el) return;
+  if (!SOCIOS_EDITANDO.length) {
+    el.className = 'socios-cuadre ok';
+    el.textContent = 'Sin socios: el grupo calcula la comisión como siempre.';
+    if (btn) btn.disabled = false;
+    return;
+  }
+  const suma = sumaSociosEditando();
+  const fmt = n => n.toLocaleString('es-VE', { maximumFractionDigits: 4 });
+  if (Math.round(suma * 10000) === 1000000) {
+    el.className = 'socios-cuadre ok';
+    el.textContent = '✅ La distribución suma exactamente 100%.';
+    if (btn) btn.disabled = false;
+  } else {
+    const dif = Math.round((100 - suma) * 10000) / 10000;
+    el.className = 'socios-cuadre mal';
+    el.textContent = `Suma ${fmt(suma)}% — ${dif > 0 ? 'faltan' : 'sobran'} ${fmt(Math.abs(dif))}% para llegar a 100%.`;
+    if (btn) btn.disabled = true;
+  }
+}
+function pintarFilasSocios() {
+  const cont = document.getElementById('sociosFilas');
+  if (!cont) return;
+  const cuenta = new Map(SOCIOS_HIPISMO.map(s => [s.id, s.clientes]));
+  if (!SOCIOS_EDITANDO.length) {
+    cont.innerHTML = '<div class="resultado-vacio">Todavía no hay socios. Pulsa "+ Agregar socio" para crear el primero.</div>';
+  } else {
+    cont.innerHTML = SOCIOS_EDITANDO.map((s, i) => `
+      <div class="fila" style="align-items:flex-end;">
+        <div style="flex:2 1 200px;"><label>Socio</label><input type="text" value="${escaparHtmlChat(s.nombre || '')}" placeholder="Nombre del socio" oninput="SOCIOS_EDITANDO[${i}].nombre = this.value"></div>
+        <div style="flex:0 1 130px;"><label>% que le toca</label><input type="number" step="0.01" min="0" max="100" value="${s.porcentaje === '' ? '' : (Number(s.porcentaje) || 0)}" oninput="SOCIOS_EDITANDO[${i}].porcentaje = this.value; pintarSumaSocios();"></div>
+        <div style="flex:0 1 110px; font-size:12.5px; color:var(--text-dim); padding-bottom:12px;">${s.id ? (cuenta.get(s.id) || 0) + ' cliente(s)' : 'nuevo'}</div>
+        <div style="flex:0; min-width:auto;"><button class="btn btn-secundario" type="button" onclick="quitarFilaSocio(${i})" title="Quitar socio">🗑️</button></div>
+      </div>`).join('');
+  }
+  pintarSumaSocios();
+}
+function agregarFilaSocio() {
+  SOCIOS_EDITANDO.push({ id: null, nombre: '', porcentaje: SOCIOS_EDITANDO.length ? 0 : 100 });
+  pintarFilasSocios();
+}
+function quitarFilaSocio(i) {
+  const s = SOCIOS_EDITANDO[i];
+  const original = s && s.id ? SOCIOS_HIPISMO.find(x => x.id === s.id) : null;
+  if (original && original.clientes > 0 && !confirm(`${original.nombre} tiene ${original.clientes} cliente(s). Si lo quitas y guardas, esos clientes quedan sin socio. ¿Quitarlo?`)) return;
+  SOCIOS_EDITANDO.splice(i, 1);
+  pintarFilasSocios();
+}
+async function guardarSocios() {
+  const msg = document.getElementById('msgSocios');
+  msg.style.color = '';
+  msg.textContent = 'Guardando…';
+  try {
+    const r = await apiHipismo('/api/hipismo/socios', { method: 'PUT', body: JSON.stringify({ socios: SOCIOS_EDITANDO.map(s => ({ id: s.id, nombre: s.nombre, porcentaje: Number(s.porcentaje) || 0 })) }) });
+    SOCIOS_HIPISMO = r.socios || [];
+    SOCIOS_EDITANDO = SOCIOS_HIPISMO.map(s => ({ id: s.id, nombre: s.nombre, porcentaje: s.porcentaje }));
+    msg.style.color = 'var(--ok)';
+    msg.textContent = SOCIOS_HIPISMO.length ? '✅ Socios guardados.' : '✅ Sin socios: el grupo calcula como siempre.';
+    await cargarClientesReales();
+    pintarFilasSocios();
+    pintarAsignacionSocios();
+  } catch (e) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ ' + e.message;
+  }
+}
+function pintarAsignacionSocios() {
+  const card = document.getElementById('cardAsignarSocios');
+  if (!card) return;
+  card.style.display = SOCIOS_HIPISMO.length ? '' : 'none';
+  if (!SOCIOS_HIPISMO.length) return;
+  const opciones = ['<option value="">— Sin socio —</option>'].concat(SOCIOS_HIPISMO.map(s => `<option value="${s.id}">${escaparHtmlChat(s.nombre)}</option>`)).join('');
+  const selMasivo = document.getElementById('selAsignarSocioMasivo');
+  const valMasivo = selMasivo.value;
+  selMasivo.innerHTML = opciones;
+  selMasivo.value = valMasivo;
+  const filtro = movNorm((document.getElementById('inpBuscarClienteSocio') || {}).value || '');
+  const clientes = CLIENTES_HIPISMO_CACHE.filter(j => !j.es_cuenta_comision && (!filtro || movNorm(j.nombre).includes(filtro)))
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const lista = document.getElementById('listaAsignarSocios');
+  if (!clientes.length) { lista.innerHTML = '<div class="resultado-vacio">No hay clientes que coincidan.</div>'; return; }
+  lista.innerHTML = '<div style="display:grid; gap:6px;">' + clientes.map(j => `
+    <div class="balance-fila" style="gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;"><input type="checkbox" class="chk-cliente-socio" style="width:auto; flex:0 0 auto; margin:0;" value="${escaparHtmlChat(j.nombre)}"><span class="nombre" style="text-align:left;">${escaparHtmlChat(formatNombre(j.nombre))}</span></div>
+      <select onchange="asignarSocioClientes([${JSON.stringify(j.nombre).replace(/"/g, '&quot;')}], this.value)" style="max-width:220px; flex:0 0 220px;">${opciones.replace(`value="${j.hipismo_socio_id}"`, `value="${j.hipismo_socio_id}" selected`)}</select>
+    </div>`).join('') + '</div>';
+}
+async function asignarSocioClientes(nombres, socioId) {
+  const msg = document.getElementById('msgAsignarSocios');
+  msg.style.color = '';
+  try {
+    await apiHipismo('/api/hipismo/socios/asignar', { method: 'PUT', body: JSON.stringify({ clientes: nombres, socioId: socioId || null }) });
+    nombres.forEach(n => { const j = CLIENTES_HIPISMO_CACHE.find(x => x.nombre === n); if (j) j.hipismo_socio_id = socioId || null; });
+    msg.style.color = 'var(--ok)';
+    msg.textContent = '✅ Guardado.';
+    await cargarSociosHipismo();
+    pintarFilasSocios();
+  } catch (e) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ ' + e.message;
+    pintarAsignacionSocios();
+  }
+}
+async function asignarSocioMarcados() {
+  const nombres = Array.from(document.querySelectorAll('.chk-cliente-socio:checked')).map(c => c.value);
+  const msg = document.getElementById('msgAsignarSocios');
+  if (!nombres.length) { msg.style.color = 'var(--danger)'; msg.textContent = 'Marca al menos un cliente.'; return; }
+  await asignarSocioClientes(nombres, document.getElementById('selAsignarSocioMasivo').value);
+  pintarAsignacionSocios();
+}
+
+// ---------- Comisiones por Avales y Socios ----------
+function cambiarSemanaSocios(semana, btn) {
+  SEMANA_SOCIOS = semana;
+  RANGO_MANUAL_SOCIOS = null;
+  document.querySelectorAll('#selectorSemanaSocios button').forEach(b => b.classList.toggle('activo', b === btn));
+  pintarComisionesSocios();
+}
+function buscarComisionesSocios() {
+  const desde = document.getElementById('inpDesdeSocios').value;
+  const hasta = document.getElementById('inpHastaSocios').value;
+  if (!desde || !hasta) return;
+  RANGO_MANUAL_SOCIOS = { desde, hasta };
+  document.querySelectorAll('#selectorSemanaSocios button').forEach(b => b.classList.remove('activo'));
+  pintarComisionesSocios();
+}
+function toastComisionesSocios(msg, esError) {
+  const t = document.getElementById('toastComisionesSocios');
+  t.textContent = msg;
+  t.style.color = esError ? 'var(--danger)' : 'var(--ok)';
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2600);
+}
+function fmtPctSocio(p) { return Number(p).toLocaleString('es-VE', { maximumFractionDigits: 4 }); }
+function htmlTarjetaSocio(titulo, pctTxt, clientes, total, vacioTxt) {
+  const filas = clientes.length
+    ? clientes.map(c => `<div class="socio-fila${c.esAjuste ? ' ajuste' : ''}"><span>${c.esAjuste ? escaparHtmlChat(c.nombre) : escaparHtmlChat(formatNombre(c.nombre))}</span><span class="monto">${formatMonto(c.monto)}</span></div>`).join('')
+    : `<div class="socio-vacio">${vacioTxt}</div>`;
+  return `<div class="socio-tarjeta"><div class="socio-cab"><span>${titulo}</span>${pctTxt ? `<span class="pct">${pctTxt}</span>` : ''}</div>${filas}<div class="socio-total"><span>TOTALES</span><span>${formatMonto(total)}</span></div></div>`;
+}
+async function pintarComisionesSocios() {
+  const cuerpo = document.getElementById('comisionesSociosCuerpo');
+  const cuadre = document.getElementById('comisionesSociosCuadre');
+  cuerpo.innerHTML = '<div class="placeholder-card">Cargando…</div>';
+  cuadre.className = 'socios-cuadre'; cuadre.textContent = '';
+  const params = RANGO_MANUAL_SOCIOS ? `desde=${RANGO_MANUAL_SOCIOS.desde}&hasta=${RANGO_MANUAL_SOCIOS.hasta}` : `semana=${SEMANA_SOCIOS}`;
+  let data;
+  try {
+    data = await apiHipismo(`/api/hipismo/comisiones-socios?${params}`);
+  } catch (e) {
+    COMISIONES_SOCIOS_ACTUAL = null;
+    cuerpo.innerHTML = `<div class="placeholder-card">No se pudo cargar: ${escaparHtmlChat(e.message)}</div>`;
+    return;
+  }
+  COMISIONES_SOCIOS_ACTUAL = data;
+  if (data.rango) {
+    document.getElementById('inpDesdeSocios').value = data.rango.desde;
+    document.getElementById('inpHastaSocios').value = data.rango.hasta;
+  }
+  const nombreGrupo = (data.nombreGrupo || (typeof GRUPO !== 'undefined' && GRUPO && GRUPO.nombre) || '').toString().toUpperCase();
+  document.getElementById('comisionesSociosTitulo').textContent = (nombreGrupo ? nombreGrupo + ' - ' : '') + 'COMISIONES POR AVALES Y SOCIOS';
+  document.getElementById('comisionesSociosFecha').textContent = data.rango
+    ? (data.rango.desde === data.rango.hasta ? formatFechaCortaDMY(data.rango.desde) : `Del ${formatFechaCortaDMY(data.rango.desde)} al ${formatFechaCortaDMY(data.rango.hasta)}`) : '';
+  if (!data.activo) {
+    cuerpo.innerHTML = '<div class="placeholder-card">Este grupo todavía no tiene socios. Créalos en Ajustes &gt; Socios.</div>';
+    return;
+  }
+  let html = '<div class="socios-rejilla">';
+  data.socios.forEach(s => { html += htmlTarjetaSocio('AVALADO POR ' + escaparHtmlChat(s.nombre), fmtPctSocio(s.porcentaje) + '%', s.clientes, s.total, 'Sin comisión en este rango.'); });
+  if (data.sinSocio) html += htmlTarjetaSocio('SIN SOCIO', '', data.sinSocio.clientes, data.sinSocio.total, '');
+  html += '</div>';
+  html += `<div class="comision-caja"><span class="etiqueta">💼 COMISIÓN TOTAL</span><span class="monto">${formatMonto(data.comisionTotal)}</span></div>`;
+  html += '<div class="socio-tarjeta" style="margin-top:14px;"><div class="socio-cab"><span>POR SOCIO</span><span class="pct">según su % del total</span></div>';
+  data.porSocio.forEach(s => {
+    html += `<div class="socio-fila"><span>${escaparHtmlChat(s.nombre)} <span style="color:#7b8a80; font-size:12px;">(${fmtPctSocio(s.porcentaje)}%)</span></span><span class="monto">${formatMonto(s.monto)}</span></div>`;
+  });
+  html += `<div class="socio-total"><span>TOTAL</span><span>${formatMonto(data.porSocio.reduce((a, s) => a + s.monto, 0))}</span></div></div>`;
+  cuerpo.innerHTML = html;
+  if (data.cuadra) {
+    cuadre.className = 'socios-cuadre ok';
+    cuadre.textContent = `✅ Cuadra al centavo con la comisión de Balance General y Cierre Final (${formatMonto(data.comisionTotal)}).`;
+  } else {
+    cuadre.className = 'socios-cuadre mal';
+    cuadre.textContent = `⚠️ No cuadra: las tarjetas suman ${formatMonto(data.sumaTarjetas)} y la comisión es ${formatMonto(data.comisionTotal)} (diferencia ${formatMonto(data.diferencia)}).`;
+  }
+}
+function textoComisionesSocios(d) {
+  let t = `*Comisiones por Avales y Socios - ${d.rango.desde} a ${d.rango.hasta}*\n────────────────────────────────\n`;
+  const bloque = (titulo, clientes, total) => {
+    t += `\n*${titulo}*\n`;
+    clientes.forEach(c => { t += `  • ${c.esAjuste ? c.nombre : formatNombre(c.nombre)}:  ${formatMontoTabla(c.monto)}${c.monto < 0 ? ' (-)' : ''}\n`; });
+    t += `  TOTALES: ${formatMontoTabla(total)}\n`;
+  };
+  d.socios.forEach(s => bloque(`AVALADO POR ${s.nombre} (${fmtPctSocio(s.porcentaje)}%)`, s.clientes, s.total));
+  if (d.sinSocio) bloque('SIN SOCIO', d.sinSocio.clientes, d.sinSocio.total);
+  t += `\n──────────────────────────────\n*COMISIÓN TOTAL: ${formatMontoTabla(d.comisionTotal)} USD*\n\n*POR SOCIO*\n`;
+  d.porSocio.forEach(s => { t += `  • ${s.nombre} (${fmtPctSocio(s.porcentaje)}%):  ${formatMontoTabla(s.monto)}\n`; });
+  return t;
+}
+function copiarComisionesSociosTexto() {
+  if (!COMISIONES_SOCIOS_ACTUAL || !COMISIONES_SOCIOS_ACTUAL.activo) { toastComisionesSocios('No hay nada que copiar todavía.', true); return; }
+  const texto = textoComisionesSocios(COMISIONES_SOCIOS_ACTUAL);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(() => toastComisionesSocios('✅ Texto copiado — pegalo en el grupo.'))
+      .catch(() => toastComisionesSocios('No se pudo copiar — selecciona el texto a mano.', true));
+  } else toastComisionesSocios('No se pudo copiar — selecciona el texto a mano.', true);
+}
+async function copiarComisionesSociosImagen() {
+  if (!COMISIONES_SOCIOS_ACTUAL || !COMISIONES_SOCIOS_ACTUAL.activo) { toastComisionesSocios('No hay nada que generar todavía.', true); return; }
+  if (typeof html2canvas !== 'function') { toastComisionesSocios('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true); return; }
+  try {
+    const canvas = await html2canvas(document.getElementById('comisionesSociosCaptura'), { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    canvas.toBlob(async blob => {
+      if (!blob) { toastComisionesSocios('⚠️ No se pudo generar la imagen.', true); return; }
+      try {
+        if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('sin soporte');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        toastComisionesSocios('✅ Imagen copiada — pegala (Ctrl+V) en WhatsApp.');
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'comisiones_avales_y_socios.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        toastComisionesSocios('No se pudo copiar directo — se descargó la imagen.', true);
+      }
+    }, 'image/png');
+  } catch (e) { toastComisionesSocios('⚠️ No se pudo generar la imagen: ' + e.message, true); }
 }
 
 function mostrarToastComisionesSinDevoluciones(msg, esError) {

@@ -230,6 +230,33 @@ async function guardarMarcaPagoDiario(jugadorId, grupoId, marca) {
 }
 const AVISO_FALTA_PAGO_DIARIO = 'Falta correr el SQL pendiente en Supabase (columna jugadores.pago_diario). El cliente se guardó, pero sin la marca de pago diario.';
 
+// 25-10-2026, "Comisiones por Avales y Socios": "cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo)".
+// `socioId` solo se toca cuando viene en el cuerpo (otras pantallas que editan al cliente no lo mandan y no deben borrarlo):
+// un id de socio del MISMO grupo lo asigna; null o '' lo quita. Igual que la marca de pago diario, se guarda aparte del
+// INSERT/UPDATE principal para que, si todavía no corrieron el SQL, crear/editar clientes siga funcionando.
+async function guardarSocioDeJugador(jugadorId, grupoId, socioId) {
+  if (socioId === undefined) return { ok: true };
+  const valor = socioId === null || socioId === '' ? null : String(socioId);
+  try {
+    if (valor !== null) {
+      const rs = await db.query('SELECT 1 FROM hipismo_socios WHERE id = $1 AND grupo_id = $2', [valor, grupoId]);
+      if (!rs.rows.length) return { ok: false, error: 'Ese socio no existe en este grupo.', status: 400 };
+    }
+    await db.query('UPDATE jugadores SET hipismo_socio_id = $1 WHERE id = $2 AND grupo_id = $3', [valor, jugadorId, grupoId]);
+    return { ok: true };
+  } catch (e) {
+    if (e && (e.code === '42703' || e.code === '42P01')) return valor === null ? { ok: true } : { ok: false, sinColumna: true };
+    if (e && e.code === '22P02') return { ok: false, error: 'Ese socio no existe en este grupo.', status: 400 };
+    throw e;
+  }
+}
+const AVISO_FALTA_SOCIOS = 'Falta correr el SQL pendiente en Supabase (tabla hipismo_socios / columna jugadores.hipismo_socio_id). El cliente se guardó, pero sin el socio.';
+function respuestaSocioFallido(res, guardado, jugador, avalesFinal) {
+  if (guardado.sinColumna) { res.status(503).json({ error: AVISO_FALTA_SOCIOS, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } }); return true; }
+  if (guardado.status) { res.status(guardado.status).json({ error: guardado.error, jugador: { ...jugador, avalesPorcentaje: avalesFinal } }); return true; }
+  return false;
+}
+
 router.post('/', asyncHandler(async (req, res) => {
   try {
     const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
@@ -252,7 +279,9 @@ router.post('/', asyncHandler(async (req, res) => {
     });
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
-    res.status(201).json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, avalesPorcentaje: avalesFinal });
+    const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
+    if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
+    res.status(201).json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });
@@ -285,7 +314,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
     });
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
-    res.json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, avalesPorcentaje: avalesFinal });
+    const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
+    if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
+    res.json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });

@@ -5444,6 +5444,106 @@ router.delete('/retiros/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// SOCIOS DE HIPISMO y "COMISIONES POR AVALES Y SOCIOS" (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
+// llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se
+// crean en Ajustes > Socios; la distribución debe dar exactamente el 100%); en esa ventana te coloca ordenado cuánto produjo cada
+// cliente en comisión (ya devolviendo los %) por a quién pertenece, y debe dar exacto a la comisión de Balance General y Cierre.
+// Un grupo que no crea socios calcula como se hace hoy: esto solo se activa cuando el grupo tiene socios").
+//   GET  /socios                 lista de socios del grupo (con cuántos clientes tiene cada uno)
+//   PUT  /socios                 { socios: [{id?, nombre, porcentaje}] } lista COMPLETA (solo administrador); suma = 100% exacto
+//   PUT  /socios/asignar         { clientes: [nombre...], socioId|null } asigna (o quita) el socio de varios clientes de una vez
+//   GET  /comisiones-socios      el reporte (?semana=actual|anterior|hace2 o ?desde&hasta), sale del MISMO Cierre Final
+// (La tabla es hipismo_socios; NO tiene relación con la tabla `socios` de Deportes.)
+// =================================================================
+const hipismoSocios = require('../services/hipismoSocios');
+const AVISO_FALTA_SQL_SOCIOS = 'Falta correr el SQL pendiente en Supabase (tabla hipismo_socios y columna jugadores.hipismo_socio_id).';
+const esErrorFaltaSocios = e => !!e && (e.code === '42P01' || e.code === '42703');
+
+async function listarSociosGrupo(grupoId) {
+  const r = await db.query(
+    `SELECT s.id, s.nombre, s.porcentaje,
+            (SELECT COUNT(*)::int FROM jugadores j WHERE j.hipismo_socio_id = s.id AND j.grupo_id = s.grupo_id) AS clientes
+       FROM hipismo_socios s WHERE s.grupo_id = $1 ORDER BY s.creado_en, s.nombre`, [grupoId]);
+  return r.rows.map(x => ({ id: x.id, nombre: x.nombre, porcentaje: Number(x.porcentaje), clientes: x.clientes }));
+}
+
+router.get('/socios', asyncHandler(async (req, res) => {
+  try {
+    const socios = await listarSociosGrupo(req.grupoId);
+    res.json({ socios, suma: socios.reduce((a, x) => a + Math.round(x.porcentaje * 10000), 0) / 10000 });
+  } catch (e) {
+    if (esErrorFaltaSocios(e)) return res.json({ socios: [], suma: 0, sinTabla: true, aviso: AVISO_FALTA_SQL_SOCIOS });
+    throw e;
+  }
+}));
+
+router.put('/socios', requiereAdministrador, asyncHandler(async (req, res) => {
+  const v = hipismoSocios.validarConfigSocios(req.body && req.body.socios);
+  if (v.error) return res.status(400).json({ error: v.error });
+  try {
+    await db.transaccion(async (client) => {
+      const actuales = (await client.query('SELECT id FROM hipismo_socios WHERE grupo_id = $1', [req.grupoId])).rows.map(x => x.id);
+      const idsEnviados = v.socios.map(x => x.id).filter(Boolean);
+      const sobrantes = actuales.filter(id => !idsEnviados.includes(id));
+      // Los nombres pasan por un nombre temporal para que intercambiar nombres entre socios no choque con la regla de nombre único.
+      if (sobrantes.length) await client.query('DELETE FROM hipismo_socios WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [req.grupoId, sobrantes]);
+      for (const x of v.socios.filter(x => x.id && actuales.includes(x.id))) {
+        await client.query('UPDATE hipismo_socios SET nombre = $1 WHERE id = $2 AND grupo_id = $3', ['~' + x.id, x.id, req.grupoId]);
+      }
+      for (const x of v.socios) {
+        if (x.id && actuales.includes(x.id)) await client.query('UPDATE hipismo_socios SET nombre = $1, porcentaje = $2 WHERE id = $3 AND grupo_id = $4', [x.nombre, x.porcentaje, x.id, req.grupoId]);
+        else await client.query('INSERT INTO hipismo_socios (grupo_id, nombre, porcentaje) VALUES ($1,$2,$3)', [req.grupoId, x.nombre, x.porcentaje]);
+      }
+    });
+  } catch (e) {
+    if (esErrorFaltaSocios(e)) return res.status(503).json({ error: AVISO_FALTA_SQL_SOCIOS, sinColumna: true });
+    if (e.code === '23505') return res.status(409).json({ error: 'Hay dos socios con el mismo nombre.' });
+    if (e.code === '22P02') return res.status(400).json({ error: 'Un socio de la lista no es válido.' });
+    throw e;
+  }
+  const socios = await listarSociosGrupo(req.grupoId);
+  res.json({ ok: true, socios, suma: socios.reduce((a, x) => a + Math.round(x.porcentaje * 10000), 0) / 10000 });
+}));
+
+router.put('/socios/asignar', asyncHandler(async (req, res) => {
+  const nombres = Array.from(new Set(((req.body && req.body.clientes) || []).map(hipismoSocios.normalizarNombreSocio).filter(Boolean)));
+  const socioId = req.body && req.body.socioId ? String(req.body.socioId) : null;
+  if (!nombres.length) return res.status(400).json({ error: 'Elige al menos un cliente.' });
+  try {
+    if (socioId) {
+      const rs = await db.query('SELECT 1 FROM hipismo_socios WHERE id = $1 AND grupo_id = $2', [socioId, req.grupoId]);
+      if (!rs.rows.length) return res.status(400).json({ error: 'Ese socio no existe en este grupo.' });
+    }
+    const r = await db.query('UPDATE jugadores SET hipismo_socio_id = $1 WHERE grupo_id = $2 AND nombre = ANY($3::text[])', [socioId, req.grupoId, nombres]);
+    res.json({ ok: true, actualizados: r.rowCount });
+  } catch (e) {
+    if (esErrorFaltaSocios(e)) return res.status(503).json({ error: AVISO_FALTA_SQL_SOCIOS, sinColumna: true });
+    if (e.code === '22P02') return res.status(400).json({ error: 'Ese socio no existe en este grupo.' });
+    throw e;
+  }
+}));
+
+router.get('/comisiones-socios', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  let socios, jugadores;
+  try {
+    socios = await listarSociosGrupo(req.grupoId);
+    if (!socios.length) return res.json({ activo: false, socios: [], rango: { desde, hasta }, semana, rangoPersonalizado: !!rangoPersonalizado });
+    jugadores = (await db.query('SELECT nombre, hipismo_socio_id FROM jugadores WHERE grupo_id = $1', [req.grupoId])).rows;
+  } catch (e) {
+    if (esErrorFaltaSocios(e)) return res.json({ activo: false, socios: [], sinTabla: true, aviso: AVISO_FALTA_SQL_SOCIOS, rango: { desde, hasta }, semana });
+    throw e;
+  }
+  const cierre = await construirCierreFinalHipismo(req.grupoId, desde, hasta, { comisionPorCliente: true });
+  const reporte = hipismoSocios.armarReporteSocios({ cierre, socios, jugadores, rango: { desde, hasta }, nombreGrupo: req.grupo && req.grupo.nombre });
+  res.json({ ...reporte, semana, rangoPersonalizado: !!rangoPersonalizado, numeroSemana: numeroSemanaISO(desde) });
+}));
+
+
+// =================================================================
 // "CARGA MASIVA ESPECIAL" (05-10-2026, a pedido del usuario — ver la nota
 // grande de services/hipismoCargasEspeciales.js y de sql/schema.sql):
 // escribir líneas "CLIENTE +monto" / "CLIENTE -monto" eligiendo hipódromo,

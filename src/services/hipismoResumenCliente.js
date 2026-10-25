@@ -1307,7 +1307,23 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
 // semanaParam/rangoPersonalizado) y no arma "dias"/"hipodromos", solo la
 // lista `clientes` con su saldo ya neto, tal cual el shape que devolvía
 // GET /cierre-final.
-async function construirCierreFinalHipismo(grupoId, desde, hasta) {
+// Reparte `objetivoCentavos` (entero) entre los nombres en proporción a sus pesos, en centavos enteros y por el método del mayor
+// resto, de modo que la suma sea EXACTAMENTE el objetivo. `pesos` = [[nombre, peso], ...]; devuelve [[nombre, centavos], ...] o null
+// si ningún peso es positivo.
+function repartirCentavosProporcional(objetivoCentavos, pesos) {
+  const total = pesos.reduce((a, [, w]) => a + (Number(w) > 0 ? Number(w) : 0), 0);
+  if (!(total > 0)) return null;
+  const partes = pesos.map(([nombre, w]) => {
+    const exacto = objetivoCentavos * (Number(w) > 0 ? Number(w) : 0) / total;
+    const piso = Math.floor(exacto + 1e-9);
+    return { nombre, piso, resto: exacto - piso };
+  });
+  let faltan = objetivoCentavos - partes.reduce((a, p) => a + p.piso, 0);
+  partes.slice().sort((a, b) => b.resto - a.resto).forEach(p => { if (faltan > 0) { p.piso += 1; faltan -= 1; } });
+  return partes.map(p => [p.nombre, p.piso]);
+}
+
+async function construirCierreFinalHipismo(grupoId, desde, hasta, opciones = {}) {
   // 06-10-2026: las Marcas que quedaron sin banquear se banquean solas con
   // MARCAS ZENYATTA/MARCAS SAMMY antes de leer, para que sus ítems salgan.
   await asegurarBanqueoAutomaticoMarcas(grupoId);
@@ -1585,7 +1601,7 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
         // Ver la nota grande de arriba (agregarPorcentajeDevuelto):
         // info.cuentaNombre ya es el nombre final, no hace falta pegarle
         // el sufijo de nuevo.
-        porGrupoCarrera.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto: 0, claveCarrera });
+        porGrupoCarrera.set(claveGrupo, { cuentaNombre: info.cuentaNombre, exacto: 0, claveCarrera, origen: nombre });
       }
       porGrupoCarrera.get(claveGrupo).exacto += exacto;
     });
@@ -1753,9 +1769,13 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
   // cada ficha (cliente, aval o cuenta "X - PORCENTAJE"), con los mismos montos ya redondeados que se suman
   // al saldo — así restárselo a esa ficha deja su saldo SIN % devuelto, exacto al centavo.
   const devueltoPorCuentaMap = new Map();
-  porGrupoCarrera.forEach(({ cuentaNombre, exacto, claveCarrera }) => {
+  // devueltoPorOrigen (25-10-2026, "Comisiones por Avales y Socios"): lo devuelto según QUIÉN GENERÓ la jugada (el cliente que apostó),
+  // con los mismos montos ya redondeados que van a totalDevueltoSemana — así bruta − devuelto por cliente suma EXACTO la comisión.
+  const devueltoPorOrigenMap = new Map();
+  porGrupoCarrera.forEach(({ cuentaNombre, exacto, claveCarrera, origen }) => {
     const devuelto = round2(exacto);
     if (!devuelto) return;
+    devueltoPorOrigenMap.set(origen, round2((devueltoPorOrigenMap.get(origen) || 0) + devuelto));
     acumular(cuentaNombre, devuelto);
     devueltoPorCuentaMap.set(cuentaNombre, round2((devueltoPorCuentaMap.get(cuentaNombre) || 0) + devuelto));
     totalDevueltoSemana = round2(totalDevueltoSemana + devuelto);
@@ -1907,9 +1927,59 @@ async function construirCierreFinalHipismo(grupoId, desde, hasta) {
     comisionSemana = comisionCuadrada;
   }
 
+  // comisionBrutaPorCliente (25-10-2026, "Comisiones por Avales y Socios", a pedido del usuario: "cuánto produjo cada cliente en
+  // comisión, ya devolviendo los %, y debe dar exacto a la comisión de Balance General y Cierre"): la comisión BRUTA que generó cada
+  // cliente (la que sale de lo que gana el lado ganador de cada ticket / jugada), repartida de forma que SUME EXACTO la que ya usa
+  // este cierre: la de cada plano de Tercios se reparte entre sus clientes en proporción a lo que generó cada uno hasta sumar justo
+  // `comision_total` de ese plano (así un plano con "cruzar jugadas" también cuadra); Tablas Fijas/Marcas y Tercios Adelantadas usan
+  // su propia comisión guardada. Lo que no se puede atribuir a un cliente (un plano sin tickets, el ajuste de centavos de arriba) se
+  // devuelve aparte en `comisionSinAtribuir`, para que bruta − devuelto de todos + eso = comisionSemana SIEMPRE.
+  // Solo se calcula si lo piden (`opciones.comisionPorCliente`): el resto de pantallas no paga esa consulta extra.
+  let comisionBrutaPorCliente, comisionSinAtribuir;
+  if (opciones && opciones.comisionPorCliente) {
+    const comisionBrutaCentavos = new Map();
+    const sumarBruta = (nombre, centavos) => { if (!centavos) return; comisionBrutaCentavos.set(nombre, (comisionBrutaCentavos.get(nombre) || 0) + centavos); };
+    const rPlanosComision = await db.query(
+      'SELECT id, comision_total FROM hipismo_planos WHERE grupo_id = $1 AND fecha BETWEEN $2 AND $3', [grupoId, desde, hasta]);
+    const pesosPorPlano = new Map();
+    rTickets.rows.forEach(t => {
+      if (!pesosPorPlano.has(t.plano_id)) pesosPorPlano.set(t.plano_id, new Map());
+      const m = pesosPorPlano.get(t.plano_id);
+      const sc = t.sin_comision;
+      const lado = (res, nombre) => { const n = Number(res); if (n > 0 && !sc) m.set(nombre, (m.get(nombre) || 0) + (n / 0.95 - n)); };
+      lado(t.resultado_jugador, t.cliente_nombre);
+      lado(t.resultado_banquero, t.banquero_nombre);
+    });
+    let sinAtribuirCentavos = 0;
+    rPlanosComision.rows.forEach(p => {
+      const objetivo = Math.round(Number(p.comision_total || 0) * 100);
+      if (!objetivo) return;
+      const pesos = pesosPorPlano.get(p.id);
+      const reparto = pesos && pesos.size ? repartirCentavosProporcional(objetivo, Array.from(pesos.entries())) : null;
+      if (!reparto) { sinAtribuirCentavos += objetivo; return; }
+      reparto.forEach(([nombre, c]) => sumarBruta(nombre, c));
+    });
+    rAdelantadas.rows.forEach(j => { if (j.comision != null) sumarBruta(j.cliente_nombre, Math.round(Number(j.comision) * 100)); });
+    rTerciosAdelantadas.rows.forEach(j => {
+      const c = Math.round(Number(j.comision_grupo || 0) * 100);
+      if (!c) return;
+      sumarBruta(Number(j.resultado_jugador) > 0 ? j.jugador_nombre : j.banquero_nombre, c);
+    });
+    comisionBrutaPorCliente = {};
+    comisionBrutaCentavos.forEach((c, nombre) => { comisionBrutaPorCliente[nombre] = c / 100; });
+    const totalBrutaCentavos = Array.from(comisionBrutaCentavos.values()).reduce((a, c) => a + c, 0) + sinAtribuirCentavos;
+    const totalDevueltoCentavos = Math.round(totalDevueltoSemana * 100);
+    // Lo que falta para que todo sume EXACTO comisionSemana (incluye el ajuste de centavos y cualquier plano sin tickets).
+    comisionSinAtribuir = round2(comisionSemana - (totalBrutaCentavos - totalDevueltoCentavos) / 100 + sinAtribuirCentavos / 100);
+
+  }
+
   return {
     clientes,
     comisionSemana,
+    comisionBrutaPorCliente,
+    comisionSinAtribuir,
+    devueltoPorOrigen: Object.fromEntries(devueltoPorOrigenMap),
     devueltoPorCarrera,
     devueltoPorCuenta: Object.fromEntries(devueltoPorCuentaMap),
     totalDevueltoSemana,
