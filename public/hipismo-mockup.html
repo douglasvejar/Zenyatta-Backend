@@ -3889,13 +3889,32 @@
     <section class="vista" id="vista-retiros">
       <div class="card">
         <h2>💸 Retiros</h2>
-        <p class="desc">Para registrar un pago que se le hizo a un cliente.</p>
+        <p class="desc">Para registrar un pago que se le hizo a un cliente (cuando se le cancela). Se le resta del saldo al cliente y se suma a la cuenta <b>PAGOS A CLIENTES</b>, así el saldo nuevo se ve igual en todas las ventanas (Balance General, Cierre Final, Pozos, su link...). Ejemplo: Raúl tiene +200, se le registra un retiro de 180 y queda en +20.</p>
         <div class="fila">
-          <div><label>Cliente</label><input type="text" placeholder="Ej: Tykhe"></div>
-          <div><label>Monto pagado</label><input type="text" placeholder="Ej: 190,00"></div>
-          <div><label>Fecha</label><input type="date"></div>
+          <div>
+            <label for="inpBuscarRetiro">Buscar cliente</label>
+            <input type="text" id="inpBuscarRetiro" placeholder="Escribe para filtrar la lista…" autocomplete="off" oninput="poblarSelectRetiro()">
+          </div>
         </div>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Registrar retiro</button></div>
+        <div class="fila">
+          <div><label for="selRetiroCliente">Cliente *</label><select id="selRetiroCliente" onchange="pintarPistaRetiro()"></select></div>
+          <div><label for="inpRetiroMonto">Monto pagado *</label><input type="number" id="inpRetiroMonto" step="0.01" min="0" placeholder="Ej: 190,00" oninput="pintarPistaRetiro()"></div>
+          <div><label for="inpRetiroFecha">Fecha</label><input type="date" id="inpRetiroFecha"></div>
+        </div>
+        <div class="fila">
+          <div style="flex:1 1 100%;"><label for="inpRetiroNota">Nota (opcional)</label><input type="text" id="inpRetiroNota" placeholder="Ej: pago por transferencia"></div>
+        </div>
+        <div id="pistaRetiro" class="desc" style="margin-top:4px;"></div>
+        <div class="btn-fila">
+          <button class="btn btn-primario" type="button" id="btnRegistrarRetiro" onclick="guardarRetiro()">+ Registrar retiro</button>
+          <button class="btn btn-secundario" type="button" id="btnCancelarEdicionRetiro" style="display:none;" onclick="cancelarEdicionRetiro()">Cancelar edición</button>
+        </div>
+        <div id="msgRetiro" class="desc" style="margin-top:10px;"></div>
+      </div>
+      <div class="card">
+        <h2>Retiros registrados</h2>
+        <p class="desc">Ordenados por día, el más reciente primero. Si te equivocaste, puedes editar o eliminar un retiro: el saldo del cliente y de PAGOS A CLIENTES se corrige solo.</p>
+        <div id="listaRetiros"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
 
@@ -7705,6 +7724,8 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   cargaMasivaEspecial: () => entrarCargaMasivaEspecial(),
   // "Traspaso de Saldo" (05-10-2026) — lista de clientes activos + historial.
   traspasos: () => entrarTraspasoSaldo(),
+  // "Retiros" (25-10-2026) — pagos a clientes: clientes activos + lista por día.
+  retiros: () => entrarRetiros(),
   // "Cargar Remate Manual" (25-09-2026) — refresca el <select> de
   // Jugador de cada fila cada vez que se entra a la pestaña, para que
   // un cliente recién creado en otra pantalla ya aparezca sin recargar.
@@ -18484,6 +18505,172 @@ async function anularTraspasoSaldo(id) {
     return;
   }
   pintarHistorialTraspasosSaldo();
+}
+
+// ------------------------------------------------------------------
+// RETIROS (Administración, 25-10-2026) — ver la nota grande de GET/POST/PUT/DELETE /retiros en routes/hipismo.js. Un retiro resta
+// del saldo del cliente y lo suma a la cuenta PAGOS A CLIENTES (es un traspaso de saldo con destino fijo).
+// ------------------------------------------------------------------
+let RETIRO_EDITANDO = null;      // { id, ... } mientras se edita uno
+let RETIRO_CUENTA = 'PAGOS A CLIENTES';
+let RETIROS_CACHE = [];
+
+function poblarSelectRetiro() {
+  const sel = document.getElementById('selRetiroCliente');
+  if (!sel) return;
+  const filtro = (document.getElementById('inpBuscarRetiro').value || '').trim().toLowerCase();
+  const prev = sel.value;
+  const activos = (CLIENTES_HIPISMO_CACHE || [])
+    .filter(j => j.activo !== false && j.nombre !== RETIRO_CUENTA)
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const visibles = activos.filter(j => !filtro || j.nombre.toLowerCase().includes(filtro) || j.nombre === prev);
+  sel.innerHTML = '<option value="">— Elige un cliente —</option>' +
+    visibles.map(j => `<option value="${escapeHtmlTraspaso(j.nombre)}">${escapeHtmlTraspaso(formatNombre(j.nombre))}</option>`).join('');
+  if (prev && visibles.some(j => j.nombre === prev)) sel.value = prev;
+}
+
+// Debajo del formulario: el saldo de la semana del cliente y cómo quedaría con este retiro.
+async function pintarPistaRetiro() {
+  const pista = document.getElementById('pistaRetiro');
+  if (!pista) return;
+  const cliente = document.getElementById('selRetiroCliente').value;
+  const monto = Number(document.getElementById('inpRetiroMonto').value) || 0;
+  if (!cliente) { pista.textContent = ''; return; }
+  let saldos;
+  try { saldos = await obtenerSaldosSemanaPozos(); } catch (e) { pista.textContent = ''; return; }
+  const fila = (saldos || []).find(c => c.nombre === cliente);
+  const saldo = redondearCentavos(fila ? fila.saldo : 0);
+  const signo = n => (n > 0 ? '+' : n < 0 ? '-' : '') + formatMontoTabla(Math.abs(n));
+  const antes = RETIRO_EDITANDO && RETIRO_EDITANDO.cliente === cliente ? RETIRO_EDITANDO.monto : 0; // al editar, el retiro viejo ya está descontado
+  const quedaria = redondearCentavos(saldo + antes - monto);
+  pista.textContent = `Saldo de la semana de ${formatNombre(cliente)}: ${signo(saldo)}` + (monto > 0 ? ` → con este retiro quedaría en ${signo(quedaria)}` : '');
+}
+
+async function entrarRetiros() {
+  const f = document.getElementById('inpRetiroFecha');
+  if (f && !f.value) f.value = fechaLocalHoy();
+  SALDOS_SEMANA_POZOS_CACHE = null;
+  poblarSelectRetiro();
+  await cargarClientesReales();
+  poblarSelectRetiro();
+  await pintarListaRetiros();
+  pintarPistaRetiro();
+}
+
+function nombreDiaRetiro(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[d.getDay()] + ' ' + formatFechaCortaDMY(iso);
+}
+
+async function pintarListaRetiros() {
+  const cont = document.getElementById('listaRetiros');
+  if (!cont) return;
+  try {
+    const d = await apiHipismo('/api/hipismo/retiros');
+    RETIRO_CUENTA = d.cuenta || RETIRO_CUENTA;
+    RETIROS_CACHE = d.retiros || [];
+  } catch (e) {
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar la lista: ${escapeHtmlTraspaso(e.message)}</div>`;
+    return;
+  }
+  if (!RETIROS_CACHE.length) { cont.innerHTML = '<div class="placeholder-card">Todavía no se ha registrado ningún retiro.</div>'; return; }
+  const porDia = new Map();
+  RETIROS_CACHE.forEach(r => { if (!porDia.has(r.fecha)) porDia.set(r.fecha, []); porDia.get(r.fecha).push(r); });
+  cont.innerHTML = Array.from(porDia.entries()).map(([fecha, lista]) => {
+    const total = redondearCentavos(lista.reduce((a, r) => a + Number(r.monto), 0));
+    return `<div style="margin-bottom:14px;">
+      <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} retiro(s), total ${formatMonto(total)}</span></div>
+      ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
+        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}</span>
+        <span class="btn-fila" style="gap:6px;">
+          <button class="btn btn-secundario" type="button" onclick="editarRetiro('${r.id}')">✏️ Editar</button>
+          <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRetiro('${r.id}')">🗑️ Eliminar</button>
+        </span>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function restablecerFormularioRetiro() {
+  RETIRO_EDITANDO = null;
+  document.getElementById('inpRetiroMonto').value = '';
+  document.getElementById('inpRetiroNota').value = '';
+  document.getElementById('btnRegistrarRetiro').textContent = '+ Registrar retiro';
+  document.getElementById('btnCancelarEdicionRetiro').style.display = 'none';
+}
+function cancelarEdicionRetiro() {
+  restablecerFormularioRetiro();
+  document.getElementById('msgRetiro').textContent = '';
+  pintarPistaRetiro();
+}
+
+function editarRetiro(id) {
+  const r = RETIROS_CACHE.find(x => x.id === id);
+  if (!r) return;
+  RETIRO_EDITANDO = { id: r.id, cliente: r.cliente, monto: Number(r.monto) };
+  document.getElementById('inpBuscarRetiro').value = '';
+  poblarSelectRetiro();
+  const sel = document.getElementById('selRetiroCliente');
+  if (![...sel.options].some(o => o.value === r.cliente)) sel.insertAdjacentHTML('beforeend', `<option value="${escapeHtmlTraspaso(r.cliente)}">${escapeHtmlTraspaso(formatNombre(r.cliente))}</option>`);
+  sel.value = r.cliente;
+  document.getElementById('inpRetiroMonto').value = r.monto;
+  document.getElementById('inpRetiroFecha').value = r.fecha;
+  document.getElementById('inpRetiroNota').value = r.nota && r.nota !== 'Retiro (pago a cliente)' ? r.nota : '';
+  document.getElementById('btnRegistrarRetiro').textContent = '💾 Guardar cambios';
+  document.getElementById('btnCancelarEdicionRetiro').style.display = '';
+  const msg = document.getElementById('msgRetiro');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = '✏️ Editando un retiro: cambia lo que haga falta y presiona "Guardar cambios".';
+  pintarPistaRetiro();
+  document.getElementById('inpRetiroMonto').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function guardarRetiro() {
+  const msg = document.getElementById('msgRetiro');
+  const cliente = document.getElementById('selRetiroCliente').value;
+  const monto = Number(document.getElementById('inpRetiroMonto').value);
+  const fecha = document.getElementById('inpRetiroFecha').value || fechaLocalHoy();
+  const nota = document.getElementById('inpRetiroNota').value.trim();
+  msg.style.color = 'var(--danger)';
+  if (!cliente) { msg.textContent = 'Elige el cliente al que se le pagó.'; return; }
+  if (!monto || monto <= 0) { msg.textContent = 'Escribe un monto mayor a 0.'; return; }
+  const editando = RETIRO_EDITANDO;
+  if (!editando && !confirm(`¿Registrar un retiro de ${formatMonto(monto)} a ${formatNombre(cliente)}? Se le resta de su saldo.`)) return;
+  const btn = document.getElementById('btnRegistrarRetiro');
+  btn.disabled = true;
+  try {
+    if (editando) await apiHipismo('/api/hipismo/retiros/' + editando.id, { method: 'PUT', body: JSON.stringify({ cliente, monto, fecha, nota }) });
+    else await apiHipismo('/api/hipismo/retiros', { method: 'POST', body: JSON.stringify({ cliente, monto, fecha, nota }) });
+  } catch (e) {
+    msg.textContent = 'No se pudo guardar el retiro: ' + e.message;
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  SALDOS_SEMANA_POZOS_CACHE = null;
+  restablecerFormularioRetiro();
+  msg.style.color = 'var(--accent-grass)';
+  msg.textContent = editando ? '✅ Retiro corregido.' : `✅ Listo: retiro de ${formatMonto(monto)} a ${formatNombre(cliente)}.`;
+  await pintarListaRetiros();
+  pintarPistaRetiro();
+}
+
+async function eliminarRetiro(id) {
+  const r = RETIROS_CACHE.find(x => x.id === id);
+  if (!confirm(`¿Eliminar el retiro de ${r ? formatMonto(r.monto) + ' a ' + formatNombre(r.cliente) : 'este cliente'}? Su saldo vuelve a como estaba.`)) return;
+  try {
+    await apiHipismo('/api/hipismo/retiros/' + id, { method: 'DELETE' });
+  } catch (e) {
+    alert('No se pudo eliminar: ' + e.message);
+    return;
+  }
+  SALDOS_SEMANA_POZOS_CACHE = null;
+  if (RETIRO_EDITANDO && RETIRO_EDITANDO.id === id) restablecerFormularioRetiro();
+  const msg = document.getElementById('msgRetiro');
+  msg.style.color = 'var(--accent-grass)'; msg.textContent = '🗑️ Retiro eliminado.';
+  await pintarListaRetiros();
+  pintarPistaRetiro();
 }
 
 // ------------------------------------------------------------------

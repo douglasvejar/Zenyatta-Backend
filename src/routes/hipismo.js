@@ -5322,14 +5322,121 @@ router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
   );
   if (!rFila.rows.length) return res.status(404).json({ error: 'Ese traspaso no existe.' });
   const fila = rFila.rows[0];
+  // 25-10-2026: se compara contra el `creado_en` de la propia fila DENTRO de la base (sub-consulta), no contra una fecha de JavaScript:
+  // Postgres guarda microsegundos y JS solo milisegundos, así que `creado_en = $2` con un Date casi nunca encontraba la otra mitad
+  // ("No se encontró la otra mitad...") aunque existiera.
   const rMismoMomento = await db.query(
     `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
        FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND creado_en = $2`,
-    [req.grupoId, fila.creado_en]
+      WHERE grupo_id = $1 AND creado_en = (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE id = $2 AND grupo_id = $1)`,
+    [req.grupoId, fila.id]
   );
   const par = emparejarTraspasosSaldo(rMismoMomento.rows).find(p => p.id === fila.id || p.idDestino === fila.id);
   if (!par) return res.status(409).json({ error: 'No se encontró la otra mitad de este traspaso, así que no se anuló nada.' });
+  await db.transaccion(async (client) => {
+    await client.query('DELETE FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [req.grupoId, [par.id, par.idDestino]]);
+  });
+  res.json({ ok: true });
+}));
+
+// =================================================================
+// PESTAÑA "RETIROS" (Administración, 25-10-2026, a pedido del usuario: "el retiro es para cuando se le cancela a un cliente: Raúl
+// está ganando 200, se le coloca un retiro de 180, Raúl queda en 20, ese sería su saldo en todas las ventanas. Crearías un código
+// que salga en todos los balances llamado PAGOS A CLIENTES... sería como un traspaso: PAGOS A CLIENTES +180, RAÚL -180. En esa
+// ventana me mostrarás ordenado por día todos los retiros, se pueden editar o eliminar en caso de error").
+//
+// Un retiro ES un traspaso de saldo (mismas 2 filas de hipismo_comisiones_ajustes, misma transacción, mismo `creado_en`, así que
+// Balance General, Cierre Final, Pozos, Detallado por Cliente, el link del cliente y el Registro de Saldos ya lo reflejan sin
+// tocar nada más): resta `monto` al cliente y se lo suma a la ficha fija "PAGOS A CLIENTES" (se crea sola, marcada como cuenta
+// de comisión para que no salga como "quién apostó" en Cargar Planos). Un retiro = el traspaso cuyo destino es esa ficha.
+//   GET    /retiros       lista (más reciente primero, ordenada por día)
+//   POST   /retiros       { cliente, monto, fecha, nota }
+//   PUT    /retiros/:id   { cliente?, monto?, fecha?, nota? }  (actualiza las 2 mitades; el `creado_en` no cambia)
+//   DELETE /retiros/:id   anula las 2 mitades
+// =================================================================
+const CUENTA_PAGOS_A_CLIENTES = 'PAGOS A CLIENTES';
+const NOTA_RETIRO_DEFECTO = 'Retiro (pago a cliente)';
+const { buscarOCrearFicha: buscarOCrearFichaRetiros } = require('../services/hipismoComisionPropia');
+
+function normalizarNombreRetiro(t) { return ((t == null ? '' : t) + '').trim().toUpperCase().replace(/\s+/g, ' '); }
+
+// Los retiros del grupo, ya emparejados (cada uno con sus 2 mitades). Solo mira los renglones que comparten momento con alguna
+// fila de la cuenta PAGOS A CLIENTES, así no revuelve el resto de los traspasos.
+async function listarRetirosGrupo(grupoId) {
+  const r = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
+       FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1
+        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $2)
+      ORDER BY creado_en DESC`,
+    [grupoId, CUENTA_PAGOS_A_CLIENTES]
+  );
+  return emparejarTraspasosSaldo(r.rows)
+    .filter(p => p.destino === CUENTA_PAGOS_A_CLIENTES)
+    .map(p => ({ id: p.id, idDestino: p.idDestino, cliente: p.origen, monto: p.monto, fecha: p.fecha, nota: p.nota, creadoEn: p.creadoEn }))
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : new Date(b.creadoEn) - new Date(a.creadoEn)));
+}
+async function buscarRetiroPorId(grupoId, id) {
+  const rFila = await db.query(
+    'SELECT id, creado_en FROM hipismo_comisiones_ajustes WHERE id = $1 AND grupo_id = $2', [id, grupoId]);
+  if (!rFila.rows.length) return null;
+  // El momento se compara dentro de la base (sub-consulta): Postgres guarda microsegundos y un Date de JavaScript solo milisegundos.
+  const rMomento = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND creado_en = (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE id = $2 AND grupo_id = $1)`,
+    [grupoId, rFila.rows[0].id]);
+  const par = emparejarTraspasosSaldo(rMomento.rows).find(p => (p.id === rFila.rows[0].id || p.idDestino === rFila.rows[0].id) && p.destino === CUENTA_PAGOS_A_CLIENTES);
+  return par || null;
+}
+
+router.get('/retiros', asyncHandler(async (req, res) => {
+  res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, retiros: await listarRetirosGrupo(req.grupoId) });
+}));
+
+router.post('/retiros', asyncHandler(async (req, res) => {
+  const cliente = normalizarNombreRetiro(req.body && req.body.cliente);
+  const monto = Number(req.body && req.body.monto);
+  const fecha = (req.body && req.body.fecha) || fechaHoyVenezuela();
+  const nota = ((req.body && req.body.nota) || '').toString().trim() || NOTA_RETIRO_DEFECTO;
+  if (!cliente) return res.status(400).json({ error: 'Elige el cliente al que se le pagó.' });
+  if (cliente === CUENTA_PAGOS_A_CLIENTES) return res.status(400).json({ error: 'Elige un cliente; PAGOS A CLIENTES es la cuenta donde se acumulan los retiros.' });
+  if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
+  if (await rechazarClientesInexistentes(req, res, [cliente])) return;
+  await buscarOCrearFichaRetiros(req.grupoId, CUENTA_PAGOS_A_CLIENTES);
+  const montoFinal = round2(monto);
+  await db.transaccion(async (client) => {
+    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, cliente, -montoFinal, fecha, nota]);
+    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, CUENTA_PAGOS_A_CLIENTES, montoFinal, fecha, nota]);
+  });
+  res.json({ ok: true });
+}));
+
+router.put('/retiros/:id', asyncHandler(async (req, res) => {
+  const par = await buscarRetiroPorId(req.grupoId, req.params.id);
+  if (!par) return res.status(404).json({ error: 'Ese retiro no existe.' });
+  const b = req.body || {};
+  const cliente = b.cliente !== undefined ? normalizarNombreRetiro(b.cliente) : par.origen;
+  const monto = b.monto !== undefined ? Number(b.monto) : par.monto;
+  const fecha = b.fecha || par.fecha;
+  const nota = b.nota !== undefined ? (((b.nota || '') + '').trim() || NOTA_RETIRO_DEFECTO) : (par.nota || NOTA_RETIRO_DEFECTO);
+  if (!cliente || cliente === CUENTA_PAGOS_A_CLIENTES) return res.status(400).json({ error: 'Elige el cliente al que se le pagó.' });
+  if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
+  if (cliente !== par.origen && await rechazarClientesInexistentes(req, res, [cliente])) return;
+  const montoFinal = round2(monto);
+  await db.transaccion(async (client) => {
+    await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
+      [cliente, -montoFinal, fecha, nota, req.grupoId, par.id]);
+    await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
+      [CUENTA_PAGOS_A_CLIENTES, montoFinal, fecha, nota, req.grupoId, par.idDestino]);
+  });
+  res.json({ ok: true });
+}));
+
+router.delete('/retiros/:id', asyncHandler(async (req, res) => {
+  const par = await buscarRetiroPorId(req.grupoId, req.params.id);
+  if (!par) return res.status(404).json({ error: 'Ese retiro no existe.' });
   await db.transaccion(async (client) => {
     await client.query('DELETE FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [req.grupoId, [par.id, par.idDestino]]);
   });

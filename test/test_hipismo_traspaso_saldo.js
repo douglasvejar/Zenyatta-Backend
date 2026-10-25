@@ -49,8 +49,9 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes WHERE id = \$1 AND grupo_id = \$2/i.test(sql)) {
     return { rows: AJUSTES.filter(a => a.id === params[0] && a.grupo_id === params[1]) };
   }
-  if (/^SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND creado_en = \$2/i.test(sql)) {
-    return { rows: AJUSTES.filter(a => a.grupo_id === params[0] && a.creado_en.getTime() === new Date(params[1]).getTime()) };
+  if (/^SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND creado_en = \(SELECT creado_en FROM hipismo_comisiones_ajustes WHERE id = \$2 AND grupo_id = \$1\)/i.test(sql)) {
+    const ref = AJUSTES.find(a => a.id === params[1] && a.grupo_id === params[0]);
+    return { rows: ref ? AJUSTES.filter(a => a.grupo_id === params[0] && a.creado_en.getTime() === ref.creado_en.getTime()) : [] };
   }
   if (/^DELETE FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND id = ANY/i.test(sql)) {
     const [grupo, ids] = params;
