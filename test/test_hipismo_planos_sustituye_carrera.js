@@ -1,4 +1,9 @@
 // =================================================================
+// 25-10-2026: ESTA REGLA CAMBIÓ. Ahora Cargar Planos NO sustituye solo: si la carrera (hipódromo + número + fecha) ya tiene un plano,
+// POST /planos responde 409 "YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA" y no toca nada; la única forma de cargarla de nuevo es
+// eliminar el plano que ya está cargado. Hipismo Oficinas (que reabre y re-guarda una carrera) sigue sustituyendo.
+// (Lo de abajo es el texto original de 29-09-2026, que dio origen a esta prueba.)
+//
 // PRUEBA: "Sustituir en vez de duplicar" (29-09-2026, a pedido del
 // usuario: "quiero que si se vuelve a meter un plano en una carrera que
 // ya existia, el nuevo siempre sustituya al anterior, no duplique las
@@ -62,6 +67,10 @@ function ejecutarQuery(text, params) {
 
   // ---- "Sustituir en vez de duplicar": busca un plano ya existente de
   //      esta misma carrera ----
+  if (/^SELECT DISTINCT carrera_numero FROM hipismo_planos WHERE grupo_id = \$1 AND hipodromo_nombre = \$2 AND fecha = \$3/i.test(sql)) {
+    const nums = Array.from(new Set(TABLAS.hipismo_planos.filter(p => p.grupo_id === params[0] && p.hipodromo_nombre === params[1] && String(p.fecha).slice(0, 10) === String(params[2]).slice(0, 10)).map(p => Number(p.carrera_numero)))).sort((a, b) => a - b);
+    return { rows: nums.map(n => ({ carrera_numero: n })) };
+  }
   if (/^SELECT id FROM hipismo_planos WHERE grupo_id = \$1 AND hipodromo_nombre = \$2 AND carrera_numero = \$3 AND fecha = \$4/i.test(sql)) {
     const [grupoId, hipodromoNombre, carreraNumero, fecha] = params;
     const filas = TABLAS.hipismo_planos.filter(p =>
@@ -216,28 +225,48 @@ function check(cond, msg) {
   check(TABLAS.hipismo_planos_papelera.length === 0, 'Nada en la Papelera todavía');
   const idPlanoViejo = TABLAS.hipismo_planos[0].id;
 
-  // --- 2) Un segundo plano para LA MISMA carrera (mismo hipódromo +
-  //     número + fecha) con un texto DISTINTO (corrección del operador):
-  //     debe sustituir, no duplicar ---
+  // --- 2) Un segundo plano para LA MISMA carrera (mismo hipódromo + número + fecha): se RECHAZA, no se sustituye ---
   const res2 = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
     body: { texto: 'Juega Sebastian 1p (10) con 80,00 da Flaco', pizarra: '10.2.3', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 5, fecha: FECHA }
   }));
-  check(res2._status === 201, '2) Segundo plano de la MISMA carrera 5 se guarda (201)');
-  check(res2._json.sustituyoAnterior === true, 'sustituyoAnterior = true (ya existía un plano de esta carrera)');
-  check(TABLAS.hipismo_planos.length === 1, 'Sigue quedando 1 SOLO plano vivo de la carrera 5 (no se duplicó)');
-  check(TABLAS.hipismo_planos[0].id !== idPlanoViejo, 'El plano vivo es el NUEVO (id distinto al primero)');
-  check(TABLAS.hipismo_tickets.length === 1 && Number(TABLAS.hipismo_tickets[0].monto) === 80, 'El ticket vivo es el del plano nuevo (monto 80, no 50)');
-  check(TABLAS.hipismo_planos_papelera.length === 1, 'El plano viejo quedó guardado en la Papelera (recuperable)');
-  check(TABLAS.hipismo_planos_papelera[0].carrera_numero === 5, 'La entrada de la Papelera es de la carrera 5');
+  check(res2._status === 409, '2) Segundo plano de la MISMA carrera 5 se rechaza (409)');
+  check(res2._json.planoYaRegistrado === true && /YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA/.test(res2._json.error), 'El mensaje dice YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA');
+  check(TABLAS.hipismo_planos.length === 1 && TABLAS.hipismo_planos[0].id === idPlanoViejo, 'El plano que ya estaba sigue intacto (mismo id)');
+  check(TABLAS.hipismo_tickets.length === 1 && Number(TABLAS.hipismo_tickets[0].monto) === 50, 'Su ticket sigue siendo el original (monto 50, no 80)');
+  check(TABLAS.hipismo_planos_papelera.length === 0, 'Nada se movió a la Papelera');
 
-  // --- 3) Un plano de OTRA carrera (6) no dispara ninguna sustitución ---
+  // --- 2b) La lista de carreras con plano ("Listo" verde) ---
+  const handlerCargadas = handlerDe('get', '/planos/carreras-cargadas');
+  let rc = await invocarRuta(handlerCargadas, Object.assign(reqBase(GRUPO_ID), { query: { hipodromoNombre: 'La Rinconada', fecha: FECHA } }));
+  check(JSON.stringify(rc._json.carreras) === '[5]', '2b) carreras-cargadas devuelve [5]');
+  rc = await invocarRuta(handlerCargadas, Object.assign(reqBase(GRUPO_ID), { query: { hipodromoNombre: 'Gulfstream Park', fecha: FECHA } }));
+  check(JSON.stringify(rc._json.carreras) === '[]', 'Otro hipódromo: ninguna carrera marcada');
+  rc = await invocarRuta(handlerCargadas, Object.assign(reqBase(GRUPO_ID), { query: {} }));
+  check(JSON.stringify(rc._json.carreras) === '[]', 'Sin hipódromo/fecha: lista vacía');
+
+  // --- 3) Un plano de OTRA carrera (6) se guarda normal ---
   const res3 = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
     body: { texto: 'Juega Rambo 1p (7) con 100,00 da Zeta', pizarra: '7.1.4', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 6, fecha: FECHA }
   }));
   check(res3._status === 201, '3) Plano de OTRA carrera (6) se guarda (201)');
   check(res3._json.sustituyoAnterior === false, 'sustituyoAnterior = false (la carrera 6 no tenía nada antes)');
   check(TABLAS.hipismo_planos.length === 2, 'Ahora hay 2 planos vivos (carrera 5 y carrera 6), sin tocar la carrera 5');
-  check(TABLAS.hipismo_planos_papelera.length === 1, 'La Papelera sigue con solo 1 entrada (la de la carrera 5 sustituida antes)');
+  rc = await invocarRuta(handlerCargadas, Object.assign(reqBase(GRUPO_ID), { query: { hipodromoNombre: 'La Rinconada', fecha: FECHA } }));
+  check(JSON.stringify(rc._json.carreras) === '[5,6]', 'carreras-cargadas ahora devuelve [5,6]');
+  // Otra fecha del mismo hipódromo: la carrera 5 NO cuenta como cargada.
+  const res3b = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: 'Juega Rambo 1p (7) con 10,00 da Zeta', pizarra: '7.1.4', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 5, fecha: '2026-09-30' }
+  }));
+  check(res3b._status === 201, 'La carrera 5 de OTRA fecha se guarda normal (201)');
+
+  // --- 4) Eliminar el plano de la carrera 5 (Eliminar Planos) y entonces SÍ se puede cargar de nuevo ---
+  await require(path.join(__dirname, '..', 'src', 'services', 'hipismoPlanosPapelera')).eliminarPlano(GRUPO_ID, idPlanoViejo);
+  rc = await invocarRuta(handlerCargadas, Object.assign(reqBase(GRUPO_ID), { query: { hipodromoNombre: 'La Rinconada', fecha: FECHA } }));
+  check(JSON.stringify(rc._json.carreras) === '[6]', '4) Tras eliminar el plano, la carrera 5 ya no sale como Listo');
+  const res4 = await invocarRuta(handlerPlanosGuardar, Object.assign(reqBase(GRUPO_ID), {
+    body: { texto: 'Juega Sebastian 1p (10) con 80,00 da Flaco', pizarra: '10.2.3', cruzaJugadas: false, hipodromoNombre: 'La Rinconada', carreraNumero: 5, fecha: FECHA }
+  }));
+  check(res4._status === 201 && res4._json.sustituyoAnterior === false, 'Ya eliminado el plano, la carrera 5 se vuelve a cargar (201, sin sustituir nada)');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);

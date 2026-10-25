@@ -1052,6 +1052,7 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
 });
 router.post('/planos/calcular', calcularPlanoHandler);
 
+const MENSAJE_PLANO_YA_REGISTRADO = 'YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA. Para cargarlo de nuevo, primero elimina el plano que ya está cargado (menú Eliminar Planos).';
 // POST /planos: calcula Y guarda de verdad (hipismo_planos + hipismo_tickets).
 const guardarPlanoHandler = asyncHandler(async (req, res) => {
   const { texto, pizarra, cruzaJugadas, hipodromoId, hipodromoNombre, carreraNumero, ret, fecha, valoresSinComision } = req.body;
@@ -1085,6 +1086,15 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     `SELECT id FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4`,
     [req.grupoId, nombreHipodromoFinal, carreraNumero, fechaFinal]
   );
+  // 25-10-2026, a pedido del usuario ("me ha pasado varias veces que ya cargué la 5ta de Gulfstream, viene la 6ta y vuelvo a
+  // cargar la 5ta por error... si voy a cargar un plano en una carrera que ya tiene plano confirmado, que diga YA TIENES UN PLANO
+  // REGISTRADO EN ESTA CARRERA; la única manera de cargarlo de nuevo es ir a Planos y borrar el que ya esté cargado"): desde
+  // Cargar Planos ya NO se sustituye solo — se rechaza con 409 y el plano existente queda intacto (nada se mueve a la Papelera).
+  // Hipismo Oficinas es otro flujo (reabre la tabla de una carrera y la vuelve a guardar) y sigue sustituyendo: lo pide el
+  // servidor mismo con req.permitirSustituirPlano (nunca viene del navegador).
+  if (rPlanosExistentes.rows.length && !req.permitirSustituirPlano) {
+    return res.status(409).json({ error: MENSAJE_PLANO_YA_REGISTRADO, planoYaRegistrado: true });
+  }
   for (const fila of rPlanosExistentes.rows) {
     await hipismoPlanosPapelera.eliminarPlano(req.grupoId, fila.id);
   }
@@ -1236,7 +1246,7 @@ router.post('/planos', guardarPlanoHandler);
 const oficinasCalc = require('../services/hipismoOficinasCalc');
 
 // Corre uno de los manejadores de planos con otro body y devuelve { status, body } en vez de responder.
-function correrManejadorPlano(manejador, req, body) {
+function correrManejadorPlano(manejador, req, body, opciones = {}) {
   return new Promise((resolve, reject) => {
     const salida = { status: 200, body: null };
     const resFalso = {
@@ -1245,6 +1255,7 @@ function correrManejadorPlano(manejador, req, body) {
     };
     const reqNuevo = Object.create(req);
     reqNuevo.body = body;
+    if (opciones.permitirSustituirPlano) reqNuevo.permitirSustituirPlano = true;
     manejador(reqNuevo, resFalso, reject);
   });
 }
@@ -1357,7 +1368,7 @@ router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
   const falla = errorDeTablaOficina(req.body.filas);
   if (falla) return res.status(422).json(falla);
   const cuerpo = cuerpoPlanoDeOficina(req);
-  const out = await correrManejadorPlano(guardarPlanoHandler, req, cuerpo);
+  const out = await correrManejadorPlano(guardarPlanoHandler, req, cuerpo, { permitirSustituirPlano: true });
   if (out.status === 201 && out.body && out.body.plano) {
     const { entradas } = oficinasCalc.normalizarEntradas(req.body.filas);
     await db.query('UPDATE hipismo_planos SET jugadas_oficina = $1 WHERE id = $2 AND grupo_id = $3', [JSON.stringify(entradas), out.body.plano.id, req.grupoId]);
@@ -1657,6 +1668,19 @@ router.get('/planos/buscar-pizarra', asyncHandler(async (req, res) => {
   );
   if (r.rows.length === 0) return res.json({ pizarra: null });
   res.json({ pizarra: r.rows[0].pizarra, planoId: r.rows[0].id });
+}));
+
+// GET /planos/carreras-cargadas?hipodromoNombre=&fecha= : los números de carrera de ese hipódromo y fecha que YA tienen un plano
+// guardado (25-10-2026, a pedido del usuario: ponerle un "Listo" verde a esas carreras en la lista de Cargar Planos). Mismo criterio
+// (grupo + hipódromo + fecha) que buscar-pizarra y que el bloqueo de POST /planos. Solo lectura. Va antes de GET /planos/:id.
+router.get('/planos/carreras-cargadas', asyncHandler(async (req, res) => {
+  const { hipodromoNombre, fecha } = req.query;
+  if (!hipodromoNombre || !fecha) return res.json({ carreras: [] });
+  const r = await db.query(
+    `SELECT DISTINCT carrera_numero FROM hipismo_planos WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND fecha = $3 ORDER BY carrera_numero`,
+    [req.grupoId, hipodromoNombre, fecha]
+  );
+  res.json({ carreras: r.rows.map(x => Number(x.carrera_numero)) });
 }));
 
 // GET /planos/:id : detalle completo (cabecera + tickets), para revisar un plano ya guardado.
