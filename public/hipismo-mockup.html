@@ -17966,10 +17966,10 @@ function textoComisionesSinDevoluciones(data) {
 
 // =================================================================
 // SOCIOS (Ajustes > Socios) y COMISIONES POR AVALES Y SOCIOS (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
-// Título de la tarjeta de un socio: "AVALADOS POR <nombre>". Si el socio ya se llama "Avalados por X" no se repite el prefijo.
+// Título de la tarjeta de un socio: "CLIENTES AVALADOS POR <nombre>". Si el socio ya se llama "Avalados por X" no se repite el prefijo.
 function tituloAvaladosPor(nombre) {
-  const limpio = String(nombre || '').trim().replace(/^avalados?\s+por\s+/i, '');
-  return 'AVALADOS POR ' + limpio.toUpperCase();
+  const limpio = String(nombre || '').trim().replace(/^(clientes\s+)?avalados?\s+por\s+/i, '');
+  return 'CLIENTES AVALADOS POR ' + limpio.toUpperCase();
 }
 // llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se crean
 // en Ajustes; la distribución debe dar exactamente 100%); esa ventana muestra cuánto produjo cada cliente en comisión (ya devolviendo
