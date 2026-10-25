@@ -206,11 +206,35 @@ async function resolverCuentaComisionPropiaId(grupoId, { comisionPropia, incluir
   return ficha.id;
 }
 
+// 25-10-2026, a pedido del usuario: "cuando creas cliente, aparte de avalados y libres, hay clientes que se denominan PAGO DIARIO".
+// Es un tercer tipo de cuenta en pantalla: se guarda como un cliente "libre" (sin pozo) con la marca jugadores.pago_diario = true.
+// `pagoDiario` solo se toca cuando viene como true/false en el cuerpo (otras pantallas que editan al cliente no lo mandan y
+// no deben borrarlo). Un cliente con pozo (avalado) nunca es pago diario.
+function resolverTipoYPagoDiario(tipoCuenta, pagoDiario) {
+  const pedido = typeof pagoDiario === 'boolean' ? pagoDiario : null;
+  const tipo = pedido === true ? 'libre' : (tipoCuenta === 'avalado' ? 'avalado' : 'libre');
+  const marca = tipo === 'avalado' ? (pedido === null ? null : false) : pedido;
+  return { tipo, marca };
+}
+// Guarda la marca aparte del INSERT/UPDATE principal para que, si la columna todavía no existe en la base (no corrieron el SQL),
+// crear/editar clientes siga funcionando igual que antes; solo se avisa cuando justo piden marcar a alguien como pago diario.
+async function guardarMarcaPagoDiario(jugadorId, grupoId, marca) {
+  if (marca === null || marca === undefined) return { ok: true };
+  try {
+    await db.query('UPDATE jugadores SET pago_diario = $1 WHERE id = $2 AND grupo_id = $3', [marca, jugadorId, grupoId]);
+    return { ok: true };
+  } catch (e) {
+    if (e && e.code === '42703') return marca ? { ok: false } : { ok: true };
+    throw e;
+  }
+}
+const AVISO_FALTA_PAGO_DIARIO = 'Falta correr el SQL pendiente en Supabase (columna jugadores.pago_diario). El cliente se guardó, pero sin la marca de pago diario.';
+
 router.post('/', asyncHandler(async (req, res) => {
   try {
     const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
-    const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
+    const { tipo, marca: marcaPagoDiario } = resolverTipoYPagoDiario(tipoCuenta, req.body.pagoDiario);
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const nombreNorm = normalizarNombreJugador(nombre);
     const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, null, nombreNorm);
@@ -226,7 +250,9 @@ router.post('/', asyncHandler(async (req, res) => {
       await reemplazarAvalesPorcentaje(client, req.grupoId, nuevo.id, avalesFinal);
       return nuevo;
     });
-    res.status(201).json({ ...jugador, avalesPorcentaje: avalesFinal });
+    const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
+    if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
+    res.status(201).json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });
@@ -238,7 +264,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   try {
     const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
-    const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
+    const { tipo, marca: marcaPagoDiario } = resolverTipoYPagoDiario(tipoCuenta, req.body.pagoDiario);
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const nombreNorm = normalizarNombreJugador(nombre);
     const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, req.params.id, nombreNorm);
@@ -257,7 +283,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
       await reemplazarAvalesPorcentaje(client, req.grupoId, actualizado.id, avalesFinal);
       return actualizado;
     });
-    res.json({ ...jugador, avalesPorcentaje: avalesFinal });
+    const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
+    if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
+    res.json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });

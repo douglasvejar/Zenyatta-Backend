@@ -2246,3 +2246,7 @@ end $$;
 
 -- 23-10-2026: orden de la lista de Pozos por grupo ('alfabetico' o 'menor_mayor'; vacío = alfabético).
 alter table grupos add column if not exists hipismo_pozos_orden text;
+
+-- 25-10-2026: clientes "PAGO DIARIO" (tercer tipo de cuenta al crear un cliente, aparte de Libre y Avalado). Se guarda como cliente
+-- libre (sin pozo) con esta marca; en el plano de Pozos salen de primeros, en su propia sección.
+alter table jugadores add column if not exists pago_diario boolean not null default false;

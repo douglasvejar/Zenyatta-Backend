@@ -57,6 +57,10 @@ setTimeout(() => {
 pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas jsonb')
   .catch((err) => console.warn('[db] No se pudo asegurar la columna grupos.funciones_habilitadas (corre sql/schema.sql en Supabase):', err.message));
 
+// 25-10-2026: marca "pago diario" de los clientes (ver sql/schema.sql); se crea sola igual que la de arriba.
+pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS pago_diario boolean NOT NULL DEFAULT false')
+  .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.pago_diario (corre sql/schema.sql en Supabase):', err.message));
+
 // HIPÓDROMOS PREDETERMINADOS (15-10-2026): los grupos que todavía no recibieron la lista (3 de Venezuela + 48 de USA) la reciben
 // una sola vez al arrancar (marca grupos.hipismo_hipodromos_iniciales), sin depender de correr el SQL. Ver
 // services/hipismoHipodromosDefecto.js. Nunca tumba el arranque: si algo falla, solo avisa en el log.

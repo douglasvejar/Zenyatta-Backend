@@ -777,6 +777,7 @@
   /* Plano de Pozos: casilla para elegir quién sale en la imagen y en el texto (12-10-2026). */
   #tablaPozos .col-sel { width: 34px; text-align: center; padding-left: 4px; padding-right: 4px; }
   #tablaPozos tr.pozo-excluido td:not(.col-sel) { opacity: 0.38; text-decoration: line-through; }
+  #tablaPozos tr.fila-seccion-pozos td { font-weight: 800; letter-spacing: 0.04em; text-align: left; background: var(--card-2); color: var(--text); padding-top: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--card-border); }
   .pozos-selector { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; }
   .pozos-selector .btn.btn-secundario { padding: 2px 8px; font-size: 11.5px; min-height: 0; line-height: 1.5; border-radius: 6px; font-weight: 600; }
   .pozos-selector .contador { font-size: 12.5px; color: var(--text-dim); }
@@ -10601,7 +10602,7 @@ function pintarTablaClientesFiltrada() {
       <td>${formatNombre(j.nombre)}${esDuplicado ? ' <span class="badge-duplicado" title="Hay otro cliente con este mismo nombre -- revisa cuál sobra y bórralo desde su ficha.">⚠️ Nombre duplicado</span>' : ''}${j.es_cuenta_comision ? ' <span class="badge-pendiente" style="font-size:10.5px;">cuenta de comisión</span>' : (j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : '')}</td>
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
       <td>${celdaPctAvalTabla(j)}</td>
-      <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : '<span class="pill pill-verde">Libre</span>'}</td>
+      <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : (j.pago_diario ? '<span class="pill pill-verde">💵 Pago diario</span>' : '<span class="pill pill-verde">Libre</span>')}</td>
       ${hayLos2Modulos ? `
       <td>
         <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:normal; cursor:pointer;" title="Su link de Hipismo mostrará también Deportes, y su link de Deportes mostrará también Hipismo — separados, pero sumados al balance total.">
@@ -10859,6 +10860,7 @@ function abrirCrearCliente() {
           <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').style.display = this.value === 'avalado' ? 'block' : 'none';">
             <option value="libre" selected>Libre</option>
             <option value="avalado">Avalado (con pozo)</option>
+            <option value="pago_diario">💵 Pago diario</option>
           </select>
         </div>
         <div id="nvoCtePozoWrap" style="display:none;">
@@ -11055,7 +11057,8 @@ async function guardarNuevoCliente() {
     telefono: document.getElementById('nvoCteTelefono').value.trim(),
     notas: document.getElementById('nvoCteNotas').value.trim(),
     activo: document.getElementById('nvoCteActivo').checked,
-    tipoCuenta: document.getElementById('nvoCteTipoCuenta').value,
+    tipoCuenta: document.getElementById('nvoCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
+    pagoDiario: document.getElementById('nvoCteTipoCuenta').value === 'pago_diario',
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia,
     incluirPorcentajeEnJugadas,
@@ -11175,8 +11178,9 @@ async function pintarFichaCliente() {
         <div>
           <label>Tipo de cuenta</label>
           <select id="detCteTipoCuenta" onchange="actualizarVisibilidadPozoDetalleCliente()">
-            <option value="libre" ${j.tipo_cuenta !== 'avalado' ? 'selected' : ''}>Libre</option>
+            <option value="libre" ${j.tipo_cuenta !== 'avalado' && !j.pago_diario ? 'selected' : ''}>Libre</option>
             <option value="avalado" ${j.tipo_cuenta === 'avalado' ? 'selected' : ''}>Avalado (con pozo)</option>
+            <option value="pago_diario" ${j.tipo_cuenta !== 'avalado' && j.pago_diario ? 'selected' : ''}>💵 Pago diario</option>
           </select>
         </div>
         <div id="detCtePozoWrap" style="display:${j.tipo_cuenta === 'avalado' ? 'block' : 'none'};">
@@ -11282,7 +11286,8 @@ async function guardarDetalleCliente(id) {
     telefono: document.getElementById('detCteTelefono').value.trim(),
     notas: document.getElementById('detCteNotas').value.trim(),
     activo: document.getElementById('detCteActivo').checked,
-    tipoCuenta: document.getElementById('detCteTipoCuenta').value,
+    tipoCuenta: document.getElementById('detCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
+    pagoDiario: document.getElementById('detCteTipoCuenta').value === 'pago_diario',
     // El pozo NO lo toca este formulario — se conserva tal cual estaba
     // (se edita aparte, con el ajuste +/- de abajo).
     pozoInicial: j ? j.pozo_inicial : 0,
@@ -13339,6 +13344,12 @@ function prepararCapturaPozos() {
   const tocados = [];
   document.querySelectorAll('#tablaPozos .col-sel').forEach(el => { tocados.push([el, el.style.display]); el.style.display = 'none'; });
   document.querySelectorAll('#tablaPozos tbody tr.pozo-excluido').forEach(el => { tocados.push([el, el.style.display]); el.style.display = 'none'; });
+  // Un título de sección (PAGO DIARIO / AVALADOS:) sin ningún cliente marcado debajo tampoco sale en la imagen.
+  document.querySelectorAll('#tablaPozos tbody tr.fila-seccion-pozos').forEach(tr => {
+    let sig = tr.nextElementSibling, hay = false;
+    while (sig && !sig.classList.contains('fila-seccion-pozos')) { if (!sig.classList.contains('pozo-excluido')) hay = true; sig = sig.nextElementSibling; }
+    if (!hay) { tocados.push([tr, tr.style.display]); tr.style.display = 'none'; }
+  });
   return () => tocados.forEach(([el, d]) => { el.style.display = d; });
 }
 
@@ -13381,6 +13392,25 @@ function filaPozoSoloSaldo(nombre, monto) {
   return `<tr data-nombre="${attrNombrePozo(nombre)}"${POZOS_EXCLUIDOS.has(nombre) ? ' class="pozo-excluido"' : ''}>${celdaSelPozo(nombre)}<td>${formatNombre(nombre)}</td><td class="num ${clase}">${signo}${formatMontoTabla(monto)}</td></tr>`;
 }
 
+// 25-10-2026, a pedido del usuario: "cuando des el plano de pozos coloca de primero los PAGO DIARIO" -- con el icono 💵 PAGO DIARIO,
+// debajo la lista de esos clientes, y después "AVALADOS:" con la lista de los demás clientes. Si el grupo no tiene ningún cliente
+// de pago diario en la lista, la tabla queda exactamente como antes (sin encabezados).
+function nombresPagoDiarioPozos() {
+  return new Set(CLIENTES_HIPISMO_CACHE.filter(j => j.pago_diario && j.tipo_cuenta !== 'avalado').map(j => j.nombre));
+}
+function filaSeccionPozos(texto, colspan) {
+  return `<tr class="fila-seccion-pozos"><td colspan="${colspan}">${texto}</td></tr>`;
+}
+// `filas` ya viene ordenado como pidió el grupo; se parte en 2 (conservando ese orden) y se arma el HTML.
+function htmlFilasPozosPorSeccion(filas, nombreDe, htmlDe, colspan) {
+  const pd = nombresPagoDiarioPozos();
+  const diarios = pd.size ? filas.filter(f => pd.has(nombreDe(f))) : [];
+  if (!diarios.length) return filas.map(htmlDe).join('');
+  const resto = filas.filter(f => !pd.has(nombreDe(f)));
+  return filaSeccionPozos('💵 PAGO DIARIO', colspan) + diarios.map(htmlDe).join('')
+    + (resto.length ? filaSeccionPozos('AVALADOS:', colspan) + resto.map(htmlDe).join('') : '');
+}
+
 async function pintarTablaPozos() {
   if (!POZOS_SYNC_HECHO) { POZOS_SYNC_HECHO = true; await sincronizarExcluidosPozos(); }
   const thead = document.getElementById('theadPozos');
@@ -13416,7 +13446,7 @@ async function pintarTablaPozos() {
     const filas = ordenarFilasPozos(CLIENTES_HIPISMO_CACHE.filter(j => j.tipo_cuenta === 'avalado' && j.pozo),
       j => redondearCentavos(j.pozo.pozoActual), j => j.nombre);
     tbody.innerHTML = filas.length
-      ? filas.map(j => filaPozoCompleta(j)).join('')
+      ? htmlFilasPozosPorSeccion(filas, j => j.nombre, j => filaPozoCompleta(j), 6)
       : `<tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes "Avalado" con pozo asignado.</td></tr>`;
     actualizarAlertaPozos();
     return;
@@ -13439,7 +13469,7 @@ async function pintarTablaPozos() {
   if (filtro === 'saldos') {
     const filas = ordenarFilasPozos(saldosSemana, c => redondearCentavos(c.saldo), c => formatNombre(c.nombre));
     tbody.innerHTML = filas.length
-      ? filas.map(c => filaPozoSoloSaldo(c.nombre, c.saldo)).join('')
+      ? htmlFilasPozosPorSeccion(filas, c => c.nombre, c => filaPozoSoloSaldo(c.nombre, c.saldo), 3)
       : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Nadie tiene jugadas en esta semana.</td></tr>`;
     actualizarAlertaPozos();
     return;
@@ -13479,7 +13509,7 @@ async function pintarTablaPozos() {
     Array.from(porNombre.values()).filter(c => conDevolucion || !c.esCuentaComision || c.saldo !== 0 || c.pozoActual !== 0),
     c => redondearCentavos(c.saldo + c.pozoActual), c => formatNombre(c.nombre));
   tbody.innerHTML = filas.length
-    ? filas.map(c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual))).join('')
+    ? htmlFilasPozosPorSeccion(filas, c => c.nombre, c => filaPozoSoloSaldo(c.nombre, redondearCentavos(c.saldo + c.pozoActual)), 3)
     : `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Todavía no hay clientes.</td></tr>`;
   actualizarAlertaPozos();
 }
@@ -13612,11 +13642,14 @@ function copiarPozosTexto() {
   // 12-10-2026, a pedido del usuario: los saldos van entre *asteriscos* (negritas en WhatsApp) y todos los nombres
   // en MAYÚSCULAS; los clientes desmarcados (casilla de cada fila) no salen.
   let incluidos = 0;
+  let encabezadoPendiente = ''; // título de sección (PAGO DIARIO / AVALADOS:) -- solo sale si alguien de esa sección sale en el plano
   filas.forEach(fila => {
+    if (fila.classList.contains('fila-seccion-pozos')) { encabezadoPendiente = fila.textContent.trim(); return; }
     const celdas = fila.querySelectorAll('td:not(.col-sel)');
     if (celdas.length < 2) return; // fila de "Cargando…"/vacío (colspan)
     if (fila.classList.contains('pozo-excluido')) return;
     const nombre = celdas[0].textContent.trim().toUpperCase();
+    if (encabezadoPendiente) { texto += (incluidos ? '\n' : '') + (encabezadoPendiente.startsWith('AVALADOS') ? '*AVALADOS:*' : '*' + encabezadoPendiente + '*') + '\n'; encabezadoPendiente = ''; }
     if (FILTRO_POZOS_ACTUAL === 'soloPozos') {
       if (fila.dataset.pct === undefined) return;
       const pct = fila.dataset.pct;
