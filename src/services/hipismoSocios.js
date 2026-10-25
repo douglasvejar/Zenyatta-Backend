@@ -101,4 +101,69 @@ function armarReporteSocios({ cierre, socios, jugadores, rango, nombreGrupo }) {
   };
 }
 
-module.exports = { normalizarNombreSocio, validarConfigSocios, repartirCentavosPorPorcentajes, armarReporteSocios };
+// BALANCE POR SOCIOS (25-10-2026, a pedido del usuario: "en saldos crea una pestaña que se llame Balance por socios; es lo mismo que la otra
+// ventana pero aquí muestras el saldo real de cada cliente, el mismo que sale en Balance General, en lista de a qué socio pertenece; abajo, al
+// final de cada lista, sale la comisión, y ahí le colocas según su % de sociedad la comisión que le tocó").
+// Los saldos son EXACTAMENTE los de Balance General/Cierre Final (cierre.clientes, sin tocarlos); cada renglón va en la lista de su socio.
+// Una cuenta de comisión (ej. "ANA - PORCENTAJE" o la ficha que el cliente eligió para su %) que no tenga socio propio sigue al socio del
+// cliente que la usa (jugadores.cuenta_comision_id), siempre que todos los clientes que la usan sean del mismo socio; lo demás va en SIN SOCIO.
+// La comisión total del cierre se reparte entre los socios según su % (centavos enteros, mayor resto: la suma es exacta).
+// jugadores: [{id, nombre, hipismo_socio_id, cuenta_comision_id}].
+function armarBalanceSocios({ cierre, socios, jugadores, rango, nombreGrupo }) {
+  const propio = new Map();
+  const idPorNombre = new Map();
+  (jugadores || []).forEach(j => {
+    const n = normalizarNombreSocio(j.nombre);
+    idPorNombre.set(n, j.id);
+    if (j.hipismo_socio_id) propio.set(n, j.hipismo_socio_id);
+  });
+  const heredaDe = new Map(); // id de la cuenta -> Set de socios de los clientes que la usan
+  (jugadores || []).forEach(j => {
+    if (!j.hipismo_socio_id || !j.cuenta_comision_id) return;
+    if (!heredaDe.has(j.cuenta_comision_id)) heredaDe.set(j.cuenta_comision_id, new Set());
+    heredaDe.get(j.cuenta_comision_id).add(j.hipismo_socio_id);
+  });
+  const socioDe = nombre => {
+    const n = normalizarNombreSocio(nombre);
+    if (propio.has(n)) return { id: propio.get(n), heredado: false };
+    const set = heredaDe.get(idPorNombre.get(n));
+    if (set && set.size === 1) return { id: Array.from(set)[0], heredado: true };
+    // Cuenta "{CLIENTE} - PORCENTAJE" que todavía no está enlazada a su cliente: sigue al socio de ese cliente.
+    const m = /^(.*) - PORCENTAJE$/.exec(n);
+    if (!set && m && propio.has(normalizarNombreSocio(m[1]))) return { id: propio.get(normalizarNombreSocio(m[1])), heredado: true };
+    return null;
+  };
+
+  const tarjetas = (socios || []).map(s => ({ id: s.id, nombre: s.nombre, porcentaje: Number(s.porcentaje), clientes: [], totalCentavos: 0 }));
+  const porId = new Map(tarjetas.map(t => [t.id, t]));
+  const sinSocio = { clientes: [], totalCentavos: 0 };
+  ((cierre && cierre.clientes) || []).forEach(c => {
+    const cent = aCentavos(c.saldo);
+    if (!cent) return;
+    const r = socioDe(c.nombre);
+    const destino = (r && porId.get(r.id)) || sinSocio;
+    destino.clientes.push({ nombre: c.nombre, centavos: cent, ...(r && r.heredado && destino !== sinSocio ? { heredado: true } : {}) });
+    destino.totalCentavos += cent;
+  });
+  const ordenar = lista => lista.sort((a, b) => b.centavos - a.centavos || a.nombre.localeCompare(b.nombre, 'es'));
+  tarjetas.forEach(t => ordenar(t.clientes));
+  ordenar(sinSocio.clientes);
+
+  const comisionTotalCentavos = aCentavos(cierre && cierre.comisionSemana);
+  const comisiones = tarjetas.length ? repartirCentavosPorPorcentajes(comisionTotalCentavos, tarjetas.map(t => t.porcentaje)) : [];
+  const fmt = lista => lista.map(c => ({ nombre: c.nombre, saldo: deCentavos(c.centavos), ...(c.heredado ? { heredado: true } : {}) }));
+  const totalSaldosCentavos = tarjetas.reduce((a, t) => a + t.totalCentavos, 0) + sinSocio.totalCentavos;
+  return {
+    activo: tarjetas.length > 0,
+    nombreGrupo: nombreGrupo || null,
+    rango,
+    comisionTotal: deCentavos(comisionTotalCentavos),
+    totalSaldos: deCentavos(totalSaldosCentavos),
+    socios: tarjetas.map((t, i) => ({ id: t.id, nombre: t.nombre, porcentaje: t.porcentaje, clientes: fmt(t.clientes), totalSaldo: deCentavos(t.totalCentavos), comision: deCentavos(comisiones[i]) })),
+    sinSocio: sinSocio.clientes.length ? { clientes: fmt(sinSocio.clientes), totalSaldo: deCentavos(sinSocio.totalCentavos) } : null,
+    sumaComisiones: deCentavos(comisiones.reduce((a, c) => a + c, 0)),
+    cuadra: comisiones.reduce((a, c) => a + c, 0) === comisionTotalCentavos
+  };
+}
+
+module.exports = { normalizarNombreSocio, validarConfigSocios, repartirCentavosPorPorcentajes, armarReporteSocios, armarBalanceSocios };

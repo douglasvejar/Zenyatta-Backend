@@ -36,6 +36,8 @@ async function invocar(handler, req) {
   });
   return { status, body: salida };
 }
+async function invocarRuta_(ruta, query) { return invocar(handlerDe(hipismoRouter, 'get', ruta), { grupoId: GRUPO_ID_, grupo: { id: GRUPO_ID_, nombre: 'GRUPO E2E' }, query, body: {}, params: {} }); }
+let GRUPO_ID_ = null;
 let semilla = 12345;
 const rnd = () => { semilla = (semilla * 1103515245 + 12345) & 0x7fffffff; return semilla / 0x7fffffff; };
 const r2 = n => Math.round(n * 100) / 100;
@@ -85,6 +87,7 @@ const r2 = n => Math.round(n * 100) / 100;
   }
   const desde = iso(lunes), hasta = iso(new Date(lunes.getTime() + 6 * 86400000));
   const grupo = { id: g, nombre: 'GRUPO E2E' };
+  GRUPO_ID_ = g;
   const req = (extra) => ({ grupoId: g, grupo, query: {}, body: {}, params: {}, ...extra });
 
   // 0) Sin socios: la ruta responde activo:false y no estorba.
@@ -139,6 +142,18 @@ const r2 = n => Math.round(n * 100) / 100;
   // Un cliente que tiene % devuelto aparece neto (menor que su bruto).
   const bruta = cierre2.comisionBrutaPorCliente, dev = cierre2.devueltoPorOrigen;
   check(Object.keys(dev).length > 0 && Object.keys(dev).every(n => r2(bruta[n] || 0) >= 0), 'hay % devueltos y se descuentan por cliente: ' + JSON.stringify(dev));
+
+  // 3b) Balance por socios: los saldos son los de Balance General (cierre.clientes), cada uno en una sola lista, y las comisiones suman la total.
+  r = await invocarRuta_('/balance-socios', { desde, hasta });
+  const bs = r.body;
+  const todos = bs.socios.flatMap(s => s.clientes).concat(bs.sinSocio ? bs.sinSocio.clientes : []);
+  const esperados = cierre.clientes.filter(c => Math.round(c.saldo * 100) !== 0);
+  check(todos.length === esperados.length && new Set(todos.map(c => c.nombre)).size === todos.length, '3b) cada saldo de Balance General sale en UNA sola lista (' + todos.length + ' filas)');
+  check(esperados.every(c => { const x = todos.find(t => t.nombre === c.nombre); return x && Math.round(x.saldo * 100) === Math.round(c.saldo * 100); }), '3b) el saldo de cada cliente es exactamente el de Balance General');
+  check(Math.round(100 * bs.totalSaldos) === Math.round(100 * cierre.clientes.reduce((a, c) => a + c.saldo, 0)), '3b) la suma de las listas = la suma de los saldos de Balance General');
+  check(bs.cuadra && Math.round(100 * bs.socios.reduce((a, s) => a + s.comision, 0)) === Math.round(100 * cierre.comisionSemana), '3b) las comisiones de los socios suman exacto la comisión total (' + bs.comisionTotal + ')');
+  check(bs.socios.every(s => Math.abs(s.comision - cierre.comisionSemana * s.porcentaje / 100) <= 0.01), '3b) cada comisión es su % de la comisión total (±1 centavo)');
+  check(bs.socios.find(s => s.nombre === 'LUIS').clientes.some(c => c.nombre === 'ANA - PORCENTAJE' && c.heredado), '3b) la cuenta "ANA - PORCENTAJE" va con ANA, que es de LUIS');
 
   // 4) Borrar un socio deja a sus clientes sin socio (y sigue cuadrando); y la lista se puede re-guardar.
   r = await invocar(handlerDe(hipismoRouter, 'put', '/socios'), req({ body: { socios: [{ id: idDe('LUIS'), nombre: 'Luis Alberto', porcentaje: 70 }, { id: idDe('PEDRO'), nombre: 'Pedro', porcentaje: 30 }] } }));

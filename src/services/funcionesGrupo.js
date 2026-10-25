@@ -49,7 +49,7 @@ const FUNCIONES_HIPISMO = [
   { clave: 'hip_winners', modulo: 'hipismo', nombre: 'Winners', descripcion: 'Cargar y eliminar winners.', vistas: ['cargarWinners', 'eliminarWinners'] },
   { clave: 'hip_pozos', modulo: 'hipismo', nombre: 'Pozos', descripcion: 'Pozo de cada cliente, saldos + pozos y plano de pozos.', vistas: ['pozos'] },
   { clave: 'hip_saldos', modulo: 'hipismo', nombre: 'Saldos y Cierre', descripcion: 'Detallado por cliente, semana por días, balance general y cierre final.',
-    vistas: ['detalladoCliente', 'semanaPorDias', 'balanceGeneral', 'cierreFinal'] },
+    vistas: ['detalladoCliente', 'semanaPorDias', 'balanceGeneral', 'cierreFinal', 'balanceSocios'] },
   { clave: 'hip_grupo_clientes', modulo: 'hipismo', nombre: 'Grupos de Clientes', descripcion: 'Agrupar clientes y sus cuadres.', vistas: ['grupoClientes'] },
   { clave: 'hip_comisiones', modulo: 'hipismo', nombre: 'Comisiones', descripcion: 'Comisión por carrera, por hipódromo, devueltas, saldo de comisiones y grupo sin devoluciones.',
     vistas: ['comisionesPorCarrera', 'comisionesTotalesPorHipodromo', 'comisionesDevueltasPorHipodromo', 'comisionesDevueltas', 'saldoComisiones', 'comisionesSinDevoluciones', 'comisionesSocios'] },
@@ -132,6 +132,7 @@ const REGLAS_RUTAS_HIPISMO = [
   [TODOS, /^\/pozos-plano-excluidos$/, ['hip_pozos']],
   // Saldos y cierre
   [['GET'], /^\/balance-general/, ['hip_saldos']],
+  [['GET'], /^\/balance-socios/, ['hip_saldos']],
   [['GET'], /^\/semana-por-dias/, ['hip_saldos']],
   [['GET'], /^\/diagnostico-saldos/, ['hip_saldos']],
   [['GET'], /^\/clientes\/[^/]+\/detalle-semana/, ['hip_saldos', 'hip_comisiones', 'hip_grupo_clientes', 'hip_pozos', 'hip_clientes']],

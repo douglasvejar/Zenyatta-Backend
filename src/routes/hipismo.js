@@ -5547,6 +5547,27 @@ router.put('/socios/asignar', asyncHandler(async (req, res) => {
   }
 }));
 
+// GET /balance-socios?semana=|desde&hasta : "Balance por socios" (Saldos) — el saldo real de cada cliente (el MISMO de Balance General) en la
+// lista de su socio, y al final de cada lista la comisión que le toca según su % (ver armarBalanceSocios en services/hipismoSocios.js).
+router.get('/balance-socios', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  let socios, jugadores;
+  try {
+    socios = await listarSociosGrupo(req.grupoId);
+    if (!socios.length) return res.json({ activo: false, socios: [], rango: { desde, hasta }, semana, rangoPersonalizado: !!rangoPersonalizado });
+    jugadores = (await db.query('SELECT id, nombre, hipismo_socio_id, cuenta_comision_id FROM jugadores WHERE grupo_id = $1', [req.grupoId])).rows;
+  } catch (e) {
+    if (esErrorFaltaSocios(e)) return res.json({ activo: false, socios: [], sinTabla: true, aviso: AVISO_FALTA_SQL_SOCIOS, rango: { desde, hasta }, semana });
+    throw e;
+  }
+  const cierre = await construirCierreFinalHipismo(req.grupoId, desde, hasta);
+  const reporte = hipismoSocios.armarBalanceSocios({ cierre, socios, jugadores, rango: { desde, hasta }, nombreGrupo: req.grupo && req.grupo.nombre });
+  res.json({ ...reporte, semana, rangoPersonalizado: !!rangoPersonalizado, numeroSemana: numeroSemanaISO(desde) });
+}));
+
 router.get('/comisiones-socios', asyncHandler(async (req, res) => {
   const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
