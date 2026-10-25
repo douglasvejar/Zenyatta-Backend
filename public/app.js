@@ -5844,7 +5844,7 @@ function renderTablaSabanaDia(tickets) {
       '<td class="col-sb-detalle">' + jugadasHTML + '</td>' +
       '<td class="col-sb-arriesga">' + formatMoney(t.arriesga) + '</td>' +
       '<td class="col-sb-gana">' + formatMoney(t.gana) + '</td>' +
-      '<td class="col-sb-estado ' + claseEstado + '">' + t.estado + '</td>' +
+      '<td class="col-sb-estado ' + claseEstado + '">' + t.estado + (t.estadoManual ? ' <span title="Estado puesto a mano: no se cambia al reprocesar la sábana">✋</span>' : '') + '</td>' +
       '<td><button type="button" class="btn-chico" onclick="editarTicketSabana(\'' + t.id + '\')">✏️ Editar</button></td>' +
       '</tr>';
   }).join('');
@@ -5919,6 +5919,7 @@ function editarTicketSabana(id) {
   document.getElementById('editTicketArriesga').value = t.arriesga;
   document.getElementById('editTicketGana').value = t.gana;
   document.getElementById('editTicketEstado').value = t.estado;
+  // Si el estado ya es una marca manual, "Automático" queda a un clic para quitarla.
   document.getElementById('modalEditarTicketSabana').classList.add('activo');
 }
 
@@ -5942,7 +5943,11 @@ async function guardarEdicionTicketSabana() {
   try {
     const resultado = await api('/api/sabana/tickets/' + id, { method: 'PUT', body: JSON.stringify(cambios) });
     cerrarEditarTicketSabana();
-    if (resultado.cambios.length > 0) {
+    if (resultado.quitoMarcaManual) {
+      alert('Marca manual quitada — en el próximo reproceso de la sábana de este día el sistema vuelve a calcular el estado solo.');
+    } else if (resultado.marcaManualGuardada === false) {
+      alert('Ticket actualizado, pero la base todavía no tiene la tabla de marcas manuales: al reprocesar la sábana puede volver al estado automático. Avísale a soporte (hay que correr el SQL tickets_estado_manual).');
+    } else if (resultado.cambios.length > 0) {
       alert('Ticket actualizado — se generó una alerta avisando qué se cambió (visible para el Grupo y para el Súper-admin).');
     } else {
       alert('No había nada distinto que guardar.');

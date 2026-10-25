@@ -181,6 +181,11 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
 
+  // Estado manual de un ticket (25-10-2026): esta prueba no lo revisa a fondo
+  // (ver test_estado_manual_ticket.js), solo que no rompa la lectura/edición.
+  if (/^SELECT cliente_nombre, ticket_label, estado FROM tickets_estado_manual/i.test(sql)) return { rows: [] };
+  if (/^INSERT INTO tickets_estado_manual/i.test(sql) || /^DELETE FROM tickets_estado_manual/i.test(sql)) return { rows: [] };
+
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }

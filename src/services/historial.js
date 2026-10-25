@@ -231,6 +231,72 @@ async function obtenerTicketPorId(grupoId, id) {
   };
 }
 
+// =================================================================
+// ESTADO MANUAL DE UN TICKET QUE NO SE PISA AL REPROCESAR (25-10-2026, a
+// pedido del usuario: tickets con "Roma 1h / Manchester City 1h / Psg 1h"
+// del día 20 quedaban PENDIENTE porque api-football.com (plan gratis) ya no
+// da esa fecha; los marcaba GANADA/PERDIDA con ✏️ Editar y a los pocos
+// segundos volvían a PENDIENTE).
+// CAUSA: la edición solo cambiaba la fila de tickets_historial, y cada vez
+// que se reprocesa la sábana de esa fecha (el panel de WhatsApp lo hace
+// cada ~25 s) guardarEnHistorial() borra y regenera esas filas desde cero.
+// ARREGLO: además de la fila, se guarda la decisión en tickets_estado_manual
+// (grupo + fecha + cliente + ticket) y procesarSabana.js la vuelve a aplicar
+// SIEMPRE que reprocesa. Se quita eligiendo "Automático" en ✏️ Editar.
+// Si la tabla todavía no existe en la base (falta correr el SQL) todo sigue
+// como antes, solo que la marca manual se pierde al reprocesar.
+// =================================================================
+function claveEstadoManual(cliente, ticket) {
+  return String(cliente || '').trim().toUpperCase() + '|' + String(ticket || '').trim().toUpperCase();
+}
+
+function esErrorFaltaTablaEstadoManual(e) {
+  return !!e && (e.code === '42P01' || e.code === '42703');
+}
+
+async function cargarEstadosManuales(grupoId, fecha) {
+  const mapa = new Map();
+  if (!fecha) return mapa;
+  try {
+    const res = await db.query(
+      'SELECT cliente_nombre, ticket_label, estado FROM tickets_estado_manual WHERE grupo_id = $1 AND fecha = $2',
+      [grupoId, fecha]
+    );
+    res.rows.forEach(r => mapa.set(claveEstadoManual(r.cliente_nombre, r.ticket_label), r.estado));
+  } catch (e) {
+    // Dato opcional: si falla la lectura (tabla sin crear, o cualquier otro
+    // error) procesar la sábana NO se cae — sigue como antes, sin marcas manuales.
+    if (!esErrorFaltaTablaEstadoManual(e)) console.error('[estado-manual] No se pudieron leer los estados manuales de ' + fecha + ':', e.message);
+  }
+  return mapa;
+}
+
+async function guardarEstadoManual(grupoId, fecha, cliente, ticket, estado) {
+  try {
+    await db.query(
+      `INSERT INTO tickets_estado_manual (grupo_id, fecha, cliente_nombre, ticket_label, estado)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (grupo_id, fecha, cliente_nombre, ticket_label) DO UPDATE SET estado = EXCLUDED.estado, creado_en = now()`,
+      [grupoId, fecha, String(cliente || '').trim().toUpperCase(), String(ticket || '').trim(), String(estado).trim().toUpperCase()]
+    );
+    return true;
+  } catch (e) {
+    if (!esErrorFaltaTablaEstadoManual(e)) throw e;
+    return false;
+  }
+}
+
+async function quitarEstadoManual(grupoId, fecha, cliente, ticket) {
+  try {
+    await db.query(
+      'DELETE FROM tickets_estado_manual WHERE grupo_id = $1 AND fecha = $2 AND cliente_nombre = $3 AND ticket_label = $4',
+      [grupoId, fecha, String(cliente || '').trim().toUpperCase(), String(ticket || '').trim()]
+    );
+  } catch (e) {
+    if (!esErrorFaltaTablaEstadoManual(e)) throw e;
+  }
+}
+
 // Edita a mano un ticket YA GUARDADO — desde la nueva pestaña "Sábanas" de
 // Administración (02-09-2026, a pedido del usuario: "creame una pestaña
 // que se llame sábanas ... tenga un botón para editar la sábana"). Se
@@ -270,9 +336,22 @@ async function editarTicket(grupoId, id, cambios) {
   tocar('cliente_nombre', 'Cliente', cambios.cliente !== undefined ? String(cambios.cliente).trim().toUpperCase() : undefined, actual.cliente);
   tocar('arriesga', 'Arriesga', cambios.arriesga !== undefined ? Number(cambios.arriesga) : undefined, actual.arriesga);
   tocar('gana', 'Gana', cambios.gana !== undefined ? Number(cambios.gana) : undefined, actual.gana);
-  tocar('estado', 'Estado', cambios.estado !== undefined ? String(cambios.estado).trim().toUpperCase() : undefined, actual.estado);
+  // "AUTOMÁTICO" no es un estado: quita la marca manual (el próximo reproceso
+  // vuelve a calcular el estado solo, ver el comentario de arriba).
+  const quitarManual = cambios.estado !== undefined && String(cambios.estado).trim().toUpperCase() === 'AUTO';
+  const estadoNuevoManual = (cambios.estado !== undefined && !quitarManual) ? String(cambios.estado).trim().toUpperCase() : undefined;
+  tocar('estado', 'Estado', estadoNuevoManual, actual.estado);
 
-  if (columnas.length === 0) return { anterior: actual, nuevo: actual, cambios: [] };
+  const clienteNuevo = cambios.cliente !== undefined ? String(cambios.cliente).trim().toUpperCase() : actual.cliente;
+  let marcaManualGuardada = null; // true/false = se pudo/no guardar; null = no aplica
+  if (quitarManual) {
+    await quitarEstadoManual(grupoId, actual.fecha, actual.cliente, actual.ticket);
+  } else if (estadoNuevoManual !== undefined && estadoNuevoManual !== String(actual.estado).toUpperCase()) {
+    if (clienteNuevo !== actual.cliente) await quitarEstadoManual(grupoId, actual.fecha, actual.cliente, actual.ticket);
+    marcaManualGuardada = await guardarEstadoManual(grupoId, actual.fecha, clienteNuevo, actual.ticket, estadoNuevoManual);
+  }
+
+  if (columnas.length === 0) return { anterior: actual, nuevo: actual, cambios: [], quitoMarcaManual: quitarManual, marcaManualGuardada };
 
   params.push(grupoId, id);
   await db.query(
@@ -286,7 +365,7 @@ async function editarTicket(grupoId, id, cambios) {
   if (cambiosDetectados.length > 0) await desconfirmarDia(grupoId, actual.fecha);
 
   const nuevo = await obtenerTicketPorId(grupoId, id);
-  return { anterior: actual, nuevo, cambios: cambiosDetectados };
+  return { anterior: actual, nuevo, cambios: cambiosDetectados, quitoMarcaManual: quitarManual, marcaManualGuardada };
 }
 
 // Reconstruye un objeto con la MISMA forma que "resumenClientes" (el que
@@ -453,6 +532,8 @@ module.exports = {
   leerHistorial,
   obtenerTicketPorId,
   editarTicket,
+  cargarEstadosManuales,
+  claveEstadoManual,
   calcularResumenHistorico,
   calcularComisionesDetalladas,
   calcularRangoRapido,

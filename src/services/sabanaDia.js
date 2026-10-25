@@ -37,7 +37,7 @@
 // más abajo) y nunca se pisa acá.
 // =================================================================
 const db = require('../db');
-const { leerHistorial, editarTicket } = require('./historial');
+const { leerHistorial, editarTicket, cargarEstadosManuales, claveEstadoManual } = require('./historial');
 const { leerPolla } = require('./polla');
 const { cargarConfigGrupo } = require('./grupoConfig');
 const { obtenerResultadosAPIs } = require('./mlbApi');
@@ -65,6 +65,10 @@ async function obtenerSabanaDeFecha(grupoId, fecha) {
   ]);
   const datosPorDeporte = { mlb: datosMLB, nfl: datosNFL, nhl: datosNHL, soccer: datosSoccer, basket: datosNBA, ncaaf: datosNCAAF };
   const diccionarioEquipos = config.diccionarioEquipos;
+
+  // ✋ Tickets con estado puesto a mano (se muestra una marca en ✏️ Editar).
+  const estadosManuales = await cargarEstadosManuales(grupoId, fecha);
+  tickets.forEach(t => { t.estadoManual = estadosManuales.has(claveEstadoManual(t.cliente, t.ticket)); });
 
   // Cada jugada guardada vuelve a pasar por evaluarJugada() SOLO para el
   // ícono del equipo — nunca para recalcular el estado del ticket (ver

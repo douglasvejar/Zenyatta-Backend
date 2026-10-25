@@ -2360,11 +2360,12 @@ ronaldo -267" style="width:100%; font-family:monospace;"></textarea>
             <option value="SUSPENDIDA">SUSPENDIDA</option>
             <option value="FALTA CERRAR EN SÁBANA">FALTA CERRAR EN SÁBANA</option>
             <option value="NULA (FALTA LOGRO)">NULA (FALTA LOGRO)</option>
+            <option value="AUTO">🔄 Automático (quitar la marca manual)</option>
           </select>
         </div>
       </div>
       <button type="button" onclick="guardarEdicionTicketSabana()" style="margin-top:12px;">Guardar cambios</button>
-      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Al guardar, si algo cambió de verdad, queda una alerta (visible para el Grupo y para el Súper-admin) indicando qué ticket se modificó y qué cambió. Si más adelante se vuelve a procesar esta misma fecha, la edición se pisa igual que cualquier otro ticket.</small>
+      <small style="display:block; margin-top:8px; color:var(--text-dim);">💡 Al guardar, si algo cambió de verdad, queda una alerta (visible para el Grupo y para el Súper-admin) indicando qué ticket se modificó y qué cambió. El estado que elijas a mano (ej. GANADA/PERDIDA de un juego que la API ya no da) se queda aunque la sábana se vuelva a procesar; para que el sistema lo calcule solo otra vez, elige "Automático".</small>
     </div>
   </div>
 

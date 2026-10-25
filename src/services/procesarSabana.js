@@ -19,7 +19,7 @@ const { evaluarJugada } = require('./evaluador');
 const { normalizarTexto } = require('./normalizar');
 const { detectarEquipoSinLogro, extraerCuotaAmericana } = require('./parser');
 const { esEstadoComisionable, calcularComisionTotalCliente, acumularComisionPorTipoJugada } = require('./comisiones');
-const { guardarEnHistorial } = require('./historial');
+const { guardarEnHistorial, cargarEstadosManuales, claveEstadoManual } = require('./historial');
 const { cargarResolucionesManuales, crearAlerta } = require('./alertas');
 const { leerPolla } = require('./polla');
 
@@ -86,6 +86,10 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
   // Alertas) — se cargan UNA vez acá y evaluarJugada() las usa como la
   // capa más fuerte de desambiguación (ver evaluador.js/alertas.js).
   const resolucionesManuales = await cargarResolucionesManuales(grupoId, fecha);
+  // Estados puestos a mano con ✏️ Editar (25-10-2026) — se vuelven a aplicar
+  // en cada reproceso; si no, la sábana los pisa de nuevo con el resultado
+  // automático (ver historial.js, "ESTADO MANUAL DE UN TICKET").
+  const estadosManuales = await cargarEstadosManuales(grupoId, fecha);
   const alertasParaCrear = []; // se juntan durante el forEach (síncrono) y se insertan todas juntas al final
 
   let totalArriesgadoSum = 0;
@@ -389,6 +393,10 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       estadoFinal = 'ANULADA';
     }
 
+    // Estado puesto a mano desde ✏️ Editar: manda sobre el automático.
+    const estadoManualAplicado = estadosManuales.get(claveEstadoManual(b.cliente, b.ticket)) || null;
+    if (estadoManualAplicado) estadoFinal = estadoManualAplicado;
+
     // =================================================================
     // MARCADOR MANUAL (✅/❌/⭕) vs. RESULTADO REAL (03-09-2026, a pedido
     // del usuario)
@@ -413,7 +421,7 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       ANULADA: '⭕',
       SUSPENDIDA: '⭕'
     };
-    const marcadorEsperado = MARCADOR_ESPERADO_POR_ESTADO[estadoFinal] || null;
+    const marcadorEsperado = estadoManualAplicado ? null : (MARCADOR_ESPERADO_POR_ESTADO[estadoFinal] || null);
     const marcadorManualIncorrecto = !!(
       b.marcadorManual && marcadorEsperado && b.marcadorManual !== marcadorEsperado
     );
@@ -478,6 +486,7 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       pagaConDiscrepancia,
       pagaSabanaOriginal,
       estado: estadoFinal,
+      estadoManual: !!estadoManualAplicado,
       cierreAutomatico: !!b.cierreAutomatico,
       marcadorManualOriginal: b.marcadorManual || null,
       marcadorManualIncorrecto,

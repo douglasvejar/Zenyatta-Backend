@@ -73,6 +73,21 @@ pool.query(`create table if not exists hipismo_socios (
   .then(() => pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS hipismo_socio_id uuid REFERENCES hipismo_socios(id) ON DELETE SET NULL'))
   .catch((err) => console.warn('[db] No se pudo asegurar hipismo_socios / jugadores.hipismo_socio_id (corre sql/schema.sql en Supabase):', err.message));
 
+// 25-10-2026: estado puesto a mano en un ticket de Deportes (✏️ Editar) que NO se pierde al reprocesar la sábana (ver sql/schema.sql
+// y services/historial.js). Se crea sola; si la base no deja, solo avisa en el log y todo sigue como antes.
+pool.query(`create table if not exists tickets_estado_manual (
+    id uuid primary key default gen_random_uuid(),
+    grupo_id uuid not null references grupos(id) on delete cascade,
+    fecha date not null,
+    cliente_nombre text not null,
+    ticket_label text not null default '',
+    estado text not null,
+    creado_en timestamptz not null default now(),
+    unique (grupo_id, fecha, cliente_nombre, ticket_label))`)
+  .then(() => pool.query('create index if not exists idx_estado_manual_grupo_fecha on tickets_estado_manual(grupo_id, fecha)'))
+  .then(() => pool.query('alter table tickets_estado_manual enable row level security'))
+  .catch((err) => console.warn('[db] No se pudo asegurar tickets_estado_manual (corre sql/schema.sql en Supabase):', err.message));
+
 // HIPÓDROMOS PREDETERMINADOS (15-10-2026): los grupos que todavía no recibieron la lista (3 de Venezuela + 48 de USA) la reciben
 // una sola vez al arrancar (marca grupos.hipismo_hipodromos_iniciales), sin depender de correr el SQL. Ver
 // services/hipismoHipodromosDefecto.js. Nunca tumba el arranque: si algo falla, solo avisa en el log.
