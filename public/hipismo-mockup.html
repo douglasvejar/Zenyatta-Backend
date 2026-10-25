@@ -2183,7 +2183,7 @@
     <span class="logo-emoji"><img src="img/logo-ludox-icono.png" alt="Ludox" width="42" height="42"></span>
     <div>
       <h1>Ludox — Panel del Grupo</h1>
-      <div class="sub" id="topbarNombreGrupo">Zenyatta 🇻🇪</div>
+      <div class="sub" id="topbarNombreGrupo">🇻🇪</div>
     </div>
   </div>
   <!-- 14-10-2026, a pedido del usuario: "un espacio de buscar arriba... desde alli puede buscar cualquier ventana o
@@ -13868,11 +13868,18 @@ function circuloPozoDeCliente(nombre) {
 
 // 27-09-2026 (filtro de Pozos): ya no asume la estructura fija de
 // columnas de "Solo Pozos" — cada filtro arma su propio texto.
+// Nombre del grupo para los textos que se copian/exportan (nunca un nombre fijo: cada grupo ve el suyo).
+function nombreGrupoTexto() {
+  let nombre = (typeof GRUPO !== 'undefined' && GRUPO && GRUPO.nombre) || '';
+  if (!nombre) { try { nombre = (JSON.parse(localStorage.getItem('zenyatta_grupo') || '{}') || {}).nombre || ''; } catch (e) { nombre = ''; } }
+  return String(nombre || 'Grupo').trim();
+}
+
 function copiarPozosTexto() {
   const emojiPorColor = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
   const titulos = { saldosMasPozos: 'SALDOS + POZOS' + (incluirDevolucionPozos() ? ' (con devolución %)' : ' (sin devolución %)'), soloPozos: 'POZOS', saldos: 'SALDOS' };
   const filas = document.querySelectorAll('#tablaPozos tbody tr');
-  let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — Zenyatta 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
+  let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — ${nombreGrupoTexto()} 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
   // 12-10-2026, a pedido del usuario: los saldos van entre *asteriscos* (negritas en WhatsApp) y todos los nombres
   // en MAYÚSCULAS; los clientes desmarcados (casilla de cada fila) no salen.
   let incluidos = 0;
@@ -13997,7 +14004,7 @@ function descargarBalanceExcel() {
   const comisionTotal = Number(BALANCE_GENERAL_ACTUAL.comisionSemana);
   const totalCents = (signo) => entradas.filter(([, v]) => signo < 0 ? v < 0 : v > 0).reduce((acc, [, v]) => acc + Math.round(redondearCentavos(v) * 100), 0) / 100;
   const filas = [['Cliente', 'Saldo'], ...entradas.map(([n, v]) => [formatNombre(n), Number(v.toFixed(2))]), [], ['TOTAL PIERDEN', totalCents(-1)], ['TOTAL GANAN', totalCents(1)], [], ['Comisión', Number(comisionTotal.toFixed(2))]];
-  const hoja = XLSX.utils.aoa_to_sheet([['Balance General — Zenyatta 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Balance General — ' + nombreGrupoTexto() + ' 🇻🇪'], [document.getElementById('balanceFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 14 }];
   aplicarFormatoMonedaXlsx(hoja, [1]); // "Saldo" / "Comisión"
   const libro = XLSX.utils.book_new();
@@ -14410,7 +14417,7 @@ function descargarCierreExcel() {
 
   const rangoTexto = `${formatFechaCortaDMY(data.rango.desde)} – ${formatFechaCortaDMY(data.rango.hasta)}`;
   const hoja = XLSX.utils.aoa_to_sheet([
-    ['Cierre Final — Zenyatta 🇻🇪'],
+    ['Cierre Final — ' + nombreGrupoTexto() + ' 🇻🇪'],
     [rangoTexto],
     [],
     encabezados,
@@ -15468,7 +15475,7 @@ function descargarComisionesPorCarreraExcel() {
   });
   filas.push([]);
   filas.push(['Total general', '', '', '', Number(COMISIONES_POR_CARRERA_ACTUAL.totalGeneral.toFixed(2))]);
-  const hoja = XLSX.utils.aoa_to_sheet([['Comisión por Carrera de Clientes — Zenyatta 🇻🇪'], [document.getElementById('comisionesPorCarreraRangoCaptura').textContent], [], ...filas]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisión por Carrera de Clientes — ' + nombreGrupoTexto() + ' 🇻🇪'], [document.getElementById('comisionesPorCarreraRangoCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 20 }, { wch: 12 }];
   aplicarFormatoMonedaXlsx(hoja, [4]); // "Comisión"
   const libro = XLSX.utils.book_new();
@@ -15629,7 +15636,7 @@ function descargarComisionesHipodromoExcel() {
     filas.push([]);
   });
   filas.push(['Total general', '', Number(COMISIONES_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
-  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoFechaCaptura').textContent], [], ...filas]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones por Hipódromo / Carrera — ' + nombreGrupoTexto() + ' 🇻🇪'], [document.getElementById('hipodromoFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
   aplicarFormatoMonedaXlsx(hoja, [2]); // "Comisión"
   const libro = XLSX.utils.book_new();
@@ -16166,7 +16173,7 @@ function descargarComisionesDevueltasHipodromoExcel() {
     filas.push([]);
   });
   filas.push(['Total general', '', Number(COMISIONES_DEVUELTAS_HIPODROMO_ACTUAL.totalGeneral.toFixed(2))]);
-  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones Devueltas por Hipódromo / Carrera — Zenyatta 🇻🇪'], [document.getElementById('hipodromoDevueltasFechaCaptura').textContent], [], ...filas]);
+  const hoja = XLSX.utils.aoa_to_sheet([['Comisiones Devueltas por Hipódromo / Carrera — ' + nombreGrupoTexto() + ' 🇻🇪'], [document.getElementById('hipodromoDevueltasFechaCaptura').textContent], [], ...filas]);
   hoja['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 12 }];
   aplicarFormatoMonedaXlsx(hoja, [2]); // "Devuelto"
   const libro = XLSX.utils.book_new();
