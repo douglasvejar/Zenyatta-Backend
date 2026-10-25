@@ -1726,14 +1726,14 @@
   #selectorPlanoCompacto label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 3px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { padding: 0 10px; font-size: 13.5px; height: 34px; border-radius: 10px; background-color: rgba(255,255,255,0.85); }
   #selectorPlanoCompacto > div:nth-child(1) { grid-column: 1 / 4; grid-row: 1; }
-  #selectorPlanoCompacto > div:nth-child(2) { grid-column: 4 / 7; grid-row: 1; } /* 25-10-2026: más ancho para que quepa "6ta ✅" */
+  #selectorPlanoCompacto > div:nth-child(2) { grid-column: 4 / 7; grid-row: 1; } /* 25-10-2026: más ancho para que quepa "6ta ✅ Listo" */
   #selectorPlanoCompacto > div:nth-child(3) { grid-column: 7 / 10; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(5) { grid-column: 10 / 13; grid-row: 1; }
   #selectorPlanoCompacto > div:nth-child(4) { grid-column: 1 / 4; grid-row: 2; }
   #selectorPlanoCompacto > div:nth-child(6) { grid-column: 4 / 13; grid-row: 2; }
   #selectorPlanoCompacto > div:nth-child(6) .btn-lista-sin-comision { position: absolute; right: 2px; top: -1px; margin: 0; padding: 0; background: none; border: 0; cursor: pointer; font-size: 11.5px; font-weight: 600; text-transform: none; letter-spacing: 0; }
   @media (min-width: 1201px) {
-    #selectorPlanoCompacto { grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1.2fr 2fr; } /* 25-10-2026: Carrera más ancha para "6ta ✅" */
+    #selectorPlanoCompacto { grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1.2fr 2fr; } /* 25-10-2026: Carrera más ancha para "6ta ✅ Listo" */
     #selectorPlanoCompacto > div:nth-child(n) { grid-column: auto; grid-row: 1; }
     #selectorPlanoCompacto > div:nth-child(6) input { padding-right: 112px; }
     #selectorPlanoCompacto > div:nth-child(6) .btn-lista-sin-comision { top: auto; bottom: 6px; right: 6px; padding: 3px 9px; border-radius: 8px; background: #eef0ff; }
@@ -7587,7 +7587,7 @@ function aplicarPermisoCruzarJugadas() {
 // botones que darían error. SECCION_DE_VISTA_HIP se genera del catálogo (src/services/funcionesGrupo.js); el test
 // test_funciones_grupo.js verifica que coincidan. Una sesión vieja no trae la lista: se asume "todas" y se refresca al cargar.
 // =================================================================
-const SECCION_DE_VISTA_HIP = {"cargarPlanos":"hip_planos","validarPlano":"hip_planos","eliminarPlanos":"hip_planos","planosEliminados":"hip_planos","traspasosJugadas":"hip_planos","montosApostados":"hip_planos","cargaMasivaEspecial":"hip_carga_masiva","cargarRemate":"hip_remates","cargarRemateManual":"hip_remates","jugadasAdelantadas":"hip_adelantadas","terciosAdelantadas":"hip_adelantadas","revTablasMarcas":"hip_adelantadas","revAdelantadasClientes":"hip_adelantadas","banqueoMarcas":"hip_adelantadas","cargarWinners":"hip_winners","eliminarWinners":"hip_winners","pozos":"hip_pozos","detalladoCliente":"hip_saldos","semanaPorDias":"hip_saldos","balanceGeneral":"hip_saldos","cierreFinal":"hip_saldos","balanceSocios":"hip_saldos","grupoClientes":"hip_grupo_clientes","comisionesPorCarrera":"hip_comisiones","comisionesTotalesPorHipodromo":"hip_comisiones","comisionesDevueltasPorHipodromo":"hip_comisiones","comisionesDevueltas":"hip_comisiones","saldoComisiones":"hip_comisiones","comisionesSinDevoluciones":"hip_comisiones","comisionesSocios":"hip_comisiones","clientes":"hip_clientes","avales":"hip_clientes","registroSaldos":"hip_clientes","retiros":"hip_finanzas","traspasos":"hip_finanzas","gastos":"hip_finanzas","hipodromos":"hip_hipodromos","pizarras":"hip_hipodromos","revisarJugadas":"hip_revisar","fechaSemana":"hip_ajustes_calculo","cabezaPie":"hip_ajustes_calculo","eliminarJornada":"hip_mantenimiento","alertasHipismo":"hip_alertas"};
+const SECCION_DE_VISTA_HIP = {"cargarPlanos": "hip_planos", "validarPlano": "hip_planos", "eliminarPlanos": "hip_planos", "planosEliminados": "hip_planos", "traspasosJugadas": "hip_planos", "montosApostados": "hip_planos", "cargaMasivaEspecial": "hip_carga_masiva", "cargarRemate": "hip_remates", "cargarRemateManual": "hip_remates", "jugadasAdelantadas": "hip_adelantadas", "terciosAdelantadas": "hip_adelantadas", "revTablasMarcas": "hip_adelantadas", "revAdelantadasClientes": "hip_adelantadas", "banqueoMarcas": "hip_adelantadas", "cargarWinners": "hip_winners", "eliminarWinners": "hip_winners", "pozos": "hip_pozos", "detalladoCliente": "hip_saldos", "semanaPorDias": "hip_saldos", "balanceGeneral": "hip_saldos", "cierreFinal": "hip_saldos", "grupoClientes": "hip_grupo_clientes", "comisionesPorCarrera": "hip_comisiones", "comisionesTotalesPorHipodromo": "hip_comisiones", "comisionesDevueltasPorHipodromo": "hip_comisiones", "comisionesDevueltas": "hip_comisiones", "saldoComisiones": "hip_comisiones", "comisionesSinDevoluciones": "hip_comisiones", "comisionesSocios": "hip_comisiones", "balanceSocios": "hip_saldos", "clientes": "hip_clientes", "avales": "hip_clientes", "registroSaldos": "hip_clientes", "retiros": "hip_finanzas", "traspasos": "hip_finanzas", "gastos": "hip_finanzas", "hipodromos": "hip_hipodromos", "pizarras": "hip_hipodromos", "revisarJugadas": "hip_revisar", "fechaSemana": "hip_ajustes_calculo", "cabezaPie": "hip_ajustes_calculo", "eliminarJornada": "hip_mantenimiento", "alertasHipismo": "hip_alertas"};
 function seccionHabilitadaHip(clave) {
   if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
   return GRUPO.funcionesHabilitadas.includes(clave);
@@ -8367,7 +8367,7 @@ function pintarCarrerasCargadas() {
   Array.from(sel.options).forEach(op => {
     const n = Number(op.value);
     const cargada = CARRERAS_CARGADAS.has(n);
-    op.textContent = ordinalCarrera(n) + (cargada ? '  ✅' : '');
+    op.textContent = ordinalCarrera(n) + (cargada ? '  ✅ Listo' : '');
     op.style.color = cargada ? '#15803d' : '';
     op.style.fontWeight = cargada ? '700' : '';
   });
@@ -17966,6 +17966,11 @@ function textoComisionesSinDevoluciones(data) {
 
 // =================================================================
 // SOCIOS (Ajustes > Socios) y COMISIONES POR AVALES Y SOCIOS (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
+// Título de la tarjeta de un socio: "AVALADOS POR <nombre>". Si el socio ya se llama "Avalados por X" no se repite el prefijo.
+function tituloAvaladosPor(nombre) {
+  const limpio = String(nombre || '').trim().replace(/^avalados?\s+por\s+/i, '');
+  return 'AVALADOS POR ' + limpio.toUpperCase();
+}
 // llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se crean
 // en Ajustes; la distribución debe dar exactamente 100%); esa ventana muestra cuánto produjo cada cliente en comisión (ya devolviendo
 // los %) ordenado por a quién pertenece, y debe dar exacto a la comisión de Balance General y Cierre; un grupo que no crea socios
@@ -18199,7 +18204,7 @@ async function pintarComisionesSocios() {
     return;
   }
   let html = '<div class="socios-rejilla">';
-  data.socios.forEach(s => { html += htmlTarjetaSocio('AVALADO POR ' + escaparHtmlChat(s.nombre), fmtPctSocio(s.porcentaje) + '%', s.clientes, s.total, 'Sin comisión en este rango.'); });
+  data.socios.forEach(s => { html += htmlTarjetaSocio(escaparHtmlChat(tituloAvaladosPor(s.nombre)), fmtPctSocio(s.porcentaje) + '%', s.clientes, s.total, 'Sin comisión en este rango.'); });
   if (data.sinSocio) html += htmlTarjetaSocio('SIN SOCIO', '', data.sinSocio.clientes, data.sinSocio.total, '');
   html += '</div>';
   html += `<div class="comision-caja"><span class="etiqueta">💼 COMISIÓN TOTAL</span><span class="monto">${formatMonto(data.comisionTotal)}</span></div>`;
@@ -18278,7 +18283,7 @@ async function pintarBalanceSocios() {
     return;
   }
   let html = '<div class="socios-rejilla">';
-  data.socios.forEach(s => { html += htmlTarjetaBalanceSocio('SOCIO ' + escaparHtmlChat(s.nombre), fmtPctSocio(s.porcentaje) + '%', s.clientes, s.totalSaldo, `COMISIÓN (${fmtPctSocio(s.porcentaje)}%)`, s.comision); });
+  data.socios.forEach(s => { html += htmlTarjetaBalanceSocio(escaparHtmlChat(tituloAvaladosPor(s.nombre)), fmtPctSocio(s.porcentaje) + '%', s.clientes, s.totalSaldo, `COMISIÓN (${fmtPctSocio(s.porcentaje)}%)`, s.comision); });
   if (data.sinSocio) html += htmlTarjetaBalanceSocio('SIN SOCIO', '', data.sinSocio.clientes, data.sinSocio.totalSaldo, '', 0);
   html += '</div>';
   html += `<div class="comision-caja"><span class="etiqueta">💼 COMISIÓN TOTAL DEL GRUPO</span><span class="monto">${formatMonto(data.comisionTotal)}</span></div>`;
@@ -18299,7 +18304,7 @@ function textoBalanceSocios(d) {
     t += `  TOTAL CLIENTES: ${total < 0 ? '-' : ''}${formatMontoTabla(total)}\n`;
     if (comisionTxt) t += `  *${comisionTxt}: ${formatMontoTabla(comision)}*\n`;
   };
-  d.socios.forEach(s => bloque(`SOCIO ${s.nombre} (${fmtPctSocio(s.porcentaje)}%)`, s.clientes, s.totalSaldo, `COMISIÓN (${fmtPctSocio(s.porcentaje)}%)`, s.comision));
+  d.socios.forEach(s => bloque(`${tituloAvaladosPor(s.nombre)} (${fmtPctSocio(s.porcentaje)}%)`, s.clientes, s.totalSaldo, `COMISIÓN (${fmtPctSocio(s.porcentaje)}%)`, s.comision));
   if (d.sinSocio) bloque('SIN SOCIO', d.sinSocio.clientes, d.sinSocio.totalSaldo, '', 0);
   t += `\n──────────────────────────────\n*COMISIÓN TOTAL DEL GRUPO: ${formatMontoTabla(d.comisionTotal)} USD*`;
   return t;
@@ -18341,7 +18346,7 @@ function textoComisionesSocios(d) {
     clientes.forEach(c => { t += `  • ${c.esAjuste ? c.nombre : formatNombre(c.nombre)}:  ${formatMontoTabla(c.monto)}${c.monto < 0 ? ' (-)' : ''}\n`; });
     t += `  TOTALES: ${formatMontoTabla(total)}\n`;
   };
-  d.socios.forEach(s => bloque(`AVALADO POR ${s.nombre} (${fmtPctSocio(s.porcentaje)}%)`, s.clientes, s.total));
+  d.socios.forEach(s => bloque(`${tituloAvaladosPor(s.nombre)} (${fmtPctSocio(s.porcentaje)}%)`, s.clientes, s.total));
   if (d.sinSocio) bloque('SIN SOCIO', d.sinSocio.clientes, d.sinSocio.total);
   t += `\n──────────────────────────────\n*COMISIÓN TOTAL: ${formatMontoTabla(d.comisionTotal)} USD*\n\n*POR SOCIO*\n`;
   d.porSocio.forEach(s => { t += `  • ${s.nombre} (${fmtPctSocio(s.porcentaje)}%):  ${formatMontoTabla(s.monto)}\n`; });
