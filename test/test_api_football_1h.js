@@ -15,6 +15,7 @@
 //
 // Mismo patrón de pruebas que test_futbol_primera_mitad.js: no depende de
 // ninguna red real, simula `global.fetch`.
+process.env.API_FOOTBALL_PLAN_PAGO = '1'; // fechas fijas de prueba: sin el salto del plan gratis (ver test_api_football_plan_fecha.js)
 const assert = require('assert');
 const { obtenerResultadosSoccer, nombresDeEquipoCoinciden } = require('../src/services/soccerApi');
 const { _resetCacheParaPruebas: resetFootballData } = require('../src/services/footballDataApi');

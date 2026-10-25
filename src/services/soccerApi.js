@@ -471,7 +471,7 @@ function agregarPrimeraMitad(mapaCombinado, fuentes) {
     }
     const conError = conClave.find(f => f.huboError);
     const referencia = conError || conClave[0];
-    juego.motivoSinPrimeraMitad = conError ? 'error-api' : 'sin-cruce';
+    juego.motivoSinPrimeraMitad = conError ? (conError.motivoError === 'plan-fecha' ? 'plan-fecha' : 'error-api') : 'sin-cruce';
     juego.fuentePrimeraMitad = referencia.nombreFuente;
     juego.variableEntornoPrimeraMitad = referencia.variableEntorno;
   });
@@ -501,7 +501,12 @@ function combinarPrimeraMitadDeDosDias(deHoy, deManana) {
     // partidos reales, un partido que de verdad faltaba en el día que
     // falló quedaría mal diagnosticado como "no cruzó" cuando en realidad
     // nunca se pudo revisar bien.
-    huboError: !!(deHoy.huboError || deManana.huboError)
+    huboError: !!(deHoy.huboError || deManana.huboError),
+    // 'plan-fecha' (api-football.com plan gratis, fecha fuera de ayer/hoy/mañana):
+    // solo se conserva si TODOS los días que fallaron fallaron por eso.
+    motivoError: ((deHoy.huboError && deHoy.motivoError !== 'plan-fecha') || (deManana.huboError && deManana.motivoError !== 'plan-fecha'))
+      ? undefined
+      : ((deHoy.huboError || deManana.huboError) ? 'plan-fecha' : undefined)
   };
 }
 

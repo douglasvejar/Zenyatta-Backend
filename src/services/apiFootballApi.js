@@ -119,8 +119,34 @@ const IDS_CUBIERTOS = new Set([...COMPETENCIAS_API_FOOTBALL, ...COMPETENCIAS_RES
 // también (confirmado con las respuestas reales que pegó el usuario:
 // "Free plans do not have access to..." llegó con `results: 0` y sin que
 // el usuario reportara nunca un status distinto de 200).
+// (25-10-2026, caso real: tickets de "1h" del día 20 quedaban PENDIENTES con
+// el texto "clave inválida o límite superado", pero la respuesta real de
+// api-football.com era {"plan":"Free plans do not have access to this date,
+// try from 2026-10-24 to 2026-10-26."}. El plan GRATIS solo deja consultar
+// ayer, hoy y mañana — con la clave bien puesta y sin pasarse del cupo.)
+// Fuera de esa ventana ni se gasta el pedido (el cupo gratis es ~100/día).
+// Si algún día se paga un plan, poner API_FOOTBALL_PLAN_PAGO=1 en Railway.
+function fechaFueraDeVentanaGratis(fechaISO, ahora) {
+  if (process.env.API_FOOTBALL_PLAN_PAGO) return false;
+  const t = Date.parse(fechaISO + 'T00:00:00Z');
+  if (!Number.isFinite(t)) return false;
+  const hoyUTC = Date.UTC((ahora || new Date()).getUTCFullYear(), (ahora || new Date()).getUTCMonth(), (ahora || new Date()).getUTCDate());
+  const dias = Math.round((t - hoyUTC) / 86400000);
+  return dias < -1 || dias > 1;
+}
+
+function esErrorDePlanPorFecha(erroresCrudos) {
+  if (!erroresCrudos || Array.isArray(erroresCrudos)) return false;
+  const texto = JSON.stringify(erroresCrudos);
+  return /do not have access to this date/i.test(texto);
+}
+
 async function obtenerPartidosDelDia(fechaISO, apiKey) {
   const datos = [];
+  if (fechaFueraDeVentanaGratis(fechaISO)) {
+    console.warn('api-football.com: la fecha ' + fechaISO + ' queda fuera de lo que permite el plan gratis (ayer, hoy y mañana) — no se pide. Resolver a mano o pasar a un plan de pago (API_FOOTBALL_PLAN_PAGO=1).');
+    return { datos, huboError: true, motivoError: 'plan-fecha' };
+  }
   try {
     const res = await fetch(
       'https://v3.football.api-sports.io/fixtures?date=' + fechaISO,
@@ -136,7 +162,7 @@ async function obtenerPartidosDelDia(fechaISO, apiKey) {
     const huboErrorEnElCuerpo = !!erroresCrudos && (Array.isArray(erroresCrudos) ? erroresCrudos.length > 0 : Object.keys(erroresCrudos).length > 0);
     if (huboErrorEnElCuerpo) {
       console.error('api-football.com devolvió un error dentro de la respuesta de /fixtures:', JSON.stringify(erroresCrudos));
-      return { datos, huboError: true };
+      return { datos, huboError: true, motivoError: esErrorDePlanPorFecha(erroresCrudos) ? 'plan-fecha' : undefined };
     }
 
     (json.response || []).forEach(partido => {
@@ -207,10 +233,11 @@ async function obtenerPrimeraMitadApiFootball(fechaISO) {
     return entradaCacheada.promesa;
   }
 
-  const promesa = obtenerPartidosDelDia(fechaISO, apiKey).then(({ datos, huboError }) => ({
+  const promesa = obtenerPartidosDelDia(fechaISO, apiKey).then(({ datos, huboError, motivoError }) => ({
     partidos: datos,
     claveConfigurada: true,
-    huboError
+    huboError,
+    motivoError
   }));
   cachePorFecha.set(fechaISO, { creadoEn: Date.now(), ttl: CACHE_TTL_MS, promesa });
 
@@ -221,4 +248,4 @@ async function obtenerPrimeraMitadApiFootball(fechaISO) {
   return resultado;
 }
 
-module.exports = { obtenerPrimeraMitadApiFootball, COMPETENCIAS_API_FOOTBALL, COMPETENCIAS_RESPALDO_API_FOOTBALL, _resetCacheParaPruebas };
+module.exports = { obtenerPrimeraMitadApiFootball, fechaFueraDeVentanaGratis, esErrorDePlanPorFecha, COMPETENCIAS_API_FOOTBALL, COMPETENCIAS_RESPALDO_API_FOOTBALL, _resetCacheParaPruebas };

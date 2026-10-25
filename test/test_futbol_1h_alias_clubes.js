@@ -2,6 +2,7 @@
 // -260" quedó PENDIENTE (sin-cruce) porque football-data.org escribe "FC
 // Bayern München" y ESPN "Bayern Munich". Verifica los alias de club y el
 // cruce flexible de un solo candidato.
+process.env.API_FOOTBALL_PLAN_PAGO = '1'; // fechas fijas de prueba: sin el salto del plan gratis (ver test_api_football_plan_fecha.js)
 const { obtenerResultadosSoccer, nombresDeEquipoCoinciden } = require('../src/services/soccerApi');
 const { _resetCacheParaPruebas } = require('../src/services/footballDataApi');
 

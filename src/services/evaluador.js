@@ -521,6 +521,8 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
         razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta, pero el servidor no tiene configurada la clave de ' + fuente1H + ' (' + variable1H + '). Esto es un problema de configuración, no de la liga: revisar esa variable de entorno en Railway.';
       } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'error-api') {
         razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' — la liga SÍ está cubierta y la clave está puesta, pero ' + fuente1H + ' devolvió un error al pedir esta competencia (clave inválida o límite de pedidos superado). Revisar el log del servidor; si sigue así, resolver a mano.';
+      } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'plan-fecha') {
+        razon = 'El partido ya terminó, pero no se pueden pedir los datos de ' + segmento + ' — no es un problema de la clave: ' + fuente1H + ' en su plan GRATIS solo permite consultar ayer, hoy y mañana, y este partido es de otra fecha. Hay que resolver esta jugada a mano (o pasar a un plan de pago de ' + fuente1H + ').';
       } else if (juego.deporte === 'soccer' && juego.motivoSinPrimeraMitad === 'sin-cruce') {
         razon = 'El partido ya terminó, pero todavía no hay datos de ' + segmento + ' para este partido puntual — la liga SÍ está cubierta y la clave funciona, pero ' + fuente1H + ' no tiene (o no se pudo cruzar por nombre de equipo) este partido en particular. Revisar este caso puntual; si sigue así, resolver a mano.';
       } else {
