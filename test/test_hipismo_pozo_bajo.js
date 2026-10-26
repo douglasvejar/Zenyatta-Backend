@@ -18,14 +18,19 @@ let pozos = {};        // nombre -> { inicial, disponible }
 let jugadoresDB = [];
 let escrituras = [];
 let yaAvisado = false;
+let recargas = {};      // nombre -> recargado en la semana
+let sinColumnaPagoDiario = false;
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
   if (/^SELECT \* FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) {
     if (!jugadoresDB) throw new Error('base caída');
-    return { rows: jugadoresDB.filter(j => params[1].includes(j.nombre) && j.tipo_cuenta === 'avalado' && !j.es_cuenta_comision) };
+    if (/pago_diario = true/.test(sql) && sinColumnaPagoDiario) { const e = new Error('no existe la columna'); e.code = '42703'; throw e; }
+    const conPD = /pago_diario = true/.test(sql);
+    return { rows: jugadoresDB.filter(j => params[1].includes(j.nombre) && (j.tipo_cuenta === 'avalado' || (conPD && j.pago_diario)) && !j.es_cuenta_comision) };
   }
+  if (/^SELECT COALESCE\(SUM\(monto\), 0\) AS total FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [{ total: recargas[params[1]] || 0 }] };
   if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) return { rows: (params[1] || []).map(nombre => ({ nombre })) };
   if (/^SELECT 1 FROM hipismo_alertas/i.test(sql)) return { rows: yaAvisado ? [{ '?column?': 1 }] : [] };
   if (/^(INSERT|UPDATE|DELETE)/i.test(sql)) { escrituras.push({ sql, params }); return { rows: [{ id: 'x1' }] }; }
@@ -50,7 +55,7 @@ Module._load = function (request) {
   if (request === 'express') return fakeExpress;
   if (request === 'bcryptjs') return { hash: async () => 'h', compare: async () => true };
   if (request === 'jsonwebtoken') return { sign: () => 't', verify: () => ({ grupoId: GRUPO_ID }) };
-  if (request === './pozo') return { calcularPozoJugador: async (g, j) => ({ pozoInicial: pozos[j.nombre].inicial, pozoDisponible: pozos[j.nombre].disponible }) };
+  if (request === './pozo') return { calcularPozoJugador: async (g, j) => ({ pozoInicial: pozos[j.nombre].inicial, pozoDisponible: pozos[j.nombre].disponible, rango: { desde: '2026-10-26', hasta: '2026-11-01' } }) };
   return originalLoad.apply(this, arguments);
 };
 process.env.DATABASE_URL = 'postgresql://fake/fake';
@@ -99,6 +104,24 @@ const jug = (nombre, extra) => ({ id: 'j-' + nombre, grupo_id: GRUPO_ID, nombre,
   const m2 = alertaPozo.mensajePozoBajo({ nombre: 'RAYA', pagoDiario: false, pozoInicial: 1000, pozoDisponible: -20, porcentaje: 0, agotado: true }, '');
   check(/PEDRO \(pago diario\) tiene POCO POZO/.test(m1) && /Belmont carrera 3/.test(m1) && /10%/.test(m1), `1h) mensaje poco pozo legible: "${m1}"`);
   check(/RAYA se quedó SIN POZO/.test(m2) && /le quedan 0,00/.test(m2), `1i) mensaje sin pozo legible: "${m2}"`);
+
+  // ---------- 1b) pago diario SIN pozo base, con recargas de la semana ----------
+  // Su saldo recargado es su pozo: base = pozo + recargas; disponible = lo que le queda de lo jugado/ganado + recargas.
+  jugadoresDB.push(jug('FELIPE', { tipo_cuenta: 'libre', pago_diario: true }), jug('MARIA', { tipo_cuenta: 'libre', pago_diario: true }), jug('JOSE', { tipo_cuenta: 'avalado', pago_diario: true }));
+  pozos.FELIPE = { inicial: 0, disponible: -460 };   // jugó/perdió 460 de lo recargado
+  pozos.MARIA = { inicial: 0, disponible: -300 };    // jugó/perdió 300
+  pozos.JOSE = { inicial: 200, disponible: -330 };   // pozo 200 + recarga 300 = 500, le quedan 500-530... -> agotado
+  recargas = { FELIPE: 500, MARIA: 1000, JOSE: 300 };
+  r = await alertaPozo.detectarPozoBajo(GRUPO_ID, ['FELIPE', 'MARIA', 'JOSE', 'DIARIO']);
+  check(!!por('FELIPE') && por('FELIPE').pagoDiario === true && por('FELIPE').pozoInicial === 500 && por('FELIPE').pozoDisponible === 40 && por('FELIPE').porcentaje === 8, '1j) PAGO DIARIO libre: recargó 500 y le quedan 40 (8%) -> poco pozo, medido contra lo recargado');
+  check(!por('MARIA'), '1k) PAGO DIARIO que recargó 1000 y le quedan 700 (70%) no avisa');
+  check(!!por('JOSE') && por('JOSE').pozoInicial === 500 && por('JOSE').pozoDisponible === -30 && por('JOSE').agotado === true, '1l) PAGO DIARIO con pozo: pozo 200 + recarga 300 = 500; se pasó -> sin pozo');
+  check(!por('DIARIO'), '1m) PAGO DIARIO sin pozo y sin recargas esta semana no avisa (no tiene saldo con el que jugar)');
+  sinColumnaPagoDiario = true;
+  r = await alertaPozo.detectarPozoBajo(GRUPO_ID, ['ANA', 'FELIPE']);
+  sinColumnaPagoDiario = false;
+  check(r.length === 1 && r[0].nombre === 'ANA', '1n) si aún no existe la columna pago_diario, sigue avisando a los avalados (sin romper)');
+  recargas = {};
 
   // ---------- 2) ruta POST /tercios-adelantadas ----------
   const base = { grupoId: GRUPO_ID, grupo: { id: GRUPO_ID, nombre: 'Largavita' }, nombreActor: 'Largavita', params: {}, query: {} };
