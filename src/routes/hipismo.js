@@ -5510,6 +5510,124 @@ router.delete('/retiros/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// SALDOS > "RECARGA SALDOS PAGO DIARIOS" (26-10-2026, a pedido del usuario: "en la pestaña Saldos crea un apartado que se llame
+// recarga saldos pago diarios; allí me van a aparecer todos los clientes que tengan la configuración de pago diario; allí se le va
+// a recargar saldo, que sería como si fuera pozos a esos clientes, pero cada recarga debe ir en contra de un ítem que debe aparecer
+// en los balances como POZOS PAGO DIARIOS. En la lista aparece Felipe, pongo Felipe +500, confirmo y acepto: se le pondrán 500 más a
+// Felipe y automáticamente POZOS PAGO DIARIOS -500"). Decisión confirmada: es un TRASPASO DE SALDO (igual que Retiros, al revés):
+// el cliente suma `monto` y la ficha fija "POZOS PAGO DIARIOS" (se crea sola, marcada como cuenta de comisión) lo resta. Son 2 filas
+// de hipismo_comisiones_ajustes (misma transacción y mismo `creado_en`), así que Balance General, Cierre Final, Pozos, Detallado por
+// Cliente, el link del cliente y el Registro de Saldos ya lo reflejan y los totales siguen sumando 0. Cae en la semana de su fecha.
+// Sin cambio de schema. Solo se puede recargar a clientes con la marca pago_diario.
+//   GET    /recargas-pago-diario       { cuenta, clientes:[pago diario activos], recargas:[...] } (recargas: más reciente primero)
+//   POST   /recargas-pago-diario       { cliente, monto, fecha, nota }
+//   PUT    /recargas-pago-diario/:id   { cliente?, monto?, fecha?, nota? }  (actualiza las 2 mitades)
+//   DELETE /recargas-pago-diario/:id   anula las 2 mitades
+// =================================================================
+const CUENTA_POZOS_PAGO_DIARIO = 'POZOS PAGO DIARIOS';
+const NOTA_RECARGA_DEFECTO = 'Recarga de saldo (pago diario)';
+
+async function listarRecargasPagoDiario(grupoId) {
+  const r = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
+       FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1
+        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $2)
+      ORDER BY creado_en DESC`,
+    [grupoId, CUENTA_POZOS_PAGO_DIARIO]
+  );
+  return emparejarTraspasosSaldo(r.rows)
+    .filter(p => p.origen === CUENTA_POZOS_PAGO_DIARIO)
+    .map(p => ({ id: p.id, idDestino: p.idDestino, cliente: p.destino, monto: p.monto, fecha: p.fecha, nota: p.nota, creadoEn: p.creadoEn }))
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : new Date(b.creadoEn) - new Date(a.creadoEn)));
+}
+async function buscarRecargaPagoDiarioPorId(grupoId, id) {
+  const rFila = await db.query('SELECT id, creado_en FROM hipismo_comisiones_ajustes WHERE id = $1 AND grupo_id = $2', [id, grupoId]);
+  if (!rFila.rows.length) return null;
+  const rMomento = await db.query(
+    `SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND creado_en = (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE id = $2 AND grupo_id = $1)`,
+    [grupoId, rFila.rows[0].id]);
+  return emparejarTraspasosSaldo(rMomento.rows).find(p => (p.id === rFila.rows[0].id || p.idDestino === rFila.rows[0].id) && p.origen === CUENTA_POZOS_PAGO_DIARIO) || null;
+}
+// Los clientes de pago diario (activos primero) del grupo. Si la columna aún no existe (falta el SQL) no hay ninguno.
+async function clientesPagoDiarioGrupo(grupoId) {
+  try {
+    const r = await db.query(
+      `SELECT nombre, COALESCE(activo, true) AS activo FROM jugadores
+        WHERE grupo_id = $1 AND pago_diario = true AND COALESCE(es_cuenta_comision, false) = false ORDER BY nombre`,
+      [grupoId]);
+    return r.rows.map(x => ({ nombre: x.nombre, activo: x.activo !== false }));
+  } catch (e) {
+    if (e && e.code === '42703') return [];
+    throw e;
+  }
+}
+async function validarClientePagoDiario(req, res, cliente) {
+  if (!cliente) { res.status(400).json({ error: 'Elige el cliente al que se le recarga.' }); return false; }
+  if (cliente === CUENTA_POZOS_PAGO_DIARIO) { res.status(400).json({ error: 'Elige un cliente; POZOS PAGO DIARIOS es la cuenta que lleva el contrapeso de las recargas.' }); return false; }
+  const lista = await clientesPagoDiarioGrupo(req.grupoId);
+  if (!lista.some(c => c.nombre === cliente)) { res.status(422).json({ error: `${cliente} no está configurado como PAGO DIARIO. Cámbialo en Clientes > Tipo de cuenta.` }); return false; }
+  return true;
+}
+
+router.get('/recargas-pago-diario', asyncHandler(async (req, res) => {
+  res.json({
+    cuenta: CUENTA_POZOS_PAGO_DIARIO,
+    clientes: await clientesPagoDiarioGrupo(req.grupoId),
+    recargas: await listarRecargasPagoDiario(req.grupoId)
+  });
+}));
+
+router.post('/recargas-pago-diario', asyncHandler(async (req, res) => {
+  const cliente = normalizarNombreRetiro(req.body && req.body.cliente);
+  const monto = Number(req.body && req.body.monto);
+  const fecha = (req.body && req.body.fecha) || fechaHoyVenezuela();
+  const nota = ((req.body && req.body.nota) || '').toString().trim() || NOTA_RECARGA_DEFECTO;
+  if (!(await validarClientePagoDiario(req, res, cliente))) return;
+  if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
+  await buscarOCrearFichaRetiros(req.grupoId, CUENTA_POZOS_PAGO_DIARIO);
+  const montoFinal = round2(monto);
+  await db.transaccion(async (client) => {
+    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, CUENTA_POZOS_PAGO_DIARIO, -montoFinal, fecha, nota]);
+    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+      [req.grupoId, cliente, montoFinal, fecha, nota]);
+  });
+  res.json({ ok: true });
+}));
+
+router.put('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
+  const par = await buscarRecargaPagoDiarioPorId(req.grupoId, req.params.id);
+  if (!par) return res.status(404).json({ error: 'Esa recarga no existe.' });
+  const b = req.body || {};
+  const cliente = b.cliente !== undefined ? normalizarNombreRetiro(b.cliente) : par.destino;
+  const monto = b.monto !== undefined ? Number(b.monto) : par.monto;
+  const fecha = b.fecha || par.fecha;
+  const nota = b.nota !== undefined ? (((b.nota || '') + '').trim() || NOTA_RECARGA_DEFECTO) : (par.nota || NOTA_RECARGA_DEFECTO);
+  if (cliente !== par.destino && !(await validarClientePagoDiario(req, res, cliente))) return;
+  if (!cliente || cliente === CUENTA_POZOS_PAGO_DIARIO) return res.status(400).json({ error: 'Elige el cliente al que se le recarga.' });
+  if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
+  const montoFinal = round2(monto);
+  await db.transaccion(async (client) => {
+    await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
+      [CUENTA_POZOS_PAGO_DIARIO, -montoFinal, fecha, nota, req.grupoId, par.id]);
+    await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
+      [cliente, montoFinal, fecha, nota, req.grupoId, par.idDestino]);
+  });
+  res.json({ ok: true });
+}));
+
+router.delete('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
+  const par = await buscarRecargaPagoDiarioPorId(req.grupoId, req.params.id);
+  if (!par) return res.status(404).json({ error: 'Esa recarga no existe.' });
+  await db.transaccion(async (client) => {
+    await client.query('DELETE FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND id = ANY($2::uuid[])', [req.grupoId, [par.id, par.idDestino]]);
+  });
+  res.json({ ok: true });
+}));
+
+// =================================================================
 // SOCIOS DE HIPISMO y "COMISIONES POR AVALES Y SOCIOS" (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
 // llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se
 // crean en Ajustes > Socios; la distribución debe dar exactamente el 100%); en esa ventana te coloca ordenado cuánto produjo cada
