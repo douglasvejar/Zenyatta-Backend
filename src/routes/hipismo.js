@@ -179,7 +179,7 @@ async function rechazarClientesInexistentes(req, res, nombres) {
 // para la sábana de Deportes (papelera recuperable, nunca borrado
 // definitivo, para un sistema contable).
 const hipismoPlanosPapelera = require('../services/hipismoPlanosPapelera');
-const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo } = require('../services/hipismoAlertaPozo');
+const { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo } = require('../services/hipismoAlertaPozo');
 // construirResumenClienteHipismo (24-09-2026) — la nueva pestaña "Saldos >
 // Detallado por Cliente" pide EXACTAMENTE la misma respuesta que ya arma
 // GET /api/hipismo-cliente/:token (el portal público) para un cliente
@@ -279,6 +279,29 @@ async function alertarApuestasSobrePozo(req, { apuestas, hipodromoNombre, carrer
     return sobre;
   } catch (e) {
     console.warn('[alerta pozo] no se pudo revisar el pozo (se guarda igual):', e.message);
+    return [];
+  }
+}
+
+// POCO POZO (26-10-2026, ver hipismoAlertaPozo.js): después de guardar la carga, avisa en Administración > Alertas de los
+// clientes con pozo (avalados y pago diario con pozo) a los que les quedó menos del 15% de su pozo. Solo AVISA y nunca
+// impide guardar. Si la misma situación ya estaba avisada hoy (mismo mensaje), no vuelve a llenar la lista de alertas,
+// pero igual se devuelve para mostrarla en pantalla.
+async function alertarPozoBajo(req, { nombres, hipodromoNombre, carreraNumero, fecha, etiqueta, excluir }) {
+  try {
+    const bajos = await detectarPozoBajo(req.grupoId, nombres, { excluir });
+    for (const b of bajos) {
+      const mensaje = mensajePozoBajo(b, etiqueta);
+      const yaAvisado = await db.query(
+        `SELECT 1 FROM hipismo_alertas WHERE grupo_id = $1 AND tipo = 'POZO_BAJO' AND mensaje = $2 AND creado_en >= now() - interval '24 hours' LIMIT 1`,
+        [req.grupoId, mensaje]
+      );
+      if (yaAvisado.rows && yaAvisado.rows.length) continue;
+      await registrarAlerta(req, { tipo: 'POZO_BAJO', hipodromoNombre, carreraNumero, fecha, mensaje });
+    }
+    return bajos;
+  } catch (e) {
+    console.warn('[alerta pozo bajo] no se pudo revisar (la carga ya quedó guardada):', e.message);
     return [];
   }
 }
@@ -1185,6 +1208,13 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
+  const pozoBajo = await alertarPozoBajo(req, {
+    nombres: resultado.tickets.reduce((a, t) => { a.push(t.clienteNombre); if (t.banqueroNombre) a.push(t.banqueroNombre); return a; }, []),
+    hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal,
+    etiqueta: `${nombreHipodromoFinal} carrera ${carreraNumero}`,
+    excluir: alertasPozo.map(a => a.nombre)
+  });
+
   const balance = mezclarAdelantadasEnBalance(resultado.totalesFinales, resultado.comisionTotal, resueltas);
   balance.totales = mezclarTerciosAdelantadasEnBalance(balance.totales, resueltasTercios);
 
@@ -1230,6 +1260,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     // de esta carrera" en vez de un simple "plano guardado".
     sustituyoAnterior: rPlanosExistentes.rows.length > 0,
     alertasPozo,
+    pozoBajo,
     adelantadasResueltas: resueltas.map(r => ({ cliente: r.cliente, tipo: r.tipo, estado: r.estadoNuevo, gano: r.gano, resultadoCliente: r.resultadoCliente })),
     terciosAdelantadasResueltas: resueltasTercios.map(r => ({ jugador: r.jugador, banquero: r.banquero, estado: r.estadoNuevo, resultadoJugador: r.resultadoJugador, resultadoBanquero: r.resultadoBanquero }))
   });
@@ -1997,7 +2028,12 @@ router.post('/adelantadas', asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
-  res.status(201).json({ plano, cantidadJugadas: jugadas.length, sinReconocer, alertasPozo });
+  const pozoBajo = await alertarPozoBajo(req, {
+    nombres: jugadas.map(j => j.cliente), hipodromoNombre: nombreHipodromoFinal, fecha,
+    etiqueta: `jugadas adelantadas de ${nombreHipodromoFinal}`, excluir: alertasPozo.map(a => a.nombre)
+  });
+
+  res.status(201).json({ plano, cantidadJugadas: jugadas.length, sinReconocer, alertasPozo, pozoBajo });
 }));
 
 // GET /adelantadas?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
@@ -2431,11 +2467,17 @@ router.post('/tercios-adelantadas', asyncHandler(async (req, res) => {
     return planoCreado;
   });
 
+  const pozoBajo = await alertarPozoBajo(req, {
+    nombres: lineas.map(l => l.jugadorNombre), hipodromoNombre: nombreHipodromoFinal, fecha,
+    etiqueta: `tercios adelantadas de ${nombreHipodromoFinal}`, excluir: alertasPozo.map(a => a.nombre)
+  });
+
   res.status(201).json({
     plano,
     cantidadJugadas: lineas.length,
     cantidadErrores: lineas.filter(l => l.errores.faltaMonto || l.errores.faltaJugador || l.errores.faltaBanquero).length,
-    alertasPozo
+    alertasPozo,
+    pozoBajo
   });
 }));
 

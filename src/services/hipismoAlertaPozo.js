@@ -108,4 +108,50 @@ function mensajeApuestaSobrePozo(s, etiqueta) {
   return `${s.nombre} apostó ${fmt(s.apostado)}${etiqueta ? ' en ' + etiqueta : ''} y su pozo disponible es ${fmt(s.pozoDisponible)} (se pasa por ${fmt(s.faltante)}).`;
 }
 
-module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo };
+
+// =================================================================
+// POZO BAJO (26-10-2026, a pedido del usuario: "cuando un cliente tenga poco pozo, así sea pago diario o avalado, debes
+// generar alertas"; "el pozo es un saldo que se le coloca, quiere decir que puede jugar hasta eso"). Después de guardar
+// un plano / jugada se revisa, de los clientes que intervinieron, a cuáles les quedó POCO pozo para seguir jugando:
+//   - Solo clientes CON pozo: avalados y pago diario con pozo (tipo_cuenta = 'avalado', con o sin la marca de pago diario).
+//     Los libres y los pago diario sin pozo no tienen saldo para jugar, así que no se les avisa.
+//   - "Poco" = lo que les queda disponible (pozoDisponible, el mismo número de la pestaña Pozos) es menos del 15% del
+//     pozo que se les colocó (el mismo corte del "pozo rojo" de la pantalla Pozos). Si ya no les queda nada, el aviso
+//     dice "sin pozo".
+//   - Los que además se pasaron en esta misma carga ya tienen su alerta APUESTA_SOBRE_POZO: se excluyen para no duplicar.
+// Solo AVISA (nunca bloquea ni cambia montos) y un error al revisar jamás impide guardar.
+// =================================================================
+const PORCENTAJE_POZO_BAJO = 15;
+
+// nombres: nombres de los clientes que intervinieron en la carga (se revisa su pozo YA con esa carga guardada).
+// Devuelve [{ nombre, pagoDiario, pozoInicial, pozoDisponible, porcentaje, agotado }] solo de los que quedaron bajos.
+async function detectarPozoBajo(grupoId, nombres, opciones) {
+  const excluir = new Set(((opciones && opciones.excluir) || []).map(n => String(n)));
+  const unicos = Array.from(new Set((nombres || []).map(n => (n ? String(n).trim() : '')).filter(n => n && !excluir.has(n))));
+  if (!unicos.length) return [];
+  const r = await db.query(
+    `SELECT * FROM jugadores
+      WHERE grupo_id = $1 AND nombre = ANY($2) AND tipo_cuenta = 'avalado' AND COALESCE(es_cuenta_comision, false) = false`,
+    [grupoId, unicos]
+  );
+  const bajos = [];
+  for (const jugador of r.rows) {
+    const pozo = await calcularPozoJugador(grupoId, jugador);
+    const base = round2(pozo.pozoInicial);
+    const disponible = round2(pozo.pozoDisponible);
+    const porcentaje = base > 0 ? Math.max(0, Math.round((disponible / base) * 100)) : (disponible > 0 ? 100 : 0);
+    if (porcentaje < PORCENTAJE_POZO_BAJO) {
+      bajos.push({ nombre: jugador.nombre, pagoDiario: !!jugador.pago_diario, pozoInicial: base, pozoDisponible: disponible, porcentaje, agotado: disponible <= 0.005 });
+    }
+  }
+  return bajos;
+}
+
+function mensajePozoBajo(b, etiqueta) {
+  const quien = `${b.nombre}${b.pagoDiario ? ' (pago diario)' : ''}`;
+  const donde = etiqueta ? ` (después de ${etiqueta})` : '';
+  if (b.agotado) return `${quien} se quedó SIN POZO${donde}: le quedan ${fmt(Math.max(0, b.pozoDisponible))} de ${fmt(b.pozoInicial)}.`;
+  return `${quien} tiene POCO POZO${donde}: le quedan ${fmt(b.pozoDisponible)} de ${fmt(b.pozoInicial)} (${b.porcentaje}%).`;
+}
+
+module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo, PORCENTAJE_POZO_BAJO };

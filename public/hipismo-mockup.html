@@ -8718,7 +8718,7 @@ async function confirmarPlano() {
   caja.style.display = 'block';
   caja.textContent = salida;
   ULTIMOS_DATOS_IMAGEN_PLANO = data.datosImagen || null;
-  mostrarAvisoPozo(data.alertasPozo);
+  mostrarAvisoPozo(data.alertasPozo, data.pozoBajo);
 
   // Deja todo listo para la SIGUIENTE carrera de la misma jornada
   // (28-09-2026, a pedido del usuario): pizarra en blanco, plano vacío,
@@ -9778,7 +9778,7 @@ async function guardarAdelantadas() {
   t.style.color = 'var(--ok)';
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
-  mostrarAvisoPozo(data.alertasPozo);
+  mostrarAvisoPozo(data.alertasPozo, data.pozoBajo);
   document.getElementById('txtAdelantadas').value = '';
   mostrarVacioAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
   cargarPendientesAdelantadas();
@@ -10176,7 +10176,7 @@ async function guardarTerciosAdelantadas() {
   t.style.color = 'var(--ok)';
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2600);
-  mostrarAvisoPozo(data.alertasPozo);
+  mostrarAvisoPozo(data.alertasPozo, data.pozoBajo);
   document.getElementById('txtTerciosAdelantadas').value = '';
   mostrarVacioTerciosAdelantadas('Las jugadas que reconozca van a aparecer acá cuando le des Revisar o Guardar.');
   cargarPendientesTerciosAdelantadas();
@@ -10831,7 +10831,7 @@ function pintarTablaClientesFiltrada() {
       <td>${formatNombre(j.nombre)}${esDuplicado ? ' <span class="badge-duplicado" title="Hay otro cliente con este mismo nombre -- revisa cuál sobra y bórralo desde su ficha.">⚠️ Nombre duplicado</span>' : ''}${j.es_cuenta_comision ? ' <span class="badge-pendiente" style="font-size:10.5px;">cuenta de comisión</span>' : (j.auto_creado ? ' <span class="badge-pendiente" style="font-size:10.5px;">creado desde un plano</span>' : '')}</td>
       <td>${Number(j.comision_propia) > 0 ? Number(j.comision_propia) + '%' : '—'}</td>
       <td>${celdaPctAvalTabla(j)}</td>
-      <td>${j.tipo_cuenta === 'avalado' ? 'Avalado' : (j.pago_diario ? '<span class="pill pill-verde">💵 Pago diario</span>' : '<span class="pill pill-verde">Libre</span>')}</td>
+      <td>${j.tipo_cuenta === 'avalado' ? (j.pago_diario ? '<span class="pill pill-verde">💵 Pago diario con pozo</span>' : 'Avalado') : (j.pago_diario ? '<span class="pill pill-verde">💵 Pago diario</span>' : '<span class="pill pill-verde">Libre</span>')}</td>
       ${hayLos2Modulos ? `
       <td>
         <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:normal; cursor:pointer;" title="Su link de Hipismo mostrará también Deportes, y su link de Deportes mostrará también Hipismo — separados, pero sumados al balance total.">
@@ -11087,10 +11087,11 @@ function abrirCrearCliente() {
       <div class="fila">
         <div>
           <label>Tipo de cuenta</label>
-          <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').style.display = this.value === 'avalado' ? 'block' : 'none';">
+          <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').style.display = (this.value === 'avalado' || this.value === 'pago_diario_pozo') ? 'block' : 'none';">
             <option value="libre" selected>Libre</option>
             <option value="avalado">Avalado (con pozo)</option>
             <option value="pago_diario">💵 Pago diario</option>
+            <option value="pago_diario_pozo">💵 Pago diario con pozo</option>
           </select>
         </div>
         <div id="nvoCtePozoWrap" style="display:none;">
@@ -11288,8 +11289,8 @@ async function guardarNuevoCliente() {
     telefono: document.getElementById('nvoCteTelefono').value.trim(),
     notas: document.getElementById('nvoCteNotas').value.trim(),
     activo: document.getElementById('nvoCteActivo').checked,
-    tipoCuenta: document.getElementById('nvoCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
-    pagoDiario: document.getElementById('nvoCteTipoCuenta').value === 'pago_diario',
+    tipoCuenta: ['avalado', 'pago_diario_pozo'].includes(document.getElementById('nvoCteTipoCuenta').value) ? 'avalado' : 'libre',
+    pagoDiario: ['pago_diario', 'pago_diario_pozo'].includes(document.getElementById('nvoCteTipoCuenta').value),
     ...socioIdDeFormulario('nvoCteSocio'),
     pozoInicial: document.getElementById('nvoCtePozoInicial') ? document.getElementById('nvoCtePozoInicial').value : 0,
     comisionPropia,
@@ -11372,7 +11373,7 @@ function cerrarFichaCliente() {
 function actualizarVisibilidadPozoDetalleCliente() {
   const sel = document.getElementById('detCteTipoCuenta');
   const wrap = document.getElementById('detCtePozoWrap');
-  if (sel && wrap) wrap.style.display = sel.value === 'avalado' ? 'block' : 'none';
+  if (sel && wrap) wrap.style.display = (sel.value === 'avalado' || sel.value === 'pago_diario_pozo') ? 'block' : 'none';
 }
 
 async function pintarFichaCliente() {
@@ -11411,8 +11412,9 @@ async function pintarFichaCliente() {
           <label>Tipo de cuenta</label>
           <select id="detCteTipoCuenta" onchange="actualizarVisibilidadPozoDetalleCliente()">
             <option value="libre" ${j.tipo_cuenta !== 'avalado' && !j.pago_diario ? 'selected' : ''}>Libre</option>
-            <option value="avalado" ${j.tipo_cuenta === 'avalado' ? 'selected' : ''}>Avalado (con pozo)</option>
+            <option value="avalado" ${j.tipo_cuenta === 'avalado' && !j.pago_diario ? 'selected' : ''}>Avalado (con pozo)</option>
             <option value="pago_diario" ${j.tipo_cuenta !== 'avalado' && j.pago_diario ? 'selected' : ''}>💵 Pago diario</option>
+            <option value="pago_diario_pozo" ${j.tipo_cuenta === 'avalado' && j.pago_diario ? 'selected' : ''}>💵 Pago diario con pozo</option>
           </select>
         </div>
         <div id="detCtePozoWrap" style="display:${j.tipo_cuenta === 'avalado' ? 'block' : 'none'};">
@@ -11519,8 +11521,8 @@ async function guardarDetalleCliente(id) {
     telefono: document.getElementById('detCteTelefono').value.trim(),
     notas: document.getElementById('detCteNotas').value.trim(),
     activo: document.getElementById('detCteActivo').checked,
-    tipoCuenta: document.getElementById('detCteTipoCuenta').value === 'avalado' ? 'avalado' : 'libre',
-    pagoDiario: document.getElementById('detCteTipoCuenta').value === 'pago_diario',
+    tipoCuenta: ['avalado', 'pago_diario_pozo'].includes(document.getElementById('detCteTipoCuenta').value) ? 'avalado' : 'libre',
+    pagoDiario: ['pago_diario', 'pago_diario_pozo'].includes(document.getElementById('detCteTipoCuenta').value),
     ...socioIdDeFormulario('detCteSocio'),
     // El pozo NO lo toca este formulario — se conserva tal cual estaba
     // (se edita aparte, con el ajuste +/- de abajo).
@@ -13630,7 +13632,7 @@ function filaPozoSoloSaldo(nombre, monto) {
 // debajo la lista de esos clientes, y después "AVALADOS:" con la lista de los demás clientes. Si el grupo no tiene ningún cliente
 // de pago diario en la lista, la tabla queda exactamente como antes (sin encabezados).
 function nombresPagoDiarioPozos() {
-  return new Set(CLIENTES_HIPISMO_CACHE.filter(j => j.pago_diario && j.tipo_cuenta !== 'avalado').map(j => j.nombre));
+  return new Set(CLIENTES_HIPISMO_CACHE.filter(j => j.pago_diario).map(j => j.nombre));
 }
 function filaSeccionPozos(texto, colspan) {
   return `<tr class="fila-seccion-pozos"><td colspan="${colspan}">${texto}</td></tr>`;
@@ -17274,7 +17276,8 @@ const TIPOS_ALERTA_TEXTO = {
   TERCIOS_ADELANTADA_EDITADA: '✏️ Tercios adelantada editada', TERCIOS_ADELANTADA_ELIMINADA: '🗑️ Tercios adelantada eliminada',
   REMATE_MANUAL_ELIMINADO: '🗑️ Remate manual eliminado',
   APUESTA_SOBRE_POZO: '⚠️ Apostó más de lo que le queda',
-  CUADRE_DESCUADRADO: '🧮 Cuadre automático: algo no cuadra'
+  CUADRE_DESCUADRADO: '🧮 Cuadre automático: algo no cuadra',
+  POZO_BAJO: '🪙 Poco pozo'
 };
 
 // (La Puesta en Marcha ya no vive en el panel del Grupo: se arma desde Súper-admin > 🚀 Puesta en Marcha.)
@@ -17491,8 +17494,12 @@ function descargarRegistroSaldosCSV() {
 // alertasPozo al guardar un plano; el aviso queda en pantalla hasta que se
 // cierra (el toast normal desaparece en 2 segundos y es fácil perdérselo).
 // Solo avisa: la jugada ya quedó guardada igual.
-function mostrarAvisoPozo(lista) {
-  if (!Array.isArray(lista) || !lista.length) return;
+function mostrarAvisoPozo(lista, pozoBajo) {
+  // 26-10-2026 ("cuando un cliente tenga poco pozo, así sea pago diario o avalado, debes generar alertas"): el mismo aviso
+  // también lista a los clientes con pozo (avalados y pago diario con pozo) a los que les quedó POCO pozo para seguir jugando.
+  const sobre = Array.isArray(lista) ? lista : [];
+  const bajos = Array.isArray(pozoBajo) ? pozoBajo : [];
+  if (!sobre.length && !bajos.length) return;
   let caja = document.getElementById('avisoPozoFlotante');
   if (!caja) {
     caja = document.createElement('div');
@@ -17501,9 +17508,16 @@ function mostrarAvisoPozo(lista) {
     document.body.appendChild(caja);
   }
   const fmtM = n => redondearCentavos(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  caja.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">⚠️ Apostó más de lo que le queda</div>` +
-    lista.map(x => `<div style="margin-bottom:4px;"><b>${formatNombre(x.nombre)}</b>: apostó ${fmtM(x.apostado)} y su pozo disponible es ${fmtM(x.pozoDisponible)} (se pasa por ${fmtM(x.faltante)})</div>`).join('') +
-    `<div style="margin-top:8px; text-align:right;"><button type="button" class="btn-secundario" onclick="document.getElementById('avisoPozoFlotante').remove()">Entendido</button></div>`;
+  let html = '';
+  if (sobre.length) {
+    html += `<div style="font-weight:700; margin-bottom:6px;">⚠️ Apostó más de lo que le queda</div>` +
+      sobre.map(x => `<div style="margin-bottom:4px;"><b>${formatNombre(x.nombre)}</b>: apostó ${fmtM(x.apostado)} y su pozo disponible es ${fmtM(x.pozoDisponible)} (se pasa por ${fmtM(x.faltante)})</div>`).join('');
+  }
+  if (bajos.length) {
+    html += `<div style="font-weight:700; margin:${sobre.length ? '10px' : '0'} 0 6px;">🪙 Poco pozo</div>` +
+      bajos.map(x => `<div style="margin-bottom:4px;"><b>${formatNombre(x.nombre)}</b>${x.pagoDiario ? ' 💵 pago diario' : ''}: ${x.agotado ? '<b>sin pozo</b>' : 'le quedan ' + fmtM(x.pozoDisponible) + ' de ' + fmtM(x.pozoInicial) + ' (' + x.porcentaje + '%)'}</div>`).join('');
+  }
+  caja.innerHTML = html + `<div style="margin-top:8px; text-align:right;"><button type="button" class="btn-secundario" onclick="document.getElementById('avisoPozoFlotante').remove()">Entendido</button></div>`;
 }
 // Revisión de cuadre nocturna (07-10-2026) — estado de las últimas noches.
 async function pintarCuadreNocturno() {

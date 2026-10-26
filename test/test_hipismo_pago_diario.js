@@ -4,7 +4,7 @@
 // abajo la lista de esos clientes y después AVALADOS: la lista de los clientes").
 //   Backend (src/routes/jugadores.js): POST/PUT aceptan `pagoDiario` (boolean) y guardan la marca aparte; sin la columna
 //   (42703) crear/editar sigue funcionando y solo avisa (503) si justo pedían marcar pago diario; si `pagoDiario` no viene
-//   no se toca la marca; un avalado nunca queda como pago diario.
+//   no se toca la marca. (26-10-2026) Un pago diario también puede tener pozo: tipo 'avalado' + marca pago_diario = "Pago diario con pozo".
 //   Pantalla (public/hipismo-mockup.html): htmlFilasPozosPorSeccion() parte la lista en PAGO DIARIO / AVALADOS: y, sin clientes
 //   de pago diario, deja la tabla igual que siempre.
 // =================================================================
@@ -91,7 +91,7 @@ const req = (body, params) => ({ body, params: params || {}, grupoId: GRUPO, rol
 
   r = await invocar(crear, req({ nombre: 'Con Pozo', tipoCuenta: 'avalado', pozoInicial: 300, pagoDiario: true }));
   const cp = JUG.find(j => j.nombre === 'CON POZO');
-  check(r.status === 201 && cp.tipo_cuenta === 'libre' && cp.pago_diario === true && Number(cp.pozo_inicial) === 0, '4) Si piden pago diario, gana sobre "avalado": queda libre, sin pozo');
+  check(r.status === 201 && cp.tipo_cuenta === 'avalado' && cp.pago_diario === true && Number(cp.pozo_inicial) === 300, '4) Pago diario CON POZO: pagoDiario=true + avalado conserva el pozo (tipo avalado, marca pago diario)');
 
   r = await invocar(editar, req({ nombre: 'Luis', tipoCuenta: 'libre', pagoDiario: true }, { id: 'j1' }));
   check(r.status === 200 && JUG[0].pago_diario === true, '5) Editar: pasar un cliente libre a pago diario');
@@ -132,10 +132,11 @@ const req = (body, params) => ({ body, params: params || {}, grupoId: GRUPO, rol
   out = armar(cache)([{ nombre: 'BETO' }, { nombre: 'DIEGO' }], f => f.nombre, f => fila(f.nombre), 3);
   check(out.includes('PAGO DIARIO') && !out.includes('AVALADOS:'), '15) Si todos son pago diario no sale el título AVALADOS: vacío');
   out = armar([{ nombre: 'BETO', tipo_cuenta: 'avalado', pago_diario: true }])([{ nombre: 'BETO' }], f => f.nombre, f => fila(f.nombre), 3);
-  check(!out.includes('PAGO DIARIO'), '16) Un cliente con pozo (avalado) no cuenta como pago diario aunque tenga la marca vieja');
+  check(out.includes('PAGO DIARIO') && !out.includes('AVALADOS:'), '16) Un pago diario con pozo (avalado + marca) SÍ sale en la sección PAGO DIARIO');
 
   check((html.match(/htmlFilasPozosPorSeccion\(/g) || []).length >= 4, '17) Los 3 filtros de Pozos (Saldos+Pozos, Solo Saldos, Solo Pozos) usan las secciones');
   check(/value="pago_diario"/.test(html) && (html.match(/value="pago_diario"/g) || []).length >= 2, '18) La opción "Pago diario" existe al crear el cliente y en su ficha');
+  check((html.match(/value="pago_diario_pozo"/g) || []).length >= 2 && /pagoDiario: \['pago_diario', 'pago_diario_pozo'\]/.test(html), '18b) La opción "Pago diario con pozo" existe al crear y en la ficha, y manda tipo avalado + pagoDiario');
   check(/encabezadoPendiente/.test(html) && /fila-seccion-pozos/.test(html), '19) El texto copiado y la imagen respetan los títulos de sección');
 
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');

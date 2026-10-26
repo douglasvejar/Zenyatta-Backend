@@ -2290,3 +2290,10 @@ create index if not exists idx_hipismo_socios_grupo on hipismo_socios(grupo_id);
 alter table hipismo_socios enable row level security;
 alter table jugadores add column if not exists hipismo_socio_id uuid references hipismo_socios(id) on delete set null;
 create index if not exists idx_jugadores_hipismo_socio on jugadores(hipismo_socio_id);
+
+-- 26-10-2026: ALERTA "POCO POZO" (a pedido del usuario: "cuando un cliente tenga poco pozo, así sea pago diario o avalado, debes generar
+-- alertas"; el pozo es el saldo con el que puede jugar). Un tipo más en hipismo_alertas: POZO_BAJO = al cargar un plano / jugada, a un
+-- cliente con pozo (avalado o pago diario con pozo) le quedó menos del 15% de su pozo. El servidor también lo aplica solo al arrancar.
+alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
+alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO')) not valid;

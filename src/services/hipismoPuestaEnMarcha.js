@@ -63,7 +63,7 @@ async function verificarEsquema() {
   try {
     const rc = await db.query(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'hipismo_alertas_tipo_check'`);
     const def = (rc.rows[0] && rc.rows[0].def) || '';
-    ['APUESTA_SOBRE_POZO', 'CUADRE_DESCUADRADO'].forEach(t => { if (!def.includes(t)) faltan.push(`la tabla de alertas no acepta el tipo ${t}`); });
+    ['APUESTA_SOBRE_POZO', 'CUADRE_DESCUADRADO', 'POZO_BAJO'].forEach(t => { if (!def.includes(t)) faltan.push(`la tabla de alertas no acepta el tipo ${t}`); });
   } catch (e) { faltan.push('no se pudo leer la restricción de alertas'); }
   return { ok: faltan.length === 0, faltan };
 }

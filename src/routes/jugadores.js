@@ -208,13 +208,15 @@ async function resolverCuentaComisionPropiaId(grupoId, { comisionPropia, incluir
 
 // 25-10-2026, a pedido del usuario: "cuando creas cliente, aparte de avalados y libres, hay clientes que se denominan PAGO DIARIO".
 // Es un tercer tipo de cuenta en pantalla: se guarda como un cliente "libre" (sin pozo) con la marca jugadores.pago_diario = true.
+// 26-10-2026, a pedido del usuario ("cuando un cliente tenga poco pozo, así sea pago diario o avalado, debes generar alertas"):
+// un pago diario TAMBIÉN puede tener pozo (el saldo con el que puede jugar). Ese es "Pago diario con pozo": tipo 'avalado' + la
+// marca pago_diario = true. La marca y el tipo son independientes: pagoDiario=true con tipoCuenta='avalado' conserva el pozo.
 // `pagoDiario` solo se toca cuando viene como true/false en el cuerpo (otras pantallas que editan al cliente no lo mandan y
-// no deben borrarlo). Un cliente con pozo (avalado) nunca es pago diario.
+// no deben borrarlo).
 function resolverTipoYPagoDiario(tipoCuenta, pagoDiario) {
   const pedido = typeof pagoDiario === 'boolean' ? pagoDiario : null;
-  const tipo = pedido === true ? 'libre' : (tipoCuenta === 'avalado' ? 'avalado' : 'libre');
-  const marca = tipo === 'avalado' ? (pedido === null ? null : false) : pedido;
-  return { tipo, marca };
+  const tipo = tipoCuenta === 'avalado' ? 'avalado' : 'libre';
+  return { tipo, marca: pedido };
 }
 // Guarda la marca aparte del INSERT/UPDATE principal para que, si la columna todavía no existe en la base (no corrieron el SQL),
 // crear/editar clientes siga funcionando igual que antes; solo se avisa cuando justo piden marcar a alguien como pago diario.

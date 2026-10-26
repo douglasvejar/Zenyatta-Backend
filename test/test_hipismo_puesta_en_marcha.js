@@ -8,7 +8,7 @@ const originalLoad = Module._load;
 const GRUPO_ID = 'g-pem-1';
 
 let cols = [];            // filas information_schema.columns
-let defAlertas = 'CHECK (tipo = ANY (ARRAY[... APUESTA_SOBRE_POZO ... CUADRE_DESCUADRADO ...]))';
+let defAlertas = 'CHECK (tipo = ANY (ARRAY[... APUESTA_SOBRE_POZO ... CUADRE_DESCUADRADO ... POZO_BAJO ...]))';
 let conteos = {};
 let ultimoCuadre = null;
 let cuadreResultado = { ok: true, clientesRevisados: 4, discrepancias: [], sumaBalance: [] };
@@ -68,8 +68,8 @@ const item = (d, k) => d.items.find(i => i.clave === k);
   cols = esquemaCompleto();
   defAlertas = "CHECK (tipo = ANY (ARRAY['PLANO_EDITADO']))";
   e = await pem.verificarEsquema();
-  check(!e.ok && e.faltan.filter(f => /no acepta el tipo/.test(f)).length === 2, '2c) avisa si la tabla de alertas no acepta los tipos nuevos');
-  defAlertas = 'APUESTA_SOBRE_POZO CUADRE_DESCUADRADO';
+  check(!e.ok && e.faltan.filter(f => /no acepta el tipo/.test(f)).length === 3, '2c) avisa si la tabla de alertas no acepta los tipos nuevos');
+  defAlertas = 'APUESTA_SOBRE_POZO CUADRE_DESCUADRADO POZO_BAJO';
 
   // ---- checklist de un grupo nuevo vacío
   conteos = { hipodromos: 0, clientes: 0, conPct: 0, empleados: 0, planos: 0 };

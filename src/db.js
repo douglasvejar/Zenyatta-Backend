@@ -73,6 +73,13 @@ pool.query(`create table if not exists hipismo_socios (
   .then(() => pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS hipismo_socio_id uuid REFERENCES hipismo_socios(id) ON DELETE SET NULL'))
   .catch((err) => console.warn('[db] No se pudo asegurar hipismo_socios / jugadores.hipismo_socio_id (corre sql/schema.sql en Supabase):', err.message));
 
+// 26-10-2026: tipo de alerta nuevo POZO_BAJO ("poco pozo", ver services/hipismoAlertaPozo.js y sql/schema.sql). El check de
+// hipismo_alertas.tipo se renueva solo al arrancar ("not valid": no revisa las alertas viejas). Si la base no deja, solo avisa en el log.
+pool.query(`alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
+  alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO')) not valid`)
+  .catch((err) => console.warn('[db] No se pudo actualizar el check de hipismo_alertas.tipo (corre sql/schema.sql en Supabase):', err.message));
+
 // 25-10-2026: estado puesto a mano en un ticket de Deportes (✏️ Editar) que NO se pierde al reprocesar la sábana (ver sql/schema.sql
 // y services/historial.js). Se crea sola; si la base no deja, solo avisa en el log y todo sigue como antes.
 pool.query(`create table if not exists tickets_estado_manual (
