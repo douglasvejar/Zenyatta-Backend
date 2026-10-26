@@ -123,6 +123,18 @@ const jug = (nombre, extra) => ({ id: 'j-' + nombre, grupo_id: GRUPO_ID, nombre,
   check(r.length === 1 && r[0].nombre === 'ANA', '1n) si aún no existe la columna pago_diario, sigue avisando a los avalados (sin romper)');
   recargas = {};
 
+  // ---------- 1c) "apostó más de lo que le queda" y "validar plano" con pago diario recargado (27-10-2026) ----------
+  recargas = { FELIPE: 500, MARIA: 1000 };
+  pozos.FELIPE = { inicial: 0, disponible: -460 };   // le quedan 40 de lo recargado
+  pozos.MARIA = { inicial: 0, disponible: -300 };    // le quedan 700
+  let sb = await alertaPozo.detectarApuestasSobrePozo(GRUPO_ID, [{ nombre: 'FELIPE', monto: 100 }, { nombre: 'MARIA', monto: 100 }, { nombre: 'DIARIO', monto: 9999 }]);
+  check(sb.length === 1 && sb[0].nombre === 'FELIPE' && sb[0].pozoDisponible === 40 && sb[0].faltante === 60, '1o) PAGO DIARIO recargado que apuesta 100 con 40 disponibles -> "apostó más de lo que le queda" (se pasa por 60); MARIA (700) y el pago diario sin recargas no');
+  const val = await alertaPozo.validarTerciosContraPozo(GRUPO_ID, [
+    { clienteNombre: 'FELIPE', modalidad: 'Gana', caballo: '1', monto: 30 }, { clienteNombre: 'FELIPE', modalidad: 'Gana', caballo: '2', monto: 30 },
+    { clienteNombre: 'FELIPE', modalidad: 'Gana', caballo: '3', monto: 10 }, { clienteNombre: 'MARIA', modalidad: 'Gana', caballo: '1', monto: 50 }]);
+  check(val.length === 1 && val[0].nombre === 'FELIPE' && val[0].juegan.length === 2 && val[0].noAlcanzan.length === 1 && val[0].noAlcanzan[0].caballo === '2', '1p) Validar plano: a FELIPE (40 recargados) le caben 30 y 10; la segunda de 30 no alcanza');
+  recargas = {};
+
   // ---------- 2) ruta POST /tercios-adelantadas ----------
   const base = { grupoId: GRUPO_ID, grupo: { id: GRUPO_ID, nombre: 'Largavita' }, nombreActor: 'Largavita', params: {}, query: {} };
   const texto = '*JUGADAS ADELANTADAS LA RINCONADA*\n\n*1RA CARRERA*\n\n*ANA 2x7 50 DA LUIS*\n*PEDRO 2x5 20 DA LUIS*';

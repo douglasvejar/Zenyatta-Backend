@@ -14,8 +14,8 @@
 // devuelve la lista en la respuesta para que la pantalla lo muestre.
 //
 // Reglas:
-//   - Solo clientes con tipo_cuenta = 'avalado' (los "libres" no tienen
-//     pozo que cuidar) y que no sean cuentas de comisión.
+//   - Solo clientes con pozo: avalados, pago diario con pozo y pago diario con recargas de la semana (27-10-2026: su saldo
+//     recargado es su pozo; ver clientesConPozoDisponible). Los "libres" no tienen pozo que cuidar; tampoco las cuentas de comisión.
 //   - El pozo se lee ANTES de guardar la carga, así que el resultado de
 //     esta misma carga no se cuenta dos veces.
 //   - Nunca rompe la carga: cualquier error al revisar se ignora (el plano
@@ -27,6 +27,54 @@ const { round2 } = require('./hipismoAdelantadasCalc');
 
 function fmt(n) {
   return Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// 27-10-2026: clientes CON pozo entre los nombres dados y lo que les queda para jugar. Son los avalados, los pago diario con pozo y
+// los pago diario con RECARGAS de la semana (su saldo recargado es su pozo: pozo + recargas; ver "Recarga Saldos Pago Diarios").
+// Un pago diario sin pozo ni recargas esta semana no tiene nada que cuidar y no entra. Si todavía no existe la columna
+// jugadores.pago_diario, solo entran los avalados.
+// Devuelve [{ jugador, base, disponible, pagoDiario }].
+const CUENTA_RECARGAS_PAGO_DIARIO = 'POZOS PAGO DIARIOS';
+
+// Lo recargado a un cliente de pago diario dentro del rango de la semana (solo las filas que son recarga: positivas y hechas en el
+// mismo momento que la fila de la cuenta POZOS PAGO DIARIOS).
+async function recargasPagoDiarioSemana(grupoId, nombre, rango) {
+  const r = await db.query(
+    `SELECT COALESCE(SUM(monto), 0) AS total FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND cliente_nombre = $2 AND monto > 0 AND fecha >= $3 AND fecha <= $4
+        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $5)`,
+    [grupoId, nombre, rango.desde, rango.hasta, CUENTA_RECARGAS_PAGO_DIARIO]
+  );
+  return round2(Number(r.rows && r.rows[0] && r.rows[0].total) || 0);
+}
+
+async function clientesConPozoDisponible(grupoId, nombres) {
+  const consulta = condicion => db.query(
+    `SELECT * FROM jugadores
+      WHERE grupo_id = $1 AND nombre = ANY($2) AND ${condicion} AND COALESCE(es_cuenta_comision, false) = false`,
+    [grupoId, nombres]
+  );
+  let r;
+  try {
+    r = await consulta("(tipo_cuenta = 'avalado' OR pago_diario = true)");
+  } catch (e) {
+    if (!e || e.code !== '42703') throw e;
+    r = await consulta("tipo_cuenta = 'avalado'");
+  }
+  const salida = [];
+  for (const jugador of r.rows) {
+    const pozo = await calcularPozoJugador(grupoId, jugador);
+    let base = round2(pozo.pozoInicial);
+    let disponible = round2(pozo.pozoDisponible);
+    if (jugador.pago_diario) {
+      const recargas = pozo.rango ? await recargasPagoDiarioSemana(grupoId, jugador.nombre, pozo.rango) : 0;
+      base = round2(base + recargas);
+      disponible = round2(disponible + recargas);
+      if (jugador.tipo_cuenta !== 'avalado' && base <= 0) continue;
+    }
+    salida.push({ jugador, base, disponible, pagoDiario: !!jugador.pago_diario });
+  }
+  return salida;
 }
 
 // apuestas: [{ nombre, monto }] — varias filas del mismo cliente se suman.
@@ -42,18 +90,12 @@ async function detectarApuestasSobrePozo(grupoId, apuestas) {
   });
   if (!porNombre.size) return [];
 
-  const r = await db.query(
-    `SELECT * FROM jugadores
-      WHERE grupo_id = $1 AND nombre = ANY($2) AND tipo_cuenta = 'avalado' AND COALESCE(es_cuenta_comision, false) = false`,
-    [grupoId, Array.from(porNombre.keys())]
-  );
   const sobre = [];
-  for (const jugador of r.rows) {
-    const pozo = await calcularPozoJugador(grupoId, jugador);
-    const apostado = round2(porNombre.get(jugador.nombre));
-    const disponible = round2(pozo.pozoDisponible);
+  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porNombre.keys()))) {
+    const apostado = round2(porNombre.get(c.jugador.nombre));
+    const disponible = c.disponible;
     if (apostado > Math.max(0, disponible) + 0.005) {
-      sobre.push({ nombre: jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - Math.max(0, disponible)) });
+      sobre.push({ nombre: c.jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - Math.max(0, disponible)) });
     }
   }
   return sobre;
@@ -80,15 +122,10 @@ async function validarTerciosContraPozo(grupoId, tickets) {
   });
   if (!porCliente.size) return [];
 
-  const r = await db.query(
-    `SELECT * FROM jugadores
-      WHERE grupo_id = $1 AND nombre = ANY($2) AND tipo_cuenta = 'avalado' AND COALESCE(es_cuenta_comision, false) = false`,
-    [grupoId, Array.from(porCliente.keys())]
-  );
   const salida = [];
-  for (const jugador of r.rows) {
-    const pozo = await calcularPozoJugador(grupoId, jugador);
-    const disponible = round2(pozo.pozoDisponible);
+  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porCliente.keys()))) {
+    const jugador = c.jugador;
+    const disponible = c.disponible;
     const tope = Math.max(0, disponible);
     let gastado = 0;
     const juegan = [];
@@ -123,56 +160,18 @@ function mensajeApuestaSobrePozo(s, etiqueta) {
 // =================================================================
 const PORCENTAJE_POZO_BAJO = 15;
 
-// 26-10-2026: la cuenta fija donde se acumula el contrapeso de las recargas de pago diario (ver "Recarga Saldos Pago Diarios" en
-// routes/hipismo.js). Un cliente de PAGO DIARIO juega con lo que se le recarga: su "pozo" de la semana = pozo que tenga + sus
-// recargas de la semana, y "poco" se mide contra eso (aunque el cliente sea libre y no tenga pozo base).
-const CUENTA_RECARGAS_PAGO_DIARIO = 'POZOS PAGO DIARIOS';
-
-// Lo recargado a un cliente de pago diario dentro del rango de la semana (solo las filas que son recarga: positivas y hechas en el
-// mismo momento que la fila de la cuenta POZOS PAGO DIARIOS).
-async function recargasPagoDiarioSemana(grupoId, nombre, rango) {
-  const r = await db.query(
-    `SELECT COALESCE(SUM(monto), 0) AS total FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = $2 AND monto > 0 AND fecha >= $3 AND fecha <= $4
-        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $5)`,
-    [grupoId, nombre, rango.desde, rango.hasta, CUENTA_RECARGAS_PAGO_DIARIO]
-  );
-  return round2(Number(r.rows && r.rows[0] && r.rows[0].total) || 0);
-}
-
 // nombres: nombres de los clientes que intervinieron en la carga (se revisa su pozo YA con esa carga guardada).
 // Devuelve [{ nombre, pagoDiario, pozoInicial, pozoDisponible, porcentaje, agotado }] solo de los que quedaron bajos.
 async function detectarPozoBajo(grupoId, nombres, opciones) {
   const excluir = new Set(((opciones && opciones.excluir) || []).map(n => String(n)));
   const unicos = Array.from(new Set((nombres || []).map(n => (n ? String(n).trim() : '')).filter(n => n && !excluir.has(n))));
   if (!unicos.length) return [];
-  const consulta = condicion => db.query(
-    `SELECT * FROM jugadores
-      WHERE grupo_id = $1 AND nombre = ANY($2) AND ${condicion} AND COALESCE(es_cuenta_comision, false) = false`,
-    [grupoId, unicos]
-  );
-  let r;
-  try {
-    r = await consulta("(tipo_cuenta = 'avalado' OR pago_diario = true)");
-  } catch (e) {
-    if (!e || e.code !== '42703') throw e; // todavía no existe la columna pago_diario: solo los avalados
-    r = await consulta("tipo_cuenta = 'avalado'");
-  }
   const bajos = [];
-  for (const jugador of r.rows) {
-    const pozo = await calcularPozoJugador(grupoId, jugador);
-    let base = round2(pozo.pozoInicial);
-    let disponible = round2(pozo.pozoDisponible);
-    if (jugador.pago_diario) {
-      const recargas = pozo.rango ? await recargasPagoDiarioSemana(grupoId, jugador.nombre, pozo.rango) : 0;
-      base = round2(base + recargas);
-      disponible = round2(disponible + recargas);
-      // Pago diario sin pozo ni recargas esta semana: no tiene saldo con el que jugar, no hay nada que cuidar.
-      if (jugador.tipo_cuenta !== 'avalado' && base <= 0) continue;
-    }
+  for (const c of await clientesConPozoDisponible(grupoId, unicos)) {
+    const { base, disponible } = c;
     const porcentaje = base > 0 ? Math.max(0, Math.round((disponible / base) * 100)) : (disponible > 0 ? 100 : 0);
     if (porcentaje < PORCENTAJE_POZO_BAJO) {
-      bajos.push({ nombre: jugador.nombre, pagoDiario: !!jugador.pago_diario, pozoInicial: base, pozoDisponible: disponible, porcentaje, agotado: disponible <= 0.005 });
+      bajos.push({ nombre: c.jugador.nombre, pagoDiario: c.pagoDiario, pozoInicial: base, pozoDisponible: disponible, porcentaje, agotado: disponible <= 0.005 });
     }
   }
   return bajos;
