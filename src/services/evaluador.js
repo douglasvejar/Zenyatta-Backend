@@ -609,8 +609,12 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
     return { estado: 'PERDIDA', debug: debugEmpate };
   }
 
-  const esOver = /(over|alta|altas)/i.test(lineaJugada);
-  const esUnder = /(under|baja|bajas)/i.test(lineaJugada);
+  // CORREGIDO (27-10-2026, ticket real "Oklahoma city thunder rl -8.5 -115" leído como UNDER): "thunder" CONTIENE "under", así que el
+  // nombre del equipo se confundía con la palabra under y el hándicap se evaluaba como baja ("Ninguno de los números... línea
+  // numérica válida"). Ahora over/under/alta/baja solo cuentan como palabra suelta (sin letras pegadas antes ni después; los números
+  // pegados como "over8.5" sí valen).
+  const esOver = /(?<![a-z])(over|alta|altas)(?![a-z])/i.test(lineaJugada);
+  const esUnder = /(?<![a-z])(under|baja|bajas)(?![a-z])/i.test(lineaJugada);
 
   if (esOver || esUnder) {
     const limpiaSinSegmento = limpiarMarcadoresSegmento(lineaJugada);
@@ -783,7 +787,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
 // de cuál es. Si cabe en el techo de más de uno (o de ninguno), esta capa
 // no aporta nada y se sigue a la próxima.
 function deportesQueCoincidenPorNumero(lineaJugada, deportesCandidatos) {
-  const esOverUnder = /(over|alta|altas|under|baja|bajas)/i.test(lineaJugada);
+  const esOverUnder = /(?<![a-z])(over|alta|altas|under|baja|bajas)(?![a-z])/i.test(lineaJugada);
   const limpia = limpiarMarcadoresSegmento(lineaJugada);
   const numeros = (extraerNumerosSueltos(limpia) || [])
     .map(parseFloat)
