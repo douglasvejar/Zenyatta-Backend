@@ -24,9 +24,27 @@ async function obtenerResultadosNBA(fechaISO) {
   const datosNBA = {};
   const fechaCompacta = (fechaISO || '').replace(/-/g, '');
 
+  // 27-10-2026: si ESPN no responde (o responde con error) ya no queda un "{}" mudo que se confunde con "no hay juego": se
+  // reintenta una vez y, si igual falla, el motivo queda en datosNBA.__meta.error para que la jugada diga la verdad (ver
+  // evaluador.js, "Partido no encontrado"). __meta no es enumerable: no aparece como si fuera un juego.
+  const meta = { error: null, totalEventos: 0 };
+  Object.defineProperty(datosNBA, '__meta', { value: meta, enumerable: false });
+
   try {
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + fechaCompacta);
-    const json = await res.json();
+    let json = null;
+    for (let intento = 1; intento <= 2 && !json; intento++) {
+      try {
+        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + fechaCompacta, { signal: AbortSignal.timeout(10000) });
+        if (res.ok === false) throw new Error('ESPN respondió ' + res.status);
+        json = await res.json();
+        meta.error = null;
+      } catch (e) {
+        meta.error = e && e.message ? e.message : String(e);
+        if (intento < 2) await new Promise(r => setTimeout(r, 1200));
+      }
+    }
+    if (!json) throw new Error(meta.error || 'sin respuesta');
+    meta.totalEventos = (json.events || []).length;
 
     (json.events || []).forEach(ev => {
       const comp = ev.competitions && ev.competitions[0];
@@ -125,6 +143,7 @@ async function obtenerResultadosNBA(fechaISO) {
       datosNBA[away.team.displayName.toLowerCase()] = info;
     });
   } catch (e) {
+    meta.error = meta.error || (e && e.message) || String(e);
     console.error('Error al conectar con la API de NBA (ESPN):', e);
   }
 

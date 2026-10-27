@@ -391,7 +391,7 @@ function evaluarConEquipoYConfig(lineaJugada, datosDeporte, infoEquipo, apodoEnc
     // que ver.
     const razon = numeroJuegoPedido
       ? ('No se encontró el juego ' + numeroJuegoPedido + ' de ' + infoEquipo.nombre + ' para esta fecha (¿hubo doble juego de verdad ese día?)')
-      : 'Partido no encontrado en la API';
+      : razonPartidoNoEncontrado([datosDeporte]);
     return { estado: 'PENDIENTE', razon, debug: debugBase };
   }
 
@@ -825,6 +825,18 @@ function deportesQueCoincidenPorNumero(lineaJugada, deportesCandidatos) {
 // AMBIGUA (VARIOS DEPORTES) y se genere una alerta — ver procesarSabana.js.
 // Devuelve { candidato } si se pudo resolver, o { candidato: null, motivo,
 // candidatosRestantes } si no.
+// 27-10-2026: algunos conectores (NBA) dejan en datos.__meta si la API falló o si no trajo ningún juego esa fecha; así el motivo
+// de "no encontrado" no es siempre el mismo y se sabe qué hacer (volver a procesar la sábana, o revisar la fecha).
+function razonPartidoNoEncontrado(listaDatos) {
+  const metas = (listaDatos || []).map(d => d && d.__meta).filter(Boolean);
+  const conError = metas.find(m => m.error);
+  if (conError) return 'No se pudo consultar la API de resultados (' + conError.error + '). Vuelve a procesar la sábana en unos minutos.';
+  if (metas.length && metas.length === (listaDatos || []).length && metas.every(m => m.totalEventos === 0)) {
+    return 'La API no trae ningún juego de este deporte para esta fecha (revisa que la fecha de la sábana sea la correcta).';
+  }
+  return 'Partido no encontrado en la API';
+}
+
 function resolverCandidatoAmbiguo(candidatos, datosPorDeporte, lineaJugada, deporteForzado, deporteResuelto, deporteMarcador) {
   if (deporteResuelto) {
     const elegidoManual = candidatos.find(c => c.deporte === deporteResuelto);
@@ -1031,7 +1043,7 @@ function evaluarJugada(lineaJugada, datosPorDeporte, diccionarioEquipos, opcione
       if (resolucion.motivo === 'sin_partido_hoy') {
         return {
           estado: 'PENDIENTE',
-          razon: 'Partido no encontrado en la API',
+          razon: razonPartidoNoEncontrado(candidatos.map(c => (datosPorDeporte && datosPorDeporte[c.deporte]) || {})),
           debug: { pata: lineaJugada, apodoDetectado: apodoEncontrado, equipoOficial: null }
         };
       }
