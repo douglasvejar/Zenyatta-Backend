@@ -31,16 +31,27 @@ async function obtenerResultadosNBA(fechaISO) {
   Object.defineProperty(datosNBA, '__meta', { value: meta, enumerable: false });
 
   try {
+    // 28-10-2026: ESPN a veces responde 200 pero con el cuerpo VACÍO o cortado ("Unexpected end of JSON input", visto en tickets de
+    // JEIFRE con Celtics/Lakers). Ahora se lee como texto para detectarlo, se reintenta hasta 3 veces con espera creciente y, desde el
+    // 2º intento, se prueba también el servidor alterno de ESPN (mismo formato de datos).
+    const HOSTS_ESPN = ['https://site.api.espn.com', 'https://site.web.api.espn.com', 'https://site.api.espn.com'];
     let json = null;
-    for (let intento = 1; intento <= 2 && !json; intento++) {
+    for (let intento = 1; intento <= 3 && !json; intento++) {
       try {
-        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + fechaCompacta, { signal: AbortSignal.timeout(10000) });
+        const res = await fetch(HOSTS_ESPN[intento - 1] + '/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + fechaCompacta, { signal: AbortSignal.timeout(10000) });
         if (res.ok === false) throw new Error('ESPN respondió ' + res.status);
-        json = await res.json();
+        if (typeof res.text === 'function') {
+          const cuerpo = await res.text();
+          if (!cuerpo || !cuerpo.trim()) throw new Error('ESPN respondió vacío');
+          try { json = JSON.parse(cuerpo); } catch (e) { throw new Error('ESPN respondió incompleto'); }
+        } else {
+          json = await res.json();
+        }
         meta.error = null;
       } catch (e) {
+        json = null;
         meta.error = e && e.message ? e.message : String(e);
-        if (intento < 2) await new Promise(r => setTimeout(r, 1200));
+        if (intento < 3) await new Promise(r => setTimeout(r, intento * 1500));
       }
     }
     if (!json) throw new Error(meta.error || 'sin respuesta');

@@ -25,7 +25,7 @@ function evaluar(texto, nba) {
   let intentos = 0;
   global.fetch = async () => { intentos++; throw new Error('fetch failed'); };
   let nba = await obtenerResultadosNBA('2026-10-26');
-  check(intentos === 2 && nba.__meta.error === 'fetch failed' && Object.keys(nba).length === 0, '1a) Si ESPN falla se reintenta 1 vez (2 intentos) y el error queda en __meta sin parecer un juego');
+  check(intentos === 3 && nba.__meta.error === 'fetch failed' && Object.keys(nba).length === 0, '1a) Si ESPN falla se reintenta 2 veces (3 intentos) y el error queda en __meta sin parecer un juego');
   let r = evaluar('Timberwolves +130', nba);
   check(r.estado === 'PENDIENTE' && /No se pudo consultar la API/.test(r.razon) && /Vuelve a procesar/.test(r.razon), `1b) La jugada dice que no se pudo consultar la API (no "Partido no encontrado"): "${r.razon}"`);
 
@@ -59,6 +59,17 @@ function evaluar(texto, nba) {
   nba = await obtenerResultadosNBA('2026-10-26');
   r = evaluar('Wolves +130', nba);
   check(r.estado === 'PENDIENTE' && /No se pudo consultar la API/.test(r.razon || ''), `6) Nombre ambiguo con la API de NBA caída también explica el motivo real: "${r.razon}"`);
+
+  // 7) ESPN responde 200 con el cuerpo vacío (caso real "Unexpected end of JSON input") y luego funciona
+  intentos = 0;
+  global.fetch = async () => { intentos++; if (intentos === 1) return { ok: true, text: async () => '' }; return { ok: true, text: async () => JSON.stringify({ events: [evento('Boston Celtics', 'Los Angeles Lakers')] }) }; };
+  nba = await obtenerResultadosNBA('2026-10-26');
+  check(intentos === 2 && nba.__meta.error === null && nba['boston celtics'], '7a) Cuerpo vacío en el 1er intento: reintenta y trae los juegos');
+  intentos = 0; const urls = [];
+  global.fetch = async (u) => { intentos++; urls.push(String(u)); return { ok: true, text: async () => '{"events":[' }; };
+  nba = await obtenerResultadosNBA('2026-10-26');
+  check(intentos === 3 && nba.__meta.error === 'ESPN respondió incompleto' && !/Unexpected end/.test(nba.__meta.error), '7b) Si siempre llega cortado, el motivo es claro (sin "Unexpected end of JSON input")');
+  check(/site\.web\.api\.espn\.com/.test(urls[1]), '7c) El 2º intento prueba el servidor alterno de ESPN');
 
   console.error = silencio;
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
