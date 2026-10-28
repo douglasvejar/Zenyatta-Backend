@@ -2131,14 +2131,16 @@
   .cpz-kpi { display: flex; flex-direction: column; padding: 16px 18px 15px; border-radius: 16px; background: var(--card-2); border: 1px solid var(--card-border); min-width: 0; }
   .cpz-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .cpz-et { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); }
-  .cpz-ic { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(120,140,130,0.16); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); flex: none; }
-  .cpz-ic svg { width: 17px; height: 17px; }
+  .cpz-ic { position: relative; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent); flex: none; }
+  .cpz-ic::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 10px; background: currentColor; opacity: .14; }
+  .cpz-ic svg { position: relative; width: 17px; height: 17px; }
   .cpz-val { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 27px; letter-spacing: -.5px; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .cpz-val.pos { color: var(--ok); } .cpz-val.neg { color: var(--danger); }
   .cpz-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.35; }
   .cpz-kpi.dest { background: linear-gradient(135deg, var(--accent-grass, var(--accent)), var(--accent-lime, var(--accent))); border-color: transparent; color: var(--t-on-accent, #ffffff); }
   .cpz-kpi.dest .cpz-et, .cpz-kpi.dest .cpz-sub { color: inherit; opacity: .88; }
-  .cpz-kpi.dest .cpz-ic { background: rgba(255,255,255,0.24); color: inherit; }
+  .cpz-kpi.dest .cpz-ic { color: inherit; }
+  .cpz-kpi.dest .cpz-ic::before { opacity: .26; }
   .cpz-estado { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 28px; align-items: center; padding: 15px 18px; border-radius: 16px; background: var(--card-2); border: 1px solid var(--card-border); margin-bottom: 18px; }
   .cpz-estado-t { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 9px; font-size: 12.5px; font-weight: 700; }
   .cpz-estado-t span { color: var(--text-dim); font-weight: 600; }
@@ -2199,35 +2201,53 @@
   .cpz-barra { display: flex; width: 78px; height: 6px; border-radius: 999px; overflow: hidden; background: var(--card-border); }
   .cpz-barra i { display: block; height: 100%; }
   .cpz-barra .d.verde { background: var(--ok); } .cpz-barra .d.amarillo { background: var(--warning); } .cpz-barra .d.rojo { background: var(--danger); } .cpz-barra .d.gris { background: #9ca3af; }
-  .cpz-barra .j { background: repeating-linear-gradient(135deg, rgba(217,119,6,0.55) 0 3px, rgba(217,119,6,0.18) 3px 6px); }
+  .cpz-barra .j { background-color: rgba(217,119,6,0.45); background-image: repeating-linear-gradient(135deg, rgba(217,119,6,0.55) 0 3px, rgba(217,119,6,0.18) 3px 6px); }
   .cpz-f { display: block; font-weight: 600; }
   .cpz-rel { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
   .cpz-rel.vieja { color: var(--warning); font-weight: 700; }
+  .cpz-acc { margin-top: -2px; }
+  .cpz-acc .rot { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-right: 2px; }
+  .cpz-btn.pri { background: var(--accent); border-color: var(--accent); color: var(--t-on-accent, #ffffff); }
+  .cpz-btn.pri:hover { color: var(--t-on-accent, #ffffff); filter: brightness(1.08); }
+  .cpz-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 9999; padding: 11px 20px; border-radius: 999px; background: #14231a; color: #ffffff; font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.28); }
+  .cpz-toast.error { background: #b42318; }
+  .cpz-captura { --card: #ffffff; --card-2: #f3f6fa; --card-border: rgba(20,40,70,0.13); --text: #14233a; --text-dim: #5a6b80; --accent: #3f57d6; --accent-grass: #0e8f9c; --accent-lime: #3f57d6; --t-on-accent: #ffffff; --ok: #16a34a; --danger: #dc2626; --warning: #d97706; --bg: #ffffff; --t-solido: #ffffff; padding: 28px 30px 30px; background: #ffffff; color: var(--text); font-family: 'Inter', sans-serif; }
+  .cpz-captura .cpz-cap-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--text); }
+  .cpz-captura .cpz-cap-cab b { display: block; font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+  .cpz-captura .cpz-cap-cab span { font-size: 15px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .6px; }
+  .cpz-captura .cpz-cap-cab .der { text-align: right; font-size: 13px; font-weight: 600; color: var(--text-dim); line-height: 1.5; }
+  .cpz-captura .cpz-kpis { margin-bottom: 12px; }
+  .cpz-captura .cpz-tabla-wrap { max-height: none; overflow: visible; }
+  .cpz-captura .cpz-tabla { min-width: 0; }
+  .cpz-captura .cpz-tabla th, .cpz-captura .cpz-tabla tfoot td { position: static; background: #f3f6fa; cursor: default; }
+  .cpz-captura .cpz-tabla th .fl { display: none; }
+  .cpz-captura .cpz-tabla, .cpz-captura .cpz-tabla td, .cpz-captura .cpz-val, .cpz-captura .cpz-leyenda b { font-variant-numeric: normal; letter-spacing: 0; }
+  .cpz-captura .cpz-tabla th { letter-spacing: .4px; }
   @media (max-width: 760px) {
-    .cpz-meta { align-items: flex-start; }
-    .cpz-estado { grid-template-columns: minmax(0, 1fr); }
-    .cpz-uso-g { text-align: left; padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--card-border); }
-    .cpz-buscar { flex: 1 1 100%; margin-left: 0; order: 3; }
-    .cpz-tabla-wrap { max-height: none; overflow: visible; border: 0; }
-    .cpz-tabla { display: block; min-width: 0; }
-    .cpz-tabla thead, .cpz-tabla tfoot { display: none; }
-    .cpz-tabla tbody { display: grid; gap: 10px; }
-    .cpz-tabla tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; padding: 14px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-2); }
-    .cpz-tabla tbody tr.cpz-rojo { background: rgba(220,38,38,0.07); }
-    .cpz-tabla td, .cpz-tabla tbody tr:hover td, .cpz-tabla tbody tr.cpz-rojo td { display: block; padding: 0; border: 0; background: none; text-align: left; white-space: normal; }
-    .cpz-tabla td.num { text-align: left; }
-    .cpz-tabla td::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); }
-    .cpz-tabla td.cpz-c-disp { grid-column: 1 / -1; }
-    .cpz-tabla td.cpz-c-cli::before, .cpz-tabla td.cpz-c-est::before { display: none; }
-    .cpz-tabla td.cpz-c-est { text-align: right; align-self: center; }
-    .cpz-cli { min-width: 0; }
-    .cpz-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .cpz-kpi { padding: 13px 14px; }
-    .cpz-kpi.dest { grid-column: 1 / -1; }
-    .cpz-val { font-size: 21px; }
-    .cpz-et { font-size: 10.5px; }
-    .cpz-uso { justify-content: flex-start; }
-    .cpz-barra { flex: 1 1 auto; max-width: 160px; }
+    #vista-controlPozos .cpz-meta { align-items: flex-start; }
+    #vista-controlPozos .cpz-estado { grid-template-columns: minmax(0, 1fr); }
+    #vista-controlPozos .cpz-uso-g { text-align: left; padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--card-border); }
+    #vista-controlPozos .cpz-buscar { flex: 1 1 100%; margin-left: 0; order: 3; }
+    #vista-controlPozos .cpz-tabla-wrap { max-height: none; overflow: visible; border: 0; }
+    #vista-controlPozos .cpz-tabla { display: block; min-width: 0; }
+    #vista-controlPozos .cpz-tabla thead, #vista-controlPozos .cpz-tabla tfoot { display: none; }
+    #vista-controlPozos .cpz-tabla tbody { display: grid; gap: 10px; }
+    #vista-controlPozos .cpz-tabla tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; padding: 14px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-2); }
+    #vista-controlPozos .cpz-tabla tbody tr.cpz-rojo { background: rgba(220,38,38,0.07); }
+    #vista-controlPozos .cpz-tabla td, #vista-controlPozos .cpz-tabla tbody tr:hover td, #vista-controlPozos .cpz-tabla tbody tr.cpz-rojo td { display: block; padding: 0; border: 0; background: none; text-align: left; white-space: normal; }
+    #vista-controlPozos .cpz-tabla td.num { text-align: left; }
+    #vista-controlPozos .cpz-tabla td::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); }
+    #vista-controlPozos .cpz-tabla td.cpz-c-disp { grid-column: 1 / -1; }
+    #vista-controlPozos .cpz-tabla td.cpz-c-cli::before, #vista-controlPozos .cpz-tabla td.cpz-c-est::before { display: none; }
+    #vista-controlPozos .cpz-tabla td.cpz-c-est { text-align: right; align-self: center; }
+    #vista-controlPozos .cpz-cli { min-width: 0; }
+    #vista-controlPozos .cpz-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    #vista-controlPozos .cpz-kpi { padding: 13px 14px; }
+    #vista-controlPozos .cpz-kpi.dest { grid-column: 1 / -1; }
+    #vista-controlPozos .cpz-val { font-size: 21px; }
+    #vista-controlPozos .cpz-et { font-size: 10.5px; }
+    #vista-controlPozos .cpz-uso { justify-content: flex-start; }
+    #vista-controlPozos .cpz-barra { flex: 1 1 auto; max-width: 160px; }
   }
 </style>
 </head>
@@ -4051,6 +4071,12 @@
           </div>
           <label class="cpz-buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg><input type="search" id="cpzBuscar" placeholder="Buscar cliente…" autocomplete="off" aria-label="Buscar cliente" oninput="cpBuscar(this.value)"></label>
           <button type="button" class="cpz-btn" onclick="cargarControlPozos()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></svg>Actualizar</button>
+        </div>
+        <div class="cpz-herr cpz-acc">
+          <span class="rot">Compartir</span>
+          <button type="button" class="cpz-btn pri" onclick="cpDescargarImagen()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>Descargar imagen</button>
+          <button type="button" class="cpz-btn" onclick="cpCopiarTexto('grupo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>Plano Pozo Grupo</button>
+          <button type="button" class="cpz-btn" onclick="cpCopiarTexto('admin')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>Plano Pozo Administración</button>
           <button type="button" class="cpz-btn" onclick="cpExportar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>Exportar CSV</button>
         </div>
         <div class="cpz-tabla-wrap" id="cpTablaWrap"><div id="cpTabla"><div class="resultado-vacio">Cargando…</div></div></div>
@@ -19668,6 +19694,112 @@ function pintarCpTabla() {
       ${cab('nombre', 'Cliente', false)}${cab('estado', 'Estado', false)}${cab('colocado', 'Colocado', true)}${cab('apostado', 'Jugado', true)}${cab('neto', 'Ganado / perdido', true)}${cab('enJuego', 'En juego', true)}${cab('disponible', 'Disponible', true)}${cab('recarga', 'Última recarga', false)}${cab('jugada', 'Última jugada', false)}
     </tr></thead><tbody>${filas}</tbody>
     <tfoot><tr><td colspan="2">Total · ${lista.length} cliente(s)</td><td class="num">${formatMontoTabla(tot.colocado)}</td><td class="num">${formatMontoTabla(tot.apostado)}</td><td class="num"><span class="${tot.neto > 0 ? 'pos' : tot.neto < 0 ? 'neg' : ''}">${sg(tot.neto)}</span></td><td class="num">${formatMontoTabla(tot.enJuego)}</td><td class="num">${formatMontoTabla(tot.disponible)}</td><td colspan="2"></td></tr></tfoot></table>`;
+}
+
+// ---- Compartir: imagen y textos de WhatsApp (28-10-2026) ----
+function cpToast(msg, esError) {
+  const d = document.createElement('div');
+  d.className = 'cpz-toast' + (esError ? ' error' : '');
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 3200);
+}
+
+async function cpDescargarImagen() {
+  if (!CP_DATOS) return;
+  if (typeof html2canvas !== 'function') { cpToast('⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true); return; }
+  const lista = cpListaFiltrada();
+  if (!lista.length) { cpToast('No hay clientes para la imagen.', true); return; }
+  const sem = CP_DATOS.semana || {};
+  const host = document.createElement('div');
+  host.className = 'cpz-captura';
+  host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1240px;';
+  const hoy = new Date().toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  host.innerHTML = `<div class="cpz-cap-cab"><div><b>Control de Pozos</b><span>${escapeHtmlTraspaso(nombreGrupoTexto())}</span></div><div class="der">${sem.desde ? `Semana del ${formatFechaCortaDMY(sem.desde)} al ${formatFechaCortaDMY(sem.hasta)}` : ''}<br>Generado el ${hoy}</div></div>`
+    + document.getElementById('cpResumen').innerHTML
+    + `<div class="cpz-tabla-wrap">${document.getElementById('cpTabla').innerHTML}</div>`;
+  document.body.appendChild(host);
+  try {
+    const canvas = await html2canvas(host, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('no se pudo generar el PNG');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const grupo = nombreGrupoTexto().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '');
+    a.href = url; a.download = `control-pozos_${grupo}_${fechaLocalHoy()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    cpToast('✅ Imagen descargada.');
+  } catch (e) {
+    cpToast('⚠️ No se pudo generar la imagen: ' + e.message, true);
+  } finally {
+    host.remove();
+  }
+}
+
+const CP_EMOJI = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
+function cpMontoTexto(n) { return (n < 0 ? '-' : '') + formatMontoTabla(Math.abs(n)); }
+function cpEncabezadoTexto(titulo) {
+  const sem = (CP_DATOS && CP_DATOS.semana) || {};
+  const corta = iso => formatFechaCortaDMY(iso).slice(0, 5);
+  return `🎛️ *${titulo}* — ${nombreGrupoTexto().toUpperCase()} 🇻🇪\n📅 ${sem.desde ? `Semana ${corta(sem.desde)} al ${formatFechaCortaDMY(sem.hasta)}` : fechaLocalHoy()}\n\n`;
+}
+
+// Plano Pozo Grupo (formato A): resumen y una línea por cliente, separado en AVALADOS y PAGO DIARIO.
+function cpTextoGrupo() {
+  const r = CP_DATOS.resumen || {};
+  const $ = n => (n < 0 ? '-' : '') + '$' + formatMontoTabla(Math.abs(redondearCentavos(n)));
+  const neto = r.totalNeto || 0;
+  let t = cpEncabezadoTexto('PLANO POZO');
+  t += `💰 Colocado: *${$(r.totalColocado || 0)}*\n🎯 Jugado: *${$(r.totalApostado || 0)}*\n📈 Ganado/perdido: *${neto > 0 ? '+' : ''}${$(neto)}*\n⏳ En juego: *${$(r.totalEnJuego || 0)}*\n✅ Disponible: *${$(r.totalDisponible || 0)}*\n`;
+  const linea = c => `${CP_EMOJI[c.semaforo]} ${String(c.nombre).toUpperCase()}: *${cpMontoTexto(c.disponible)}* de ${formatMontoTabla(c.colocado)} (${c.semaforo === 'gris' ? 'sin saldo' : c.porcentaje + '%'})\n`;
+  const clientes = CP_DATOS.clientes || [];
+  const avalados = clientes.filter(c => c.tipo === 'avalado');
+  const diarios = clientes.filter(c => c.tipo !== 'avalado');
+  if (avalados.length) t += '\n*AVALADOS:*\n' + avalados.map(linea).join('');
+  if (diarios.length) t += '\n*PAGO DIARIO:*\n' + diarios.map(linea).join('');
+  return t.trim();
+}
+
+// Plano Pozo Administración (formato B): agrupado por semáforo, primero los que piden atención.
+function cpTextoAdmin() {
+  const r = CP_DATOS.resumen || {};
+  const $ = n => (n < 0 ? '-' : '') + '$' + formatMontoTabla(Math.abs(redondearCentavos(n)));
+  let t = cpEncabezadoTexto('PLANO POZO ADMINISTRACIÓN');
+  t += `✅ Disponible total: *${$(r.totalDisponible || 0)}* de ${$(r.totalColocado || 0)}\n🔴 ${r.rojos || 0} en rojo · 🟡 ${r.amarillos || 0} en amarillo · 🟢 ${r.verdes || 0} al día · ⚪ ${r.sinSaldo || 0} sin saldo\n`;
+  const secciones = [['rojo', 'POCO POZO'], ['amarillo', 'OJO'], ['gris', 'SIN SALDO'], ['verde', 'AL DÍA']];
+  const clientes = CP_DATOS.clientes || [];
+  const corta = iso => formatFechaCortaDMY(String(iso).slice(0, 10)).slice(0, 5);
+  secciones.forEach(([k, titulo]) => {
+    const g = clientes.filter(c => c.semaforo === k);
+    if (!g.length) return;
+    t += `\n${CP_EMOJI[k]} *${titulo}*\n` + g.map(c => {
+      let l = `• ${String(c.nombre).toUpperCase()}: *${cpMontoTexto(c.disponible)}*`;
+      if (k !== 'gris') l += ` (${c.porcentaje}%)`;
+      if (c.enJuego) l += ` — en juego ${formatMontoTabla(c.enJuego)}`;
+      if (k === 'gris' && c.ultimaRecarga) l += ` — recargó ${corta(c.ultimaRecarga)}`;
+      return l + '\n';
+    }).join('');
+  });
+  return t.trim();
+}
+
+async function cpCopiarTexto(formato) {
+  if (!CP_DATOS || !(CP_DATOS.clientes || []).length) { cpToast('No hay clientes con pozo ni de pago diario.', true); return; }
+  const texto = formato === 'admin' ? cpTextoAdmin() : cpTextoGrupo();
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('sin soporte');
+    await navigator.clipboard.writeText(texto);
+    cpToast('✅ Texto copiado — pégalo en WhatsApp.');
+  } catch (e) {
+    // Sin portapapeles: se descarga como .txt para no perder el texto.
+    const url = URL.createObjectURL(new Blob([texto], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `plano-pozo-${formato === 'admin' ? 'administracion' : 'grupo'}_${fechaLocalHoy()}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    cpToast('No se pudo copiar directo — se descargó el texto.', true);
+  }
 }
 
 function cpExportar() {
