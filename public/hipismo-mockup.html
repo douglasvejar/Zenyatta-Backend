@@ -2119,26 +2119,116 @@
   .tema-nombre em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--t-on-accent, #fff); }
   .tema-desc { font-size: 12px; color: var(--text-dim); line-height: 1.35; }
 
-  /* ===== Control de Pozos (28-10-2026) ===== */
-  .cp-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 14px; }
-  .cp-stat { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
-  .cp-stat .cp-et { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-dim); }
-  .cp-stat .cp-val { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 19px; font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .cp-stat .cp-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
-  .cp-semaforos { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; font-size: 12.5px; font-weight: 700; }
-  .cp-semaforos span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); }
-  .cp-punto { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; background: #9ca3af; }
-  .cp-punto.verde { background: var(--ok); } .cp-punto.amarillo { background: var(--warning); } .cp-punto.rojo { background: var(--danger); } .cp-punto.gris { background: #9ca3af; }
-  .cp-tabla-wrap { overflow-x: auto; }
-  .cp-tabla { min-width: 860px; }
-  .cp-tabla td, .cp-tabla th { white-space: nowrap; }
-  .cp-tabla td.cp-nombre { white-space: normal; min-width: 150px; font-weight: 700; }
-  .cp-tabla .cp-sub { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); }
-  .cp-tabla tr.cp-rojo td { background: rgba(220,38,38,0.06); }
-  .cp-barra { display: inline-block; vertical-align: middle; width: 70px; height: 8px; border-radius: 6px; background: var(--card-border); overflow: hidden; margin-right: 6px; }
-  .cp-barra > i { display: block; height: 100%; border-radius: 6px; background: var(--ok); }
-  .cp-barra.amarillo > i { background: var(--warning); } .cp-barra.rojo > i { background: var(--danger); }
-  .cp-tipo { font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); margin-left: 6px; white-space: nowrap; }
+  /* ===== Control de Pozos (28-10-2026, rediseño profesional) ===== */
+  .cpz-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 20px; }
+  .cpz-cab h2 { margin: 0 0 6px; }
+  .cpz-cab .desc { margin: 0; max-width: 680px; }
+  .cpz-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .cpz-semana { display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .cpz-semana svg { width: 16px; height: 16px; color: var(--text-dim); flex: none; }
+  .cpz-act { font-size: 12px; color: var(--text-dim); }
+  .cpz-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .cpz-kpi { display: flex; flex-direction: column; padding: 16px 18px 15px; border-radius: 16px; background: var(--card-2); border: 1px solid var(--card-border); min-width: 0; }
+  .cpz-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .cpz-et { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); }
+  .cpz-ic { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(120,140,130,0.16); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); flex: none; }
+  .cpz-ic svg { width: 17px; height: 17px; }
+  .cpz-val { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 27px; letter-spacing: -.5px; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .cpz-val.pos { color: var(--ok); } .cpz-val.neg { color: var(--danger); }
+  .cpz-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.35; }
+  .cpz-kpi.dest { background: linear-gradient(135deg, var(--accent-grass, var(--accent)), var(--accent-lime, var(--accent))); border-color: transparent; color: var(--t-on-accent, #ffffff); }
+  .cpz-kpi.dest .cpz-et, .cpz-kpi.dest .cpz-sub { color: inherit; opacity: .88; }
+  .cpz-kpi.dest .cpz-ic { background: rgba(255,255,255,0.24); color: inherit; }
+  .cpz-estado { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 28px; align-items: center; padding: 15px 18px; border-radius: 16px; background: var(--card-2); border: 1px solid var(--card-border); margin-bottom: 18px; }
+  .cpz-estado-t { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 9px; font-size: 12.5px; font-weight: 700; }
+  .cpz-estado-t span { color: var(--text-dim); font-weight: 600; }
+  .cpz-seg { display: flex; gap: 2px; height: 10px; border-radius: 999px; overflow: hidden; background: var(--card-border); }
+  .cpz-seg i { display: block; height: 100%; min-width: 4px; }
+  .cpz-seg .verde, .cpz-leyenda .verde { background: var(--ok); } .cpz-seg .amarillo, .cpz-leyenda .amarillo { background: var(--warning); }
+  .cpz-seg .rojo, .cpz-leyenda .rojo { background: var(--danger); } .cpz-seg .gris, .cpz-leyenda .gris { background: #9ca3af; }
+  .cpz-leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 11px; font-size: 12.5px; color: var(--text-dim); }
+  .cpz-leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+  .cpz-leyenda i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .cpz-leyenda b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .cpz-regla { margin-top: 6px; font-size: 11.5px; color: var(--text-dim); }
+  .cpz-uso-g { text-align: right; padding-left: 24px; border-left: 1px solid var(--card-border); }
+  .cpz-uso-g .cpz-val { font-size: 30px; }
+  .cpz-herr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; }
+  .cpz-filtros { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); }
+  .cpz-filtros button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+  .cpz-filtros button b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: rgba(120,140,130,0.18); color: inherit; font-variant-numeric: tabular-nums; }
+  .cpz-filtros button:hover { color: var(--text); }
+  .cpz-filtros button.activo { background: var(--accent); color: var(--t-on-accent, #ffffff); }
+  .cpz-filtros button.activo b { background: rgba(255,255,255,0.26); }
+  .cpz-buscar { position: relative; margin: 0 0 0 auto; flex: 0 1 250px; display: block; }
+  .cpz-buscar svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-dim); pointer-events: none; }
+  #vista-controlPozos .cpz-buscar input { height: 38px; padding: 0 14px 0 40px; border-radius: 999px; box-sizing: border-box; }
+  .cpz-btn { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card-2); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .cpz-btn svg { width: 15px; height: 15px; }
+  .cpz-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .cpz-filtros button:focus-visible, .cpz-btn:focus-visible, .cpz-tabla th:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cpz-tabla-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--card-border); border-radius: 16px; }
+  .cpz-tabla { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+  .cpz-tabla th { position: sticky; top: 0; z-index: 2; text-align: left; padding: 12px 10px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; line-height: 1.25; color: var(--text-dim); cursor: pointer; user-select: none; border-bottom: 1px solid var(--card-border); background: linear-gradient(var(--card-2), var(--card-2)), var(--t-solido, var(--bg, #ffffff)); }
+  .cpz-tabla th.num, .cpz-tabla td.num { text-align: right; }
+  .cpz-tabla th:hover { color: var(--text); }
+  .cpz-tabla th .fl { display: inline-block; width: 10px; margin-left: 4px; font-size: 9px; opacity: 0; }
+  .cpz-tabla th[aria-sort] { color: var(--accent); }
+  .cpz-tabla th[aria-sort] .fl { opacity: 1; }
+  .cpz-tabla td { padding: 11px 10px; border-bottom: 1px solid var(--card-border); white-space: nowrap; vertical-align: middle; font-size: 13.5px; }
+  .cpz-tabla tbody tr:last-child td { border-bottom: 0; }
+  .cpz-tabla tbody tr:hover td { background: rgba(120,140,130,0.09); }
+  .cpz-tabla tbody tr.cpz-rojo td { background: rgba(220,38,38,0.07); }
+  .cpz-tabla tfoot td { position: sticky; bottom: 0; font-weight: 800; border-top: 1px solid var(--card-border); border-bottom: 0; background: linear-gradient(var(--card-2), var(--card-2)), var(--t-solido, var(--bg, #ffffff)); }
+  .cpz-tabla td .pos, .cpz-tabla tfoot .pos { color: var(--ok); } .cpz-tabla td .neg, .cpz-tabla tfoot .neg { color: var(--danger); }
+  .cpz-cli { display: flex; align-items: center; gap: 10px; min-width: 140px; }
+  .cpz-av { width: 34px; height: 34px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; background: rgba(156,163,175,0.22); color: var(--text-dim); }
+  .cpz-av.verde { background: rgba(22,163,74,0.16); color: var(--ok); } .cpz-av.amarillo { background: rgba(217,119,6,0.17); color: var(--warning); }
+  .cpz-av.rojo { background: rgba(220,38,38,0.16); color: var(--danger); }
+  .cpz-cli-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .cpz-cli-t b { font-size: 14px; }
+  .cpz-tipo { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+  .cpz-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(156,163,175,0.2); color: var(--text-dim); }
+  .cpz-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .cpz-pill.verde { background: rgba(22,163,74,0.14); color: var(--ok); } .cpz-pill.amarillo { background: rgba(217,119,6,0.16); color: var(--warning); }
+  .cpz-pill.rojo { background: rgba(220,38,38,0.14); color: var(--danger); }
+  .cpz-sub2 { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); margin-top: 2px; }
+  .cpz-mudo { color: var(--text-dim); }
+  .cpz-disp b { font-size: 14px; }
+  .cpz-uso { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 5px; font-size: 11.5px; font-weight: 700; color: var(--text-dim); }
+  .cpz-barra { display: flex; width: 78px; height: 6px; border-radius: 999px; overflow: hidden; background: var(--card-border); }
+  .cpz-barra i { display: block; height: 100%; }
+  .cpz-barra .d.verde { background: var(--ok); } .cpz-barra .d.amarillo { background: var(--warning); } .cpz-barra .d.rojo { background: var(--danger); } .cpz-barra .d.gris { background: #9ca3af; }
+  .cpz-barra .j { background: repeating-linear-gradient(135deg, rgba(217,119,6,0.55) 0 3px, rgba(217,119,6,0.18) 3px 6px); }
+  .cpz-f { display: block; font-weight: 600; }
+  .cpz-rel { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .cpz-rel.vieja { color: var(--warning); font-weight: 700; }
+  @media (max-width: 760px) {
+    .cpz-meta { align-items: flex-start; }
+    .cpz-estado { grid-template-columns: minmax(0, 1fr); }
+    .cpz-uso-g { text-align: left; padding: 12px 0 0; border-left: 0; border-top: 1px solid var(--card-border); }
+    .cpz-buscar { flex: 1 1 100%; margin-left: 0; order: 3; }
+    .cpz-tabla-wrap { max-height: none; overflow: visible; border: 0; }
+    .cpz-tabla { display: block; min-width: 0; }
+    .cpz-tabla thead, .cpz-tabla tfoot { display: none; }
+    .cpz-tabla tbody { display: grid; gap: 10px; }
+    .cpz-tabla tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; padding: 14px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card-2); }
+    .cpz-tabla tbody tr.cpz-rojo { background: rgba(220,38,38,0.07); }
+    .cpz-tabla td, .cpz-tabla tbody tr:hover td, .cpz-tabla tbody tr.cpz-rojo td { display: block; padding: 0; border: 0; background: none; text-align: left; white-space: normal; }
+    .cpz-tabla td.num { text-align: left; }
+    .cpz-tabla td::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); }
+    .cpz-tabla td.cpz-c-disp { grid-column: 1 / -1; }
+    .cpz-tabla td.cpz-c-cli::before, .cpz-tabla td.cpz-c-est::before { display: none; }
+    .cpz-tabla td.cpz-c-est { text-align: right; align-self: center; }
+    .cpz-cli { min-width: 0; }
+    .cpz-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .cpz-kpi { padding: 13px 14px; }
+    .cpz-kpi.dest { grid-column: 1 / -1; }
+    .cpz-val { font-size: 21px; }
+    .cpz-et { font-size: 10.5px; }
+    .cpz-uso { justify-content: flex-start; }
+    .cpz-barra { flex: 1 1 auto; max-width: 160px; }
+  }
 </style>
 </head>
 <body>
@@ -3944,17 +4034,26 @@
          semáforo; arriba un resumen del grupo. Solo lee (ver GET /control-pozos en routes/hipismo.js). -->
     <section class="vista" id="vista-controlPozos">
       <div class="card">
-        <h2>🎛️ Control de Pozos</h2>
-        <p class="desc">Todos los clientes con <b>pozo</b> o de <b>pago diario</b> en una sola pantalla: lo que se les colocó o recargó, lo que han jugado y ganado o perdido esta semana, lo que tienen <b>en juego</b> sin resolver y lo que <b>les queda</b> para jugar. Semáforo: <b>verde</b> si les queda el 80% o más, <b>amarillo</b> entre 15% y 79%, <b>rojo</b> menos del 15%. Los que más atención piden salen primero. <span id="cpSemana"></span></p>
-        <div id="cpResumen"></div>
-        <div class="subnav" id="cpFiltros">
-          <button type="button" class="activo" data-filtro="todos" onclick="cpFiltrar('todos', this)">Todos</button>
-          <button type="button" data-filtro="pago_diario" onclick="cpFiltrar('pago_diario', this)">💵 Pago diario</button>
-          <button type="button" data-filtro="pozo" onclick="cpFiltrar('pozo', this)">🏦 Con pozo</button>
-          <button type="button" data-filtro="atencion" onclick="cpFiltrar('atencion', this)">🔴 Pide atención</button>
-          <button type="button" class="btn-secundario" style="margin-left:auto;" onclick="cargarControlPozos()">↻ Actualizar</button>
+        <div class="cpz-cab">
+          <div>
+            <h2>🎛️ Control de Pozos</h2>
+            <p class="desc">Seguimiento semanal de los clientes con <b>pozo</b> y de <b>pago diario</b>: lo colocado o recargado, lo jugado, lo que tienen en juego y lo que les queda para jugar. Los que más atención piden aparecen primero.</p>
+          </div>
+          <div class="cpz-meta"><span class="cpz-semana" id="cpSemana"></span><span class="cpz-act" id="cpActualizado"></span></div>
         </div>
-        <div class="cp-tabla-wrap"><div id="cpTabla"><div class="resultado-vacio">Cargando…</div></div></div>
+        <div id="cpResumen"></div>
+        <div class="cpz-herr">
+          <div class="cpz-filtros" id="cpFiltros" role="group" aria-label="Filtrar clientes">
+            <button type="button" class="activo" data-filtro="todos" onclick="cpFiltrar('todos', this)">Todos <b id="cpN-todos">0</b></button>
+            <button type="button" data-filtro="pago_diario" onclick="cpFiltrar('pago_diario', this)">Pago diario <b id="cpN-pago_diario">0</b></button>
+            <button type="button" data-filtro="pozo" onclick="cpFiltrar('pozo', this)">Con pozo <b id="cpN-pozo">0</b></button>
+            <button type="button" data-filtro="atencion" onclick="cpFiltrar('atencion', this)">Pide atención <b id="cpN-atencion">0</b></button>
+          </div>
+          <label class="cpz-buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg><input type="search" id="cpzBuscar" placeholder="Buscar cliente…" autocomplete="off" aria-label="Buscar cliente" oninput="cpBuscar(this.value)"></label>
+          <button type="button" class="cpz-btn" onclick="cargarControlPozos()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></svg>Actualizar</button>
+          <button type="button" class="cpz-btn" onclick="cpExportar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>Exportar CSV</button>
+        </div>
+        <div class="cpz-tabla-wrap" id="cpTablaWrap"><div id="cpTabla"><div class="resultado-vacio">Cargando…</div></div></div>
       </div>
     </section>
 
@@ -19401,19 +19500,48 @@ async function eliminarRetiro(id) {
 // ------------------------------------------------------------------
 let CP_DATOS = null;
 let CP_FILTRO = 'todos';
+let CP_BUSCAR = '';
+let CP_ORDEN = null; // { col, dir } -- null = el orden del servidor (los que más atención piden primero)
+
+const CP_IC = {
+  semana: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  colocado: '<path d="M3 7a2 2 0 012-2h13v4M3 7v11a2 2 0 002 2h15V9H5a2 2 0 01-2-2z"/><circle cx="16.5" cy="14.5" r="1"/>',
+  jugado: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  neto: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  juego: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  disponible: '<path d="M12 3l8 3v6c0 4.5-3.3 8-8 9-4.7-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
+};
+function cpIc(k) { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CP_IC[k]}</svg>`; }
 
 async function cargarControlPozos() {
   const cont = document.getElementById('cpTabla');
   if (!cont) return;
+  const wrap = document.getElementById('cpTablaWrap');
+  if (wrap) wrap.style.opacity = CP_DATOS ? '0.55' : '1';
   try { CP_DATOS = await apiHipismo('/api/hipismo/control-pozos'); }
-  catch (e) { CP_DATOS = null; cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escapeHtmlTraspaso(e.message)}</div>`; document.getElementById('cpResumen').innerHTML = ''; return; }
+  catch (e) {
+    CP_DATOS = null;
+    if (wrap) wrap.style.opacity = '1';
+    cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escapeHtmlTraspaso(e.message)}</div>`;
+    document.getElementById('cpResumen').innerHTML = '';
+    return;
+  }
+  if (wrap) wrap.style.opacity = '1';
+  const act = document.getElementById('cpActualizado');
+  if (act) act.textContent = 'Actualizado a las ' + new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
   pintarControlPozos();
 }
 
 function cpFiltrar(filtro, btn) {
   CP_FILTRO = filtro;
   document.querySelectorAll('#cpFiltros button[data-filtro]').forEach(b => b.classList.toggle('activo', b === btn));
-  pintarControlPozos();
+  pintarCpTabla();
+}
+function cpBuscar(v) { CP_BUSCAR = String(v || '').trim().toLowerCase(); pintarCpTabla(); }
+function cpOrdenar(col) {
+  if (CP_ORDEN && CP_ORDEN.col === col) CP_ORDEN = CP_ORDEN.dir === 'asc' ? { col, dir: 'desc' } : null;
+  else CP_ORDEN = { col, dir: col === 'nombre' || col === 'estado' ? 'asc' : 'desc' };
+  pintarCpTabla();
 }
 
 function cpDiasDesde(iso) {
@@ -19422,68 +19550,139 @@ function cpDiasDesde(iso) {
   const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
   return Math.round((hoy - d) / 86400000);
 }
-function cpTextoFecha(iso) {
-  if (!iso) return '<span style="color:var(--text-dim);">—</span>';
+function cpTextoFecha(iso, marcarVieja) {
+  if (!iso) return '<span class="cpz-mudo">—</span>';
   const dias = cpDiasDesde(iso);
   const rel = dias === 0 ? 'hoy' : dias === 1 ? 'ayer' : dias > 1 ? `hace ${dias} días` : '';
-  return `${formatFechaCortaDMY(String(iso).slice(0, 10))}${rel ? `<span class="cp-sub">${rel}</span>` : ''}`;
+  const vieja = marcarVieja && dias >= 7;
+  return `<span class="cpz-f">${formatFechaCortaDMY(String(iso).slice(0, 10))}</span>${rel ? `<span class="cpz-rel${vieja ? ' vieja' : ''}">${rel}</span>` : ''}`;
 }
-const CP_TIPO_TEXTO = { avalado: 'Con pozo', pago_diario: '💵 Pago diario', pago_diario_pozo: '💵 Pago diario + pozo' };
-const CP_SEMAFORO_TEXTO = { verde: 'Bien', amarillo: 'Ojo', rojo: 'Poco pozo', gris: 'Sin saldo' };
+const CP_TIPO_TEXTO = { avalado: 'Con pozo', pago_diario: 'Pago diario', pago_diario_pozo: 'Pago diario + pozo' };
+const CP_SEMAFORO_TEXTO = { verde: 'Al día', amarillo: 'Ojo', rojo: 'Poco pozo', gris: 'Sin saldo' };
+const CP_CLAVES = {
+  nombre: c => String(c.nombre || '').toLowerCase(),
+  estado: c => c.porcentaje,
+  colocado: c => c.colocado, apostado: c => c.apostado, neto: c => c.neto, enJuego: c => c.enJuego, disponible: c => c.disponible,
+  recarga: c => c.ultimaRecarga || null, jugada: c => c.ultimaJugada || null
+};
 
-function pintarControlPozos() {
-  const cont = document.getElementById('cpTabla');
-  const res = document.getElementById('cpResumen');
-  if (!cont || !res || !CP_DATOS) return;
-  const r = CP_DATOS.resumen || {};
-  const m = n => formatMonto(redondearCentavos(n));
-  const sg = n => (n > 0 ? '+' : n < 0 ? '-' : '') + formatMontoTabla(Math.abs(redondearCentavos(n)));
-  const sem = CP_DATOS.semana || {};
-  const spanSem = document.getElementById('cpSemana');
-  if (spanSem) spanSem.textContent = sem.desde ? `Semana del ${formatFechaCortaDMY(sem.desde)} al ${formatFechaCortaDMY(sem.hasta)}.` : '';
-  res.innerHTML = `
-    <div class="cp-resumen">
-      <div class="cp-stat"><div class="cp-et">Colocado</div><div class="cp-val">${m(r.totalColocado || 0)}</div><div class="cp-sub">pozos + recargas de la semana</div></div>
-      <div class="cp-stat"><div class="cp-et">Jugado</div><div class="cp-val">${m(r.totalApostado || 0)}</div><div class="cp-sub">apostado esta semana</div></div>
-      <div class="cp-stat"><div class="cp-et">Ganado / perdido</div><div class="cp-val ${(r.totalNeto || 0) >= 0 ? 'pos' : 'neg'}">${sg(r.totalNeto || 0)}</div><div class="cp-sub">de estos clientes</div></div>
-      <div class="cp-stat"><div class="cp-et">En juego</div><div class="cp-val">${m(r.totalEnJuego || 0)}</div><div class="cp-sub">sin resolver</div></div>
-      <div class="cp-stat"><div class="cp-et">Disponible</div><div class="cp-val">${m(r.totalDisponible || 0)}</div><div class="cp-sub">${r.totalClientes || 0} cliente(s): ${r.conPozo || 0} con pozo, ${r.pagoDiario || 0} pago diario</div></div>
-    </div>
-    <div class="cp-semaforos">
-      <span><i class="cp-punto rojo"></i> ${r.rojos || 0} en rojo</span>
-      <span><i class="cp-punto amarillo"></i> ${r.amarillos || 0} en amarillo</span>
-      <span><i class="cp-punto verde"></i> ${r.verdes || 0} en verde</span>
-      <span><i class="cp-punto gris"></i> ${r.sinSaldo || 0} sin saldo</span>
-    </div>`;
-  let lista = CP_DATOS.clientes || [];
+function cpListaFiltrada() {
+  let lista = (CP_DATOS && CP_DATOS.clientes) || [];
   if (CP_FILTRO === 'pago_diario') lista = lista.filter(c => c.tipo !== 'avalado');
   else if (CP_FILTRO === 'pozo') lista = lista.filter(c => c.tipo !== 'pago_diario');
-  else if (CP_FILTRO === 'atencion') lista = lista.filter(c => c.semaforo === 'rojo' || c.semaforo === 'amarillo');
+  else if (CP_FILTRO === 'atencion') lista = lista.filter(c => c.semaforo !== 'verde');
+  if (CP_BUSCAR) lista = lista.filter(c => String(c.nombre || '').toLowerCase().includes(CP_BUSCAR));
+  if (CP_ORDEN && CP_CLAVES[CP_ORDEN.col]) {
+    const f = CP_CLAVES[CP_ORDEN.col];
+    const k = CP_ORDEN.dir === 'asc' ? 1 : -1;
+    lista = lista.slice().sort((a, b) => {
+      const x = f(a), y = f(b);
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return (typeof x === 'string' ? x.localeCompare(y, 'es') : x - y) * k;
+    });
+  }
+  return lista;
+}
+
+function pintarControlPozos() {
+  const res = document.getElementById('cpResumen');
+  if (!res || !CP_DATOS) return;
+  const r = CP_DATOS.resumen || {};
+  const m = n => formatMonto(redondearCentavos(n));
+  const sg = n => (n > 0 ? '+' : n < 0 ? '-' : '') + '$ ' + formatMontoTabla(Math.abs(redondearCentavos(n)));
+  const sem = CP_DATOS.semana || {};
+  const spanSem = document.getElementById('cpSemana');
+  if (spanSem) spanSem.innerHTML = sem.desde ? `${cpIc('semana')}Semana del ${formatFechaCortaDMY(sem.desde)} al ${formatFechaCortaDMY(sem.hasta)}` : '';
+  const neto = r.totalNeto || 0;
+  const colocadoTotal = r.totalColocado || 0;
+  const pctDisp = colocadoTotal > 0 ? Math.round((r.totalDisponible || 0) / colocadoTotal * 1000) / 10 : 0;
+  const seg = (k, n, t) => n > 0 ? `<i class="${k}" style="flex:${n}" title="${n} ${t}"></i>` : '';
+  const ley = (k, n, t) => `<span><i class="${k}"></i><b>${n}</b> ${t}</span>`;
+  res.innerHTML = `
+    <div class="cpz-kpis">
+      <div class="cpz-kpi"><div class="cpz-kpi-top"><span class="cpz-et">Colocado</span><span class="cpz-ic">${cpIc('colocado')}</span></div><div class="cpz-val">${m(colocadoTotal)}</div><div class="cpz-sub">pozos + recargas de la semana</div></div>
+      <div class="cpz-kpi"><div class="cpz-kpi-top"><span class="cpz-et">Jugado</span><span class="cpz-ic">${cpIc('jugado')}</span></div><div class="cpz-val">${m(r.totalApostado || 0)}</div><div class="cpz-sub">apostado esta semana</div></div>
+      <div class="cpz-kpi"><div class="cpz-kpi-top"><span class="cpz-et">Ganado / perdido</span><span class="cpz-ic">${cpIc('neto')}</span></div><div class="cpz-val ${neto > 0 ? 'pos' : neto < 0 ? 'neg' : ''}">${sg(neto)}</div><div class="cpz-sub">resultado de estos clientes</div></div>
+      <div class="cpz-kpi"><div class="cpz-kpi-top"><span class="cpz-et">En juego</span><span class="cpz-ic">${cpIc('juego')}</span></div><div class="cpz-val">${m(r.totalEnJuego || 0)}</div><div class="cpz-sub">jugadas sin resolver</div></div>
+      <div class="cpz-kpi dest"><div class="cpz-kpi-top"><span class="cpz-et">Disponible</span><span class="cpz-ic">${cpIc('disponible')}</span></div><div class="cpz-val">${m(r.totalDisponible || 0)}</div><div class="cpz-sub">${r.totalClientes || 0} cliente(s): ${r.conPozo || 0} con pozo, ${r.pagoDiario || 0} pago diario</div></div>
+    </div>
+    <div class="cpz-estado">
+      <div>
+        <div class="cpz-estado-t">Estado de los clientes<span>${r.totalClientes || 0} en total</span></div>
+        <div class="cpz-seg">${seg('verde', r.verdes || 0, 'al día')}${seg('amarillo', r.amarillos || 0, 'en amarillo')}${seg('rojo', r.rojos || 0, 'en rojo')}${seg('gris', r.sinSaldo || 0, 'sin saldo')}</div>
+        <div class="cpz-leyenda">${ley('verde', r.verdes || 0, 'al día')}${ley('amarillo', r.amarillos || 0, 'en amarillo')}${ley('rojo', r.rojos || 0, 'en rojo')}${ley('gris', r.sinSaldo || 0, 'sin saldo')}</div>
+        <div class="cpz-regla">Al día: les queda el 80% o más · Amarillo: entre 15% y 79% · Rojo: menos del 15%.</div>
+      </div>
+      <div class="cpz-uso-g"><div class="cpz-et">Pozo disponible</div><div class="cpz-val">${pctDisp.toLocaleString('es-VE')}%</div><div class="cpz-sub">del total colocado</div></div>
+    </div>`;
+  const todos = CP_DATOS.clientes || [];
+  const cuenta = {
+    todos: todos.length,
+    pago_diario: todos.filter(c => c.tipo !== 'avalado').length,
+    pozo: todos.filter(c => c.tipo !== 'pago_diario').length,
+    atencion: todos.filter(c => c.semaforo !== 'verde').length
+  };
+  Object.keys(cuenta).forEach(k => { const e = document.getElementById('cpN-' + k); if (e) e.textContent = cuenta[k]; });
+  pintarCpTabla();
+}
+
+function pintarCpTabla() {
+  const cont = document.getElementById('cpTabla');
+  if (!cont || !CP_DATOS) return;
+  const sg = n => (n > 0 ? '+' : n < 0 ? '-' : '') + formatMontoTabla(Math.abs(redondearCentavos(n)));
+  const lista = cpListaFiltrada();
   if (!lista.length) {
     cont.innerHTML = (CP_DATOS.clientes || []).length
-      ? '<div class="placeholder-card">Ningún cliente cumple ese filtro.</div>'
-      : '<div class="placeholder-card">Todavía no hay clientes con pozo ni de pago diario. Créalos en Administración &gt; Clientes (Tipo de cuenta: Avalado, 💵 Pago diario o 💵 Pago diario con pozo).</div>';
+      ? '<div class="placeholder-card">Ningún cliente coincide con ese filtro o búsqueda.</div>'
+      : '<div class="placeholder-card">Todavía no hay clientes con pozo ni de pago diario. Créalos en Administración &gt; Clientes (Tipo de cuenta: Avalado, Pago diario o Pago diario con pozo).</div>';
     return;
   }
-  cont.innerHTML = `<table class="cp-tabla"><thead><tr>
-      <th>Cliente</th><th class="num">Colocado</th><th class="num">Jugado</th><th class="num">Ganado / perdido</th><th class="num">En juego</th><th class="num">Disponible</th><th>Le queda</th><th>Última recarga</th><th>Última jugada</th></tr></thead><tbody>` +
-    lista.map(c => {
-      const detalleColocado = c.tipo === 'avalado' ? '' : `<span class="cp-sub">pozo ${formatMontoTabla(c.pozoBase)} + recargas ${formatMontoTabla(c.recargasSemana)}</span>`;
-      const pct = Math.max(0, Math.min(100, c.porcentaje));
-      const recarga = c.tipo === 'avalado' ? '<span style="color:var(--text-dim);">—</span>' : cpTextoFecha(c.ultimaRecarga);
-      const jugadaVieja = c.ultimaJugada && cpDiasDesde(c.ultimaJugada) >= 7;
-      return `<tr class="${c.semaforo === 'rojo' ? 'cp-rojo' : ''}">
-        <td class="cp-nombre"><i class="cp-punto ${c.semaforo}" title="${CP_SEMAFORO_TEXTO[c.semaforo]}"></i> ${escapeHtmlTraspaso(formatNombre(c.nombre))}<span class="cp-tipo">${CP_TIPO_TEXTO[c.tipo] || ''}</span></td>
-        <td class="num">${formatMontoTabla(c.colocado)}${detalleColocado}</td>
-        <td class="num">${formatMontoTabla(c.apostado)}</td>
-        <td class="num ${c.neto > 0 ? 'pos' : c.neto < 0 ? 'neg' : ''}">${sg(c.neto)}</td>
-        <td class="num">${c.enJuego ? formatMontoTabla(c.enJuego) : '<span style="color:var(--text-dim);">—</span>'}</td>
-        <td class="num ${c.disponible < 0 ? 'neg' : ''}"><b>${c.disponible < 0 ? '-' : ''}${formatMontoTabla(Math.abs(c.disponible))}</b></td>
-        <td>${c.semaforo === 'gris' ? `<span style="color:var(--text-dim);">${CP_SEMAFORO_TEXTO.gris}</span>` : `<span class="cp-barra ${c.semaforo}"><i style="width:${pct}%"></i></span><b>${c.porcentaje}%</b>`}</td>
-        <td>${recarga}</td>
-        <td${jugadaVieja ? ' style="color:var(--warning);"' : ''}>${cpTextoFecha(c.ultimaJugada)}</td>
-      </tr>`;
-    }).join('') + '</tbody></table>';
+  const cab = (col, texto, num) => {
+    const act = CP_ORDEN && CP_ORDEN.col === col;
+    const aria = act ? ` aria-sort="${CP_ORDEN.dir === 'asc' ? 'ascending' : 'descending'}"` : '';
+    return `<th class="${num ? 'num' : ''}" tabindex="0" role="columnheader"${aria} onclick="cpOrdenar('${col}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();cpOrdenar('${col}');}">${texto}<span class="fl">${act ? (CP_ORDEN.dir === 'asc' ? '▲' : '▼') : '▲'}</span></th>`;
+  };
+  const tot = lista.reduce((a, c) => ({ colocado: a.colocado + c.colocado, apostado: a.apostado + c.apostado, neto: a.neto + c.neto, enJuego: a.enJuego + c.enJuego, disponible: a.disponible + c.disponible }), { colocado: 0, apostado: 0, neto: 0, enJuego: 0, disponible: 0 });
+  const filas = lista.map(c => {
+    const inicial = escapeHtmlTraspaso(formatNombre(c.nombre).charAt(0));
+    const detalleColocado = c.tipo === 'avalado' ? '' : `<span class="cpz-sub2">pozo ${formatMontoTabla(c.pozoBase)} + recargas ${formatMontoTabla(c.recargasSemana)}</span>`;
+    const pctD = Math.max(0, Math.min(100, c.porcentaje));
+    const pctJ = c.colocado > 0 ? Math.max(0, Math.min(100 - pctD, c.enJuego / c.colocado * 100)) : 0;
+    const recarga = c.tipo === 'avalado' ? '<span class="cpz-mudo">—</span>' : cpTextoFecha(c.ultimaRecarga, false);
+    const tituloBarra = `Disponible ${c.porcentaje}%${c.enJuego ? ` · en juego ${formatMontoTabla(c.enJuego)}` : ''}`;
+    return `<tr class="${c.semaforo === 'rojo' ? 'cpz-rojo' : ''}">
+      <td class="cpz-c-cli" data-label="Cliente"><div class="cpz-cli"><span class="cpz-av ${c.semaforo}">${inicial}</span><div class="cpz-cli-t"><b>${escapeHtmlTraspaso(formatNombre(c.nombre))}</b><span class="cpz-tipo">${CP_TIPO_TEXTO[c.tipo] || ''}</span></div></div></td>
+      <td class="cpz-c-est" data-label="Estado"><span class="cpz-pill ${c.semaforo}"><i></i>${CP_SEMAFORO_TEXTO[c.semaforo]}</span></td>
+      <td class="num" data-label="Colocado">${formatMontoTabla(c.colocado)}${detalleColocado}</td>
+      <td class="num" data-label="Jugado">${formatMontoTabla(c.apostado)}</td>
+      <td class="num" data-label="Ganado / perdido"><span class="${c.neto > 0 ? 'pos' : c.neto < 0 ? 'neg' : ''}">${sg(c.neto)}</span></td>
+      <td class="num" data-label="En juego">${c.enJuego ? formatMontoTabla(c.enJuego) : '<span class="cpz-mudo">—</span>'}</td>
+      <td class="num cpz-disp cpz-c-disp" data-label="Disponible"><b class="${c.disponible < 0 ? 'neg' : ''}">${c.disponible < 0 ? '-' : ''}${formatMontoTabla(Math.abs(c.disponible))}</b>${c.semaforo === 'gris' ? '' : `<div class="cpz-uso" title="${tituloBarra}"><span class="cpz-barra"><i class="d ${c.semaforo}" style="width:${pctD}%"></i><i class="j" style="width:${pctJ}%"></i></span>${c.porcentaje}%</div>`}</td>
+      <td data-label="Última recarga">${recarga}</td>
+      <td data-label="Última jugada">${cpTextoFecha(c.ultimaJugada, true)}</td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `<table class="cpz-tabla"><thead><tr>
+      ${cab('nombre', 'Cliente', false)}${cab('estado', 'Estado', false)}${cab('colocado', 'Colocado', true)}${cab('apostado', 'Jugado', true)}${cab('neto', 'Ganado / perdido', true)}${cab('enJuego', 'En juego', true)}${cab('disponible', 'Disponible', true)}${cab('recarga', 'Última recarga', false)}${cab('jugada', 'Última jugada', false)}
+    </tr></thead><tbody>${filas}</tbody>
+    <tfoot><tr><td colspan="2">Total · ${lista.length} cliente(s)</td><td class="num">${formatMontoTabla(tot.colocado)}</td><td class="num">${formatMontoTabla(tot.apostado)}</td><td class="num"><span class="${tot.neto > 0 ? 'pos' : tot.neto < 0 ? 'neg' : ''}">${sg(tot.neto)}</span></td><td class="num">${formatMontoTabla(tot.enJuego)}</td><td class="num">${formatMontoTabla(tot.disponible)}</td><td colspan="2"></td></tr></tfoot></table>`;
+}
+
+function cpExportar() {
+  const lista = cpListaFiltrada();
+  if (!lista.length) return;
+  const num = v => String(redondearCentavos(v)).replace('.', ',');
+  const esc = v => { const s = String(v == null ? '' : v); return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const fila = c => [formatNombre(c.nombre), CP_TIPO_TEXTO[c.tipo] || '', CP_SEMAFORO_TEXTO[c.semaforo] || '', num(c.colocado), num(c.apostado), num(c.neto), num(c.enJuego), num(c.disponible), String(c.porcentaje).replace('.', ','), c.ultimaRecarga ? formatFechaCortaDMY(String(c.ultimaRecarga).slice(0, 10)) : '', c.ultimaJugada ? formatFechaCortaDMY(String(c.ultimaJugada).slice(0, 10)) : ''];
+  const filas = [['Cliente', 'Tipo', 'Estado', 'Colocado', 'Jugado', 'Ganado/perdido', 'En juego', 'Disponible', '% disponible', 'Ultima recarga', 'Ultima jugada']].concat(lista.map(fila));
+  const csv = '﻿' + filas.map(f => f.map(esc).join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `control-pozos-${fechaLocalHoy()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // ------------------------------------------------------------------
