@@ -20,6 +20,7 @@ let escrituras = [];
 let yaAvisado = false;
 let recargas = {};      // nombre -> recargado en la semana
 let sinColumnaPagoDiario = false;
+let pendientesAdel = {}; // nombre -> monto de adelantadas pendientes (en juego de Hipismo)
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
@@ -30,6 +31,7 @@ function ejecutarQuery(text, params) {
     const conPD = /pago_diario = true/.test(sql);
     return { rows: jugadoresDB.filter(j => params[1].includes(j.nombre) && (j.tipo_cuenta === 'avalado' || (conPD && j.pago_diario)) && !j.es_cuenta_comision) };
   }
+  if (/FROM hipismo_adelantadas_jugadas WHERE grupo_id = \$1 AND estado = 'pendiente'/i.test(sql)) return { rows: Object.keys(pendientesAdel).filter(n => params[1].includes(n)).map(n => ({ nombre: n, total: pendientesAdel[n] })) };
   if (/^SELECT COALESCE\(SUM\(monto\), 0\) AS total FROM hipismo_comisiones_ajustes/i.test(sql)) return { rows: [{ total: recargas[params[1]] || 0 }] };
   if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql)) return { rows: (params[1] || []).map(nombre => ({ nombre })) };
   if (/^SELECT 1 FROM hipismo_alertas/i.test(sql)) return { rows: yaAvisado ? [{ '?column?': 1 }] : [] };
@@ -134,6 +136,16 @@ const jug = (nombre, extra) => ({ id: 'j-' + nombre, grupo_id: GRUPO_ID, nombre,
     { clienteNombre: 'FELIPE', modalidad: 'Gana', caballo: '3', monto: 10 }, { clienteNombre: 'MARIA', modalidad: 'Gana', caballo: '1', monto: 50 }]);
   check(val.length === 1 && val[0].nombre === 'FELIPE' && val[0].juegan.length === 2 && val[0].noAlcanzan.length === 1 && val[0].noAlcanzan[0].caballo === '2', '1p) Validar plano: a FELIPE (40 recargados) le caben 30 y 10; la segunda de 30 no alcanza');
   recargas = {};
+
+  // ---------- 1d) lo que ya tiene en juego en Hipismo (adelantadas pendientes) tampoco se puede volver a jugar (28-10-2026) ----------
+  pozos.ANA = { inicial: 1000, disponible: 500 };     // sin nada en juego: 50% -> no avisa
+  pendientesAdel = { ANA: 450 };                       // pero tiene 450 en adelantadas pendientes -> realmente le quedan 50 (5%)
+  r = await alertaPozo.detectarPozoBajo(GRUPO_ID, ['ANA']);
+  check(r.length === 1 && r[0].nombre === 'ANA' && r[0].pozoDisponible === 50 && r[0].porcentaje === 5, '1q) Poco pozo descuenta lo que tiene en juego en Hipismo (adelantadas pendientes): 500 - 450 = 50 (5%)');
+  sb = await alertaPozo.detectarApuestasSobrePozo(GRUPO_ID, [{ nombre: 'ANA', monto: 100 }]);
+  check(sb.length === 1 && sb[0].pozoDisponible === 50 && sb[0].faltante === 50, '1r) "Apostó más de lo que le queda" también descuenta lo que tiene en juego: apuesta 100 con 50 libres -> se pasa por 50');
+  pendientesAdel = {};
+  pozos.ANA = { inicial: 1000, disponible: 100 };
 
   // ---------- 2) ruta POST /tercios-adelantadas ----------
   const base = { grupoId: GRUPO_ID, grupo: { id: GRUPO_ID, nombre: 'Largavita' }, nombreActor: 'Largavita', params: {}, query: {} };

@@ -2118,6 +2118,27 @@
   .tema-nombre { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--accent-deep); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .tema-nombre em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--t-on-accent, #fff); }
   .tema-desc { font-size: 12px; color: var(--text-dim); line-height: 1.35; }
+
+  /* ===== Control de Pozos (28-10-2026) ===== */
+  .cp-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 14px; }
+  .cp-stat { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
+  .cp-stat .cp-et { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-dim); }
+  .cp-stat .cp-val { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 19px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .cp-stat .cp-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+  .cp-semaforos { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; font-size: 12.5px; font-weight: 700; }
+  .cp-semaforos span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); }
+  .cp-punto { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; background: #9ca3af; }
+  .cp-punto.verde { background: var(--ok); } .cp-punto.amarillo { background: var(--warning); } .cp-punto.rojo { background: var(--danger); } .cp-punto.gris { background: #9ca3af; }
+  .cp-tabla-wrap { overflow-x: auto; }
+  .cp-tabla { min-width: 860px; }
+  .cp-tabla td, .cp-tabla th { white-space: nowrap; }
+  .cp-tabla td.cp-nombre { white-space: normal; min-width: 150px; font-weight: 700; }
+  .cp-tabla .cp-sub { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); }
+  .cp-tabla tr.cp-rojo td { background: rgba(220,38,38,0.06); }
+  .cp-barra { display: inline-block; vertical-align: middle; width: 70px; height: 8px; border-radius: 6px; background: var(--card-border); overflow: hidden; margin-right: 6px; }
+  .cp-barra > i { display: block; height: 100%; border-radius: 6px; background: var(--ok); }
+  .cp-barra.amarillo > i { background: var(--warning); } .cp-barra.rojo > i { background: var(--danger); }
+  .cp-tipo { font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--card-border); color: var(--text-dim); margin-left: 6px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -2283,6 +2304,8 @@
     </div>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
+    <!-- 28-10-2026: "Control de Pozos" -- tablero con una fila por cliente con pozo o de pago diario (ver vista-controlPozos). -->
+    <button type="button" class="nav-item" data-vista="controlPozos" onclick="mostrarVista('controlPozos', this)">🎛️<span class="nav-lbl"> Control de Pozos</span></button>
 
     <hr>
 
@@ -3912,6 +3935,26 @@
           <div><label>Monto de aval</label><input type="text" placeholder="Ej: 2.000,00"></div>
         </div>
         <div class="btn-fila"><button class="btn btn-primario" type="button" disabled>+ Registrar aval</button></div>
+      </div>
+    </section>
+
+    <!-- ============ CONTROL DE POZOS Y PAGO DIARIO (28-10-2026) ============
+         A pedido del usuario: una ventana con una fila por cliente con pozo o de pago diario -- cuánto se le colocó o recargó, cuánto
+         jugó y ganó o perdió esta semana, cuánto tiene en juego, cuánto le queda (con %), última recarga y última jugada, y un
+         semáforo; arriba un resumen del grupo. Solo lee (ver GET /control-pozos en routes/hipismo.js). -->
+    <section class="vista" id="vista-controlPozos">
+      <div class="card">
+        <h2>🎛️ Control de Pozos</h2>
+        <p class="desc">Todos los clientes con <b>pozo</b> o de <b>pago diario</b> en una sola pantalla: lo que se les colocó o recargó, lo que han jugado y ganado o perdido esta semana, lo que tienen <b>en juego</b> sin resolver y lo que <b>les queda</b> para jugar. Semáforo: <b>verde</b> si les queda el 80% o más, <b>amarillo</b> entre 15% y 79%, <b>rojo</b> menos del 15%. Los que más atención piden salen primero. <span id="cpSemana"></span></p>
+        <div id="cpResumen"></div>
+        <div class="subnav" id="cpFiltros">
+          <button type="button" class="activo" data-filtro="todos" onclick="cpFiltrar('todos', this)">Todos</button>
+          <button type="button" data-filtro="pago_diario" onclick="cpFiltrar('pago_diario', this)">💵 Pago diario</button>
+          <button type="button" data-filtro="pozo" onclick="cpFiltrar('pozo', this)">🏦 Con pozo</button>
+          <button type="button" data-filtro="atencion" onclick="cpFiltrar('atencion', this)">🔴 Pide atención</button>
+          <button type="button" class="btn-secundario" style="margin-left:auto;" onclick="cargarControlPozos()">↻ Actualizar</button>
+        </div>
+        <div class="cp-tabla-wrap"><div id="cpTabla"><div class="resultado-vacio">Cargando…</div></div></div>
       </div>
     </section>
 
@@ -7611,7 +7654,7 @@ function aplicarPermisoCruzarJugadas() {
 // botones que darían error. SECCION_DE_VISTA_HIP se genera del catálogo (src/services/funcionesGrupo.js); el test
 // test_funciones_grupo.js verifica que coincidan. Una sesión vieja no trae la lista: se asume "todas" y se refresca al cargar.
 // =================================================================
-const SECCION_DE_VISTA_HIP = {"cargarPlanos":"hip_planos","validarPlano":"hip_planos","eliminarPlanos":"hip_planos","planosEliminados":"hip_planos","traspasosJugadas":"hip_planos","montosApostados":"hip_planos","cargaMasivaEspecial":"hip_carga_masiva","cargarRemate":"hip_remates","cargarRemateManual":"hip_remates","jugadasAdelantadas":"hip_adelantadas","terciosAdelantadas":"hip_adelantadas","revTablasMarcas":"hip_adelantadas","revAdelantadasClientes":"hip_adelantadas","banqueoMarcas":"hip_adelantadas","cargarWinners":"hip_winners","eliminarWinners":"hip_winners","pozos":"hip_pozos","detalladoCliente":"hip_saldos","semanaPorDias":"hip_saldos","balanceGeneral":"hip_saldos","cierreFinal":"hip_saldos","balanceSocios":"hip_saldos","recargaPagoDiario":"hip_saldos","grupoClientes":"hip_grupo_clientes","comisionesPorCarrera":"hip_comisiones","comisionesTotalesPorHipodromo":"hip_comisiones","comisionesDevueltasPorHipodromo":"hip_comisiones","comisionesDevueltas":"hip_comisiones","saldoComisiones":"hip_comisiones","comisionesSinDevoluciones":"hip_comisiones","comisionesSocios":"hip_comisiones","clientes":"hip_clientes","avales":"hip_clientes","registroSaldos":"hip_clientes","retiros":"hip_finanzas","traspasos":"hip_finanzas","gastos":"hip_finanzas","hipodromos":"hip_hipodromos","pizarras":"hip_hipodromos","revisarJugadas":"hip_revisar","fechaSemana":"hip_ajustes_calculo","cabezaPie":"hip_ajustes_calculo","eliminarJornada":"hip_mantenimiento","alertasHipismo":"hip_alertas"};
+const SECCION_DE_VISTA_HIP = {"cargarPlanos":"hip_planos","validarPlano":"hip_planos","eliminarPlanos":"hip_planos","planosEliminados":"hip_planos","traspasosJugadas":"hip_planos","montosApostados":"hip_planos","cargaMasivaEspecial":"hip_carga_masiva","cargarRemate":"hip_remates","cargarRemateManual":"hip_remates","jugadasAdelantadas":"hip_adelantadas","terciosAdelantadas":"hip_adelantadas","revTablasMarcas":"hip_adelantadas","revAdelantadasClientes":"hip_adelantadas","banqueoMarcas":"hip_adelantadas","cargarWinners":"hip_winners","eliminarWinners":"hip_winners","pozos":"hip_pozos","controlPozos":"hip_pozos","detalladoCliente":"hip_saldos","semanaPorDias":"hip_saldos","balanceGeneral":"hip_saldos","cierreFinal":"hip_saldos","balanceSocios":"hip_saldos","recargaPagoDiario":"hip_saldos","grupoClientes":"hip_grupo_clientes","comisionesPorCarrera":"hip_comisiones","comisionesTotalesPorHipodromo":"hip_comisiones","comisionesDevueltasPorHipodromo":"hip_comisiones","comisionesDevueltas":"hip_comisiones","saldoComisiones":"hip_comisiones","comisionesSinDevoluciones":"hip_comisiones","comisionesSocios":"hip_comisiones","clientes":"hip_clientes","avales":"hip_clientes","registroSaldos":"hip_clientes","retiros":"hip_finanzas","traspasos":"hip_finanzas","gastos":"hip_finanzas","hipodromos":"hip_hipodromos","pizarras":"hip_hipodromos","revisarJugadas":"hip_revisar","fechaSemana":"hip_ajustes_calculo","cabezaPie":"hip_ajustes_calculo","eliminarJornada":"hip_mantenimiento","alertasHipismo":"hip_alertas"};
 function seccionHabilitadaHip(clave) {
   if (!GRUPO || !Array.isArray(GRUPO.funcionesHabilitadas)) return true;
   return GRUPO.funcionesHabilitadas.includes(clave);
@@ -7888,6 +7931,8 @@ const REFRESCAR_AL_ENTRAR_VISTA = {
   retiros: () => entrarRetiros(),
   // "Recarga Saldos Pago Diarios" (26-10-2026) — clientes de pago diario con su saldo + recargas por día.
   recargaPagoDiario: () => entrarRecargaPagoDiario(),
+  // "Control de Pozos" (28-10-2026) — tablero de pozos y pago diario.
+  controlPozos: () => cargarControlPozos(),
   // "Cargar Remate Manual" (25-09-2026) — refresca el <select> de
   // Jugador de cada fila cada vez que se entra a la pestaña, para que
   // un cliente recién creado en otra pantalla ya aparezca sin recargar.
@@ -8044,7 +8089,7 @@ const CR_ICONOS = {
   ajustes: '<path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
   salida: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>'
 };
-const CR_ICONOS_VISTA = {"preferencias": "<path d=\"M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2\"/><circle cx=\"14\" cy=\"6\" r=\"2\"/><circle cx=\"8\" cy=\"12\" r=\"2\"/><circle cx=\"16\" cy=\"18\" r=\"2\"/>", "cargarPlanos": "<path d=\"M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2\"/>", "cargaMasivaEspecial": "<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "validarPlano": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.5l2.7 2.7L16 9.5\"/>", "eliminarPlanos": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "cargarRemate": "<path d=\"M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a3 3 0 003 3M16 6h4v1a3 3 0 01-3 3M12 13v4M8 21h8M10 17h4\"/>", "cargarRemateManual": "<path d=\"M4 20l1-4L16.500 4.500a2.100 2.100 0 013 3L8 19z\"/><path d=\"M14 7l3 3\"/>", "traspasosJugadas": "<path d=\"M17 3l4 4-4 4M3 11V9a2 2 0 012-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 01-2 2H3\"/>", "jugadasAdelantadas": "<path d=\"M3 6l8 6-8 6zM13 6l8 6-8 6z\"/>", "terciosAdelantadas": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/>", "montosApostados": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M14.500 9.500c-.5-1-1.500-1.500-2.500-1.500-1.400 0-2.500.8-2.500 2 0 2.800 5 1.400 5 4 0 1.200-1.100 2-2.500 2-1.100 0-2.100-.5-2.600-1.500M12 6v2M12 16v2\"/>", "cargarWinners": "<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"M8.500 14.500L7 21l5-3 5 3-1.500-6.500\"/>", "eliminarWinners": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "pozos": "<ellipse cx=\"12\" cy=\"6\" rx=\"7\" ry=\"3\"/><path d=\"M5 6v6c0 1.700 3.100 3 7 3s7-1.300 7-3V6M5 12v6c0 1.700 3.100 3 7 3s7-1.300 7-3v-6\"/>", "detalladoCliente": "<path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2z\"/><path d=\"M9 8h6M9 12h6\"/>", "semanaPorDias": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/>", "balanceGeneral": "<path d=\"M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3z\"/><path d=\"M8 9h7M8 13h7\"/>", "cierreFinal": "<path d=\"M5 21V4M5 4h11l-2 4 2 4H5\"/>", "grupoClientes": "<path d=\"M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z\"/>", "revTablasMarcas": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M3 15h18M9 4v16\"/>", "revAdelantadasClientes": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/>", "comisionesPorCarrera": "<path d=\"M3 17l6-6 4 4 8-8M15 7h6v6\"/>", "comisionesTotalesPorHipodromo": "<path d=\"M3 20h18M5 20V9l7-5 7 5v11M9 20v-5h6v5\"/>", "comisionesDevueltasPorHipodromo": "<path d=\"M9 14L4 9l5-5\"/><path d=\"M4 9h10a6 6 0 010 12h-3\"/>", "comisionesDevueltas": "<path d=\"M19 5L5 19\"/><circle cx=\"7\" cy=\"7\" r=\"2.500\"/><circle cx=\"17\" cy=\"17\" r=\"2.500\"/>", "saldoComisiones": "<path d=\"M3 7a2 2 0 012-2h13v4M3 7v11a2 2 0 002 2h15V9H5a2 2 0 01-2-2z\"/><circle cx=\"16.500\" cy=\"14.500\" r=\"1\"/>", "comisionesSinDevoluciones": "<rect x=\"5\" y=\"3\" width=\"14\" height=\"18\" rx=\"2\"/><path d=\"M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2\"/>", "clientes": "<circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21c0-4 3.600-7 8-7s8 3 8 7\"/>", "registroSaldos": "<path d=\"M3 12h4l3-8 4 16 3-8h4\"/>", "avales": "<path d=\"M12 3l8 3v6c0 4.500-3.300 8-8 9-4.700-1-8-4.500-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "retiros": "<path d=\"M12 20V5M6 11l6-6 6 6M5 21h14\"/>", "recargaPagoDiario": "<rect x=\"3\" y=\"6\" width=\"18\" height=\"13\" rx=\"2\"/><path d=\"M3 10h18M16 15h2\"/>", "traspasos": "<path d=\"M4 8h15l-4-4M20 16H5l4 4\"/>", "gastos": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 10h18M7 15h4\"/>", "hipodromos": "<path d=\"M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z\"/><circle cx=\"12\" cy=\"10\" r=\"2.500\"/>", "pizarras": "<rect x=\"5\" y=\"4\" width=\"14\" height=\"17\" rx=\"2\"/><path d=\"M9 4h6v3H9zM9 12h6M9 16h4\"/>", "revisarJugadas": "<circle cx=\"11\" cy=\"11\" r=\"6.500\"/><path d=\"M16 16l5 5\"/>", "fechaSemana": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4\"/>", "banqueoMarcas": "<path d=\"M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18\"/>", "cabezaPie": "<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"2\"/><path d=\"M4 8h16M4 16h16\"/>", "planosEliminados": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8M10 12h4\"/>", "eliminarJornada": "<path d=\"M12 3c1 3.500 5 5.500 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.500 1 2 2 2-1-3 0-5 1-8z\"/>", "alertasHipismo": "<path d=\"M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4\"/>", "usuarios": "<circle cx=\"9\" cy=\"8\" r=\"4\"/><path d=\"M2 21c0-3.500 3-6 7-6s7 2.500 7 6M19 8v6M16 11h6\"/>", "seguridad": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 018 0v4\"/>"};
+const CR_ICONOS_VISTA = {"preferencias": "<path d=\"M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2\"/><circle cx=\"14\" cy=\"6\" r=\"2\"/><circle cx=\"8\" cy=\"12\" r=\"2\"/><circle cx=\"16\" cy=\"18\" r=\"2\"/>", "cargarPlanos": "<path d=\"M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2\"/>", "cargaMasivaEspecial": "<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "validarPlano": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.5l2.7 2.7L16 9.5\"/>", "eliminarPlanos": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "cargarRemate": "<path d=\"M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a3 3 0 003 3M16 6h4v1a3 3 0 01-3 3M12 13v4M8 21h8M10 17h4\"/>", "cargarRemateManual": "<path d=\"M4 20l1-4L16.500 4.500a2.100 2.100 0 013 3L8 19z\"/><path d=\"M14 7l3 3\"/>", "traspasosJugadas": "<path d=\"M17 3l4 4-4 4M3 11V9a2 2 0 012-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 01-2 2H3\"/>", "jugadasAdelantadas": "<path d=\"M3 6l8 6-8 6zM13 6l8 6-8 6z\"/>", "terciosAdelantadas": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/>", "montosApostados": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M14.500 9.500c-.5-1-1.500-1.500-2.500-1.500-1.400 0-2.500.8-2.500 2 0 2.800 5 1.400 5 4 0 1.200-1.100 2-2.500 2-1.100 0-2.100-.5-2.600-1.500M12 6v2M12 16v2\"/>", "cargarWinners": "<circle cx=\"12\" cy=\"9\" r=\"6\"/><path d=\"M8.500 14.500L7 21l5-3 5 3-1.500-6.500\"/>", "eliminarWinners": "<path d=\"M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6\"/>", "pozos": "<ellipse cx=\"12\" cy=\"6\" rx=\"7\" ry=\"3\"/><path d=\"M5 6v6c0 1.700 3.100 3 7 3s7-1.300 7-3V6M5 12v6c0 1.700 3.100 3 7 3s7-1.300 7-3v-6\"/>", "detalladoCliente": "<path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2z\"/><path d=\"M9 8h6M9 12h6\"/>", "semanaPorDias": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/>", "balanceGeneral": "<path d=\"M4 4h12a3 3 0 013 3v13H7a3 3 0 01-3-3z\"/><path d=\"M8 9h7M8 13h7\"/>", "cierreFinal": "<path d=\"M5 21V4M5 4h11l-2 4 2 4H5\"/>", "grupoClientes": "<path d=\"M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z\"/>", "revTablasMarcas": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M3 15h18M9 4v16\"/>", "revAdelantadasClientes": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/>", "comisionesPorCarrera": "<path d=\"M3 17l6-6 4 4 8-8M15 7h6v6\"/>", "comisionesTotalesPorHipodromo": "<path d=\"M3 20h18M5 20V9l7-5 7 5v11M9 20v-5h6v5\"/>", "comisionesDevueltasPorHipodromo": "<path d=\"M9 14L4 9l5-5\"/><path d=\"M4 9h10a6 6 0 010 12h-3\"/>", "comisionesDevueltas": "<path d=\"M19 5L5 19\"/><circle cx=\"7\" cy=\"7\" r=\"2.500\"/><circle cx=\"17\" cy=\"17\" r=\"2.500\"/>", "saldoComisiones": "<path d=\"M3 7a2 2 0 012-2h13v4M3 7v11a2 2 0 002 2h15V9H5a2 2 0 01-2-2z\"/><circle cx=\"16.500\" cy=\"14.500\" r=\"1\"/>", "comisionesSinDevoluciones": "<rect x=\"5\" y=\"3\" width=\"14\" height=\"18\" rx=\"2\"/><path d=\"M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2\"/>", "clientes": "<circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21c0-4 3.600-7 8-7s8 3 8 7\"/>", "registroSaldos": "<path d=\"M3 12h4l3-8 4 16 3-8h4\"/>", "avales": "<path d=\"M12 3l8 3v6c0 4.500-3.300 8-8 9-4.700-1-8-4.500-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "retiros": "<path d=\"M12 20V5M6 11l6-6 6 6M5 21h14\"/>", "controlPozos": "<path d=\"M4 20V10M10 20V4M16 20v-8M22 20H2\"/>", "recargaPagoDiario": "<rect x=\"3\" y=\"6\" width=\"18\" height=\"13\" rx=\"2\"/><path d=\"M3 10h18M16 15h2\"/>", "traspasos": "<path d=\"M4 8h15l-4-4M20 16H5l4 4\"/>", "gastos": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 10h18M7 15h4\"/>", "hipodromos": "<path d=\"M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z\"/><circle cx=\"12\" cy=\"10\" r=\"2.500\"/>", "pizarras": "<rect x=\"5\" y=\"4\" width=\"14\" height=\"17\" rx=\"2\"/><path d=\"M9 4h6v3H9zM9 12h6M9 16h4\"/>", "revisarJugadas": "<circle cx=\"11\" cy=\"11\" r=\"6.500\"/><path d=\"M16 16l5 5\"/>", "fechaSemana": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4\"/>", "banqueoMarcas": "<path d=\"M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18\"/>", "cabezaPie": "<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"2\"/><path d=\"M4 8h16M4 16h16\"/>", "planosEliminados": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8M10 12h4\"/>", "eliminarJornada": "<path d=\"M12 3c1 3.500 5 5.500 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.500 1 2 2 2-1-3 0-5 1-8z\"/>", "alertasHipismo": "<path d=\"M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4\"/>", "usuarios": "<circle cx=\"9\" cy=\"8\" r=\"4\"/><path d=\"M2 21c0-3.500 3-6 7-6s7 2.500 7 6M19 8v6M16 11h6\"/>", "seguridad": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 018 0v4\"/>"};
 const CR_EMOJI_INICIO = /^[\p{Extended_Pictographic}️‍\s]+/u;
 function crSvg(trazos, clase) {
   return '<svg class="' + clase + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + trazos + '</svg>';
@@ -19349,6 +19394,96 @@ async function eliminarRetiro(id) {
   msg.style.color = 'var(--accent-grass)'; msg.textContent = '🗑️ Retiro eliminado.';
   await pintarListaRetiros();
   pintarPistaRetiro();
+}
+
+// ------------------------------------------------------------------
+// CONTROL DE POZOS Y PAGO DIARIO (28-10-2026) — ver GET /control-pozos en routes/hipismo.js y services/hipismoControlPozos.js.
+// ------------------------------------------------------------------
+let CP_DATOS = null;
+let CP_FILTRO = 'todos';
+
+async function cargarControlPozos() {
+  const cont = document.getElementById('cpTabla');
+  if (!cont) return;
+  try { CP_DATOS = await apiHipismo('/api/hipismo/control-pozos'); }
+  catch (e) { CP_DATOS = null; cont.innerHTML = `<div class="resultado-vacio">No se pudo cargar: ${escapeHtmlTraspaso(e.message)}</div>`; document.getElementById('cpResumen').innerHTML = ''; return; }
+  pintarControlPozos();
+}
+
+function cpFiltrar(filtro, btn) {
+  CP_FILTRO = filtro;
+  document.querySelectorAll('#cpFiltros button[data-filtro]').forEach(b => b.classList.toggle('activo', b === btn));
+  pintarControlPozos();
+}
+
+function cpDiasDesde(iso) {
+  if (!iso) return null;
+  const hoy = new Date(fechaLocalHoy() + 'T12:00:00');
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
+  return Math.round((hoy - d) / 86400000);
+}
+function cpTextoFecha(iso) {
+  if (!iso) return '<span style="color:var(--text-dim);">—</span>';
+  const dias = cpDiasDesde(iso);
+  const rel = dias === 0 ? 'hoy' : dias === 1 ? 'ayer' : dias > 1 ? `hace ${dias} días` : '';
+  return `${formatFechaCortaDMY(String(iso).slice(0, 10))}${rel ? `<span class="cp-sub">${rel}</span>` : ''}`;
+}
+const CP_TIPO_TEXTO = { avalado: 'Con pozo', pago_diario: '💵 Pago diario', pago_diario_pozo: '💵 Pago diario + pozo' };
+const CP_SEMAFORO_TEXTO = { verde: 'Bien', amarillo: 'Ojo', rojo: 'Poco pozo', gris: 'Sin saldo' };
+
+function pintarControlPozos() {
+  const cont = document.getElementById('cpTabla');
+  const res = document.getElementById('cpResumen');
+  if (!cont || !res || !CP_DATOS) return;
+  const r = CP_DATOS.resumen || {};
+  const m = n => formatMonto(redondearCentavos(n));
+  const sg = n => (n > 0 ? '+' : n < 0 ? '-' : '') + formatMontoTabla(Math.abs(redondearCentavos(n)));
+  const sem = CP_DATOS.semana || {};
+  const spanSem = document.getElementById('cpSemana');
+  if (spanSem) spanSem.textContent = sem.desde ? `Semana del ${formatFechaCortaDMY(sem.desde)} al ${formatFechaCortaDMY(sem.hasta)}.` : '';
+  res.innerHTML = `
+    <div class="cp-resumen">
+      <div class="cp-stat"><div class="cp-et">Colocado</div><div class="cp-val">${m(r.totalColocado || 0)}</div><div class="cp-sub">pozos + recargas de la semana</div></div>
+      <div class="cp-stat"><div class="cp-et">Jugado</div><div class="cp-val">${m(r.totalApostado || 0)}</div><div class="cp-sub">apostado esta semana</div></div>
+      <div class="cp-stat"><div class="cp-et">Ganado / perdido</div><div class="cp-val ${(r.totalNeto || 0) >= 0 ? 'pos' : 'neg'}">${sg(r.totalNeto || 0)}</div><div class="cp-sub">de estos clientes</div></div>
+      <div class="cp-stat"><div class="cp-et">En juego</div><div class="cp-val">${m(r.totalEnJuego || 0)}</div><div class="cp-sub">sin resolver</div></div>
+      <div class="cp-stat"><div class="cp-et">Disponible</div><div class="cp-val">${m(r.totalDisponible || 0)}</div><div class="cp-sub">${r.totalClientes || 0} cliente(s): ${r.conPozo || 0} con pozo, ${r.pagoDiario || 0} pago diario</div></div>
+    </div>
+    <div class="cp-semaforos">
+      <span><i class="cp-punto rojo"></i> ${r.rojos || 0} en rojo</span>
+      <span><i class="cp-punto amarillo"></i> ${r.amarillos || 0} en amarillo</span>
+      <span><i class="cp-punto verde"></i> ${r.verdes || 0} en verde</span>
+      <span><i class="cp-punto gris"></i> ${r.sinSaldo || 0} sin saldo</span>
+    </div>`;
+  let lista = CP_DATOS.clientes || [];
+  if (CP_FILTRO === 'pago_diario') lista = lista.filter(c => c.tipo !== 'avalado');
+  else if (CP_FILTRO === 'pozo') lista = lista.filter(c => c.tipo !== 'pago_diario');
+  else if (CP_FILTRO === 'atencion') lista = lista.filter(c => c.semaforo === 'rojo' || c.semaforo === 'amarillo');
+  if (!lista.length) {
+    cont.innerHTML = (CP_DATOS.clientes || []).length
+      ? '<div class="placeholder-card">Ningún cliente cumple ese filtro.</div>'
+      : '<div class="placeholder-card">Todavía no hay clientes con pozo ni de pago diario. Créalos en Administración &gt; Clientes (Tipo de cuenta: Avalado, 💵 Pago diario o 💵 Pago diario con pozo).</div>';
+    return;
+  }
+  cont.innerHTML = `<table class="cp-tabla"><thead><tr>
+      <th>Cliente</th><th class="num">Colocado</th><th class="num">Jugado</th><th class="num">Ganado / perdido</th><th class="num">En juego</th><th class="num">Disponible</th><th>Le queda</th><th>Última recarga</th><th>Última jugada</th></tr></thead><tbody>` +
+    lista.map(c => {
+      const detalleColocado = c.tipo === 'avalado' ? '' : `<span class="cp-sub">pozo ${formatMontoTabla(c.pozoBase)} + recargas ${formatMontoTabla(c.recargasSemana)}</span>`;
+      const pct = Math.max(0, Math.min(100, c.porcentaje));
+      const recarga = c.tipo === 'avalado' ? '<span style="color:var(--text-dim);">—</span>' : cpTextoFecha(c.ultimaRecarga);
+      const jugadaVieja = c.ultimaJugada && cpDiasDesde(c.ultimaJugada) >= 7;
+      return `<tr class="${c.semaforo === 'rojo' ? 'cp-rojo' : ''}">
+        <td class="cp-nombre"><i class="cp-punto ${c.semaforo}" title="${CP_SEMAFORO_TEXTO[c.semaforo]}"></i> ${escapeHtmlTraspaso(formatNombre(c.nombre))}<span class="cp-tipo">${CP_TIPO_TEXTO[c.tipo] || ''}</span></td>
+        <td class="num">${formatMontoTabla(c.colocado)}${detalleColocado}</td>
+        <td class="num">${formatMontoTabla(c.apostado)}</td>
+        <td class="num ${c.neto > 0 ? 'pos' : c.neto < 0 ? 'neg' : ''}">${sg(c.neto)}</td>
+        <td class="num">${c.enJuego ? formatMontoTabla(c.enJuego) : '<span style="color:var(--text-dim);">—</span>'}</td>
+        <td class="num ${c.disponible < 0 ? 'neg' : ''}"><b>${c.disponible < 0 ? '-' : ''}${formatMontoTabla(Math.abs(c.disponible))}</b></td>
+        <td>${c.semaforo === 'gris' ? `<span style="color:var(--text-dim);">${CP_SEMAFORO_TEXTO.gris}</span>` : `<span class="cp-barra ${c.semaforo}"><i style="width:${pct}%"></i></span><b>${c.porcentaje}%</b>`}</td>
+        <td>${recarga}</td>
+        <td${jugadaVieja ? ' style="color:var(--warning);"' : ''}>${cpTextoFecha(c.ultimaJugada)}</td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
 }
 
 // ------------------------------------------------------------------

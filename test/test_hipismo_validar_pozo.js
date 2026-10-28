@@ -12,6 +12,7 @@ const JUGADORES = [
 ];
 Module._load = function (request, parent, isMain) {
   const base = parent && parent.filename ? path.basename(parent.filename) : '';
+  if (base === 'hipismoEnJuego.js' && request === '../db') return { query: async () => ({ rows: [] }) }; // sin adelantadas pendientes
   if (base === 'hipismoAlertaPozo.js' && request === '../db') {
     return { query: async (sql, params) => ({ rows: JUGADORES.filter(j => params[1].includes(j.nombre)) }) };
   }

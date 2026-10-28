@@ -5628,6 +5628,17 @@ router.delete('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
 }));
 
 // =================================================================
+// TABLERO DE CONTROL DE POZOS Y PAGO DIARIO (28-10-2026, ver services/hipismoControlPozos.js): una fila por cliente con pozo o de
+// pago diario (colocado/recargado, jugado, ganado o perdido, en juego, disponible con su %, última recarga y última jugada, semáforo)
+// y un resumen del grupo. Solo lee.
+//   GET /control-pozos   { semana:{desde,hasta}, resumen:{...}, clientes:[...] }
+// =================================================================
+const { construirControlPozos } = require('../services/hipismoControlPozos');
+router.get('/control-pozos', asyncHandler(async (req, res) => {
+  res.json(await construirControlPozos(req.grupoId));
+}));
+
+// =================================================================
 // SOCIOS DE HIPISMO y "COMISIONES POR AVALES Y SOCIOS" (25-10-2026, a pedido del usuario: "en comisiones crea una pestaña que se
 // llame comisiones por avales y socios; cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo, que se
 // crean en Ajustes > Socios; la distribución debe dar exactamente el 100%); en esa ventana te coloca ordenado cuánto produjo cada

@@ -24,6 +24,7 @@
 const db = require('../db');
 const { calcularPozoJugador } = require('./pozo');
 const { round2 } = require('./hipismoAdelantadasCalc');
+const { hipismoEnJuegoPorCliente } = require('./hipismoEnJuego');
 
 function fmt(n) {
   return Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,11 +62,13 @@ async function clientesConPozoDisponible(grupoId, nombres) {
     if (!e || e.code !== '42703') throw e;
     r = await consulta("tipo_cuenta = 'avalado'");
   }
+  // 28-10-2026: lo que ya tiene en juego en Hipismo (adelantadas pendientes) tampoco se puede volver a jugar.
+  const enJuegoHipismo = await hipismoEnJuegoPorCliente(grupoId, r.rows.map(j => j.nombre));
   const salida = [];
   for (const jugador of r.rows) {
     const pozo = await calcularPozoJugador(grupoId, jugador);
     let base = round2(pozo.pozoInicial);
-    let disponible = round2(pozo.pozoDisponible);
+    let disponible = round2(pozo.pozoDisponible - (enJuegoHipismo.get(jugador.nombre) || 0));
     if (jugador.pago_diario) {
       const recargas = pozo.rango ? await recargasPagoDiarioSemana(grupoId, jugador.nombre, pozo.rango) : 0;
       base = round2(base + recargas);
@@ -184,4 +187,4 @@ function mensajePozoBajo(b, etiqueta) {
   return `${quien} tiene POCO POZO${donde}: le quedan ${fmt(b.pozoDisponible)} de ${fmt(b.pozoInicial)} (${b.porcentaje}%).`;
 }
 
-module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo, PORCENTAJE_POZO_BAJO };
+module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo, PORCENTAJE_POZO_BAJO, CUENTA_RECARGAS_PAGO_DIARIO };

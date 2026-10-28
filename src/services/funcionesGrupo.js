@@ -47,7 +47,7 @@ const FUNCIONES_HIPISMO = [
   { clave: 'hip_adelantadas', modulo: 'hipismo', nombre: 'Tablas Fijas, Marcas y Tercios Adelantadas', descripcion: 'Jugadas adelantadas, tercios adelantadas, revisiones de tablas/marcas y banqueo.',
     vistas: ['jugadasAdelantadas', 'terciosAdelantadas', 'revTablasMarcas', 'revAdelantadasClientes', 'banqueoMarcas'] },
   { clave: 'hip_winners', modulo: 'hipismo', nombre: 'Winners', descripcion: 'Cargar y eliminar winners.', vistas: ['cargarWinners', 'eliminarWinners'] },
-  { clave: 'hip_pozos', modulo: 'hipismo', nombre: 'Pozos', descripcion: 'Pozo de cada cliente, saldos + pozos y plano de pozos.', vistas: ['pozos'] },
+  { clave: 'hip_pozos', modulo: 'hipismo', nombre: 'Pozos', descripcion: 'Pozo de cada cliente, saldos + pozos y plano de pozos.', vistas: ['pozos', 'controlPozos'] },
   { clave: 'hip_saldos', modulo: 'hipismo', nombre: 'Saldos y Cierre', descripcion: 'Detallado por cliente, semana por días, balance general y cierre final.',
     vistas: ['detalladoCliente', 'semanaPorDias', 'balanceGeneral', 'cierreFinal', 'balanceSocios', 'recargaPagoDiario'] },
   { clave: 'hip_grupo_clientes', modulo: 'hipismo', nombre: 'Grupos de Clientes', descripcion: 'Agrupar clientes y sus cuadres.', vistas: ['grupoClientes'] },
@@ -130,6 +130,7 @@ const REGLAS_RUTAS_HIPISMO = [
   [TODOS, /^\/winners/, ['hip_winners']],
   // Pozos
   [TODOS, /^\/pozos-plano-excluidos$/, ['hip_pozos']],
+  [['GET'], /^\/control-pozos/, ['hip_pozos', 'hip_saldos']],
   // Saldos y cierre
   [['GET'], /^\/balance-general/, ['hip_saldos']],
   [['GET'], /^\/balance-socios/, ['hip_saldos']],
