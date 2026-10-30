@@ -92,8 +92,12 @@ async function cargarResolucionesManuales(grupoId, fecha) {
 // (para que la PRÓXIMA vez que se procese esa sábana ya salga bien sola) y
 // marca la alerta como resuelta. No recalcula el ticket en el momento —
 // hace falta volver a "Procesar Sábana" para verlo aplicado.
-async function resolverAlerta(alertaId, deporteElegido) {
-  const r = await db.query('SELECT grupo_id, fecha, pata FROM alertas WHERE id = $1', [alertaId]);
+// 30-10-2026: `grupoId` (opcional) = el grupo que la pide. Cuando viene (rutas del Grupo), la alerta SOLO se encuentra si es de ese grupo;
+// sin él (Súper-admin, que ve todos los grupos) funciona como siempre.
+async function resolverAlerta(alertaId, deporteElegido, grupoId) {
+  const r = grupoId
+    ? await db.query('SELECT grupo_id, fecha, pata FROM alertas WHERE id = $1 AND grupo_id = $2', [alertaId, grupoId])
+    : await db.query('SELECT grupo_id, fecha, pata FROM alertas WHERE id = $1', [alertaId]);
   const alerta = r.rows[0];
   if (!alerta) {
     const err = new Error('Alerta no encontrada.');
@@ -122,8 +126,10 @@ async function resolverAlerta(alertaId, deporteElegido) {
 // ningún deporte que recordar para la próxima vez: si el Grupo corrige el
 // texto de la jugada en la sábana, la próxima vez es un texto distinto y
 // se evalúa de cero, tal como corresponde.
-async function descartarAlerta(alertaId) {
-  const r = await db.query('SELECT grupo_id FROM alertas WHERE id = $1', [alertaId]);
+async function descartarAlerta(alertaId, grupoId) {
+  const r = grupoId
+    ? await db.query('SELECT grupo_id FROM alertas WHERE id = $1 AND grupo_id = $2', [alertaId, grupoId])
+    : await db.query('SELECT grupo_id FROM alertas WHERE id = $1', [alertaId]);
   const alerta = r.rows[0];
   if (!alerta) {
     const err = new Error('Alerta no encontrada.');

@@ -210,18 +210,15 @@ router.post('/alertas/marcar-leidas', requierePermiso('alertas'), asyncHandler(a
 
 // Resuelve una alerta a mano eligiendo el deporte correcto — ver
 // alertas.js (guarda la elección en resoluciones_ambiguas para la
-// PRÓXIMA vez que se reprocese esa sábana). No valida acá que la alerta
-// pertenezca a este grupo_id a propósito: el id es un UUID impredecible
-// que solo aparece en las respuestas de ESTE mismo grupo (ver
-// listarAlertasGrupo), así que en la práctica un Grupo nunca llega a
-// conocer el id de una alerta ajena para poder mandarlo acá.
+// PRÓXIMA vez que se reprocese esa sábana). Desde el 30-10-2026 SÍ se valida que la alerta
+// pertenezca a este grupo (antes se confiaba en que el UUID era impredecible): una alerta de otro grupo da 404.
 router.post('/alertas/:id/resolver', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   const { deporte } = req.body;
   if (!deporte || !deporte.trim()) {
     return res.status(400).json({ error: 'Elige un deporte antes de resolver la alerta.' });
   }
   try {
-    const resultado = await alertasService.resolverAlerta(req.params.id, deporte.trim());
+    const resultado = await alertasService.resolverAlerta(req.params.id, deporte.trim(), req.grupoId);
     res.json({ ok: true, grupoId: resultado.grupoId });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message || 'No se pudo resolver la alerta.' });
@@ -234,7 +231,7 @@ router.post('/alertas/:id/resolver', requierePermiso('alertas'), asyncHandler(as
 // volver a procesar; esto solo la saca de la lista de pendientes.
 router.post('/alertas/:id/descartar', requierePermiso('alertas'), asyncHandler(async (req, res) => {
   try {
-    const resultado = await alertasService.descartarAlerta(req.params.id);
+    const resultado = await alertasService.descartarAlerta(req.params.id, req.grupoId);
     res.json({ ok: true, grupoId: resultado.grupoId });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message || 'No se pudo descartar la alerta.' });
