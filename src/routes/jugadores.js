@@ -75,7 +75,9 @@ router.get('/', asyncHandler(async (req, res) => {
   // ver la nota grande en services/pozo.js).
   const rangoSemana = await rangoSemanaActualPozo(req.grupoId);
   const conPozo = await Promise.all(r.rows.map(async j => {
-    const pozo = j.tipo_cuenta === 'avalado' ? await calcularPozoJugador(req.grupoId, j, { rango: rangoSemana }) : null;
+    // 31-10-2026: un cliente de PAGO DIARIO sin pozo (libre) también trae su 'pozo' (base + lo jugado de la semana): la pantalla Pozos
+    // (Solo Pozos) lo muestra con su saldo real (recargas, traspasos, cruces, etc.). Las pantallas siguen filtrando por tipo_cuenta.
+    const pozo = (j.tipo_cuenta === 'avalado' || j.pago_diario === true) ? await calcularPozoJugador(req.grupoId, j, { rango: rangoSemana }) : null;
     return { ...j, pozo, avalesPorcentaje: avalesPorJugadorId[j.id] || [] };
   }));
   res.json(conPozo);
