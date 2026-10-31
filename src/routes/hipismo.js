@@ -5423,6 +5423,19 @@ router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
 const CUENTA_PAGOS_A_CLIENTES = 'PAGOS A CLIENTES';
 const NOTA_RETIRO_DEFECTO = 'Retiro (pago a cliente)';
 const { buscarOCrearFicha: buscarOCrearFichaRetiros } = require('../services/hipismoComisionPropia');
+// 31-10-2026, a pedido del usuario ("no se hace como las recargas: TERCIOS --, POZOS DIARIOS ++"): el retiro de un cliente de PAGO DIARIO
+// no va a PAGOS A CLIENTES sino a la cuenta POZOS PAGO DIARIOS (la misma de sus recargas, al revés): cliente -monto, POZOS PAGO DIARIOS +monto.
+// Los demás clientes siguen igual (PAGOS A CLIENTES +monto). El resto (listas, editar, eliminar) funciona con las dos cuentas.
+async function cuentaDestinoRetiro(grupoId, cliente) {
+  try {
+    const r = await db.query('SELECT 1 FROM jugadores WHERE grupo_id = $1 AND nombre = $2 AND pago_diario = true', [grupoId, cliente]);
+    return r.rows && r.rows.length ? CUENTA_POZOS_PAGO_DIARIO : CUENTA_PAGOS_A_CLIENTES;
+  } catch (e) {
+    if (e && e.code === '42703') return CUENTA_PAGOS_A_CLIENTES; // todavía no existe la columna pago_diario
+    throw e;
+  }
+}
+const esDestinoDeRetiro = d => d === CUENTA_PAGOS_A_CLIENTES || d === CUENTA_POZOS_PAGO_DIARIO;
 
 function normalizarNombreRetiro(t) { return ((t == null ? '' : t) + '').trim().toUpperCase().replace(/\s+/g, ' '); }
 
@@ -5433,13 +5446,14 @@ async function listarRetirosGrupo(grupoId) {
     `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
        FROM hipismo_comisiones_ajustes
       WHERE grupo_id = $1
-        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $2)
+        AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = ANY($2))
       ORDER BY creado_en DESC`,
-    [grupoId, CUENTA_PAGOS_A_CLIENTES]
+    [grupoId, [CUENTA_PAGOS_A_CLIENTES, CUENTA_POZOS_PAGO_DIARIO]]
   );
+  // Retiro = el cliente resta y el DESTINO es PAGOS A CLIENTES o POZOS PAGO DIARIOS (una recarga es al revés: ahí el origen es POZOS PAGO DIARIOS).
   return emparejarTraspasosSaldo(r.rows)
-    .filter(p => p.destino === CUENTA_PAGOS_A_CLIENTES)
-    .map(p => ({ id: p.id, idDestino: p.idDestino, cliente: p.origen, monto: p.monto, fecha: p.fecha, nota: p.nota, creadoEn: p.creadoEn }))
+    .filter(p => esDestinoDeRetiro(p.destino))
+    .map(p => ({ id: p.id, idDestino: p.idDestino, cliente: p.origen, cuenta: p.destino, monto: p.monto, fecha: p.fecha, nota: p.nota, creadoEn: p.creadoEn }))
     .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : new Date(b.creadoEn) - new Date(a.creadoEn)));
 }
 async function buscarRetiroPorId(grupoId, id) {
@@ -5451,12 +5465,12 @@ async function buscarRetiroPorId(grupoId, id) {
     `SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes
       WHERE grupo_id = $1 AND creado_en = (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE id = $2 AND grupo_id = $1)`,
     [grupoId, rFila.rows[0].id]);
-  const par = emparejarTraspasosSaldo(rMomento.rows).find(p => (p.id === rFila.rows[0].id || p.idDestino === rFila.rows[0].id) && p.destino === CUENTA_PAGOS_A_CLIENTES);
+  const par = emparejarTraspasosSaldo(rMomento.rows).find(p => (p.id === rFila.rows[0].id || p.idDestino === rFila.rows[0].id) && esDestinoDeRetiro(p.destino));
   return par || null;
 }
 
 router.get('/retiros', asyncHandler(async (req, res) => {
-  res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, retiros: await listarRetirosGrupo(req.grupoId) });
+  res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, cuentaPagoDiario: CUENTA_POZOS_PAGO_DIARIO, retiros: await listarRetirosGrupo(req.grupoId) });
 }));
 
 router.post('/retiros', asyncHandler(async (req, res) => {
@@ -5465,18 +5479,19 @@ router.post('/retiros', asyncHandler(async (req, res) => {
   const fecha = (req.body && req.body.fecha) || fechaHoyVenezuela();
   const nota = ((req.body && req.body.nota) || '').toString().trim() || NOTA_RETIRO_DEFECTO;
   if (!cliente) return res.status(400).json({ error: 'Elige el cliente al que se le pagó.' });
-  if (cliente === CUENTA_PAGOS_A_CLIENTES) return res.status(400).json({ error: 'Elige un cliente; PAGOS A CLIENTES es la cuenta donde se acumulan los retiros.' });
+  if (esDestinoDeRetiro(cliente)) return res.status(400).json({ error: 'Elige un cliente; PAGOS A CLIENTES y POZOS PAGO DIARIOS son las cuentas donde se acumulan los retiros.' });
   if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
   if (await rechazarClientesInexistentes(req, res, [cliente])) return;
-  await buscarOCrearFichaRetiros(req.grupoId, CUENTA_PAGOS_A_CLIENTES);
+  const cuentaDestino = await cuentaDestinoRetiro(req.grupoId, cliente);
+  await buscarOCrearFichaRetiros(req.grupoId, cuentaDestino);
   const montoFinal = round2(monto);
   await db.transaccion(async (client) => {
     await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
       [req.grupoId, cliente, -montoFinal, fecha, nota]);
     await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
-      [req.grupoId, CUENTA_PAGOS_A_CLIENTES, montoFinal, fecha, nota]);
+      [req.grupoId, cuentaDestino, montoFinal, fecha, nota]);
   });
-  res.json({ ok: true });
+  res.json({ ok: true, cuenta: cuentaDestino });
 }));
 
 router.put('/retiros/:id', asyncHandler(async (req, res) => {
@@ -5487,17 +5502,19 @@ router.put('/retiros/:id', asyncHandler(async (req, res) => {
   const monto = b.monto !== undefined ? Number(b.monto) : par.monto;
   const fecha = b.fecha || par.fecha;
   const nota = b.nota !== undefined ? (((b.nota || '') + '').trim() || NOTA_RETIRO_DEFECTO) : (par.nota || NOTA_RETIRO_DEFECTO);
-  if (!cliente || cliente === CUENTA_PAGOS_A_CLIENTES) return res.status(400).json({ error: 'Elige el cliente al que se le pagó.' });
+  if (!cliente || esDestinoDeRetiro(cliente)) return res.status(400).json({ error: 'Elige el cliente al que se le pagó.' });
   if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
   if (cliente !== par.origen && await rechazarClientesInexistentes(req, res, [cliente])) return;
+  const cuentaDestino = await cuentaDestinoRetiro(req.grupoId, cliente); // si cambió de cliente, el destino sigue al nuevo cliente
+  await buscarOCrearFichaRetiros(req.grupoId, cuentaDestino);
   const montoFinal = round2(monto);
   await db.transaccion(async (client) => {
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
       [cliente, -montoFinal, fecha, nota, req.grupoId, par.id]);
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
-      [CUENTA_PAGOS_A_CLIENTES, montoFinal, fecha, nota, req.grupoId, par.idDestino]);
+      [cuentaDestino, montoFinal, fecha, nota, req.grupoId, par.idDestino]);
   });
-  res.json({ ok: true });
+  res.json({ ok: true, cuenta: cuentaDestino });
 }));
 
 router.delete('/retiros/:id', asyncHandler(async (req, res) => {

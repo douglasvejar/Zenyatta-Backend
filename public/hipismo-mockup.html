@@ -4110,7 +4110,7 @@
     <section class="vista" id="vista-retiros">
       <div class="card">
         <h2>💸 Retiros</h2>
-        <p class="desc">Para registrar un pago que se le hizo a un cliente (cuando se le cancela). Se le resta del saldo al cliente y se suma a la cuenta <b>PAGOS A CLIENTES</b>, así el saldo nuevo se ve igual en todas las ventanas (Balance General, Cierre Final, Pozos, su link...). Ejemplo: Raúl tiene +200, se le registra un retiro de 180 y queda en +20.</p>
+        <p class="desc">Para registrar un pago que se le hizo a un cliente (cuando se le cancela). Se le resta del saldo al cliente y se suma a la cuenta <b>PAGOS A CLIENTES</b> (si el cliente es de <b>PAGO DIARIO</b>, a <b>POZOS PAGO DIARIOS</b>, la misma cuenta de sus recargas pero al revés), así el saldo nuevo se ve igual en todas las ventanas (Balance General, Cierre Final, Pozos, su link...). Ejemplo: Raúl tiene +200, se le registra un retiro de 180 y queda en +20.</p>
         <div class="fila">
           <div>
             <label for="inpBuscarRetiro">Buscar cliente</label>
@@ -4134,7 +4134,7 @@
       </div>
       <div class="card">
         <h2>Retiros registrados</h2>
-        <p class="desc">Ordenados por día, el más reciente primero. Si te equivocaste, puedes editar o eliminar un retiro: el saldo del cliente y de PAGOS A CLIENTES se corrige solo.</p>
+        <p class="desc">Ordenados por día, el más reciente primero. Si te equivocaste, puedes editar o eliminar un retiro: el saldo del cliente y de la cuenta destino (PAGOS A CLIENTES o POZOS PAGO DIARIOS) se corrige solo.</p>
         <div id="listaRetiros"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
@@ -19405,6 +19405,12 @@ async function anularTraspasoSaldo(id) {
 // ------------------------------------------------------------------
 let RETIRO_EDITANDO = null;      // { id, ... } mientras se edita uno
 let RETIRO_CUENTA = 'PAGOS A CLIENTES';
+const RETIRO_CUENTA_PAGO_DIARIO = 'POZOS PAGO DIARIOS';
+// 31-10-2026: el retiro de un cliente de PAGO DIARIO va a POZOS PAGO DIARIOS (contrapeso de sus recargas); los demás, a PAGOS A CLIENTES.
+function cuentaDestinoRetiroFront(cliente) {
+  const j = (CLIENTES_HIPISMO_CACHE || []).find(x => x.nombre === cliente);
+  return j && j.pago_diario ? RETIRO_CUENTA_PAGO_DIARIO : RETIRO_CUENTA;
+}
 let RETIROS_CACHE = [];
 
 function poblarSelectRetiro() {
@@ -19413,7 +19419,7 @@ function poblarSelectRetiro() {
   const filtro = (document.getElementById('inpBuscarRetiro').value || '').trim().toLowerCase();
   const prev = sel.value;
   const activos = (CLIENTES_HIPISMO_CACHE || [])
-    .filter(j => j.activo !== false && j.nombre !== RETIRO_CUENTA)
+    .filter(j => j.activo !== false && j.nombre !== RETIRO_CUENTA && j.nombre !== RETIRO_CUENTA_PAGO_DIARIO)
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const visibles = activos.filter(j => !filtro || j.nombre.toLowerCase().includes(filtro) || j.nombre === prev);
   sel.innerHTML = '<option value="">— Elige un cliente —</option>' +
@@ -19435,7 +19441,9 @@ async function pintarPistaRetiro() {
   const signo = n => (n > 0 ? '+' : n < 0 ? '-' : '') + formatMontoTabla(Math.abs(n));
   const antes = RETIRO_EDITANDO && RETIRO_EDITANDO.cliente === cliente ? RETIRO_EDITANDO.monto : 0; // al editar, el retiro viejo ya está descontado
   const quedaria = redondearCentavos(saldo + antes - monto);
-  pista.textContent = `Saldo de la semana de ${formatNombre(cliente)}: ${signo(saldo)}` + (monto > 0 ? ` → con este retiro quedaría en ${signo(quedaria)}` : '');
+  const cuenta = cuentaDestinoRetiroFront(cliente);
+  pista.textContent = `Saldo de la semana de ${formatNombre(cliente)}: ${signo(saldo)}` + (monto > 0 ? ` → con este retiro quedaría en ${signo(quedaria)}` : '')
+    + ` · el retiro se suma a ${cuenta}` + (monto > 0 ? ` (${formatNombre(cliente)} -${formatMontoTabla(monto)} / ${cuenta} +${formatMontoTabla(monto)})` : '') + '.';
 }
 
 async function entrarRetiros() {
@@ -19474,7 +19482,7 @@ async function pintarListaRetiros() {
     return `<div style="margin-bottom:14px;">
       <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} retiro(s), total ${formatMonto(total)}</span></div>
       ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
-        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}</span>
+        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b> <span style="color:var(--text-dim);">→ ${escapeHtmlTraspaso(r.cuenta || RETIRO_CUENTA)}</span>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}</span>
         <span class="btn-fila" style="gap:6px;">
           <button class="btn btn-secundario" type="button" onclick="editarRetiro('${r.id}')">✏️ Editar</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRetiro('${r.id}')">🗑️ Eliminar</button>
@@ -19528,7 +19536,8 @@ async function guardarRetiro() {
   if (!cliente) { msg.textContent = 'Elige el cliente al que se le pagó.'; return; }
   if (!monto || monto <= 0) { msg.textContent = 'Escribe un monto mayor a 0.'; return; }
   const editando = RETIRO_EDITANDO;
-  if (!editando && !confirm(`¿Registrar un retiro de ${formatMonto(monto)} a ${formatNombre(cliente)}? Se le resta de su saldo.`)) return;
+  const cuentaDestino = cuentaDestinoRetiroFront(cliente);
+  if (!editando && !confirm(`¿Registrar un retiro de ${formatMonto(monto)} a ${formatNombre(cliente)}?\n\n${formatNombre(cliente)} -${formatMontoTabla(monto)}\n${cuentaDestino} +${formatMontoTabla(monto)}`)) return;
   const btn = document.getElementById('btnRegistrarRetiro');
   btn.disabled = true;
   try {
@@ -19543,7 +19552,7 @@ async function guardarRetiro() {
   SALDOS_SEMANA_POZOS_CACHE = null;
   restablecerFormularioRetiro();
   msg.style.color = 'var(--accent-grass)';
-  msg.textContent = editando ? '✅ Retiro corregido.' : `✅ Listo: retiro de ${formatMonto(monto)} a ${formatNombre(cliente)}.`;
+  msg.textContent = editando ? '✅ Retiro corregido.' : `✅ Listo: ${formatNombre(cliente)} -${formatMontoTabla(monto)} y ${cuentaDestino} +${formatMontoTabla(monto)}.`;
   await pintarListaRetiros();
   pintarPistaRetiro();
 }

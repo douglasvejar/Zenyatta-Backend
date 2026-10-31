@@ -15,12 +15,14 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
 const GRUPO = 'g-ret-1', OTRO = 'g-ret-2';
 let reloj = 1000, txAhora = null, seq = 0;
 const AJUSTES = [];
-const JUGADORES = [{ id: 'j1', grupo_id: GRUPO, nombre: 'RAUL', es_cuenta_comision: false }, { id: 'j2', grupo_id: GRUPO, nombre: 'ANA', es_cuenta_comision: false }];
+const JUGADORES = [{ id: 'j1', grupo_id: GRUPO, nombre: 'RAUL', es_cuenta_comision: false }, { id: 'j2', grupo_id: GRUPO, nombre: 'ANA', es_cuenta_comision: false }, { id: 'j9', grupo_id: GRUPO, nombre: 'FELIPE', es_cuenta_comision: false, pago_diario: true }];
 
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND nombre = ANY/i.test(sql))
     return { rows: JUGADORES.filter(j => j.grupo_id === params[0] && params[1].includes(j.nombre)).map(j => ({ nombre: j.nombre })) };
+  if (/^SELECT 1 FROM jugadores WHERE grupo_id = \$1 AND nombre = \$2 AND pago_diario = true/i.test(sql))
+    return { rows: JUGADORES.filter(j => j.grupo_id === params[0] && j.nombre === params[1] && j.pago_diario === true).map(() => ({ '?column?': 1 })) };
   if (/^SELECT id, nombre, es_cuenta_comision FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: JUGADORES.filter(j => j.grupo_id === params[0]) };
   if (/^INSERT INTO jugadores/i.test(sql)) { const j = { id: 'j' + (JUGADORES.length + 1), grupo_id: params[0], nombre: params[1], es_cuenta_comision: /es_cuenta_comision\) VALUES/i.test(sql) }; JUGADORES.push(j); return { rows: [j] }; }
   if (sql === 'BEGIN') { txAhora = new Date(2026, 9, 25, 12, 0, 0, reloj++); return { rows: [] }; }
@@ -31,7 +33,8 @@ function ejecutarQuery(text, params) {
     return { rows: [] };
   }
   if (/^SELECT id, cliente_nombre, monto, fecha, nota, creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND creado_en IN \(SELECT creado_en/i.test(sql)) {
-    const momentos = new Set(AJUSTES.filter(a => a.grupo_id === params[0] && a.cliente_nombre === params[1]).map(a => a.creado_en.getTime()));
+    const cuentas = Array.isArray(params[1]) ? params[1] : [params[1]];
+    const momentos = new Set(AJUSTES.filter(a => a.grupo_id === params[0] && cuentas.includes(a.cliente_nombre)).map(a => a.creado_en.getTime()));
     return { rows: AJUSTES.filter(a => a.grupo_id === params[0] && momentos.has(a.creado_en.getTime())).sort((x, y) => y.creado_en - x.creado_en) };
   }
   if (/^SELECT id, creado_en FROM hipismo_comisiones_ajustes WHERE id = \$1 AND grupo_id = \$2/i.test(sql)) return { rows: AJUSTES.filter(a => a.id === params[0] && a.grupo_id === params[1]) };
@@ -148,6 +151,31 @@ const saldoDe = nombre => AJUSTES.filter(a => a.grupo_id === GRUPO && a.cliente_
   check(r.status === 404 && AJUSTES.length === antes, '25) Un traspaso normal no se puede borrar desde Retiros');
   r = await invocar(handlerDe('delete', '/retiros/:id'), { ...base, grupoId: OTRO, params: { id: L.find(x => x.cliente === 'ANA').id } });
   check(r.status === 404, '26) No se puede tocar un retiro de otro grupo');
+
+  // PAGO DIARIO (31-10-2026): "TERCIOS --, POZOS DIARIOS ++" -- el retiro de un cliente de pago diario va a POZOS PAGO DIARIOS
+  const sumaAntes = AJUSTES.filter(a => a.grupo_id === GRUPO).length;
+  r = await post({ cliente: 'felipe', monto: 300, fecha: '2026-10-26' });
+  check(r.salida && r.salida.ok === true && r.salida.cuenta === 'POZOS PAGO DIARIOS', '30) Retiro a un cliente de pago diario responde con la cuenta POZOS PAGO DIARIOS');
+  check(saldoDe('FELIPE') === -300 && saldoDe('POZOS PAGO DIARIOS') === 300, '31) FELIPE -300 y POZOS PAGO DIARIOS +300');
+  const fichaPD = JUGADORES.find(j => j.nombre === 'POZOS PAGO DIARIOS');
+  check(fichaPD && fichaPD.es_cuenta_comision === true, '32) La ficha POZOS PAGO DIARIOS se crea sola como cuenta de comisión');
+  check(AJUSTES.filter(a => a.grupo_id === GRUPO).length === sumaAntes + 2 && Math.abs(AJUSTES.filter(a => a.grupo_id === GRUPO).reduce((x, a) => x + Number(a.monto), 0)) < 1e-9, '33) Siguen sumando 0');
+  r = await invocar(handlerDe('get', '/retiros'), base);
+  const rf = r.salida.retiros.find(x => x.cliente === 'FELIPE');
+  check(rf && rf.cuenta === 'POZOS PAGO DIARIOS' && rf.monto === 300, '34) Sale en la lista de Retiros indicando la cuenta destino');
+  check(r.salida.retiros.filter(x => x.cuenta === 'PAGOS A CLIENTES').length === 2, '35) Los demás retiros siguen yendo a PAGOS A CLIENTES');
+  r = await post({ cliente: 'POZOS PAGO DIARIOS', monto: 5 }); check(r.status === 400, '36) No se le puede hacer un retiro a la cuenta POZOS PAGO DIARIOS');
+  r = await invocar(handlerDe('put', '/retiros/:id'), { ...base, params: { id: rf.id }, body: { monto: 250 } });
+  check(r.salida.ok === true && saldoDe('FELIPE') === -250 && saldoDe('POZOS PAGO DIARIOS') === 250, '37) Editar el monto corrige las dos mitades');
+  r = await invocar(handlerDe('put', '/retiros/:id'), { ...base, params: { id: rf.id }, body: { cliente: 'ana' } });
+  check(r.salida.ok === true && saldoDe('POZOS PAGO DIARIOS') === 0 && saldoDe('FELIPE') === 0, '38) Si cambia a un cliente que no es de pago diario, el destino pasa a PAGOS A CLIENTES');
+  r = await invocar(handlerDe('delete', '/retiros/:id'), { ...base, params: { id: rf.id } });
+  check(r.salida.ok === true && saldoDe('POZOS PAGO DIARIOS') === 0, '39) Eliminar un retiro de pago diario borra las 2 mitades');
+  // una recarga NO se confunde con un retiro
+  AJUSTES.push({ id: 'rc1', grupo_id: GRUPO, cliente_nombre: 'POZOS PAGO DIARIOS', monto: -500, fecha: '2026-10-26', nota: null, creado_en: new Date(2026, 9, 26, 9, 0, 0, 7) });
+  AJUSTES.push({ id: 'rc2', grupo_id: GRUPO, cliente_nombre: 'FELIPE', monto: 500, fecha: '2026-10-26', nota: null, creado_en: new Date(2026, 9, 26, 9, 0, 0, 7) });
+  r = await invocar(handlerDe('get', '/retiros'), base);
+  check(!r.salida.retiros.some(x => x.id === 'rc1' || x.id === 'rc2'), '40) Una recarga de pago diario no aparece como retiro');
 
   // pantalla
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');

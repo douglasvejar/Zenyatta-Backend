@@ -42,11 +42,12 @@ const CUENTA_RECARGAS_PAGO_DIARIO = 'POZOS PAGO DIARIOS';
 async function recargasPagoDiarioSemana(grupoId, nombre, rango) {
   const r = await db.query(
     `SELECT COALESCE(SUM(monto), 0) AS total FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = $2 AND monto > 0 AND fecha >= $3 AND fecha <= $4
+      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha >= $3 AND fecha <= $4
         AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $5)`,
     [grupoId, nombre, rango.desde, rango.hasta, CUENTA_RECARGAS_PAGO_DIARIO]
   );
-  return round2(Number(r.rows && r.rows[0] && r.rows[0].total) || 0);
+  // recargas (+) menos retiros (-): el retiro de un pago diario va a POZOS PAGO DIARIOS y baja lo que tiene para jugar
+  return Math.max(0, round2(Number(r.rows && r.rows[0] && r.rows[0].total) || 0));
 }
 
 async function clientesConPozoDisponible(grupoId, nombres) {

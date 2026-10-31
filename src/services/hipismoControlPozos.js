@@ -63,9 +63,9 @@ async function construirControlPozos(grupoId) {
   const recargas = mapa(await q(
     `SELECT cliente_nombre AS nombre,
             COALESCE(SUM(monto) FILTER (WHERE fecha >= $3 AND fecha <= $4), 0) AS semana,
-            MAX(fecha) AS ultima
+            MAX(fecha) FILTER (WHERE monto > 0) AS ultima
        FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = ANY($2) AND monto > 0
+      WHERE grupo_id = $1 AND cliente_nombre = ANY($2)
         AND creado_en IN (SELECT creado_en FROM hipismo_comisiones_ajustes WHERE grupo_id = $1 AND cliente_nombre = $5)
       GROUP BY cliente_nombre`,
     [grupoId, nombres, rango.desde, rango.hasta, CUENTA_RECARGAS_PAGO_DIARIO]));
@@ -105,7 +105,8 @@ async function construirControlPozos(grupoId) {
     const tipo = esPagoDiario ? (j.tipo_cuenta === 'avalado' ? 'pago_diario_pozo' : 'pago_diario') : 'avalado';
     const base = round2(pozo.pozoInicial);
     const rec = recargas.get(j.nombre);
-    const recargasSemana = esPagoDiario ? round2(Number(rec && rec.semana) || 0) : 0;
+    // recargas (+) menos retiros (-) de la semana: lo que se retira de un pago diario también baja lo que tiene colocado
+    const recargasSemana = esPagoDiario ? Math.max(0, round2(Number(rec && rec.semana) || 0)) : 0;
     const colocado = round2(base + recargasSemana);
     const neto = round2(pozo.liquidado);
     const enJuego = round2((pozo.congelado || 0) + (enJuegoHipismo.get(j.nombre) || 0));
