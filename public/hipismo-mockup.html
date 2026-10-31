@@ -14076,7 +14076,7 @@ function nombreGrupoTexto() {
 
 function copiarPozosTexto() {
   const emojiPorColor = { verde: '🟢', amarillo: '🟡', rojo: '🔴', gris: '⚪' };
-  const titulos = { saldosMasPozos: 'SALDOS + POZOS' + (incluirDevolucionPozos() ? ' (con devolución %)' : ' (sin devolución %)'), soloPozos: 'POZOS', saldos: 'SALDOS' };
+  const titulos = { saldosMasPozos: 'SALDOS + POZOS', soloPozos: 'POZOS', saldos: 'SALDOS' };
   const filas = document.querySelectorAll('#tablaPozos tbody tr');
   let texto = `💰 *${titulos[FILTRO_POZOS_ACTUAL] || 'POZOS'}* — ${nombreGrupoTexto()} 🇻🇪\n📅 ` + document.getElementById('pozosFechaCaptura').textContent + '\n\n';
   // 12-10-2026, a pedido del usuario: los saldos van entre *asteriscos* (negritas en WhatsApp) y todos los nombres
