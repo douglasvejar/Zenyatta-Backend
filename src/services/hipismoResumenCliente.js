@@ -26,6 +26,7 @@ const { sanearComisionTerciosAdelantadas } = require('./hipismoSanearTerciosAdel
 const { round2, montoDecididoExacto, montoBaseComisionExacto, ADELANTADAS_GENERAN_PORCENTAJE_DEVUELTO } = require('./hipismoAdelantadasCalc');
 const { montoBaseTerciosAdelantadaExacto } = require('./hipismoTerciosAdelantadasCalc');
 const { obtenerCargasEspecialesRango } = require('./hipismoCargasEspeciales');
+const { detallesPorAjuste } = require('./hipismoPagosDetalle');
 const { rangoSemanaGrupo } = require('./hipismoSemana');
 const { urlLogoGrupo, temaColorGrupo } = require('./logoGrupo');
 // obtenerComisionesPropias (26-09-2026, ver la nota grande de
@@ -488,6 +489,50 @@ function paisDeHipodromo(mapa, nombre, paisLinea) {
   return mapa.get(String(nombre || '').trim().toLowerCase()) || paisLinea;
 }
 
+// 02-11-2026, a pedido del usuario ("al ver el detallado de ese cliente se debe ver de quién es la recarga, para qué cliente fue la
+// recarga o el retiro... y si tiene imagen un botón de ver imagen"): lee los traspasos / recargas / retiros de una cuenta o cliente con
+// la CONTRAPARTE (la otra mitad del par: misma transacción y monto contrario) y el detalle del pago (método, referencia, si hay foto).
+// Si la consulta ampliada falla (por ejemplo falta la tabla de detalle), cae a la lectura simple de siempre, sin contraparte.
+async function leerTraspasosConDetalle(grupoId, nombre, desde, hasta) {
+  try {
+    const r = await db.query(
+      `SELECT a.id, a.monto, a.fecha, a.nota,
+              (SELECT b.cliente_nombre FROM hipismo_comisiones_ajustes b WHERE b.grupo_id = a.grupo_id AND b.creado_en = a.creado_en AND b.id <> a.id AND b.monto = -a.monto LIMIT 1) AS contraparte,
+              (SELECT b.id FROM hipismo_comisiones_ajustes b WHERE b.grupo_id = a.grupo_id AND b.creado_en = a.creado_en AND b.id <> a.id AND b.monto = -a.monto LIMIT 1) AS contraparte_id
+         FROM hipismo_comisiones_ajustes a
+        WHERE a.grupo_id = $1 AND a.cliente_nombre = $2 AND a.fecha BETWEEN $3 AND $4
+        ORDER BY a.fecha DESC, a.creado_en ASC`,
+      [grupoId, nombre, desde, hasta]
+    );
+    const filas = r.rows || [];
+    const det = await detallesPorAjuste(grupoId, filas.flatMap(f => [f.id, f.contraparte_id]));
+    return filas.map(f => {
+      const idDet = det.has(f.id) ? f.id : (det.has(f.contraparte_id) ? f.contraparte_id : null);
+      const d = idDet ? det.get(idDet) : null;
+      return {
+        monto: f.monto, fecha: f.fecha, nota: f.nota,
+        contraparte: f.contraparte || null,
+        pago: d ? { metodo: d.metodo, referencia: d.referencia, tieneImagen: d.tieneImagen, comprobanteId: d.tieneImagen ? idDet : null } : null
+      };
+    });
+  } catch (e) {
+    const r = await db.query(
+      `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
+        WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
+        ORDER BY fecha DESC, creado_en ASC`,
+      [grupoId, nombre, desde, hasta]
+    );
+    return r.rows || [];
+  }
+}
+// La línea de traspaso del detalle, con quién es la otra parte y el pago (campos nuevos; sin ellos todo se ve como antes).
+function lineaTraspaso(row) {
+  const linea = { tipo: 'traspaso', nota: row.nota || null, resultado: Number(row.monto) };
+  if (row.contraparte) linea.contraparte = row.contraparte;
+  if (row.pago) linea.pago = row.pago;
+  return linea;
+}
+
 async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
   const semana = semanaParam === 'anterior' ? 'anterior' : 'actual';
   const offset = semana === 'anterior' ? -1 : 0;
@@ -505,13 +550,8 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
   // en routes/hipismo.js) — a diferencia de arriba, estos SÍ quedan
   // guardados directamente con el nombre de esta cuenta como
   // cliente_nombre, así que se leen tal cual, uno por fila.
-  const rTraspasos = await db.query(
-    `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
-      ORDER BY fecha DESC, creado_en ASC`,
-    [jugador.grupo_id, jugador.nombre, desde, hasta]
-  );
-  rTraspasos.rows.forEach(row => {
+  const filasTraspasos = await leerTraspasosConDetalle(jugador.grupo_id, jugador.nombre, desde, hasta);
+  filasTraspasos.forEach(row => {
     const monto = Number(row.monto);
     const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
 
@@ -520,11 +560,7 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
     if (!hipMap.has(NOMBRE_BLOQUE_TRASPASOS)) {
       hipMap.set(NOMBRE_BLOQUE_TRASPASOS, { nombre: NOMBRE_BLOQUE_TRASPASOS, tipo: 'traspaso', carreras: [] });
     }
-    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push({
-      tipo: 'traspaso',
-      nota: row.nota || null,
-      resultado: monto
-    });
+    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push(lineaTraspaso(row));
 
     totalSemana += monto;
     cantidadJugadas += 1;
@@ -829,13 +865,8 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   // sabe pintar genéricamente por `hip.tipo`, sin importar si el dueño es
   // una cuenta de comisión o un cliente normal.
   let cantidadTraspasos = 0;
-  const rTraspasosCliente = await db.query(
-    `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
-      ORDER BY fecha DESC, creado_en ASC`,
-    [jugador.grupo_id, jugador.nombre, desde, hasta]
-  );
-  rTraspasosCliente.rows.forEach(row => {
+  const filasTraspasosCliente = await leerTraspasosConDetalle(jugador.grupo_id, jugador.nombre, desde, hasta);
+  filasTraspasosCliente.forEach(row => {
     const monto = Number(row.monto);
     const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
 
@@ -844,11 +875,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     if (!hipMap.has(NOMBRE_BLOQUE_TRASPASOS)) {
       hipMap.set(NOMBRE_BLOQUE_TRASPASOS, { nombre: NOMBRE_BLOQUE_TRASPASOS, tipo: 'traspaso', carreras: [] });
     }
-    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push({
-      tipo: 'traspaso',
-      nota: row.nota || null,
-      resultado: monto
-    });
+    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push(lineaTraspaso(row));
 
     totalSemana += monto;
     cantidadTraspasos += 1;
@@ -1005,19 +1032,14 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
 // lo que dice el cuadro. Devuelve lo que sumó para que quien llama lo agregue a sus totales.
 async function agregarMovimientosDirectosAItem(porDia, grupoId, nombre, desde, hasta, hoyIso) {
   let total = 0, hoy = 0, cantidad = 0;
-  const rTraspasos = await db.query(
-    `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
-      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
-      ORDER BY fecha DESC, creado_en ASC`,
-    [grupoId, nombre, desde, hasta]
-  );
-  (rTraspasos.rows || []).forEach(row => {
+  const filasTraspasos = await leerTraspasosConDetalle(grupoId, nombre, desde, hasta);
+  filasTraspasos.forEach(row => {
     const monto = Number(row.monto);
     const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
     if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
     const hipMap = porDia.get(fechaIso);
     if (!hipMap.has(NOMBRE_BLOQUE_TRASPASOS)) hipMap.set(NOMBRE_BLOQUE_TRASPASOS, { nombre: NOMBRE_BLOQUE_TRASPASOS, tipo: 'traspaso', carreras: [] });
-    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push({ tipo: 'traspaso', nota: row.nota || null, resultado: monto });
+    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push(lineaTraspaso(row));
     total += monto; cantidad += 1;
     if (fechaIso === hoyIso) hoy += monto;
   });
@@ -2136,5 +2158,6 @@ async function diagnosticarSaldosHipismo(grupoId, grupo, desde, hasta) {
 
 module.exports = {
   construirResumenClienteHipismo, construirResumenRemateHipismo, construirResumenWinnersHipismo,
-  construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo
+  construirResumenTablasFijasHipismo, construirCierreFinalHipismo, diagnosticarSaldosHipismo,
+  leerTraspasosConDetalle, lineaTraspaso // (solo para pruebas)
 };

@@ -1398,6 +1398,8 @@
   .detmodal-ticket-fila { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 7px 2px; border-top: 1px dashed var(--card-border); flex-wrap: wrap; }
   .detmodal-ticket-fila:first-child { border-top: none; }
   .detmodal-ticket-fila .detalle { flex: 1; min-width: 130px; }
+  .detmodal-ticket-fila .contraparte { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--text); }
+  .btn-ver-imagen { margin-top: 4px; padding: 2px 9px; min-height: 0; font-size: 11px; line-height: 1.5; border-radius: 6px; font-weight: 700; cursor: pointer; }
   .detmodal-ticket-fila .num { display: block; font-size: 9.5px; color: var(--text-dim); }
   .detmodal-ticket-fila .estado { display: inline-block; margin-top: 2px; font-size: 9.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; }
   .detmodal-ticket-fila .resultado { text-align: right; font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -4096,6 +4098,8 @@
           <div><label for="inpRecargaFecha">Fecha de las recargas</label><input type="date" id="inpRecargaFecha"></div>
           <div style="flex:2 1 260px;"><label for="inpRecargaNota">Nota (opcional)</label><input type="text" id="inpRecargaNota" placeholder="Ej: pago móvil"></div>
         </div>
+        <div style="margin:10px 0 4px; font-weight:800;">Datos del pago <span style="font-weight:600; color:var(--text-dim);">(opcional — se guardan con la próxima recarga que hagas)</span></div>
+        <div id="bloquePagoRec"></div>
         <div id="listaClientesRecarga"><div class="resultado-vacio">Cargando…</div></div>
         <div id="msgRecarga" class="desc" style="margin-top:10px;"></div>
       </div>
@@ -4125,6 +4129,8 @@
         <div class="fila">
           <div style="flex:1 1 100%;"><label for="inpRetiroNota">Nota (opcional)</label><input type="text" id="inpRetiroNota" placeholder="Ej: pago por transferencia"></div>
         </div>
+        <div style="margin:10px 0 4px; font-weight:800;">Datos del pago <span style="font-weight:600; color:var(--text-dim);">(opcional)</span></div>
+        <div id="bloquePagoRet"></div>
         <div id="pistaRetiro" class="desc" style="margin-top:4px;"></div>
         <div class="btn-fila">
           <button class="btn btn-primario" type="button" id="btnRegistrarRetiro" onclick="guardarRetiro()">+ Registrar retiro</button>
@@ -13091,6 +13097,7 @@ function renderDetalleClienteModal(data) {
           fila.innerHTML = `
             <span class="detalle">
               <span class="jugada-txt">${c.nota ? c.nota : 'Traspaso'}</span>
+              ${detalleContrapartePagoHtml(c)}
             </span>
             <span class="resultado ${claseMontoDet(c.resultado)}">${conSignoDet(c.resultado)}</span>`;
           bodyHip.appendChild(fila);
@@ -13345,7 +13352,7 @@ function construirPDFTodosLosClientes(lista, resultados, semana, opciones) {
         if (hip.tipo === 'deportes') {
           hip.carreras.forEach(t => filaPDF(`${limpiarTextoPDF(t.ticket || '')} ${limpiarTextoPDF(t.detalle || '')} [${limpiarTextoPDF(t.estado || '')}]`, '', `arriesga ${formatMontoDet(t.monto)}`, t.resultado));
         } else if (hip.tipo === 'traspaso' || hip.tipo === 'devolucion') {
-          hip.carreras.forEach(t => filaPDF(limpiarTextoPDF(t.nota || 'Traspaso'), '', '', t.resultado));
+          hip.carreras.forEach(t => filaPDF(limpiarTextoPDF(t.nota || 'Traspaso'), limpiarTextoPDF(textoTraspasoPDF(t)), '', t.resultado));
         } else {
           const nums = Array.from(new Set(hip.carreras.map(x => x.carrera))).sort((a, b) => a - b);
           nums.forEach(num => {
@@ -13452,6 +13459,31 @@ function construirNombreCarpetaDetalleCliente() {
   return `Semana ${nombre} (${desde} al ${hasta}${semanaTxt})`;
 }
 
+// Traspasos / recargas / retiros en el detallado de un cliente (02-11-2026): de quién o para quién fue, el método y la referencia del pago,
+// y, si subieron la foto, el botón "Ver imagen". El texto del PDF usa la misma frase (sin botón).
+function textoContraparteDet(c) {
+  if (!c || !c.contraparte) return '';
+  return (Number(c.resultado) < 0 ? 'para ' : 'de ') + formatNombre(c.contraparte);
+}
+function detalleContrapartePagoHtml(c) {
+  const partes = [];
+  const quien = textoContraparteDet(c);
+  if (quien) partes.push(`<span class="contraparte">${Number(c.resultado) < 0 ? '➡️' : '⬅️'} ${escapeHtmlTraspaso(quien)}</span>`);
+  const pago = c && c.pago ? textoPago(c.pago) : '';
+  if (pago) partes.push(`<span class="num">${escapeHtmlTraspaso(pago)}</span>`);
+  if (c && c.pago && c.pago.tieneImagen && c.pago.comprobanteId) partes.push(botonVerImagenHtml(c.pago.comprobanteId));
+  return partes.join('');
+}
+function textoTraspasoPDF(c) {
+  const partes = [];
+  const quien = textoContraparteDet(c);
+  if (quien) partes.push(quien);
+  const pago = c && c.pago ? textoPago(c.pago) : '';
+  if (pago) partes.push(pago);
+  if (c && c.pago && c.pago.tieneImagen) partes.push('con imagen');
+  return partes.join(' - ');
+}
+
 // Arma el PNG de UN contenido puntual (html2canvas) y lo entrega: al
 // portapapeles cuando `nombreArchivo` es null (comportamiento de siempre,
 // 1 sola imagen), o siempre como descarga con ese nombre cuando viene un
@@ -13464,7 +13496,7 @@ function construirNombreCarpetaDetalleCliente() {
 // `download` (03-10-2026, ver construirNombreCarpetaDetalleCliente).
 async function generarYEntregarUnaImagenDetalle(contenido, nombreArchivo) {
   try {
-    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
+    const canvas = await html2canvas(contenido, { scale: 3, backgroundColor: '#ffffff', useCORS: true, ignoreElements: el => !!(el.classList && el.classList.contains('no-captura')) });
     return await new Promise(resolve => {
       canvas.toBlob(async blob => {
         if (!blob) { mostrarToastDetalleCliente('⚠️ No se pudo generar la imagen.', true); resolve(false); return; }
@@ -19451,6 +19483,7 @@ async function entrarRetiros() {
   if (f && !f.value) f.value = fechaLocalHoy();
   SALDOS_SEMANA_POZOS_CACHE = null;
   poblarSelectRetiro();
+  prepararBloquePago('Ret');
   await cargarClientesReales();
   poblarSelectRetiro();
   await pintarListaRetiros();
@@ -19482,7 +19515,7 @@ async function pintarListaRetiros() {
     return `<div style="margin-bottom:14px;">
       <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} retiro(s), total ${formatMonto(total)}</span></div>
       ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
-        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b> <span style="color:var(--text-dim);">→ ${escapeHtmlTraspaso(r.cuenta || RETIRO_CUENTA)}</span>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}</span>
+        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b> <span style="color:var(--text-dim);">→ ${escapeHtmlTraspaso(r.cuenta || RETIRO_CUENTA)}</span>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${textoPago(r) ? ` <span style="color:var(--text-dim);">· ${escapeHtmlTraspaso(textoPago(r))}</span>` : ''}${r.tieneImagen ? ' ' + botonVerImagenHtml(r.id) : ''}</span>
         <span class="btn-fila" style="gap:6px;">
           <button class="btn btn-secundario" type="button" onclick="editarRetiro('${r.id}')">✏️ Editar</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRetiro('${r.id}')">🗑️ Eliminar</button>
@@ -19496,6 +19529,7 @@ function restablecerFormularioRetiro() {
   RETIRO_EDITANDO = null;
   document.getElementById('inpRetiroMonto').value = '';
   document.getElementById('inpRetiroNota').value = '';
+  limpiarDatosPago('Ret');
   document.getElementById('btnRegistrarRetiro').textContent = '+ Registrar retiro';
   document.getElementById('btnCancelarEdicionRetiro').style.display = 'none';
 }
@@ -19517,6 +19551,7 @@ function editarRetiro(id) {
   document.getElementById('inpRetiroMonto').value = r.monto;
   document.getElementById('inpRetiroFecha').value = r.fecha;
   document.getElementById('inpRetiroNota').value = r.nota && r.nota !== 'Retiro (pago a cliente)' ? r.nota : '';
+  limpiarDatosPago('Ret', r);
   document.getElementById('btnRegistrarRetiro').textContent = '💾 Guardar cambios';
   document.getElementById('btnCancelarEdicionRetiro').style.display = '';
   const msg = document.getElementById('msgRetiro');
@@ -19532,6 +19567,7 @@ async function guardarRetiro() {
   const monto = Number(document.getElementById('inpRetiroMonto').value);
   const fecha = document.getElementById('inpRetiroFecha').value || fechaLocalHoy();
   const nota = document.getElementById('inpRetiroNota').value.trim();
+  const pago = leerDatosPago('Ret');
   msg.style.color = 'var(--danger)';
   if (!cliente) { msg.textContent = 'Elige el cliente al que se le pagó.'; return; }
   if (!monto || monto <= 0) { msg.textContent = 'Escribe un monto mayor a 0.'; return; }
@@ -19541,8 +19577,8 @@ async function guardarRetiro() {
   const btn = document.getElementById('btnRegistrarRetiro');
   btn.disabled = true;
   try {
-    if (editando) await apiHipismo('/api/hipismo/retiros/' + editando.id, { method: 'PUT', body: JSON.stringify({ cliente, monto, fecha, nota }) });
-    else await apiHipismo('/api/hipismo/retiros', { method: 'POST', body: JSON.stringify({ cliente, monto, fecha, nota }) });
+    if (editando) await apiHipismo('/api/hipismo/retiros/' + editando.id, { method: 'PUT', body: JSON.stringify(Object.assign({ cliente, monto, fecha, nota }, pago)) });
+    else await apiHipismo('/api/hipismo/retiros', { method: 'POST', body: JSON.stringify(Object.assign({ cliente, monto, fecha, nota }, pago)) });
   } catch (e) {
     msg.textContent = 'No se pudo guardar el retiro: ' + e.message;
     btn.disabled = false;
@@ -19551,6 +19587,7 @@ async function guardarRetiro() {
   btn.disabled = false;
   SALDOS_SEMANA_POZOS_CACHE = null;
   restablecerFormularioRetiro();
+  prepararBloquePago('Ret'); // por si agregó un método nuevo con "Otro"
   msg.style.color = 'var(--accent-grass)';
   msg.textContent = editando ? '✅ Retiro corregido.' : `✅ Listo: ${formatNombre(cliente)} -${formatMontoTabla(monto)} y ${cuentaDestino} +${formatMontoTabla(monto)}.`;
   await pintarListaRetiros();
@@ -19871,6 +19908,144 @@ function cpExportar() {
 }
 
 // ------------------------------------------------------------------
+// MÉTODO / REFERENCIA / IMAGEN DEL PAGO de una recarga o un retiro (02-11-2026) — ver services/hipismoPagosDetalle.js. Todo opcional.
+// Los métodos predeterminados son los mismos para todos los grupos; los que se agregan con "Otro" quedan solo en la lista de ese grupo.
+// ------------------------------------------------------------------
+let METODOS_PAGO = { predeterminados: ['Zelle', 'Pago móvil', 'Dólares efectivo', 'Bolívares efectivo', 'Banesco Panamá', 'Cash App'], personalizados: [] };
+const PAGO_IMAGEN = {}; // prefijo ('Rec' | 'Ret') -> { base64, mime }
+const PAGO_IMAGEN_MAX_LADO = 1600;
+
+function bloquePagoHtml(p) {
+  return `<div class="fila">
+      <div><label for="selMetodo${p}">Método de pago</label><select id="selMetodo${p}" onchange="cambioMetodoPago('${p}')"></select></div>
+      <div id="boxOtroMetodo${p}" style="display:none;"><label for="inpOtroMetodo${p}">Escribe el método</label><input type="text" id="inpOtroMetodo${p}" maxlength="60" placeholder="Ej: Binance"></div>
+      <div><label for="inpReferencia${p}">Referencia</label><input type="text" id="inpReferencia${p}" maxlength="160" placeholder="Ej: 004512389" autocomplete="off"></div>
+    </div>
+    <div class="fila">
+      <div style="flex:1 1 100%;"><label for="filePago${p}">Foto de la referencia del pago</label>
+        <input type="file" id="filePago${p}" accept="image/*" onchange="elegirImagenPago('${p}', this)">
+        <div id="prevPago${p}" class="desc" style="margin-top:4px;"></div></div>
+    </div>`;
+}
+
+function pintarSelectMetodoPago(p, valor) {
+  const sel = document.getElementById('selMetodo' + p);
+  if (!sel) return;
+  const actual = valor !== undefined ? valor : sel.value;
+  const todos = METODOS_PAGO.predeterminados.concat(METODOS_PAGO.personalizados);
+  if (actual && actual !== '__otro' && !todos.includes(actual)) todos.push(actual); // un método viejo que ya no está en la lista
+  sel.innerHTML = '<option value="">— Sin especificar —</option>'
+    + todos.map(m => `<option value="${escapeHtmlTraspaso(m)}">${escapeHtmlTraspaso(m)}</option>`).join('')
+    + '<option value="__otro">Otro…</option>';
+  sel.value = actual || '';
+  cambioMetodoPago(p);
+}
+
+function cambioMetodoPago(p) {
+  const sel = document.getElementById('selMetodo' + p);
+  const box = document.getElementById('boxOtroMetodo' + p);
+  if (box && sel) box.style.display = sel.value === '__otro' ? '' : 'none';
+}
+
+async function prepararBloquePago(p) {
+  const cont = document.getElementById('bloquePago' + p);
+  if (!cont) return;
+  if (!cont.firstElementChild) cont.innerHTML = bloquePagoHtml(p);
+  try { const d = await apiHipismo('/api/hipismo/metodos-pago'); if (d && d.predeterminados) METODOS_PAGO = { predeterminados: d.predeterminados, personalizados: d.personalizados || [] }; } catch (e) { /* se quedan los predeterminados */ }
+  pintarSelectMetodoPago(p);
+}
+
+// La foto se reduce en el navegador (máximo 1600 px, JPEG) para que pese poco antes de mandarla.
+function elegirImagenPago(p, input) {
+  const prev = document.getElementById('prevPago' + p);
+  const f = input.files && input.files[0];
+  delete PAGO_IMAGEN[p];
+  if (prev) prev.textContent = '';
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { if (prev) { prev.style.color = 'var(--danger)'; prev.textContent = 'Elige un archivo de imagen (foto o captura).'; } input.value = ''; return; }
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, PAGO_IMAGEN_MAX_LADO / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    const dataUrl = c.toDataURL('image/jpeg', 0.85);
+    URL.revokeObjectURL(url);
+    PAGO_IMAGEN[p] = { base64: dataUrl.split(',')[1], mime: 'image/jpeg' };
+    if (prev) { prev.style.color = 'var(--accent-grass)'; prev.textContent = '✅ Imagen lista: ' + f.name; }
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    if (prev) { prev.style.color = 'var(--danger)'; prev.textContent = 'No se pudo leer esa imagen. Prueba con otra.'; }
+    input.value = '';
+  };
+  img.src = url;
+}
+
+// Lo que se manda al servidor: { metodo, referencia, imagen? }. "Otro…" usa lo escrito.
+function leerDatosPago(p) {
+  const sel = document.getElementById('selMetodo' + p);
+  let metodo = sel ? sel.value : '';
+  if (metodo === '__otro') metodo = (document.getElementById('inpOtroMetodo' + p).value || '').trim();
+  const ref = document.getElementById('inpReferencia' + p);
+  const datos = { metodo, referencia: ref ? ref.value.trim() : '' };
+  if (PAGO_IMAGEN[p]) datos.imagen = PAGO_IMAGEN[p];
+  return datos;
+}
+
+function limpiarDatosPago(p, valores) {
+  delete PAGO_IMAGEN[p];
+  const v = valores || {};
+  pintarSelectMetodoPago(p, v.metodo || '');
+  const o = document.getElementById('inpOtroMetodo' + p); if (o) o.value = '';
+  const r = document.getElementById('inpReferencia' + p); if (r) r.value = v.referencia || '';
+  const f = document.getElementById('filePago' + p); if (f) f.value = '';
+  const prev = document.getElementById('prevPago' + p);
+  if (prev) { prev.style.color = 'var(--text-dim)'; prev.textContent = v.tieneImagen ? '🖼️ Ya tiene una imagen guardada (si subes otra, la reemplaza).' : ''; }
+}
+
+// "Zelle · Ref. 1234" para las listas y los detalles.
+function textoPago(x) {
+  if (!x) return '';
+  const partes = [];
+  if (x.metodo) partes.push(x.metodo);
+  if (x.referencia) partes.push('Ref. ' + x.referencia);
+  return partes.join(' · ');
+}
+
+function botonVerImagenHtml(id) {
+  return `<button type="button" class="btn btn-secundario btn-ver-imagen no-captura" onclick="event.stopPropagation(); verComprobante('${escapeHtmlTraspaso(id)}')">🖼️ Ver imagen</button>`;
+}
+
+// Abre la foto del comprobante (hace falta la sesión, por eso se pide con el token y se muestra como imagen local).
+async function verComprobante(id) {
+  let blob;
+  try {
+    const res = await fetch('/api/hipismo/comprobantes/' + encodeURIComponent(id), { headers: TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {} });
+    if (!res.ok) {
+      let m = 'No se pudo abrir la imagen.';
+      try { const j = await res.json(); if (j && j.error) m = j.error; } catch (e) { /* sin cuerpo */ }
+      alert(m);
+      return;
+    }
+    blob = await res.blob();
+  } catch (e) { alert('No se pudo conectar con el servidor.'); return; }
+  const url = URL.createObjectURL(blob);
+  const velo = document.createElement('div');
+  velo.style.cssText = 'position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,0.88); display:flex; align-items:center; justify-content:center; padding:16px; cursor:zoom-out;';
+  velo.innerHTML = `<img src="${url}" alt="Comprobante del pago" style="max-width:96vw; max-height:90vh; object-fit:contain; border-radius:8px; background:#fff;">
+    <button type="button" aria-label="Cerrar" style="position:absolute; top:12px; right:14px; font-size:22px; line-height:1; background:#fff; color:#111; border:none; border-radius:50%; width:36px; height:36px; cursor:pointer;">✕</button>`;
+  const cerrar = () => { document.removeEventListener('keydown', alEsc); velo.remove(); URL.revokeObjectURL(url); };
+  const alEsc = ev => { if (ev.key === 'Escape') cerrar(); };
+  velo.addEventListener('click', cerrar);
+  document.addEventListener('keydown', alEsc);
+  document.body.appendChild(velo);
+}
+
+// ------------------------------------------------------------------
 // RECARGA SALDOS PAGO DIARIOS (Saldos, 26-10-2026) — ver la nota grande de /recargas-pago-diario en routes/hipismo.js. Recargar a un
 // cliente de pago diario le suma ese saldo y deja la cuenta POZOS PAGO DIARIOS en negativo por lo mismo (traspaso de saldo).
 // ------------------------------------------------------------------
@@ -19882,6 +20057,7 @@ async function entrarRecargaPagoDiario() {
   const f = document.getElementById('inpRecargaFecha');
   if (f && !f.value) f.value = fechaLocalHoy();
   SALDOS_SEMANA_POZOS_CACHE = null;
+  prepararBloquePago('Rec');
   await pintarRecargaPagoDiario();
 }
 
@@ -19925,7 +20101,7 @@ async function pintarRecargaPagoDiario() {
     return `<div style="margin-bottom:14px;">
       <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} recarga(s), total ${formatMonto(total)}</span></div>
       ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
-        <span class="nombre">💵 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>+${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Recarga de saldo (pago diario)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}</span>
+        <span class="nombre">💵 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>+${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Recarga de saldo (pago diario)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${textoPago(r) ? ` <span style="color:var(--text-dim);">· ${escapeHtmlTraspaso(textoPago(r))}</span>` : ''}${r.tieneImagen ? ' ' + botonVerImagenHtml(r.id) : ''}</span>
         <span class="btn-fila" style="gap:6px;">
           <button class="btn btn-secundario" type="button" onclick="editarRecargaPagoDiario('${r.id}')">✏️ Cambiar monto</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRecargaPagoDiario('${r.id}')">🗑️ Eliminar</button>
@@ -19950,10 +20126,14 @@ async function recargarClientePagoDiario(i) {
   if (!monto || monto <= 0) { mensajeRecarga('Escribe un monto mayor a 0 para ' + formatNombre(c.nombre) + '.', false); return; }
   const fecha = document.getElementById('inpRecargaFecha').value || fechaLocalHoy();
   const nota = document.getElementById('inpRecargaNota').value.trim();
-  if (!confirm(`¿Recargar ${formatMonto(monto)} a ${formatNombre(c.nombre)}?\n\n${formatNombre(c.nombre)} +${formatMonto(monto)}\n${RECARGAS_PD_CUENTA} −${formatMonto(monto)}`)) return;
+  const pago = leerDatosPago('Rec');
+  const resumenPago = textoPago(pago) + (pago.imagen ? (textoPago(pago) ? ' · ' : '') + 'con imagen' : '');
+  if (!confirm(`¿Recargar ${formatMonto(monto)} a ${formatNombre(c.nombre)}?\n\n${formatNombre(c.nombre)} +${formatMonto(monto)}\n${RECARGAS_PD_CUENTA} −${formatMonto(monto)}` + (resumenPago ? `\n\nPago: ${resumenPago}` : ''))) return;
   try {
-    await apiHipismo('/api/hipismo/recargas-pago-diario', { method: 'POST', body: JSON.stringify({ cliente: c.nombre, monto, fecha, nota }) });
+    await apiHipismo('/api/hipismo/recargas-pago-diario', { method: 'POST', body: JSON.stringify(Object.assign({ cliente: c.nombre, monto, fecha, nota }, pago)) });
   } catch (e) { mensajeRecarga('No se pudo recargar: ' + e.message, false); return; }
+  limpiarDatosPago('Rec');
+  prepararBloquePago('Rec'); // por si agregó un método nuevo con "Otro"
   SALDOS_SEMANA_POZOS_CACHE = null;
   await pintarRecargaPagoDiario();
   mensajeRecarga(`✅ Listo: ${formatNombre(c.nombre)} +${formatMonto(monto)} y ${RECARGAS_PD_CUENTA} −${formatMonto(monto)}.`, true);

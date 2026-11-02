@@ -5423,6 +5423,7 @@ router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
 const CUENTA_PAGOS_A_CLIENTES = 'PAGOS A CLIENTES';
 const NOTA_RETIRO_DEFECTO = 'Retiro (pago a cliente)';
 const { buscarOCrearFicha: buscarOCrearFichaRetiros } = require('../services/hipismoComisionPropia');
+const pagosDetalle = require('../services/hipismoPagosDetalle');
 // 31-10-2026, a pedido del usuario ("no se hace como las recargas: TERCIOS --, POZOS DIARIOS ++"): el retiro de un cliente de PAGO DIARIO
 // no va a PAGOS A CLIENTES sino a la cuenta POZOS PAGO DIARIOS (la misma de sus recargas, al revés): cliente -monto, POZOS PAGO DIARIOS +monto.
 // Los demás clientes siguen igual (PAGOS A CLIENTES +monto). El resto (listas, editar, eliminar) funciona con las dos cuentas.
@@ -5469,8 +5470,14 @@ async function buscarRetiroPorId(grupoId, id) {
   return par || null;
 }
 
+// Agrega a cada par (recarga/retiro) su detalle de pago: método, referencia y si tiene imagen (02-11-2026).
+async function conDetallePago(grupoId, lista) {
+  const det = await pagosDetalle.detallesPorAjuste(grupoId, lista.map(x => x.id));
+  return lista.map(x => { const d = det.get(x.id); return d ? { ...x, metodo: d.metodo, referencia: d.referencia, tieneImagen: d.tieneImagen } : { ...x, metodo: null, referencia: null, tieneImagen: false }; });
+}
+
 router.get('/retiros', asyncHandler(async (req, res) => {
-  res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, cuentaPagoDiario: CUENTA_POZOS_PAGO_DIARIO, retiros: await listarRetirosGrupo(req.grupoId) });
+  res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, cuentaPagoDiario: CUENTA_POZOS_PAGO_DIARIO, retiros: await conDetallePago(req.grupoId, await listarRetirosGrupo(req.grupoId)) });
 }));
 
 router.post('/retiros', asyncHandler(async (req, res) => {
@@ -5482,12 +5489,15 @@ router.post('/retiros', asyncHandler(async (req, res) => {
   if (esDestinoDeRetiro(cliente)) return res.status(400).json({ error: 'Elige un cliente; PAGOS A CLIENTES y POZOS PAGO DIARIOS son las cuentas donde se acumulan los retiros.' });
   if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
   if (await rechazarClientesInexistentes(req, res, [cliente])) return;
+  const vp = pagosDetalle.validarDatosPago(req.body);
+  if (!vp.ok) return res.status(400).json({ error: vp.error });
   const cuentaDestino = await cuentaDestinoRetiro(req.grupoId, cliente);
   await buscarOCrearFichaRetiros(req.grupoId, cuentaDestino);
   const montoFinal = round2(monto);
   await db.transaccion(async (client) => {
-    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+    const rOrigen = await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5) RETURNING id',
       [req.grupoId, cliente, -montoFinal, fecha, nota]);
+    await pagosDetalle.guardarDetallePago(client, req.grupoId, rOrigen && rOrigen.rows && rOrigen.rows[0] && rOrigen.rows[0].id, vp.datos);
     await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
       [req.grupoId, cuentaDestino, montoFinal, fecha, nota]);
   });
@@ -5508,7 +5518,11 @@ router.put('/retiros/:id', asyncHandler(async (req, res) => {
   const cuentaDestino = await cuentaDestinoRetiro(req.grupoId, cliente); // si cambió de cliente, el destino sigue al nuevo cliente
   await buscarOCrearFichaRetiros(req.grupoId, cuentaDestino);
   const montoFinal = round2(monto);
+  const cambiaPago = ['metodo', 'referencia', 'imagen'].some(k => b[k] !== undefined);
+  const vp = cambiaPago ? pagosDetalle.validarDatosPago(b) : null;
+  if (vp && !vp.ok) return res.status(400).json({ error: vp.error });
   await db.transaccion(async (client) => {
+    if (vp) await pagosDetalle.guardarDetallePago(client, req.grupoId, par.id, vp.datos, true);
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
       [cliente, -montoFinal, fecha, nota, req.grupoId, par.id]);
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
@@ -5592,8 +5606,31 @@ router.get('/recargas-pago-diario', asyncHandler(async (req, res) => {
   res.json({
     cuenta: CUENTA_POZOS_PAGO_DIARIO,
     clientes: await clientesPagoDiarioGrupo(req.grupoId),
-    recargas: await listarRecargasPagoDiario(req.grupoId)
+    recargas: await conDetallePago(req.grupoId, await listarRecargasPagoDiario(req.grupoId))
   });
+}));
+
+// MÉTODOS DE PAGO (02-11-2026): los predeterminados + los que el grupo agregó con "Otro". POST agrega uno a la lista del grupo.
+router.get('/metodos-pago', asyncHandler(async (req, res) => {
+  res.json(await pagosDetalle.listarMetodos(req.grupoId));
+}));
+router.post('/metodos-pago', asyncHandler(async (req, res) => {
+  const vp = pagosDetalle.validarDatosPago({ metodo: req.body && req.body.nombre });
+  if (!vp.ok) return res.status(400).json({ error: vp.error });
+  if (!vp.datos.metodo) return res.status(400).json({ error: 'Escribe el nombre del método de pago.' });
+  await pagosDetalle.asegurarMetodo(db, req.grupoId, vp.datos.metodo);
+  res.json({ ok: true, ...(await pagosDetalle.listarMetodos(req.grupoId)) });
+}));
+
+// La foto del comprobante de una recarga o de un retiro (solo con sesión y dentro del grupo). `id` = comprobanteId del detalle.
+router.get('/comprobantes/:id', asyncHandler(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese comprobante no existe.' });
+  const img = await pagosDetalle.leerImagenPago(req.grupoId, id);
+  if (!img) return res.status(404).json({ error: 'Ese comprobante no existe.' });
+  res.set('Content-Type', img.mime);
+  res.set('Cache-Control', 'private, max-age=300');
+  res.send(img.buffer);
 }));
 
 router.post('/recargas-pago-diario', asyncHandler(async (req, res) => {
@@ -5603,11 +5640,14 @@ router.post('/recargas-pago-diario', asyncHandler(async (req, res) => {
   const nota = ((req.body && req.body.nota) || '').toString().trim() || NOTA_RECARGA_DEFECTO;
   if (!(await validarClientePagoDiario(req, res, cliente))) return;
   if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
+  const vp = pagosDetalle.validarDatosPago(req.body);
+  if (!vp.ok) return res.status(400).json({ error: vp.error });
   await buscarOCrearFichaRetiros(req.grupoId, CUENTA_POZOS_PAGO_DIARIO);
   const montoFinal = round2(monto);
   await db.transaccion(async (client) => {
-    await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
+    const rOrigen = await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5) RETURNING id',
       [req.grupoId, CUENTA_POZOS_PAGO_DIARIO, -montoFinal, fecha, nota]);
+    await pagosDetalle.guardarDetallePago(client, req.grupoId, rOrigen && rOrigen.rows && rOrigen.rows[0] && rOrigen.rows[0].id, vp.datos);
     await client.query('INSERT INTO hipismo_comisiones_ajustes (grupo_id, cliente_nombre, monto, fecha, nota) VALUES ($1,$2,$3,$4,$5)',
       [req.grupoId, cliente, montoFinal, fecha, nota]);
   });
@@ -5626,7 +5666,11 @@ router.put('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
   if (!cliente || cliente === CUENTA_POZOS_PAGO_DIARIO) return res.status(400).json({ error: 'Elige el cliente al que se le recarga.' });
   if (!monto || monto <= 0 || isNaN(monto)) return res.status(400).json({ error: 'Escribe un monto mayor a 0.' });
   const montoFinal = round2(monto);
+  const cambiaPago = ['metodo', 'referencia', 'imagen'].some(k => b[k] !== undefined);
+  const vp = cambiaPago ? pagosDetalle.validarDatosPago(b) : null;
+  if (vp && !vp.ok) return res.status(400).json({ error: vp.error });
   await db.transaccion(async (client) => {
+    if (vp) await pagosDetalle.guardarDetallePago(client, req.grupoId, par.id, vp.datos, true);
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',
       [CUENTA_POZOS_PAGO_DIARIO, -montoFinal, fecha, nota, req.grupoId, par.id]);
     await client.query('UPDATE hipismo_comisiones_ajustes SET cliente_nombre = $1, monto = $2, fecha = $3, nota = $4 WHERE grupo_id = $5 AND id = $6',

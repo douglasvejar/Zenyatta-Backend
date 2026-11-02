@@ -147,6 +147,9 @@ const REGLAS_RUTAS_HIPISMO = [
   [TODOS, /^\/traspasos-saldo/, ['hip_finanzas', 'hip_clientes']],
   [TODOS, /^\/retiros/, ['hip_finanzas']],
   [TODOS, /^\/recargas-pago-diario/, ['hip_saldos', 'hip_finanzas']],
+  // Método de pago y comprobante de recargas/retiros (02-11-2026)
+  [TODOS, /^\/metodos-pago/, ['hip_saldos', 'hip_finanzas']],
+  [['GET'], /^\/comprobantes\//, ['hip_saldos', 'hip_finanzas', 'hip_clientes', 'hip_pozos', 'hip_grupo_clientes', 'hip_comisiones']],
   [['GET'], /^\/comisiones-socios/, ['hip_comisiones', 'hip_saldos']],
   [['GET'], /^\/registro-saldos/, ['hip_clientes', 'hip_saldos']],
   // Hipódromos y pizarras

@@ -80,6 +80,28 @@ pool.query(`alter table hipismo_alertas drop constraint if exists hipismo_alerta
   check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO')) not valid`)
   .catch((err) => console.warn('[db] No se pudo actualizar el check de hipismo_alertas.tipo (corre sql/schema.sql en Supabase):', err.message));
 
+// 02-11-2026: detalle del pago de recargas de pago diario y retiros (método, referencia, foto del comprobante; ver sql/schema.sql y
+// services/hipismoPagosDetalle.js). Se crea solo, en orden; si la base no deja, solo avisa en el log y todo sigue como antes.
+pool.query(`create table if not exists hipismo_metodos_pago (
+    id uuid primary key default gen_random_uuid(),
+    grupo_id uuid not null references grupos(id) on delete cascade,
+    nombre text not null,
+    creado_en timestamptz not null default now(),
+    unique (grupo_id, nombre))`)
+  .then(() => pool.query('create index if not exists idx_hipismo_metodos_pago_grupo on hipismo_metodos_pago(grupo_id)'))
+  .then(() => pool.query('alter table hipismo_metodos_pago enable row level security'))
+  .then(() => pool.query(`create table if not exists hipismo_pagos_detalle (
+    ajuste_id uuid primary key references hipismo_comisiones_ajustes(id) on delete cascade,
+    grupo_id uuid not null references grupos(id) on delete cascade,
+    metodo text,
+    referencia text,
+    imagen_base64 text,
+    imagen_mime text,
+    creado_en timestamptz not null default now())`))
+  .then(() => pool.query('create index if not exists idx_hipismo_pagos_detalle_grupo on hipismo_pagos_detalle(grupo_id)'))
+  .then(() => pool.query('alter table hipismo_pagos_detalle enable row level security'))
+  .catch((err) => console.warn('[db] No se pudo asegurar hipismo_metodos_pago / hipismo_pagos_detalle (corre sql/schema.sql en Supabase):', err.message));
+
 // 25-10-2026: estado puesto a mano en un ticket de Deportes (✏️ Editar) que NO se pierde al reprocesar la sábana (ver sql/schema.sql
 // y services/historial.js). Se crea sola; si la base no deja, solo avisa en el log y todo sigue como antes.
 pool.query(`create table if not exists tickets_estado_manual (
