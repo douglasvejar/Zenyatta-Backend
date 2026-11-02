@@ -1398,6 +1398,26 @@
   .detmodal-ticket-fila { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 7px 2px; border-top: 1px dashed var(--card-border); flex-wrap: wrap; }
   .detmodal-ticket-fila:first-child { border-top: none; }
   .detmodal-ticket-fila .detalle { flex: 1; min-width: 130px; }
+  /* Recarga Saldos Pago Diarios (02-11-2026): una tarjeta por cliente con sus datos de pago (método, referencia, foto) antes del monto */
+  .rec-cli { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px 14px; margin-bottom: 10px; }
+  .rec-cli-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rec-cli-nombre { font-weight: 800; font-size: 15px; }
+  .rec-cli-saldo { font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
+  .rec-cli-saldo.pos b { color: var(--accent-grass); }
+  .rec-cli-saldo.neg b { color: var(--danger); }
+  .rec-campos { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(130px, 1fr) auto minmax(130px, 0.8fr) auto; gap: 10px 12px; align-items: start; }
+  .rec-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rec-campo > .rec-rot { margin: 0; font-size: 10.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .rec-campo select, .rec-campo input[type="text"], .rec-campo input[type="number"] { height: 38px; box-sizing: border-box; }
+  .rec-campo .rec-otro { margin-top: 4px; }
+  .rec-foto { display: inline-flex; align-items: center; gap: 8px; height: 38px; }
+  .rec-foto .rec-foto-btn { margin: 0; height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .rec-foto .rec-foto-ok { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .rec-btn { height: 38px; padding: 0 20px; white-space: nowrap; width: 100%; }
+  @media (max-width: 820px) { .rec-campos { grid-template-columns: 1fr 1fr; } .rec-campo-btn, .rec-campo-metodo, .rec-campo-monto { grid-column: 1 / -1; } .rec-campo-btn .rec-rot { display: none; } }
+  .rec-linea { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+  .rec-linea .btn.btn-ver-imagen, .btn.btn-ver-imagen { margin-top: 0; padding: 3px 10px !important; min-height: 0 !important; height: auto !important; font-size: 11.5px !important; line-height: 1.5; border-radius: 999px !important; box-shadow: none !important; }
+  .rec-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--card); border: 1px solid var(--border-light); color: var(--text-dim); white-space: nowrap; }
   .detmodal-ticket-fila .contraparte { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--text); }
   .btn-ver-imagen { margin-top: 4px; padding: 2px 9px; min-height: 0; font-size: 11px; line-height: 1.5; border-radius: 6px; font-weight: 700; cursor: pointer; }
   .detmodal-ticket-fila .num { display: block; font-size: 9.5px; color: var(--text-dim); }
@@ -19514,7 +19534,7 @@ async function pintarListaRetiros() {
     return `<div style="margin-bottom:14px;">
       <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} retiro(s), total ${formatMonto(total)}</span></div>
       ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
-        <span class="nombre">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b> <span style="color:var(--text-dim);">→ ${escapeHtmlTraspaso(r.cuenta || RETIRO_CUENTA)}</span>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${textoPago(r) ? ` <span style="color:var(--text-dim);">· ${escapeHtmlTraspaso(textoPago(r))}</span>` : ''}${r.tieneImagen ? ' ' + botonVerImagenHtml(r.id) : ''}</span>
+        <span class="nombre rec-linea">💸 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>${formatMonto(r.monto)}</b> <span style="color:var(--text-dim);">→ ${escapeHtmlTraspaso(r.cuenta || RETIRO_CUENTA)}</span>${r.nota && r.nota !== 'Retiro (pago a cliente)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${chipsPagoHtml(r)}${r.tieneImagen ? botonVerImagenHtml(r.id) : ''}</span>
         <span class="btn-fila" style="gap:6px;">
           <button class="btn btn-secundario" type="button" onclick="editarRetiro('${r.id}')">✏️ Editar</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRetiro('${r.id}')">🗑️ Eliminar</button>
@@ -19958,16 +19978,22 @@ async function prepararBloquePago(p) {
   pintarSelectMetodoPago(p);
 }
 
-// Versión pequeña para cada cliente de la pantalla de recargas (método, referencia y foto, antes del monto). p = 'Rec' + número de fila.
+// Los datos del pago de cada cliente de la pantalla de recargas (método, referencia y foto, antes del monto). p = 'Rec' + número de fila.
+// Devuelve 3 celdas de la cuadrícula .rec-campos.
 function bloquePagoMiniHtml(p) {
-  const e = 'font-size:12px; padding:4px 6px; min-height:0; height:30px; box-sizing:border-box;';
-  return `<span style="display:inline-flex; gap:5px; align-items:center; flex-wrap:wrap;">
-      <select id="selMetodo${p}" onchange="cambioMetodoPago('${p}')" title="Método de pago (opcional)" style="width:132px; ${e}"></select>
-      <span id="boxOtroMetodo${p}" style="display:none;"><input type="text" id="inpOtroMetodo${p}" maxlength="60" placeholder="Escribe el método" title="Método nuevo: queda guardado en la lista de tu grupo" style="width:118px; ${e}"></span>
-      <input type="text" id="inpReferencia${p}" maxlength="160" placeholder="Referencia" autocomplete="off" title="Referencia del pago (opcional)" style="width:104px; ${e}">
-      <label class="btn btn-secundario" title="Foto de la referencia del pago (opcional)" style="padding:0 9px; font-size:13px; height:30px; min-height:0; display:inline-flex; align-items:center; cursor:pointer; margin:0;">📎<input type="file" id="filePago${p}" accept="image/*" hidden onchange="elegirImagenPago('${p}', this)"></label>
-      <span id="prevPago${p}" style="font-size:11px; color:var(--text-dim);"></span>
-    </span>`;
+  return `<div class="rec-campo rec-campo-metodo">
+      <label class="rec-rot" for="selMetodo${p}">Método de pago</label>
+      <select id="selMetodo${p}" onchange="cambioMetodoPago('${p}')"></select>
+      <div id="boxOtroMetodo${p}" class="rec-otro" style="display:none;"><input type="text" id="inpOtroMetodo${p}" maxlength="60" placeholder="Escribe el método" title="Queda guardado en la lista de tu grupo"></div>
+    </div>
+    <div class="rec-campo">
+      <label class="rec-rot" for="inpReferencia${p}">Referencia</label>
+      <input type="text" id="inpReferencia${p}" maxlength="160" placeholder="Opcional" autocomplete="off">
+    </div>
+    <div class="rec-campo">
+      <span class="rec-rot">Foto</span>
+      <span class="rec-foto"><label class="btn btn-secundario rec-foto-btn" title="Foto de la referencia del pago (opcional)">📎 Adjuntar<input type="file" id="filePago${p}" accept="image/*" hidden onchange="elegirImagenPago('${p}', this)"></label><span id="prevPago${p}" class="rec-foto-ok"></span></span>
+    </div>`;
 }
 
 // La foto se reduce en el navegador (máximo 1600 px, JPEG) para que pese poco antes de mandarla.
@@ -20029,6 +20055,15 @@ function textoPago(x) {
   if (x.metodo) partes.push(x.metodo);
   if (x.referencia) partes.push('Ref. ' + x.referencia);
   return partes.join(' · ');
+}
+
+// Método y referencia como "chips" en las listas de recargas y retiros.
+function chipsPagoHtml(x) {
+  if (!x) return '';
+  let h = '';
+  if (x.metodo) h += `<span class="rec-chip">💳 ${escapeHtmlTraspaso(x.metodo)}</span>`;
+  if (x.referencia) h += `<span class="rec-chip">Ref. ${escapeHtmlTraspaso(x.referencia)}</span>`;
+  return h;
 }
 
 function botonVerImagenHtml(id) {
@@ -20099,13 +20134,22 @@ async function pintarRecargaPagoDiario() {
     cont.innerHTML = RECARGAS_PD_CLIENTES.map((c, i) => {
       const fila = saldos.find(x => x.nombre === c.nombre);
       const saldo = redondearCentavos(fila ? fila.saldo : 0);
-      return `<div class="balance-fila" style="margin-bottom:6px; gap:10px; flex-wrap:wrap;">
-        <span class="nombre">💵 ${escapeHtmlTraspaso(formatNombre(c.nombre))} <span style="color:var(--text-dim); font-weight:600;">— saldo de la semana ${signo(saldo)}</span></span>
-        <span class="btn-fila" style="gap:6px; align-items:center; flex-wrap:wrap;">
+      return `<div class="rec-cli">
+        <div class="rec-cli-cab">
+          <span class="rec-cli-nombre">💵 ${escapeHtmlTraspaso(formatNombre(c.nombre))}</span>
+          <span class="rec-cli-saldo ${saldo > 0 ? 'pos' : (saldo < 0 ? 'neg' : '')}">Saldo de la semana <b>${signo(saldo)}</b></span>
+        </div>
+        <div class="rec-campos">
           ${bloquePagoMiniHtml('Rec' + i)}
-          <input type="number" step="0.01" min="0" id="inpRecargaMonto${i}" placeholder="+ monto" style="width:130px;" onkeydown="if(event.key==='Enter')recargarClientePagoDiario(${i})">
-          <button class="btn btn-primario" type="button" onclick="recargarClientePagoDiario(${i})">Recargar</button>
-        </span>
+          <div class="rec-campo rec-campo-monto">
+            <label class="rec-rot" for="inpRecargaMonto${i}">Monto a recargar</label>
+            <input type="number" step="0.01" min="0" id="inpRecargaMonto${i}" placeholder="+ monto" onkeydown="if(event.key==='Enter')recargarClientePagoDiario(${i})">
+          </div>
+          <div class="rec-campo rec-campo-btn">
+            <span class="rec-rot" aria-hidden="true">&nbsp;</span>
+            <button class="btn btn-primario rec-btn" type="button" onclick="recargarClientePagoDiario(${i})">Recargar</button>
+          </div>
+        </div>
       </div>`;
     }).join('');
   }
@@ -20118,7 +20162,7 @@ async function pintarRecargaPagoDiario() {
     return `<div style="margin-bottom:14px;">
       <div style="font-weight:800; margin:6px 0;">📅 ${nombreDiaRetiro(fecha)} <span style="font-weight:600; color:var(--text-dim);">— ${lista.length} recarga(s), total ${formatMonto(total)}</span></div>
       ${lista.map(r => `<div class="balance-fila" style="margin-bottom:4px;">
-        <span class="nombre">💵 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>+${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Recarga de saldo (pago diario)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${textoPago(r) ? ` <span style="color:var(--text-dim);">· ${escapeHtmlTraspaso(textoPago(r))}</span>` : ''}${r.tieneImagen ? ' ' + botonVerImagenHtml(r.id) : ''}</span>
+        <span class="nombre rec-linea">💵 ${escapeHtmlTraspaso(formatNombre(r.cliente))}: <b>+${formatMonto(r.monto)}</b>${r.nota && r.nota !== 'Recarga de saldo (pago diario)' ? ` <span style="color:var(--text-dim);">(${escapeHtmlTraspaso(r.nota)})</span>` : ''}${chipsPagoHtml(r)}${r.tieneImagen ? botonVerImagenHtml(r.id) : ''}</span>
         <span class="btn-fila" style="gap:6px;">
           <button class="btn btn-secundario" type="button" onclick="editarRecargaPagoDiario('${r.id}')">✏️ Cambiar monto</button>
           <button class="btn btn-secundario" type="button" style="color:var(--danger);" onclick="eliminarRecargaPagoDiario('${r.id}')">🗑️ Eliminar</button>
