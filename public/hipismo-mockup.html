@@ -4098,8 +4098,7 @@
           <div><label for="inpRecargaFecha">Fecha de las recargas</label><input type="date" id="inpRecargaFecha"></div>
           <div style="flex:2 1 260px;"><label for="inpRecargaNota">Nota (opcional)</label><input type="text" id="inpRecargaNota" placeholder="Ej: pago móvil"></div>
         </div>
-        <div style="margin:10px 0 4px; font-weight:800;">Datos del pago <span style="font-weight:600; color:var(--text-dim);">(opcional — se guardan con la próxima recarga que hagas)</span></div>
-        <div id="bloquePagoRec"></div>
+        <p class="desc" style="margin:2px 0 10px;">En cada cliente puedes indicar, si lo necesitas para tener más control, el <b>método de pago</b>, la <b>referencia</b> y la <b>foto</b> 📎 del comprobante, justo antes del monto. Todo es opcional.</p>
         <div id="listaClientesRecarga"><div class="resultado-vacio">Cargando…</div></div>
         <div id="msgRecarga" class="desc" style="margin-top:10px;"></div>
       </div>
@@ -19947,12 +19946,28 @@ function cambioMetodoPago(p) {
   if (box && sel) box.style.display = sel.value === '__otro' ? '' : 'none';
 }
 
+async function cargarMetodosPago() {
+  try { const d = await apiHipismo('/api/hipismo/metodos-pago'); if (d && d.predeterminados) METODOS_PAGO = { predeterminados: d.predeterminados, personalizados: d.personalizados || [] }; } catch (e) { /* se quedan los predeterminados */ }
+}
+
 async function prepararBloquePago(p) {
   const cont = document.getElementById('bloquePago' + p);
   if (!cont) return;
   if (!cont.firstElementChild) cont.innerHTML = bloquePagoHtml(p);
-  try { const d = await apiHipismo('/api/hipismo/metodos-pago'); if (d && d.predeterminados) METODOS_PAGO = { predeterminados: d.predeterminados, personalizados: d.personalizados || [] }; } catch (e) { /* se quedan los predeterminados */ }
+  await cargarMetodosPago();
   pintarSelectMetodoPago(p);
+}
+
+// Versión pequeña para cada cliente de la pantalla de recargas (método, referencia y foto, antes del monto). p = 'Rec' + número de fila.
+function bloquePagoMiniHtml(p) {
+  const e = 'font-size:12px; padding:4px 6px; min-height:0; height:30px; box-sizing:border-box;';
+  return `<span style="display:inline-flex; gap:5px; align-items:center; flex-wrap:wrap;">
+      <select id="selMetodo${p}" onchange="cambioMetodoPago('${p}')" title="Método de pago (opcional)" style="width:132px; ${e}"></select>
+      <span id="boxOtroMetodo${p}" style="display:none;"><input type="text" id="inpOtroMetodo${p}" maxlength="60" placeholder="Escribe el método" title="Método nuevo: queda guardado en la lista de tu grupo" style="width:118px; ${e}"></span>
+      <input type="text" id="inpReferencia${p}" maxlength="160" placeholder="Referencia" autocomplete="off" title="Referencia del pago (opcional)" style="width:104px; ${e}">
+      <label class="btn btn-secundario" title="Foto de la referencia del pago (opcional)" style="padding:0 9px; font-size:13px; height:30px; min-height:0; display:inline-flex; align-items:center; cursor:pointer; margin:0;">📎<input type="file" id="filePago${p}" accept="image/*" hidden onchange="elegirImagenPago('${p}', this)"></label>
+      <span id="prevPago${p}" style="font-size:11px; color:var(--text-dim);"></span>
+    </span>`;
 }
 
 // La foto se reduce en el navegador (máximo 1600 px, JPEG) para que pese poco antes de mandarla.
@@ -19975,7 +19990,7 @@ function elegirImagenPago(p, input) {
     const dataUrl = c.toDataURL('image/jpeg', 0.85);
     URL.revokeObjectURL(url);
     PAGO_IMAGEN[p] = { base64: dataUrl.split(',')[1], mime: 'image/jpeg' };
-    if (prev) { prev.style.color = 'var(--accent-grass)'; prev.textContent = '✅ Imagen lista: ' + f.name; }
+    if (prev) { prev.style.color = 'var(--accent-grass)'; prev.textContent = '✅ Foto lista'; prev.title = f.name; }
   };
   img.onerror = () => {
     URL.revokeObjectURL(url);
@@ -20057,7 +20072,7 @@ async function entrarRecargaPagoDiario() {
   const f = document.getElementById('inpRecargaFecha');
   if (f && !f.value) f.value = fechaLocalHoy();
   SALDOS_SEMANA_POZOS_CACHE = null;
-  prepararBloquePago('Rec');
+  await cargarMetodosPago();
   await pintarRecargaPagoDiario();
 }
 
@@ -20086,13 +20101,15 @@ async function pintarRecargaPagoDiario() {
       const saldo = redondearCentavos(fila ? fila.saldo : 0);
       return `<div class="balance-fila" style="margin-bottom:6px; gap:10px; flex-wrap:wrap;">
         <span class="nombre">💵 ${escapeHtmlTraspaso(formatNombre(c.nombre))} <span style="color:var(--text-dim); font-weight:600;">— saldo de la semana ${signo(saldo)}</span></span>
-        <span class="btn-fila" style="gap:6px;">
+        <span class="btn-fila" style="gap:6px; align-items:center; flex-wrap:wrap;">
+          ${bloquePagoMiniHtml('Rec' + i)}
           <input type="number" step="0.01" min="0" id="inpRecargaMonto${i}" placeholder="+ monto" style="width:130px;" onkeydown="if(event.key==='Enter')recargarClientePagoDiario(${i})">
           <button class="btn btn-primario" type="button" onclick="recargarClientePagoDiario(${i})">Recargar</button>
         </span>
       </div>`;
     }).join('');
   }
+  RECARGAS_PD_CLIENTES.forEach((c, i) => { delete PAGO_IMAGEN['Rec' + i]; pintarSelectMetodoPago('Rec' + i, ''); });
   if (!RECARGAS_PD_CACHE.length) { contRec.innerHTML = '<div class="placeholder-card">Todavía no se ha registrado ninguna recarga.</div>'; return; }
   const porDia = new Map();
   RECARGAS_PD_CACHE.forEach(r => { if (!porDia.has(r.fecha)) porDia.set(r.fecha, []); porDia.get(r.fecha).push(r); });
@@ -20126,14 +20143,13 @@ async function recargarClientePagoDiario(i) {
   if (!monto || monto <= 0) { mensajeRecarga('Escribe un monto mayor a 0 para ' + formatNombre(c.nombre) + '.', false); return; }
   const fecha = document.getElementById('inpRecargaFecha').value || fechaLocalHoy();
   const nota = document.getElementById('inpRecargaNota').value.trim();
-  const pago = leerDatosPago('Rec');
+  const pago = leerDatosPago('Rec' + i);
   const resumenPago = textoPago(pago) + (pago.imagen ? (textoPago(pago) ? ' · ' : '') + 'con imagen' : '');
   if (!confirm(`¿Recargar ${formatMonto(monto)} a ${formatNombre(c.nombre)}?\n\n${formatNombre(c.nombre)} +${formatMonto(monto)}\n${RECARGAS_PD_CUENTA} −${formatMonto(monto)}` + (resumenPago ? `\n\nPago: ${resumenPago}` : ''))) return;
   try {
     await apiHipismo('/api/hipismo/recargas-pago-diario', { method: 'POST', body: JSON.stringify(Object.assign({ cliente: c.nombre, monto, fecha, nota }, pago)) });
   } catch (e) { mensajeRecarga('No se pudo recargar: ' + e.message, false); return; }
-  limpiarDatosPago('Rec');
-  prepararBloquePago('Rec'); // por si agregó un método nuevo con "Otro"
+  await cargarMetodosPago(); // por si agregó un método nuevo con "Otro": aparece en la lista de todas las filas
   SALDOS_SEMANA_POZOS_CACHE = null;
   await pintarRecargaPagoDiario();
   mensajeRecarga(`✅ Listo: ${formatNombre(c.nombre)} +${formatMonto(monto)} y ${RECARGAS_PD_CUENTA} −${formatMonto(monto)}.`, true);
