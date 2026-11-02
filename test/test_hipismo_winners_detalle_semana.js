@@ -31,6 +31,14 @@ const OTRO_GRUPO_ID = 'grupo-winners-detalle-2';
 const FECHA = '2026-09-24';
 
 const TABLAS = {
+  // 02-11-2026: movimientos directos que Balance General suma al ítem WINNERS (traspaso y carga masiva especial) y el detalle debe mostrar
+  ajustes: [
+    { grupo_id: GRUPO_ID, cliente_nombre: 'WINNERS', monto: -100, fecha: FECHA, nota: 'traspaso a mano' },
+    { grupo_id: GRUPO_ID, cliente_nombre: 'LUSHO', monto: 100, fecha: FECHA, nota: 'traspaso a mano' }
+  ],
+  cargas: [
+    { grupo_id: GRUPO_ID, cliente_nombre: 'WINNERS', monto: -149, fecha: FECHA, carrera: 5, codigo_nombre: 'WINNERS', hipodromo_nombre: 'La Rinconada' }
+  ],
   hipismo_winners: [
     { grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 5, fecha: FECHA, cliente_nombre: 'LUSHO', caballo: '7', monto: 400 },
     { grupo_id: GRUPO_ID, hipodromo_nombre: 'La Rinconada', carrera_numero: 6, fecha: FECHA, cliente_nombre: 'CARLA', caballo: '3', monto: -120 },
@@ -59,7 +67,14 @@ function ejecutarQuery(text, params) {
 
   if (/^SELECT j\.(\*|id, j\.jugador_nombre)[\s\S]*?FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
-  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
+  if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) {
+    const [grupoId, nombre, desde, hasta] = params;
+    return { rows: TABLAS.ajustes.filter(a => a.grupo_id === grupoId && a.cliente_nombre === nombre && a.fecha >= desde && a.fecha <= hasta) };
+  }
+  if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) {
+    const [grupoId, desde, hasta, nombre] = params;
+    return { rows: TABLAS.cargas.filter(c => c.grupo_id === grupoId && c.fecha >= desde && c.fecha <= hasta && (!nombre || c.cliente_nombre === nombre)) };
+  }
   throw new Error('La base de datos falsa de esta prueba (winners detalle-semana) no sabe responder: ' + sql);
 }
 
@@ -130,8 +145,13 @@ function check(cond, msg) {
   // 2 filas de Winners (LUSHO +400, CARLA -120) -> el espejo de WINNERS
   // da -400 y +120 -> total -280,00. Mismo signo EXACTO que ya calcula
   // /cierre-final para este ítem (ver test_hipismo_winners_contrapartida_balance.js).
-  check(res._json.resumen.totalSemana === -280, `4) totalSemana = -(400) + -(-120) = -400+120 = -280,00, dio ${res._json.resumen.totalSemana}`);
-  check(res._json.resumen.cantidadJugadas === 2, '5) Cuenta las 2 filas de Winners de este grupo (nunca la del otro grupo)');
+  // + el traspaso (-100) y la carga masiva (-149) que Balance General también le suma a WINNERS = -529
+  check(res._json.resumen.totalSemana === -529, `4) totalSemana = -280 (winners) -100 (traspaso) -149 (carga masiva) = -529,00, dio ${res._json.resumen.totalSemana}`);
+  check(res._json.resumen.cantidadJugadas === 4, '5) Cuenta las 2 filas de Winners + el traspaso + la carga (nunca lo del otro grupo)');
+  const diaX = res._json.dias.find(d => d.fecha === FECHA);
+  check(diaX.hipodromos.some(h => h.tipo === 'traspaso' && h.carreras.some(c => c.resultado === -100)), '5b) El traspaso de WINNERS aparece en su detalle (bloque Traspasos)');
+  const hipRin = diaX.hipodromos.find(h => h.nombre === 'La Rinconada');
+  check(hipRin.carreras.some(c => c.tipo === 'carga' && c.resultado === -149), '5c) La carga masiva de WINNERS aparece como una línea más de su hipódromo');
 
   const dia = res._json.dias.find(d => d.fecha === FECHA);
   check(!!dia, '6) El día de los Winners aparece agrupado');

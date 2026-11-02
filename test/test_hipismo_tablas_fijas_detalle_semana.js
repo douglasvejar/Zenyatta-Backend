@@ -86,6 +86,7 @@ function ejecutarQuery(text, params) {
   // este archivo crea jugadas de esta pestaña nueva.
   if (/^SELECT j\.(\*|id, j\.jugador_nombre)[\s\S]*?FROM hipismo_tercios_adelantadas_jugadas/i.test(sql)) return { rows: [] };
 
+  if (/^SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) return { rows: [] };
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba (tablas fijas detalle-semana) no sabe responder: ' + sql);
 }

@@ -997,6 +997,47 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
   };
 }
 
+// 02-11-2026, a pedido del usuario ("el programa dice una cosa, los reportes otra": en Detallado por Cliente el cuadro WINNERS decía
+// -400,30 y el reporte de Winners sumaba -151,30): los ítems WINNERS / REMATE / TABLAS FIJAS solo mostraban en su detalle las jugadas
+// propias de cada ítem, pero Balance General / Cierre Final también les suma los TRASPASOS (hipismo_comisiones_ajustes) y las CARGAS
+// MASIVAS ESPECIALES que caen sobre ese nombre. Esa diferencia no se veía en ningún lado. Esta función agrega esos mismos movimientos al
+// detalle del ítem (mismo bloque "Traspasos" y misma línea de carga que ya ve un cliente normal) para que el detalle sume EXACTAMENTE
+// lo que dice el cuadro. Devuelve lo que sumó para que quien llama lo agregue a sus totales.
+async function agregarMovimientosDirectosAItem(porDia, grupoId, nombre, desde, hasta, hoyIso) {
+  let total = 0, hoy = 0, cantidad = 0;
+  const rTraspasos = await db.query(
+    `SELECT monto, fecha, nota FROM hipismo_comisiones_ajustes
+      WHERE grupo_id = $1 AND cliente_nombre = $2 AND fecha BETWEEN $3 AND $4
+      ORDER BY fecha DESC, creado_en ASC`,
+    [grupoId, nombre, desde, hasta]
+  );
+  (rTraspasos.rows || []).forEach(row => {
+    const monto = Number(row.monto);
+    const fechaIso = row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : row.fecha;
+    if (!porDia.has(fechaIso)) porDia.set(fechaIso, new Map());
+    const hipMap = porDia.get(fechaIso);
+    if (!hipMap.has(NOMBRE_BLOQUE_TRASPASOS)) hipMap.set(NOMBRE_BLOQUE_TRASPASOS, { nombre: NOMBRE_BLOQUE_TRASPASOS, tipo: 'traspaso', carreras: [] });
+    hipMap.get(NOMBRE_BLOQUE_TRASPASOS).carreras.push({ tipo: 'traspaso', nota: row.nota || null, resultado: monto });
+    total += monto; cantidad += 1;
+    if (fechaIso === hoyIso) hoy += monto;
+  });
+  const cargas = await obtenerCargasEspecialesRango(grupoId, desde, hasta, nombre);
+  cargas.forEach(l => {
+    if (!porDia.has(l.fecha)) porDia.set(l.fecha, new Map());
+    const hipMap = porDia.get(l.fecha);
+    const accion = (l.codigoNombre || '').toString().trim().toUpperCase();
+    const textoJugada = TEXTO_JUGADA_CARGA_ESPECIAL[accion] || (accion ? `${accion.charAt(0)}${accion.slice(1).toLowerCase()}` : 'Jugada');
+    const nombreBloque = l.hipodromoNombre || textoJugada.replace(/^[^A-Za-zÁÉÍÓÚáéíóú]+/, '');
+    const existente = Array.from(hipMap.keys()).find(k => String(k).trim().toUpperCase() === nombreBloque.trim().toUpperCase());
+    const claveBloque = existente !== undefined ? existente : nombreBloque;
+    if (!hipMap.has(claveBloque)) hipMap.set(claveBloque, { nombre: claveBloque, carreras: [] });
+    hipMap.get(claveBloque).carreras.push({ carrera: l.carrera ? Number(l.carrera) : 0, tipo: 'carga', texto: textoJugada, monto: null, resultado: l.monto });
+    total += l.monto; cantidad += 1;
+    if (l.fecha === hoyIso) hoy += l.monto;
+  });
+  return { total, hoy, cantidad };
+}
+
 // =================================================================
 // RESUMEN DEL ÍTEM "REMATE" (26-09-2026, a pedido del usuario, ver la
 // nota grande de GET /cierre-final en routes/hipismo.js y de
@@ -1063,6 +1104,9 @@ async function construirResumenRemateHipismo(grupoId, grupo, semanaParam, rangoP
     cantidadJugadas += 1;
     if (fechaIso === hoyIso) totalHoy += resultado;
   });
+
+  const extraItem = await agregarMovimientosDirectosAItem(porDia, grupoId, 'REMATE', desde, hasta, hoyIso);
+  totalSemana += extraItem.total; totalHoy += extraItem.hoy; cantidadJugadas += extraItem.cantidad;
 
   const dias = Array.from(porDia.entries())
     .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
@@ -1151,6 +1195,9 @@ async function construirResumenWinnersHipismo(grupoId, grupo, semanaParam, rango
     cantidadJugadas += 1;
     if (fechaIso === hoyIso) totalHoy += resultado;
   });
+
+  const extraItem = await agregarMovimientosDirectosAItem(porDia, grupoId, 'WINNERS', desde, hasta, hoyIso);
+  totalSemana += extraItem.total; totalHoy += extraItem.hoy; cantidadJugadas += extraItem.cantidad;
 
   const dias = Array.from(porDia.entries())
     .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
@@ -1252,6 +1299,9 @@ async function construirResumenTablasFijasHipismo(grupoId, grupo, semanaParam, r
     cantidadJugadas += 1;
     if (fechaIso === hoyIso) totalHoy += resultado;
   });
+
+  const extraItem = await agregarMovimientosDirectosAItem(porDia, grupoId, 'TABLAS FIJAS', desde, hasta, hoyIso);
+  totalSemana += extraItem.total; totalHoy += extraItem.hoy; cantidadJugadas += extraItem.cantidad;
 
   const dias = Array.from(porDia.entries())
     .map(([fecha, hipMap]) => ({ fecha, hipodromos: Array.from(hipMap.values()) }))
