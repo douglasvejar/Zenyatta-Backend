@@ -45,7 +45,7 @@ function agregarPorMonedaSiMixto(req, resultado, campos) {
       // dejó ese bloque de clientes a la casa, ya restando % y Polla —
       // se agrega acá para no obligar al frontend a mezclar dólares con
       // bolívares sumando el total ya combinado de `resultado`.
-      bloque.totalBalanceCasa = t.perdido - t.ganado - t.comisionTotal - t.polla;
+      bloque.totalBalanceCasa = require('../services/redondeo').redondear2(t.perdido - t.ganado - t.comisionTotal - t.polla);
     });
   }
   return { ...resultado, porMoneda: bloques };

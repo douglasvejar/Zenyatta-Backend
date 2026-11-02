@@ -6,6 +6,7 @@ const { calcularResumenHistorico } = require('./historial');
 const { calcularTransferenciasPorCliente } = require('./transferencias');
 const { calcularComisionTotalCliente } = require('./comisiones');
 const { calcularPollaPorCliente } = require('./polla');
+const { redondear2 } = require('./redondeo');
 
 // "Polla" (02-09-2026, a pedido del usuario): juego APARTE de la
 // sábana — se suma/resta directo al saldo del cliente y a la banca. Ver
@@ -100,28 +101,31 @@ async function calcularBalanceGeneral(grupoId, desde, hasta, porcentajesPropios,
     const comision = calcularComisionTotalCliente(cliente, resumen, porcentajesPropios, avalesMap, configComision);
     // Convención CASA: lo que le dejó ese cliente a la banca, ya restando
     // el % que se le pagó.
-    const totalBancaCliente = rc.perdido - rc.ganado - comision.total;
-    totalBancaGeneral += totalBancaCliente;
+    // 02-11-2026: montos por cliente en centavos ANTES de sumar (ver la nota de procesarSabana.js: el total debe ser la suma exacta de
+    // lo que se ve en cada línea, sin 1 centavo de más o de menos por los decimales crudos).
+    const perdidoR = redondear2(rc.perdido), ganadoR = redondear2(rc.ganado), comisionR = redondear2(comision.total);
+    const totalBancaCliente = redondear2(perdidoR - ganadoR - comisionR);
+    totalBancaGeneral = redondear2(totalBancaGeneral + totalBancaCliente);
 
     // Convención POLLA: el monto del cliente (positivo = ganó, negativo
     // = perdió) es EXACTAMENTE lo que se le suma a su saldo; el aporte
     // a la banca es la negación de ese mismo monto (si el cliente
     // perdió, aporta a la banca; si ganó, le cuesta a la banca).
-    const pollaCliente = polla[cliente] || 0;
+    const pollaCliente = redondear2(polla[cliente] || 0);
     const bancaPollaCliente = -pollaCliente;
-    totalBancaPolla += bancaPollaCliente;
+    totalBancaPolla = redondear2(totalBancaPolla + bancaPollaCliente);
 
-    const netoTransferencias = transferencias[cliente] || 0;
+    const netoTransferencias = redondear2(transferencias[cliente] || 0);
     // Convención CLIENTE (positivo = él va ganando), + transferencias +
     // polla.
-    const saldoCliente = -totalBancaCliente + netoTransferencias + pollaCliente;
+    const saldoCliente = redondear2(-totalBancaCliente + netoTransferencias + pollaCliente);
 
     return {
       cliente,
-      arriesgado: rc.arriesgado,
-      ganado: rc.ganado,
-      perdido: rc.perdido,
-      comision: comision.total,
+      arriesgado: redondear2(rc.arriesgado),
+      ganado: ganadoR,
+      perdido: perdidoR,
+      comision: comisionR,
       transferencias: netoTransferencias,
       polla: pollaCliente,
       saldoCliente
@@ -136,13 +140,14 @@ async function calcularBalanceGeneral(grupoId, desde, hasta, porcentajesPropios,
     acc.transferencias += f.transferencias;
     acc.polla += f.polla;
     acc.saldoCliente += f.saldoCliente;
+    ['arriesgado', 'ganado', 'perdido', 'comision', 'transferencias', 'polla', 'saldoCliente'].forEach(k => { acc[k] = redondear2(acc[k]); }); // sin ruido de coma flotante
     return acc;
   }, { cliente: 'TOTAL', arriesgado: 0, ganado: 0, perdido: 0, comision: 0, transferencias: 0, polla: 0, saldoCliente: 0 });
 
   return {
     filas,
     filaTotal,
-    balanceBanca: totalBancaGeneral + totalBancaPolla,
+    balanceBanca: redondear2(totalBancaGeneral + totalBancaPolla),
     balanceBancaSabana: totalBancaGeneral,
     balanceBancaPolla: totalBancaPolla
   };

@@ -22,6 +22,7 @@ const { esEstadoComisionable, calcularComisionTotalCliente, acumularComisionPorT
 const { guardarEnHistorial, cargarEstadosManuales, claveEstadoManual } = require('./historial');
 const { cargarResolucionesManuales, crearAlerta } = require('./alertas');
 const { leerPolla } = require('./polla');
+const { redondear2 } = require('./redondeo');
 
 // Da de alta en la tabla "jugadores" a cualquier cliente detectado en la
 // sábana que todavía no esté registrado en este grupo — igual que
@@ -529,8 +530,13 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
   const resumenPorCliente = Array.from(clientesDelDia).sort().map(cliente => {
     const rc = resumenClientes[cliente] || { arriesgado: 0, arriesgadoComisionable: 0, ganado: 0, perdido: 0, pendientes: 0 };
     const comision = calcularComisionTotalCliente(cliente, resumenClientes, porcentajesPropios, avalesMap, configComision);
-    totalDevolucionesSum += comision.total;
-    const polla = pollaPorCliente[cliente] || 0;
+    // 02-11-2026, a pedido del usuario ("esta suma da 61,77 y el TOTAL BANCA decía 61,78... más nunca debe pasar"): cada monto de
+    // cada cliente se redondea a CENTAVOS (medio centavo sube) ANTES de sumar. Antes se sumaban los montos crudos (un % de 4,125 o un
+    // pago de 74,095) y recién el total se redondeaba al imprimir: cada línea del plano se veía bien pero el TOTAL BANCA, que es la
+    // suma de los crudos, podía caer 1 centavo distinto de la suma de lo que se ve. Ahora todo sale de los mismos centavos.
+    const comisionTotalR = redondear2(comision.total);
+    totalDevolucionesSum += comisionTotalR;
+    const polla = redondear2(pollaPorCliente[cliente] || 0);
     totalPollaSum += polla;
     // "moneda del grupo" (18-09-2026) — se etiqueta cada fila con la
     // moneda de ESE cliente (jugadores.moneda) para que routes/sabana.js
@@ -544,14 +550,14 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       cliente,
       jugoHoy: Object.prototype.hasOwnProperty.call(resumenClientes, cliente),
       jugoPolla: Object.prototype.hasOwnProperty.call(pollaPorCliente, cliente),
-      arriesgado: rc.arriesgado,
-      ganado: rc.ganado,
-      perdido: rc.perdido,
-      balance: rc.ganado - rc.perdido,
+      arriesgado: redondear2(rc.arriesgado),
+      ganado: redondear2(rc.ganado),
+      perdido: redondear2(rc.perdido),
+      balance: redondear2(redondear2(rc.ganado) - redondear2(rc.perdido)),
       porcentajePropio: comision.porcentajePropio,
-      comisionPropia: comision.comisionPropia,
-      comisionAval: comision.comisionAval,
-      comisionTotal: comision.total,
+      comisionPropia: redondear2(comision.comisionPropia),
+      comisionAval: redondear2(comision.comisionAval),
+      comisionTotal: comisionTotalR,
       polla,
       pendientes: rc.pendientes,
       moneda
@@ -559,7 +565,7 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
   });
   // Banca: negación del total de Polla — misma convención usada en
   // balanceGeneral.js (bancaPollaCliente = -pollaCliente).
-  const totalBancaPollaSum = -totalPollaSum;
+  const totalBancaPollaSum = redondear2(-totalPollaSum);
 
   // Totales del día por cliente en convención CASA, para el cierre del
   // "Plano de WhatsApp" (positivo = ese cliente le dejó plata a la banca).
@@ -570,12 +576,16 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
     cliente: c.cliente,
     jugoHoy: c.jugoHoy,
     jugoPolla: c.jugoPolla,
-    totalBanca: c.perdido - c.ganado - c.comisionTotal,
+    totalBanca: redondear2(c.perdido - c.ganado - c.comisionTotal),
     devolucion: c.comisionTotal,
     polla: c.polla,
     bancaPolla: -c.polla
   }));
-  const totalBancaGeneral = totalesClientesPlano.reduce((acc, c) => acc + c.totalBanca, 0);
+  const totalBancaGeneral = redondear2(totalesClientesPlano.reduce((acc, c) => acc + c.totalBanca, 0));
+  // Totales del día = suma de lo que ya se redondeó por cliente (así las tarjetas cuadran con las líneas del plano).
+  const totalPerdidoCli = redondear2(resumenPorCliente.reduce((acc, c) => acc + c.perdido, 0));
+  const totalPremiosCli = redondear2(resumenPorCliente.reduce((acc, c) => acc + c.ganado, 0));
+  const totalDevolucionesCli = redondear2(totalDevolucionesSum);
 
   await autoRegistrarJugadores(grupoId, Object.keys(resumenClientes), jugadoresPorNombre);
   await guardarEnHistorial(grupoId, fecha, registrosHistorial);
@@ -621,8 +631,8 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
   // día que no sea el día fijo de la Polla de ese grupo).
   // =============================================================
   const pollaRegistrada = pollaDelDia.length > 0;
-  const totalBalanceCasaSabana = totalPerdidoSum - totalPremiosSum - totalDevolucionesSum;
-  const totalBalanceCasa = totalBalanceCasaSabana + totalBancaPollaSum;
+  const totalBalanceCasaSabana = totalBancaGeneral;
+  const totalBalanceCasa = redondear2(totalBalanceCasaSabana + totalBancaPollaSum);
 
   return {
     fecha,
@@ -642,10 +652,10 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
     // round-trip a /estado-dia, apenas termina de procesar.
     diaConfirmado: false,
     totales: {
-      totalArriesgado: totalArriesgadoSum,
-      totalPerdido: totalPerdidoSum,
-      totalPremios: totalPremiosSum,
-      totalDevoluciones: totalDevolucionesSum,
+      totalArriesgado: redondear2(totalArriesgadoSum),
+      totalPerdido: totalPerdidoCli,
+      totalPremios: totalPremiosCli,
+      totalDevoluciones: totalDevolucionesCli,
       // Balance neto del día, YA combinado con la Polla si esta fecha la
       // tiene registrada (ver comentario grande de arriba).
       totalBalanceCasa,
@@ -653,7 +663,7 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       // hace falta mostrarlo aparte (mismo patrón que balanceBancaSabana
       // en balanceGeneral.js).
       totalBalanceCasaSabana,
-      totalPolla: totalPollaSum,
+      totalPolla: redondear2(totalPollaSum),
       totalBancaPolla: totalBancaPollaSum,
       pollaRegistrada
     },
@@ -662,7 +672,7 @@ async function procesarSabana(grupoId, textoCrudo, fecha) {
       // "TOTAL BANCA" del Plano: mismo criterio, ya combinado con la Polla
       // del día. totalBancaSabana queda para quien necesite el desglose.
       totalBancaSabana: totalBancaGeneral,
-      totalBanca: totalBancaGeneral + totalBancaPollaSum,
+      totalBanca: redondear2(totalBancaGeneral + totalBancaPollaSum),
       totalBancaPolla: totalBancaPollaSum,
       pollaRegistrada
     }
