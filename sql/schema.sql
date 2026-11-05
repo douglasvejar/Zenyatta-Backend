@@ -2296,7 +2296,7 @@ create index if not exists idx_jugadores_hipismo_socio on jugadores(hipismo_soci
 -- cliente con pozo (avalado o pago diario con pozo) le quedó menos del 15% de su pozo. El servidor también lo aplica solo al arrancar.
 alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
 alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
-  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO')) not valid;
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO','PENDIENTE_ELIMINADO')) not valid;
 
 -- 02-11-2026: DETALLE DEL PAGO de una recarga de pago diario o de un retiro (a pedido del usuario: método de pago, referencia y foto del
 -- comprobante, opcionales, "para mayor control"). Los métodos predeterminados (Zelle, Pago móvil, Dólares efectivo, Bolívares efectivo,

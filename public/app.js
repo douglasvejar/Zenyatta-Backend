@@ -149,7 +149,10 @@ const ETIQUETAS_PERMISOS = {
   polla: '🎲 Polla',
   alertas: '🔔 Alertas / Chat',
   descargar: '⬇️ Descargar (Saldos Semana, Excel, PDF)',
-  hipismo: '🐎 Módulo Hipismo'
+  hipismo: '🐎 Módulo Hipismo',
+  oficinas_saldos: '🏢 Oficinas: recargas, retiros y control de pozos',
+  oficinas_informes: '🏢 Oficinas: Balance General, Saldos, Detallado y Comisión',
+  oficinas_eliminar: '🏢 Oficinas: eliminar carreras y jugadas'
 };
 
 // ¿Esta sesión tiene el permiso `clave` (uno de ETIQUETAS_PERMISOS de

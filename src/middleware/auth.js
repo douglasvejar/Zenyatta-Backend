@@ -42,7 +42,13 @@ const PERMISOS_VALIDOS = [
   'polla', // 🎲 Polla
   'alertas', // 🔔 Alertas y chat interno
   'descargar', // ⬇️ Descargar (21-09-2026: Saldos Semana, Excel, PDF)
-  'hipismo' // 🐎 Módulo Hipismo completo (22-09-2026) — igual que 'sabana' para Deportes, protege TODO src/routes/hipismo.js. Además de este permiso, la ruta exige que el GRUPO tenga grupos.modulo_hipismo_habilitado=true (ver requiereGrupo() más abajo y hipismo.js) — un empleado con este permiso pero de un grupo sin el módulo contratado sigue sin poder entrar.
+  'hipismo', // 🐎 Módulo Hipismo completo (22-09-2026) — igual que 'sabana' para Deportes, protege TODO src/routes/hipismo.js. Además de este permiso, la ruta exige que el GRUPO tenga grupos.modulo_hipismo_habilitado=true (ver requiereGrupo() más abajo y hipismo.js) — un empleado con este permiso pero de un grupo sin el módulo contratado sigue sin poder entrar.
+
+  // Hipismo Oficinas (05-11-2026): permisos finos para empleados de una oficina. Compatibles hacia atrás: un empleado que NO tiene ninguna de
+  // estas tres claves sigue como siempre (todo lo de Oficinas); en cuanto el administrador marca alguna, solo puede lo que marcó (ver requierePermisoOficina).
+  'oficinas_saldos', // 💵 Oficinas: recargas, retiros y control de pozos
+  'oficinas_informes', // 💰 Oficinas: Balance General, Saldos, Detallado y Comisión por Carrera
+  'oficinas_eliminar' // 🗑️ Oficinas: eliminar carreras y jugadas
 ];
 
 // Lee req.grupo.moneda_modo con un default seguro ('usd', igual que la
@@ -194,6 +200,19 @@ function requiereAlgunoDe(...claves) {
   };
 }
 
+
+// Hipismo Oficinas (05-11-2026): límites finos para empleados. El Administrador SIEMPRE pasa. Un empleado sin ninguna clave oficinas_* pasa
+// (así nadie pierde acceso por sorpresa); con alguna marcada, solo pasa con la clave pedida.
+const PERMISOS_OFICINAS = ['oficinas_saldos', 'oficinas_informes', 'oficinas_eliminar'];
+function requierePermisoOficina(clave) {
+  return function (req, res, next) {
+    if (req.rol !== 'empleado') return next();
+    const permisos = Array.isArray(req.permisos) ? req.permisos : [];
+    if (!permisos.some(p => PERMISOS_OFICINAS.includes(p)) || permisos.includes(clave)) return next();
+    return res.status(403).json({ error: 'Tu usuario no tiene permiso para hacer esto en Hipismo Oficinas. Pídeselo al administrador del grupo.' });
+  };
+}
+
 // Exige que la sesión sea del Administrador (el dueño del grupo, nunca un
 // Empleado) — usado por routes/empleados.js, y por el interruptor de
 // moneda del grupo (routes/grupo.js), a propósito NO delegables a ningún
@@ -222,6 +241,8 @@ module.exports = {
   requierePermiso,
   requiereAlgunoDe,
   requiereAdministrador,
+  requierePermisoOficina,
+  PERMISOS_OFICINAS,
   requiereSuperadmin,
   normalizarPermisos,
   monedaModoDe,

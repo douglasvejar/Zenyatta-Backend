@@ -354,7 +354,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/modalNoExiste/.test(html) && /NO EXISTE/.test(html) && /clientesNoExisten/.test(html) && /focusout/.test(html), '5) la pantalla avisa en una ventana "CLIENTE X NO EXISTE" con el nombre');
   check(/modalNoExisteCrear/.test(html) && /irATab\('clientes'\)/.test(html), '5) la ventana ofrece ir a Crear Cliente con el nombre puesto');
   // El script de la página compila
-  const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   try { new Function(script); check(true, '5) el script de la pantalla no tiene errores de sintaxis'); } catch (e) { check(false, '5) el script de la pantalla tiene error de sintaxis: ' + e.message); }
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);

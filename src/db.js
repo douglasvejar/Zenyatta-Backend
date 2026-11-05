@@ -77,7 +77,7 @@ pool.query(`create table if not exists hipismo_socios (
 // hipismo_alertas.tipo se renueva solo al arrancar ("not valid": no revisa las alertas viejas). Si la base no deja, solo avisa en el log.
 pool.query(`alter table hipismo_alertas drop constraint if exists hipismo_alertas_tipo_check;
   alter table hipismo_alertas add constraint hipismo_alertas_tipo_check
-  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO')) not valid`)
+  check (tipo in ('PLANO_EDITADO','PLANO_ELIMINADO','ADELANTADA_EDITADA','ADELANTADA_ELIMINADA','JORNADA_ELIMINADA','WINNER_EDITADO','WINNER_ELIMINADO','PIZARRA_EDITADA','PIZARRA_ELIMINADA','TERCIOS_ADELANTADA_EDITADA','TERCIOS_ADELANTADA_ELIMINADA','REMATE_MANUAL_ELIMINADO','APUESTA_SOBRE_POZO','CUADRE_DESCUADRADO','POZO_BAJO','PENDIENTE_ELIMINADO')) not valid`)
   .catch((err) => console.warn('[db] No se pudo actualizar el check de hipismo_alertas.tipo (corre sql/schema.sql en Supabase):', err.message));
 
 // 02-11-2026: detalle del pago de recargas de pago diario y retiros (método, referencia, foto del comprobante; ver sql/schema.sql y

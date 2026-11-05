@@ -26,7 +26,8 @@
 const express = require('express');
 const db = require('../db');
 const bcrypt = require('bcryptjs');
-const { requiereGrupo, requierePermiso, requiereAdministrador } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso, requiereAdministrador, requierePermisoOficina } = require('../middleware/auth');
+const oficinasControl = require('../services/hipismoOficinasControl');
 const asyncHandler = require('../middleware/asyncHandler');
 const { rutaHipismoPermitida } = require('../services/funcionesGrupo');
 // CHAT DE SOPORTE (26-09-2026, "activa el modulo de mensajes... para el
@@ -1448,7 +1449,7 @@ router.post('/oficinas/pendiente', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /oficinas/pendiente?hipodromoId=&carrera=&fecha= — descarta una carrera pendiente de llegada.
-router.delete('/oficinas/pendiente', asyncHandler(async (req, res) => {
+router.delete('/oficinas/pendiente', requierePermisoOficina('oficinas_eliminar'), asyncHandler(async (req, res) => {
   const { hipodromoId, carrera } = req.query;
   const fecha = req.query.fecha || fechaHoyVenezuela();
   if (!hipodromoId || !carrera) return res.status(400).json({ error: 'Falta el hipódromo o la carrera.' });
@@ -1458,6 +1459,9 @@ router.delete('/oficinas/pendiente', asyncHandler(async (req, res) => {
     'DELETE FROM hipismo_oficinas_pendientes WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND carrera_numero = $3 AND fecha = $4',
     [req.grupoId, rh.rows[0].nombre, carrera, fecha]
   );
+  try {
+    await registrarAlerta(req, { tipo: 'PENDIENTE_ELIMINADO', hipodromoNombre: rh.rows[0].nombre, carreraNumero: Number(carrera), fecha, mensaje: `${req.nombreActor} eliminó la carrera ${carrera} de ${rh.rows[0].nombre} (${fecha}) que estaba pendiente de llegada.` });
+  } catch (e) { /* la alerta nunca impide eliminar */ }
   res.json({ ok: true });
 }));
 
@@ -1551,12 +1555,30 @@ router.get('/oficinas/registro-dias', asyncHandler(async (req, res) => {
   res.json({ dias: Array.from(dias.values()).sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 31) });
 }));
 
+// GET /oficinas/pendientes-periodo?semana=actual|anterior|hace2 | ?desde=&hasta= — cuántas carreras están guardadas SIN llegada en el período
+// (no cuentan en los saldos). El Balance General de Oficinas lo usa para avisar.
+router.get('/oficinas/pendientes-periodo', asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  res.json(await oficinasControl.carrerasPendientesPeriodo(req.grupoId, desde, hasta));
+}));
+
+// GET /oficinas/cierre-dia?fecha= — el cierre del día: carreras calculadas / pendientes / en hueco por hipódromo y si el día cuadra
+// (saldo de todos los clientes + comisión de la oficina = 0, la misma cuenta del Balance General).
+router.get('/oficinas/cierre-dia', asyncHandler(async (req, res) => {
+  const fecha = req.query.fecha || fechaHoyVenezuela();
+  if (!fechaValida(fecha)) return res.status(400).json({ error: 'La fecha no es válida.' });
+  res.json(await oficinasControl.construirCierreDia(req.grupoId, fecha, construirCierreFinalHipismo));
+}));
+
 // GET /oficinas/comision-por-carrera?semana=actual|anterior|hace2 | ?desde=&hasta= — cuánto ganó la oficina en cada
 // carrera. Comisión NETA = el 5% cobrado en la carrera (comision_total del plano) menos los % devueltos a
 // clientes/avales en esa misma carrera. Los devueltos salen de construirCierreFinalHipismo (la misma cuenta del
 // Balance General, ya redondeada), así que la suma de todas las carreras + lo que no está ligado a una carrera
 // (comisión de Jugadas Adelantadas) da EXACTAMENTE la "Comisión" del Balance General (comisionOficina).
-router.get('/oficinas/comision-por-carrera', asyncHandler(async (req, res) => {
+router.get('/oficinas/comision-por-carrera', requierePermisoOficina('oficinas_informes'), asyncHandler(async (req, res) => {
   const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
   const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
   const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
@@ -1879,7 +1901,7 @@ router.delete('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => 
 // Planos" SÍ genere una alerta ("si el plano lo eliminan se genera la
 // alerta igual mente") — cambio de criterio respecto a la ronda pasada,
 // documentado en claude/plan-modulo-hipismo.md.
-router.delete('/planos/:id', asyncHandler(async (req, res) => {
+router.delete('/planos/:id', requierePermisoOficina('oficinas_eliminar'), asyncHandler(async (req, res) => {
   try {
     const resultado = await hipismoPlanosPapelera.eliminarPlano(req.grupoId, req.params.id);
     await registrarAlerta(req, {
@@ -5480,7 +5502,7 @@ router.get('/retiros', asyncHandler(async (req, res) => {
   res.json({ cuenta: CUENTA_PAGOS_A_CLIENTES, cuentaPagoDiario: CUENTA_POZOS_PAGO_DIARIO, retiros: await conDetallePago(req.grupoId, await listarRetirosGrupo(req.grupoId)) });
 }));
 
-router.post('/retiros', asyncHandler(async (req, res) => {
+router.post('/retiros', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const cliente = normalizarNombreRetiro(req.body && req.body.cliente);
   const monto = Number(req.body && req.body.monto);
   const fecha = (req.body && req.body.fecha) || fechaHoyVenezuela();
@@ -5504,7 +5526,7 @@ router.post('/retiros', asyncHandler(async (req, res) => {
   res.json({ ok: true, cuenta: cuentaDestino });
 }));
 
-router.put('/retiros/:id', asyncHandler(async (req, res) => {
+router.put('/retiros/:id', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const par = await buscarRetiroPorId(req.grupoId, req.params.id);
   if (!par) return res.status(404).json({ error: 'Ese retiro no existe.' });
   const b = req.body || {};
@@ -5531,7 +5553,7 @@ router.put('/retiros/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, cuenta: cuentaDestino });
 }));
 
-router.delete('/retiros/:id', asyncHandler(async (req, res) => {
+router.delete('/retiros/:id', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const par = await buscarRetiroPorId(req.grupoId, req.params.id);
   if (!par) return res.status(404).json({ error: 'Ese retiro no existe.' });
   await db.transaccion(async (client) => {
@@ -5610,6 +5632,23 @@ router.get('/recargas-pago-diario', asyncHandler(async (req, res) => {
   });
 }));
 
+// Marcar / quitar "pago diario" a un cliente sin tocar nada más de su ficha (05-11-2026, Hipismo Oficinas: la lista de clientes tiene un botón).
+router.put('/clientes/:id/pago-diario', asyncHandler(async (req, res) => {
+  const marca = req.body && req.body.pagoDiario;
+  if (typeof marca !== 'boolean') return res.status(400).json({ error: 'Indica si es de pago diario (sí o no).' });
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  let r;
+  try {
+    r = await db.query('UPDATE jugadores SET pago_diario = $1 WHERE id = $2 AND grupo_id = $3 AND COALESCE(es_cuenta_comision, false) = false RETURNING id, nombre, pago_diario', [marca, id, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(409).json({ error: 'Falta correr el SQL pendiente en Supabase (columna jugadores.pago_diario).' });
+    throw e;
+  }
+  if (!r.rows.length) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  res.json({ ok: true, cliente: r.rows[0] });
+}));
+
 // MÉTODOS DE PAGO (02-11-2026): los predeterminados + los que el grupo agregó con "Otro". POST agrega uno a la lista del grupo.
 router.get('/metodos-pago', asyncHandler(async (req, res) => {
   res.json(await pagosDetalle.listarMetodos(req.grupoId));
@@ -5633,7 +5672,7 @@ router.get('/comprobantes/:id', asyncHandler(async (req, res) => {
   res.send(img.buffer);
 }));
 
-router.post('/recargas-pago-diario', asyncHandler(async (req, res) => {
+router.post('/recargas-pago-diario', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const cliente = normalizarNombreRetiro(req.body && req.body.cliente);
   const monto = Number(req.body && req.body.monto);
   const fecha = (req.body && req.body.fecha) || fechaHoyVenezuela();
@@ -5654,7 +5693,7 @@ router.post('/recargas-pago-diario', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.put('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
+router.put('/recargas-pago-diario/:id', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const par = await buscarRecargaPagoDiarioPorId(req.grupoId, req.params.id);
   if (!par) return res.status(404).json({ error: 'Esa recarga no existe.' });
   const b = req.body || {};
@@ -5679,7 +5718,7 @@ router.put('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.delete('/recargas-pago-diario/:id', asyncHandler(async (req, res) => {
+router.delete('/recargas-pago-diario/:id', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const par = await buscarRecargaPagoDiarioPorId(req.grupoId, req.params.id);
   if (!par) return res.status(404).json({ error: 'Esa recarga no existe.' });
   await db.transaccion(async (client) => {

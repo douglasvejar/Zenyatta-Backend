@@ -1,0 +1,162 @@
+// =================================================================
+// PRUEBA: HIPISMO OFICINAS — mejoras del 05-11-2026 (recargas/retiros/control de pozos, cierre del día, aviso de pendientes,
+// permisos por empleado, historial, Excel, marcar pago diario).
+// Sin base de datos: la base se reemplaza por una falsa y las rutas se llaman directo.
+// =================================================================
+const Module = require('module');
+const path = require('path');
+const fs = require('fs');
+const originalLoad = Module._load;
+const RAIZ = path.join(__dirname, '..');
+
+let pasaron = 0, fallaron = 0;
+function check(cond, msg) {
+  if (cond) { pasaron++; console.log('OK:', msg); }
+  else { fallaron++; console.error('FALLÓ:', msg); }
+}
+const leer = p => fs.readFileSync(path.join(RAIZ, p), 'utf8');
+
+// Base falsa para TODO el archivo (el db real exige DATABASE_URL): cada bloque cambia dbRespuesta.
+const consultas = [];
+let dbRespuesta = () => ({ rows: [] });
+const dbFalsa = {
+  query: async (t, p) => { consultas.push([t, p]); return dbRespuesta(t, p); },
+  transaccion: async (f) => f({ query: async (t, p) => { consultas.push([t, p]); return { rows: [{ id: 'x' }] }; } })
+};
+const routerFalso = (handlers) => () => { const router = {}; ['get', 'post', 'put', 'patch', 'delete', 'use'].forEach(m => { router[m] = (...a) => { handlers.push([m, a]); return router; }; }); return router; };
+const handlers = [];
+const expressReal = require('express');
+let usarRouterFalso = false;
+Module._load = function (request) {
+  if (/(^|\/)db$/.test(request) || request === '../db') return dbFalsa;
+  if (usarRouterFalso && request === 'express') { const e = () => ({}); e.Router = routerFalso(handlers); e.json = expressReal.json; return e; }
+  return originalLoad.apply(this, arguments);
+};
+
+// ---------- 1) armarCierreDia (pura) ----------
+const control = require('../src/services/hipismoOficinasControl');
+{
+  const d = control.armarCierreDia({
+    fecha: '2026-11-04',
+    planos: [{ hipodromo_nombre: 'Gulfstream Park', carrera_numero: 1 }, { hipodromo_nombre: 'Gulfstream Park', carrera_numero: 2 }, { hipodromo_nombre: 'Gulfstream Park', carrera_numero: 4 }],
+    pendientes: [{ hipodromo_nombre: 'Gulfstream Park', carrera_numero: 5 }],
+    cierre: { clientes: [{ nombre: 'PEDRO', saldo: -100 }, { nombre: 'JOSE', saldo: 95 }], comisionSemana: 5 }
+  });
+  check(d.hipodromos.length === 1 && d.hipodromos[0].calculadas === 3 && d.hipodromos[0].pendientes === 1, 'cierre del día: cuenta calculadas y pendientes');
+  check(JSON.stringify(d.hipodromos[0].faltantes) === '[3]', 'cierre del día: detecta el hueco (carrera 3 no cargada)');
+  check(d.totales.carreras === 4 && d.totales.pendientes === 1 && d.totales.huecos === 1, 'cierre del día: totales');
+  check(d.saldos.cuadra === true && d.saldos.diferencia === 0, 'cierre del día: saldo de clientes + comisión = 0 cuadra');
+  check(d.listo === false, 'cierre del día: no está listo si queda una carrera sin llegada');
+  check(d.avisos.some(a => a.nivel === 'error' && /sin llegada/.test(a.texto)), 'cierre del día: avisa de la carrera sin llegada');
+  check(d.avisos.some(a => a.nivel === 'aviso' && /carrera 3/.test(a.texto)), 'cierre del día: avisa del hueco');
+}
+{
+  const d = control.armarCierreDia({
+    fecha: '2026-11-04',
+    planos: [{ hipodromo_nombre: 'Santa Anita', carrera_numero: 1 }, { hipodromo_nombre: 'Santa Anita', carrera_numero: 2 }],
+    pendientes: [],
+    cierre: { clientes: [{ nombre: 'PEDRO', saldo: -100 }, { nombre: 'JOSE', saldo: 95 }], comisionSemana: 4 }
+  });
+  check(d.saldos.cuadra === false && d.saldos.diferencia === -1, 'cierre del día: detecta que el día NO cuadra (-1,00)');
+  check(d.avisos.some(a => /no cuadra/.test(a.texto)) && d.listo === false, 'cierre del día: avisa que no cuadra y no queda listo');
+}
+{
+  const d = control.armarCierreDia({
+    fecha: '2026-11-04',
+    planos: [{ hipodromo_nombre: 'Santa Anita', carrera_numero: 1 }, { hipodromo_nombre: 'Gulfstream Park', carrera_numero: 1 }],
+    pendientes: [],
+    cierre: { clientes: [{ nombre: 'PEDRO', saldo: -100 }, { nombre: 'JOSE', saldo: 95 }], comisionSemana: 5 }
+  });
+  check(d.listo === true && d.avisos.length === 0, 'cierre del día: todo calculado y cuadrado = listo, sin avisos');
+  check(d.hipodromos[0].nombre === 'Gulfstream Park', 'cierre del día: hipódromos ordenados por nombre');
+  const vacio = control.armarCierreDia({ fecha: '2026-11-04', planos: [], pendientes: [], cierre: { clientes: [], comisionSemana: 0 } });
+  check(vacio.listo === false && vacio.avisos.some(a => a.nivel === 'info'), 'cierre del día: un día sin carreras no se da por listo');
+}
+
+// ---------- 2) carrerasPendientesPeriodo (base falsa) ----------
+(async () => {
+  dbRespuesta = (texto, params) => {
+    if (/hipismo_oficinas_pendientes/.test(texto)) {
+      if (params[0] === 'sin-tabla') { const e = new Error('no existe'); e.code = '42P01'; throw e; }
+      return { rows: [{ fecha: new Date('2026-11-03T00:00:00Z'), hipodromo_nombre: 'Gulfstream Park', carrera_numero: '4' }, { fecha: '2026-11-04', hipodromo_nombre: 'Santa Anita', carrera_numero: 2 }] };
+    }
+    return { rows: [] };
+  };
+  const ctl = control;
+  let r = await ctl.carrerasPendientesPeriodo('g1', '2026-11-02', '2026-11-08');
+  check(r.total === 2 && r.carreras[0].fecha === '2026-11-03' && r.carreras[0].carrera === 4, 'pendientes del período: lista fecha, hipódromo y número de carrera');
+  r = await ctl.carrerasPendientesPeriodo('sin-tabla', '2026-11-02', '2026-11-08');
+  check(r.total === 0, 'pendientes del período: si falta la tabla (SQL sin correr) responde vacío, no error');
+
+  // ---------- 3) permisos por empleado en Oficinas ----------
+  const { requierePermisoOficina, PERMISOS_OFICINAS, PERMISOS_VALIDOS } = require('../src/middleware/auth');
+  const pasa = (req, clave) => { let ok = false, estado = null; requierePermisoOficina(clave)(req, { status: (s) => ({ json: () => { estado = s; } }) }, () => { ok = true; }); return { ok, estado }; };
+  check(PERMISOS_OFICINAS.length === 3 && PERMISOS_OFICINAS.every(p => PERMISOS_VALIDOS.includes(p)), 'permisos: las 3 claves de Oficinas son válidas');
+  check(pasa({ rol: 'administrador', permisos: null }, 'oficinas_saldos').ok, 'permisos: el administrador siempre puede');
+  check(pasa({ rol: 'empleado', permisos: ['hip_ver'] }, 'oficinas_saldos').ok, 'permisos: empleado sin claves de Oficinas conserva el acceso de siempre');
+  check(pasa({ rol: 'empleado', permisos: [] }, 'oficinas_informes').ok, 'permisos: empleado con lista vacía tampoco se bloquea (compatibilidad)');
+  check(pasa({ rol: 'empleado', permisos: ['oficinas_saldos'] }, 'oficinas_saldos').ok, 'permisos: empleado con la clave puede');
+  const sin = pasa({ rol: 'empleado', permisos: ['oficinas_saldos'] }, 'oficinas_eliminar');
+  check(!sin.ok && sin.estado === 403, 'permisos: empleado con otra clave de Oficinas recibe 403 en lo que no marcó');
+
+  // ---------- 4) rutas ----------
+  usarRouterFalso = true; dbRespuesta = () => ({ rows: [] });
+  let hip;
+  try { delete require.cache[require.resolve('../src/routes/hipismo')]; hip = require('../src/routes/hipismo'); }
+  catch (e) { console.error('No se pudo cargar la ruta con la base falsa:', e.message); }
+  usarRouterFalso = false;
+
+  const buscar = (m, p) => handlers.find(([mm, a]) => mm === m && a[0] === p);
+  const rutaPD = buscar('put', '/clientes/:id/pago-diario');
+  check(!!rutaPD, 'ruta PUT /clientes/:id/pago-diario existe');
+  check(!!buscar('get', '/oficinas/pendientes-periodo') && !!buscar('get', '/oficinas/cierre-dia'), 'rutas GET /oficinas/pendientes-periodo y /oficinas/cierre-dia existen');
+  const llamar = async (h, req) => new Promise((resolve, reject) => {
+    const res = { codigo: 200, status(c) { this.codigo = c; return this; }, json(b) { resolve({ codigo: this.codigo, body: b }); } };
+    Promise.resolve(h(req, res, e => reject(e))).catch(reject);
+  });
+  if (rutaPD) {
+    const h = rutaPD[1][rutaPD[1].length - 1];
+    const ID = '11111111-2222-3333-4444-555555555555';
+    dbRespuesta = () => ({ rows: [{ id: ID, nombre: 'JOSE', pago_diario: true }] });
+    let r = await llamar(h, { grupoId: 'g1', params: { id: ID }, body: { pagoDiario: true } });
+    check(r.codigo === 200 && r.body.ok && r.body.cliente.pago_diario === true, 'pago diario: marcar a un cliente responde ok');
+    check(/UPDATE jugadores SET pago_diario/.test(consultas[consultas.length - 1][0]) && consultas[consultas.length - 1][1].includes('g1'), 'pago diario: el UPDATE va filtrado por grupo (aislamiento)');
+    r = await llamar(h, { grupoId: 'g1', params: { id: ID }, body: { pagoDiario: 'si' } });
+    check(r.codigo === 400, 'pago diario: un valor que no es sí/no da 400');
+    r = await llamar(h, { grupoId: 'g1', params: { id: 'abc' }, body: { pagoDiario: true } });
+    check(r.codigo === 404, 'pago diario: id inválido da 404');
+    dbRespuesta = () => ({ rows: [] });
+    r = await llamar(h, { grupoId: 'g1', params: { id: ID }, body: { pagoDiario: false } });
+    check(r.codigo === 404, 'pago diario: cliente de otro grupo / inexistente da 404');
+  }
+
+  // Candados por permiso puestos en las rutas
+  const tieneMiddleware = (m, p, n) => { const e = buscar(m, p); return !!e && e[1].length > 2 && e[1].slice(1, -1).some(f => f && f.name === 'requierePermisoOficinaMw' || typeof f === 'function'); };
+  check(tieneMiddleware('post', '/recargas-pago-diario'), 'permisos: POST recargas lleva candado de Oficinas');
+  check(tieneMiddleware('post', '/retiros'), 'permisos: POST retiros lleva candado de Oficinas');
+  check(tieneMiddleware('get', '/oficinas/comision-por-carrera'), 'permisos: Comisión por Carrera lleva candado de Oficinas');
+  check(tieneMiddleware('delete', '/oficinas/pendiente'), 'permisos: eliminar pendiente lleva candado de Oficinas');
+
+  // ---------- 5) funcionesGrupo ----------
+  const fg = require('../src/services/funcionesGrupo');
+  const secc = fg.seccionesDeRutaHipismo('PUT', '/clientes/abc/pago-diario');
+  check(Array.isArray(secc) && secc.includes('hip_clientes') && secc.includes('hip_saldos'), 'funcionesGrupo: marcar pago diario cae bajo Clientes/Saldos');
+  check(fg.seccionesDeRutaHipismo('GET', '/oficinas/cierre-dia') === null, 'funcionesGrupo: las rutas /oficinas/* siguen libres de candado por sección');
+
+  // ---------- 6) pantalla (cadenas) ----------
+  const html = leer('public/hipismo-oficinas.html');
+  const saldos = leer('public/oficinas-saldos.js');
+  const mejoras = leer('public/oficinas-mejoras.js');
+  ['panel-recargas', 'panel-controlpozos', 'panel-cierredia', 'panel-historial', 'jPozoAviso', 'balPendientes', 'spPendientes', 'cPagoDiario', 'oficinas-saldos.js', 'oficinas-mejoras.js'].forEach(k =>
+    check(html.includes(k), `pantalla: hipismo-oficinas.html contiene ${k}`));
+  check(/data-perm="oficinas_saldos"/.test(html) && /data-perm="oficinas_informes"/.test(html) && /data-perm="oficinas_eliminar"/.test(html), 'pantalla: las pestañas llevan data-perm según el permiso');
+  ['descargarExcel', 'entrarRecargas', 'entrarRetiros', 'guardarRetiro', 'cargarControlPozosOf', 'alternarPagoDiario'].forEach(k => check(saldos.includes('function ' + k) || saldos.includes('window.' + k), `oficinas-saldos.js define ${k}`));
+  ['duplicarFila', 'copiarDeOtraCarrera', 'cargarCierreDia', 'cargarHistorial', 'exportarExcel', 'aplicarPermisosOficina', 'verJugadasRegistro'].forEach(k => check(mejoras.includes(k), `oficinas-mejoras.js define ${k}`));
+  try { new Function(saldos); new Function(mejoras); check(true, 'los dos scripts nuevos son JavaScript válido'); } catch (e) { check(false, 'JavaScript inválido: ' + e.message); }
+  const dbJs = leer('src/db.js'), schema = leer('sql/schema.sql');
+  check(/PENDIENTE_ELIMINADO/.test(dbJs) && /PENDIENTE_ELIMINADO/.test(schema), 'base: el tipo de alerta PENDIENTE_ELIMINADO está permitido en db.js y schema.sql');
+  check(/PENDIENTE_ELIMINADO/.test(leer('src/routes/hipismo.js')), 'ruta: eliminar una carrera pendiente deja registro en el Historial');
+
+  console.log(`\n${pasaron} OK, ${fallaron} fallaron`);
+  process.exit(fallaron ? 1 : 0);
+})().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

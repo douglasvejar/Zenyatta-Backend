@@ -198,6 +198,56 @@
   .informe .car-total.cero { background: #eef2ef; color: #3f5247; border-top-color: #94a3a0; }
   .informe .vacio { padding: 18px; text-align: center; color: #587264; }
   .informe .sub-linea { color: #587264; font-size: 12px; }
+  /* ---------- Recargas, Retiros y Control de Pozos (05-11-2026) ---------- */
+  .vacio { color: var(--text-dim); padding: 14px; font-size: 13px; }
+  .rec-cli { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px 14px; margin-bottom: 10px; }
+  .rec-cli-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rec-cli-nombre { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; }
+  .rec-cli-saldo { font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
+  .rec-cli-saldo.pos b { color: var(--ok); } .rec-cli-saldo.neg b { color: var(--danger); }
+  .rec-campos { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(130px, 1fr) auto minmax(130px, 0.8fr) auto; gap: 10px 12px; align-items: start; }
+  .rec-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rec-campo > .rec-rot { margin: 0; font-size: 10.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .rec-campo select, .rec-campo input[type="text"], .rec-campo input[type="number"] { height: 38px; }
+  .rec-campo .rec-otro { margin-top: 4px; }
+  .rec-foto { display: inline-flex; align-items: center; gap: 8px; height: 38px; }
+  .rec-foto .rec-foto-btn { margin: 0; height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; border-radius: 9px; font-family: 'Outfit', sans-serif; font-weight: 700; color: var(--accent-deep); }
+  .rec-foto .rec-foto-ok { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .rec-btn { height: 38px; padding: 0 20px; white-space: nowrap; width: 100%; }
+  @media (max-width: 820px) { .rec-campos { grid-template-columns: 1fr 1fr; } .rec-campo-btn, .rec-campo-metodo, .rec-campo-monto { grid-column: 1 / -1; } .rec-campo-btn .rec-rot { display: none; } }
+  .rec-linea { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+  .rec-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--card); border: 1px solid var(--border-light); color: var(--text-dim); white-space: nowrap; }
+  button.btn.btn-ver-imagen { padding: 3px 10px; font-size: 11.5px; border-radius: 999px; }
+  .mov-dia { font-family: 'Outfit', sans-serif; font-weight: 800; margin: 8px 0 6px; } .mov-dia span { font-weight: 600; color: var(--text-dim); }
+  .mov-fila { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 12px; margin-bottom: 5px; font-size: 13.5px; }
+  .mov-acc { display: flex; gap: 6px; }
+  .cpo-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0 12px; }
+  .cpo-kpi { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .cpo-kpi span { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; }
+  .cpo-kpi b { font-family: 'Outfit', sans-serif; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .cpo-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .cpo-filtros button { border: 1px solid var(--border-light); background: var(--card-2); color: var(--accent-deep); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: 'Outfit', sans-serif; }
+  .cpo-filtros button.activo { background: var(--accent-grass); color: #fff; border-color: var(--accent-grass); }
+  .cpo-filtros input { max-width: 220px; margin-left: auto; }
+  table.tabla-simple { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 760px; }
+  table.tabla-simple th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); padding: 7px 8px; border-bottom: 1px solid var(--card-border); }
+  table.tabla-simple td { padding: 7px 8px; border-bottom: 1px solid var(--card-border); }
+  table.tabla-simple .num, table.tabla-simple th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.tabla-simple .pos { color: var(--ok); } table.tabla-simple .neg { color: var(--danger); }
+  .semaforo { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #94a3a0; }
+  .semaforo.rojo { background: #dc2626; } .semaforo.amarillo { background: #f59e0b; } .semaforo.verde { background: #16a34a; }
+
+  /* ---------- Mejoras de Oficinas (05-11-2026) ---------- */
+  tr.fila-pozo input[data-c="jugador"] { border-color: var(--warning); background: var(--warn-bg); }
+  tr.fila-resaltada td { background: #fef9c3; transition: background .4s; }
+  .cd-estado { display: flex; flex-direction: column; gap: 2px; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .cd-estado b { font-family: 'Outfit', sans-serif; font-size: 17px; } .cd-estado span { font-size: 13px; }
+  .cd-estado.ok { background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.4); }
+  .cd-estado.mal { background: var(--warn-bg); color: #92400e; border: 1px solid rgba(217,119,6,0.4); }
+  .cd-estado.vacio { background: var(--card-2); color: var(--text-dim); border: 1px solid var(--card-border); }
+  .cd-avisos { margin: 0 0 12px; padding-left: 18px; list-style: disc; font-size: 13.5px; } .cd-avisos li { margin-bottom: 4px; } .rec-sep { margin: 0 6px; color: var(--text-dim); } .cd-avisos li.error { color: var(--danger); font-weight: 600; } .cd-avisos li.aviso { color: #92400e; }
+  .cd-hip { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .cd-hip-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -224,10 +274,14 @@
   <div class="tabs" role="tablist">
     <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
     <button type="button" class="tab" data-tab="registro" onclick="irATab('registro')">📚 Registro de Jugadas</button>
-    <button type="button" class="tab" data-tab="balance" onclick="irATab('balance')">💰 Balance General</button>
-    <button type="button" class="tab" data-tab="saldospozos" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
-    <button type="button" class="tab" data-tab="detalle" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
-    <button type="button" class="tab" data-tab="comision" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
+    <button type="button" class="tab" data-tab="cierredia" data-perm="oficinas_informes" onclick="irATab('cierredia')">📅 Cierre del Día</button>
+    <button type="button" class="tab" data-tab="balance" data-perm="oficinas_informes" onclick="irATab('balance')">💰 Balance General</button>
+    <button type="button" class="tab" data-tab="saldospozos" data-perm="oficinas_informes" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
+    <button type="button" class="tab" data-tab="recargas" data-perm="oficinas_saldos" onclick="irATab('recargas')">💵 Recargas y Retiros</button>
+    <button type="button" class="tab" data-tab="controlpozos" data-perm="oficinas_saldos" onclick="irATab('controlpozos')">🚦 Control de Pozos</button>
+    <button type="button" class="tab" data-tab="detalle" data-perm="oficinas_informes" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
+    <button type="button" class="tab" data-tab="comision" data-perm="oficinas_informes" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
+    <button type="button" class="tab" data-tab="historial" onclick="irATab('historial')">📜 Historial de Cambios</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
     <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
     <button type="button" class="tab sep" data-tab="configuracion" onclick="irATab('configuracion')">⚙️ Configuración</button>
@@ -240,7 +294,7 @@
         <div class="edicion-barra oculto" id="jEdicion">
           <span id="jEdicionTxt"></span><span class="espacio"></span>
           <button type="button" class="btn btn-sec btn-chico" onclick="volverAlRegistro()">← Volver al Registro</button>
-          <button type="button" class="btn btn-peligro btn-chico" onclick="eliminarCarreraEnEdicion()">🗑️ Eliminar carrera</button>
+          <button type="button" class="btn btn-peligro btn-chico" data-perm="oficinas_eliminar" onclick="eliminarCarreraEnEdicion()">🗑️ Eliminar carrera</button>
         </div>
         <div class="card">
           <h2>Cargar carrera</h2>
@@ -266,8 +320,10 @@
               <tbody id="jTbody"></tbody>
             </table>
           </div>
+          <div class="aviso info oculto" id="jPozoAviso"></div>
           <div class="acciones-tabla">
             <button type="button" class="btn btn-sec" onclick="agregarFila(true)">＋ Agregar fila</button>
+            <span style="display:inline-flex;gap:6px;align-items:center;" title="Trae a la tabla las jugadas de otra carrera del mismo día y hipódromo"><input type="number" min="1" id="jCopiarN" placeholder="N.º" style="width:72px;"><button type="button" class="btn btn-sec btn-chico" onclick="copiarDeOtraCarrera()">📋 Copiar de otra carrera</button></span>
             <button type="button" class="btn btn-sec btn-chico" onclick="limpiarTabla()">Limpiar tabla</button>
             <span class="espacio"></span>
             <button type="button" class="btn btn-sec" id="btnCalcular" onclick="calcularVistaPrevia()" disabled>Calcular (vista previa)</button>
@@ -320,9 +376,11 @@
       <h2>Balance General</h2>
       <p class="nota">El total de todos los clientes y de todos los ítems, y abajo la comisión de la oficina. Toca un cliente para ver su detalle.</p>
       <div id="balPeriodo"></div>
+      <div class="aviso info oculto" id="balPendientes"></div>
       <div class="barra-export">
         <button type="button" class="btn btn-sec" onclick="copiarImagenHD('balCaptura','balance_general')">📸 Copiar imagen HD</button>
         <button type="button" class="btn btn-sec" onclick="descargarPDF('balCaptura','balance_general','balToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="exportarExcel('balance')">📊 Descargar Excel</button>
         <span class="toast" id="balToast"></span>
       </div>
       <div class="informe" id="balCaptura"><div class="vacio">Cargando…</div></div>
@@ -335,6 +393,7 @@
       <h2>Saldos con Pozos</h2>
       <p class="nota">El saldo de cada cliente en el período más su pozo (si tiene). Sin pozo es su saldo real, y con pozo y sin jugadas es el pozo. Por defecto sale sin los % devueltos a clientes y avales; con la casilla de abajo se incluyen, igual que el Balance General.</p>
       <div id="spPeriodo"></div>
+      <div class="aviso info oculto" id="spPendientes"></div>
       <label class="sp-check"><input type="checkbox" id="spIncluirDev" onchange="pintarSaldosPozos()"> Incluir devolución %</label>
       <div class="barra-export">
         <button type="button" class="btn btn-sec" onclick="copiarImagenHD('spCaptura','saldos_con_pozos')">📸 Copiar imagen HD</button>
@@ -343,6 +402,99 @@
         <span class="toast" id="spToast"></span>
       </div>
       <div class="informe" id="spCaptura" style="max-width:520px; margin-left:auto; margin-right:auto;"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== RECARGAS Y RETIROS (05-11-2026) ===================== -->
+  <section class="panel" id="panel-recargas">
+    <div class="card">
+      <h2>Recargas y Retiros</h2>
+      <p class="nota">Lo mismo que en Hipismo Grupos Hípicos: una recarga le suma saldo al cliente de <b>pago diario</b> y deja <b>POZOS PAGO DIARIOS</b> en negativo por lo mismo; un retiro hace lo contrario. En cada una puedes anotar, si lo necesitas, el método de pago, la referencia y la foto del comprobante.</p>
+      <div class="subtabs">
+        <button type="button" class="subtab activa" data-sub="recargas" onclick="irASubSaldos('recargas')">💵 Recargas pago diario</button>
+        <button type="button" class="subtab" data-sub="retiros" onclick="irASubSaldos('retiros')">💸 Retiros</button>
+      </div>
+      <div class="subpanel activo" id="subpanel-recargas">
+        <div class="fila-campos" style="margin-bottom:12px;">
+          <div><label for="rcFecha">Fecha de las recargas</label><input type="date" id="rcFecha"></div>
+          <div style="grid-column: span 2;"><label for="rcNota">Nota (opcional)</label><input type="text" id="rcNota" placeholder="Ej: pago móvil" autocomplete="off"></div>
+        </div>
+        <div id="rcClientes"><div class="vacio">Cargando…</div></div>
+        <div class="msg" id="rcMsg"></div>
+        <h3 style="margin:18px 0 6px;font-size:16px;">Recargas registradas</h3>
+        <div id="rcLista"></div>
+      </div>
+      <div class="subpanel" id="subpanel-retiros">
+        <div class="fila-campos" style="margin-bottom:10px;">
+          <div><label for="rtBuscar">Buscar cliente</label><input type="text" id="rtBuscar" placeholder="Escribe para filtrar…" autocomplete="off" oninput="poblarSelectRetiro()"></div>
+          <div><label for="rtCliente">Cliente *</label><select id="rtCliente" onchange="pintarPistaRetiro()"></select></div>
+          <div><label for="rtMonto">Monto pagado *</label><input type="number" id="rtMonto" step="0.01" min="0" placeholder="Ej: 190,00" oninput="pintarPistaRetiro()"></div>
+          <div><label for="rtFecha">Fecha</label><input type="date" id="rtFecha"></div>
+        </div>
+        <div class="campo" style="margin-bottom:10px;"><label for="rtNota">Nota (opcional)</label><input type="text" id="rtNota" placeholder="Ej: pago por transferencia" autocomplete="off"></div>
+        <div id="rtPagoBloque"></div>
+        <div class="nota" id="rtPista" style="margin-top:10px;"></div>
+        <div class="acciones-tabla">
+          <button type="button" class="btn" id="rtGuardar" onclick="guardarRetiro()">+ Registrar retiro</button>
+          <button type="button" class="btn btn-sec" id="rtCancelar" style="display:none;" onclick="restablecerRetiro(); msg('rtMsg','')">Cancelar edición</button>
+        </div>
+        <div class="msg" id="rtMsg"></div>
+        <h3 style="margin:18px 0 6px;font-size:16px;">Retiros registrados</h3>
+        <div id="rtLista"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CONTROL DE POZOS (05-11-2026) ===================== -->
+  <section class="panel" id="panel-controlpozos">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2>Control de Pozos y Pago Diario</h2><span class="espacio"></span>
+        <button type="button" class="btn btn-sec btn-chico" onclick="cargarControlPozosOf()">🔄 Actualizar</button>
+        <button type="button" class="btn btn-sec btn-chico" onclick="exportarControlPozosExcel()">📊 Descargar Excel</button></div>
+      <p class="nota">Una fila por cliente con pozo o de pago diario: cuánto se le colocó o recargó, cuánto jugó y ganó o perdió esta semana, cuánto tiene en juego y cuánto le queda disponible. 🔴 menos del 15% · 🟡 en medio · 🟢 80% o más.</p>
+      <div class="cpo-kpis" id="cpoResumen"></div>
+      <div class="cpo-filtros" id="cpoFiltros">
+        <button type="button" class="activo" onclick="cpoFiltrar('todos', this)">Todos</button>
+        <button type="button" onclick="cpoFiltrar('rojo', this)">🔴 Rojos</button>
+        <button type="button" onclick="cpoFiltrar('amarillo', this)">🟡 Amarillos</button>
+        <button type="button" onclick="cpoFiltrar('verde', this)">🟢 Verdes</button>
+        <button type="button" onclick="cpoFiltrar('gris', this)">Sin saldo</button>
+        <button type="button" onclick="cpoFiltrar('pago_diario', this)">💵 Pago diario</button>
+        <input type="text" placeholder="Buscar cliente…" oninput="cpoBuscar(this.value)" autocomplete="off">
+      </div>
+      <div id="cpoTabla"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== CIERRE DEL DÍA (05-11-2026) ===================== -->
+  <section class="panel" id="panel-cierredia">
+    <div class="card">
+      <h2>Cierre del Día</h2>
+      <p class="nota">Revisa que el día esté completo: qué carreras están calculadas, cuáles siguen sin llegada, si falta alguna carrera por cargar y si el saldo de todos los clientes más la comisión de la oficina da 0.</p>
+      <div class="fila-campos">
+        <div><label for="cdFecha">Día</label><input type="date" id="cdFecha" onchange="cargarCierreDia()"></div>
+        <div><label>&nbsp;</label><span style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn btn-sec" onclick="moverDiaCierre(-1)">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaCierre(1)">Siguiente ›</button><button type="button" class="btn btn-sec" onclick="$('cdFecha').value = fechaHoyVenezuela(); cargarCierreDia()">Hoy</button></span></div>
+        <div><label>&nbsp;</label><span style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn btn-sec" onclick="copiarCierreDiaTexto()">📋 Copiar resumen</button><button type="button" class="btn btn-sec" onclick="exportarExcel('cierredia')">📊 Descargar Excel</button></span></div>
+      </div>
+      <div class="msg" id="cdMsg"></div>
+      <div id="cdContenido" style="margin-top:12px;"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== HISTORIAL DE CAMBIOS (05-11-2026) ===================== -->
+  <section class="panel" id="panel-historial">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2>Historial de Cambios</h2><span class="espacio"></span>
+        <button type="button" class="btn btn-sec btn-chico" onclick="cargarHistorial()">🔄 Actualizar</button>
+        <button type="button" class="btn btn-sec btn-chico" onclick="exportarExcel('historial')">📊 Descargar Excel</button></div>
+      <p class="nota">Quién editó o eliminó una carrera (o una jugada), cuándo y qué pasó, más los avisos de pozo bajo. Se registra solo: nadie tiene que confirmarlo.</p>
+      <div class="fila-campos" style="margin-bottom:10px;">
+        <div><label for="hiTipo">Qué mostrar</label><select id="hiTipo" onchange="pintarHistorial()"><option value="todo">Todo</option><option value="ediciones">Ediciones</option><option value="eliminaciones">Eliminaciones</option><option value="pozos">Pozos</option><option value="cuadre">Cuadre</option></select></div>
+        <div><label for="hiDesde">Desde</label><input type="date" id="hiDesde" onchange="pintarHistorial()"></div>
+        <div><label for="hiHasta">Hasta</label><input type="date" id="hiHasta" onchange="pintarHistorial()"></div>
+        <div><label for="hiBuscar">Buscar (usuario, hipódromo…)</label><input type="text" id="hiBuscar" oninput="pintarHistorial()" autocomplete="off"></div>
+      </div>
+      <div id="hiTabla"><div class="vacio">Cargando…</div></div>
     </div>
   </section>
 
@@ -358,6 +510,7 @@
       <div class="barra-export">
         <button type="button" class="btn btn-sec" onclick="copiarImagenHD('detCaptura','detalle_cliente')">📸 Copiar imagen HD</button>
         <button type="button" class="btn btn-sec" onclick="descargarPDF('detCaptura','detalle_cliente','detToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="exportarExcel('detalle')">📊 Descargar Excel</button>
         <span class="toast" id="detToast"></span>
       </div>
       <div class="informe" id="detCaptura"><div class="vacio">Elige un cliente para ver su detalle.</div></div>
@@ -373,6 +526,7 @@
       <div class="barra-export">
         <button type="button" class="btn btn-sec" onclick="copiarImagenHD('comCaptura','comision_por_carrera')">📸 Copiar imagen HD</button>
         <button type="button" class="btn btn-sec" onclick="descargarPDF('comCaptura','comision_por_carrera','comToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="exportarExcel('comision')">📊 Descargar Excel</button>
         <span class="toast" id="comToast"></span>
       </div>
       <div class="informe" id="comCaptura"><div class="vacio">Cargando…</div></div>
@@ -389,6 +543,10 @@
         <div class="fila-campos campo">
           <div><label for="cTelefono">Teléfono (opcional)</label><input type="text" id="cTelefono" autocomplete="off"></div>
           <div><label for="cNotas">Notas (opcional)</label><input type="text" id="cNotas" autocomplete="off"></div>
+        </div>
+
+        <div class="pregunta">
+          <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;font-weight:700;margin:0;cursor:pointer;"><input type="checkbox" id="cPagoDiario" style="width:auto;"> 💵 Cliente de pago diario <span style="font-weight:500;color:var(--text-dim);font-size:12.5px;">(se le recarga saldo en "Recargas y Retiros")</span></label>
         </div>
 
         <div class="pregunta">
@@ -542,6 +700,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="oficinas-informes.js"></script>
+<script src="oficinas-saldos.js"></script>
 <script>
 // ------------------------------------------------------------------
 // Sesión: misma que Hipismo Grupos Hípicos y Deportes (mismas claves de localStorage). Esta página no tiene
@@ -627,6 +786,8 @@ function irATab(t) {
   if (t === 'hipodromos') cargarHipodromos();
   if (t === 'balance') cargarBalance();
   if (t === 'saldospozos') cargarSaldosPozos();
+  if (t === 'recargas') entrarRecargas();
+  if (t === 'controlpozos') cargarControlPozosOf();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();
 }
@@ -638,8 +799,8 @@ function irATab(t) {
 let CONFIG = { planoResuelto: false };
 const nombreHip = n => window.OficinasInformes.nombreHipodromo(n);
 function irASubConfig(sub) {
-  document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('activa', b.dataset.sub === sub));
-  document.querySelectorAll('.subpanel').forEach(p => p.classList.toggle('activo', p.id === 'sub-' + sub));
+  document.querySelectorAll('#panel-configuracion .subtab').forEach(b => b.classList.toggle('activa', b.dataset.sub === sub));
+  document.querySelectorAll('#panel-configuracion .subpanel').forEach(p => p.classList.toggle('activo', p.id === 'sub-' + sub));
 }
 function aplicarConfigPlano() {
   $('cfgPlano').checked = !!CONFIG.planoResuelto;
@@ -725,7 +886,7 @@ function pintarTabla(erroresPorFila) {
       <td style="width:110px;"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"></td>
       <td style="width:100px;"><input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off"></td>
       <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
-      <td class="x"><button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
+      <td class="x" style="width:128px;white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Duplicar fila (Ctrl+D)" onclick="duplicarFila(${i})">⧉</button> <button type="button" class="btn btn-sec btn-chico" title="Contraparte: la misma jugada del otro lado (Jugó ⇄ Dio)" onclick="duplicarContraparte(${i})">⇄</button> <button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
   if (typeof marcarFilasNoExisten === 'function') marcarFilasNoExisten();
 }
@@ -1143,13 +1304,13 @@ async function guardarCliente() {
   }
   try {
     await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
-      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial,
+      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked,
       comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje
     }) });
   } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
   $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
-  $('cPozo').value = ''; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
+  $('cPozo').value = ''; $('cPagoDiario').checked = false; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
   document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
   document.querySelector('input[name="cGenera"][value="no"]').checked = true;
   document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
@@ -1205,7 +1366,7 @@ function pintarClientes() {
     const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
     const tienePozo = c.tipo_cuenta === 'avalado';
     const pozo = `<span style="white-space:nowrap;">${tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>' : '<span style="color:var(--text-dim)">—</span>'} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button></span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}</td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 
@@ -1615,8 +1776,8 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
 (async function iniciar() {
   if (!TOKEN || !GRUPO) return;
   $('jFecha').value = fechaHoyVenezuela();
-  iniciarPeriodo('bal', cargarBalance);
-  iniciarPeriodo('sp', cargarSaldosPozos);
+  iniciarPeriodo('bal', () => cargarBalance());
+  iniciarPeriodo('sp', () => cargarSaldosPozos());
   iniciarPeriodo('det', cargarListaDetalle);
   iniciarPeriodo('com', cargarComision);
   limpiarTabla();
@@ -1625,5 +1786,6 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   actualizarPreguntasCliente();
 })();
 </script>
+<script src="oficinas-mejoras.js"></script>
 </body>
 </html>
