@@ -446,6 +446,9 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/<script src="buscador-lista\.js"><\/script>/.test(html) && /<script src="buscador-lista\.js"><\/script>/.test(htmlMock) && /<select id="jHipodromo" data-buscar/.test(html) && /<select id="rHipodromo" data-buscar/.test(html) && idsMock.every(i => new RegExp('<select id="' + i + '" data-buscar').test(htmlMock)), '9i) las listas de hipódromos de Oficinas y de Hipismo/Grupos usan el buscador');
   check(/👤 Crear Cliente u Oficina<\/button>/.test(html) && /<h2>Crear cliente u oficina<\/h2>/.test(html), '9j) la pestaña y el título se llaman "Crear cliente u oficina"');
   check(/function asegurarFilaLibre/.test(html) && /function ultimaFilaCompleta/.test(html) && /alEscribirFila\(t\);\n  asegurarFilaLibre\(\);/.test(html), '10a) al completar la última fila (jugador y monto) se crea sola una fila nueva, de a una');
+  const portal = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-cliente-portal.html'), 'utf8');
+  check(/\.informe \.inf-logo-fondo \{[^}]*z-index: 2;/.test(html) && /LOGO_LUDOX_MARCA/.test(html), '11a) la marca de agua de los informes va ENCIMA del contenido (tenue) y usa el logo de Ludox si el grupo no tiene uno');
+  check(/\.marca-agua \{[^}]*pointer-events: none/.test(portal) && /id="marcaAgua"/.test(portal) && /marca\.style\.backgroundImage/.test(portal), '11b) el link del cliente también lleva la marca de agua (sin capturar clics)');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);

@@ -169,9 +169,12 @@
   .toast.ok { color: var(--ok); } .toast.error { color: var(--danger); }
   /* La tarjeta que se captura (imagen HD / PDF): fondo blanco y colores fijos, para que salga igual de clara siempre. */
   .informe { background: #ffffff; color: #2c2a26; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; position: relative; overflow: hidden; }
-  /* Logo del grupo como marca de agua de fondo (Balance General, Detallado por Cliente y Comisión por Carrera): va en una capa
-     aparte detrás del contenido; las filas de totales son semitransparentes para que se note. En el PDF cada página lo repite. */
-  .informe .inf-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.14; pointer-events: none; z-index: 0; }
+  /* Marca de agua: el logo del grupo (o el de Ludox si el grupo no subió uno), centrado y muy tenue. 06-11-2026 (a pedido del
+     usuario: "se debe ver el logo de fondo como marca de agua, que se aprecie pero no estorbe"): antes iba DETRÁS del contenido y
+     las cajas de color de cada carrera lo tapaban casi todo; ahora va en una capa ENCIMA, con poca opacidad y sin capturar clics,
+     así se ve sobre cualquier fila y el texto sigue leyéndose. Aplica a Balance General, Detallado por Cliente, Saldos con Pozos
+     y Comisión por Carrera, y sale igual en la imagen HD (la capa va dentro de la tarjeta) y, repetida en cada hoja, en el PDF. */
+  .informe .inf-logo-fondo { position: absolute; inset: 6% 10%; background-repeat: no-repeat; background-position: center; background-size: contain; opacity: 0.09; pointer-events: none; z-index: 2; }
   .informe .inf-contenido { position: relative; z-index: 1; }
   .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #3f8a85; padding-bottom: 10px; margin-bottom: 12px; }
   .informe .inf-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; }
@@ -1898,7 +1901,9 @@ function queryPeriodo(prefijo) {
   return p.personalizado ? `desde=${encodeURIComponent(p.desde)}&hasta=${encodeURIComponent(p.hasta)}` : `semana=${p.semana}`;
 }
 // Pone el contenido de un informe con el logo del grupo como marca de agua detrás (si el grupo tiene logo).
-function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : null; }
+// Sin logo propio, la marca de agua es el isotipo de Ludox (así los informes nunca salen sin ella).
+const LOGO_LUDOX_MARCA = '/img/logo-ludox-icono.png';
+function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : LOGO_LUDOX_MARCA; }
 function ponerInforme(idCaptura, html) {
   const logo = urlLogoGrupo();
   $(idCaptura).innerHTML = `<div class="inf-logo-fondo"${logo ? ` style="background-image:url('${logo}')"` : ''}></div><div class="inf-contenido">${html}</div>`;
@@ -2202,10 +2207,6 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
       const pg = document.createElement('canvas'); pg.width = PW; pg.height = PH;
       const ctx = pg.getContext('2d');
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PW, PH);
-      if (logo && logo.naturalWidth) {                          // marca de agua del grupo, igual en todas las páginas
-        const w = Math.min(PW * 0.62, PH * 0.5 * logo.naturalWidth / logo.naturalHeight), h = w * logo.naturalHeight / logo.naturalWidth;
-        ctx.globalAlpha = 0.14; ctx.drawImage(logo, (PW - w) / 2, (PH - h) / 2, w, h); ctx.globalAlpha = 1;
-      }
       let dy = mx;
       if (i > 0 && cabPx) { ctx.drawImage(canvas, 0, 0, canvas.width, cabPx, mx, dy, canvas.width, cabPx); dy += cabPx; }
       if (i > 0 && ctxLista.length) {
@@ -2213,6 +2214,10 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
         dy += Math.round(6 * f);
       }
       ctx.drawImage(canvas, 0, y0, canvas.width, y1 - y0, mx, dy, canvas.width, y1 - y0);
+      if (logo && logo.naturalWidth) {                          // marca de agua del grupo ENCIMA del contenido, igual en todas las páginas
+        const w = Math.min(PW * 0.62, PH * 0.5 * logo.naturalWidth / logo.naturalHeight), h = w * logo.naturalHeight / logo.naturalWidth;
+        ctx.globalAlpha = 0.09; ctx.drawImage(logo, (PW - w) / 2, (PH - h) / 2, w, h); ctx.globalAlpha = 1;
+      }
       ctx.fillStyle = '#766f64'; ctx.textAlign = 'center'; ctx.font = `${Math.round(PW * 0.017)}px Arial, sans-serif`;
       ctx.fillText(`${nombreGrupo} — ${tituloInf} — Página ${i + 1} de ${tramos.length}`, PW / 2, PH - Math.round(mx * 0.7));
       if (i > 0) pdf.addPage();
