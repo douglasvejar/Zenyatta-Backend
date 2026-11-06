@@ -236,8 +236,18 @@
   $('btnAnt').addEventListener('click', () => cargar('anterior'));
   $('btnAct').addEventListener('click', () => cargar('actual'));
 
-  async function cargar(s) {
+  // Respuesta que dejó la página vieja del link al redirigir (vale 1 minuto, una sola vez y solo para este mismo token y semana).
+  function tomarPrecarga(s) {
+    try {
+      const x = JSON.parse(sessionStorage.getItem('oficinas_portal_precarga') || 'null');
+      sessionStorage.removeItem('oficinas_portal_precarga');
+      return x && x.token === TOKEN && x.semana === s && x.hasta > Date.now() ? x.data : null;
+    } catch (e) { return null; }
+  }
+  async function cargar(s, usarPrecarga) {
     semana = s; $('carga').hidden = false; $('contenido').hidden = true;
+    const previa = usarPrecarga ? tomarPrecarga(s) : null;
+    if (previa) { semana = previa.semana; return pintar(previa); }
     try {
       const r = await fetch(`/api/hipismo-cliente/${encodeURIComponent(TOKEN)}?semana=${semana}`);
       const data = await r.json();
@@ -246,6 +256,6 @@
     } catch (e) { mostrarError('No se pudo conectar con el servidor. Prueba de nuevo en un momento.'); }
   }
   if (!TOKEN) mostrarError('Link inválido — falta el token. Pídele al grupo que te comparta el link correcto.');
-  else cargar(semana);
+  else cargar(semana, true);
 })();
 </script></body></html>

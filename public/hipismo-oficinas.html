@@ -1974,10 +1974,14 @@ function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/im
 // responde 404 si no tiene) y se actualiza la sesión de esta pestaña; así no hace falta cerrar sesión y volver a entrar.
 async function refrescarLogoGrupo() {
   if (!GRUPO || !GRUPO.id) return;
+  // Poco consumo de la base (Supabase): como mucho UNA consulta cada 10 minutos por pestaña y con la caché normal del navegador
+  // (el servidor ya responde con Cache-Control de 5 min y ETag), no cada vez que se abre o recarga la página.
+  const CLAVE = 'zenyatta_logo_chequeo_' + GRUPO.id;
+  try { const ult = parseInt(sessionStorage.getItem(CLAVE), 10); if (ult && Date.now() - ult < 10 * 60 * 1000) return; sessionStorage.setItem(CLAVE, String(Date.now())); } catch (e) { /* sin sessionStorage: se consulta igual */ }
   const url = `/api/imagenes/logo-grupo/${GRUPO.id}`;
   let tiene = null;
   try {
-    const r = await fetch(url, { cache: 'no-cache' });
+    const r = await fetch(url);
     if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) tiene = true;
     else if (r.status === 404) tiene = false;
   } catch (e) { return; }

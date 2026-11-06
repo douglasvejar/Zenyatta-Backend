@@ -867,6 +867,8 @@
       }
       // Grupos de Hipismo Oficinas: el link se ve en la página nueva (días y carreras plegables, 06-11-2026). Los links ya enviados siguen siendo estos.
       if (data.formatoOficinas) {
+        // Se pasa la respuesta a la página nueva para que NO vuelva a pedirla (cada pedido del link consulta varias veces la base de datos).
+        try { sessionStorage.setItem('oficinas_portal_precarga', JSON.stringify({ token: TOKEN, semana: data.semana, hasta: Date.now() + 60 * 1000, data })); } catch (e) { /* sin sessionStorage: la página nueva la pide */ }
         location.replace('oficinas-cliente-portal.html?token=' + encodeURIComponent(TOKEN) + '&semana=' + encodeURIComponent(data.semana));
         return;
       }
