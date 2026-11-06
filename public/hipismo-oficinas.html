@@ -148,6 +148,17 @@
   .campo { margin-top: 12px; }
   .pregunta { margin-top: 16px; padding: 12px; background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; }
   .pregunta .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  /* Tipo de cliente (06-11-2026): Tercio (cliente normal) u Oficina (lleva % de devolución), con icono. */
+  .tipo-sel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .tipo-op { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 10px 12px; border: 1.5px solid var(--border-light); border-radius: 11px; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--text-dim); background: #fff; text-transform: none; letter-spacing: 0; }
+  .tipo-op input { position: absolute; opacity: 0; pointer-events: none; width: 0; }
+  .tipo-op.on { border-color: var(--accent-grass); background: #e6f2f0; color: var(--accent-deep); }
+  .tipo-op:focus-within { outline: 2px solid var(--accent-grass); outline-offset: 2px; }
+  .ico-tipo { width: 20px; height: 20px; flex: none; }
+  .tag-tipo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; margin-left: 6px; vertical-align: 1px; }
+  .tag-tipo .ico-tipo { width: 13px; height: 13px; }
+  .tag-tipo.of { background: #dff0ee; color: #2f6764; } .tag-tipo.te { background: #f3e8cf; color: #8a5a12; }
+  .nota-tercio { margin-top: 12px; border: 1px dashed var(--border-light); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; color: var(--text-dim); text-align: center; }
   .si-no { display: flex; gap: 8px; }
   .si-no label { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 14px; border: 1px solid var(--border-light); border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--text); background: #fff; }
   .si-no input { width: auto; }
@@ -236,6 +247,7 @@
   .informe .car-caja table td.num { font-weight: 800; font-size: 14px; }
   .informe .lin-otra { color: #5a554c; font-size: 13px; }
   .informe .lin-otra::before { content: '•'; color: #94a3a0; margin-right: 6px; }
+  .informe .lin-dev { display: inline-block; background: #e6f2f0; color: #2f6764; border: 1px dashed #3f8a85; border-radius: 8px; padding: 3px 9px; font-weight: 700; font-size: 12.5px; }
   .informe .jug { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
   .informe .jug-rol { font-size: 11px; font-weight: 800; letter-spacing: .3px; padding: 2px 9px; border-radius: 999px; line-height: 1.3; }
   .informe .jug-rol.jugo { background: #dcfce7; color: #166534; border: 1px solid #a7e3bc; }
@@ -705,11 +717,20 @@
         </div>
 
         <div class="pregunta">
+          <div class="q">Tipo</div>
+          <div class="tipo-sel" id="cTipoSel">
+            <label class="tipo-op"><input type="radio" name="cTipo" value="tercio" checked onchange="actualizarPreguntasCliente()"><span data-ico="tercio"></span>Tercio</label>
+            <label class="tipo-op"><input type="radio" name="cTipo" value="oficina" onchange="actualizarPreguntasCliente()"><span data-ico="oficina"></span>Oficina</label>
+          </div>
+        </div>
+
+        <div class="pregunta">
           <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;font-weight:700;margin:0;cursor:pointer;"><input type="checkbox" id="cPagoDiario" style="width:auto;"> 💵 Cliente de pago diario <span style="font-weight:500;color:var(--text-dim);font-size:12.5px;">(se le recarga saldo en "Recargas y Retiros")</span></label>
         </div>
         <div id="cSocioBloque"></div>
 
-        <div class="pregunta">
+        <div class="nota-tercio oculto" id="cTercioNota">Las preguntas del % de devolución solo aplican a las oficinas.</div>
+        <div class="pregunta" id="cDevuelvePregunta">
           <div class="q">¿Se le devuelve un % a este cliente?</div>
           <div class="si-no">
             <label><input type="radio" name="cDevuelve" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
@@ -1686,9 +1707,22 @@ async function eliminarCarreraEnEdicion() {
 // CREAR CLIENTE
 // ------------------------------------------------------------------
 function valorRadio(nombre) { const r = document.querySelector(`input[name="${nombre}"]:checked`); return r ? r.value : ''; }
+const ICO_TIPO = {
+  tercio: '<svg class="ico-tipo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
+  oficina: '<svg class="ico-tipo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-4h6v4M8 7h2M14 7h2M8 11h2M14 11h2"/></svg>'
+};
+// Tipo de un cliente: el guardado en la base; si la base todavía no tiene la columna, se deduce del % de devolución.
+function tipoDeCliente(c) { return c && (c.tipo_cliente === 'oficina' || c.tipo_cliente === 'tercio') ? c.tipo_cliente : (Number(c && c.comision_propia) > 0 ? 'oficina' : 'tercio'); }
+function etiquetaTipo(c) { const t = tipoDeCliente(c); return `<span class="tag-tipo ${t === 'oficina' ? 'of' : 'te'}">${ICO_TIPO[t]}${t === 'oficina' ? 'Oficina' : 'Tercio'}</span>`; }
 function actualizarPreguntasCliente() {
-  $('cDevuelveBloque').classList.toggle('oculto', valorRadio('cDevuelve') !== 'si');
-  $('cFichaWrap').classList.toggle('oculto', !(valorRadio('cDevuelve') === 'si' && valorRadio('cDonde') === 'ficha'));
+  document.querySelectorAll('#cTipoSel [data-ico]').forEach(e => { if (!e.firstChild) e.innerHTML = ICO_TIPO[e.dataset.ico]; });
+  const esOficina = valorRadio('cTipo') === 'oficina';
+  document.querySelectorAll('#cTipoSel .tipo-op').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+  $('cDevuelvePregunta').classList.toggle('oculto', !esOficina);
+  $('cTercioNota').classList.toggle('oculto', esOficina);
+  const devuelve = esOficina && valorRadio('cDevuelve') === 'si';
+  $('cDevuelveBloque').classList.toggle('oculto', !devuelve);
+  $('cFichaWrap').classList.toggle('oculto', !(devuelve && valorRadio('cDonde') === 'ficha'));
   const genera = valorRadio('cGenera') === 'si';
   $('cGeneraBloque').classList.toggle('oculto', !genera);
   $('cPozoBloque').classList.toggle('oculto', valorRadio('cPozoSi') !== 'si');
@@ -1719,7 +1753,8 @@ async function guardarCliente() {
     if (!(pozoInicial > 0)) return msg('cMsg', 'Escribe el monto del pozo, o marca "No".', false);
   }
   let comisionPropia = 0, incluirPorcentajeEnJugadas = false, comisionPropiaFicha = '';
-  if (valorRadio('cDevuelve') === 'si') {
+  const tipoCliente = valorRadio('cTipo') === 'oficina' ? 'oficina' : 'tercio';
+  if (tipoCliente === 'oficina' && valorRadio('cDevuelve') === 'si') {
     comisionPropia = parseFloat(String($('cPorcentaje').value).replace(',', '.')) || 0;
     if (!(comisionPropia > 0)) return msg('cMsg', 'Escribe cuánto % se le devuelve.', false);
     if (valorRadio('cDonde') === 'jugadas') incluirPorcentajeEnJugadas = true;
@@ -1754,17 +1789,25 @@ async function guardarCliente() {
   try {
     await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
       nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked, ...($('cSocio') ? { socioId: $('cSocio').value || null } : {}),
-      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje
+      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje, tipoCliente
     }) });
   } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
   $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
   $('cPozo').value = ''; $('cPagoDiario').checked = false; if ($('cSocio')) $('cSocio').value = ''; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
   document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
+  document.querySelector('input[name="cTipo"][value="tercio"]').checked = true;
   document.querySelector('input[name="cGenera"][value="no"]').checked = true;
   document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
   $('cAvales').innerHTML = '';
   actualizarPreguntasCliente();
+  await cargarClientes();
+}
+async function cambiarTipoCliente(id, tipo) {
+  const c = CLIENTES.find(x => x.id === id); if (!c) return;
+  if (!confirm(`¿Cambiar a ${nombreBonito(c.nombre)} a ${tipo === 'oficina' ? 'OFICINA' : 'TERCIO'}?`)) return;
+  try { await api('/api/hipismo/clientes/' + encodeURIComponent(id) + '/tipo-cliente', { method: 'PUT', body: JSON.stringify({ tipoCliente: tipo }) }); }
+  catch (e) { return alert('No se pudo cambiar: ' + e.message); }
   await cargarClientes();
 }
 // Pozo de un cliente (11-10-2026): se asigna al crearlo o desde la lista ("Dar pozo" / "± Pozo"). Los ajustes quedan con motivo e historial
@@ -1815,7 +1858,7 @@ function pintarClientes() {
     const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
     const tienePozo = c.tipo_cuenta === 'avalado';
     const pozo = `<span style="white-space:nowrap;">${tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>' : '<span style="color:var(--text-dim)">—</span>'} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button></span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div>${tipoDeCliente(c) === 'oficina' && pct > 0 ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> `}<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 
@@ -2030,7 +2073,7 @@ async function cargarDetalle() {
   if (!nombre) { caja.innerHTML = '<div class="vacio">Elige un cliente para ver su detalle.</div>'; return; }
   caja.innerHTML = '<div class="vacio">Cargando…</div>';
   try {
-    const d = await api('/api/hipismo/clientes/' + encodeURIComponent(nombre) + '/detalle-semana?' + queryPeriodo('det'));
+    const d = await api('/api/hipismo/clientes/' + encodeURIComponent(nombre) + '/detalle-semana?formato=oficinas&' + queryPeriodo('det'));
     pintarDetalle(nombre, d);
   } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
 }
@@ -2040,7 +2083,7 @@ function pintarDetalle(nombre, resp) {
   if (!det.dias.length) html += '<div class="vacio">Este cliente no tiene movimientos en este período.</div>';
   const signoDe = n => INF.r2(n) > 0 ? 'gana' : (INF.r2(n) < 0 ? 'pierde' : 'cero');
   // Una jugada normal se pinta con chip Jugó/Dio + modalidad + caballos de colores; el resto (traspasos, % devuelto, cargas) va como texto.
-  const celdaLinea = l => l.jugada ? INF.jugadaHTML(l.jugada) : `<span class="lin-otra">${esc(l.texto)}</span>`;
+  const celdaLinea = l => l.jugada ? INF.jugadaHTML(l.jugada) : (l.tipo === 'devolucion-propia' ? `<span class="lin-dev">↩ ${esc(l.texto)}</span>` : `<span class="lin-otra">${esc(l.texto)}</span>`);
   det.dias.forEach(dia => {
     html += `<div class="inf-dia det-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span class="dia-monto ${signoDe(dia.total)}">${INF.dineroConSigno(dia.total)}</span></div>`;
     dia.hipodromos.forEach(h => {

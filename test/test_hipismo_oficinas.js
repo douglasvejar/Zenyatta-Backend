@@ -455,6 +455,40 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const claro = new Uint8ClampedArray([255, 255, 255, 255, 250, 250, 250, 200, 0, 0, 0, 0]), oscuro = new Uint8ClampedArray([20, 20, 20, 255, 30, 60, 90, 255]), color = new Uint8ClampedArray([200, 40, 40, 255, 40, 80, 200, 255]);
   check(ctxMA.window.MarcaAgua.esClaro(claro) && !ctxMA.window.MarcaAgua.esClaro(oscuro) && !ctxMA.window.MarcaAgua.esClaro(color), '11d) detecta si el logo es claro (blanco) para oscurecerlo; los oscuros o de colores quedan como están');
 
+  // ---- 12) Tipo de cliente (Tercio / Oficina) y link de Oficinas (06-11-2026) ----
+  const rutaJug = leer('src/routes/jugadores.js'), rutaHip = leer('src/routes/hipismo.js'), dbjs = leer('src/db.js');
+  check(/name="cTipo" value="tercio" checked/.test(html) && /name="cTipo" value="oficina"/.test(html) && /id="cDevuelvePregunta"/.test(html) && !/cliente normal|lleva % de devolución/.test(html.slice(html.indexOf('id="cTipoSel"'), html.indexOf('id="cTipoSel"') + 700)),
+    '12a) el formulario tiene el selector Tipo (Tercio por defecto / Oficina), sin textos debajo de cada opción');
+  check(/ICO_TIPO/.test(html) && /<circle cx="12" cy="8" r="4"\/>/.test(html) && /<rect x="4" y="3" width="16" height="18"/.test(html), '12b) cada tipo lleva su icono (persona = Tercio, edificio = Oficina)');
+  check(/\$\('cDevuelvePregunta'\)\.classList\.toggle\('oculto', !esOficina\)/.test(html) && /if \(tipoCliente === 'oficina' && valorRadio\('cDevuelve'\) === 'si'\)/.test(html) && /avalesPorcentaje, tipoCliente/.test(html),
+    '12c) un Tercio no ve ni envía las preguntas del % de devolución; el tipo viaja al servidor');
+  check(/etiquetaTipo\(c\)/.test(html) && /cambiarTipoCliente\(/.test(html) && /\/tipo-cliente'/.test(html), '12d) la lista muestra la etiqueta del tipo y permite cambiarlo');
+  check(/tipo_cliente text not null default 'tercio'/.test(dbjs) && /update jugadores set tipo_cliente = 'oficina' where coalesce\(comision_propia, 0\) > 0/.test(dbjs) && /if not exists \(select 1 from information_schema\.columns where table_name = 'jugadores' and column_name = 'tipo_cliente'\)/.test(dbjs),
+    '12e) la columna se crea sola y clasifica UNA sola vez a los existentes (con % = oficina, sin % = tercio)');
+  const sqlPend = leer('sql/pendiente-06-11-2026.sql'), sqlTodo = leer('sql/schema.sql');
+  check(sqlPend.includes('tipo_cliente') && sqlTodo.includes(sqlPend.trim()), '12f) el SQL está en el archivo pendiente y al final de schema.sql (completo)');
+  check(/resolverTipoCliente/.test(rutaJug) && /tipoCliente === 'tercio'\) \{ comisionPropia = 0/.test(rutaJug) && /guardarTipoCliente\(jugador\.id, req\.grupoId, tipoCliente\)/.test(rutaJug), '12g) crear cliente guarda el tipo (aparte, tolera la columna ausente) y un Tercio no guarda %');
+  check(/router\.put\('\/clientes\/:id\/tipo-cliente'/.test(rutaHip) && /todavía tiene % de devolución/.test(rutaHip), '12h) la ruta de cambio de tipo rechaza pasar a Tercio a quien aún tiene %');
+  check(/formato=oficinas&/.test(html) && /devolucion-propia/.test(html) && /\.lin-dev/.test(html), '12i) el Detallado de Oficinas pide el % dentro de la carrera y lo pinta');
+  const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
+  const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
+    { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },
+    { carrera: 2, tipo: 'devolucion-propia', porcentaje: 5, monto: 80, resultado: 4 }] }] }], resumen: { totalSemana: -76 } });
+  const car2 = det.dias[0].hipodromos[0].carreras[0];
+  check(car2.lineas.length === 2 && car2.total === -76 && det.totalPeriodo === -76 && car2.lineas[1].jugada === null && /% devuelto 5% de 80,00/.test(car2.lineas[1].texto.replace(/\s/g, ' ')),
+    '12j) el Detallado agrupa el % devuelto dentro de su carrera y la carrera lo incluye en su total');
+  const portalOf = leer('public/oficinas-cliente-portal.html'), portalViejo = leer('public/hipismo-cliente-portal.html');
+  check(/class="dia-tit" role="button"/.test(portalOf) && /class="car-cab" role="button"/.test(portalOf) && /di === ultimo \? '' : ' cerrado'/.test(portalOf) && /car-caja cerrada/.test(portalOf) && /id="btnTodo"/.test(portalOf),
+    '12k) el link de Oficinas tiene días y carreras plegables (último día abierto, resto cerrado) y un botón Abrir/Cerrar todo');
+  check(/oficinas-informes\.js/.test(portalOf) && /marca-agua\.js/.test(portalOf) && /\/api\/hipismo-cliente\//.test(portalOf) && /MarcaAgua\.preparar\(data\.grupo\.logoUrl/.test(portalOf), '12l) el link de Oficinas usa el mismo servidor/token, los helpers de informes y la marca de agua');
+  check(/if \(data\.formatoOficinas\) \{\s*location\.replace\('oficinas-cliente-portal\.html\?token='/.test(portalViejo), '12m) el link viejo redirige a la página nueva en grupos de Oficinas (los links ya enviados siguen sirviendo)');
+  const servicio = leer('src/services/hipismoResumenCliente.js');
+  check(/formatoOficinas: devolucionEnCarreraPorDefecto\(grupo\)/.test(servicio) && /modulo_hipismo_oficinas_habilitado && !grupo\.modulo_hipismo_habilitado/.test(servicio), '12n) la respuesta del link avisa formatoOficinas solo para grupos con Oficinas y sin Grupos Hípicos');
+  const vmCtx = { window: {}, document: { getElementById: () => ({}), querySelectorAll: () => [], addEventListener() {} }, location: { search: '?token=x' }, fetch: async () => ({}), console };
+  const scriptsPortal = [...portalOf.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  let compila = true; try { new (require('vm').Script)(scriptsPortal); } catch (e) { compila = false; }
+  check(compila, '12o) el script de la página nueva compila');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();

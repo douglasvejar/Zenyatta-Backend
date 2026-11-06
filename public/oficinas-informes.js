@@ -69,6 +69,7 @@
   function descripcionLinea(l) {
     if (l.tipo === 'traspaso') return 'Traspaso' + (l.nota ? ' — ' + l.nota : '');
     if (l.tipo === 'carga') return l.texto || 'Carga';
+    if (l.tipo === 'devolucion-propia') return `% devuelto${l.porcentaje !== undefined ? ' ' + l.porcentaje + '% de ' + dinero(l.monto) : ''}`;
     if (l.tipo === 'comision') {
       const pct = l.porcentaje !== undefined ? `${l.porcentaje}% de ${dinero(l.monto)}` : '';
       return `% devuelto${l.clienteOrigen ? ' (' + l.clienteOrigen + ')' : ''}${pct ? ' — ' + pct : ''}`;
@@ -86,7 +87,7 @@
   // Partes de una jugada para pintarla bonita (chip Jugó/Dio + modalidad + caballos de colores + monto). Devuelve null si la
   // línea no es una jugada normal (traspaso, carga, % devuelto, ticket suelto…): esas se siguen mostrando como texto.
   function partesJugada(l) {
-    if (l.tipo === 'traspaso' || l.tipo === 'carga' || l.tipo === 'comision' || l.ticket) return null;
+    if (l.tipo === 'traspaso' || l.tipo === 'carga' || l.tipo === 'comision' || l.tipo === 'devolucion-propia' || l.ticket) return null;
     const rol = l.rol === 'banquero' ? 'Dio' : (l.rol === 'jugador' ? 'Jugó' : '');
     let caballo = '';
     if (l.modalidad === 'pp' && l.caballoA !== undefined) caballo = `${l.caballoA}x${l.caballoB}`;

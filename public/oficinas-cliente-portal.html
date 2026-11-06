@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mis Jugadas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Link del cliente para grupos de HIPISMO OFICINAS (06-11-2026, a pedido del usuario: "los link de los clientes y oficinas de los modulos de
+     oficinas ... se vea diferente", con los días y las carreras plegables "asi se resume mas"). Mismo servidor y mismo token que
+     hipismo-cliente-portal.html (GET /api/hipismo-cliente/:token): la página vieja redirige acá cuando la respuesta trae formatoOficinas,
+     así los links ya enviados siguen funcionando. El % devuelto sale como una línea dentro de su carrera. -->
+<style>
+:root{--bg:#f6f3ee;--card:#fffdf9;--card-border:rgba(70,55,30,.12);--text:#2c2a26;--text-dim:#766f64;--teal:#2f6764;--teal2:#3f8a85}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:0 0 40px}
+.banda{background:linear-gradient(120deg,#2a5a57,#3f8a85);color:#fff;padding:16px 18px 18px;border-radius:0 0 22px 22px;display:flex;gap:14px;align-items:center}
+.banda img{height:92px;width:auto;flex:none}
+.banda .t{min-width:0}
+.banda .hola{font-size:13px;opacity:.85}
+.banda h1{margin:2px 0 0;font:800 21px Outfit,Inter,sans-serif}
+.banda .sub{font-size:12.5px;opacity:.85;margin-top:3px}
+.periodo{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 16px 0}
+.periodo button{border:1px solid rgba(70,55,30,.2);background:#fffdf9;color:#2f6764;border-radius:999px;padding:8px 12px;font:600 12.5px Inter,sans-serif}
+.periodo button[disabled]{opacity:.45}
+.periodo .rango{text-align:center;font-size:12.5px;color:var(--text-dim);line-height:1.3}.periodo .rango b{display:block;color:var(--text);font-size:13.5px}
+.resumen{margin:12px 16px 0;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px}
+.resumen div{background:#fffdf9;border:1px solid var(--card-border);border-radius:12px;padding:10px 12px}
+.resumen small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:700}
+.resumen b{font:800 19px Outfit,sans-serif;font-variant-numeric:tabular-nums}.resumen .g{color:#15803d}
+.resumen div:first-child{background:#2f6764;border-color:#2f6764;color:#fff}.resumen div:first-child small{color:#cfe5e2}.resumen div:first-child b{font-size:23px}
+.informe{margin:14px 12px 0;max-width:none;padding:16px 14px}
+.aviso{margin:14px 16px 0;background:#fff7e6;border:1px solid #f0d9a8;color:#7a4b10;border-radius:12px;padding:11px 14px;font-size:12.5px;line-height:1.45}
+.aviso i{display:block;margin-top:4px;font-size:11.5px;opacity:.9}
+.pie{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:16px}
+  .informe { background: #ffffff; color: #2c2a26; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; position: relative; overflow: hidden; }
+  .informe .inf-logo-fondo { position: absolute; inset: 6% 10%; background-repeat: no-repeat; background-position: center; background-size: contain; opacity: 0.09; pointer-events: none; z-index: 2; }
+  .informe .inf-contenido { position: relative; z-index: 1; }
+  .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #3f8a85; padding-bottom: 10px; margin-bottom: 12px; }
+  .informe .inf-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; }
+  .informe .inf-titulo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: #2f6764; text-transform: uppercase; letter-spacing: 0.6px; }
+  .informe .inf-periodo { font-size: 12.5px; color: #766f64; text-align: right; }
+  .informe table.com-cols { table-layout: fixed; }
+  .informe table.com-cols td:first-child, .informe table.com-cols th:first-child { width: 34%; }
+  .informe table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .informe th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #766f64; padding: 5px 8px; border-bottom: 1px solid #ddd5c6; }
+  .informe td { padding: 6px 8px; border-bottom: 1px solid #ddd5c6; }
+  .informe .num { text-align: right; white-space: nowrap; }
+  .informe .pos { color: #15803d; font-weight: 700; } .informe .neg { color: #dc2626; font-weight: 700; }
+  .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f3efe8; }
+  .informe .item-tag { font-size: 10px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #f3d9a4; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+  .informe tr.total td { font-weight: 800; border-top: 2px solid #2f6764; border-bottom: none; background: rgba(243,239,232,0.78); }
+  .informe tr.comision td { font-weight: 800; font-size: 15px; background: #2f6764; color: #ffffff; border: none; }
+  .informe tr.aviso-dif td { background: #fffbeb; color: #92400e; font-weight: 700; }
+  .informe .dia-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; background: #2f6764; color: #fff; padding: 6px 10px; border-radius: 8px; margin: 14px 0 6px; display: flex; justify-content: space-between; }
+  .informe .hip-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #2f6764; margin: 10px 0 2px; padding-left: 2px; }
+  .informe .car-tit td { background: rgba(243,239,232,0.78); font-weight: 700; color: #2f6764; font-size: 12.5px; }
+  .informe tr.sub td { font-weight: 700; background: rgba(248,245,240,0.72); }
+  .informe tr.sub-hip td { font-weight: 800; background: rgba(235,229,218,0.82); }
+  .informe .car-caja { border: 1px solid #cfc5b2; border-radius: 10px; margin: 8px 0; overflow: hidden; background: rgba(255,255,255,0.55); }
+  .informe .car-caja .car-cab { background: rgba(235,229,218,0.9); color: #2f6764; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .3px; padding: 6px 10px; border-bottom: 1px solid #cfc5b2; }
+  .informe .car-caja table td { padding: 5px 10px; }
+  .informe .car-caja table tr:last-child td { border-bottom: none; }
+  .informe .car-total { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15.5px; border-top: 2px solid; }
+  .informe .car-total b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .informe .car-total.gana { background: #dcfce7; color: #166534; border-top-color: #16a34a; }
+  .informe .car-total.pierde { background: #fee2e2; color: #b91c1c; border-top-color: #dc2626; }
+  .informe .car-total.cero { background: #ebe5da; color: #5a554c; border-top-color: #94a3a0; }
+  .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
+  .informe .det-dia .dia-tit .dia-monto { background: rgba(255,255,255,0.14); border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums; }
+  .informe .det-dia .dia-tit .dia-monto.gana { background: #dcfce7; color: #166534; }
+  .informe .det-dia .dia-tit .dia-monto.pierde { background: #fee2e2; color: #b91c1c; }
+  .informe .det-hip .hip-tit { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 15px; }
+  .informe .det-hip .hip-tit::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #3f8a85; }
+  .informe .det-hip .hip-tit.otros::before { background: #94a3a0; }
+  .informe .car-caja { border-radius: 12px; box-shadow: 0 1px 3px rgba(20,83,45,0.08); }
+  .informe .car-cab { display: flex; align-items: center; gap: 8px; }
+  .informe .car-cab .car-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #2f6764; color: #fff; font-size: 12px; font-weight: 800; }
+  .informe .car-caja table td { padding: 7px 10px; vertical-align: middle; }
+  .informe .car-caja table tr:nth-child(even) td { background: rgba(247,243,236,0.7); }
+  .informe .car-caja table td.num { font-weight: 800; font-size: 14px; }
+  .informe .lin-otra { color: #5a554c; font-size: 13px; }
+  .informe .lin-otra::before { content: '•'; color: #94a3a0; margin-right: 6px; }
+  .informe .jug { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
+  .informe .jug-rol { font-size: 11px; font-weight: 800; letter-spacing: .3px; padding: 2px 9px; border-radius: 999px; line-height: 1.3; }
+  .informe .jug-rol.jugo { background: #dcfce7; color: #166534; border: 1px solid #a7e3bc; }
+  .informe .jug-rol.dio { background: #e0e7ff; color: #3730a3; border: 1px solid #c3cdf8; }
+  .informe .jug-mod { font-weight: 800; font-size: 13px; color: #2f6764; background: #ebe5da; border: 1px solid #cfc5b2; border-radius: 6px; padding: 1px 7px; }
+  .informe .jug-cab { display: inline-flex; align-items: center; gap: 5px; }
+  .informe .cab-col { display: inline-flex; align-items: center; gap: 2px; }
+  .informe .cab-col svg { display: block; }
+  .informe .cab-sep { font-weight: 800; color: #766f64; font-size: 12px; }
+  .informe .jug-monto { color: #766f64; font-size: 12.5px; }
+  .informe .jug-monto b { color: #2c2a26; font-variant-numeric: tabular-nums; }
+  .informe .det-sub td { font-weight: 800; background: rgba(235,229,218,0.82); }
+  .informe .vacio { padding: 18px; text-align: center; color: #766f64; }
+  .informe .sub-linea { color: #766f64; font-size: 12px; }
+
+.acc .dia-tit{cursor:pointer;user-select:none;gap:10px}
+.acc .dia-tit .fl{display:inline-flex;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.18);align-items:center;justify-content:center;font-size:12px;transition:transform .15s;flex:none}
+.acc.cerrado .dia-tit .fl{transform:rotate(-90deg)}
+.acc .dia-tit .izq{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.acc.cerrado .dia-cuerpo{display:none}
+.acc{margin-bottom:10px}
+.informe .car-caja .car-cab{cursor:pointer;user-select:none;justify-content:flex-start}
+.informe .car-caja .car-cab .fl2{font-size:11px;color:#2f6764;display:inline-block;transition:transform .15s;flex:none}
+.informe .car-caja.cerrada .car-cab .fl2{transform:rotate(-90deg)}
+.informe .car-caja .car-cab .ctot{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;font-size:14px;padding:3px 10px;border-radius:999px}
+.informe .car-caja .car-cab .ctot.gana{background:#dcfce7;color:#166534}.informe .car-caja .car-cab .ctot.pierde{background:#fee2e2;color:#b91c1c}.informe .car-caja .car-cab .ctot.cero{background:#ebe5da;color:#5a554c}
+.informe .car-caja.cerrada table{display:none}
+.informe .car-caja.cerrada .car-cab{border-bottom:none}
+.lin-dev{display:inline-block;background:#e6f2f0;color:#2f6764;border:1px dashed #3f8a85;border-radius:8px;padding:3px 9px;font-weight:700;font-size:12.5px}
+.ayuda{margin:10px 16px 0;font-size:12px;color:var(--text-dim);text-align:center}
+.sinlogo{opacity:0}
+</style><style>
+.banda .logo{flex:none;display:flex;align-items:center;justify-content:center}
+.banda .logo img{height:92px;width:auto;max-width:130px;object-fit:contain}
+.banda .logo.sobre-blanco{background:#fff;border-radius:16px;padding:8px}
+.banda .logo.sobre-blanco img{height:72px}
+.banda .logo[hidden]{display:none}
+.estado{text-align:center;padding:60px 20px;color:var(--text-dim);font-size:14px}
+.error{background:linear-gradient(100deg,#dc2626,#b91c1c);color:#fff;text-align:center;font-weight:700;font-size:13px;padding:10px 16px}
+.marca-agua-pag{display:none}
+.ayuda{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.ayuda button{border:1px solid rgba(70,55,30,.2);background:#fffdf9;color:#2f6764;border-radius:999px;padding:4px 12px;font:600 12px Inter,sans-serif;cursor:pointer}
+.periodo button{cursor:pointer;white-space:nowrap}
+.informe .car-cab{cursor:pointer;user-select:none}
+.periodo button[disabled]{cursor:default}
+.acc .dia-tit:focus-visible,.car-cab:focus-visible,.ayuda button:focus-visible,.periodo button:focus-visible{outline:2px solid #3f8a85;outline-offset:2px}
+</style>
+</head><body>
+<div id="error" class="error" hidden></div>
+<div id="carga" class="estado">Cargando tus jugadas...</div>
+<div class="wrap" id="contenido" hidden>
+  <div class="banda" id="banda"><div class="logo" id="logo" hidden><img alt="Logo del grupo" id="logoImg"></div><div class="t"><div class="hola">Tus jugadas</div><h1 id="saludo">Hola</h1><div class="sub" id="grupoNombre"></div></div></div>
+  <div class="periodo"><button type="button" id="btnAnt">‹ Anterior</button><div class="rango" id="rango"></div><button type="button" id="btnAct">Actual ›</button></div>
+  <div class="resumen" id="res"></div>
+  <div class="ayuda"><span>Toca un día o una carrera para ver el detalle</span><button type="button" id="btnTodo">Abrir todo</button></div>
+  <div class="informe" id="inf"></div>
+  <div class="aviso" id="aviso"></div>
+  <div class="pie">Sistema Ludox · Since 2026</div>
+</div>
+<script src="oficinas-informes.js"></script><script src="marca-agua.js"></script>
+<script>
+(function () {
+  'use strict';
+  const INF = window.OficinasInformes;
+  const TOKEN = new URLSearchParams(location.search).get('token');
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const clasePN = n => INF.r2(n) > 0 ? 'pos' : (INF.r2(n) < 0 ? 'neg' : '');
+  const celdaSaldo = n => `<span class="${clasePN(n)}">${INF.dineroConSigno(n)}</span>`;
+  const signoDe = n => INF.r2(n) > 0 ? 'gana' : (INF.r2(n) < 0 ? 'pierde' : 'cero');
+  let semana = new URLSearchParams(location.search).get('semana') === 'anterior' ? 'anterior' : 'actual';
+  let todoAbierto = false;
+
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const diaMes = iso => { const p = String(iso).split('-'); return `${Number(p[2])} ${MESES[Number(p[1]) - 1]}`; };
+  function mostrarError(m) { $('carga').hidden = true; $('contenido').hidden = true; const e = $('error'); e.textContent = m; e.hidden = false; }
+
+  const celdaLinea = l => l.jugada ? INF.jugadaHTML(l.jugada)
+    : (l.tipo === 'devolucion-propia' ? `<span class="lin-dev">↩ ${esc(l.texto)}</span>` : `<span class="lin-otra">${esc(l.texto)}</span>`);
+
+  function armarInforme(resp) {
+    const det = INF.armarDetalleCliente(resp);
+    let html = '';
+    if (!det.dias.length) html += '<div class="vacio" style="padding:18px;text-align:center;color:#766f64">No hay movimientos en este período.</div>';
+    const ultimo = det.dias.length - 1;
+    det.dias.forEach((dia, di) => {
+      html += `<div class="inf-dia det-dia acc${di === ultimo ? '' : ' cerrado'}"><div class="dia-tit" role="button" tabindex="0" aria-expanded="${di === ultimo}"><span class="izq"><span class="fl">▾</span><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span></span><span class="dia-monto ${signoDe(dia.total)}">${INF.dineroConSigno(dia.total)}</span></div><div class="dia-cuerpo">`;
+      dia.hipodromos.forEach(h => {
+        const t = h.esCarreras ? INF.nombreHipodromo(h.nombre) : h.nombre;
+        html += `<div class="inf-hip det-hip"><div class="hip-tit${h.esCarreras ? '' : ' otros'}">${esc(t)}<span style="margin-left:auto;font-size:13px" class="${clasePN(h.total)}">${INF.dineroConSigno(h.total)}</span></div>`;
+        h.carreras.forEach(c => {
+          const li = c.lineas.map(l => `<tr><td>${celdaLinea(l)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`).join('');
+          if (c.numero) html += `<div class="car-caja cerrada"><div class="car-cab" role="button" tabindex="0" aria-expanded="false"><span class="fl2">▾</span><span class="car-n">${c.numero}</span>Carrera ${c.numero}<span class="ctot ${signoDe(c.total)}">${INF.dineroConSigno(c.total)}</span></div><table><tbody>${li}</tbody></table></div>`;
+          else html += `<div class="car-caja"><table><tbody>${li}</tbody></table></div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    html += `<table style="margin-top:14px;"><tbody><tr class="comision"><td>TOTAL DE LA SEMANA ${INF.numeroSemanaDe(resp)}</td><td class="num">${INF.dineroConSigno(det.totalPeriodo)}</td></tr></tbody></table>`;
+    return { html, det };
+  }
+
+  function ponerLogo(url) {
+    const caja = $('logo'), img = $('logoImg');
+    if (!url) { caja.hidden = true; return; }
+    img.onerror = () => { caja.hidden = true; };
+    img.onload = () => {
+      caja.hidden = false;
+      // Un logo oscuro o de colores sobre el degradado se pierde: va sobre una pastilla blanca. Uno claro (blanco) va directo.
+      try {
+        const c = document.createElement('canvas'); c.width = 48; c.height = 48;
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0, 48, 48);
+        caja.classList.toggle('sobre-blanco', !window.MarcaAgua.esClaro(x.getImageData(0, 0, 48, 48).data));
+      } catch (e) { caja.classList.add('sobre-blanco'); }
+    };
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+  }
+
+  function pintar(data) {
+    $('error').hidden = true; $('carga').hidden = true; $('contenido').hidden = false;
+    document.title = 'Mis Jugadas — ' + data.grupo.nombre;
+    $('saludo').textContent = 'Hola, ' + data.jugador.nombre;
+    $('grupoNombre').textContent = data.grupo.nombre;
+    if (data.grupo.colorPrimario && data.grupo.colorSecundario) $('banda').style.background = `linear-gradient(120deg,${data.grupo.colorPrimario},${data.grupo.colorSecundario})`;
+    ponerLogo(data.grupo.logoUrl);
+    $('rango').innerHTML = `<b>Semana ${esc(INF.numeroSemanaDe(data))}</b>${esc(diaMes(data.rango.desde))} – ${esc(diaMes(data.rango.hasta))}`;
+    $('btnAct').disabled = data.esSemanaActual; $('btnAnt').disabled = !data.esSemanaActual;
+    const { html, det } = armarInforme(data);
+    const hoy = data.esSemanaActual ? `<div><small>Hoy</small><b class="${clasePN(data.resumen.totalHoy)}">${INF.dineroConSigno(data.resumen.totalHoy)}</b></div>` : '';
+    $('res').style.gridTemplateColumns = data.esSemanaActual ? '1.4fr 1fr 1fr' : '1.4fr 1fr';
+    $('res').innerHTML = `<div><small>Total de la semana</small><b>${INF.dineroConSigno(det.totalPeriodo)}</b></div>${hoy}<div><small>Jugadas</small><b>${esc(data.resumen.cantidadJugadas)}</b></div>`;
+    const inf = $('inf');
+    inf.innerHTML = '<div class="inf-logo-fondo"></div><div class="inf-contenido">' + html + '</div>';
+    window.MarcaAgua.preparar(data.grupo.logoUrl || '/img/logo-ludox-icono.png').then(u => { const f = inf.querySelector('.inf-logo-fondo'); if (f) f.style.backgroundImage = `url('${u}')`; });
+    $('aviso').innerHTML = `⏰ <b>Importante:</b> dispones de 24 horas para indicar cualquier diferencia o reclamo sobre estas jugadas. De lo contrario, se dará por confirmada tu cuenta y no tendrá modificación.<i>— Gerencia, ${esc(data.grupo.nombre)}</i>`;
+    todoAbierto = false; $('btnTodo').textContent = 'Abrir todo';
+  }
+
+  // Plegar / desplegar (días y carreras): un clic o Enter/Espacio.
+  function alternar(el) {
+    const dia = el.classList.contains('dia-tit'), caja = el.parentNode;
+    const clase = dia ? 'cerrado' : 'cerrada';
+    caja.classList.toggle(clase);
+    el.setAttribute('aria-expanded', String(!caja.classList.contains(clase)));
+  }
+  $('inf').addEventListener('click', e => { const t = e.target.closest('.dia-tit, .car-cab'); if (t) alternar(t); });
+  $('inf').addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; const t = e.target.closest('.dia-tit, .car-cab'); if (t) { e.preventDefault(); alternar(t); } });
+  $('btnTodo').addEventListener('click', () => {
+    todoAbierto = !todoAbierto;
+    document.querySelectorAll('#inf .acc').forEach(d => { d.classList.toggle('cerrado', !todoAbierto); d.querySelector('.dia-tit').setAttribute('aria-expanded', String(todoAbierto)); });
+    document.querySelectorAll('#inf .car-caja').forEach(c => { if (c.querySelector('.car-cab')) { c.classList.toggle('cerrada', !todoAbierto); c.querySelector('.car-cab').setAttribute('aria-expanded', String(todoAbierto)); } });
+    $('btnTodo').textContent = todoAbierto ? 'Cerrar todo' : 'Abrir todo';
+  });
+  $('btnAnt').addEventListener('click', () => cargar('anterior'));
+  $('btnAct').addEventListener('click', () => cargar('actual'));
+
+  async function cargar(s) {
+    semana = s; $('carga').hidden = false; $('contenido').hidden = true;
+    try {
+      const r = await fetch(`/api/hipismo-cliente/${encodeURIComponent(TOKEN)}?semana=${semana}`);
+      const data = await r.json();
+      if (!r.ok) return mostrarError(data.error || 'No se pudo cargar tu resumen.');
+      semana = data.semana; pintar(data);
+    } catch (e) { mostrarError('No se pudo conectar con el servidor. Prueba de nuevo en un momento.'); }
+  }
+  if (!TOKEN) mostrarError('Link inválido — falta el token. Pídele al grupo que te comparta el link correcto.');
+  else cargar(semana);
+})();
+</script></body></html>

@@ -366,6 +366,27 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
   check(!!lineaAvalPedro && lineaAvalPedro.clienteOrigen === 'OTRO' && lineaAvalPedro.porcentaje === 2 && lineaAvalPedro.resultado === 1,
     'ARREGLO "Mrmoney" (03-10-2026): aparece una línea de comisión aparte en la propia ficha de PEDRO por avalar a OTRO (2% de 50 = 1,00), antes invisible acá');
 
+  // 06-11-2026 (Hipismo Oficinas: "los % de devolución se colocan en su respectiva carrera"): con devolucionEnCarrera la devolución
+  // sale como UNA línea dentro de su carrera (tipo 'devolucion-propia'), NO como bloque "Devolución", y los totales no cambian.
+  const fichaPedroOf = await construirResumenClienteHipismo(pedroActualizado, grupo, 'actual', undefined, { devolucionEnCarrera: true });
+  const diaPedroOf = fichaPedroOf.dias.find(d => d.fecha === FECHA);
+  const hipPedroOf = diaPedroOf.hipodromos.find(h => h.nombre === 'La Rinconada');
+  const lineasDevOf = hipPedroOf.carreras.filter(c => c.tipo === 'devolucion-propia');
+  check(!diaPedroOf.hipodromos.some(h => h.tipo === 'devolucion'), 'Formato Oficinas: ya NO existe el bloque "Devolución" al final del día');
+  check(lineasDevOf.length === 1 && lineasDevOf[0].carrera === lineaJugadorPedro.carrera && lineasDevOf[0].resultado === esperadoComisionNetaPedro && lineasDevOf[0].porcentaje === 1,
+    `Formato Oficinas: UNA línea "% devuelto" dentro de la MISMA carrera de la jugada (${esperadoComisionNetaPedro}, 1%): obtenido ${JSON.stringify(lineasDevOf)}`);
+  check(Math.abs(lineasDevOf[0].monto * lineasDevOf[0].porcentaje / 100 - lineasDevOf[0].resultado) < 0.011, 'Formato Oficinas: la base mostrada (monto) por el % da la devolución');
+  check(fichaPedroOf.resumen.totalSemana === fichaPedro.resumen.totalSemana, 'Formato Oficinas: el total de la semana es EXACTAMENTE el mismo que con el bloque aparte');
+  const sumaDiaOf = round2(diaPedroOf.hipodromos.reduce((acc, h) => acc + h.carreras.reduce((x, c) => x + c.resultado, 0), 0));
+  check(sumaDiaOf === fichaPedroOf.resumen.totalSemana, `Formato Oficinas: la suma de lo mostrado en el día da el totalSemana: ${sumaDiaOf} vs ${fichaPedroOf.resumen.totalSemana}`);
+  check(fichaPedro.formatoOficinas === false, 'El formato por defecto de un grupo sin la marca de Oficinas sigue siendo el de siempre (formatoOficinas=false)');
+  const fichaPedroGrupoOf = await construirResumenClienteHipismo(pedroActualizado, { ...grupo, modulo_hipismo_oficinas_habilitado: true, modulo_hipismo_habilitado: false }, 'actual');
+  check(fichaPedroGrupoOf.formatoOficinas === true && !fichaPedroGrupoOf.dias.some(d => d.hipodromos.some(h => h.tipo === 'devolucion')),
+    'Un grupo con Oficinas y SIN Grupos Hípicos usa el formato nuevo por defecto (formatoOficinas=true)');
+  const fichaPedroAmbos = await construirResumenClienteHipismo(pedroActualizado, { ...grupo, modulo_hipismo_oficinas_habilitado: true, modulo_hipismo_habilitado: true }, 'actual');
+  check(fichaPedroAmbos.formatoOficinas === false && fichaPedroAmbos.dias.some(d => d.hipodromos.some(h => h.tipo === 'devolucion')),
+    'Un grupo con los DOS módulos conserva el bloque Devolución en su link (Grupos Hípicos no cambia)');
+
   const fichaMaria = await construirResumenClienteHipismo(mariaActualizada, grupo, 'actual');
   check(fichaMaria.resumen.totalSemana === -300,
     `MARIA (toggle OFF): su ficha sigue mostrando la jugada CRUDA, sin tocar (-300,00): obtenido ${fichaMaria.resumen.totalSemana}`);

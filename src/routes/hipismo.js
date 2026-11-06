@@ -5632,6 +5632,28 @@ router.get('/recargas-pago-diario', asyncHandler(async (req, res) => {
   });
 }));
 
+// Cambiar el tipo de un cliente (06-11-2026, Hipismo Oficinas: "tercio" = cliente normal, "oficina" = la que lleva % de devolución).
+// Pasar a tercio a quien todavía tiene % de devolución se rechaza: primero hay que quitarle ese % (en Hipismo Grupos Hípicos).
+router.put('/clientes/:id/tipo-cliente', asyncHandler(async (req, res) => {
+  const tipo = String((req.body && req.body.tipoCliente) || '').toLowerCase();
+  if (tipo !== 'tercio' && tipo !== 'oficina') return res.status(400).json({ error: 'El tipo debe ser "tercio" u "oficina".' });
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  const actual = await db.query('SELECT id, comision_propia FROM jugadores WHERE id = $1 AND grupo_id = $2 AND COALESCE(es_cuenta_comision, false) = false', [id, req.grupoId]);
+  if (!actual.rows.length) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  if (tipo === 'tercio' && Number(actual.rows[0].comision_propia) > 0) {
+    return res.status(409).json({ error: 'Este cliente todavía tiene % de devolución. Quítaselo primero (en Hipismo Grupos Hípicos) para pasarlo a tercio.' });
+  }
+  let r;
+  try {
+    r = await db.query('UPDATE jugadores SET tipo_cliente = $1 WHERE id = $2 AND grupo_id = $3 RETURNING id, nombre, tipo_cliente', [tipo, id, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(409).json({ error: 'Falta correr el SQL pendiente en Supabase (columna jugadores.tipo_cliente).' });
+    throw e;
+  }
+  res.json({ ok: true, cliente: r.rows[0] });
+}));
+
 // Marcar / quitar "pago diario" a un cliente sin tocar nada más de su ficha (05-11-2026, Hipismo Oficinas: la lista de clientes tiene un botón).
 router.put('/clientes/:id/pago-diario', asyncHandler(async (req, res) => {
   const marca = req.body && req.body.pagoDiario;
@@ -6735,7 +6757,9 @@ router.get('/clientes/:nombre/detalle-semana', asyncHandler(async (req, res) => 
   }
   if (!jugador) return res.status(404).json({ error: 'No se encontró ese cliente.' });
 
-  const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana, rangoPersonalizado);
+  // ?formato=oficinas (módulo Oficinas): el % devuelto va dentro de su carrera (ver construirResumenClienteHipismo).
+  const resultado = await construirResumenClienteHipismo(jugador, req.grupo, req.query.semana, rangoPersonalizado,
+    req.query.formato === 'oficinas' ? { devolucionEnCarrera: true } : undefined);
   res.json(resultado);
 }));
 

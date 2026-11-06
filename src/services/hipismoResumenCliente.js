@@ -599,7 +599,16 @@ async function construirResumenCuentaComisionHipismo(jugador, grupo, semanaParam
 // jugador: fila de "jugadores" (necesita .grupo_id, .nombre, .modulos_anclados).
 // grupo: fila de "grupos" (necesita .nombre, .logo_url, .modulo_deportes_habilitado).
 // semanaParam: 'actual' (default) | 'anterior'.
-async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rangoPersonalizado) {
+// `opciones.devolucionEnCarrera` (06-11-2026, Hipismo Oficinas: "las que tengan % de devolución se le coloca en su respectiva carrera"):
+// el % propio incluido en las jugadas sale como UNA línea dentro de su carrera ("% devuelto 5% de 80,00") y NO como el bloque
+// "Devolución" al final del día. Los totales no cambian. Por defecto se activa en los grupos que tienen Oficinas SIN Grupos Hípicos
+// (su link usa el portal de Oficinas); Hipismo Grupos Hípicos conserva el bloque de siempre. El Detallado del módulo Oficinas lo pide
+// con ?formato=oficinas para que también se vea así en un grupo que tenga los dos módulos.
+function devolucionEnCarreraPorDefecto(grupo) {
+  return !!(grupo && grupo.modulo_hipismo_oficinas_habilitado && !grupo.modulo_hipismo_habilitado);
+}
+async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rangoPersonalizado, opciones) {
+  const devolucionEnCarrera = opciones && typeof opciones.devolucionEnCarrera === 'boolean' ? opciones.devolucionEnCarrera : devolucionEnCarreraPorDefecto(grupo);
   const paisPorNombreHip = await obtenerPaisPorNombreHipodromo(jugador.grupo_id);
   // Cuenta de comisión ("{nombre} - PORCENTAJE", ver la nota grande de
   // construirResumenCuentaComisionHipismo arriba) — nunca tiene jugadas
@@ -798,7 +807,7 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     // final de ese día. Los TOTALES no cambian: resultadoFinal (jugada +
     // devolución) sigue sumándose igual a totalSemana/totalHoy.
     const resultadoFinal = comisionIncluida ? round2(linea.resultado + comisionIncluida) : linea.resultado;
-    if (comisionIncluida) {
+    if (comisionIncluida && !devolucionEnCarrera) {
       devolucionPorDia.set(fechaIso, round2((devolucionPorDia.get(fechaIso) || 0) + comisionIncluida));
     }
 
@@ -835,6 +844,16 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
       carrera.caballo = linea.caballo;
     }
     hipMap.get(hipNombre).carreras.push(carrera);
+    if (comisionIncluida && devolucionEnCarrera) {
+      // Una línea propia dentro de la MISMA carrera: "% devuelto X% de BASE". La base se deduce de la comisión exacta de la carrera.
+      hipMap.get(hipNombre).carreras.push({
+        tipo: 'devolucion-propia',
+        carrera: linea.carreraNumero,
+        porcentaje: pctPropioIncluido,
+        monto: round2(comisionIncluida * 100 / pctPropioIncluido),
+        resultado: comisionIncluida
+      });
+    }
 
     totalSemana += resultadoFinal;
     comisionPropiaIncluidaSemana += comisionIncluida;
@@ -999,6 +1018,8 @@ async function construirResumenClienteHipismo(jugador, grupo, semanaParam, rango
     hoy: hoyIso,
     esSemanaActual: !rangoPersonalizado && hoyIso >= desde && hoyIso <= hasta,
     modulos: { hipismo: true, deportes: deportesAnclado },
+    // true = grupo de Hipismo Oficinas (sin Grupos Hípicos): el link se ve en public/oficinas-cliente-portal.html (días y carreras plegables).
+    formatoOficinas: devolucionEnCarreraPorDefecto(grupo),
     resumen: {
       totalSemana,
       totalHoy,

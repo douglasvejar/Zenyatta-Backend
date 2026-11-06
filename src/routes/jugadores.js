@@ -234,6 +234,22 @@ async function guardarMarcaPagoDiario(jugadorId, grupoId, marca) {
 }
 const AVISO_FALTA_PAGO_DIARIO = 'Falta correr el SQL pendiente en Supabase (columna jugadores.pago_diario). El cliente se guardó, pero sin la marca de pago diario.';
 
+// 06-11-2026, Hipismo Oficinas: "al crear cliente u oficina, selecciono si es un cliente (lo llamaremos tercio) o es una oficina". Se guarda
+// aparte del INSERT/UPDATE principal (igual que la marca de pago diario) para que, si todavía no corrieron el SQL, crear/editar siga funcionando.
+// `tipoCliente` solo se toca cuando viene en el cuerpo ('tercio' | 'oficina'); otras pantallas que editan al cliente no lo mandan.
+function resolverTipoCliente(valor) {
+  const v = String(valor || '').toLowerCase();
+  return v === 'tercio' || v === 'oficina' ? v : null;
+}
+async function guardarTipoCliente(jugadorId, grupoId, tipo) {
+  if (!tipo) return;
+  try {
+    await db.query('UPDATE jugadores SET tipo_cliente = $1 WHERE id = $2 AND grupo_id = $3', [tipo, jugadorId, grupoId]);
+  } catch (e) {
+    if (!(e && e.code === '42703')) throw e;
+  }
+}
+
 // 25-10-2026, "Comisiones por Avales y Socios": "cuando creas un cliente colocas AVALADO POR (una lista con los socios del grupo)".
 // `socioId` solo se toca cuando viene en el cuerpo (otras pantallas que editan al cliente no lo mandan y no deben borrarlo):
 // un id de socio del MISMO grupo lo asigna; null o '' lo quita. Igual que la marca de pago diario, se guarda aparte del
@@ -263,8 +279,11 @@ function respuestaSocioFallido(res, guardado, jugador, avalesFinal) {
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
+    let { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
+    const tipoCliente = resolverTipoCliente(req.body.tipoCliente);
+    // Un tercio no lleva % de devolución (solo las oficinas).
+    if (tipoCliente === 'tercio') { comisionPropia = 0; incluirPorcentajeEnJugadas = false; comisionPropiaFicha = ''; }
     const { tipo, marca: marcaPagoDiario } = resolverTipoYPagoDiario(tipoCuenta, req.body.pagoDiario);
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const nombreNorm = normalizarNombreJugador(nombre);
@@ -281,11 +300,12 @@ router.post('/', asyncHandler(async (req, res) => {
       await reemplazarAvalesPorcentaje(client, req.grupoId, nuevo.id, avalesFinal);
       return nuevo;
     });
+    await guardarTipoCliente(jugador.id, req.grupoId, tipoCliente);
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
     if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
-    res.status(201).json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
+    res.status(201).json({ ...jugador, ...(tipoCliente ? { tipo_cliente: tipoCliente } : {}), pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });
@@ -316,11 +336,13 @@ router.put('/:id', asyncHandler(async (req, res) => {
       await reemplazarAvalesPorcentaje(client, req.grupoId, actualizado.id, avalesFinal);
       return actualizado;
     });
+    const tipoClientePut = resolverTipoCliente(req.body.tipoCliente);
+    await guardarTipoCliente(jugador.id, req.grupoId, tipoClientePut);
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
     if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
-    res.json({ ...jugador, pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
+    res.json({ ...jugador, ...(tipoClientePut ? { tipo_cliente: tipoClientePut } : {}), pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });

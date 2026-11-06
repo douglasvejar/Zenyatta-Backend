@@ -61,6 +61,16 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas js
 pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS pago_diario boolean NOT NULL DEFAULT false')
   .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.pago_diario (corre sql/schema.sql en Supabase):', err.message));
 
+// 06-11-2026: tipo de cliente de Hipismo Oficinas (Tercio u Oficina, ver sql/schema.sql). Al crear la columna, los clientes que ya
+// existen se clasifican UNA sola vez (con % de devolución = oficina, sin % = tercio); después cada cambio manual se respeta.
+pool.query(`do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name = 'jugadores' and column_name = 'tipo_cliente') then
+    alter table jugadores add column tipo_cliente text not null default 'tercio' check (tipo_cliente in ('tercio','oficina'));
+    update jugadores set tipo_cliente = 'oficina' where coalesce(comision_propia, 0) > 0;
+  end if;
+end $$;`)
+  .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.tipo_cliente (corre sql/schema.sql en Supabase):', err.message));
+
 // 25-10-2026: socios de Hipismo y "Avalado por" del cliente (ver sql/schema.sql). Se crean solos, en orden (la columna del cliente
 // apunta a la tabla), y si la base no deja alterar solo avisan en el log.
 pool.query(`create table if not exists hipismo_socios (
