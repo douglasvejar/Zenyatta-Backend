@@ -459,8 +459,8 @@
     const n = parseInt(numeroCrudo, 10);
     if (!n || isNaN(n)) return '';
     const c = COLORES_EJEMPLAR[n] || { bg: '#616161', fg: '#ffffff' };
-    const borde = c.borde ? 'stroke:#666666; stroke-width:6;' : '';
-    return `<span class="gualdrapa"><svg width="22" height="22" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="${c.bg}" style="${borde}"/><text x="50" y="72" font-size="62" font-weight="800" fill="${c.fg}" text-anchor="middle" font-family="Arial, sans-serif">${n}</text></svg><svg width="20" height="20" viewBox="0 0 512 512"><path d="${CABALLO_PATH}" fill="#8d8d8d"/></svg></span>`;
+    // 06-11-2026: la cabeza del caballo va pintada del MISMO color que su número (como en Oficinas), con contorno oscuro para que se lea también el blanco/amarillo.
+    return `<span class="gualdrapa"><svg width="22" height="22" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="${c.bg}" stroke="#6b665c" stroke-width="5"/><text x="50" y="72" font-size="${n > 9 ? 54 : 62}" font-weight="800" fill="${c.fg}" text-anchor="middle" font-family="Arial, sans-serif">${n}</text></svg><svg width="20" height="20" viewBox="0 0 512 512"><path d="${CABALLO_PATH}" fill="${c.bg}" stroke="#57524a" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span>`;
   }
 
   function fechaDeIso(iso) {

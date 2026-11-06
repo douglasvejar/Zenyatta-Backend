@@ -489,6 +489,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/Saludos \$\{tituloNombre\(c\.nombre\)\}[\s\S]{0,200}oficina de confianza \$\{tituloNombre\(GRUPO\.nombre\)\}/.test(html) && /🏇/.test(html) && /💰/.test(html) && /💵/.test(html) && /operativo las 24 horas/.test(html), '12w) el mensaje a copiar lleva el nombre del cliente y de la oficina del grupo, con emojis de caballo y dinero');
   check(!/lk-ejemplo|Solo enlace/.test(html), '12x) la ventana Links no tiene cuadro de ejemplo ni botón "Solo enlace"');
   check(/function cargarLinks\(forzar\)[\s\S]{0,120}!CLIENTES\.length/.test(html), '12y) Links no vuelve a pedir la lista de clientes si ya está cargada (no pesa en Supabase)');
+  check(/<path d="\$\{CABALLO_PATH\}" fill="\$\{c\.bg\}"/.test(vie) && !/fill="#8d8d8d"/.test(vie), '12z) en el link de Grupos Hípicos la cabeza del caballo va del mismo color que su número (no gris)');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
     { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },
