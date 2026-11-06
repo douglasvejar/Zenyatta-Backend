@@ -93,6 +93,10 @@
   .edicion-barra .espacio { flex: 1; }
   .chip-carrera.actual { background: var(--accent-grass); color: #fff; border-color: var(--accent-grass); }
   .aviso { border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-top: 12px; }
+  .pizarras-faltan { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.5); border-left: 5px solid #d97706; color: #7c3a0b; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; }
+  .pizarras-faltan .pf-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pizarras-faltan .chip-carrera { cursor: pointer; }
+  .modal-caja .ya-cargada-datos { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.4); border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-weight: 700; color: #7c3a0b; }
   .aviso.info { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.35); color: #92400e; }
   .tabla-wrap { overflow-x: auto; margin-top: 12px; }
   table.jugadas { width: 100%; border-collapse: collapse; min-width: 640px; }
@@ -375,13 +379,14 @@
           <button type="button" class="btn btn-sec btn-chico" onclick="volverAlRegistro()">← Volver al Registro</button>
           <button type="button" class="btn btn-peligro btn-chico" data-perm="oficinas_eliminar" onclick="eliminarCarreraEnEdicion()">🗑️ Eliminar carrera</button>
         </div>
+        <div class="pizarras-faltan oculto" id="jPizarrasFaltan" role="alert"></div>
         <div class="card">
           <h2>Cargar carrera</h2>
           <p class="nota">Elige el hipódromo: se abre solo la carrera que sigue a la última cargada. La carrera se guarda cuando lo que jugaron es igual a lo que dieron, por cada tipo de jugada y caballo.</p>
           <div class="fila-campos">
             <div><label for="jFecha">Fecha</label><input type="date" id="jFecha" onchange="cambioFechaOHipodromo()"></div>
             <div><label for="jHipodromo">Hipódromo</label><select id="jHipodromo" onchange="cambioFechaOHipodromo()"><option value="">— Elige —</option></select></div>
-            <div><label for="jCarrera">Carrera</label><input type="number" min="1" id="jCarrera" onchange="cambioCarrera()"></div>
+            <div><label for="jCarrera">Carrera</label><input type="number" min="1" id="jCarrera" onchange="cambioCarrera(false, true)"></div>
             <div><label for="jPizarra">Llegada (pizarra)</label><input type="text" id="jPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off"></div>
             <div><label for="jRet">Retirados (opcional)</label><input type="text" id="jRet" placeholder="Ej. 5" autocomplete="off"></div>
             <div id="jCruzarWrap"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;margin:0;" title="Se activa/desactiva por grupo desde Súper-admin"><input type="checkbox" id="jCruzar" style="width:auto;" checked> Cruzar jugadas</label></div>
@@ -848,6 +853,18 @@
   </section>
 </div>
 
+<div class="modal-fondo oculto" id="modalYaCargada" role="dialog" aria-modal="true" aria-labelledby="modalYaCargadaTit">
+  <div class="modal-caja">
+    <h3 id="modalYaCargadaTit">⚠️ Esta carrera ya tiene jugadas cargadas</h3>
+    <div class="ya-cargada-datos" id="modalYaCargadaDatos"></div>
+    <p>Si sigues, verás sus jugadas y, al guardar, se calcula de nuevo y <b>sustituye a la anterior</b> (la anterior queda en la papelera de planos). Si te equivocaste de número, elige otra carrera.</p>
+    <div class="modal-botones">
+      <button type="button" class="btn" id="modalYaCargadaOtra">➡️ Elegir otra carrera</button>
+      <button type="button" class="btn btn-sec" id="modalYaCargadaVer">Ver y corregir esta carrera</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-fondo oculto" id="modalNoExiste" role="dialog" aria-modal="true" aria-labelledby="modalNoExisteTit">
   <div class="modal-caja">
     <h3 id="modalNoExisteTit">⚠️ Cliente no existe</h3>
@@ -948,6 +965,7 @@ function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el
 })();
 
 function irATab(t) {
+  if (t === 'jugadas' && typeof avisarPizarrasFaltan === 'function') avisarPizarrasFaltan();
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
   if (t === 'registro') abrirRegistro();
@@ -1312,6 +1330,7 @@ async function guardarCarrera() {
     pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
     $('jAviso').classList.add('oculto');
     await abrirSiguienteCarrera();
+    avisarPizarrasFaltan();
   } catch (e) { msg('jMsg', textoError(e), false); actualizarBotones(); }
 }
 function copiarResultado() {
@@ -1342,15 +1361,77 @@ function pintarCargadas() {
     : ($('jHipodromo').value ? 'Todavía no hay carreras cargadas en este hipódromo hoy.' : '');
 }
 async function abrirCarrera(n) { $('jCarrera').value = n; await cambioCarrera(); }
-async function cambioFechaOHipodromo() { await abrirSiguienteCarrera(); await cambioCarrera(true); }
+async function cambioFechaOHipodromo() { await abrirSiguienteCarrera(); await cambioCarrera(true); avisarPizarrasFaltan(); }
+
+// ---------- Aviso: la carrera elegida ya tiene jugadas cargadas ----------
+let _resolverYaCargada = null;
+function preguntarYaCargada(carrera) {
+  const hip = $('jHipodromo'), nombreHipSel = hip.options[hip.selectedIndex] ? hip.options[hip.selectedIndex].text : '';
+  const sinLlegada = PENDIENTES.includes(carrera);
+  $('modalYaCargadaDatos').textContent = `${nombreHipSel.replace(/^\S*\s/, '') || 'Hipódromo'} — carrera ${carrera} (${$('jFecha').value.split('-').reverse().join('/')}) · ${sinLlegada ? 'guardada SIN llegada (falta la pizarra)' : 'ya calculada'}`;
+  $('modalYaCargada').classList.remove('oculto');
+  $('modalYaCargadaOtra').focus();
+  return new Promise(res => { _resolverYaCargada = res; });
+}
+function cerrarYaCargada(seguir) {
+  $('modalYaCargada').classList.add('oculto');
+  const r = _resolverYaCargada; _resolverYaCargada = null;
+  if (r) r(seguir);
+}
+$('modalYaCargadaVer').addEventListener('click', () => cerrarYaCargada(true));
+$('modalYaCargadaOtra').addEventListener('click', () => cerrarYaCargada(false));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modalYaCargada').classList.contains('oculto')) cerrarYaCargada(false); });
+
+// ---------- Aviso: pizarras (llegadas) que faltan por cargar ----------
+// Son las carreras guardadas SIN llegada (no cuentan en los saldos hasta cargar la pizarra): las de los últimos 30 días hasta hoy.
+let PIZARRAS_FALTAN = [];
+function fechaMasDias(iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+async function avisarPizarrasFaltan() {
+  if (!$('jPizarrasFaltan')) return;
+  const f = $('jFecha').value || fechaHoyVenezuela();
+  const hoy = fechaHoyVenezuela();
+  try {
+    const d = await api(`/api/hipismo/oficinas/pendientes-periodo?desde=${fechaMasDias(f, -30)}&hasta=${f > hoy ? f : hoy}`);
+    PIZARRAS_FALTAN = d.carreras || [];
+  } catch (e) { return; }   // el aviso nunca estorba
+  pintarPizarrasFaltan();
+}
+function pintarPizarrasFaltan() {
+  const caja = $('jPizarrasFaltan');
+  if (!PIZARRAS_FALTAN.length) { caja.classList.add('oculto'); caja.innerHTML = ''; return; }
+  const n = PIZARRAS_FALTAN.length;
+  const chips = PIZARRAS_FALTAN.map(c => `<button type="button" class="chip-carrera pend" data-fecha="${esc(c.fecha)}" data-hip="${esc(c.hipodromo)}" data-carrera="${c.carrera}" title="Abrirla para cargar la pizarra">${esc(nombreHip(c.hipodromo))} · ${INF.fechaCorta(c.fecha).slice(0, 5)} · carrera ${c.carrera}</button>`).join('');
+  caja.innerHTML = `⏳ <b>${n === 1 ? 'Te falta la pizarra de 1 carrera' : `Te faltan las pizarras de ${n} carreras`}</b>: están guardadas sin llegada y no cuentan en los saldos hasta que las cargues. Toca una para abrirla.<div class="pf-lista">${chips}</div>`;
+  caja.classList.remove('oculto');
+}
+$('jPizarrasFaltan').addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('button[data-carrera]'); if (!b) return;
+  irAPizarraFalta(b.dataset.fecha, b.dataset.hip, Number(b.dataset.carrera));
+});
+async function irAPizarraFalta(fecha, hipodromo, carrera) {
+  const hip = HIPODROMOS.find(x => normNombre(x.nombre) === normNombre(hipodromo));
+  if (!hip) return msg('jMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder abrir la carrera.', false);
+  $('jFecha').value = fecha; $('jHipodromo').value = hip.id;
+  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  $('jPizarra').value = ''; $('jRet').value = ''; msg('jMsg', '');
+  await abrirSiguienteCarrera();
+  $('jCarrera').value = carrera;
+  await cambioCarrera(false);
+  $('jPizarra').focus();
+}
 // Si la carrera escrita ya existe, se trae su tabla para corregirla; guardar la sustituye.
-async function cambioCarrera(soloAvisar) {
+async function cambioCarrera(soloAvisar, preguntar) {
   pintarCargadas();
   const h = $('jHipodromo').value, c = $('jCarrera').value;
   if (!h || !c) { actualizarBotones(); return; }
   if (!CARGADAS.includes(Number(c))) {
     if (!soloAvisar) { $('jAviso').classList.add('oculto'); }
     actualizarBotones(); return;
+  }
+  // Eligió a mano una carrera que ya tiene jugadas: se le avisa en una ventana antes de abrirla (para no cargarla dos veces por error).
+  if (preguntar && !enEdicion()) {
+    const seguir = await preguntarYaCargada(Number(c));
+    if (!seguir) { await abrirSiguienteCarrera(); return; }
   }
   try {
     const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent($('jFecha').value)}`);
@@ -2024,6 +2105,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
   await Promise.all([cargarHipodromos(), cargarClientes(), cargarConfiguracion()]);
   actualizarPreguntasCliente();
+  avisarPizarrasFaltan();
 })();
 </script>
 <script src="oficinas-mejoras.js"></script>

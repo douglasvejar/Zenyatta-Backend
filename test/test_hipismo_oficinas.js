@@ -396,6 +396,16 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/esMarcaFila\(f\)\s*\?\s*170/.test(html), '6u) el premio solo aparece en filas de Marca');
   check(/function sincronizarMarca/.test(html) && /\$\{a\}x\$\{b\}/.test(html), '6l) las dos casillas se juntan como "AxB" para el servidor');
 
+  // ---- 7) Avisos en Jugadas: pizarras que faltan y carrera que ya tiene jugadas (06-11-2026) ----
+  check(/id="jPizarrasFaltan"/.test(html) && /function avisarPizarrasFaltan/.test(html) && /pendientes-periodo\?desde=/.test(html), '7a) Jugadas avisa de las pizarras (llegadas) que faltan por cargar usando las carreras guardadas sin llegada');
+  check(/avisarPizarrasFaltan\(\);\s*\n\s*\}\s*catch|abrirSiguienteCarrera\(\);\s*\n\s*avisarPizarrasFaltan/.test(html) && /if \(t === 'jugadas'[^)]*\)[^\n]*avisarPizarrasFaltan/.test(html), '7b) el aviso de pizarras se refresca al guardar y al volver a Jugadas');
+  check(/async function irAPizarraFalta/.test(html) && /data-carrera="\$\{c\.carrera\}"/.test(html), '7c) tocar una carrera sin pizarra la abre para cargarla');
+  check(/id="modalYaCargada"/.test(html) && /Esta carrera ya tiene jugadas cargadas/.test(html) && /function preguntarYaCargada/.test(html), '7d) existe la ventana "Esta carrera ya tiene jugadas cargadas"');
+  check(/id="jCarrera" onchange="cambioCarrera\(false, true\)"/.test(html) && /if \(preguntar && !enEdicion\(\)\)/.test(html), '7e) al elegir a mano una carrera ya cargada pregunta (no al abrirla desde el Registro ni desde los chips)');
+  check(/modalYaCargadaOtra/.test(html) && /modalYaCargadaVer/.test(html) && /Escape/.test(html), '7f) la ventana deja elegir otra carrera o verla y corregirla');
+  const rutaPend = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'routes', 'hipismo.js'), 'utf8');
+  check(/router\.get\('\/oficinas\/pendientes-periodo'/.test(rutaPend) && /rangoPersonalizadoDeQuery\(req\)/.test(rutaPend), '7g) el servidor ya entrega las carreras sin llegada por rango de fechas');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
