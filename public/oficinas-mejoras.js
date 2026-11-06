@@ -246,7 +246,7 @@ function exportarExcel(que) {
   if (que === 'balance') {
     if (!BALANCE) return;
     const b = INF.armarBalance(BALANCE, esItemBalance);
-    descargarExcel('balance_general', [['Cliente / ítem', 'Saldo']].concat(b.filas.map(f => [nombreBonito(f.nombre) + (f.esItem ? ' (ÍTEM)' : ''), numExcel(f.saldo)]),
+    descargarExcel('balance_general', [['Cliente / ítem', 'Saldo']].concat(b.pierden.concat(b.ganan, b.sinSaldo).map(f => [nombreBonito(f.nombre) + (f.esItem ? ' (ÍTEM)' : ''), numExcel(f.saldo)]),
       [['TOTAL DE TODOS LOS CLIENTES E ÍTEMS', numExcel(b.totalClientes)], ['COMISIÓN OFICINA ' + (GRUPO.nombre || '').toUpperCase(), numExcel(b.comisionOficina)], ['Diferencia sin ubicar', numExcel(b.diferencia)]]));
   } else if (que === 'comision') {
     const d = window.__COM; if (!d) return;

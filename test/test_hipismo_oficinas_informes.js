@@ -281,7 +281,7 @@ async function invocarRuta(handler, req) {
   const nh = INF.nombreHipodromo;
   check(nh('gulfstream park') === 'Gulfstream Park' && nh('GULFSTREAM PARK') === 'Gulfstream Park' && nh('  la   rinconada ') === 'La Rinconada', '4a) el hipódromo se muestra con la primera letra en mayúscula, lo hayan escrito como lo hayan escrito');
   check(nh('hipodromo de caracas') === 'Hipodromo de Caracas' && nh('McKee') === 'McKee' && nh('') === '', '4b) "de/del/la" quedan en minúscula (salvo al inicio), lo escrito con mezcla se respeta y vacío da vacío');
-  check(/<th>Cliente \/ ítem<\/th><th class="num">Saldo<\/th>/.test(html) && !/\$\{f\.jugadas/.test(html), '4c) el Balance General ya no muestra la cantidad de jugadas del cliente');
+  check(/class="bal-pierden">🔻 Pierden<\/th>/.test(html) && /class="bal-ganan">🔺 Ganan<\/th>/.test(html) && !/\$\{f\.jugadas/.test(html), '4c) el Balance General (en dos columnas: pierden y ganan) no muestra la cantidad de jugadas del cliente');
   check(/car-caja/.test(html) && /car-total/.test(html) && /Total carrera \$\{c\.numero\}/.test(html) && /\.car-total\.gana/.test(html) && /\.car-total\.pierde/.test(html), '4d) el detallado por cliente pone cada carrera en su cuadro y resalta el total de la carrera');
   check(/'\.car-caja, tbody tr:not\(\.car-tit\)/.test(html) || /\.car-caja, tbody tr:not\(\.car-tit\)/.test(html), '4e) el PDF no parte un cuadro de carrera por la mitad si cabe en una página');
   check(/nombreHip\(h\.nombre\)/.test(html) && !/>\$\{esc\(h\.nombre\)\}</.test(html.replace(/hNombre/g, '')), '4f) los hipódromos se muestran con el formato (primera letra en mayúscula) en todas las pantallas');

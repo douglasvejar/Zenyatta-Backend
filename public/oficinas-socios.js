@@ -126,7 +126,8 @@
   const textoPeriodo = d => {
     if (!d || !d.rango) return '';
     const r = `${INFO.fechaCorta(d.rango.desde)} al ${INFO.fechaCorta(d.rango.hasta)}`;
-    return d.rangoPersonalizado || !d.numeroSemana ? `Del ${r}` : `Semana ${d.numeroSemana} — ${r}`;
+    const n = INFO.numeroSemanaDe(d);
+    return d.rangoPersonalizado || !n ? `Del ${r}` : `Semana ${n} — ${r}`;
   };
   function tarjeta(titulo, pct, filasHtml, pie) {
     return `<div class="soc-tarjeta"><div class="soc-cab"><span>${esc(titulo)}</span>${pct ? `<span class="pct">${esc(pct)}</span>` : ''}</div>${filasHtml}${pie}</div>`;

@@ -32,10 +32,16 @@
   function nombreDia(iso) {
     return DIAS[new Date(iso + 'T00:00:00Z').getUTCDay()];
   }
+  // El servidor manda numeroSemana como { anio, semana } (o, en respuestas viejas, como un número): siempre se muestra solo el número.
+  function numeroSemanaDe(d) {
+    const n = d && d.numeroSemana;
+    if (n && typeof n === 'object') return n.semana;
+    return n;
+  }
   function textoPeriodo(d) {
     const rango = `${fechaCorta(d.rango.desde)} al ${fechaCorta(d.rango.hasta)}`;
     if (d.rangoPersonalizado) return `Del ${rango}`;
-    return `Semana ${d.numeroSemana} — ${rango}`;
+    return `Semana ${numeroSemanaDe(d)} — ${rango}`;
   }
 
   // ---------------- Balance General ----------------
@@ -49,7 +55,13 @@
     const comisionOficina = r2(cierre.comisionSemana);
     // En un grupo cuadrado, lo que ganan y pierden todos los renglones + la comisión de la oficina suma 0.
     const diferencia = r2(totalClientes + comisionOficina);
-    return { filas, totalClientes, comisionOficina, diferencia };
+    // Balance en dos columnas: a la izquierda los que PIERDEN (el que más pierde arriba) y a la derecha los que GANAN (el que más gana arriba).
+    const pierden = filas.filter(f => f.saldo < 0).sort((a, b) => a.saldo - b.saldo || a.nombre.localeCompare(b.nombre, 'es'));
+    const ganan = filas.filter(f => f.saldo > 0).sort((a, b) => b.saldo - a.saldo || a.nombre.localeCompare(b.nombre, 'es'));
+    const sinSaldo = filas.filter(f => f.saldo === 0);
+    const totalPierden = r2(pierden.reduce((s, f) => s + f.saldo, 0));
+    const totalGanan = r2(ganan.reduce((s, f) => s + f.saldo, 0));
+    return { filas, pierden, ganan, sinSaldo, totalPierden, totalGanan, totalClientes, comisionOficina, diferencia };
   }
 
   // ---------------- Detallado por Cliente ----------------
@@ -107,7 +119,7 @@
     }).join(' ');
   }
 
-  const api = { nombreHipodromo, r2, dinero, dineroConSigno, fechaCorta, nombreDia, textoPeriodo, armarBalance, armarDetalleCliente, descripcionLinea };
+  const api = { nombreHipodromo, r2, dinero, dineroConSigno, fechaCorta, nombreDia, textoPeriodo, numeroSemanaDe, armarBalance, armarDetalleCliente, descripcionLinea };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   raiz.OficinasInformes = api;
 })(typeof window !== 'undefined' ? window : globalThis);

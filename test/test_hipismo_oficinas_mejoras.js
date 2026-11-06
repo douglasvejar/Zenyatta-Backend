@@ -187,6 +187,18 @@ const control = require('../src/services/hipismoOficinasControl');
   check((html.match(/opcionesHipodromosAgrupadas\(/g) || []).length >= 3, 'hipódromos: Jugadas y Registro usan la lista agrupada');
   check(mejoras.includes('banderaHip(h.nombre)') && mejoras.includes('ordenarHipodromos('), 'hipódromos: el Cierre del Día también va con bandera y nacionales primero');
 
+
+  // ---------- 10) Balance General en dos columnas y número de semana ----------
+  const INFO_ = require('../public/oficinas-informes.js');
+  const bal = INFO_.armarBalance({ clientes: [{ nombre: 'A', saldo: 384 }, { nombre: 'B', saldo: -400 }, { nombre: 'C', saldo: 190 }, { nombre: 'D', saldo: -270 }, { nombre: 'E', saldo: 0 }, { nombre: 'F', saldo: 25.5 }], comisionSemana: 0 });
+  check(bal.pierden.map(f => f.nombre).join('') === 'BD', 'balance: a la izquierda los que pierden, el que más pierde primero');
+  check(bal.ganan.map(f => f.nombre).join('') === 'ACF', 'balance: a la derecha los que ganan, el que más gana primero');
+  check(bal.sinSaldo.length === 1 && bal.totalPierden === -670 && bal.totalGanan === 599.5 && bal.totalClientes === -70.5, 'balance: totales de cada lado y total general');
+  const rangoSem = { desde: '2026-11-02', hasta: '2026-11-08' };
+  check(INFO_.textoPeriodo({ rango: rangoSem, numeroSemana: { anio: 2026, semana: 45 } }) === 'Semana 45 — 02/11/2026 al 08/11/2026', 'semana: el servidor manda {anio, semana} y se muestra "Semana 45" (no [object Object])');
+  check(INFO_.textoPeriodo({ rango: rangoSem, numeroSemana: 45 }) === 'Semana 45 — 02/11/2026 al 08/11/2026', 'semana: también funciona si viene como número');
+  check(html.includes('class="bal-dos"') && html.includes('Pierden') && html.includes('Ganan'), 'pantalla: el Balance General tiene columnas Pierden y Ganan');
+
   console.log(`\n${pasaron} OK, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

@@ -278,6 +278,15 @@
   .sp-sel { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--card-border); border-radius: 999px; background: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .sp-sel input { width: auto; margin: 0; } .sp-sel small { color: var(--text-dim); font-weight: 500; } .sp-sel.off { opacity: .55; text-decoration: line-through; }
   #panel-registro .fila-campos .btn { white-space: nowrap; }
+  /* Balance General en dos columnas: pierden | ganan (06-11-2026) */
+  .informe .informe-ancho-bal, .informe table.bal-dos { width: 100%; }
+  .informe table.bal-dos th.bal-pierden { color: #b91c1c; background: rgba(254,242,242,0.85); font-size: 12px; }
+  .informe table.bal-dos th.bal-ganan { color: #15803d; background: rgba(236,253,243,0.9); font-size: 12px; }
+  .informe table.bal-dos .bal-sep { width: 14px; padding: 0; border-bottom: none; background: transparent; border-right: 1px solid #d7e8dc; }
+  .informe table.bal-dos td.bal-nom + td + td + td, .informe table.bal-dos tr.sub-bal td:nth-child(4) { padding-left: 12px; }
+  .informe table.bal-dos td.bal-nom { width: 28%; } .informe table.bal-dos td.bal-monto { width: 22%; white-space: nowrap; }
+  .informe table.bal-dos tr.sub-bal td { font-weight: 800; font-size: 12.5px; border-top: 2px solid #14532d; background: rgba(241,248,243,0.78); }
+  .informe table.bal-dos td.bal-cero { color: #587264; font-size: 12px; font-style: italic; border-bottom: none; }
 </style>
 </head>
 <body>
@@ -1621,15 +1630,21 @@ function esItemBalance(nombre) {
 function pintarBalance() {
   const d = BALANCE; if (!d) return;
   const b = INF.armarBalance(d, esItemBalance);
-  const filas = b.filas.map(f => `<tr class="fila-click" onclick="verDetalleDe(decodeURIComponent('${encodeURIComponent(f.nombre)}'))">
-      <td>${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num">${celdaSaldo(f.saldo)}</td></tr>`).join('');
-  ponerInforme('balCaptura', cabeceraInforme('Balance General', d) + `<table>
-      <thead><tr><th>Cliente / ítem</th><th class="num">Saldo</th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="2" class="vacio">No hay jugadas en este período.</td></tr>'}</tbody>
+  // Dos columnas (06-11-2026, a pedido del usuario): a la izquierda los que PIERDEN y a la derecha los que GANAN, cada lado ordenado del
+  // que más pierde / más gana hacia abajo. El total y la comisión van debajo, con las mismas cuentas de siempre.
+  const celda = f => f ? `<td class="fila-click bal-nom" onclick="verDetalleDe(decodeURIComponent('${encodeURIComponent(f.nombre)}'))">${esc(nombreBonito(f.nombre))}${f.esItem ? '<span class="item-tag">ÍTEM</span>' : ''}</td><td class="num bal-monto">${celdaSaldo(f.saldo)}</td>` : '<td class="bal-nom"></td><td class="bal-monto"></td>';
+  const n = Math.max(b.pierden.length, b.ganan.length);
+  let filas = '';
+  for (let i = 0; i < n; i++) filas += `<tr>${celda(b.pierden[i])}<td class="bal-sep"></td>${celda(b.ganan[i])}</tr>`;
+  const sinSaldo = b.sinSaldo.length ? `<tr><td colspan="5" class="bal-cero">Sin saldo: ${b.sinSaldo.map(f => esc(nombreBonito(f.nombre))).join(', ')}</td></tr>` : '';
+  ponerInforme('balCaptura', cabeceraInforme('Balance General', d) + `<table class="bal-dos">
+      <thead><tr><th colspan="2" class="bal-pierden">🔻 Pierden</th><th class="bal-sep"></th><th colspan="2" class="bal-ganan">🔺 Ganan</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="5" class="vacio">No hay jugadas en este período.</td></tr>'}${sinSaldo}</tbody>
       <tfoot>
-        <tr class="total"><td>TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
-        <tr class="comision"><td>COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
-        ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
+        <tr class="sub-bal"><td>TOTAL PIERDEN</td><td class="num">${celdaSaldo(b.totalPierden)}</td><td class="bal-sep"></td><td>TOTAL GANAN</td><td class="num">${celdaSaldo(b.totalGanan)}</td></tr>
+        <tr class="total"><td colspan="4">TOTAL DE TODOS LOS CLIENTES E ÍTEMS</td><td class="num">${celdaSaldo(b.totalClientes)}</td></tr>
+        <tr class="comision"><td colspan="4">COMISIÓN OFICINA ${esc((GRUPO.nombre || '').toUpperCase())}</td><td class="num">${INF.dinero(b.comisionOficina)}</td></tr>
+        ${Math.abs(b.diferencia) >= 0.01 ? `<tr class="aviso-dif"><td colspan="4">⚠️ Diferencia sin ubicar (total + comisión)</td><td class="num">${INF.dineroConSigno(b.diferencia)}</td></tr>` : ''}
       </tfoot></table>`);
 }
 // ---------- Saldos con Pozos ----------
@@ -1740,7 +1755,7 @@ function pintarDetalle(nombre, resp) {
     });
     html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table></div>`;
   });
-  html += `<table style="margin-top:14px;"><tbody><tr class="comision"><td>TOTAL ${resp.rangoPersonalizado ? 'DEL PERÍODO' : 'DE LA SEMANA ' + resp.numeroSemana}</td><td class="num">${INF.dineroConSigno(det.totalPeriodo)}</td></tr>
+  html += `<table style="margin-top:14px;"><tbody><tr class="comision"><td>TOTAL ${resp.rangoPersonalizado ? 'DEL PERÍODO' : 'DE LA SEMANA ' + INF.numeroSemanaDe(resp)}</td><td class="num">${INF.dineroConSigno(det.totalPeriodo)}</td></tr>
     ${Math.abs(det.totalPeriodo - det.totalSegunServidor) >= 0.01 ? `<tr class="aviso-dif"><td>⚠️ El total del servidor es distinto</td><td class="num">${INF.dineroConSigno(det.totalSegunServidor)}</td></tr>` : ''}</tbody></table>`;
   ponerInforme('detCaptura', html);
 }
