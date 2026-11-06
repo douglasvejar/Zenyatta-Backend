@@ -1870,6 +1870,19 @@ async function alternarSinPozo(id, valor) {
   catch (e) { return alert('No se pudo cambiar: ' + e.message); }
   await cargarClientes();
 }
+// Eliminar un cliente u oficina (06-11-2026). Pide confirmación; no borra las jugadas ya cargadas (quedan con su nombre).
+async function eliminarClienteOficina(id) {
+  const c = CLIENTES.find(x => String(x.id) === String(id)); if (!c) return;
+  const esOf = tipoDeCliente(c) === 'oficina';
+  if (!confirm(`¿Eliminar ${esOf ? 'la OFICINA' : 'al TERCIO'} "${nombreBonito(c.nombre)}"?\n\n` +
+    '• Su link dejará de funcionar y desaparecerá de la lista (también en Hipismo Grupos Hípicos: son los mismos clientes).\n' +
+    '• Sus jugadas ya cargadas NO se borran.\n' +
+    '• No se puede deshacer.')) return;
+  try { await api('/api/hipismo/clientes/' + encodeURIComponent(id), { method: 'DELETE' }); }
+  catch (e) { return alert('No se pudo eliminar: ' + e.message); }
+  await cargarClientes();
+  msg('cMsg', `🗑️ ${esOf ? 'Oficina' : 'Tercio'} "${nombreBonito(c.nombre)}" eliminado.`, true);
+}
 async function cambiarTipoCliente(id, tipo) {
   const c = CLIENTES.find(x => x.id === id); if (!c) return;
   if (!confirm(`¿Cambiar a ${nombreBonito(c.nombre)} a ${tipo === 'oficina' ? 'OFICINA' : 'TERCIO'}?`)) return;
@@ -1930,7 +1943,7 @@ function pintarClientes() {
       : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">Tercio libre</span>' : '<span style="color:var(--text-dim)">—</span>'));
     const botonLibre = tienePozo || c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? 'Pasar a libre' : 'Marcar sin pozo'}</button>`;
     const pozo = `<span style="white-space:nowrap;">${estadoPozo} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button> ${botonLibre}</span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`} ${puedeOficina('oficinas_eliminar') ? `<button type="button" class="btn btn-peligro btn-chico" style="margin-top:4px;" onclick="eliminarClienteOficina('${esc(c.id)}')">🗑️ Eliminar</button>` : ''}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 

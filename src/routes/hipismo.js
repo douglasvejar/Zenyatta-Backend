@@ -5667,6 +5667,17 @@ router.put('/clientes/:id/sin-pozo', asyncHandler(async (req, res) => {
   res.json({ ok: true, cliente: r.rows[0] });
 }));
 
+// Eliminar un cliente u oficina (06-11-2026, Hipismo Oficinas: botón "Eliminar" en la lista). Mismo borrado que ya usa Hipismo Grupos Hípicos / Deportes
+// (DELETE /api/jugadores/:id: una sola tabla "jugadores"), pero aquí limitado al grupo de la sesión y, para empleados, al permiso oficinas_eliminar.
+// No borra las jugadas ya procesadas (quedan guardadas con su nombre); sí se van su link, sus ajustes de pozo y sus relaciones de avales/%.
+router.delete('/clientes/:id', requierePermisoOficina('oficinas_eliminar'), asyncHandler(async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  const r = await db.query('DELETE FROM jugadores WHERE id = $1 AND grupo_id = $2 RETURNING id, nombre', [id, req.grupoId]);
+  if (!r.rows.length) return res.status(404).json({ error: 'Ese cliente no existe o ya fue eliminado.' });
+  res.json({ ok: true, eliminado: r.rows[0] });
+}));
+
 // Marcar / quitar "pago diario" a un cliente sin tocar nada más de su ficha (05-11-2026, Hipismo Oficinas: la lista de clientes tiene un botón).
 router.put('/clientes/:id/pago-diario', asyncHandler(async (req, res) => {
   const marca = req.body && req.body.pagoDiario;
