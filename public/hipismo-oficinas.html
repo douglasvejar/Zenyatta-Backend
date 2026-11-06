@@ -371,7 +371,7 @@
     <button type="button" class="tab" data-tab="detalle" data-perm="oficinas_informes" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" data-perm="oficinas_informes" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
     <button type="button" class="tab" data-tab="historial" onclick="irATab('historial')">📜 Historial de Cambios</button>
-    <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente</button>
+    <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente u Oficina</button>
     <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
     <button type="button" class="tab sep" data-tab="configuracion" onclick="irATab('configuracion')">⚙️ Configuración</button>
   </div>
@@ -692,9 +692,9 @@
   <section class="panel" id="panel-clientes">
     <div class="dos-col">
       <div class="card">
-        <h2>Crear cliente</h2>
+        <h2>Crear cliente u oficina</h2>
         <p class="nota">Los clientes son los mismos de Hipismo Grupos Hípicos: lo que crees aquí aparece allá y al revés.</p>
-        <div class="campo"><label for="cNombre">Nombre</label><input type="text" id="cNombre" autocomplete="off"></div>
+        <div class="campo"><label for="cNombre">Nombre del cliente u oficina</label><input type="text" id="cNombre" autocomplete="off"></div>
         <div class="fila-campos campo">
           <div><label for="cTelefono">Teléfono (opcional)</label><input type="text" id="cTelefono" autocomplete="off"></div>
           <div><label for="cNotas">Notas (opcional)</label><input type="text" id="cNotas" autocomplete="off"></div>
@@ -754,7 +754,7 @@
         </div>
 
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn" onclick="guardarCliente()">Guardar cliente</button>
+          <button type="button" class="btn" onclick="guardarCliente()">Guardar</button>
         </div>
         <div class="msg" id="cMsg"></div>
       </div>
@@ -877,9 +877,9 @@
   <div class="modal-caja">
     <h3 id="modalNoExisteTit">⚠️ Cliente no existe</h3>
     <div class="nombres" id="modalNoExisteNombres"></div>
-    <p>Escribe bien su nombre o créalo primero en <b>Crear Cliente</b>. Ningún cliente se crea solo.</p>
+    <p>Escribe bien su nombre o créalo primero en <b>Crear Cliente u Oficina</b>. Ningún cliente se crea solo.</p>
     <div class="modal-botones">
-      <button type="button" class="btn" id="modalNoExisteCrear">👤 Crear cliente</button>
+      <button type="button" class="btn" id="modalNoExisteCrear">👤 Crear cliente u oficina</button>
       <button type="button" class="btn btn-sec" id="modalNoExisteCorregir">Corregir el nombre</button>
     </div>
   </div>
@@ -1252,7 +1252,7 @@ function pintarCuadre(c) {
   else { cab.className = 'cuadre-cab mal'; cab.textContent = '⚠️ La carrera todavía no cuadra'; }
   const errs = [];
   NO_EXISTEN = c.clientesNoExisten || [];
-  NO_EXISTEN.forEach(n => errs.push(`<b>CLIENTE ${esc(n)} NO EXISTE</b> — escribe bien su nombre o créalo en Crear Cliente.`));
+  NO_EXISTEN.forEach(n => errs.push(`<b>CLIENTE ${esc(n)} NO EXISTE</b> — escribe bien su nombre o créalo en Crear Cliente u Oficina.`));
   (c.errores || []).forEach(e => errs.push(`Fila ${e.fila}: ${esc(e.error)}`));
   if (malas.length) errs.push('No reconozco: ' + malas.map(esc).join(', ') + '. Revisa el tipo y el caballo.');
   $('cuadreErrores').innerHTML = errs.join('<br>');

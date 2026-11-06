@@ -173,7 +173,7 @@ async function pintarRecargas() {
   const saldos = await saldosSemanaPorCliente();
   const signo = n => (n > 0 ? '+' : n < 0 ? '-' : '') + fmt(Math.abs(n));
   if (!RECARGAS.clientes.length) {
-    cont.innerHTML = '<div class="vacio">Todavía no hay clientes de pago diario. Márcalos en <b>Crear Cliente</b> (casilla 💵 Pago diario, o el botón en la lista de clientes).</div>';
+    cont.innerHTML = '<div class="vacio">Todavía no hay clientes de pago diario. Márcalos en <b>Crear Cliente u Oficina</b> (casilla 💵 Pago diario, o el botón en la lista de clientes).</div>';
   } else {
     cont.innerHTML = RECARGAS.clientes.map((c, i) => {
       const saldo = redondearCentavos(saldos.get(normNombre(c.nombre)) || 0);
