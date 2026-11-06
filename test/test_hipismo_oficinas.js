@@ -485,6 +485,10 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const por=fs.readFileSync(path.join(__dirname,'..','public','oficinas-cliente-portal.html'),'utf8'), vie=fs.readFileSync(path.join(__dirname,'..','public','hipismo-cliente-portal.html'),'utf8');
   check(/zenyatta_logo_chequeo_[\s\S]{0,200}10 \* 60 \* 1000/.test(html), '12t) el chequeo del logo se hace a lo sumo 1 vez cada 10 min por pestaña (no pesa en Supabase) y usa la caché HTTP normal');
   check(/oficinas_portal_precarga/.test(vie) && /tomarPrecarga/.test(por) && /oficinas_portal_precarga/.test(por), '12u) la redirección al link nuevo reutiliza el resumen ya descargado (no duplica la consulta pesada)');
+  check(/data-tab="links"/.test(html) && /id="panel-links"/.test(html) && /if \(t === 'links'\) cargarLinks\(\)/.test(html), '12v) existe la pestaña "Links" de Oficinas');
+  check(/Saludos \$\{tituloNombre\(c\.nombre\)\}[\s\S]{0,200}oficina de confianza \$\{tituloNombre\(GRUPO\.nombre\)\}/.test(html) && /🏇/.test(html) && /💰/.test(html) && /💵/.test(html) && /operativo las 24 horas/.test(html), '12w) el mensaje a copiar lleva el nombre del cliente y de la oficina del grupo, con emojis de caballo y dinero');
+  check(!/lk-ejemplo|Solo enlace/.test(html), '12x) la ventana Links no tiene cuadro de ejemplo ni botón "Solo enlace"');
+  check(/function cargarLinks\(forzar\)[\s\S]{0,120}!CLIENTES\.length/.test(html), '12y) Links no vuelve a pedir la lista de clientes si ya está cargada (no pesa en Supabase)');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
     { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },

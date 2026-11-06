@@ -69,6 +69,10 @@
   .card + .card { margin-top: 14px; }
   .card h2 { font-size: 17px; margin-bottom: 4px; }
   .nota { color: var(--text-dim); font-size: 13px; margin: 2px 0 12px; }
+  .lk-fila { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--card-border); }
+  .lk-fila .lk-nombre { font-weight: 700; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lk-fila .lk-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+  @media (max-width: 560px) { .lk-fila { flex-wrap: wrap; } .lk-fila .lk-btns { width: 100%; } }
 
   label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; }
   input, select, textarea { width: 100%; font: inherit; font-size: 14px; color: var(--text); background: #fff; border: 1px solid var(--border-light); border-radius: 8px; padding: 8px 10px; }
@@ -387,6 +391,7 @@
     <button type="button" class="tab oculto" data-tab="comisionessocios" data-perm="oficinas_informes" onclick="irATab('comisionessocios')">🤝 Comisiones por Socios</button>
     <button type="button" class="tab" data-tab="detalle" data-perm="oficinas_informes" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" data-perm="oficinas_informes" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
+    <button type="button" class="tab" data-tab="links" onclick="irATab('links')">🔗 Links</button>
     <button type="button" class="tab" data-tab="historial" onclick="irATab('historial')">📜 Historial de Cambios</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente u Oficina</button>
     <button type="button" class="tab" data-tab="hipodromos" onclick="irATab('hipodromos')">🏟️ Crear Hipódromo</button>
@@ -686,6 +691,18 @@
         <span class="toast" id="detToast"></span>
       </div>
       <div class="informe" id="detCaptura"><div class="vacio">Elige un cliente para ver su detalle.</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== LINKS ===================== -->
+  <section class="panel" id="panel-links">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><h2>Links</h2><span class="espacio"></span>
+        <button type="button" class="btn btn-sec btn-chico" onclick="cargarLinks(true)">🔄 Actualizar</button></div>
+      <p class="nota">Cada tercio u oficina tiene su link personal: sin clave, abierto las 24 horas, y ahí ve sus jugadas y su detallado. Dale a <b>Copiar link</b> y pega el mensaje en su chat.</p>
+      <div class="campo" style="max-width:360px;margin:12px 0;"><input type="text" id="lkBuscar" oninput="pintarLinks()" autocomplete="off" placeholder="Buscar tercio u oficina…"></div>
+      <div id="lkLista"><div class="vacio">Cargando…</div></div>
+      <div class="msg" id="lkMsg"></div>
     </div>
   </section>
 
@@ -999,6 +1016,39 @@ function msg(id, texto, ok) { const el = $(id); el.textContent = texto || ''; el
   if (!puedeCruzarJugadas()) { $('jCruzarWrap').classList.add('oculto'); $('jCruzar').checked = false; $('jCruzarNota').classList.remove('oculto'); }
 })();
 
+// ------------------------------------------------------------------
+// LINKS: el link personal de cada tercio u oficina (el mismo que usa Grupos Hípicos: sin clave, abierto 24 h; ahí ve sus jugadas y su detallado).
+// El botón copia el mensaje completo ya personalizado (nombre del cliente y de ESTA oficina); lleva emojis de WhatsApp (caballo de carreras y dinero).
+// No hace consultas nuevas si la lista de clientes ya está cargada (el botón Actualizar la vuelve a pedir).
+// ------------------------------------------------------------------
+function tituloNombre(n) { return String(n || '').trim().toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()); }
+function urlLinkCliente(c) { return c && c.token ? `${location.origin}/hipismo-cliente-portal.html?token=${encodeURIComponent(c.token)}` : ''; }
+function mensajeLinkCliente(c) {
+  return `🏇 Saludos ${tituloNombre(c.nombre)}, a continuación se le envía el link con sus jugadas en su oficina de confianza ${tituloNombre(GRUPO.nombre)}. 💰\n\n🔗 ${urlLinkCliente(c)}\n\n🐎 El link está operativo las 24 horas. Agradezco su confirmación a la brevedad posible. 💵`;
+}
+async function cargarLinks(forzar) {
+  if (forzar || !CLIENTES.length) await cargarClientes();
+  pintarLinks();
+}
+function pintarLinks() {
+  const q = ($('lkBuscar').value || '').trim().toLowerCase();
+  const con = CLIENTES.filter(c => c.token);
+  const lista = con.filter(c => !q || String(c.nombre).toLowerCase().includes(q));
+  $('lkLista').innerHTML = lista.length ? lista.map(c => `<div class="lk-fila"><span class="lk-nombre">${esc(tituloNombre(c.nombre))}</span>${etiquetaTipo(c)}<span class="lk-btns">
+      <button type="button" class="btn btn-chico" onclick="copiarLinkDe('${esc(c.id)}')">📋 Copiar link</button></span></div>`).join('')
+    : `<div class="vacio">${CLIENTES.length ? 'Ningún nombre coincide con la búsqueda.' : 'Aún no hay clientes ni oficinas. Créalos en “Crear Cliente u Oficina”.'}</div>`;
+}
+async function copiarLinkDe(id) {
+  const c = CLIENTES.find(x => String(x.id) === String(id));
+  if (!c || !c.token) { msg('lkMsg', 'Este cliente no tiene link.', false); return; }
+  const texto = mensajeLinkCliente(c);
+  let ok = false;
+  try { await navigator.clipboard.writeText(texto); ok = true; } catch (e) {
+    try { const t = document.createElement('textarea'); t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (e2) { ok = false; }
+  }
+  msg('lkMsg', ok ? `📋 Mensaje con el link de ${tituloNombre(c.nombre)} copiado.` : 'No se pudo copiar; tu navegador no lo permite.', ok);
+}
+
 function irATab(t) {
   if (t === 'jugadas' && typeof avisarPizarrasFaltan === 'function') avisarPizarrasFaltan();
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
@@ -1013,6 +1063,7 @@ function irATab(t) {
   if (t === 'controlpozos') cargarControlPozosOf();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();
+  if (t === 'links') cargarLinks();
 }
 
 // ------------------------------------------------------------------
