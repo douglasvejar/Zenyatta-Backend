@@ -15,10 +15,10 @@
      solo cambia la forma de CARGAR las jugadas (tabla en vez de plano) — ver src/services/hipismoOficinasCalc.js.
      ================================================================= */
   :root {
-    --bg: #f3f9f4; --card: #ffffff; --card-2: #f1f8f3;
-    --card-border: rgba(15,60,35,0.12); --border-light: rgba(15,60,35,0.18);
-    --text: #15321f; --text-dim: #587264;
-    --accent-grass: #16a34a; --accent-lime: #65a30d; --accent-deep: #14532d;
+    --bg: #f6f3ee; --card: #fffdf9; --card-2: #f3efe8;
+    --card-border: rgba(70,55,30,0.12); --border-light: rgba(70,55,30,0.18);
+    --text: #2c2a26; --text-dim: #766f64;
+    --accent-grass: #3f8a85; --accent-lime: #5fa39b; --accent-deep: #2f6764;
     --danger: #dc2626; --ok: #16a34a; --warning: #d97706;
     --danger-bg: #fef2f2; --ok-bg: #ecfdf3; --warn-bg: #fffbeb;
   }
@@ -56,11 +56,11 @@
   .subpanel { display: none; } .subpanel.activo { display: block; }
   .interruptor { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text); margin: 0; }
   .interruptor input { position: absolute; opacity: 0; width: 0; height: 0; }
-  .interruptor .pista { flex-shrink: 0; width: 46px; height: 26px; border-radius: 999px; background: #cbd5d0; position: relative; transition: background .15s; }
+  .interruptor .pista { flex-shrink: 0; width: 46px; height: 26px; border-radius: 999px; background: #d4ccbd; position: relative; transition: background .15s; }
   .interruptor .pista::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
   .interruptor input:checked + .pista { background: var(--accent-grass); }
   .interruptor input:checked + .pista::after { left: 23px; }
-  .interruptor input:focus-visible + .pista { outline: 2px solid rgba(22,163,74,0.5); outline-offset: 2px; }
+  .interruptor input:focus-visible + .pista { outline: 2px solid rgba(63,138,133,0.5); outline-offset: 2px; }
   .interruptor .estado { font-weight: 800; min-width: 92px; }
 
   .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 16px 18px; }
@@ -70,7 +70,7 @@
 
   label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; }
   input, select, textarea { width: 100%; font: inherit; font-size: 14px; color: var(--text); background: #fff; border: 1px solid var(--border-light); border-radius: 8px; padding: 8px 10px; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid rgba(22,163,74,0.35); border-color: var(--accent-grass); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid rgba(63,138,133,0.35); border-color: var(--accent-grass); }
   button.btn { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; border: none; border-radius: 9px; padding: 9px 16px; cursor: pointer; background: linear-gradient(100deg, var(--accent-grass), var(--accent-lime) 65%); color: #fff; }
   button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
   button.btn-sec { background: var(--card-2); color: var(--accent-deep); border: 1px solid var(--border-light); }
@@ -158,52 +158,53 @@
   .barra-export .toast { font-size: 13px; font-weight: 600; }
   .toast.ok { color: var(--ok); } .toast.error { color: var(--danger); }
   /* La tarjeta que se captura (imagen HD / PDF): fondo blanco y colores fijos, para que salga igual de clara siempre. */
-  .informe { background: #ffffff; color: #15321f; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; position: relative; overflow: hidden; }
+  .informe { background: #ffffff; color: #2c2a26; border: 1px solid var(--card-border); border-radius: 12px; padding: 22px 24px; max-width: 760px; position: relative; overflow: hidden; }
   /* Logo del grupo como marca de agua de fondo (Balance General, Detallado por Cliente y Comisión por Carrera): va en una capa
      aparte detrás del contenido; las filas de totales son semitransparentes para que se note. En el PDF cada página lo repite. */
   .informe .inf-logo-fondo { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: 55%; opacity: 0.14; pointer-events: none; z-index: 0; }
   .informe .inf-contenido { position: relative; z-index: 1; }
-  .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #16a34a; padding-bottom: 10px; margin-bottom: 12px; }
+  .informe .inf-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2px solid #3f8a85; padding-bottom: 10px; margin-bottom: 12px; }
   .informe .inf-grupo { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 18px; }
-  .informe .inf-titulo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: #14532d; text-transform: uppercase; letter-spacing: 0.6px; }
-  .informe .inf-periodo { font-size: 12.5px; color: #587264; text-align: right; }
+  .informe .inf-titulo { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 14px; color: #2f6764; text-transform: uppercase; letter-spacing: 0.6px; }
+  .informe .inf-periodo { font-size: 12.5px; color: #766f64; text-align: right; }
   .informe table.com-cols { table-layout: fixed; }
   .informe table.com-cols td:first-child, .informe table.com-cols th:first-child { width: 34%; }
   .informe table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-  .informe th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #587264; padding: 5px 8px; border-bottom: 1px solid #d7e8dc; }
-  .informe td { padding: 6px 8px; border-bottom: 1px solid #eaf3ed; }
+  .informe th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #766f64; padding: 5px 8px; border-bottom: 1px solid #ddd5c6; }
+  .informe td { padding: 6px 8px; border-bottom: 1px solid #ddd5c6; }
   .informe .num { text-align: right; white-space: nowrap; }
   .informe .pos { color: #15803d; font-weight: 700; } .informe .neg { color: #dc2626; font-weight: 700; }
   .sp-check { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-weight: 700; cursor: pointer; }
   .sp-check input { width: auto; margin: 0; }
-  .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f1f8f3; }
+  .informe tr.fila-click { cursor: pointer; } .informe tr.fila-click:hover td { background: #f3efe8; }
   .informe .item-tag { font-size: 10px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #f3d9a4; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
-  .informe tr.total td { font-weight: 800; border-top: 2px solid #14532d; border-bottom: none; background: rgba(241,248,243,0.78); }
-  .informe tr.comision td { font-weight: 800; font-size: 15px; background: #14532d; color: #ffffff; border: none; }
+  .informe tr.total td { font-weight: 800; border-top: 2px solid #2f6764; border-bottom: none; background: rgba(243,239,232,0.78); }
+  .informe tr.comision td { font-weight: 800; font-size: 15px; background: #2f6764; color: #ffffff; border: none; }
   .informe tr.aviso-dif td { background: #fffbeb; color: #92400e; font-weight: 700; }
-  .informe .dia-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; background: #14532d; color: #fff; padding: 6px 10px; border-radius: 8px; margin: 14px 0 6px; display: flex; justify-content: space-between; }
-  .informe .hip-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #14532d; margin: 10px 0 2px; padding-left: 2px; }
-  .informe .car-tit td { background: rgba(241,248,243,0.78); font-weight: 700; color: #14532d; font-size: 12.5px; }
-  .informe tr.sub td { font-weight: 700; background: rgba(248,251,249,0.72); }
-  .informe tr.sub-hip td { font-weight: 800; background: rgba(227,241,232,0.82); }
+  .informe .dia-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; background: #2f6764; color: #fff; padding: 6px 10px; border-radius: 8px; margin: 14px 0 6px; display: flex; justify-content: space-between; }
+  .informe .hip-tit { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; color: #2f6764; margin: 10px 0 2px; padding-left: 2px; }
+  .informe .car-tit td { background: rgba(243,239,232,0.78); font-weight: 700; color: #2f6764; font-size: 12.5px; }
+  .informe tr.sub td { font-weight: 700; background: rgba(248,245,240,0.72); }
+  .informe tr.sub-hip td { font-weight: 800; background: rgba(235,229,218,0.82); }
   /* Detallado por Cliente: cada carrera en su cuadro; el total de la carrera resalta. */
-  .informe .car-caja { border: 1px solid #b9d6c3; border-radius: 10px; margin: 8px 0; overflow: hidden; background: rgba(255,255,255,0.55); }
-  .informe .car-caja .car-cab { background: rgba(227,241,232,0.9); color: #14532d; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .3px; padding: 6px 10px; border-bottom: 1px solid #b9d6c3; }
+  .informe .car-caja { border: 1px solid #cfc5b2; border-radius: 10px; margin: 8px 0; overflow: hidden; background: rgba(255,255,255,0.55); }
+  .informe .car-caja .car-cab { background: rgba(235,229,218,0.9); color: #2f6764; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .3px; padding: 6px 10px; border-bottom: 1px solid #cfc5b2; }
   .informe .car-caja table td { padding: 5px 10px; }
   .informe .car-caja table tr:last-child td { border-bottom: none; }
   .informe .car-total { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15.5px; border-top: 2px solid; }
   .informe .car-total b { font-size: 18px; font-variant-numeric: tabular-nums; }
   .informe .car-total.gana { background: #dcfce7; color: #166534; border-top-color: #16a34a; }
   .informe .car-total.pierde { background: #fee2e2; color: #b91c1c; border-top-color: #dc2626; }
-  .informe .car-total.cero { background: #eef2ef; color: #3f5247; border-top-color: #94a3a0; }
+  .informe .car-total.cero { background: #ebe5da; color: #5a554c; border-top-color: #94a3a0; }
   /* Marca en la tabla de Jugadas: la casilla Caballo se parte en dos (mi caballo vs el otro). */
   .cab-par { display: flex; align-items: center; gap: 4px; }
   .cab-par input { min-width: 0; width: 100%; text-align: center; padding-left: 4px; padding-right: 4px; }
   .tipo-par { display: flex; align-items: center; gap: 4px; }
   .tipo-par input { min-width: 0; }
-  #jTbody td:nth-child(2) input { min-width: 140px; }
-  .tipo-par input[data-c="tipo"] { width: 96px; flex: none; }
-  .tipo-par input[data-c="premio"] { width: 80px; flex: none; text-align: center; background: #fffbeb; border-color: #f3d9a4; }
+  #jTbody td:nth-child(2) input { min-width: 120px; }
+  #jTbody td:nth-child(3) select { min-width: 92px; }
+  .tipo-par input[data-c="tipo"] { width: 84px; flex: none; }
+  .tipo-par input[data-c="premio"] { width: 70px; flex: none; text-align: center; background: #fffbeb; border-color: #f3d9a4; }
   .cab-par .vs { font-size: 11px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; }
   /* Detallado por Cliente — vista mejorada (06-11-2026): jugadas con chip Jugó/Dio, modalidad y caballos de colores. */
   .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
@@ -211,30 +212,30 @@
   .informe .det-dia .dia-tit .dia-monto.gana { background: #dcfce7; color: #166534; }
   .informe .det-dia .dia-tit .dia-monto.pierde { background: #fee2e2; color: #b91c1c; }
   .informe .det-hip .hip-tit { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 15px; }
-  .informe .det-hip .hip-tit::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #16a34a; }
+  .informe .det-hip .hip-tit::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #3f8a85; }
   .informe .det-hip .hip-tit.otros::before { background: #94a3a0; }
   .informe .car-caja { border-radius: 12px; box-shadow: 0 1px 3px rgba(20,83,45,0.08); }
   .informe .car-cab { display: flex; align-items: center; gap: 8px; }
-  .informe .car-cab .car-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #14532d; color: #fff; font-size: 12px; font-weight: 800; }
+  .informe .car-cab .car-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #2f6764; color: #fff; font-size: 12px; font-weight: 800; }
   .informe .car-caja table td { padding: 7px 10px; vertical-align: middle; }
-  .informe .car-caja table tr:nth-child(even) td { background: rgba(244,250,246,0.7); }
+  .informe .car-caja table tr:nth-child(even) td { background: rgba(247,243,236,0.7); }
   .informe .car-caja table td.num { font-weight: 800; font-size: 14px; }
-  .informe .lin-otra { color: #3f5247; font-size: 13px; }
+  .informe .lin-otra { color: #5a554c; font-size: 13px; }
   .informe .lin-otra::before { content: '•'; color: #94a3a0; margin-right: 6px; }
   .informe .jug { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
   .informe .jug-rol { font-size: 11px; font-weight: 800; letter-spacing: .3px; padding: 2px 9px; border-radius: 999px; line-height: 1.3; }
   .informe .jug-rol.jugo { background: #dcfce7; color: #166534; border: 1px solid #a7e3bc; }
   .informe .jug-rol.dio { background: #e0e7ff; color: #3730a3; border: 1px solid #c3cdf8; }
-  .informe .jug-mod { font-weight: 800; font-size: 13px; color: #14532d; background: #eef5f0; border: 1px solid #cfe3d6; border-radius: 6px; padding: 1px 7px; }
+  .informe .jug-mod { font-weight: 800; font-size: 13px; color: #2f6764; background: #ebe5da; border: 1px solid #cfc5b2; border-radius: 6px; padding: 1px 7px; }
   .informe .jug-cab { display: inline-flex; align-items: center; gap: 5px; }
   .informe .cab-col { display: inline-flex; align-items: center; gap: 2px; }
   .informe .cab-col svg { display: block; }
-  .informe .cab-sep { font-weight: 800; color: #587264; font-size: 12px; }
-  .informe .jug-monto { color: #587264; font-size: 12.5px; }
-  .informe .jug-monto b { color: #15321f; font-variant-numeric: tabular-nums; }
-  .informe .det-sub td { font-weight: 800; background: rgba(227,241,232,0.82); }
-  .informe .vacio { padding: 18px; text-align: center; color: #587264; }
-  .informe .sub-linea { color: #587264; font-size: 12px; }
+  .informe .cab-sep { font-weight: 800; color: #766f64; font-size: 12px; }
+  .informe .jug-monto { color: #766f64; font-size: 12.5px; }
+  .informe .jug-monto b { color: #2c2a26; font-variant-numeric: tabular-nums; }
+  .informe .det-sub td { font-weight: 800; background: rgba(235,229,218,0.82); }
+  .informe .vacio { padding: 18px; text-align: center; color: #766f64; }
+  .informe .sub-linea { color: #766f64; font-size: 12px; }
   /* ---------- Recargas, Retiros y Control de Pozos (05-11-2026) ---------- */
   .vacio { color: var(--text-dim); padding: 14px; font-size: 13px; }
   .rec-cli { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px 14px; margin-bottom: 10px; }
@@ -272,7 +273,7 @@
   table.tabla-simple .num, table.tabla-simple th.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.tabla-simple .pos { color: var(--ok); } table.tabla-simple .neg { color: var(--danger); }
   .semaforo { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #94a3a0; }
-  .semaforo.rojo { background: #dc2626; } .semaforo.amarillo { background: #f59e0b; } .semaforo.verde { background: #16a34a; }
+  .semaforo.rojo { background: #dc2626; } .semaforo.amarillo { background: #f59e0b; } .semaforo.verde { background: #3f8a85; }
 
   /* ---------- Mejoras de Oficinas (05-11-2026) ---------- */
   tr.fila-pozo input[data-c="jugador"] { border-color: var(--warning); background: var(--warn-bg); }
@@ -302,11 +303,11 @@
   .soc-tarjeta { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; background: #fff; }
   .soc-cab { background: var(--accent-deep); color: #fff; padding: 9px 14px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
   .soc-cab .pct { font-weight: 600; opacity: .8; font-size: 12.5px; }
-  .soc-f { display: flex; justify-content: space-between; gap: 10px; padding: 6px 14px; font-size: 13.5px; border-top: 1px solid #eef1ee; font-variant-numeric: tabular-nums; }
+  .soc-f { display: flex; justify-content: space-between; gap: 10px; padding: 6px 14px; font-size: 13.5px; border-top: 1px solid #ebe5da; font-variant-numeric: tabular-nums; }
   .soc-f.ajuste { color: #7a5a14; font-style: italic; } .soc-f small { color: var(--text-dim); }
   .soc-f b.pos { color: #15803d; } .soc-f b.neg { color: #b91c1c; }
   .soc-vacio { padding: 10px 14px; color: var(--text-dim); font-size: 13px; }
-  .soc-total, .soc-sub { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px; background: #e9f3ec; border-top: 2px solid var(--accent-deep); font-weight: 800; font-size: 13.5px; color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+  .soc-total, .soc-sub { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px; background: #ebe5da; border-top: 2px solid var(--accent-deep); font-weight: 800; font-size: 13.5px; color: var(--accent-deep); font-variant-numeric: tabular-nums; }
   .soc-com { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; background: linear-gradient(100deg, #d97706, #f59e0b 75%); color: #2b1c02; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; }
   .soc-caja { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0 14px; padding: 12px 16px; background: var(--accent-deep); color: #fff; border-radius: 10px; font-family: 'Outfit', sans-serif; font-weight: 800; }
   .sp-quien { margin: 10px 0; border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 12px; background: var(--card-2); }
@@ -319,11 +320,11 @@
   .informe .informe-ancho-bal, .informe table.bal-dos { width: 100%; }
   .informe table.bal-dos th.bal-pierden { color: #b91c1c; background: rgba(254,242,242,0.85); font-size: 12px; }
   .informe table.bal-dos th.bal-ganan { color: #15803d; background: rgba(236,253,243,0.9); font-size: 12px; }
-  .informe table.bal-dos .bal-sep { width: 14px; padding: 0; border-bottom: none; background: transparent; border-right: 1px solid #d7e8dc; }
+  .informe table.bal-dos .bal-sep { width: 14px; padding: 0; border-bottom: none; background: transparent; border-right: 1px solid #ddd5c6; }
   .informe table.bal-dos td.bal-nom + td + td + td, .informe table.bal-dos tr.sub-bal td:nth-child(4) { padding-left: 12px; }
   .informe table.bal-dos td.bal-nom { width: 28%; } .informe table.bal-dos td.bal-monto { width: 22%; white-space: nowrap; }
-  .informe table.bal-dos tr.sub-bal td { font-weight: 800; font-size: 12.5px; border-top: 2px solid #14532d; background: rgba(241,248,243,0.78); }
-  .informe table.bal-dos td.bal-cero { color: #587264; font-size: 12px; font-style: italic; border-bottom: none; }
+  .informe table.bal-dos tr.sub-bal td { font-weight: 800; font-size: 12.5px; border-top: 2px solid #2f6764; background: rgba(243,239,232,0.78); }
+  .informe table.bal-dos td.bal-cero { color: #766f64; font-size: 12px; font-style: italic; border-bottom: none; }
 </style>
 </head>
 <body>
@@ -759,7 +760,7 @@
   </section>
 
   <!-- ===================== POZO DE UN CLIENTE (ventana) ===================== -->
-  <dialog id="dlgPozo" style="border:1px solid var(--line, #d7e8dc); border-radius:14px; padding:20px; max-width:520px; width:92vw;">
+  <dialog id="dlgPozo" style="border:1px solid var(--line, #ddd5c6); border-radius:14px; padding:20px; max-width:520px; width:92vw;">
     <h2 id="dlgPozoTitulo" style="margin-top:0;">Pozo</h2>
     <div id="dlgPozoActual" class="nota"></div>
     <div class="fila-campos campo" style="margin-top:10px;">
@@ -1104,10 +1105,10 @@ function pintarTabla(erroresPorFila) {
       <td class="n">${i + 1}</td>
       <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
       <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
-      <td style="width:${esMarcaFila(f) ? 190 : 110}px;min-width:${esMarcaFila(f) ? 190 : 110}px;">${esMarcaFila(f)
+      <td style="width:${esMarcaFila(f) ? 170 : 110}px;min-width:${esMarcaFila(f) ? 170 : 110}px;">${esMarcaFila(f)
         ? `<div class="tipo-par"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"><input data-i="${i}" data-c="premio" list="dlPremios" value="${esc(f.premio || '')}" placeholder="pp" title="Premio de la marca: pp (completo), 10a9, 10a8, 10a7…" autocomplete="off"></div>`
         : `<input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off">`}</td>
-      <td style="width:${esMarcaFila(f) ? 150 : 100}px;">${esMarcaFila(f)
+      <td style="width:${esMarcaFila(f) ? 130 : 100}px;">${esMarcaFila(f)
         ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" placeholder="N.º" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" placeholder="N.º" autocomplete="off"></div>`
         : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off">`}</td>
       <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
@@ -1999,7 +2000,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
         dy += Math.round(6 * f);
       }
       ctx.drawImage(canvas, 0, y0, canvas.width, y1 - y0, mx, dy, canvas.width, y1 - y0);
-      ctx.fillStyle = '#587264'; ctx.textAlign = 'center'; ctx.font = `${Math.round(PW * 0.017)}px Arial, sans-serif`;
+      ctx.fillStyle = '#766f64'; ctx.textAlign = 'center'; ctx.font = `${Math.round(PW * 0.017)}px Arial, sans-serif`;
       ctx.fillText(`${nombreGrupo} — ${tituloInf} — Página ${i + 1} de ${tramos.length}`, PW / 2, PH - Math.round(mx * 0.7));
       if (i > 0) pdf.addPage();
       pdf.addImage(pg.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, anchoPdf, altoPdf);

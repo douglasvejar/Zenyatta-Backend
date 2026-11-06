@@ -393,7 +393,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     { jugador: 'RAUL', lado: 'dio', tipo: 'Marca', caballo: '4x3', premio: '10a8', monto: 100 }]);
   check(emp.length === 1 && emp[0].tipo === '10a8' && emp[0].caballo === '3x4', '6s) el plano queda "10a8 (3x4)" con Luis jugando el 3');
   check(/id="dlPremios"/.test(html) && /data-c="premio"/.test(html) && /function filaDeServidor/.test(html), '6t) la casilla del premio sale solo con Marca y trae sus opciones (pp, 10a9, 10a8…)');
-  check(/esMarcaFila\(f\)\s*\?\s*190/.test(html), '6u) el premio solo aparece en filas de Marca');
+  check(/esMarcaFila\(f\)\s*\?\s*170/.test(html), '6u) el premio solo aparece en filas de Marca');
   check(/function sincronizarMarca/.test(html) && /\$\{a\}x\$\{b\}/.test(html), '6l) las dos casillas se juntan como "AxB" para el servidor');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);

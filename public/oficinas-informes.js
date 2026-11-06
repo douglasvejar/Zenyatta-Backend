@@ -110,7 +110,7 @@
     const n = parseInt(numero, 10);
     if (!n || isNaN(n)) return '';
     const [bg, fg] = colorEjemplar(n);
-    return `<span class="cab-col" title="Caballo ${n}"><svg class="cab-num" width="24" height="24" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="${bg}" stroke="#5b6b61" stroke-width="5"/><text x="50" y="72" font-size="${n > 9 ? 54 : 62}" font-weight="800" fill="${fg}" text-anchor="middle" font-family="Arial, sans-serif">${n}</text></svg><svg class="cab-cabeza" width="22" height="22" viewBox="0 0 512 512"><path d="${CABALLO_PATH}" fill="${bg}" stroke="#4b5a51" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span>`;
+    return `<span class="cab-col" title="Caballo ${n}"><svg class="cab-num" width="24" height="24" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="${bg}" stroke="#6b665c" stroke-width="5"/><text x="50" y="72" font-size="${n > 9 ? 54 : 62}" font-weight="800" fill="${fg}" text-anchor="middle" font-family="Arial, sans-serif">${n}</text></svg><svg class="cab-cabeza" width="22" height="22" viewBox="0 0 512 512"><path d="${CABALLO_PATH}" fill="${bg}" stroke="#57524a" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span>`;
   }
   // "3" / "4x3" / "1y2" / "1y2x3" -> caballos de colores con su separador. Si no trae números, queda el texto tal cual.
   function caballosHTML(texto) {
