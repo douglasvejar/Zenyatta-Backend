@@ -357,6 +357,28 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   try { new Function(script); check(true, '5) el script de la pantalla no tiene errores de sintaxis'); } catch (e) { check(false, '5) el script de la pantalla tiene error de sintaxis: ' + e.message); }
 
+  // ---- 6) Marcas escritas como el usuario las escribe: Tipo "4x3" (o "4×3") / "marca" (06-11-2026) ----
+  const ent = (tipo, caballo, lado) => oficinas.normalizarEntradas([{ jugador: 'LUSHO', lado: lado || 'jugo', tipo, caballo, monto: 300 }]);
+  const e1 = ent('4×3', '4');
+  check(e1.errores.length === 0 && e1.entradas[0].tipo === 'pp' && e1.entradas[0].caballo === '4x3', '6a) Tipo "4×3" + Caballo "4" = pp 4x3 (el caso de la captura)');
+  check(ent('4x3', '3').entradas[0].caballo === '3x4', '6b) Tipo 4x3 con Caballo 3: juega con el 3, el cruce queda 3x4');
+  check(ent('4x3', '').errores.length === 0 && ent('4x3', '').entradas[0].caballo === '4x3', '6c) Tipo 4x3 sin Caballo también vale');
+  check(ent('marca', '3x4').entradas[0].tipo === 'pp' && ent('Marcas', '3X4').entradas[0].caballo === '3x4', '6d) Tipo "marca" + Caballo 3x4 = pp 3x4');
+  check(ent('marca', '4').errores.length === 0 && ent('marca', '4').entradas[0].tipo === 'marca', '6e) "marca" con un solo caballo no se inventa nada (el motor avisará que no la reconoce)');
+  check(ent('pp', '4x3').entradas[0].tipo === 'pp' && ent('2p', '4').entradas[0].caballo === '4', '6f) lo de siempre no cambia (pp 4x3, 2p 4)');
+  const cuadreMarca = oficinas.calcularCuadre([
+    { jugador: 'LUSHO', lado: 'jugo', tipo: '4×3', caballo: '4', monto: 300 },
+    { jugador: 'RAUL', lado: 'dio', tipo: 'marca', caballo: '3x4', monto: 300 }]);
+  check(cuadreMarca.cuadra && cuadreMarca.detalle.length === 1 && cuadreMarca.detalle[0].etiqueta === 'pp del 4x3', '6g) Lusho (4×3) y Raúl (marca 3x4) cuadran como un solo cruce');
+  const parejaMarca = oficinas.emparejar([
+    { jugador: 'LUSHO', lado: 'jugo', tipo: '4×3', caballo: '4', monto: 300 },
+    { jugador: 'RAUL', lado: 'dio', tipo: 'pp', caballo: '3x4', monto: 300 }]);
+  check(parejaMarca.length === 1 && parejaMarca[0].tipo === 'pp' && parejaMarca[0].caballo === '4x3' && parejaMarca[0].jugador === 'LUSHO', '6h) Lusho va con el 4 en el plano');
+  check(oficinas.tiposNoReconocidos([{ jugador: 'LUSHO', lado: 'jugo', tipo: '4×3', caballo: '4', monto: 300 }]).length === 0, '6i) el motor reconoce la marca escrita como 4×3');
+  check(/<option value="marca">/.test(html), '6j) la lista de tipos ofrece "marca"');
+  check(/function esMarcaFila/.test(html) && /data-c="cab1"/.test(html) && /data-c="cab2"/.test(html) && /class="cab-par"/.test(html), '6k) con Tipo "Marca" la casilla Caballo se parte en dos (cab1 vs cab2)');
+  check(/function sincronizarMarca/.test(html) && /\$\{a\}x\$\{b\}/.test(html), '6l) las dos casillas se juntan como "AxB" para el servidor');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();

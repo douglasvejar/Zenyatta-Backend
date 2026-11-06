@@ -34,7 +34,25 @@ function tipoCanonico(t) {
   return normalizarModalidadCombo(String(t || '').trim()).replace(/\s+/g, ' ');
 }
 function caballoCanonico(c) {
-  return String(c || '').trim().replace(/\s+/g, '').replace(/X/g, 'x');
+  return String(c || '').trim().replace(/\s+/g, '').replace(/[X×✕✖]/g, 'x');
+}
+// Atajos para escribir una MARCA en la tabla (06-11-2026, a pedido del usuario, que escribió "4x3" en Tipo y "4" en Caballo):
+//  - Tipo "4x3" (o "4×3")  -> tipo pp, caballo 4x3. Si en Caballo puso el número con el que juega y es el segundo (3), el cruce se
+//    escribe al revés (3x4) para que quien juega vaya con SU caballo.
+//  - Tipo "marca"/"marcas" + Caballo "4x3" -> tipo pp, caballo 4x3.
+// El resto (pp + 4x3 de siempre, 2p, 3n…) no cambia.
+function interpretarMarca(tipoCrudo, caballoCrudo) {
+  const tipo = String(tipoCrudo || '').trim().replace(/\s+/g, '').replace(/[X×✕✖]/g, 'x').toLowerCase();
+  const caballo = caballoCanonico(caballoCrudo);
+  const m = tipo.match(/^(\d{1,2})x(\d{1,2})$/);
+  if (m) {
+    const [a, b] = [m[1], m[2]];
+    const sueltoRaw = caballo.match(/^\d{1,2}$/) ? String(Number(caballo)) : null;
+    if (sueltoRaw !== null && sueltoRaw === String(Number(b)) && sueltoRaw !== String(Number(a))) return { tipo: 'pp', caballo: `${b}x${a}` };
+    return { tipo: 'pp', caballo: `${a}x${b}` };
+  }
+  if ((tipo === 'marca' || tipo === 'marcas') && /^\d{1,2}x\d{1,2}$/.test(caballo)) return { tipo: 'pp', caballo };
+  return null;
 }
 // "4x3" y "3x4" son el mismo cruce visto desde el otro lado: la clave los junta.
 function claveCaballo(c) {
@@ -69,8 +87,9 @@ function normalizarEntradas(filas) {
     const n = i + 1;
     const jugador = nombreCanonico(f.jugador);
     const lado = String(f.lado || '').toLowerCase().replace('ó', 'o');
-    const tipo = tipoCanonico(f.tipo);
-    const caballo = caballoCanonico(f.caballo);
+    const marca = interpretarMarca(f.tipo, f.caballo);
+    const tipo = marca ? marca.tipo : tipoCanonico(f.tipo);
+    const caballo = marca ? marca.caballo : caballoCanonico(f.caballo);
     const monto = round2(montoComoNumero(f.monto));
     if (!jugador) errores.push({ fila: n, error: 'Falta el jugador.' });
     else if (!LADOS.includes(lado)) errores.push({ fila: n, error: 'Elige si jugó o dio.' });
@@ -195,6 +214,6 @@ function tiposNoReconocidos(filas) {
 }
 
 module.exports = {
-  normalizarEntradas, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
+  normalizarEntradas, interpretarMarca, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
   nombreCanonico, tipoCanonico, caballoCanonico, claveGrupo, montoComoNumero
 };

@@ -196,6 +196,10 @@
   .informe .car-total.gana { background: #dcfce7; color: #166534; border-top-color: #16a34a; }
   .informe .car-total.pierde { background: #fee2e2; color: #b91c1c; border-top-color: #dc2626; }
   .informe .car-total.cero { background: #eef2ef; color: #3f5247; border-top-color: #94a3a0; }
+  /* Marca en la tabla de Jugadas: la casilla Caballo se parte en dos (mi caballo vs el otro). */
+  .cab-par { display: flex; align-items: center; gap: 4px; }
+  .cab-par input { min-width: 0; width: 100%; text-align: center; padding-left: 4px; padding-right: 4px; }
+  .cab-par .vs { font-size: 11px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; }
   /* Detallado por Cliente — vista mejorada (06-11-2026): jugadas con chip Jugó/Dio, modalidad y caballos de colores. */
   .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
   .informe .det-dia .dia-tit .dia-monto { background: rgba(255,255,255,0.14); border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums; }
@@ -851,7 +855,7 @@
 </div>
 <datalist id="dlClientes"></datalist>
 <datalist id="dlTipos">
-  <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp">
+  <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp"><option value="marca">
 </datalist>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1054,6 +1058,30 @@ function quitarFila(i) {
   pintarTabla();
   programarCuadre();
 }
+// Tipo "Marca": la casilla Caballo se parte en dos (el caballo con el que juega y el caballo contra el que juega); el
+// servidor lo recibe como caballo "AxB" y tipo pp (ver interpretarMarca en hipismoOficinasCalc.js).
+function esMarcaFila(f) { return /^marcas?$/i.test(String((f && f.tipo) || '').trim()); }
+function partesMarca(f) {
+  if (f.cab1 !== undefined || f.cab2 !== undefined) return [f.cab1 || '', f.cab2 || ''];
+  const m = String(f.caballo || '').trim().match(/^(\d{1,2})\s*[x×]\s*(\d{1,2})$/i);
+  return m ? [m[1], m[2]] : [String(f.caballo || '').trim(), ''];
+}
+function sincronizarMarca(i) {
+  const f = FILAS[i];
+  const a = String(f.cab1 || '').replace(/\D/g, ''), b = String(f.cab2 || '').replace(/\D/g, '');
+  f.caballo = a && b ? `${a}x${b}` : '';
+}
+function alEscribirFila(t) {
+  const f = FILAS[+t.dataset.i], c = t.dataset.c;
+  if (c === 'cab1' || c === 'cab2') {
+    const [pa, pb] = partesMarca(f);
+    if (f.cab1 === undefined) f.cab1 = pa;
+    if (f.cab2 === undefined) f.cab2 = pb;
+    f[c] = t.value; sincronizarMarca(+t.dataset.i); return;
+  }
+  f[c] = t.value;
+  if (c === 'lado') t.className = 'lado-' + t.value;
+}
 function pintarTabla(erroresPorFila) {
   const malas = new Set((erroresPorFila || []).map(e => e.fila));
   $('jTbody').innerHTML = FILAS.map((f, i) => `
@@ -1062,7 +1090,9 @@ function pintarTabla(erroresPorFila) {
       <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
       <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
       <td style="width:110px;"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"></td>
-      <td style="width:100px;"><input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off"></td>
+      <td style="width:${esMarcaFila(f) ? 150 : 100}px;">${esMarcaFila(f)
+        ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" placeholder="N.º" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" placeholder="N.º" autocomplete="off"></div>`
+        : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off">`}</td>
       <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
       <td class="x" style="width:128px;white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Duplicar fila (Ctrl+D)" onclick="duplicarFila(${i})">⧉</button> <button type="button" class="btn btn-sec btn-chico" title="Contraparte: la misma jugada del otro lado (Jugó ⇄ Dio)" onclick="duplicarContraparte(${i})">⇄</button> <button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
@@ -1070,14 +1100,20 @@ function pintarTabla(erroresPorFila) {
 }
 $('jTbody').addEventListener('input', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
-  FILAS[+t.dataset.i][t.dataset.c] = t.value;
-  if (t.dataset.c === 'lado') t.className = 'lado-' + t.value;
+  alEscribirFila(t);
   programarCuadre();
 });
 $('jTbody').addEventListener('change', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
-  FILAS[+t.dataset.i][t.dataset.c] = t.value;
-  if (t.dataset.c === 'lado') t.className = 'lado-' + t.value;
+  const i = +t.dataset.i;
+  alEscribirFila(t);
+  // ¿La fila quedó como Marca (o dejó de serlo)? Entonces la casilla Caballo cambia de una a dos casillas.
+  if (t.dataset.c === 'tipo' && esMarcaFila(FILAS[i]) !== !!t.closest('tr').querySelector('[data-c="cab1"]')) {
+    // Al elegir "Marca": la casilla Caballo pasa a ser dos casillas (si ya había "4x3" se reparte solo).
+    pintarTabla();
+    const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${esMarcaFila(FILAS[i]) ? 'cab1' : 'caballo'}"]`);
+    if (inp) inp.focus();
+  }
   programarCuadre();
 });
 // Enter en el monto de la última fila abre una fila nueva y salta al jugador.
