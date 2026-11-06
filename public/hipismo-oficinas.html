@@ -69,6 +69,11 @@
   .card + .card { margin-top: 14px; }
   .card h2 { font-size: 17px; margin-bottom: 4px; }
   .nota { color: var(--text-dim); font-size: 13px; margin: 2px 0 12px; }
+  .pz-estado { display: inline-block; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 3px 11px; }
+  .pz-estado.con { background: var(--ok-bg); color: var(--accent-deep); border: 1px solid rgba(22,163,74,0.35); }
+  .pz-estado.sin { background: #fffbeb; color: #92400e; border: 1px dashed #d97706; }
+  .pz-ficha { margin-top: 14px; border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; background: var(--card-2); }
+  .pz-ficha .pz-resumen { color: var(--text-dim); font-size: 13px; margin: 8px 0 12px; }
   .lk-fila { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--card-border); }
   .lk-fila .lk-nombre { font-weight: 700; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lk-fila .lk-btns { display: flex; gap: 6px; flex: 0 0 auto; }
@@ -382,6 +387,7 @@
   <div class="tabs" role="tablist">
     <button type="button" class="tab activa" data-tab="jugadas" onclick="irATab('jugadas')">🎯 Jugadas</button>
     <button type="button" class="tab" data-tab="registro" onclick="irATab('registro')">📚 Registro de Jugadas</button>
+    <button type="button" class="tab" data-tab="pizarras" onclick="irATab('pizarras')">🏁 Pizarras</button>
     <button type="button" class="tab" data-tab="cierredia" data-perm="oficinas_informes" onclick="irATab('cierredia')">📅 Cierre del Día</button>
     <button type="button" class="tab" data-tab="balance" data-perm="oficinas_informes" onclick="irATab('balance')">💰 Balance General</button>
     <button type="button" class="tab" data-tab="saldospozos" data-perm="oficinas_informes" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
@@ -482,6 +488,22 @@
       <div class="msg" id="rMsg"></div>
     </div>
     <div id="rLista"></div>
+  </section>
+
+  <!-- ===================== PIZARRAS ===================== -->
+  <section class="panel" id="panel-pizarras">
+    <div class="card">
+      <h2>Pizarras</h2>
+      <p class="nota">Elige el día, el hipódromo y la carrera para ver su pizarra (llegada). Si todavía no la tiene, cárgala aquí; si ya la tiene, puedes modificarla. Al guardar, todas las jugadas de esa carrera se recalculan solas.</p>
+      <div class="fila-campos">
+        <div><label for="pzFecha">Fecha</label><input type="date" id="pzFecha" onchange="pzCambioHipodromo()"></div>
+        <div><label for="pzHipodromo">Hipódromo</label><select id="pzHipodromo" data-buscar onchange="pzCambioHipodromo()"><option value="">— Elige —</option></select></div>
+        <div><label for="pzCarrera">Carrera</label><select id="pzCarrera" onchange="pzAbrirCarrera()"><option value="">—</option></select></div>
+      </div>
+      <div class="cargadas" id="pzCargadas"></div>
+      <div id="pzCaja"><div class="vacio">Elige el hipódromo y la carrera.</div></div>
+      <div class="msg" id="pzMsg"></div>
+    </div>
   </section>
 
   <section class="panel" id="panel-balance">
@@ -1049,11 +1071,111 @@ async function copiarLinkDe(id) {
   msg('lkMsg', ok ? `📋 Mensaje con el link de ${tituloNombre(c.nombre)} copiado.` : 'No se pudo copiar; tu navegador no lo permite.', ok);
 }
 
+// ------------------------------------------------------------------
+// PIZARRAS: ver, cargar o modificar la llegada de una carrera. Al guardar se recalculan solas todas las jugadas de esa carrera.
+// Usa lo que ya existe: la carrera se vuelve a guardar con sus mismas jugadas y la pizarra nueva (/oficinas/guardar, que sustituye a la
+// anterior); si fue cargada como plano en Grupos Hípicos (sin tabla de jugadas) se corrige con /pizarras/tercios/:id.
+// ------------------------------------------------------------------
+let PZ = { cargadas: [], pendientes: [], max: 12, datos: null };
+function pzAbrirPestana() {
+  if (!$('pzFecha').value) $('pzFecha').value = fechaHoyVenezuela();
+  const sel = $('pzHipodromo');
+  if (sel.options.length <= 1 && HIPODROMOS.length) sel.innerHTML = '<option value="">— Elige —</option>' + opcionesHipodromosAgrupadas(HIPODROMOS.map(h => ({ valor: h.id, nombre: h.nombre })));
+  if ($('pzHipodromo').value) pzCambioHipodromo(true);
+}
+function pzArmarCarreras() {
+  const sel = $('pzCarrera'), actual = sel.value;
+  let o = '<option value="">—</option>';
+  for (let n = 1; n <= PZ.max; n++) o += `<option value="${n}">${n}${PZ.pendientes.includes(n) ? '  ⏳ sin pizarra' : (PZ.cargadas.includes(n) ? '  ✅ con pizarra' : '')}</option>`;
+  sel.innerHTML = o; sel.value = actual;
+  $('pzCargadas').innerHTML = PZ.cargadas.length
+    ? 'Con jugadas: ' + PZ.cargadas.map(n => `<button type="button" class="chip-carrera${n === Number(actual) ? ' actual' : ''}${PZ.pendientes.includes(n) ? ' pend' : ''}" onclick="pzIrACarrera(${n})" title="${PZ.pendientes.includes(n) ? 'Sin pizarra: ábrela para cargarla' : 'Con pizarra: ábrela para verla o modificarla'}">${n}${PZ.pendientes.includes(n) ? ' ⏳' : ''}</button>`).join('')
+    : ($('pzHipodromo').value ? 'Este hipódromo no tiene carreras con jugadas ese día.' : '');
+}
+async function pzCambioHipodromo(conservar) {
+  const h = $('pzHipodromo').value;
+  const carrera = conservar ? $('pzCarrera').value : '';
+  msg('pzMsg', '');
+  if (!h) { PZ = { cargadas: [], pendientes: [], max: 12, datos: null }; pzArmarCarreras(); $('pzCaja').innerHTML = '<div class="vacio">Elige el hipódromo y la carrera.</div>'; return; }
+  try {
+    const r = await api('/api/hipismo/oficinas/siguiente-carrera?hipodromoId=' + encodeURIComponent(h) + '&fecha=' + encodeURIComponent($('pzFecha').value));
+    PZ.cargadas = r.cargadas || []; PZ.pendientes = r.pendientes || []; PZ.max = Math.max(r.carrerasMax || 12, ...PZ.cargadas, 1);
+  } catch (e) { msg('pzMsg', e.message, false); return; }
+  $('pzCarrera').innerHTML = '<option value="">—</option>'; $('pzCarrera').value = '';
+  pzArmarCarreras();
+  if (carrera) { $('pzCarrera').value = carrera; pzArmarCarreras(); }
+  await pzAbrirCarrera();
+}
+async function pzIrACarrera(n) { $('pzCarrera').value = String(n); await pzAbrirCarrera(); }
+async function pzAbrirCarrera() {
+  const h = $('pzHipodromo').value, c = $('pzCarrera').value, caja = $('pzCaja');
+  msg('pzMsg', ''); PZ.datos = null; pzArmarCarreras();
+  if (!h || !c) { caja.innerHTML = '<div class="vacio">Elige el hipódromo y la carrera.</div>'; return; }
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  let r;
+  try { r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent($('pzFecha').value)}`); }
+  catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; return; }
+  PZ.datos = r;
+  const hip = HIPODROMOS.find(x => x.id === h), titulo = `${hip ? esc(nombreHip(hip.nombre)) : 'Hipódromo'} — carrera ${esc(c)} · ${INF.fechaCorta($('pzFecha').value)}`;
+  if (!r.existe) {
+    caja.innerHTML = `<div class="pz-ficha"><b>${titulo}</b><div class="pz-resumen">Esta carrera todavía no tiene jugadas cargadas, así que no hay nada que calcular. Cárgalas primero y luego pon aquí su pizarra.</div>
+      <button type="button" class="btn" onclick="pzIrAJugadas()">🎯 Ir a cargar las jugadas</button></div>`;
+    return;
+  }
+  const tieneFilas = Array.isArray(r.filas) && r.filas.length > 0;
+  const n = tieneFilas ? r.filas.length : null;
+  const con = !r.pendiente && !!r.pizarra;
+  const resumen = tieneFilas
+    ? `${n} ${n === 1 ? 'jugada' : 'jugadas'} en esta carrera. ${con ? 'Al modificar la pizarra se recalculan todas y cambian los saldos de esos clientes.' : 'Al guardar la pizarra se calculan todas y entran a los saldos.'}`
+    : 'Esta carrera se cargó como plano desde Hipismo Grupos Hípicos: se corrige su pizarra y se recalculan todos sus tickets.';
+  caja.innerHTML = `<div class="pz-ficha"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><b>${titulo}</b>
+      <span class="pz-estado ${con ? 'con' : 'sin'}">${con ? '✅ Pizarra cargada' : '⏳ Sin pizarra'}</span></div>
+    <div class="pz-resumen">${resumen}</div>
+    <div class="fila-campos" style="max-width:520px;">
+      <div><label for="pzPizarra">Llegada (pizarra)</label><input type="text" id="pzPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off" value="${esc(r.pizarra || '')}" onkeydown="if(event.key==='Enter')pzGuardar()"></div>
+      <div><label for="pzRet">Retirados (opcional)</label><input type="text" id="pzRet" placeholder="Ej. 5" autocomplete="off" value="${esc(r.ret || '')}"${tieneFilas ? '' : ' disabled'}></div>
+    </div>
+    <div style="margin-top:14px;"><button type="button" class="btn" id="pzBtn" onclick="pzGuardar()">${con ? '💾 Modificar pizarra y recalcular' : '💾 Guardar pizarra y calcular'}</button></div></div>`;
+  $('pzPizarra').focus();
+}
+async function pzGuardar() {
+  const r = PZ.datos; if (!r || !r.existe) return;
+  const pizarra = $('pzPizarra').value.trim(), ret = $('pzRet').value.trim();
+  const h = $('pzHipodromo').value, c = Number($('pzCarrera').value), fecha = $('pzFecha').value;
+  if (!pizarra) return msg('pzMsg', 'Escribe la pizarra (el orden de llegada).', false);
+  const con = !r.pendiente && !!r.pizarra;
+  if (con && pizarra === String(r.pizarra).trim() && ret === String(r.ret || '').trim()) return msg('pzMsg', 'Esa ya es la pizarra guardada: no hay nada que cambiar.', false);
+  if (con && !confirm(`¿Cambiar la pizarra de la carrera ${c}?\n\nAntes: ${r.pizarra}\nAhora: ${pizarra}\n\nSe recalcularán todas las jugadas de esta carrera y cambiarán los saldos de esos clientes.`)) return;
+  $('pzBtn').disabled = true; msg('pzMsg', '');
+  try {
+    if (Array.isArray(r.filas) && r.filas.length) {
+      await api('/api/hipismo/oficinas/guardar', { method: 'POST', body: JSON.stringify({
+        filas: r.filas.map(filaDeServidor), pizarra, hipodromoId: h, carreraNumero: c, ret, fecha, cruzaJugadas: !!(r.cruzaJugadas && puedeCruzarJugadas())
+      }) });
+    } else if (r.planoId) {
+      await api('/api/hipismo/pizarras/tercios/' + encodeURIComponent(r.planoId), { method: 'PUT', body: JSON.stringify({ pizarra }) });
+    } else {
+      throw new Error('No se pudo identificar la carrera para cambiar su pizarra.');
+    }
+  } catch (e) { $('pzBtn').disabled = false; return msg('pzMsg', textoErrorPizarra(e), false); }
+  const n = Array.isArray(r.filas) ? r.filas.length : null;
+  await pzCambioHipodromo(true);
+  msg('pzMsg', `✅ Pizarra ${con ? 'modificada' : 'guardada'} (${pizarra}): ${n ? `se recalcularon las ${n} jugadas` : 'se recalcularon todos los tickets'} de la carrera ${c}.`, true);
+  if (typeof avisarPizarrasFaltan === 'function') avisarPizarrasFaltan();
+}
+function textoErrorPizarra(e) { return (e && e.datos && e.datos.cuadre) ? 'La carrera no cuadra con esa pizarra: ' + e.message : (e && e.message) || 'No se pudo guardar la pizarra.'; }
+async function pzIrAJugadas() {
+  $('jFecha').value = $('pzFecha').value; $('jHipodromo').value = $('pzHipodromo').value;
+  irATab('jugadas');
+  await abrirSiguienteCarrera(); ponerCarrera($('pzCarrera').value); await cambioCarrera(true);
+}
+
 function irATab(t) {
   if (t === 'jugadas' && typeof avisarPizarrasFaltan === 'function') avisarPizarrasFaltan();
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === t));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('activo', p.id === 'panel-' + t));
   if (t === 'registro') abrirRegistro();
+  if (t === 'pizarras') pzAbrirPestana();
   if (t === 'configuracion') cargarConfiguracion();
   if (t === 'clientes') cargarClientes();
   if (t === 'hipodromos') cargarHipodromos();
@@ -1135,6 +1257,9 @@ async function cargarHipodromos() {
   const actual = sel.value;
   sel.innerHTML = '<option value="">— Elige —</option>' + opcionesHipodromosAgrupadas(HIPODROMOS.map(h => ({ valor: h.id, nombre: h.nombre })));
   if (actual && HIPODROMOS.some(h => h.id === actual)) sel.value = actual;
+  const sp = $('pzHipodromo'), actualP = sp.value;
+  sp.innerHTML = '<option value="">— Elige —</option>' + opcionesHipodromosAgrupadas(HIPODROMOS.map(h => ({ valor: h.id, nombre: h.nombre })));
+  if (actualP && HIPODROMOS.some(h => h.id === actualP)) sp.value = actualP;
 }
 async function cargarClientes() {
   try { CLIENTES = await api('/api/jugadores'); } catch (e) { CLIENTES = []; msg('cMsg', e.message, false); }
