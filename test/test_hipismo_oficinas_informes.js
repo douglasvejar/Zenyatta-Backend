@@ -287,7 +287,7 @@ async function invocarRuta(handler, req) {
   check(/nombreHip\(h\.nombre\)/.test(html) && !/>\$\{esc\(h\.nombre\)\}</.test(html.replace(/hNombre/g, '')), '4f) los hipódromos se muestran con el formato (primera letra en mayúscula) en todas las pantallas');
   check(/inf-dia/.test(html) && /inf-hip/.test(html), '3) los bloques de día y de hipódromo están marcados para repetirlos en cada página');
   check(/Semana actual/.test(html) && /Semana anterior/.test(html) && /Ver rango/.test(html), '3) selector de semana + rango de fechas');
-  const script = html.match(/<script>([\s\S]*?)<\/script>\s*<script src="oficinas-mejoras.js"><\/script>\s*<\/body>/)[1];
+  const script = html.match(/<script>([\s\S]*?)<\/script>\s*<script src="oficinas-mejoras.js"><\/script>(?:\s*<script src="oficinas-socios.js"><\/script>)?\s*<\/body>/)[1];
   try { new Function(script); check(true, '3) el script de la pantalla compila'); } catch (e) { check(false, '3) error de sintaxis: ' + e.message); }
 
   global.Date = OriginalDate;

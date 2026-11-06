@@ -248,6 +248,35 @@
   .cd-avisos { margin: 0 0 12px; padding-left: 18px; list-style: disc; font-size: 13.5px; } .cd-avisos li { margin-bottom: 4px; } .rec-sep { margin: 0 6px; color: var(--text-dim); } .cd-avisos li.error { color: var(--danger); font-weight: 600; } .cd-avisos li.aviso { color: #92400e; }
   .cd-hip { background: var(--card-2); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
   .cd-hip-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* Socios (05-11-2026) */
+  .informe.informe-ancho { max-width: 980px; }
+  .soc-fila { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
+  .soc-fila .soc-nombre { flex: 2 1 200px; } .soc-fila .soc-pct { flex: 0 1 140px; }
+  .soc-fila .soc-n { flex: 0 1 100px; font-size: 12.5px; color: var(--text-dim); padding-bottom: 10px; }
+  .soc-cuadre { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .soc-cuadre:empty { display: none; }
+  .soc-cuadre.ok { background: var(--ok-bg); color: #14602b; } .soc-cuadre.mal { background: var(--danger-bg); color: #9b1c1c; }
+  .soc-cli { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--card-border); }
+  .soc-cli label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; font-weight: 500; }
+  .soc-cli label { font-size: 14px; text-transform: none; letter-spacing: 0; } .soc-cli label input { width: auto; } .soc-cli small { color: var(--text-dim); }
+  .soc-cli select { max-width: 220px; flex: 0 0 220px; }
+  .soc-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; margin: 14px 0; align-items: start; }
+  .soc-tarjeta { border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; background: #fff; }
+  .soc-cab { background: var(--accent-deep); color: #fff; padding: 9px 14px; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
+  .soc-cab .pct { font-weight: 600; opacity: .8; font-size: 12.5px; }
+  .soc-f { display: flex; justify-content: space-between; gap: 10px; padding: 6px 14px; font-size: 13.5px; border-top: 1px solid #eef1ee; font-variant-numeric: tabular-nums; }
+  .soc-f.ajuste { color: #7a5a14; font-style: italic; } .soc-f small { color: var(--text-dim); }
+  .soc-f b.pos { color: #15803d; } .soc-f b.neg { color: #b91c1c; }
+  .soc-vacio { padding: 10px 14px; color: var(--text-dim); font-size: 13px; }
+  .soc-total, .soc-sub { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px; background: #e9f3ec; border-top: 2px solid var(--accent-deep); font-weight: 800; font-size: 13.5px; color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+  .soc-com { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; background: linear-gradient(100deg, #d97706, #f59e0b 75%); color: #2b1c02; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 14px; }
+  .soc-caja { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0 14px; padding: 12px 16px; background: var(--accent-deep); color: #fff; border-radius: 10px; font-family: 'Outfit', sans-serif; font-weight: 800; }
+  .sp-quien { margin: 10px 0; border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 12px; background: var(--card-2); }
+  .sp-quien summary { cursor: pointer; font-weight: 700; font-size: 13.5px; } .sp-quien summary span { color: var(--text-dim); font-weight: 500; margin-left: 8px; }
+  .sp-seleccion { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow: auto; }
+  .sp-sel { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--card-border); border-radius: 999px; background: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .sp-sel input { width: auto; margin: 0; } .sp-sel small { color: var(--text-dim); font-weight: 500; } .sp-sel.off { opacity: .55; text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -279,6 +308,8 @@
     <button type="button" class="tab" data-tab="saldospozos" data-perm="oficinas_informes" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
     <button type="button" class="tab" data-tab="recargas" data-perm="oficinas_saldos" onclick="irATab('recargas')">💵 Recargas y Retiros</button>
     <button type="button" class="tab" data-tab="controlpozos" data-perm="oficinas_saldos" onclick="irATab('controlpozos')">🚦 Control de Pozos</button>
+    <button type="button" class="tab oculto" data-tab="balancesocios" data-perm="oficinas_informes" onclick="irATab('balancesocios')">🤝 Balance por Socios</button>
+    <button type="button" class="tab oculto" data-tab="comisionessocios" data-perm="oficinas_informes" onclick="irATab('comisionessocios')">🤝 Comisiones por Socios</button>
     <button type="button" class="tab" data-tab="detalle" data-perm="oficinas_informes" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" data-perm="oficinas_informes" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
     <button type="button" class="tab" data-tab="historial" onclick="irATab('historial')">📜 Historial de Cambios</button>
@@ -395,6 +426,16 @@
       <div id="spPeriodo"></div>
       <div class="aviso info oculto" id="spPendientes"></div>
       <label class="sp-check"><input type="checkbox" id="spIncluirDev" onchange="pintarSaldosPozos()"> Incluir devolución %</label>
+      <details class="sp-quien">
+        <summary>👥 Quién sale en la imagen y el texto <span id="spContador"></span></summary>
+        <p class="nota" style="margin:6px 0;">Desmarca a los clientes que no quieres mandar. Queda guardado: un cliente nuevo sale marcado solo.</p>
+        <div class="barra-export" style="margin:0 0 8px;">
+          <button type="button" class="btn btn-sec btn-chico" onclick="marcarTodosPlano()">Marcar todos</button>
+          <button type="button" class="btn btn-sec btn-chico" onclick="desmarcarTodosPlano()">Desmarcar todos</button>
+          <button type="button" class="btn btn-sec btn-chico" onclick="quitarEnCeroPlano()">Quitar los que están en 0</button>
+        </div>
+        <div id="spSeleccion" class="sp-seleccion"></div>
+      </details>
       <div class="barra-export">
         <button type="button" class="btn btn-sec" onclick="copiarImagenHD('spCaptura','saldos_con_pozos')">📸 Copiar imagen HD</button>
         <button type="button" class="btn btn-sec" onclick="descargarPDF('spCaptura','saldos_con_pozos','spToast')">📄 Descargar PDF</button>
@@ -402,6 +443,40 @@
         <span class="toast" id="spToast"></span>
       </div>
       <div class="informe" id="spCaptura" style="max-width:520px; margin-left:auto; margin-right:auto;"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== SOCIOS (05-11-2026) ===================== -->
+  <section class="panel" id="panel-comisionessocios">
+    <div class="card">
+      <h2>Comisiones por Socios</h2>
+      <p class="nota">Cuánto produjo cada cliente en comisión (ya restando los % devueltos), agrupado por el socio al que pertenece. La suma tiene que ser exactamente la comisión del Balance General.</p>
+      <div id="csPeriodo"></div>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('csCaptura','comisiones_por_socios')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('csCaptura','comisiones_por_socios','csToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="copiarComisionesTexto()">📋 Copiar texto</button>
+        <button type="button" class="btn btn-sec" onclick="excelComisionesSocios()">📊 Descargar Excel</button>
+        <span class="toast" id="csToast"></span>
+      </div>
+      <div class="soc-cuadre" id="csCuadre"></div>
+      <div class="informe informe-ancho" id="csCaptura"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+  <section class="panel" id="panel-balancesocios">
+    <div class="card">
+      <h2>Balance por Socios</h2>
+      <p class="nota">El saldo real de cada cliente (el mismo del Balance General) en la lista del socio al que pertenece, y al final de cada lista la comisión que le toca según su % de sociedad.</p>
+      <div id="bsPeriodo"></div>
+      <div class="barra-export">
+        <button type="button" class="btn btn-sec" onclick="copiarImagenHD('bsCaptura','balance_por_socios')">📸 Copiar imagen HD</button>
+        <button type="button" class="btn btn-sec" onclick="descargarPDF('bsCaptura','balance_por_socios','bsToast')">📄 Descargar PDF</button>
+        <button type="button" class="btn btn-sec" onclick="copiarBalanceTexto()">📋 Copiar texto</button>
+        <button type="button" class="btn btn-sec" onclick="excelBalanceSocios()">📊 Descargar Excel</button>
+        <span class="toast" id="bsToast"></span>
+      </div>
+      <div class="soc-cuadre" id="bsCuadre"></div>
+      <div class="informe informe-ancho" id="bsCaptura"><div class="vacio">Cargando…</div></div>
     </div>
   </section>
 
@@ -640,6 +715,7 @@
       <h2>⚙️ Configuración</h2>
       <div class="subtabs" role="tablist">
         <button type="button" class="subtab activa" data-sub="planos" onclick="irASubConfig('planos')">📄 Planos para grupos</button>
+        <button type="button" class="subtab" data-sub="socios" onclick="irASubConfig('socios')">🤝 Socios</button>
       </div>
       <div class="subpanel activo" id="sub-planos">
         <h3 style="font-size:16px;margin-bottom:4px;">Planos para grupos</h3>
@@ -651,6 +727,28 @@
           <span style="font-weight:500;color:var(--text-dim);">Mostrar el plano resuelto al calcular una jugada</span>
         </label>
         <div class="msg" id="cfgMsg"></div>
+      </div>
+      <div class="subpanel" id="sub-socios">
+        <h3 style="font-size:16px;margin-bottom:4px;">Socios de la oficina</h3>
+        <p class="nota">Crea los socios y el % que le toca a cada uno: tiene que sumar <b>exactamente 100%</b>. Después asígnale clientes a cada socio. Esto <b>no cambia ningún saldo</b>: solo agrupa la comisión en <b>Comisiones por Socios</b> y <b>Balance por Socios</b>. Si no creas socios, la oficina calcula como siempre.</p>
+        <div id="socFilas"></div>
+        <div class="soc-cuadre" id="socSuma"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+          <button type="button" class="btn btn-sec" onclick="agregarSocio()">+ Agregar socio</button>
+          <button type="button" class="btn" id="socGuardar" onclick="guardarSocios()">💾 Guardar socios</button>
+        </div>
+        <div class="msg" id="socMsg"></div>
+        <div id="socAsignar" class="oculto" style="margin-top:22px;">
+          <h3 style="font-size:16px;margin-bottom:4px;">¿A qué socio pertenece cada cliente?</h3>
+          <p class="nota">Un cliente pertenece a un solo socio. Cambia el socio en la lista, o marca varios clientes y asígnalos de una vez.</p>
+          <div class="fila-campos" style="margin-bottom:10px;">
+            <div><label for="socBuscar">Buscar cliente</label><input type="text" id="socBuscar" placeholder="Escribe para filtrar…" autocomplete="off" oninput="pintarAsignacion()"></div>
+            <div><label for="socMasivo">Asignar los marcados a</label><select id="socMasivo"></select></div>
+            <div><button type="button" class="btn btn-sec" onclick="asignarMarcados()">Asignar marcados</button></div>
+          </div>
+          <div class="msg" id="socAsigMsg"></div>
+          <div id="socLista"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -1787,5 +1885,6 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
 })();
 </script>
 <script src="oficinas-mejoras.js"></script>
+<script src="oficinas-socios.js"></script>
 </body>
 </html>

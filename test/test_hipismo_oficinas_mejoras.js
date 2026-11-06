@@ -157,6 +157,17 @@ const control = require('../src/services/hipismoOficinasControl');
   check(/PENDIENTE_ELIMINADO/.test(dbJs) && /PENDIENTE_ELIMINADO/.test(schema), 'base: el tipo de alerta PENDIENTE_ELIMINADO está permitido en db.js y schema.sql');
   check(/PENDIENTE_ELIMINADO/.test(leer('src/routes/hipismo.js')), 'ruta: eliminar una carrera pendiente deja registro en el Historial');
 
+
+  // ---------- 7) socios en Oficinas ----------
+  const socios = leer('public/oficinas-socios.js');
+  try { new Function(socios); check(true, 'oficinas-socios.js es JavaScript válido'); } catch (e) { check(false, 'oficinas-socios.js inválido: ' + e.message); }
+  ['panel-comisionessocios', 'panel-balancesocios', 'sub-socios', 'socFilas', 'socGuardar', 'spSeleccion', 'oficinas-socios.js'].forEach(k => check(html.includes(k), `pantalla: hipismo-oficinas.html contiene ${k}`));
+  check(/data-tab="comisionessocios" data-perm="oficinas_informes"/.test(html) && /data-tab="balancesocios" data-perm="oficinas_informes"/.test(html), 'pantalla: las pestañas de socios llevan el permiso de informes');
+  check(/class="tab oculto" data-tab="comisionessocios"/.test(html) && /class="tab oculto" data-tab="balancesocios"/.test(html), 'pantalla: las pestañas de socios arrancan ocultas (un grupo sin socios no las ve)');
+  ['/api/hipismo/socios', '/api/hipismo/socios/asignar', '/api/hipismo/comisiones-socios', '/api/hipismo/balance-socios', '/api/hipismo/pozos-plano-excluidos'].forEach(k => check(socios.includes(k), `oficinas-socios.js usa la ruta ${k}`));
+  ['/socios', '/socios/asignar', '/comisiones-socios', '/balance-socios', '/pozos-plano-excluidos'].forEach(k => check(!!buscar('get', k) || !!buscar('put', k), `la ruta ${k} existe en el servidor`));
+  check(/hipismo-oficinas\.html[\s\S]*oficinas-socios\.js/.test('hipismo-oficinas.html oficinas-socios.js') && html.indexOf('oficinas-mejoras.js') < html.indexOf('oficinas-socios.js'), 'pantalla: oficinas-socios.js se carga después de oficinas-mejoras.js');
+
   console.log(`\n${pasaron} OK, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });
