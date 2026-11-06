@@ -3,6 +3,7 @@
 <head>
 <script src="sesion-pestana.js"></script>
 <script src="buscador-lista.js"></script>
+<script src="marca-agua.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ludox Hipismo Oficinas 🏢 — Panel del Grupo</title>
@@ -1906,7 +1907,9 @@ const LOGO_LUDOX_MARCA = '/img/logo-ludox-icono.png';
 function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : LOGO_LUDOX_MARCA; }
 function ponerInforme(idCaptura, html) {
   const logo = urlLogoGrupo();
-  $(idCaptura).innerHTML = `<div class="inf-logo-fondo"${logo ? ` style="background-image:url('${logo}')"` : ''}></div><div class="inf-contenido">${html}</div>`;
+  $(idCaptura).innerHTML = `<div class="inf-logo-fondo"></div><div class="inf-contenido">${html}</div>`;
+  // Un logo blanco sin fondo se oscurece solo (ver marca-agua.js) para que se note sobre la hoja blanca.
+  if (logo) MarcaAgua.preparar(logo).then(u => { const el = $(idCaptura).querySelector('.inf-logo-fondo'); if (el) el.style.backgroundImage = `url('${u}')`; });
 }
 function cabeceraInforme(titulo, d, extra) {
   return `<div class="inf-cab"><div><div class="inf-grupo">${esc(GRUPO.nombre || '')}</div><div class="inf-titulo">${esc(titulo)}</div>${extra ? `<div class="sub-linea">${extra}</div>` : ''}</div>
@@ -2200,7 +2203,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
       tramos.push({ y0: y, y1: fin, ctx: ctxLista }); y = fin;
     }
 
-    const logo = await cargarImagenLogo(urlLogoGrupo());
+    const logo = await cargarImagenLogo(await MarcaAgua.preparar(urlLogoGrupo()));
     const nombreGrupo = (caja.querySelector('.inf-grupo') || {}).textContent || '';
     const tituloInf = (caja.querySelector('.inf-titulo') || {}).textContent || '';
     tramos.forEach(({ y0, y1, ctx: ctxLista }, i) => {

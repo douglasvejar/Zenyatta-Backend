@@ -449,6 +449,11 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const portal = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-cliente-portal.html'), 'utf8');
   check(/\.informe \.inf-logo-fondo \{[^}]*z-index: 2;/.test(html) && /LOGO_LUDOX_MARCA/.test(html), '11a) la marca de agua de los informes va ENCIMA del contenido (tenue) y usa el logo de Ludox si el grupo no tiene uno');
   check(/\.marca-agua \{[^}]*pointer-events: none/.test(portal) && /id="marcaAgua"/.test(portal) && /marca\.style\.backgroundImage/.test(portal), '11b) el link del cliente también lleva la marca de agua (sin capturar clics)');
+  const ma = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'marca-agua.js'), 'utf8');
+  check(/<script src="marca-agua\.js"><\/script>/.test(html) && /<script src="marca-agua\.js"><\/script>/.test(portal) && /MarcaAgua\.preparar\(logo\)/.test(html) && /MarcaAgua\.preparar\(data\.grupo\.logoUrl/.test(portal), '11c) un logo blanco sin fondo se oscurece solo para la marca de agua (informes, PDF y link del cliente)');
+  const ctxMA = { window: {}, document: {}, Image: function () {} }; require('vm').createContext(ctxMA); require('vm').runInContext(ma, ctxMA);
+  const claro = new Uint8ClampedArray([255, 255, 255, 255, 250, 250, 250, 200, 0, 0, 0, 0]), oscuro = new Uint8ClampedArray([20, 20, 20, 255, 30, 60, 90, 255]), color = new Uint8ClampedArray([200, 40, 40, 255, 40, 80, 200, 255]);
+  check(ctxMA.window.MarcaAgua.esClaro(claro) && !ctxMA.window.MarcaAgua.esClaro(oscuro) && !ctxMA.window.MarcaAgua.esClaro(color), '11d) detecta si el logo es claro (blanco) para oscurecerlo; los oscuros o de colores quedan como están');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);

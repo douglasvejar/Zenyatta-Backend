@@ -316,6 +316,7 @@
 </style>
 </head>
 <body>
+<script src="marca-agua.js"></script>
 
   <div class="marca-agua" id="marcaAgua" aria-hidden="true"></div>
 
@@ -596,8 +597,8 @@
     avatar.textContent = data.jugador.nombre.trim().charAt(0).toUpperCase();
     // Marca de agua de fondo: el logo del grupo, o el isotipo de Ludox si no tiene uno.
     const marca = document.getElementById('marcaAgua');
-    marca.style.backgroundImage = `url('${data.grupo.logoUrl || '/img/logo-ludox-icono.png'}')`;
-    marca.classList.add('visible');
+    // Un logo blanco sin fondo se oscurece solo (ver marca-agua.js) para que se note sobre la pantalla clara.
+    MarcaAgua.preparar(data.grupo.logoUrl || '/img/logo-ludox-icono.png').then(u => { marca.style.backgroundImage = `url('${u}')`; marca.classList.add('visible'); });
     if (data.grupo.logoUrl) {
       const img = logoEsquina.querySelector('img');
       img.onerror = () => { logoEsquina.classList.remove('con-logo'); };
