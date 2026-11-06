@@ -725,13 +725,13 @@
           </div>
         </div>
 
-        <div class="pregunta">
+        <div class="pregunta" id="cPagoDiarioWrap">
           <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;font-weight:700;margin:0;cursor:pointer;"><input type="checkbox" id="cPagoDiario" style="width:auto;"> 💵 Cliente de pago diario <span style="font-weight:500;color:var(--text-dim);font-size:12.5px;">(se le recarga saldo en "Recargas y Retiros")</span></label>
         </div>
         <div id="cSocioBloque"></div>
 
         <div class="pregunta">
-          <div class="q">¿Se le devuelve un % a este cliente?</div>
+          <div class="q" id="qDevuelve">¿Se le devuelve un % a este cliente?</div>
           <div class="si-no">
             <label><input type="radio" name="cDevuelve" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
             <label><input type="radio" name="cDevuelve" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
@@ -754,7 +754,7 @@
         </div>
 
         <div class="pregunta">
-          <div class="q">¿Este cliente le genera % a otro cliente?</div>
+          <div class="q" id="qGenera">¿Este cliente le genera % a otro cliente?</div>
           <div class="si-no">
             <label><input type="radio" name="cGenera" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
             <label><input type="radio" name="cGenera" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
@@ -766,11 +766,11 @@
         </div>
 
         <div class="pregunta">
-          <div class="q">¿Este cliente tiene pozo?</div>
+          <div class="q" id="qPozo">¿Este cliente tiene pozo?</div>
           <div class="si-no">
             <label><input type="radio" name="cPozoSi" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
             <label><input type="radio" name="cPozoSi" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
-            <label><input type="radio" name="cPozoSi" value="libre" onchange="actualizarPreguntasCliente()"> Tercio libre</label>
+            <label><input type="radio" name="cPozoSi" value="libre" onchange="actualizarPreguntasCliente()"> <span id="cLibreTxt">Tercio libre</span></label>
           </div>
           <div class="nota" id="cPozoExplica" style="margin-top:6px;"></div>
           <div class="sub-bloque oculto" id="cPozoBloque">
@@ -1719,13 +1719,21 @@ function etiquetaTipo(c) { const t = tipoDeCliente(c); return `<span class="tag-
 function actualizarPreguntasCliente() {
   document.querySelectorAll('#cTipoSel [data-ico]').forEach(e => { if (!e.firstChild) e.innerHTML = ICO_TIPO[e.dataset.ico]; });
   document.querySelectorAll('#cTipoSel .tipo-op').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+  // Textos según el tipo (06-11-2026): una Oficina no es de pago diario y sus preguntas hablan de "esta oficina".
+  const esOf = valorRadio('cTipo') === 'oficina';
+  $('cPagoDiarioWrap').classList.toggle('oculto', esOf);
+  if (esOf) $('cPagoDiario').checked = false;
+  $('qDevuelve').textContent = esOf ? '¿Se le devuelve un % a esta oficina?' : '¿Se le devuelve un % a este cliente?';
+  $('qGenera').textContent = esOf ? '¿Esta oficina le genera % a otra oficina o a un cliente?' : '¿Este cliente le genera % a otro cliente?';
+  $('qPozo').textContent = esOf ? '¿Esta oficina tiene pozo?' : '¿Este cliente tiene pozo?';
+  $('cLibreTxt').textContent = esOf ? 'Libre' : 'Tercio libre';
   const devuelve = valorRadio('cDevuelve') === 'si';
   $('cDevuelveBloque').classList.toggle('oculto', !devuelve);
   $('cFichaWrap').classList.toggle('oculto', !(devuelve && valorRadio('cDonde') === 'ficha'));
   const genera = valorRadio('cGenera') === 'si';
   $('cGeneraBloque').classList.toggle('oculto', !genera);
   $('cPozoBloque').classList.toggle('oculto', valorRadio('cPozoSi') !== 'si');
-  $('cPozoExplica').textContent = ({ no: 'Sin pozo: todavía no puede jugar (si se le carga una jugada, avisa).', si: 'Con pozo: puede jugar hasta lo que tenga de pozo; cuando se le esté acabando, avisa.', libre: 'Tercio libre: sin límites, puede jugar lo que quiera.' })[valorRadio('cPozoSi')] || '';
+  $('cPozoExplica').textContent = ({ no: 'Sin pozo: todavía no puede jugar (si se le carga una jugada, avisa).', si: 'Con pozo: puede jugar hasta lo que tenga de pozo; cuando se le esté acabando, avisa.', libre: (esOf ? 'Libre' : 'Tercio libre') + ': sin límites, puede jugar lo que quiera.' })[valorRadio('cPozoSi')] || '';
   if (genera && !document.querySelector('#cAvales .aval-fila')) agregarAval();
 }
 function agregarAval() {
@@ -1871,7 +1879,7 @@ function pintarClientes() {
       : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">Tercio libre</span>' : '<span style="color:var(--text-dim)">—</span>'));
     const botonLibre = tienePozo || c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? 'Pasar a libre' : 'Marcar sin pozo'}</button>`;
     const pozo = `<span style="white-space:nowrap;">${estadoPozo} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button> ${botonLibre}</span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> <button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 

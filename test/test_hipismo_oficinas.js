@@ -478,6 +478,9 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const mejorasJs = leer('public/oficinas-mejoras.js');
   check(/Sin pozo, aún no puede jugar/.test(mejorasJs) && /c\.sin_pozo === true/.test(mejorasJs) && /alternarSinPozo/.test(html) && /Tercio libre/.test(html), '12h4) la tabla de jugadas avisa de un cliente sin pozo y la lista permite pasarlo a libre o dejarlo sin pozo');
   check(/formato=oficinas&/.test(html) && /devolucion-propia/.test(html) && /\.lin-dev/.test(html), '12i) el Detallado de Oficinas pide el % dentro de la carrera y lo pinta');
+  check(/id="cPagoDiarioWrap"/.test(html) && /\$\('cPagoDiarioWrap'\)\.classList\.toggle\('oculto', esOf\)/.test(html) && /if \(esOf\) \$\('cPagoDiario'\)\.checked = false/.test(html), '12p) al elegir Oficina desaparece "Cliente de pago diario" (y se desmarca)');
+  check(/¿Se le devuelve un % a esta oficina\?/.test(html) && /¿Esta oficina le genera % a otra oficina o a un cliente\?/.test(html) && /¿Esta oficina tiene pozo\?/.test(html) && /esOf \? 'Libre' : 'Tercio libre'/.test(html), '12q) con Oficina las preguntas hablan de "esta oficina" y la opción libre se llama "Libre"');
+  check(/tipoDeCliente\(c\) === 'oficina' && !c\.pago_diario \? ''/.test(html), '12r) en la lista, una oficina no ofrece "Marcar pago diario"');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
     { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },
