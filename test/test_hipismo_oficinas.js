@@ -481,6 +481,11 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/id="cPagoDiarioWrap"/.test(html) && /\$\('cPagoDiarioWrap'\)\.classList\.toggle\('oculto', esOf\)/.test(html) && /if \(esOf\) \$\('cPagoDiario'\)\.checked = false/.test(html), '12p) al elegir Oficina desaparece "Cliente de pago diario" (y se desmarca)');
   check(/¿Se le devuelve un % a esta oficina\?/.test(html) && /¿Esta oficina le genera % a otra oficina o a un cliente\?/.test(html) && /¿Esta oficina tiene pozo\?/.test(html) && /esOf \? 'Libre' : 'Tercio libre'/.test(html), '12q) con Oficina las preguntas hablan de "esta oficina" y la opción libre se llama "Libre"');
   check(/tipoDeCliente\(c\) === 'oficina' && !c\.pago_diario \? ''/.test(html), '12r) en la lista, una oficina no ofrece "Marcar pago diario"');
+  // Aislamiento entre grupos (06-11-2026): cada grupo es una empresa autónoma; nada de lo nuevo puede tocar ni mostrar datos de otro grupo.
+  let portalOfAislado;
+  const sentenciasNuevas = [...(rutaHip + '\n' + rutaJug).matchAll(/UPDATE jugadores SET (?:tipo_cliente|sin_pozo) = \$1[^`'"]*/g)].map(m => m[0]);
+  check(sentenciasNuevas.length >= 4 && sentenciasNuevas.every(q => /grupo_id = \$3/.test(q)), `12s) todo UPDATE nuevo de tipo_cliente / sin_pozo está limitado a su grupo (grupo_id) — ${sentenciasNuevas.length} sentencias revisadas`);
+  check(/id="cPagoDiarioWrap"/.test(html) && !/localStorage/.test(portalOfAislado = leer('public/oficinas-cliente-portal.html')) && /\/api\/hipismo-cliente\/\$\{encodeURIComponent\(TOKEN\)\}/.test(portalOfAislado), '12t) la página nueva del link no usa sesión ni almacenamiento del navegador: pide solo los datos del token de ESE cliente');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
     { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },
