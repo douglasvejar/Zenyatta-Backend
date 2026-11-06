@@ -394,7 +394,7 @@
       <div class="fila-campos">
         <div><label for="rFecha">Día</label><input type="date" id="rFecha" onchange="cargarRegistro()"></div>
         <div><label for="rHipodromo">Hipódromo</label><select id="rHipodromo" onchange="pintarRegistro()"><option value="">Todos</option></select></div>
-        <div><label>&nbsp;</label><span style="display:flex;gap:6px;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button></span></div>
+        <div><label>&nbsp;</label><span style="display:flex;gap:6px;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button><button type="button" class="btn btn-sec" onclick="excelRegistro()" title="Descarga todas las jugadas del día">📊 Descargar Excel</button></span></div>
       </div>
       <div class="cargadas" id="rDias"></div>
       <div class="msg" id="rMsg"></div>
@@ -488,6 +488,7 @@
       <div class="subtabs">
         <button type="button" class="subtab activa" data-sub="recargas" onclick="irASubSaldos('recargas')">💵 Recargas pago diario</button>
         <button type="button" class="subtab" data-sub="retiros" onclick="irASubSaldos('retiros')">💸 Retiros</button>
+        <button type="button" class="subtab" data-sub="traspasos" onclick="irASubSaldos('traspasos')">🔄 Traspaso de saldo</button>
       </div>
       <div class="subpanel activo" id="subpanel-recargas">
         <div class="fila-campos" style="margin-bottom:12px;">
@@ -516,6 +517,25 @@
         <div class="msg" id="rtMsg"></div>
         <h3 style="margin:18px 0 6px;font-size:16px;">Retiros registrados</h3>
         <div id="rtLista"></div>
+      </div>
+      <div class="subpanel" id="subpanel-traspasos">
+        <p class="nota">Le resta saldo a un cliente y se lo suma a otro, el mismo día. Se ve en el Balance General y en el detallado de cada cliente, y los totales siguen sumando 0. Si te equivocas, anúlalo en la lista de abajo.</p>
+        <div class="fila-campos" style="margin-bottom:10px;">
+          <div><label for="tsBuscar">Buscar cliente</label><input type="text" id="tsBuscar" placeholder="Escribe para filtrar…" autocomplete="off" oninput="poblarSelectsTraspaso()"></div>
+          <div><label for="tsOrigen">De (sale el saldo) *</label><select id="tsOrigen" onchange="pintarPistaTraspaso()"></select></div>
+          <div><label for="tsDestino">A (recibe el saldo) *</label><select id="tsDestino" onchange="pintarPistaTraspaso()"></select></div>
+          <div><label for="tsMonto">Monto *</label><input type="number" id="tsMonto" step="0.01" min="0" placeholder="Ej: 20,00" oninput="pintarPistaTraspaso()"></div>
+          <div><label for="tsFecha">Fecha</label><input type="date" id="tsFecha"></div>
+        </div>
+        <div class="campo" style="margin-bottom:10px;"><label for="tsNota">Nota (opcional)</label><input type="text" id="tsNota" placeholder="Ej: Traspaso de saldo" autocomplete="off"></div>
+        <div class="nota" id="tsPista" style="margin-top:6px;"></div>
+        <div class="acciones-tabla">
+          <button type="button" class="btn" id="tsGuardar" onclick="guardarTraspaso()">🔄 Traspasar</button>
+          <button type="button" class="btn btn-sec" onclick="excelTraspasos()">📊 Descargar Excel</button>
+        </div>
+        <div class="msg" id="tsMsg"></div>
+        <h3 style="margin:18px 0 6px;font-size:16px;">Traspasos hechos</h3>
+        <div id="tsLista"></div>
       </div>
     </div>
   </section>
@@ -623,6 +643,7 @@
         <div class="pregunta">
           <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;font-weight:700;margin:0;cursor:pointer;"><input type="checkbox" id="cPagoDiario" style="width:auto;"> 💵 Cliente de pago diario <span style="font-weight:500;color:var(--text-dim);font-size:12.5px;">(se le recarga saldo en "Recargas y Retiros")</span></label>
         </div>
+        <div id="cSocioBloque"></div>
 
         <div class="pregunta">
           <div class="q">¿Se le devuelve un % a este cliente?</div>
@@ -1402,13 +1423,13 @@ async function guardarCliente() {
   }
   try {
     await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
-      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked,
+      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked, ...($('cSocio') ? { socioId: $('cSocio').value || null } : {}),
       comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje
     }) });
   } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
   $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
-  $('cPozo').value = ''; $('cPagoDiario').checked = false; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
+  $('cPozo').value = ''; $('cPagoDiario').checked = false; if ($('cSocio')) $('cSocio').value = ''; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
   document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
   document.querySelector('input[name="cGenera"][value="no"]').checked = true;
   document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
@@ -1464,7 +1485,7 @@ function pintarClientes() {
     const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
     const tienePozo = c.tipo_cuenta === 'avalado';
     const pozo = `<span style="white-space:nowrap;">${tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>' : '<span style="color:var(--text-dim)">—</span>'} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button></span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 

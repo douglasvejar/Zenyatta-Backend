@@ -5321,7 +5321,7 @@ router.post('/traspasos/jugada', asyncHandler(async (req, res) => {
 // obtenerAjustesComision más abajo). El destino puede ser CUALQUIER
 // cliente (otra cuenta de comisión, o un cliente normal) — se
 // auto-registra si todavía no existe, igual que el resto del sistema.
-router.post('/comisiones/traspaso', asyncHandler(async (req, res) => {
+router.post('/comisiones/traspaso', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const { clienteOrigen, clienteDestino, monto, fecha, nota } = req.body;
   // 29-09-2026 — mismo criterio que jugadores.js/hipismoCalc.js: colapsa
   // espacios de más entre palabras.
@@ -5402,7 +5402,7 @@ router.get('/traspasos-saldo', asyncHandler(async (req, res) => {
 
 // Anula un traspaso completo (las 2 patas). `:id` puede ser el id de
 // cualquiera de las 2 filas del par.
-router.delete('/traspasos-saldo/:id', asyncHandler(async (req, res) => {
+router.delete('/traspasos-saldo/:id', requierePermisoOficina('oficinas_saldos'), asyncHandler(async (req, res) => {
   const rFila = await db.query(
     `SELECT id, cliente_nombre, monto, fecha, nota, creado_en
        FROM hipismo_comisiones_ajustes WHERE id = $1 AND grupo_id = $2`,

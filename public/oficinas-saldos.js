@@ -143,14 +143,16 @@ async function verComprobante(id) {
 function irASubSaldos(sub) {
   document.querySelectorAll('#panel-recargas .subtab').forEach(b => b.classList.toggle('activa', b.dataset.sub === sub));
   document.querySelectorAll('#panel-recargas .subpanel').forEach(p => p.classList.toggle('activo', p.id === 'subpanel-' + sub));
-  if (sub === 'recargas') pintarRecargas(); else entrarRetiros();
+  if (sub === 'recargas') pintarRecargas(); else if (sub === 'traspasos') entrarTraspasos(); else entrarRetiros();
 }
 async function entrarRecargas() {
   const f = $('rcFecha'); if (f && !f.value) f.value = fechaHoyVenezuela();
   const f2 = $('rtFecha'); if (f2 && !f2.value) f2.value = fechaHoyVenezuela();
   await cargarMetodosPago();
   const activa = document.querySelector('#panel-recargas .subtab.activa');
-  if (activa && activa.dataset.sub === 'retiros') await entrarRetiros(); else await pintarRecargas();
+  if (activa && activa.dataset.sub === 'retiros') await entrarRetiros();
+  else if (activa && activa.dataset.sub === 'traspasos') await entrarTraspasos();
+  else await pintarRecargas();
 }
 
 let RECARGAS = { cuenta: 'POZOS PAGO DIARIOS', clientes: [], recargas: [] };
@@ -380,4 +382,98 @@ function exportarControlPozosExcel() {
   const filas = filasControlPozos();
   descargarExcel('control_de_pozos', [['Cliente', 'Tipo', 'Colocado', 'Jugado', 'Ganado/perdido', 'En juego', 'Disponible', '% disponible', 'Última recarga', 'Última jugada', 'Semáforo']]
     .concat(filas.map(c => [nombreBonito(c.nombre), c.tipo, numExcel(c.colocado), numExcel(c.apostado), numExcel(c.neto), numExcel(c.enJuego), numExcel(c.disponible), c.colocado > 0 ? c.porcentaje : '', c.ultimaRecarga || '', c.ultimaJugada || '', c.semaforo])));
+}
+
+
+// ------------------------------------------------------------------
+// TRASPASO DE SALDO (05-11-2026): le resta saldo a un cliente y se lo suma a otro (mismo mecanismo y mismas rutas que en Hipismo Grupos
+// Hípicos: POST /comisiones/traspaso, GET /traspasos-saldo, DELETE /traspasos-saldo/:id). Aparece en Balance General, Cierre Final y el
+// detallado de cada cliente, y los totales siguen sumando 0. Sin SQL nuevo.
+// ------------------------------------------------------------------
+let TRASPASOS = [];
+async function entrarTraspasos() {
+  const f = $('tsFecha'); if (f && !f.value) f.value = fechaHoyVenezuela();
+  if (!CLIENTES.length) await cargarClientes();
+  poblarSelectsTraspaso();
+  await pintarTraspasos();
+}
+function poblarSelectsTraspaso() {
+  const q = normNombre($('tsBuscar').value);
+  const prevO = $('tsOrigen').value, prevD = $('tsDestino').value;
+  const lista = CLIENTES.filter(c => c.activo !== false && (!q || normNombre(c.nombre).includes(q) || c.nombre === prevO || c.nombre === prevD))
+    .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const ops = '<option value="">— Elige —</option>' + lista.map(c => `<option value="${esc(c.nombre)}">${esc(nombreBonito(c.nombre))}</option>`).join('');
+  $('tsOrigen').innerHTML = ops; $('tsDestino').innerHTML = ops;
+  if (prevO && lista.some(c => c.nombre === prevO)) $('tsOrigen').value = prevO;
+  if (prevD && lista.some(c => c.nombre === prevD)) $('tsDestino').value = prevD;
+  pintarPistaTraspaso();
+}
+function pintarPistaTraspaso() {
+  const o = $('tsOrigen').value, d = $('tsDestino').value, m = Number($('tsMonto').value) || 0;
+  $('tsPista').textContent = (o && d && m > 0) ? `${nombreBonito(o)} −${INF.dinero(m)} / ${nombreBonito(d)} +${INF.dinero(m)}` : '';
+}
+async function guardarTraspaso() {
+  const origen = $('tsOrigen').value, destino = $('tsDestino').value, monto = Number($('tsMonto').value);
+  const fecha = $('tsFecha').value || fechaHoyVenezuela(), nota = $('tsNota').value.trim();
+  if (!origen || !destino) return msg('tsMsg', 'Elige el cliente de origen y el de destino.', false);
+  if (origen === destino) return msg('tsMsg', 'El origen y el destino no pueden ser el mismo cliente.', false);
+  if (!monto || monto <= 0) return msg('tsMsg', 'Escribe un monto mayor a 0.', false);
+  if (!confirm(`¿Traspasar ${INF.dinero(monto)} de ${nombreBonito(origen)} a ${nombreBonito(destino)}?`)) return;
+  $('tsGuardar').disabled = true;
+  try {
+    await api('/api/hipismo/comisiones/traspaso', { method: 'POST', body: JSON.stringify({ clienteOrigen: origen, clienteDestino: destino, monto, fecha, nota: nota || 'Traspaso de saldo' }) });
+    msg('tsMsg', `✅ Listo: ${INF.dinero(monto)} de ${nombreBonito(origen)} a ${nombreBonito(destino)}.`, true);
+    $('tsMonto').value = ''; $('tsNota').value = ''; pintarPistaTraspaso();
+    await pintarTraspasos();
+  } catch (e) { msg('tsMsg', 'No se pudo traspasar: ' + e.message, false); }
+  $('tsGuardar').disabled = false;
+}
+async function pintarTraspasos() {
+  const cont = $('tsLista');
+  try { TRASPASOS = (await api('/api/hipismo/traspasos-saldo')).traspasos || []; }
+  catch (e) { cont.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; return; }
+  if (!TRASPASOS.length) { cont.innerHTML = '<div class="vacio">Todavía no se ha hecho ningún traspaso.</div>'; return; }
+  cont.innerHTML = TRASPASOS.map(t => `<div class="mov-fila"><span class="rec-linea">🔄 <b>${INF.fechaCorta(t.fecha)}</b> — ${esc(nombreBonito(t.origen))} → ${esc(nombreBonito(t.destino))}<span class="rec-sep">·</span><b>${INF.dinero(t.monto)}</b>${t.nota ? ` <span class="rec-chip">${esc(t.nota)}</span>` : ''}</span>
+    <span class="mov-acc"><button type="button" class="btn btn-peligro btn-chico" onclick="anularTraspaso('${esc(t.id)}')">🗑️ Anular</button></span></div>`).join('');
+}
+async function anularTraspaso(id) {
+  if (!confirm('¿Anular este traspaso? Se borran las 2 mitades y los saldos vuelven a como estaban.')) return;
+  try { await api('/api/hipismo/traspasos-saldo/' + encodeURIComponent(id), { method: 'DELETE' }); }
+  catch (e) { return msg('tsMsg', 'No se pudo anular: ' + e.message, false); }
+  msg('tsMsg', '✅ Traspaso anulado.', true);
+  await pintarTraspasos();
+}
+function excelTraspasos() {
+  if (!TRASPASOS.length) return msg('tsMsg', 'No hay traspasos para descargar.', false);
+  descargarExcel('traspasos_de_saldo', [['Fecha', 'De', 'A', 'Monto', 'Nota']].concat(TRASPASOS.map(t => [t.fecha, nombreBonito(t.origen), nombreBonito(t.destino), numExcel(t.monto), t.nota || ''])));
+}
+
+// ------------------------------------------------------------------
+// REGISTRO DE JUGADAS > Excel (05-11-2026): una fila por jugada del día (y del hipódromo elegido), con la llegada y el estado de cada carrera.
+// ------------------------------------------------------------------
+async function excelRegistro() {
+  if (!REGISTRO) return msg('rMsg', 'Primero abre un día con carreras.', false);
+  const filtro = $('rHipodromo').value;
+  const hips = REGISTRO.hipodromos.filter(h => !filtro || h.nombre === filtro);
+  const tareas = [];
+  hips.forEach(h => h.carreras.forEach(c => tareas.push({ h, c })));
+  if (!tareas.length) return msg('rMsg', 'No hay carreras para descargar.', false);
+  msg('rMsg', 'Preparando el Excel…', true);
+  const filas = [['Fecha', 'Hipódromo', 'Carrera', 'Estado', 'Llegada', 'Jugador', 'Jugó / Dio', 'Tipo', 'Caballo', 'Monto']];
+  let sinDetalle = 0;
+  for (let i = 0; i < tareas.length; i += 6) {
+    const lote = await Promise.all(tareas.slice(i, i + 6).map(async ({ h, c }) => {
+      let det = null;
+      if (h.hipodromoId) { try { det = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h.hipodromoId)}&carrera=${c.numero}&fecha=${encodeURIComponent(REGISTRO.fecha)}`); } catch (e) { det = null; } }
+      return { h, c, det };
+    }));
+    lote.forEach(({ h, c, det }) => {
+      const base = [REGISTRO.fecha, nombreHip(h.nombre), c.numero, c.estado === 'calculada' ? 'Calculada' : 'Pendiente de llegada', c.pizarra || ''];
+      const jugadas = det && Array.isArray(det.filas) ? det.filas : [];
+      if (!jugadas.length) { sinDetalle++; filas.push(base.concat(['', '', '', '', numExcel(c.totalJugado)])); return; }
+      jugadas.forEach(j => filas.push(base.concat([nombreBonito(j.jugador), j.lado === 'dio' ? 'Dio' : 'Jugó', j.tipo || '', j.caballo || '', numExcel(j.monto)])));
+    });
+  }
+  descargarExcel('registro_de_jugadas_' + REGISTRO.fecha, filas);
+  msg('rMsg', `✅ Excel descargado (${filas.length - 1} filas)` + (sinDetalle ? `; ${sinDetalle} carrera(s) sin detalle de jugadas quedaron con su total.` : '.'), true);
 }

@@ -37,6 +37,8 @@
       SIN_TABLA = !!r.sinTabla;
     } catch (e) { /* sin conexión o sin permiso: queda lo que había */ }
     actualizarVisibilidad();
+    pintarSocioCliente();
+    if (typeof pintarClientes === 'function' && CLIENTES.length) pintarClientes();
   }
 
   // ---------- Configuración > Socios ----------
@@ -270,6 +272,22 @@
     return p >= 0.8 ? '🟢' : (p < 0.15 ? '🔴' : '🟡');
   }
 
+  // ---------- Crear Cliente: "¿Pertenece a un socio?" ----------
+  // Bloque aparte (no cambia saldos). Solo se muestra si la oficina ya tiene socios.
+  function pintarSocioCliente() {
+    const caja = $('cSocioBloque'); if (!caja) return;
+    if (!SOCIOS.length) { caja.innerHTML = ''; return; }
+    const previo = $('cSocio') ? $('cSocio').value : '';
+    caja.innerHTML = `<div class="pregunta"><div class="q">🤝 ¿Pertenece a un socio?</div>
+      <p class="nota" style="margin:2px 0 8px;">Solo sirve para armar "Comisiones por Socios" y "Balance por Socios". No cambia el saldo del cliente.</p>
+      <select id="cSocio"><option value="">No pertenece a ningún socio</option>${SOCIOS.map(s => `<option value="${esc(s.id)}">${esc(s.nombre)}</option>`).join('')}</select></div>`;
+    if (previo) $('cSocio').value = previo;
+  }
+  function etiquetaSocioDe(c) {
+    const s = c && c.hipismo_socio_id ? SOCIOS.find(x => x.id === c.hipismo_socio_id) : null;
+    return s ? ` <span class="tag">🤝 ${esc(s.nombre)}</span>` : '';
+  }
+
   // ---------- conexión con la página ----------
   function iniciar() {
     // Configuración > Socios (solo el administrador)
@@ -333,7 +351,7 @@
     agregarSocio, guardarSocios, asignarMarcados, pintarAsignacion,
     copiarComisionesTexto, copiarBalanceTexto, excelComisionesSocios, excelBalanceSocios,
     marcarTodosPlano: marcarTodos, desmarcarTodosPlano: desmarcarTodos, quitarEnCeroPlano: quitarEnCero,
-    cargarSociosOf
+    cargarSociosOf, etiquetaSocioDe
   });
   iniciar();
 })();

@@ -168,6 +168,17 @@ const control = require('../src/services/hipismoOficinasControl');
   ['/socios', '/socios/asignar', '/comisiones-socios', '/balance-socios', '/pozos-plano-excluidos'].forEach(k => check(!!buscar('get', k) || !!buscar('put', k), `la ruta ${k} existe en el servidor`));
   check(/hipismo-oficinas\.html[\s\S]*oficinas-socios\.js/.test('hipismo-oficinas.html oficinas-socios.js') && html.indexOf('oficinas-mejoras.js') < html.indexOf('oficinas-socios.js'), 'pantalla: oficinas-socios.js se carga después de oficinas-mejoras.js');
 
+
+  // ---------- 8) traspaso de saldo, socio al crear cliente y Excel del Registro ----------
+  ['subpanel-traspasos', 'tsOrigen', 'tsDestino', 'tsGuardar', 'cSocioBloque', 'excelRegistro()'].forEach(k => check(html.includes(k), `pantalla: hipismo-oficinas.html contiene ${k}`));
+  ['entrarTraspasos', 'guardarTraspaso', 'anularTraspaso', 'excelTraspasos', 'excelRegistro'].forEach(k => check(saldos.includes('function ' + k), `oficinas-saldos.js define ${k}`));
+  check(saldos.includes('/api/hipismo/comisiones/traspaso') && saldos.includes('/api/hipismo/traspasos-saldo'), 'traspaso: usa las rutas de siempre (comisiones/traspaso y traspasos-saldo)');
+  check(/socioId: \$\('cSocio'\)\.value \|\| null/.test(html), 'crear cliente: manda socioId solo cuando el bloque de socio está en pantalla');
+  check(socios.includes('pintarSocioCliente') && socios.includes('etiquetaSocioDe'), 'oficinas-socios.js arma el bloque "¿Pertenece a un socio?" y la etiqueta del socio en la lista');
+  const rutaTras = buscar('post', '/comisiones/traspaso'), rutaAnular = buscar('delete', '/traspasos-saldo/:id');
+  check(!!rutaTras && rutaTras[1].length > 2, 'permisos: POST /comisiones/traspaso lleva candado de Oficinas');
+  check(!!rutaAnular && rutaAnular[1].length > 2, 'permisos: anular un traspaso lleva candado de Oficinas');
+
   console.log(`\n${pasaron} OK, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });
