@@ -349,6 +349,41 @@ function describirAdjunto(m) {
   return '📎 Adjuntó ' + que + (m.adjunto_nombre && !tipo.startsWith('audio/') ? ' (' + m.adjunto_nombre + ')' : '') + ' — míralo en la plataforma.';
 }
 
+// ARCHIVOS DEL CHAT (06-11-2026): el archivo adjunto de un mensaje del grupo viaja a Telegram (foto, video, nota de
+// voz, documento) en vez de quedarse en un aviso de texto. El archivo se guarda en base64 (a veces con el prefijo
+// "data:...;base64,") y se pide aparte con chat.obtenerAdjunto — la notificación solo trae tipo y nombre.
+// Devuelve null si el mensaje no trae adjunto, si el cliente de Telegram no sabe mandar archivos o si no se pudo leer
+// (en ese caso queda el aviso "📎 Adjuntó…" de siempre).
+async function cargarArchivoDelMensaje(grupoId, mensaje) {
+  if (!mensaje || !mensaje.tiene_adjunto || !apiActual || typeof apiActual.enviarArchivo !== 'function') return null;
+  try {
+    const adj = await require('./chat').obtenerAdjunto(grupoId, mensaje.id);
+    if (!adj || !adj.datos) return null;
+    let b64 = String(adj.datos);
+    const coma = b64.startsWith('data:') ? b64.indexOf(',') : -1;
+    if (coma >= 0) b64 = b64.slice(coma + 1);
+    const buffer = Buffer.from(b64, 'base64');
+    if (!buffer.length) return null;
+    return { buffer, tipo: adj.tipo || mensaje.adjunto_tipo, nombre: adj.nombre || mensaje.adjunto_nombre || 'archivo' };
+  } catch (e) {
+    console.error('[telegramBot] No se pudo leer el adjunto del mensaje para mandarlo a Telegram:', e.message);
+    return null;
+  }
+}
+
+// Manda el archivo; si Telegram lo rechaza (por algo que no sea el tema/chat), deja el aviso de texto para que
+// el dueño sepa que había un adjunto. Los errores de tema/chat se relanzan para que se recupere como siempre.
+async function mandarArchivoOAviso(chat, opciones, archivo, mensaje, caption) {
+  try {
+    return await apiActual.enviarArchivo(chat, archivo.buffer, { ...opciones, tipo: archivo.tipo, nombre: archivo.nombre, caption });
+  } catch (e) {
+    if (/thread|topic|chat not found|bot was kicked|not enough rights|forum/i.test(e.message || '')) throw e;
+    console.error('[telegramBot] Telegram no aceptó el archivo adjunto (' + e.message + ').');
+    const aviso = await apiActual.enviarTexto(chat, (caption && /💬/.test(caption) ? caption + '\n' : '') + describirAdjunto(mensaje), opciones);
+    return aviso && aviso[0];
+  }
+}
+
 // UN CHAT POR GRUPO (14-10-2026, a pedido del usuario: "quiero que estos mensajes me lleguen individual por
 // grupo, un chat por cada grupo que me escriba"): Telegram no deja que un bot cree chats privados, pero sí
 // TEMAS dentro de un grupo propio (un supergrupo con "Temas" activados). Con TELEGRAM_SOPORTE_CHAT_ID=<id de ese
@@ -397,12 +432,14 @@ async function obtenerTemaDeGrupo(grupoId, nombre) {
   try { return await promesa; } finally { temasCreandose.delete(grupoId); }
 }
 
-async function avisarMensajeEnTema({ grupoId, nombre, texto }) {
+async function avisarMensajeEnTema({ grupoId, nombre, texto, archivo, mensaje }) {
   const chat = chatSoporte();
   let { temaId, nuevo } = await obtenerTemaDeGrupo(grupoId, nombre);
   const mandar = async () => {
     if (nuevo) await apiActual.enviarTexto(chat, '💬 Este es el chat de *' + String(nombre).toUpperCase() + '*. Todo lo que escribas aquí le llega a su bandeja de mensajes.', { threadId: temaId });
-    await apiActual.enviarTexto(chat, texto, { threadId: temaId });
+    if (texto) await apiActual.enviarTexto(chat, texto, { threadId: temaId });
+    // El archivo va dentro del mismo tema, con el nombre del grupo como pie si no hubo texto antes.
+    if (archivo) await mandarArchivoOAviso(chat, { threadId: temaId }, archivo, mensaje, texto ? '📎 ' + (archivo.nombre || '') : '💬 *' + String(nombre).toUpperCase() + '*');
   };
   try {
     await mandar();
@@ -430,13 +467,16 @@ async function entregarMensajeDeGrupo({ grupoId, mensaje }) {
   }
   const r = await db.query('SELECT nombre FROM grupos WHERE id = $1', [grupoId]);
   const nombre = (r.rows[0] && r.rows[0].nombre) || 'GRUPO';
+  const archivo = await cargarArchivoDelMensaje(grupoId, mensaje);
   if (enTemas) {
-    const cuerpo = ['💬 *' + String(nombre).toUpperCase() + '*'];
+    const cuerpo = [];
+    // Con archivo y sin texto, el encabezado con el nombre del grupo va como pie del archivo (un solo mensaje).
+    if (!archivo || (mensaje && mensaje.texto)) cuerpo.push('💬 *' + String(nombre).toUpperCase() + '*');
     if (mensaje && mensaje.texto) cuerpo.push(mensaje.texto);
-    const adjTema = describirAdjunto(mensaje);
+    const adjTema = archivo ? '' : describirAdjunto(mensaje);
     if (adjTema) cuerpo.push(adjTema);
     try {
-      return await avisarMensajeEnTema({ grupoId, nombre, texto: cuerpo.join('\n') });
+      return await avisarMensajeEnTema({ grupoId, nombre, texto: cuerpo.join('\n'), archivo, mensaje });
     } catch (e) {
       // El grupo de soporte falló (no tiene Temas activados, el bot no puede administrarlos, etc.): si hay un chat de
       // avisos, el mensaje sale ahí como siempre en vez de perderse.
@@ -447,12 +487,22 @@ async function entregarMensajeDeGrupo({ grupoId, mensaje }) {
   }
   const partes = [MARCA_CHAT + String(nombre).toUpperCase()];
   if (mensaje && mensaje.texto) partes.push(mensaje.texto);
-  const adj = describirAdjunto(mensaje);
+  const adj = archivo ? '' : describirAdjunto(mensaje);
   if (adj) partes.push(adj);
   partes.push('↩️ Responde a este mensaje para contestarle.');
   // El encabezado va en negrita para que se distinga; el texto del grupo se manda tal cual.
   const texto = partes[0].replace(/^(.*)$/, '*$1*') + '\n' + partes.slice(1).join('\n');
-  const enviados = await apiActual.enviarTexto(destino, texto);
+  let enviados;
+  if (archivo) {
+    // El archivo lleva el encabezado (así se puede contestar sobre él); si además hubo texto, va en un mensaje aparte.
+    enviados = [];
+    if (mensaje && mensaje.texto) enviados = enviados.concat(await apiActual.enviarTexto(destino, texto));
+    const pie = (mensaje && mensaje.texto ? '*' + MARCA_CHAT + String(nombre).toUpperCase() + '*' : texto);
+    const m = await mandarArchivoOAviso(destino, {}, archivo, mensaje, pie);
+    if (m) enviados.push(m);
+  } else {
+    enviados = await apiActual.enviarTexto(destino, texto);
+  }
   (enviados || []).forEach(m => {
     if (!m || m.message_id == null) return;
     grupoPorMensajeTelegram.set(claveMensaje(destino, m.message_id), { grupoId, nombre });

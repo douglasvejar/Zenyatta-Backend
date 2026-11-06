@@ -13,6 +13,7 @@ const GRUPOS = [
   { id: 'g2', nombre: 'Deportes Bernal', activo: true }
 ];
 const MENSAJES = [];
+const ADJUNTOS = {};
 let SIN_COLUMNA_TEMA = false;
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
@@ -37,9 +38,14 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, nombre FROM grupos WHERE activo = true/i.test(sql)) return { rows: GRUPOS.filter(g => g.activo).map(g => ({ id: g.id, nombre: g.nombre })) };
   if (/^INSERT INTO mensajes_chat/i.test(sql)) {
     const [grupoId, remitente, texto, datos, tipo, nombre] = params;
-    const fila = { id: 'm' + (MENSAJES.length + 1), grupo_id: grupoId, remitente, texto, tiene_adjunto: !!datos, adjunto_tipo: tipo, adjunto_nombre: nombre, leido_superadmin: false };
+    const fila = { id: '00000000-0000-4000-8000-' + String(MENSAJES.length + 1).padStart(12, '0'), grupo_id: grupoId, remitente, texto, tiene_adjunto: !!datos, adjunto_tipo: tipo, adjunto_nombre: nombre, leido_superadmin: false };
     MENSAJES.push(fila);
+    if (datos) ADJUNTOS[fila.id] = { datos, tipo, nombre, grupo_id: grupoId };
     return { rows: [fila] };
+  }
+  if (/^SELECT adjunto_datos AS datos, adjunto_tipo AS tipo, adjunto_nombre AS nombre FROM mensajes_chat WHERE id = \$1 AND grupo_id = \$2/i.test(sql)) {
+    const a = ADJUNTOS[params[0]];
+    return { rows: a && a.grupo_id === params[1] ? [{ datos: a.datos, tipo: a.tipo, nombre: a.nombre }] : [] };
   }
   if (/^UPDATE mensajes_chat SET leido_superadmin = true/i.test(sql)) {
     MENSAJES.forEach(m => { if (m.grupo_id === params[0] && m.remitente === 'grupo') m.leido_superadmin = true; });
@@ -244,6 +250,64 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   check(avisosG.some(a => /Administrar temas/.test(a.t)), '12b) y explica el motivo en cristiano (permiso Administrar temas)');
   delete process.env.TELEGRAM_CENTRAL_CHAT_ID;
   delete process.env.TELEGRAM_SOPORTE_CHAT_ID;
+
+  // 13) ARCHIVOS: el adjunto viaja de verdad a Telegram (06-11-2026)
+  const { elegirMetodo } = require(path.join(__dirname, '..', 'src', 'services', 'telegramApi'));
+  check(elegirMetodo('image/png').metodo === 'sendPhoto' && elegirMetodo('image/jpeg').campo === 'photo', '13a) una foto png/jpeg va como foto');
+  check(elegirMetodo('video/mp4').metodo === 'sendVideo' && elegirMetodo('video/webm').metodo === 'sendDocument', '13b) mp4 va como video; otros videos como documento');
+  check(elegirMetodo('audio/ogg;codecs=opus').metodo === 'sendVoice' && elegirMetodo('audio/mpeg').metodo === 'sendAudio' && elegirMetodo('audio/webm;codecs=opus').metodo === 'sendDocument', '13c) nota de voz ogg, audio mp3 y el resto como documento');
+  check(elegirMetodo('application/pdf').metodo === 'sendDocument' && elegirMetodo('image/gif').metodo === 'sendDocument', '13d) PDF y demás van como documento');
+
+  const archivosEnv = [];
+  const crearApiArchivos = (fallaArchivo) => ({
+    enviarTexto: async (c, t, op = {}) => { archivosEnv.push({ k: 'texto', c: String(c), t, tema: op.threadId }); return [{ message_id: 300 + archivosEnv.length }]; },
+    enviarArchivo: async (c, buf, op = {}) => {
+      if (fallaArchivo) throw new Error(fallaArchivo);
+      archivosEnv.push({ k: 'archivo', c: String(c), bytes: buf.length, tipo: op.tipo, nombre: op.nombre, caption: op.caption, tema: op.threadId });
+      return { message_id: 300 + archivosEnv.length };
+    },
+    crearTemaForo: async () => ({ message_thread_id: 55 }),
+    esAdministrador: async () => true
+  });
+  const PNG_B64 = Buffer.from('imagen-de-prueba-123').toString('base64');
+  // 13e) chat privado, adjunto con prefijo data: y sin texto -> UN mensaje con el archivo y el encabezado del grupo
+  process.env.TELEGRAM_AVISOS_CHAT_ID = String(DUENO_CHAT);
+  telegramBot._usarCliente(crearApiArchivos());
+  await chatService.enviarMensaje('g1', 'grupo', '', { datos: 'data:image/png;base64,' + PNG_B64, tipo: 'image/png', nombre: 'pago.png' });
+  await espera(50);
+  const f13 = archivosEnv.filter(x => x.k === 'archivo');
+  check(f13.length === 1 && f13[0].bytes === Buffer.from('imagen-de-prueba-123').length && f13[0].tipo === 'image/png' && f13[0].nombre === 'pago.png', '13e) el archivo llega a Telegram completo (se decodifica el base64 con prefijo data:)');
+  check(/MENSAJE — ZENYATTA/.test(f13[0].caption) && /Responde a este mensaje/.test(f13[0].caption) && !archivosEnv.some(x => x.k === 'texto' && /Adjuntó/.test(x.t)), '13f) lleva el nombre del grupo como pie y ya no manda el aviso de "Adjuntó"');
+  // 13g) con texto: primero el texto, luego el archivo
+  archivosEnv.length = 0;
+  await chatService.enviarMensaje('g2', 'grupo', 'Mira este comprobante', { datos: PNG_B64, tipo: 'application/pdf', nombre: 'recibo.pdf' });
+  await espera(50);
+  check(archivosEnv.length === 2 && archivosEnv[0].k === 'texto' && /Mira este comprobante/.test(archivosEnv[0].t) && archivosEnv[1].k === 'archivo' && archivosEnv[1].nombre === 'recibo.pdf', '13g) con texto: primero el texto y después el archivo');
+  // 13h) si Telegram no acepta el archivo, queda el aviso de texto
+  archivosEnv.length = 0;
+  telegramBot._usarCliente(crearApiArchivos('Bad Request: file is too big'));
+  await chatService.enviarMensaje('g1', 'grupo', '', { datos: PNG_B64, tipo: 'video/mp4', nombre: 'video.mp4' });
+  await espera(50);
+  check(archivosEnv.length === 1 && archivosEnv[0].k === 'texto' && /MENSAJE — ZENYATTA/.test(archivosEnv[0].t) && /Adjuntó un video/.test(archivosEnv[0].t), '13h) si Telegram rechaza el archivo, igual llega el aviso "Adjuntó un video" con el grupo');
+  // 13i) modo temas: el archivo va DENTRO del tema del grupo
+  archivosEnv.length = 0;
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+  process.env.TELEGRAM_SOPORTE_CHAT_ID = '-100777';
+  GRUPOS.push({ id: 'g7', nombre: 'ConTema', activo: true, tema: 77 });
+  telegramBot._usarCliente(crearApiArchivos());
+  await chatService.enviarMensaje('g7', 'grupo', '', { datos: PNG_B64, tipo: 'audio/ogg', nombre: 'nota.ogg' });
+  await espera(50);
+  const t13 = archivosEnv.filter(x => x.k === 'archivo');
+  check(t13.length === 1 && t13[0].c === '-100777' && t13[0].tema === 77 && /CONTEMA/.test(t13[0].caption), '13i) en modo temas el archivo llega dentro del tema del grupo, con su nombre');
+  check(!archivosEnv.some(x => x.k === 'texto' && /Adjuntó/.test(x.t)), '13j) y no queda el aviso de texto redundante');
+  // 13k) un adjunto que no se puede leer deja el aviso de siempre
+  archivosEnv.length = 0;
+  process.env.TELEGRAM_AVISOS_CHAT_ID = String(DUENO_CHAT);
+  delete process.env.TELEGRAM_SOPORTE_CHAT_ID;
+  telegramBot._usarCliente(crearApiArchivos());
+  await telegramBot.avisarMensajeDeGrupo({ grupoId: 'g1', mensaje: { id: 'no-existe', texto: '', tiene_adjunto: true, adjunto_tipo: 'image/png', adjunto_nombre: 'x.png' } });
+  check(archivosEnv.length === 1 && archivosEnv[0].k === 'texto' && /una foto/.test(archivosEnv[0].t), '13k) si no se puede leer el adjunto, queda el aviso de texto de siempre');
+  delete process.env.TELEGRAM_AVISOS_CHAT_ID;
 
   console.log(`\n${ok} pruebas OK, ${mal} fallaron.`);
   process.exit(mal ? 1 : 0);

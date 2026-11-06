@@ -51,6 +51,16 @@ function partirTexto(texto, max = LIMITE_TROZO) {
   return trozos;
 }
 
+// Qué método de Telegram usar para un tipo de archivo (ver enviarArchivo).
+function elegirMetodo(tipo) {
+  const mime = String(tipo || '').split(';')[0].trim().toLowerCase();
+  if (/^image\/(jpeg|jpg|png|webp)$/.test(mime)) return { metodo: 'sendPhoto', campo: 'photo' };
+  if (mime === 'video/mp4') return { metodo: 'sendVideo', campo: 'video' };
+  if (mime === 'audio/ogg' || mime === 'audio/opus') return { metodo: 'sendVoice', campo: 'voice' };
+  if (mime === 'audio/mpeg' || mime === 'audio/mp3' || mime === 'audio/mp4' || mime === 'audio/x-m4a' || mime === 'audio/m4a') return { metodo: 'sendAudio', campo: 'audio' };
+  return { metodo: 'sendDocument', campo: 'document' };
+}
+
 function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
   const hacerFetch = fetchImpl || ((...a) => fetch(...a));
   const esperar = esperarImpl || (ms => new Promise(r => setTimeout(r, ms)));
@@ -147,6 +157,46 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
     }
   }
 
+  // ARCHIVOS DEL CHAT (06-11-2026, a pedido del usuario: "cuando me envían un archivo adjunto por el chat, no me
+  // cargan en el Telegram"): antes solo se avisaba con texto que había un adjunto. Ahora el archivo mismo viaja a
+  // Telegram, con el método que mejor lo muestra: foto, video mp4, nota de voz (ogg/opus), audio (mp3/m4a) y, para
+  // todo lo demás (PDF, Word, Excel, videos .mov/.webm, audios .webm), como documento.
+  // `opciones`: { tipo, nombre, caption, threadId }.
+  async function enviarArchivo(chatId, buffer, opciones = {}) {
+    const mime = String(opciones.tipo || 'application/octet-stream').split(';')[0].trim().toLowerCase() || 'application/octet-stream';
+    const nombre = String(opciones.nombre || 'archivo').slice(0, 120);
+    const caption = opciones.caption || '';
+    const armar = (metodo, campo, texto, conHtml) => {
+      const f = new FormData();
+      f.append('chat_id', String(chatId));
+      if (opciones.threadId) f.append('message_thread_id', String(Number(opciones.threadId)));
+      if (texto) {
+        f.append('caption', String(texto).slice(0, 1000));
+        if (conHtml) f.append('parse_mode', 'HTML');
+      }
+      f.append(campo, new Blob([buffer], { type: mime }), nombre);
+      return f;
+    };
+    const mandar = async (m) => {
+      try {
+        return await llamar(m.metodo, {}, { timeoutMs: 90000, formData: armar(m.metodo, m.campo, caption ? formatearParaTelegram(caption) : '', true) });
+      } catch (e) {
+        if (caption && /parse entities|can't parse/i.test(e.message || '')) {
+          return await llamar(m.metodo, {}, { timeoutMs: 90000, formData: armar(m.metodo, m.campo, caption, false) });
+        }
+        throw e;
+      }
+    };
+    const primero = elegirMetodo(mime);
+    try {
+      return await mandar(primero);
+    } catch (e) {
+      // Si Telegram no acepta el formato como foto/video/voz (medidas, códec...), se manda igual como documento.
+      if (primero.metodo === 'sendDocument' || /thread|topic|chat not found|bot was kicked|not enough rights/i.test(e.message || '')) throw e;
+      return await mandar({ metodo: 'sendDocument', campo: 'document' });
+    }
+  }
+
   // ¿Quién escribió es administrador (o dueño) del grupo de Telegram? En un
   // chat privado siempre es "él mismo".
   async function esAdministrador(chatId, userId) {
@@ -159,6 +209,7 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
     llamar,
     enviarTexto,
     enviarFoto,
+    enviarArchivo,
     esAdministrador,
     // Crea un tema (un "chat" aparte) dentro de un grupo con Temas activados. Devuelve { message_thread_id, name, ... }.
     crearTemaForo: (chatId, nombre) => llamar('createForumTopic', { chat_id: chatId, name: String(nombre || 'Grupo').slice(0, 128) }),
@@ -168,4 +219,4 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
   };
 }
 
-module.exports = { crearClienteTelegram, formatearParaTelegram, partirTexto, escaparHtml, LIMITE_TELEGRAM };
+module.exports = { elegirMetodo, crearClienteTelegram, formatearParaTelegram, partirTexto, escaparHtml, LIMITE_TELEGRAM };
