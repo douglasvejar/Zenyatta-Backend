@@ -406,6 +406,18 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const rutaPend = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'routes', 'hipismo.js'), 'utf8');
   check(/router\.get\('\/oficinas\/pendientes-periodo'/.test(rutaPend) && /rangoPersonalizadoDeQuery\(req\)/.test(rutaPend), '7g) el servidor ya entrega las carreras sin llegada por rango de fechas');
 
+  // ---- 8) Agregar más jugadas a una carrera ya cargada (06-11-2026) ----
+  check(/async function agregarMasJugadas/.test(html) && /id="modalYaCargadaAgregar"/.test(html) && /Agregar más jugadas/.test(html), '8a) existe la opción "Agregar más jugadas" (ventana de carrera ya cargada)');
+  check(/AGREGANDO = \{ hipodromoId/.test(html) && /tr\.classList\.add\('fila-existente'\)/.test(html) && /el\.disabled = true/.test(html), '8b) las jugadas que ya estaban quedan bloqueadas y las nuevas van debajo');
+  check(/\$\('jPizarra'\)\.value = r\.pizarra \|\| ''; \$\('jRet'\)\.value = r\.ret \|\| ''/.test(html) && /\$\('jPizarra'\)\.readOnly = true/.test(html), '8c) la carrera se abre con la pizarra que ya tenía (bloqueada) para calcular las nuevas jugadas sin volver a cargarla');
+  check(/Guardar jugadas nuevas y calcular/.test(html) && /se calcularon con la pizarra que ya tenía/.test(html), '8d) el botón y el mensaje hablan de jugadas nuevas calculadas con la pizarra existente');
+  check(/agregarDelRegistro/.test(html) && /➕ Agregar<\/button>/.test(html), '8e) el Registro tiene el botón "➕ Agregar" por carrera');
+  check(/Cargada como plano en Grupos Hípicos \(sin tabla\): igual se muestra su pizarra/.test(html), '8f) una carrera cargada como plano también muestra su pizarra al elegirla');
+  const oficinasMerge = oficinas.calcularCuadre([
+    { jugador: 'LUIS', lado: 'jugo', tipo: '1p', caballo: '3', monto: 100 }, { jugador: 'RAUL', lado: 'dio', tipo: '1p', caballo: '3', monto: 100 },
+    { jugador: 'ANA', lado: 'jugo', tipo: '1p', caballo: '5', monto: 200 }, { jugador: 'PEDRO', lado: 'dio', tipo: '1p', caballo: '5', monto: 200 }]);
+  check(oficinasMerge.cuadra && oficinasMerge.detalle.length === 2, '8g) las jugadas de siempre + las nuevas cuadran juntas (la tabla se guarda completa y se calcula con la misma pizarra)');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();

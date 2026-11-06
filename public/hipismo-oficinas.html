@@ -93,6 +93,11 @@
   .edicion-barra .espacio { flex: 1; }
   .chip-carrera.actual { background: var(--accent-grass); color: #fff; border-color: var(--accent-grass); }
   .aviso { border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-top: 12px; }
+  tr.fila-existente td { background: rgba(70,55,30,0.05); }
+  tr.fila-existente input, tr.fila-existente select { opacity: .7; }
+  tr.fila-existente td.x { text-align: center; color: var(--text-dim); }
+  tr.fila-nueva td { background: rgba(63,138,133,0.07); }
+  .agregando-banner { background: var(--ok-bg); border: 1px solid rgba(63,138,133,0.45); border-left: 5px solid var(--accent-grass); color: var(--accent-deep); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
   .pizarras-faltan { background: var(--warn-bg); border: 1px solid rgba(217,119,6,0.5); border-left: 5px solid #d97706; color: #7c3a0b; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; }
   .pizarras-faltan .pf-lista { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .pizarras-faltan .chip-carrera { cursor: pointer; }
@@ -398,6 +403,7 @@
 
         <div class="card">
           <h2>Jugadas de la carrera</h2>
+          <div class="agregando-banner oculto" id="jAgregarBanner"><div id="jAgregarTxt"></div><button type="button" class="btn btn-sec btn-chico" onclick="cancelarAgregar()">Cancelar</button></div>
           <div class="tabla-wrap">
             <table class="jugadas">
               <thead><tr><th></th><th>Jugador</th><th>Jugó / Dio</th><th>Tipo</th><th>Caballo</th><th>Monto</th><th></th></tr></thead>
@@ -857,10 +863,11 @@
   <div class="modal-caja">
     <h3 id="modalYaCargadaTit">⚠️ Esta carrera ya tiene jugadas cargadas</h3>
     <div class="ya-cargada-datos" id="modalYaCargadaDatos"></div>
-    <p>Si sigues, verás sus jugadas y, al guardar, se calcula de nuevo y <b>sustituye a la anterior</b> (la anterior queda en la papelera de planos). Si te equivocaste de número, elige otra carrera.</p>
+    <p>¿Se te olvidó alguna jugada? Usa <b>Agregar más jugadas</b>: las que ya están no se tocan y las nuevas se calculan con la pizarra que la carrera ya tiene. Si prefieres corregir las existentes, al guardar se calcula de nuevo y <b>sustituye a la anterior</b> (queda en la papelera de planos). Si te equivocaste de número, elige otra carrera.</p>
     <div class="modal-botones">
-      <button type="button" class="btn" id="modalYaCargadaOtra">➡️ Elegir otra carrera</button>
+      <button type="button" class="btn" id="modalYaCargadaAgregar">➕ Agregar más jugadas</button>
       <button type="button" class="btn btn-sec" id="modalYaCargadaVer">Ver y corregir esta carrera</button>
+      <button type="button" class="btn btn-sec" id="modalYaCargadaOtra">➡️ Elegir otra carrera</button>
     </div>
   </div>
 </div>
@@ -1059,6 +1066,7 @@ async function cargarClientes() {
 // JUGADAS
 // ------------------------------------------------------------------
 let FILAS = [];          // { jugador, lado, tipo, caballo, monto }
+let AGREGANDO = null;    // { hipodromoId, fecha, carrera, existentes, conLlegada } mientras se agregan jugadas a una carrera ya cargada
 let CUADRE_OK = false;
 let TIMER_CUADRE = null;
 let ULTIMO_RESULTADO_TEXTO = '';
@@ -1075,6 +1083,7 @@ function agregarFila(enfocar) {
   if (enfocar) { const inp = document.querySelector('#jTbody tr:last-child input[data-c="jugador"]'); if (inp) inp.focus(); }
 }
 function limpiarTabla() {
+  salirAgregar();
   FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
   pintarTabla();
   programarCuadre();
@@ -1133,6 +1142,13 @@ function pintarTabla(erroresPorFila) {
       <td class="x" style="width:128px;white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Duplicar fila (Ctrl+D)" onclick="duplicarFila(${i})">⧉</button> <button type="button" class="btn btn-sec btn-chico" title="Contraparte: la misma jugada del otro lado (Jugó ⇄ Dio)" onclick="duplicarContraparte(${i})">⇄</button> <button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
   if (typeof marcarFilasNoExisten === 'function') marcarFilasNoExisten();
+  if (AGREGANDO) document.querySelectorAll('#jTbody tr').forEach((tr, i) => {
+    if (i < AGREGANDO.existentes) {
+      tr.classList.add('fila-existente');
+      tr.querySelectorAll('input,select').forEach(el => { el.disabled = true; });
+      const x = tr.querySelector('td.x'); if (x) x.innerHTML = '<span title="Jugada que ya estaba cargada: no se toca">🔒</span>';
+    } else tr.classList.add('fila-nueva');
+  });
 }
 $('jTbody').addEventListener('input', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
@@ -1259,8 +1275,9 @@ function actualizarBotones() {
   const base = CUADRE_OK && $('jHipodromo').value && $('jCarrera').value;
   const hayPizarra = !!$('jPizarra').value.trim();
   // Con llegada: guarda Y calcula. Sin llegada: guarda las jugadas "pendientes" (no afectan balances).
-  $('btnGuardar').disabled = !base;
-  $('btnGuardar').textContent = hayPizarra ? '💾 Guardar y calcular' : '💾 Guardar sin llegada';
+  const hayNuevas = !AGREGANDO || FILAS.slice(AGREGANDO.existentes).some(f => String(f.jugador || '').trim() || String(f.monto || '').trim());
+  $('btnGuardar').disabled = !(base && hayNuevas);
+  $('btnGuardar').textContent = AGREGANDO ? (hayPizarra ? '💾 Guardar jugadas nuevas y calcular' : '💾 Guardar jugadas nuevas (sin llegada)') : (hayPizarra ? '💾 Guardar y calcular' : '💾 Guardar sin llegada');
   $('btnCalcular').disabled = !(base && hayPizarra);
   pintarEdicion();
 }
@@ -1304,19 +1321,22 @@ async function guardarCarrera() {
   const cuerpo = cuerpoCarrera();
   const sinLlegada = !cuerpo.pizarra;
   const editando = enEdicion();
+  const agregando = !!AGREGANDO;
+  const nuevas = agregando ? FILAS.slice(AGREGANDO.existentes).filter(f => String(f.jugador || '').trim() && String(f.monto || '').trim()).length : 0;
   $('btnGuardar').disabled = true;
   try {
     const r = await api(sinLlegada ? '/api/hipismo/oficinas/pendiente' : '/api/hipismo/oficinas/guardar', { method: 'POST', body: JSON.stringify(cuerpo) });
     const avisos = [];
     if (!sinLlegada) {
-      if (r.sustituyoAnterior) avisos.push('Esta carrera ya estaba cargada: la nueva sustituyó a la anterior (la anterior queda en la papelera de planos).');
+      if (r.sustituyoAnterior && !agregando) avisos.push('Esta carrera ya estaba cargada: la nueva sustituyó a la anterior (la anterior queda en la papelera de planos).');
       (r.alertasPozo || []).forEach(a => avisos.push(typeof a === 'string' ? a : (a.mensaje || JSON.stringify(a))));
       (r.sinReconocer || []).forEach(x => avisos.push('No reconocí: ' + x));
       mostrarResultado('Carrera ' + cuerpo.carreraNumero + ' guardada', r.plano ? r.plano.texto_resultado : '', avisos);
     }
     const texto = sinLlegada
-      ? `⏳ Carrera ${cuerpo.carreraNumero} guardada SIN llegada (pendiente). Cuando tengas la pizarra, ábrela desde el Registro, agrégala y guarda: se calcula sola.`
-      : `✅ Carrera ${cuerpo.carreraNumero} guardada y calculada.`;
+      ? (agregando ? `⏳ Se agregaron ${nuevas} jugadas nuevas a la carrera ${cuerpo.carreraNumero}; sigue SIN llegada (pendiente).` : `⏳ Carrera ${cuerpo.carreraNumero} guardada SIN llegada (pendiente). Cuando tengas la pizarra, ábrela desde el Registro, agrégala y guarda: se calcula sola.`)
+      : (agregando ? `✅ Se agregaron ${nuevas} jugadas nuevas a la carrera ${cuerpo.carreraNumero} y se calcularon con la pizarra que ya tenía.` : `✅ Carrera ${cuerpo.carreraNumero} guardada y calculada.`);
+    salirAgregar();
     msg('jMsg', texto, true);
     if (editando) {            // venía del Registro: vuelve ahí con la lista al día
       EDICION = null;
@@ -1361,7 +1381,51 @@ function pintarCargadas() {
     : ($('jHipodromo').value ? 'Todavía no hay carreras cargadas en este hipódromo hoy.' : '');
 }
 async function abrirCarrera(n) { $('jCarrera').value = n; await cambioCarrera(); }
-async function cambioFechaOHipodromo() { await abrirSiguienteCarrera(); await cambioCarrera(true); avisarPizarrasFaltan(); }
+async function cambioFechaOHipodromo() { salirAgregar(); await abrirSiguienteCarrera(); await cambioCarrera(true); avisarPizarrasFaltan(); }
+
+// ---------- Agregar más jugadas a una carrera ya cargada ----------
+// La carrera se abre con sus jugadas bloqueadas (🔒) y filas nuevas debajo; la pizarra (llegada) que ya tiene queda puesta.
+// Al guardar se envían las jugadas de siempre + las nuevas y se calcula con esa misma pizarra: no hay que volver a cargarla.
+function salirAgregar() {
+  if (!AGREGANDO) return;
+  AGREGANDO = null;
+  $('jAgregarBanner').classList.add('oculto');
+  $('jPizarra').readOnly = false; $('jRet').readOnly = false;
+  if (puedeCruzarJugadas()) $('jCruzar').disabled = false;
+}
+async function cancelarAgregar() {
+  salirAgregar();
+  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  $('jPizarra').value = ''; $('jRet').value = '';
+  pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
+  $('jAviso').classList.add('oculto');
+  await abrirSiguienteCarrera();
+}
+async function agregarMasJugadas() {
+  const h = $('jHipodromo').value, c = Number($('jCarrera').value), fecha = $('jFecha').value;
+  if (!h || !c) return;
+  try {
+    const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent(fecha)}`);
+    if (!r.existe) return msg('jMsg', 'Esa carrera todavía no tiene jugadas cargadas.', false);
+    if (!r.filas || !r.filas.length) {
+      $('jPizarra').value = r.pizarra || '';
+      return msg('jMsg', 'Esa carrera se cargó como plano en Hipismo Grupos Hípicos y no tiene tabla: no se le pueden agregar jugadas desde aquí.', false);
+    }
+    salirAgregar();
+    FILAS = r.filas.map(filaDeServidor);
+    AGREGANDO = { hipodromoId: h, fecha, carrera: c, existentes: FILAS.length, conLlegada: !!r.pizarra };
+    FILAS.push(filaVacia(null), filaVacia(null), filaVacia(null));
+    $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
+    $('jCruzar').checked = !!r.cruzaJugadas;
+    if (r.pizarra) { $('jPizarra').readOnly = true; $('jRet').readOnly = true; $('jCruzar').disabled = true; }
+    $('jAviso').classList.add('oculto'); msg('jMsg', '');
+    const hip = HIPODROMOS.find(x => x.id === h);
+    $('jAgregarTxt').innerHTML = `➕ <b>Agregando jugadas a la carrera ${c}${hip ? ' de ' + esc(nombreHip(hip.nombre)) : ''}.</b> Las ${AGREGANDO.existentes} jugadas que ya estaban (🔒) no se tocan: escribe abajo solo las nuevas (lo nuevo también tiene que cuadrar: lo que jugaron = lo que dieron). ${r.pizarra ? `Se calculan con la pizarra que ya tiene: <b>${esc(r.pizarra)}</b>${r.ret ? ` (ret. ${esc(r.ret)})` : ''}.` : 'Esta carrera todavía no tiene pizarra: se guardan como pendientes.'}`;
+    $('jAgregarBanner').classList.remove('oculto');
+    pintarTabla(); pintarCargadas(); programarCuadre(); actualizarBotones();
+    const inp = document.querySelector(`#jTbody tr:nth-child(${AGREGANDO.existentes + 1}) input[data-c="jugador"]`); if (inp) inp.focus();
+  } catch (e) { msg('jMsg', e.message, false); }
+}
 
 // ---------- Aviso: la carrera elegida ya tiene jugadas cargadas ----------
 let _resolverYaCargada = null;
@@ -1370,7 +1434,7 @@ function preguntarYaCargada(carrera) {
   const sinLlegada = PENDIENTES.includes(carrera);
   $('modalYaCargadaDatos').textContent = `${nombreHipSel.replace(/^\S*\s/, '') || 'Hipódromo'} — carrera ${carrera} (${$('jFecha').value.split('-').reverse().join('/')}) · ${sinLlegada ? 'guardada SIN llegada (falta la pizarra)' : 'ya calculada'}`;
   $('modalYaCargada').classList.remove('oculto');
-  $('modalYaCargadaOtra').focus();
+  $('modalYaCargadaAgregar').focus();
   return new Promise(res => { _resolverYaCargada = res; });
 }
 function cerrarYaCargada(seguir) {
@@ -1379,6 +1443,7 @@ function cerrarYaCargada(seguir) {
   if (r) r(seguir);
 }
 $('modalYaCargadaVer').addEventListener('click', () => cerrarYaCargada(true));
+$('modalYaCargadaAgregar').addEventListener('click', () => cerrarYaCargada('agregar'));
 $('modalYaCargadaOtra').addEventListener('click', () => cerrarYaCargada(false));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modalYaCargada').classList.contains('oculto')) cerrarYaCargada(false); });
 
@@ -1431,8 +1496,10 @@ async function cambioCarrera(soloAvisar, preguntar) {
   // Eligió a mano una carrera que ya tiene jugadas: se le avisa en una ventana antes de abrirla (para no cargarla dos veces por error).
   if (preguntar && !enEdicion()) {
     const seguir = await preguntarYaCargada(Number(c));
-    if (!seguir) { await abrirSiguienteCarrera(); return; }
+    if (seguir === 'agregar') { await agregarMasJugadas(); return; }
+    if (!seguir) { salirAgregar(); await abrirSiguienteCarrera(); return; }
   }
+  if (AGREGANDO && !(AGREGANDO.hipodromoId === h && String(AGREGANDO.carrera) === String(c) && AGREGANDO.fecha === $('jFecha').value)) salirAgregar();
   try {
     const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(h)}&carrera=${encodeURIComponent(c)}&fecha=${encodeURIComponent($('jFecha').value)}`);
     if (!r.existe) { actualizarBotones(); return; }
@@ -1446,7 +1513,15 @@ async function cambioCarrera(soloAvisar, preguntar) {
         ? `La carrera ${c} está guardada SIN llegada. Agrega la pizarra y guarda: se calcula sola.`
         : `La carrera ${c} ya estaba cargada. Estás viendo sus jugadas: si guardas, se calcula de nuevo y sustituye a la anterior.`);
     } else {
+      // Cargada como plano en Grupos Hípicos (sin tabla): igual se muestra su pizarra y retirados.
+      $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
       mostrarAviso(`La carrera ${c} ya estaba cargada desde Hipismo Grupos Hípicos (como plano). Si guardas aquí, la nueva la sustituye.`);
+    }
+    if (r.filas && r.filas.length && !r.pendiente) {
+      const a = $('jAviso'), b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-sec btn-chico'; b.style.marginLeft = '10px'; b.textContent = '➕ Agregar más jugadas en vez de corregir';
+      b.onclick = () => agregarMasJugadas();
+      a.appendChild(b);
     }
   } catch (e) { msg('jMsg', e.message, false); }
   actualizarBotones();
@@ -1514,8 +1589,20 @@ function pintarRegistro() {
           <td>${c.estado === 'calculada' ? '<span class="tag">✅ Calculada</span>' : '<span class="tag pend">⏳ Pendiente de llegada</span>'}</td>
           <td>${c.pizarra ? esc(c.pizarra) : '—'}${c.ret ? ` <span class="sub-linea">ret. ${esc(c.ret)}</span>` : ''}</td>
           <td class="num">${c.filas}</td><td class="num">${c.jugadores}</td><td class="num">${INF.dinero(c.totalJugado)}</td>
-          <td class="num"><button type="button" class="btn btn-sec btn-chico">✏️ Editar</button></td></tr>`).join('')}</tbody>
+          <td class="num" style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Agregar jugadas nuevas a esta carrera sin tocar las que ya tiene" onclick="event.stopPropagation(); agregarDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">➕ Agregar</button> <button type="button" class="btn btn-sec btn-chico">✏️ Editar</button></td></tr>`).join('')}</tbody>
       </table></div></div>`).join('');
+}
+async function agregarDelRegistro(hipodromoId, numero) {
+  if (!hipodromoId || !HIPODROMOS.some(h => h.id === hipodromoId)) return msg('rMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder agregar jugadas a esta carrera.', false);
+  msg('rMsg', '');
+  EDICION = null; salirAgregar();
+  $('jFecha').value = REGISTRO.fecha; $('jHipodromo').value = hipodromoId;
+  $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
+  irATab('jugadas');
+  await abrirSiguienteCarrera();
+  $('jCarrera').value = numero;
+  await agregarMasJugadas();
+  $('panel-jugadas').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 async function abrirDelRegistro(hipodromoId, numero) {
   if (!hipodromoId || !HIPODROMOS.some(h => h.id === hipodromoId)) return msg('rMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder editar esta carrera.', false);
