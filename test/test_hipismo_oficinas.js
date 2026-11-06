@@ -481,6 +481,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/id="cPagoDiarioWrap"/.test(html) && /\$\('cPagoDiarioWrap'\)\.classList\.toggle\('oculto', esOf\)/.test(html) && /if \(esOf\) \$\('cPagoDiario'\)\.checked = false/.test(html), '12p) al elegir Oficina desaparece "Cliente de pago diario" (y se desmarca)');
   check(/¿Se le devuelve un % a esta oficina\?/.test(html) && /¿Esta oficina le genera % a otra oficina o a un cliente\?/.test(html) && /¿Esta oficina tiene pozo\?/.test(html) && /esOf \? 'Libre' : 'Tercio libre'/.test(html), '12q) con Oficina las preguntas hablan de "esta oficina" y la opción libre se llama "Libre"');
   check(/tipoDeCliente\(c\) === 'oficina' && !c\.pago_diario \? ''/.test(html), '12r) en la lista, una oficina no ofrece "Marcar pago diario"');
+  check(/async function refrescarLogoGrupo\(\)/.test(html) && /fetch\(url, \{ cache: 'no-cache' \}\)/.test(html) && /GRUPO\.logoUrl = tiene \? url : null/.test(html) && /\nrefrescarLogoGrupo\(\);/.test(html), '12s) al abrir la página se consulta el logo REAL del grupo (aunque la sesión sea vieja) para la marca de agua');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [
     { carrera: 2, rol: 'jugador', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80, resultado: -80 },

@@ -1969,6 +1969,23 @@ function queryPeriodo(prefijo) {
 // Sin logo propio, la marca de agua es el isotipo de Ludox (así los informes nunca salen sin ella).
 const LOGO_LUDOX_MARCA = '/img/logo-ludox-icono.png';
 function urlLogoGrupo() { return (GRUPO && GRUPO.id && GRUPO.logoUrl) ? `/api/imagenes/logo-grupo/${GRUPO.id}` : LOGO_LUDOX_MARCA; }
+// El logo viaja en la sesión guardada al iniciar sesión: si el Súper-admin lo cargó (o lo cambió) DESPUÉS, esa copia queda vieja y la marca de agua
+// salía con el logo de Ludox (06-11-2026). Al abrir la página se consulta el logo REAL del grupo en el servidor (la ruta es pública por id de grupo y
+// responde 404 si no tiene) y se actualiza la sesión de esta pestaña; así no hace falta cerrar sesión y volver a entrar.
+async function refrescarLogoGrupo() {
+  if (!GRUPO || !GRUPO.id) return;
+  const url = `/api/imagenes/logo-grupo/${GRUPO.id}`;
+  let tiene = null;
+  try {
+    const r = await fetch(url, { cache: 'no-cache' });
+    if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) tiene = true;
+    else if (r.status === 404) tiene = false;
+  } catch (e) { return; }
+  if (tiene === null || !!GRUPO.logoUrl === tiene) return;
+  GRUPO.logoUrl = tiene ? url : null;
+  try { localStorage.setItem('zenyatta_grupo', JSON.stringify(GRUPO)); } catch (e) { /* no crítico */ }
+}
+refrescarLogoGrupo();
 function ponerInforme(idCaptura, html) {
   const logo = urlLogoGrupo();
   $(idCaptura).innerHTML = `<div class="inf-logo-fondo"></div><div class="inf-contenido">${html}</div>`;
