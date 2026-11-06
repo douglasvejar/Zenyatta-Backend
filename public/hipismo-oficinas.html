@@ -1084,6 +1084,28 @@ function agregarFila(enfocar) {
   pintarTabla();
   if (enfocar) { const inp = document.querySelector('#jTbody tr:last-child input[data-c="jugador"]'); if (inp) inp.focus(); }
 }
+// FILAS AUTOMÁTICAS (06-11-2026, a pedido del usuario: "si faltan celdas para cuadrar la carrera créalas
+// automáticamente de a 1 en 1, para agilizar el proceso"): en cuanto la ÚLTIMA fila tiene jugador y monto, se abre
+// una fila nueva debajo (con el mismo tipo y caballo, igual que "Agregar fila"). Así siempre hay una fila libre y no
+// hace falta apretar nada para seguir cargando hasta que la carrera cuadre. Una fila nueva por vez: mientras la
+// última esté vacía no se crea otra. El cursor se queda donde estaba escribiendo.
+function ultimaFilaCompleta() {
+  const u = FILAS[FILAS.length - 1];
+  return !!u && !!String(u.jugador || '').trim() && !!String(u.monto || '').trim();
+}
+function asegurarFilaLibre() {
+  if (!ultimaFilaCompleta()) return false;
+  const ae = document.activeElement;
+  const enTabla = ae && ae.dataset && ae.dataset.c !== undefined && $('jTbody').contains(ae);
+  const foco = enTabla ? { i: ae.dataset.i, c: ae.dataset.c, a: ae.selectionStart, b: ae.selectionEnd } : null;
+  FILAS.push(filaVacia(FILAS[FILAS.length - 1]));
+  pintarTabla();
+  if (foco) {
+    const el = document.querySelector(`#jTbody [data-i="${foco.i}"][data-c="${foco.c}"]`);
+    if (el) { el.focus(); try { if (foco.a != null) el.setSelectionRange(foco.a, foco.b); } catch (e) { /* un select no tiene cursor */ } }
+  }
+  return true;
+}
 function limpiarTabla() {
   salirAgregar();
   FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
@@ -1155,6 +1177,7 @@ function pintarTabla(erroresPorFila) {
 $('jTbody').addEventListener('input', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
   alEscribirFila(t);
+  asegurarFilaLibre();
   programarCuadre();
 });
 $('jTbody').addEventListener('change', e => {
@@ -1168,6 +1191,7 @@ $('jTbody').addEventListener('change', e => {
     const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${esMarcaFila(FILAS[i]) ? 'premio' : 'caballo'}"]`);
     if (inp) inp.focus();
   }
+  asegurarFilaLibre();
   programarCuadre();
 });
 // Enter en el monto de la última fila abre una fila nueva y salta al jugador.
