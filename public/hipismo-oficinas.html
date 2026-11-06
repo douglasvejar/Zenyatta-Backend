@@ -196,6 +196,34 @@
   .informe .car-total.gana { background: #dcfce7; color: #166534; border-top-color: #16a34a; }
   .informe .car-total.pierde { background: #fee2e2; color: #b91c1c; border-top-color: #dc2626; }
   .informe .car-total.cero { background: #eef2ef; color: #3f5247; border-top-color: #94a3a0; }
+  /* Detallado por Cliente — vista mejorada (06-11-2026): jugadas con chip Jugó/Dio, modalidad y caballos de colores. */
+  .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
+  .informe .det-dia .dia-tit .dia-monto { background: rgba(255,255,255,0.14); border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums; }
+  .informe .det-dia .dia-tit .dia-monto.gana { background: #dcfce7; color: #166534; }
+  .informe .det-dia .dia-tit .dia-monto.pierde { background: #fee2e2; color: #b91c1c; }
+  .informe .det-hip .hip-tit { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 15px; }
+  .informe .det-hip .hip-tit::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #16a34a; }
+  .informe .det-hip .hip-tit.otros::before { background: #94a3a0; }
+  .informe .car-caja { border-radius: 12px; box-shadow: 0 1px 3px rgba(20,83,45,0.08); }
+  .informe .car-cab { display: flex; align-items: center; gap: 8px; }
+  .informe .car-cab .car-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #14532d; color: #fff; font-size: 12px; font-weight: 800; }
+  .informe .car-caja table td { padding: 7px 10px; vertical-align: middle; }
+  .informe .car-caja table tr:nth-child(even) td { background: rgba(244,250,246,0.7); }
+  .informe .car-caja table td.num { font-weight: 800; font-size: 14px; }
+  .informe .lin-otra { color: #3f5247; font-size: 13px; }
+  .informe .lin-otra::before { content: '•'; color: #94a3a0; margin-right: 6px; }
+  .informe .jug { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
+  .informe .jug-rol { font-size: 11px; font-weight: 800; letter-spacing: .3px; padding: 2px 9px; border-radius: 999px; line-height: 1.3; }
+  .informe .jug-rol.jugo { background: #dcfce7; color: #166534; border: 1px solid #a7e3bc; }
+  .informe .jug-rol.dio { background: #e0e7ff; color: #3730a3; border: 1px solid #c3cdf8; }
+  .informe .jug-mod { font-weight: 800; font-size: 13px; color: #14532d; background: #eef5f0; border: 1px solid #cfe3d6; border-radius: 6px; padding: 1px 7px; }
+  .informe .jug-cab { display: inline-flex; align-items: center; gap: 5px; }
+  .informe .cab-col { display: inline-flex; align-items: center; gap: 2px; }
+  .informe .cab-col svg { display: block; }
+  .informe .cab-sep { font-weight: 800; color: #587264; font-size: 12px; }
+  .informe .jug-monto { color: #587264; font-size: 12.5px; }
+  .informe .jug-monto b { color: #15321f; font-variant-numeric: tabular-nums; }
+  .informe .det-sub td { font-weight: 800; background: rgba(227,241,232,0.82); }
   .informe .vacio { padding: 18px; text-align: center; color: #587264; }
   .informe .sub-linea { color: #587264; font-size: 12px; }
   /* ---------- Recargas, Retiros y Control de Pozos (05-11-2026) ---------- */
@@ -1735,23 +1763,25 @@ function pintarDetalle(nombre, resp) {
   const det = INF.armarDetalleCliente(resp);
   let html = cabeceraInforme('Detallado por Cliente', resp, `<b>${esc(nombreBonito(nombre))}</b>`);
   if (!det.dias.length) html += '<div class="vacio">Este cliente no tiene movimientos en este período.</div>';
+  const signoDe = n => INF.r2(n) > 0 ? 'gana' : (INF.r2(n) < 0 ? 'pierde' : 'cero');
+  // Una jugada normal se pinta con chip Jugó/Dio + modalidad + caballos de colores; el resto (traspasos, % devuelto, cargas) va como texto.
+  const celdaLinea = l => l.jugada ? INF.jugadaHTML(l.jugada) : `<span class="lin-otra">${esc(l.texto)}</span>`;
   det.dias.forEach(dia => {
-    html += `<div class="inf-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span>${INF.dineroConSigno(dia.total)}</span></div>`;
+    html += `<div class="inf-dia det-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span class="dia-monto ${signoDe(dia.total)}">${INF.dineroConSigno(dia.total)}</span></div>`;
     dia.hipodromos.forEach(h => {
       const titulo = h.esCarreras ? nombreHip(h.nombre) : h.nombre;
-      html += `<div class="inf-hip"><div class="hip-tit">${esc(titulo)}</div>`;
+      html += `<div class="inf-hip det-hip"><div class="hip-tit${h.esCarreras ? '' : ' otros'}">${esc(titulo)}</div>`;
       // Cada carrera va en su propio cuadro y el total de la carrera resalta al pie.
       h.carreras.forEach(c => {
-        const lineas = c.lineas.map(l => `<tr><td>${esc(l.texto)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`).join('');
+        const lineas = c.lineas.map(l => `<tr><td>${celdaLinea(l)}</td><td class="num">${celdaSaldo(l.resultado)}</td></tr>`).join('');
         if (c.numero) {
-          const signo = INF.r2(c.total) > 0 ? 'gana' : (INF.r2(c.total) < 0 ? 'pierde' : 'cero');
-          html += `<div class="car-caja"><div class="car-cab">Carrera ${c.numero}</div><table><tbody>${lineas}</tbody></table>
-            <div class="car-total ${signo}"><span>Total carrera ${c.numero}</span><b>${INF.dineroConSigno(c.total)}</b></div></div>`;
+          html += `<div class="car-caja"><div class="car-cab"><span class="car-n">${c.numero}</span>Carrera ${c.numero}</div><table><tbody>${lineas}</tbody></table>
+            <div class="car-total ${signoDe(c.total)}"><span>Total carrera ${c.numero}</span><b>${INF.dineroConSigno(c.total)}</b></div></div>`;
         } else {
           html += `<div class="car-caja"><table><tbody>${lineas}</tbody></table></div>`;
         }
       });
-      html += `<table><tbody><tr class="sub-hip"><td>Total ${esc(titulo)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table></div>`;
+      html += `<table><tbody><tr class="sub-hip det-sub"><td>Total ${esc(titulo)}</td><td class="num">${celdaSaldo(h.total)}</td></tr></tbody></table></div>`;
     });
     html += `<table><tbody><tr class="total"><td>TOTAL DEL DÍA ${INF.nombreDia(dia.fecha).toUpperCase()} ${INF.fechaCorta(dia.fecha)}</td><td class="num">${celdaSaldo(dia.total)}</td></tr></tbody></table></div>`;
   });

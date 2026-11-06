@@ -269,9 +269,30 @@ async function invocarRuta(handler, req) {
   check(INF.descripcionLinea({ rol: 'jugador', modalidad: '1p', caballo: '(3)', monto: 100 }) === 'Jugó 1p (3) con 100,00', '2k) "Jugó 1p (3) con 100,00"');
   check(INF.descripcionLinea({ rol: 'banquero', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80 }) === 'Dio pp (4x3) con 80,00', '2l) un cruce se lee "Dio pp (4x3) con 80,00"');
 
+  // ---- 2m) Caballos de colores y vista mejorada del Detallado (06-11-2026) ----
+  const pj = INF.partesJugada({ rol: 'jugador', modalidad: '2n', caballo: '(3)', monto: 400 });
+  check(pj && pj.rol === 'Jugó' && pj.modalidad === '2n' && pj.caballo === '3' && pj.monto === '400,00', '2m) partesJugada separa rol, modalidad, caballo y monto');
+  check(INF.partesJugada({ tipo: 'traspaso' }) === null && INF.partesJugada({ tipo: 'comision' }) === null && INF.partesJugada({ ticket: 'T1' }) === null, '2n) traspasos, % devuelto y tickets no son jugada (se quedan como texto)');
+  const cpp = INF.partesJugada({ rol: 'banquero', modalidad: 'pp', caballoA: 4, caballoB: 3, monto: 80 });
+  check(cpp.caballo === '4x3' && cpp.rol === 'Dio', '2o) un cruce pp queda como "4x3"');
+  check((INF.caballosHTML('4x3').match(/class="cab-col"/g) || []).length === 2 && /cab-sep">x</.test(INF.caballosHTML('4x3')), '2p) "4x3" pinta dos caballos de colores con su separador');
+  check((INF.caballosHTML('1y2y13').match(/class="cab-col"/g) || []).length === 3, '2q) una jugada de varios caballos pinta uno por número');
+  check(INF.colorEjemplar(1)[0] === '#e02020' && INF.colorEjemplar(3)[0] === '#1560bd' && INF.colorEjemplar(2)[0] === '#f2f2f2', '2r) colores de gualdrapa: 1 rojo, 2 blanco, 3 azul');
+  check(INF.colorEjemplar(99)[0] === '#616161', '2s) un número sin color definido sale gris');
+  check(/fill="#e02020"/.test(INF.caballoColorHTML(1)) && /<path d="M400 16/.test(INF.caballoColorHTML(1)) && />1<\/text>/.test(INF.caballoColorHTML(1)), '2t) el caballo lleva el número y la cabeza pintada del color');
+  check(INF.caballoColorHTML('abc') === '' && INF.caballosHTML('') === '', '2u) sin número válido no pinta nada');
+  check(/<script>/.test(INF.caballosHTML('<script>')) === false, '2v) el texto sin números se escapa');
+  const jh = INF.jugadaHTML(pj);
+  check(/jug-rol jugo">Jugó/.test(jh) && /jug-mod">2n/.test(jh) && /jug-monto">con <b>400,00/.test(jh), '2w) jugadaHTML: chip Jugó, modalidad y monto');
+  check(/jug-rol dio">Dio/.test(INF.jugadaHTML(cpp)), '2x) el banquero lleva chip "Dio"');
+  const todasLineas = [];
+  detalle.dias.forEach(dd => dd.hipodromos.forEach(hh => hh.carreras.forEach(cc => cc.lineas.forEach(l => todasLineas.push(l)))));
+  check(todasLineas.every(l => l.texto) && todasLineas.some(l => l.jugada && l.jugada.caballo), '2y) cada línea conserva su texto (Excel) y las jugadas traen sus partes');
+
   // ---- 3) La pantalla ----
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-oficinas.html'), 'utf8');
   ['Balance General', 'Detallado por Cliente', 'Comisión por Carrera', 'COMISIÓN OFICINA', 'Copiar imagen HD', 'Descargar PDF', 'TOTAL DEL DÍA', 'oficinas-informes.js', 'html2canvas', 'jspdf', '/api/hipismo/cierre-final', '/detalle-semana', '/api/hipismo/oficinas/comision-por-carrera'].forEach(t => check(html.includes(t), `3) la pantalla incluye "${t}"`));
+  check(/INF\.jugadaHTML\(l\.jugada\)/.test(html) && /\.jug-rol\.dio/.test(html) && /\.cab-col/.test(html) && /car-n/.test(html), '3z) el Detallado pinta las jugadas con chips y caballos de colores');
   ['balCaptura', 'detCaptura', 'comCaptura'].forEach(id => check(new RegExp(`copiarImagenHD\\('${id}'`).test(html) && new RegExp(`descargarPDF\\('${id}'`).test(html), `3) ${id}: tiene botón de imagen HD y de PDF`));
   check(/while \(y < canvas\.height\)/.test(html) && /pdf\.addPage\(\)/.test(html), '3) el PDF se parte en varias páginas (no recorta un informe largo)');
   check(/inf-logo-fondo/.test(html) && /ponerInforme\('balCaptura'/.test(html) && /ponerInforme\('detCaptura'/.test(html) && /ponerInforme\('comCaptura'/.test(html) && /\/api\/imagenes\/logo-grupo\//.test(html), '3) Balance, Detallado y Comisión llevan el logo del grupo de fondo');
