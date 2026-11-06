@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <script src="sesion-pestana.js"></script>
+<script src="buscador-lista.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ludox Hipismo 🇻🇪 — Panel del Grupo</title>
@@ -2604,7 +2605,7 @@
         <div id="selectorPlanoCompacto">
           <div>
             <label for="selHipodromo">Hipódromo</label>
-            <select id="selHipodromo" onchange="revisarPizarraAnterior()">
+            <select id="selHipodromo" data-buscar onchange="revisarPizarraAnterior()">
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -2717,7 +2718,7 @@
         <div class="fila">
           <div>
             <label for="vpHipodromo">Hipódromo</label>
-            <select id="vpHipodromo"><option value="">(cargando…)</option></select>
+            <select id="vpHipodromo" data-buscar><option value="">(cargando…)</option></select>
           </div>
           <div>
             <label for="vpCarrera">Carrera</label>
@@ -2764,7 +2765,7 @@
         <div class="fila">
           <div>
             <label for="selHipodromoRemate">Hipódromo</label>
-            <select id="selHipodromoRemate">
+            <select id="selHipodromoRemate" data-buscar>
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -2864,7 +2865,7 @@
         <div class="fila">
           <div>
             <label for="selHipodromoRemateManual">Hipódromo</label>
-            <select id="selHipodromoRemateManual">
+            <select id="selHipodromoRemateManual" data-buscar>
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -2955,7 +2956,7 @@
         <div class="fila">
           <div>
             <label for="selHipodromoAdelantadas">Hipódromo</label>
-            <select id="selHipodromoAdelantadas">
+            <select id="selHipodromoAdelantadas" data-buscar>
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -3034,7 +3035,7 @@
         <div class="fila">
           <div>
             <label for="selHipodromoTerciosAdelantadas">Hipódromo</label>
-            <select id="selHipodromoTerciosAdelantadas">
+            <select id="selHipodromoTerciosAdelantadas" data-buscar>
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -4287,7 +4288,7 @@
         <div class="fila">
           <div style="flex:1 1 220px;">
             <label for="selCmeHipodromo">🏟️ Hipódromo *</label>
-            <select id="selCmeHipodromo" onchange="cmeCambioForm()"></select>
+            <select id="selCmeHipodromo" data-buscar onchange="cmeCambioForm()"></select>
           </div>
           <div style="flex:1 1 220px;">
             <label for="selCmeAccion">🎯 Acción *</label>
@@ -4798,7 +4799,7 @@ Pizarra: [se llena al calcular]
         <div class="fila">
           <div>
             <label for="selHipodromoWinners">Hipódromo</label>
-            <select id="selHipodromoWinners">
+            <select id="selHipodromoWinners" data-buscar>
               <option value="">(cargando…)</option>
             </select>
           </div>
@@ -4893,7 +4894,7 @@ Pizarra: [se llena al calcular]
           </div>
           <div>
             <label for="selHipodromoRevisar">Hipódromo</label>
-            <select id="selHipodromoRevisar" onchange="cargarRevisarJugadas()">
+            <select id="selHipodromoRevisar" data-buscar onchange="cargarRevisarJugadas()">
               <option value="">(cargando…)</option>
             </select>
           </div>

@@ -428,6 +428,20 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const opcionesHip = mock.match(/<option value="\$\{[^"]*h\.nombre[^"]*\}">[^`]*<\/option>/g) || [];
   const conBandera = opcionesHip.filter(o => /banderaPorPais/.test(o));
   check(conBandera.length >= 8 && conBandera.every(o => /h\.nombre\)?\} \$\{banderaPorPais\[h\.pais\]/.test(o)), '9e) en el módulo Hipismo/Grupos todas las listas de hipódromos llevan la bandera al final (' + conBandera.length + ' listas)');
+  // 9f) Buscador de hipódromos (06-11-2026): teclear filtra, no da vueltas
+  const vm = require('vm');
+  const codigoBL = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'buscador-lista.js'), 'utf8');
+  const ctxBL = { window: {}, document: { addEventListener() {}, removeEventListener() {} } };
+  vm.createContext(ctxBL); vm.runInContext(codigoBL, ctxBL);
+  const BL = ctxBL.window.BuscadorLista;
+  const ops = ['— Elige —', 'La Rinconada 🇻🇪', 'Valencia 🇻🇪', 'Tampa Bay Downs 🇺🇸', 'Turfway Park 🇺🇸', 'Santa Anita 🇺🇸', 'Oaklawn Park 🇺🇸'].map(t => ({ valor: t, texto: t, grupo: '', off: false }));
+  const fx = q => BL.filtrar(ops, q).map(o => o.texto.replace(/ 🇻🇪| 🇺🇸/, ''));
+  check(JSON.stringify(fx('t')) === JSON.stringify(['Tampa Bay Downs', 'Turfway Park']), '9f) escribir "t" deja SOLO los hipódromos con T (no rueda por la lista)');
+  check(JSON.stringify(fx('tam')) === JSON.stringify(['Tampa Bay Downs']) && fx('tt').length === 0, '9g) seguir escribiendo afina ("tam") y una letra repetida no da vueltas ("tt" no coincide)');
+  check(fx('sánta')[0] === 'Santa Anita' && fx('park').length === 2 && fx('')[0] === '— Elige —' && fx('').length === ops.length, '9h) ignora acentos, encuentra por palabra ("park") y sin texto muestra todo');
+  const htmlMock = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+  const idsMock = ['selHipodromo', 'vpHipodromo', 'selHipodromoRemate', 'selHipodromoRemateManual', 'selHipodromoAdelantadas', 'selHipodromoTerciosAdelantadas', 'selHipodromoWinners', 'selHipodromoRevisar', 'selCmeHipodromo'];
+  check(/<script src="buscador-lista\.js"><\/script>/.test(html) && /<script src="buscador-lista\.js"><\/script>/.test(htmlMock) && /<select id="jHipodromo" data-buscar/.test(html) && /<select id="rHipodromo" data-buscar/.test(html) && idsMock.every(i => new RegExp('<select id="' + i + '" data-buscar').test(htmlMock)), '9i) las listas de hipódromos de Oficinas y de Hipismo/Grupos usan el buscador');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);

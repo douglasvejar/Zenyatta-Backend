@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <script src="sesion-pestana.js"></script>
+<script src="buscador-lista.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ludox Hipismo Oficinas 🏢 — Panel del Grupo</title>
@@ -390,7 +391,7 @@
           <p class="nota">Elige el hipódromo: se abre solo la carrera que sigue a la última cargada. La carrera se guarda cuando lo que jugaron es igual a lo que dieron, por cada tipo de jugada y caballo.</p>
           <div class="fila-campos">
             <div><label for="jFecha">Fecha</label><input type="date" id="jFecha" onchange="cambioFechaOHipodromo()"></div>
-            <div><label for="jHipodromo">Hipódromo</label><select id="jHipodromo" onchange="cambioFechaOHipodromo()"><option value="">— Elige —</option></select></div>
+            <div><label for="jHipodromo">Hipódromo</label><select id="jHipodromo" data-buscar onchange="cambioFechaOHipodromo()"><option value="">— Elige —</option></select></div>
             <div><label for="jCarrera">Carrera</label><select id="jCarrera" onchange="cambioCarrera(false, true)"><option value="">—</option></select></div>
             <div><label for="jPizarra">Llegada (pizarra)</label><input type="text" id="jPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off"></div>
             <div><label for="jRet">Retirados (opcional)</label><input type="text" id="jRet" placeholder="Ej. 5" autocomplete="off"></div>
@@ -452,7 +453,7 @@
       <p class="nota">Abre un día, elige el hipódromo y toca una carrera para corregir jugadores y montos. Al guardar, la carrera se calcula de nuevo sola si ya tiene su llegada (pizarra); si no la tiene, queda pendiente.</p>
       <div class="fila-campos">
         <div><label for="rFecha">Día</label><input type="date" id="rFecha" onchange="cargarRegistro()"></div>
-        <div><label for="rHipodromo">Hipódromo</label><select id="rHipodromo" onchange="pintarRegistro()"><option value="">Todos</option></select></div>
+        <div><label for="rHipodromo">Hipódromo</label><select id="rHipodromo" data-buscar onchange="pintarRegistro()"><option value="">Todos</option></select></div>
         <div style="grid-column: span 2;"><label>&nbsp;</label><span style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button><button type="button" class="btn btn-sec" onclick="excelRegistro()" title="Descarga todas las jugadas del día">📊 Descargar Excel</button></span></div>
       </div>
       <div class="cargadas" id="rDias"></div>
