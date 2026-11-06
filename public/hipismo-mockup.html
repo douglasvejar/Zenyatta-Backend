@@ -9725,7 +9725,7 @@ function poblarSelectHipodromoWinners() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -14875,7 +14875,7 @@ function poblarSelectHipodromo() {
     sel.innerHTML = '<option value="">Crea un hipódromo primero (Administración &gt; Hipódromos)</option>';
   } else {
     const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-    sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+    sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
     if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
   }
   poblarSelectHipodromoRemate();
@@ -14898,7 +14898,7 @@ function poblarSelectHipodromoAdelantadas() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -14913,7 +14913,7 @@ function poblarSelectHipodromoTerciosAdelantadas() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -14928,7 +14928,7 @@ function poblarSelectHipodromoRemate() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -14943,7 +14943,7 @@ function poblarSelectHipodromoRemateManual() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais]} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 
@@ -14964,7 +14964,7 @@ function poblarSelectHipodromoValidar() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${banderaPorPais[h.pais] || ''} ${h.nombre}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${h.nombre}">${h.nombre} ${banderaPorPais[h.pais] || ''}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 function vpEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -18786,7 +18786,7 @@ function poblarSelectHipodromoRevisar() {
     return;
   }
   const banderaPorPais = { VE: '🇻🇪', US: '🇺🇸' };
-  sel.innerHTML = HIPODROMOS.map(h => `<option value="${escRev(h.nombre)}">${banderaPorPais[h.pais]} ${escRev(h.nombre)}</option>`).join('');
+  sel.innerHTML = HIPODROMOS.map(h => `<option value="${escRev(h.nombre)}">${escRev(h.nombre)} ${banderaPorPais[h.pais]}</option>`).join('');
   if (HIPODROMOS.some(h => h.nombre === valorPrevio)) sel.value = valorPrevio;
 }
 

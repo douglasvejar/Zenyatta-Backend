@@ -423,6 +423,11 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/<select id="jCarrera"/.test(html) && /function armarOpcionesCarrera/.test(html) && /function ponerCarrera/.test(html), '9b) la carrera es una lista despegable 1..N (se salta tecleando el número)');
   check(!/\$\('jCarrera'\)\.value = (?!n \? String)/.test(html.replace(/\$\('jCarrera'\)\.value = n \? String\(n\) : ''/, '')), '9c) ningún sitio asigna jCarrera a mano: todos pasan por ponerCarrera (que crea la opción si no existe)');
   check(/<select id="jCopiarN"/.test(html), '9d) "Copiar de otra carrera" también es lista (solo las carreras ya cargadas)');
+  // 9e) Módulo Hipismo / Grupos: mismas listas de hipódromos con la bandera AL FINAL (06-11-2026)
+  const mock = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+  const opcionesHip = mock.match(/<option value="\$\{[^"]*h\.nombre[^"]*\}">[^`]*<\/option>/g) || [];
+  const conBandera = opcionesHip.filter(o => /banderaPorPais/.test(o));
+  check(conBandera.length >= 8 && conBandera.every(o => /h\.nombre\)?\} \$\{banderaPorPais\[h\.pais\]/.test(o)), '9e) en el módulo Hipismo/Grupos todas las listas de hipódromos llevan la bandera al final (' + conBandera.length + ' listas)');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
