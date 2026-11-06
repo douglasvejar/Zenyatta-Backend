@@ -401,7 +401,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/avisarPizarrasFaltan\(\);\s*\n\s*\}\s*catch|abrirSiguienteCarrera\(\);\s*\n\s*avisarPizarrasFaltan/.test(html) && /if \(t === 'jugadas'[^)]*\)[^\n]*avisarPizarrasFaltan/.test(html), '7b) el aviso de pizarras se refresca al guardar y al volver a Jugadas');
   check(/async function irAPizarraFalta/.test(html) && /data-carrera="\$\{c\.carrera\}"/.test(html), '7c) tocar una carrera sin pizarra la abre para cargarla');
   check(/id="modalYaCargada"/.test(html) && /Esta carrera ya tiene jugadas cargadas/.test(html) && /function preguntarYaCargada/.test(html), '7d) existe la ventana "Esta carrera ya tiene jugadas cargadas"');
-  check(/id="jCarrera" onchange="cambioCarrera\(false, true\)"/.test(html) && /if \(preguntar && !enEdicion\(\)\)/.test(html), '7e) al elegir a mano una carrera ya cargada pregunta (no al abrirla desde el Registro ni desde los chips)');
+  check(/<select id="jCarrera" onchange="cambioCarrera\(false, true\)">/.test(html) && /if \(preguntar && !enEdicion\(\)\)/.test(html), '7e) al elegir a mano una carrera ya cargada pregunta (no al abrirla desde el Registro ni desde los chips)');
   check(/modalYaCargadaOtra/.test(html) && /modalYaCargadaVer/.test(html) && /Escape/.test(html), '7f) la ventana deja elegir otra carrera o verla y corregirla');
   const rutaPend = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'routes', 'hipismo.js'), 'utf8');
   check(/router\.get\('\/oficinas\/pendientes-periodo'/.test(rutaPend) && /rangoPersonalizadoDeQuery\(req\)/.test(rutaPend), '7g) el servidor ya entrega las carreras sin llegada por rango de fechas');
@@ -417,6 +417,12 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     { jugador: 'LUIS', lado: 'jugo', tipo: '1p', caballo: '3', monto: 100 }, { jugador: 'RAUL', lado: 'dio', tipo: '1p', caballo: '3', monto: 100 },
     { jugador: 'ANA', lado: 'jugo', tipo: '1p', caballo: '5', monto: 200 }, { jugador: 'PEDRO', lado: 'dio', tipo: '1p', caballo: '5', monto: 200 }]);
   check(oficinasMerge.cuadra && oficinasMerge.detalle.length === 2, '8g) las jugadas de siempre + las nuevas cuadran juntas (la tabla se guarda completa y se calcula con la misma pizarra)');
+
+  // ---- 9) Listas despegables con búsqueda por teclado (06-11-2026) ----
+  check(/\$\{esc\(nombreHip\(i\.nombre\)\)\} \$\{BANDERA_PAIS\[pais\]\}<\/option>/.test(html) && !/>\$\{BANDERA_PAIS\[pais\]\} \$\{esc\(nombreHip/.test(html), '9a) en la lista de hipódromos la bandera va AL FINAL: tecleando una letra salta al nombre que empieza con ella');
+  check(/<select id="jCarrera"/.test(html) && /function armarOpcionesCarrera/.test(html) && /function ponerCarrera/.test(html), '9b) la carrera es una lista despegable 1..N (se salta tecleando el número)');
+  check(!/\$\('jCarrera'\)\.value = (?!n \? String)/.test(html.replace(/\$\('jCarrera'\)\.value = n \? String\(n\) : ''/, '')), '9c) ningún sitio asigna jCarrera a mano: todos pasan por ponerCarrera (que crea la opción si no existe)');
+  check(/<select id="jCopiarN"/.test(html), '9d) "Copiar de otra carrera" también es lista (solo las carreras ya cargadas)');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);

@@ -391,7 +391,7 @@
           <div class="fila-campos">
             <div><label for="jFecha">Fecha</label><input type="date" id="jFecha" onchange="cambioFechaOHipodromo()"></div>
             <div><label for="jHipodromo">Hipódromo</label><select id="jHipodromo" onchange="cambioFechaOHipodromo()"><option value="">— Elige —</option></select></div>
-            <div><label for="jCarrera">Carrera</label><input type="number" min="1" id="jCarrera" onchange="cambioCarrera(false, true)"></div>
+            <div><label for="jCarrera">Carrera</label><select id="jCarrera" onchange="cambioCarrera(false, true)"><option value="">—</option></select></div>
             <div><label for="jPizarra">Llegada (pizarra)</label><input type="text" id="jPizarra" placeholder="Ej. 6-10-4-8-2" autocomplete="off"></div>
             <div><label for="jRet">Retirados (opcional)</label><input type="text" id="jRet" placeholder="Ej. 5" autocomplete="off"></div>
             <div id="jCruzarWrap"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px;margin:0;" title="Se activa/desactiva por grupo desde Súper-admin"><input type="checkbox" id="jCruzar" style="width:auto;" checked> Cruzar jugadas</label></div>
@@ -413,7 +413,7 @@
           <div class="aviso info oculto" id="jPozoAviso"></div>
           <div class="acciones-tabla">
             <button type="button" class="btn btn-sec" onclick="agregarFila(true)">＋ Agregar fila</button>
-            <span style="display:inline-flex;gap:6px;align-items:center;" title="Trae a la tabla las jugadas de otra carrera del mismo día y hipódromo"><input type="number" min="1" id="jCopiarN" placeholder="N.º" style="width:72px;"><button type="button" class="btn btn-sec btn-chico" onclick="copiarDeOtraCarrera()">📋 Copiar de otra carrera</button></span>
+            <span style="display:inline-flex;gap:6px;align-items:center;" title="Trae a la tabla las jugadas de otra carrera del mismo día y hipódromo"><select id="jCopiarN" title="Carrera de donde copiar las jugadas" style="width:96px;"><option value="">N.º</option></select><button type="button" class="btn btn-sec btn-chico" onclick="copiarDeOtraCarrera()">📋 Copiar de otra carrera</button></span>
             <button type="button" class="btn btn-sec btn-chico" onclick="limpiarTabla()">Limpiar tabla</button>
             <span class="espacio"></span>
             <button type="button" class="btn btn-sec" id="btnCalcular" onclick="calcularVistaPrevia()" disabled>Calcular (vista previa)</button>
@@ -1038,11 +1038,12 @@ function ordenarHipodromos(lista, nombreDe) {
     return pa - pb || nombreHip(nombreDe(a)).localeCompare(nombreHip(nombreDe(b)), 'es');
   });
 }
-// <optgroup> Nacionales / Americanos. items = [{ valor, nombre }]
+// <optgroup> Nacionales / Americanos. items = [{ valor, nombre }]. La bandera va AL FINAL: en una lista despegable, al teclear una letra el
+// navegador salta al primer nombre que EMPIEZA con ella, y con la bandera adelante ninguno empezaba por una letra.
 function opcionesHipodromosAgrupadas(items) {
   const grupo = pais => {
     const l = ordenarHipodromos(items.filter(i => paisPorNombreHip(i.nombre) === pais), i => i.nombre);
-    return l.length ? `<optgroup label="${TITULO_PAIS[pais]}">${l.map(i => `<option value="${esc(i.valor)}">${BANDERA_PAIS[pais]} ${esc(nombreHip(i.nombre))}</option>`).join('')}</optgroup>` : '';
+    return l.length ? `<optgroup label="${TITULO_PAIS[pais]}">${l.map(i => `<option value="${esc(i.valor)}">${esc(nombreHip(i.nombre))} ${BANDERA_PAIS[pais]}</option>`).join('')}</optgroup>` : '';
   };
   return grupo('VE') + grupo('US');
 }
@@ -1358,6 +1359,23 @@ function copiarResultado() {
   navigator.clipboard.writeText(ULTIMO_RESULTADO_TEXTO).then(() => msg('jMsg', '📋 Texto copiado.', true), () => msg('jMsg', 'No se pudo copiar; selecciónalo a mano.', false));
 }
 
+// Lista despegable de carreras (1..N): se salta tecleando el número (1, 12…). Marca las que ya están cargadas / sin llegada.
+let CARRERAS_MAX = 12;
+function armarOpcionesCarrera() {
+  const sel = $('jCarrera'), actual = sel.value;
+  const max = Math.max(CARRERAS_MAX || 12, ...CARGADAS, Number(actual) || 0);
+  let o = '<option value="">—</option>';
+  for (let n = 1; n <= max; n++) o += `<option value="${n}">${n}${PENDIENTES.includes(n) ? '  ⏳ sin llegada' : (CARGADAS.includes(n) ? '  ✅ ya cargada' : '')}</option>`;
+  sel.innerHTML = o; sel.value = actual;
+  const cp = $('jCopiarN');
+  if (cp) { const v = cp.value; cp.innerHTML = '<option value="">N.º</option>' + CARGADAS.map(n => `<option value="${n}">${n}</option>`).join(''); cp.value = CARGADAS.includes(Number(v)) ? v : ''; }
+}
+function ponerCarrera(n) {
+  n = Number(n) || 0;
+  if (n > CARRERAS_MAX) CARRERAS_MAX = n;
+  armarOpcionesCarrera();
+  $('jCarrera').value = n ? String(n) : '';
+}
 // Carrera siguiente automática: la que sigue a la última cargada de ese hipódromo en esa fecha.
 async function abrirSiguienteCarrera() {
   const h = $('jHipodromo').value;
@@ -1366,7 +1384,8 @@ async function abrirSiguienteCarrera() {
     const r = await api('/api/hipismo/oficinas/siguiente-carrera?hipodromoId=' + encodeURIComponent(h) + '&fecha=' + encodeURIComponent($('jFecha').value));
     CARGADAS = r.cargadas || [];
     PENDIENTES = r.pendientes || [];
-    $('jCarrera').value = r.siguiente;
+    CARRERAS_MAX = r.carrerasMax || 12;
+    ponerCarrera(r.siguiente);
     if (r.carrerasMax && r.siguiente > r.carrerasMax) mostrarAviso(`Ojo: este hipódromo tiene ${r.carrerasMax} carreras y la que sigue es la ${r.siguiente}.`);
     else $('jAviso').classList.add('oculto');
   } catch (e) { msg('jMsg', e.message, false); }
@@ -1375,12 +1394,13 @@ async function abrirSiguienteCarrera() {
 }
 function mostrarAviso(t) { const a = $('jAviso'); a.textContent = t; a.classList.remove('oculto'); }
 function pintarCargadas() {
+  armarOpcionesCarrera();
   const actual = Number($('jCarrera').value);
   $('jCargadas').innerHTML = CARGADAS.length
     ? 'Ya cargadas: ' + CARGADAS.map(n => `<button type="button" class="chip-carrera${n === actual ? ' actual' : ''}${PENDIENTES.includes(n) ? ' pend' : ''}" onclick="abrirCarrera(${n})" title="${PENDIENTES.includes(n) ? 'Guardada sin llegada: ábrela para agregar la pizarra' : 'Abrir para corregir'}">${n}${PENDIENTES.includes(n) ? ' ⏳' : ''}</button>`).join('')
     : ($('jHipodromo').value ? 'Todavía no hay carreras cargadas en este hipódromo hoy.' : '');
 }
-async function abrirCarrera(n) { $('jCarrera').value = n; await cambioCarrera(); }
+async function abrirCarrera(n) { ponerCarrera(n); await cambioCarrera(); }
 async function cambioFechaOHipodromo() { salirAgregar(); await abrirSiguienteCarrera(); await cambioCarrera(true); avisarPizarrasFaltan(); }
 
 // ---------- Agregar más jugadas a una carrera ya cargada ----------
@@ -1480,7 +1500,7 @@ async function irAPizarraFalta(fecha, hipodromo, carrera) {
   FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = ''; msg('jMsg', '');
   await abrirSiguienteCarrera();
-  $('jCarrera').value = carrera;
+  ponerCarrera(carrera);
   await cambioCarrera(false);
   $('jPizarra').focus();
 }
@@ -1600,7 +1620,7 @@ async function agregarDelRegistro(hipodromoId, numero) {
   $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
   irATab('jugadas');
   await abrirSiguienteCarrera();
-  $('jCarrera').value = numero;
+  ponerCarrera(numero);
   await agregarMasJugadas();
   $('panel-jugadas').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1613,7 +1633,7 @@ async function abrirDelRegistro(hipodromoId, numero) {
   $('jPizarra').value = ''; $('jRet').value = ''; $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
   irATab('jugadas');
   await abrirSiguienteCarrera();
-  $('jCarrera').value = numero;
+  ponerCarrera(numero);
   await cambioCarrera();
   $('panel-jugadas').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -2189,6 +2209,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   iniciarPeriodo('det', cargarListaDetalle);
   iniciarPeriodo('com', cargarComision);
   limpiarTabla();
+  armarOpcionesCarrera();
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
   await Promise.all([cargarHipodromos(), cargarClientes(), cargarConfiguracion()]);
   actualizarPreguntasCliente();
