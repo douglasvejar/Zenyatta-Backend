@@ -377,6 +377,23 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(oficinas.tiposNoReconocidos([{ jugador: 'LUSHO', lado: 'jugo', tipo: '4×3', caballo: '4', monto: 300 }]).length === 0, '6i) el motor reconoce la marca escrita como 4×3');
   check(/<option value="marca">/.test(html), '6j) la lista de tipos ofrece "marca"');
   check(/function esMarcaFila/.test(html) && /data-c="cab1"/.test(html) && /data-c="cab2"/.test(html) && /class="cab-par"/.test(html), '6k) con Tipo "Marca" la casilla Caballo se parte en dos (cab1 vs cab2)');
+  const ep = (premio, cab) => oficinas.normalizarEntradas([{ jugador: 'LUIS', lado: 'jugo', tipo: 'Marca', caballo: cab || '3x4', premio, monto: 100 }]);
+  check(ep('', '3x4').entradas[0].tipo === 'pp' && ep('pp').entradas[0].tipo === 'pp', '6m) Marca sin premio o con "pp" = pp (completo)');
+  check(ep('10a8').entradas[0].tipo === '10a8' && ep('10A9').entradas[0].tipo === '10a9' && ep('7,5').entradas[0].tipo === '10a7,5' && ep('8').entradas[0].tipo === '10a8', '6n) Marca con premio 10a8 / 10A9 / 7,5 / 8 = a premio (10aN)');
+  check(ep('10a8').entradas[0].caballo === '3x4', '6o) el premio no toca el cruce');
+  check(oficinas.tiposNoReconocidos([{ jugador: 'L', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: '10a8', monto: 100 }]).length === 0, '6p) el motor reconoce una marca 10a8');
+  check(oficinas.tiposNoReconocidos([{ jugador: 'L', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: 'xx', monto: 100 }]).length === 1, '6q) un premio mal escrito se avisa antes de guardar');
+  const cu2 = oficinas.calcularCuadre([
+    { jugador: 'LUIS', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: '10a8', monto: 100 },
+    { jugador: 'RAUL', lado: 'dio', tipo: 'Marca', caballo: '4x3', premio: '10a8', monto: 100 },
+    { jugador: 'ANA', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: 'pp', monto: 50 }]);
+  check(!cu2.cuadra && cu2.detalle.length === 2 && cu2.detalle.find(d => d.etiqueta === '10a8 del 3x4').cuadra && !cu2.detalle.find(d => d.etiqueta === 'pp del 3x4').cuadra, '6r) cada premio cuadra por separado (10a8 aparte de pp)');
+  const emp = oficinas.emparejar([
+    { jugador: 'LUIS', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: '10a8', monto: 100 },
+    { jugador: 'RAUL', lado: 'dio', tipo: 'Marca', caballo: '4x3', premio: '10a8', monto: 100 }]);
+  check(emp.length === 1 && emp[0].tipo === '10a8' && emp[0].caballo === '3x4', '6s) el plano queda "10a8 (3x4)" con Luis jugando el 3');
+  check(/id="dlPremios"/.test(html) && /data-c="premio"/.test(html) && /function filaDeServidor/.test(html), '6t) la casilla del premio sale solo con Marca y trae sus opciones (pp, 10a9, 10a8…)');
+  check(/esMarcaFila\(f\)\s*\?\s*190/.test(html), '6u) el premio solo aparece en filas de Marca');
   check(/function sincronizarMarca/.test(html) && /\$\{a\}x\$\{b\}/.test(html), '6l) las dos casillas se juntan como "AxB" para el servidor');
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);

@@ -36,22 +36,35 @@ function tipoCanonico(t) {
 function caballoCanonico(c) {
   return String(c || '').trim().replace(/\s+/g, '').replace(/[X×✕✖]/g, 'x');
 }
-// Atajos para escribir una MARCA en la tabla (06-11-2026, a pedido del usuario, que escribió "4x3" en Tipo y "4" en Caballo):
-//  - Tipo "4x3" (o "4×3")  -> tipo pp, caballo 4x3. Si en Caballo puso el número con el que juega y es el segundo (3), el cruce se
-//    escribe al revés (3x4) para que quien juega vaya con SU caballo.
-//  - Tipo "marca"/"marcas" + Caballo "4x3" -> tipo pp, caballo 4x3.
-// El resto (pp + 4x3 de siempre, 2p, 3n…) no cambia.
-function interpretarMarca(tipoCrudo, caballoCrudo) {
+// "Premio" de una marca: vacío o "pp" = completo; "10a8", "10a9", "10a7,5" (o solo "8" / "7,5") = a premio (el que gana cobra N/10).
+// Devuelve el texto canónico ("pp" o "10aN") o null si no se entiende.
+function premioCanonico(p) {
+  const s = String(p === undefined || p === null ? '' : p).trim().toLowerCase().replace(/\s+/g, '');
+  if (!s || s === 'pp') return 'pp';
+  if (/^10a\d+([.,]\d+)?$/.test(s)) return s;
+  if (/^\d+([.,]\d+)?$/.test(s)) return '10a' + s;
+  return null;
+}
+// Atajos para escribir una MARCA en la tabla (06-11-2026, a pedido del usuario): al elegir Tipo "Marca" la pantalla muestra
+// otra casilla con el premio (pp, 10a8, 10a9…) y el caballo en dos casillas (3 vs 4). El servidor recibe tipo "Marca",
+// premio y caballo "AxB" y lo convierte en lo que entiende el motor: tipo pp (o 10aN) con caballo AxB.
+// Otros atajos: Tipo "4x3" / "4×3" / "4x3 10a8" (+ Caballo opcional con el número con el que juega: si es el segundo, el cruce
+// se escribe al revés) y Tipo "marca" + Caballo "4x3". Lo de siempre (pp + 4x3, 2p, 3n…) no cambia.
+function interpretarMarca(tipoCrudo, caballoCrudo, premioCrudo) {
   const tipo = String(tipoCrudo || '').trim().replace(/\s+/g, '').replace(/[X×✕✖]/g, 'x').toLowerCase();
   const caballo = caballoCanonico(caballoCrudo);
-  const m = tipo.match(/^(\d{1,2})x(\d{1,2})$/);
+  const m = tipo.match(/^(\d{1,2})x(\d{1,2})(10a\d+(?:[.,]\d+)?)?$/);
   if (m) {
     const [a, b] = [m[1], m[2]];
-    const sueltoRaw = caballo.match(/^\d{1,2}$/) ? String(Number(caballo)) : null;
-    if (sueltoRaw !== null && sueltoRaw === String(Number(b)) && sueltoRaw !== String(Number(a))) return { tipo: 'pp', caballo: `${b}x${a}` };
-    return { tipo: 'pp', caballo: `${a}x${b}` };
+    const premio = premioCanonico(m[3] || premioCrudo);
+    const suelto = caballo.match(/^\d{1,2}$/) ? String(Number(caballo)) : null;
+    const alReves = suelto !== null && suelto === String(Number(b)) && suelto !== String(Number(a));
+    return { tipo: premio || String(premioCrudo).trim(), caballo: alReves ? `${b}x${a}` : `${a}x${b}` };
   }
-  if ((tipo === 'marca' || tipo === 'marcas') && /^\d{1,2}x\d{1,2}$/.test(caballo)) return { tipo: 'pp', caballo };
+  if ((tipo === 'marca' || tipo === 'marcas') && /^\d{1,2}x\d{1,2}$/.test(caballo)) {
+    const premio = premioCanonico(premioCrudo);
+    return { tipo: premio || String(premioCrudo).trim(), caballo };
+  }
   return null;
 }
 // "4x3" y "3x4" son el mismo cruce visto desde el otro lado: la clave los junta.
@@ -87,7 +100,7 @@ function normalizarEntradas(filas) {
     const n = i + 1;
     const jugador = nombreCanonico(f.jugador);
     const lado = String(f.lado || '').toLowerCase().replace('ó', 'o');
-    const marca = interpretarMarca(f.tipo, f.caballo);
+    const marca = interpretarMarca(f.tipo, f.caballo, f.premio);
     const tipo = marca ? marca.tipo : tipoCanonico(f.tipo);
     const caballo = marca ? marca.caballo : caballoCanonico(f.caballo);
     const monto = round2(montoComoNumero(f.monto));
@@ -214,6 +227,6 @@ function tiposNoReconocidos(filas) {
 }
 
 module.exports = {
-  normalizarEntradas, interpretarMarca, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
+  normalizarEntradas, interpretarMarca, premioCanonico, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
   nombreCanonico, tipoCanonico, caballoCanonico, claveGrupo, montoComoNumero
 };

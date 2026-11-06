@@ -52,14 +52,14 @@ async function avisarPendientesPeriodo(prefijo, idAviso) {
 // ---------- 3. Carga rápida ----------
 function duplicarFila(i) {
   const f = FILAS[i]; if (!f) return;
-  FILAS.splice(i + 1, 0, { jugador: f.jugador, lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: f.monto });
+  FILAS.splice(i + 1, 0, { jugador: f.jugador, lado: f.lado, tipo: f.tipo, premio: f.premio || '', caballo: f.caballo, monto: f.monto });
   pintarTabla(); programarCuadre();
   const inp = document.querySelector(`#jTbody input[data-i="${i + 1}"][data-c="jugador"]`); if (inp) { inp.focus(); inp.select(); }
 }
 // Contraparte: la misma jugada (tipo, caballo y monto) del otro lado, para ponerle el jugador que la tomó.
 function duplicarContraparte(i) {
   const f = FILAS[i]; if (!f) return;
-  FILAS.splice(i + 1, 0, { jugador: '', lado: f.lado === 'jugo' ? 'dio' : 'jugo', tipo: f.tipo, caballo: f.caballo, monto: f.monto });
+  FILAS.splice(i + 1, 0, { jugador: '', lado: f.lado === 'jugo' ? 'dio' : 'jugo', tipo: f.tipo, premio: f.premio || '', caballo: f.caballo, monto: f.monto });
   pintarTabla(); programarCuadre();
   const inp = document.querySelector(`#jTbody input[data-i="${i + 1}"][data-c="jugador"]`); if (inp) inp.focus();
 }
@@ -79,7 +79,7 @@ async function copiarDeOtraCarrera() {
   if (!r.existe || !r.filas || !r.filas.length) return msg('jMsg', `La carrera ${n} no tiene jugadas guardadas en ese día y hipódromo.`, false);
   const hayDatos = FILAS.some(f => f.jugador || f.monto);
   if (hayDatos && !confirm(`La tabla ya tiene jugadas. ¿Reemplazarlas por las ${r.filas.length} jugadas de la carrera ${n}?`)) return;
-  FILAS = r.filas.map(f => ({ jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) }));
+  FILAS = r.filas.map(filaDeServidor);
   pintarTabla(); programarCuadre();
   msg('jMsg', `📋 Copié ${FILAS.length} jugadas de la carrera ${n}. Corrige lo que cambie y agrega la llegada de esta carrera.`, true);
 }

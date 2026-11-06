@@ -199,6 +199,11 @@
   /* Marca en la tabla de Jugadas: la casilla Caballo se parte en dos (mi caballo vs el otro). */
   .cab-par { display: flex; align-items: center; gap: 4px; }
   .cab-par input { min-width: 0; width: 100%; text-align: center; padding-left: 4px; padding-right: 4px; }
+  .tipo-par { display: flex; align-items: center; gap: 4px; }
+  .tipo-par input { min-width: 0; }
+  #jTbody td:nth-child(2) input { min-width: 140px; }
+  .tipo-par input[data-c="tipo"] { width: 96px; flex: none; }
+  .tipo-par input[data-c="premio"] { width: 80px; flex: none; text-align: center; background: #fffbeb; border-color: #f3d9a4; }
   .cab-par .vs { font-size: 11px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; }
   /* Detallado por Cliente — vista mejorada (06-11-2026): jugadas con chip Jugó/Dio, modalidad y caballos de colores. */
   .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
@@ -854,6 +859,9 @@
   </div>
 </div>
 <datalist id="dlClientes"></datalist>
+<datalist id="dlPremios">
+  <option value="pp"><option value="10a9"><option value="10a8"><option value="10a7"><option value="10a6"><option value="10a5"><option value="10a4"><option value="10a3"><option value="10a2"><option value="10a1">
+</datalist>
 <datalist id="dlTipos">
   <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp"><option value="marca">
 </datalist>
@@ -1039,7 +1047,7 @@ let CARGADAS = [];
 let PENDIENTES = [];     // carreras guardadas sin llegada
 
 function filaVacia(base) {
-  return { jugador: '', lado: 'jugo', tipo: base ? base.tipo : '', caballo: base ? base.caballo : '', monto: '' };
+  return { jugador: '', lado: 'jugo', tipo: base ? base.tipo : '', premio: base ? base.premio || '' : '', caballo: base ? base.caballo : '', monto: '' };
 }
 function agregarFila(enfocar) {
   const previa = FILAS.length ? FILAS[FILAS.length - 1] : null;
@@ -1060,6 +1068,13 @@ function quitarFila(i) {
 }
 // Tipo "Marca": la casilla Caballo se parte en dos (el caballo con el que juega y el caballo contra el que juega); el
 // servidor lo recibe como caballo "AxB" y tipo pp (ver interpretarMarca en hipismoOficinasCalc.js).
+// Fila guardada -> fila de la tabla. Una jugada pp / 10aN con caballo "AxB" se muestra como Marca + premio.
+function filaDeServidor(f) {
+  const fila = { jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) };
+  const tipo = String(f.tipo || '').trim().toLowerCase();
+  if (/^\d{1,2}x\d{1,2}$/i.test(String(f.caballo || '').trim()) && (tipo === 'pp' || /^10a\d+([.,]\d+)?$/.test(tipo))) { fila.tipo = 'Marca'; fila.premio = tipo; }
+  return fila;
+}
 function esMarcaFila(f) { return /^marcas?$/i.test(String((f && f.tipo) || '').trim()); }
 function partesMarca(f) {
   if (f.cab1 !== undefined || f.cab2 !== undefined) return [f.cab1 || '', f.cab2 || ''];
@@ -1089,7 +1104,9 @@ function pintarTabla(erroresPorFila) {
       <td class="n">${i + 1}</td>
       <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
       <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
-      <td style="width:110px;"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"></td>
+      <td style="width:${esMarcaFila(f) ? 190 : 110}px;min-width:${esMarcaFila(f) ? 190 : 110}px;">${esMarcaFila(f)
+        ? `<div class="tipo-par"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"><input data-i="${i}" data-c="premio" list="dlPremios" value="${esc(f.premio || '')}" placeholder="pp" title="Premio de la marca: pp (completo), 10a9, 10a8, 10a7…" autocomplete="off"></div>`
+        : `<input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off">`}</td>
       <td style="width:${esMarcaFila(f) ? 150 : 100}px;">${esMarcaFila(f)
         ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" placeholder="N.º" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" placeholder="N.º" autocomplete="off"></div>`
         : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off">`}</td>
@@ -1111,7 +1128,7 @@ $('jTbody').addEventListener('change', e => {
   if (t.dataset.c === 'tipo' && esMarcaFila(FILAS[i]) !== !!t.closest('tr').querySelector('[data-c="cab1"]')) {
     // Al elegir "Marca": la casilla Caballo pasa a ser dos casillas (si ya había "4x3" se reparte solo).
     pintarTabla();
-    const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${esMarcaFila(FILAS[i]) ? 'cab1' : 'caballo'}"]`);
+    const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${esMarcaFila(FILAS[i]) ? 'premio' : 'caballo'}"]`);
     if (inp) inp.focus();
   }
   programarCuadre();
@@ -1339,7 +1356,7 @@ async function cambioCarrera(soloAvisar) {
     if (!r.existe) { actualizarBotones(); return; }
     if (enEdicion()) { EDICION.estado = r.pendiente ? 'pendiente' : 'calculada'; EDICION.planoId = r.planoId || null; }
     if (r.filas && r.filas.length) {
-      FILAS = r.filas.map(f => ({ jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) }));
+      FILAS = r.filas.map(filaDeServidor);
       $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
       $('jCruzar').checked = !!r.cruzaJugadas;
       pintarTabla(); programarCuadre();
