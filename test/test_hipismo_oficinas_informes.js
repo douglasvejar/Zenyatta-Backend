@@ -296,7 +296,7 @@ async function invocarRuta(handler, req) {
   ['balCaptura', 'detCaptura', 'comCaptura'].forEach(id => check(new RegExp(`copiarImagenHD\\('${id}'`).test(html) && new RegExp(`descargarPDF\\('${id}'`).test(html), `3) ${id}: tiene botón de imagen HD y de PDF`));
   check(/while \(y < canvas\.height\)/.test(html) && /pdf\.addPage\(\)/.test(html), '3) el PDF se parte en varias páginas (no recorta un informe largo)');
   check(/inf-logo-fondo/.test(html) && /ponerInforme\('balCaptura'/.test(html) && /ponerInforme\('detCaptura'/.test(html) && /ponerInforme\('comCaptura'/.test(html) && /\/api\/imagenes\/logo-grupo\//.test(html), '3) Balance, Detallado y Comisión llevan el logo del grupo de fondo');
-  check(/cargarImagenLogo\(urlLogoGrupo\(\)\)/.test(html) && /globalAlpha = 0\.09/.test(html), '3) en el PDF, cada página dibuja el logo de fondo (tenue, encima del contenido)');
+  check(/cargarImagenLogo\(await MarcaAgua\.preparar\(urlLogoGrupo\(\)\)\)/.test(html) && /globalAlpha = 0\.09/.test(html), '3) en el PDF, cada página dibuja el logo de fondo (tenue, encima del contenido)');
   check(/contextoEn/.test(html) && /i > 0 && cabPx/.test(html) && /Página \$\{i \+ 1\} de \$\{tramos\.length\}/.test(html), '3) en el PDF, cada página repite el encabezado y el contexto (día, hipódromo, columnas) y numera "Página X de Y"');
   // --- nombres de hipódromo, Balance sin jugadas, detalle en cuadros ---
   const nh = INF.nombreHipodromo;
