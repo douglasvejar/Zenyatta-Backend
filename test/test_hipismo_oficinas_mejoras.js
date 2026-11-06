@@ -179,6 +179,14 @@ const control = require('../src/services/hipismoOficinasControl');
   check(!!rutaTras && rutaTras[1].length > 2, 'permisos: POST /comisiones/traspaso lleva candado de Oficinas');
   check(!!rutaAnular && rutaAnular[1].length > 2, 'permisos: anular un traspaso lleva candado de Oficinas');
 
+
+  // ---------- 9) hipódromos: nacionales arriba, americanos abajo, con bandera ----------
+  check(html.includes('opcionesHipodromosAgrupadas') && html.includes('<optgroup label="${TITULO_PAIS[pais]}">'), 'hipódromos: las listas desplegables se arman con grupos Nacionales / Americanos');
+  check(html.includes("VE: '🇻🇪'") && html.includes("US: '🇺🇸'"), 'hipódromos: cada país tiene su bandera');
+  check(/grupo\('VE'\) \+ grupo\('US'\)/.test(html), 'hipódromos: los nacionales van primero y los americanos debajo');
+  check((html.match(/opcionesHipodromosAgrupadas\(/g) || []).length >= 3, 'hipódromos: Jugadas y Registro usan la lista agrupada');
+  check(mejoras.includes('banderaHip(h.nombre)') && mejoras.includes('ordenarHipodromos('), 'hipódromos: el Cierre del Día también va con bandera y nacionales primero');
+
   console.log(`\n${pasaron} OK, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

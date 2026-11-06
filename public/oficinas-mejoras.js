@@ -173,7 +173,7 @@ function pintarCierreDia() {
   const estado = !d.totales.carreras ? ['vacio', 'Sin carreras cargadas', 'Ese día no hay nada cargado.']
     : d.listo ? ['ok', '✅ El día está completo y cuadra', 'Todas las carreras están calculadas y el saldo de los clientes más la comisión de la oficina da 0.']
     : ['mal', '⚠️ El día todavía no está cerrado', 'Revisa los avisos de abajo.'];
-  const hips = d.hipodromos.map(h => `<div class="cd-hip"><div class="cd-hip-cab"><b>🏇 ${esc(nombreHip(h.nombre))}</b>
+  const hips = ordenarHipodromos(d.hipodromos, h => h.nombre).map(h => `<div class="cd-hip"><div class="cd-hip-cab"><b>${banderaHip(h.nombre)} ${esc(nombreHip(h.nombre))}</b>
       <span class="rec-chip">✅ ${h.calculadas} calculadas</span>${h.pendientes ? `<span class="rec-chip" style="color:#92400e;background:#fffbeb;">⏳ ${h.pendientes} sin llegada</span>` : ''}${h.faltantes.length ? `<span class="rec-chip" style="color:#92400e;background:#fffbeb;">❔ sin carga: ${h.faltantes.join(', ')}</span>` : ''}</div>
       <div class="cargadas">${h.carreras.map(c => `<span class="chip-carrera${c.estado === 'pendiente' ? ' pend' : ''}" style="cursor:default;">${c.numero}${c.estado === 'pendiente' ? ' ⏳' : ' ✓'}</span>`).join('')}</div></div>`).join('');
   $('cdContenido').innerHTML = `

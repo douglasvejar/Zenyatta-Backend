@@ -277,6 +277,7 @@
   .sp-seleccion { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow: auto; }
   .sp-sel { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--card-border); border-radius: 999px; background: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .sp-sel input { width: auto; margin: 0; } .sp-sel small { color: var(--text-dim); font-weight: 500; } .sp-sel.off { opacity: .55; text-decoration: line-through; }
+  #panel-registro .fila-campos .btn { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -394,7 +395,7 @@
       <div class="fila-campos">
         <div><label for="rFecha">Día</label><input type="date" id="rFecha" onchange="cargarRegistro()"></div>
         <div><label for="rHipodromo">Hipódromo</label><select id="rHipodromo" onchange="pintarRegistro()"><option value="">Todos</option></select></div>
-        <div><label>&nbsp;</label><span style="display:flex;gap:6px;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button><button type="button" class="btn btn-sec" onclick="excelRegistro()" title="Descarga todas las jugadas del día">📊 Descargar Excel</button></span></div>
+        <div style="grid-column: span 2;"><label>&nbsp;</label><span style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(-1)" title="Día anterior">‹ Anterior</button><button type="button" class="btn btn-sec" onclick="moverDiaRegistro(1)" title="Día siguiente">Siguiente ›</button><button type="button" class="btn btn-sec" onclick="excelRegistro()" title="Descarga todas las jugadas del día">📊 Descargar Excel</button></span></div>
       </div>
       <div class="cargadas" id="rDias"></div>
       <div class="msg" id="rMsg"></div>
@@ -949,6 +950,27 @@ async function guardarConfigPlano() {
 // Datos compartidos
 // ------------------------------------------------------------------
 let HIPODROMOS = [];
+// Nacionales (Venezuela) primero y americanos (EE.UU.) debajo, cada uno con su bandera (06-11-2026, a pedido del usuario).
+const BANDERA_PAIS = { VE: '🇻🇪', US: '🇺🇸' };
+const TITULO_PAIS = { VE: '🇻🇪 Nacionales', US: '🇺🇸 Americanos' };
+function paisDeHipodromo(h) { return h && h.pais === 'US' ? 'US' : 'VE'; }
+// El registro y el cierre solo traen el nombre del hipódromo: se busca su país entre los hipódromos del grupo (sin dato = nacional).
+function paisPorNombreHip(nombre) { const k = normNombre(nombre); return paisDeHipodromo(HIPODROMOS.find(h => normNombre(h.nombre) === k)); }
+function banderaHip(nombre) { return BANDERA_PAIS[paisPorNombreHip(nombre)]; }
+function ordenarHipodromos(lista, nombreDe) {
+  return lista.slice().sort((a, b) => {
+    const pa = paisPorNombreHip(nombreDe(a)) === 'US' ? 1 : 0, pb = paisPorNombreHip(nombreDe(b)) === 'US' ? 1 : 0;
+    return pa - pb || nombreHip(nombreDe(a)).localeCompare(nombreHip(nombreDe(b)), 'es');
+  });
+}
+// <optgroup> Nacionales / Americanos. items = [{ valor, nombre }]
+function opcionesHipodromosAgrupadas(items) {
+  const grupo = pais => {
+    const l = ordenarHipodromos(items.filter(i => paisPorNombreHip(i.nombre) === pais), i => i.nombre);
+    return l.length ? `<optgroup label="${TITULO_PAIS[pais]}">${l.map(i => `<option value="${esc(i.valor)}">${BANDERA_PAIS[pais]} ${esc(nombreHip(i.nombre))}</option>`).join('')}</optgroup>` : '';
+  };
+  return grupo('VE') + grupo('US');
+}
 let CLIENTES = [];
 
 async function cargarHipodromos() {
@@ -956,7 +978,7 @@ async function cargarHipodromos() {
   pintarHipodromos();
   const sel = $('jHipodromo');
   const actual = sel.value;
-  sel.innerHTML = '<option value="">— Elige —</option>' + HIPODROMOS.map(h => `<option value="${esc(h.id)}">${esc(nombreHip(h.nombre))}</option>`).join('');
+  sel.innerHTML = '<option value="">— Elige —</option>' + opcionesHipodromosAgrupadas(HIPODROMOS.map(h => ({ valor: h.id, nombre: h.nombre })));
   if (actual && HIPODROMOS.some(h => h.id === actual)) sel.value = actual;
 }
 async function cargarClientes() {
@@ -1297,7 +1319,7 @@ async function cargarRegistro() {
       ? 'Días con carreras: ' + dias.dias.map(d => `<button type="button" class="chip-carrera${d.fecha === fecha ? ' actual' : ''}" onclick="irADiaRegistro('${d.fecha}')" title="${d.carreras} calculadas${d.pendientes ? ', ' + d.pendientes + ' pendientes' : ''}">${INF.fechaCorta(d.fecha).slice(0, 5)} · ${d.carreras + d.pendientes}${d.pendientes ? ' ⏳' : ''}</button>`).join('')
       : 'Todavía no hay carreras cargadas.';
     const sel = $('rHipodromo'), actual = sel.value;
-    sel.innerHTML = '<option value="">Todos</option>' + reg.hipodromos.map(h => `<option value="${esc(h.nombre)}">${esc(nombreHip(h.nombre))}</option>`).join('');
+    sel.innerHTML = '<option value="">Todos</option>' + opcionesHipodromosAgrupadas(reg.hipodromos.map(h => ({ valor: h.nombre, nombre: h.nombre })));
     if (actual && reg.hipodromos.some(h => h.nombre === actual)) sel.value = actual;
     pintarRegistro();
   } catch (e) { msg('rMsg', e.message, false); }
@@ -1307,12 +1329,12 @@ function pintarRegistro() {
   const cont = $('rLista');
   if (!REGISTRO) { cont.innerHTML = ''; return; }
   const filtro = $('rHipodromo').value;
-  const hips = REGISTRO.hipodromos.filter(h => !filtro || h.nombre === filtro);
+  const hips = ordenarHipodromos(REGISTRO.hipodromos.filter(h => !filtro || h.nombre === filtro), h => h.nombre);
   if (!hips.length) { cont.innerHTML = `<div class="card"><div class="vacio" style="padding:18px;text-align:center;color:var(--text-dim);">No hay carreras cargadas el ${INF.fechaCorta(REGISTRO.fecha)}${filtro ? ' en ' + esc(nombreHip(filtro)) : ''}.</div></div>`; return; }
   const t = REGISTRO.totales;
   cont.innerHTML = `<p class="nota" style="margin:0 2px 10px;">${INF.nombreDia(REGISTRO.fecha)} ${INF.fechaCorta(REGISTRO.fecha)} — ${t.carreras} ${t.carreras === 1 ? 'carrera' : 'carreras'}: ${t.calculadas} calculadas${t.pendientes ? `, <b>${t.pendientes} pendientes de llegada</b>` : ''}. Toca una carrera para editarla.</p>` +
     hips.map(h => `<div class="card" style="margin-bottom:12px;">
-      <div class="reg-hip">🏇 ${esc(nombreHip(h.nombre))}</div>
+      <div class="reg-hip">${banderaHip(h.nombre)} ${esc(nombreHip(h.nombre))}</div>
       <div class="tabla-wrap"><table class="lista">
         <thead><tr><th>Carrera</th><th>Estado</th><th>Llegada</th><th class="num">Jugadas</th><th class="num">Jugadores</th><th class="num">Total jugado</th><th></th></tr></thead>
         <tbody>${h.carreras.map(c => `<tr class="reg-fila" onclick="abrirDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">
@@ -1494,8 +1516,8 @@ function pintarClientes() {
 // ------------------------------------------------------------------
 let HIPODROMO_EDITANDO = null;
 function pintarHipodromos() {
-  $('hLista').innerHTML = HIPODROMOS.length ? HIPODROMOS.map(h => `
-    <tr><td><b>${esc(nombreHip(h.nombre))}</b></td><td>${h.pais === 'US' ? 'Estados Unidos' : 'Venezuela'}</td><td>${esc(h.carreras_max)}</td>
+  $('hLista').innerHTML = HIPODROMOS.length ? ordenarHipodromos(HIPODROMOS, h => h.nombre).map(h => `
+    <tr><td><b>${BANDERA_PAIS[paisDeHipodromo(h)]} ${esc(nombreHip(h.nombre))}</b></td><td>${h.pais === 'US' ? 'Estados Unidos' : 'Venezuela'}</td><td>${esc(h.carreras_max)}</td>
     <td style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" onclick="editarHipodromo('${esc(h.id)}')">Editar</button>
     <button type="button" class="btn btn-peligro btn-chico" onclick="borrarHipodromo('${esc(h.id)}')">Eliminar</button></td></tr>`).join('')
     : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay hipódromos. Crea el primero a la izquierda.</td></tr>';
