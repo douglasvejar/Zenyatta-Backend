@@ -71,6 +71,11 @@ pool.query(`do $$ begin
 end $$;`)
   .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.tipo_cliente (corre sql/schema.sql en Supabase):', err.message));
 
+// 06-11-2026: "sin pozo" (cliente al que todavía no se le coloca pozo: aún no puede jugar). Solo vale para clientes libres; los clientes que ya
+// existen quedan en false = libres sin límite, como siempre (ver sql/schema.sql).
+pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS sin_pozo boolean NOT NULL DEFAULT false')
+  .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.sin_pozo (corre sql/schema.sql en Supabase):', err.message));
+
 // 25-10-2026: socios de Hipismo y "Avalado por" del cliente (ver sql/schema.sql). Se crean solos, en orden (la columna del cliente
 // apunta a la tabla), y si la base no deja alterar solo avisan en el log.
 pool.query(`create table if not exists hipismo_socios (

@@ -155,10 +155,11 @@
   .tipo-op.on { border-color: var(--accent-grass); background: #e6f2f0; color: var(--accent-deep); }
   .tipo-op:focus-within { outline: 2px solid var(--accent-grass); outline-offset: 2px; }
   .ico-tipo { width: 20px; height: 20px; flex: none; }
+  .tag-pozo { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; }
+  .tag-pozo.sin { background: #fdecea; color: #b42318; border: 1px solid #f3b9b3; } .tag-pozo.libre { background: #eef3f1; color: #476b66; border: 1px solid #cfdcd8; }
   .tag-tipo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; margin-left: 6px; vertical-align: 1px; }
   .tag-tipo .ico-tipo { width: 13px; height: 13px; }
   .tag-tipo.of { background: #dff0ee; color: #2f6764; } .tag-tipo.te { background: #f3e8cf; color: #8a5a12; }
-  .nota-tercio { margin-top: 12px; border: 1px dashed var(--border-light); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; color: var(--text-dim); text-align: center; }
   .si-no { display: flex; gap: 8px; }
   .si-no label { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 14px; border: 1px solid var(--border-light); border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--text); background: #fff; }
   .si-no input { width: auto; }
@@ -729,8 +730,7 @@
         </div>
         <div id="cSocioBloque"></div>
 
-        <div class="nota-tercio oculto" id="cTercioNota">Las preguntas del % de devolución solo aplican a las oficinas.</div>
-        <div class="pregunta" id="cDevuelvePregunta">
+        <div class="pregunta">
           <div class="q">¿Se le devuelve un % a este cliente?</div>
           <div class="si-no">
             <label><input type="radio" name="cDevuelve" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
@@ -770,7 +770,9 @@
           <div class="si-no">
             <label><input type="radio" name="cPozoSi" value="no" checked onchange="actualizarPreguntasCliente()"> No</label>
             <label><input type="radio" name="cPozoSi" value="si" onchange="actualizarPreguntasCliente()"> Sí</label>
+            <label><input type="radio" name="cPozoSi" value="libre" onchange="actualizarPreguntasCliente()"> Tercio libre</label>
           </div>
+          <div class="nota" id="cPozoExplica" style="margin-top:6px;"></div>
           <div class="sub-bloque oculto" id="cPozoBloque">
             <label for="cPozo">Pozo (monto)</label>
             <input type="number" id="cPozo" min="0" step="0.01" placeholder="Ej. 1000">
@@ -1716,16 +1718,14 @@ function tipoDeCliente(c) { return c && (c.tipo_cliente === 'oficina' || c.tipo_
 function etiquetaTipo(c) { const t = tipoDeCliente(c); return `<span class="tag-tipo ${t === 'oficina' ? 'of' : 'te'}">${ICO_TIPO[t]}${t === 'oficina' ? 'Oficina' : 'Tercio'}</span>`; }
 function actualizarPreguntasCliente() {
   document.querySelectorAll('#cTipoSel [data-ico]').forEach(e => { if (!e.firstChild) e.innerHTML = ICO_TIPO[e.dataset.ico]; });
-  const esOficina = valorRadio('cTipo') === 'oficina';
   document.querySelectorAll('#cTipoSel .tipo-op').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
-  $('cDevuelvePregunta').classList.toggle('oculto', !esOficina);
-  $('cTercioNota').classList.toggle('oculto', esOficina);
-  const devuelve = esOficina && valorRadio('cDevuelve') === 'si';
+  const devuelve = valorRadio('cDevuelve') === 'si';
   $('cDevuelveBloque').classList.toggle('oculto', !devuelve);
   $('cFichaWrap').classList.toggle('oculto', !(devuelve && valorRadio('cDonde') === 'ficha'));
   const genera = valorRadio('cGenera') === 'si';
   $('cGeneraBloque').classList.toggle('oculto', !genera);
   $('cPozoBloque').classList.toggle('oculto', valorRadio('cPozoSi') !== 'si');
+  $('cPozoExplica').textContent = ({ no: 'Sin pozo: todavía no puede jugar (si se le carga una jugada, avisa).', si: 'Con pozo: puede jugar hasta lo que tenga de pozo; cuando se le esté acabando, avisa.', libre: 'Tercio libre: sin límites, puede jugar lo que quiera.' })[valorRadio('cPozoSi')] || '';
   if (genera && !document.querySelector('#cAvales .aval-fila')) agregarAval();
 }
 function agregarAval() {
@@ -1754,7 +1754,7 @@ async function guardarCliente() {
   }
   let comisionPropia = 0, incluirPorcentajeEnJugadas = false, comisionPropiaFicha = '';
   const tipoCliente = valorRadio('cTipo') === 'oficina' ? 'oficina' : 'tercio';
-  if (tipoCliente === 'oficina' && valorRadio('cDevuelve') === 'si') {
+  if (valorRadio('cDevuelve') === 'si') {
     comisionPropia = parseFloat(String($('cPorcentaje').value).replace(',', '.')) || 0;
     if (!(comisionPropia > 0)) return msg('cMsg', 'Escribe cuánto % se le devuelve.', false);
     if (valorRadio('cDonde') === 'jugadas') incluirPorcentajeEnJugadas = true;
@@ -1789,7 +1789,8 @@ async function guardarCliente() {
   try {
     await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
       nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked, ...($('cSocio') ? { socioId: $('cSocio').value || null } : {}),
-      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje, tipoCliente
+      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje, tipoCliente,
+      sinPozo: valorRadio('cPozoSi') === 'no' && !$('cPagoDiario').checked
     }) });
   } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
@@ -1801,6 +1802,13 @@ async function guardarCliente() {
   document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
   $('cAvales').innerHTML = '';
   actualizarPreguntasCliente();
+  await cargarClientes();
+}
+async function alternarSinPozo(id, valor) {
+  const c = CLIENTES.find(x => x.id === id); if (!c) return;
+  if (!confirm(valor ? `¿Dejar a ${nombreBonito(c.nombre)} SIN POZO? Todavía no podrá jugar: si se le carga una jugada, avisa.` : `¿Pasar a ${nombreBonito(c.nombre)} a TERCIO LIBRE? Podrá jugar sin límites.`)) return;
+  try { await api('/api/hipismo/clientes/' + encodeURIComponent(id) + '/sin-pozo', { method: 'PUT', body: JSON.stringify({ sinPozo: !!valor }) }); }
+  catch (e) { return alert('No se pudo cambiar: ' + e.message); }
   await cargarClientes();
 }
 async function cambiarTipoCliente(id, tipo) {
@@ -1857,8 +1865,13 @@ function pintarClientes() {
     const devuelve = pct > 0 ? `<span class="tag">${fmt(pct)}%</span> ${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}` : '—';
     const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
     const tienePozo = c.tipo_cuenta === 'avalado';
-    const pozo = `<span style="white-space:nowrap;">${tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>' : '<span style="color:var(--text-dim)">—</span>'} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button></span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div>${tipoDeCliente(c) === 'oficina' && pct > 0 ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> `}<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    // Cliente libre (sin pozo): "Sin pozo" = todavía no puede jugar; "Libre" = sin límites. Un pago diario usa sus recargas, no esta marca.
+    const sinPozo = !tienePozo && !c.pago_diario && c.sin_pozo === true, libre = !tienePozo && !c.pago_diario && !sinPozo;
+    const estadoPozo = tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>'
+      : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">Tercio libre</span>' : '<span style="color:var(--text-dim)">—</span>'));
+    const botonLibre = tienePozo || c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? 'Pasar a libre' : 'Marcar sin pozo'}</button>`;
+    const pozo = `<span style="white-space:nowrap;">${estadoPozo} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button> ${botonLibre}</span>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> <button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button></div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 

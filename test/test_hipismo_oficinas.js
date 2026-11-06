@@ -457,18 +457,26 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
 
   // ---- 12) Tipo de cliente (Tercio / Oficina) y link de Oficinas (06-11-2026) ----
   const rutaJug = leer('src/routes/jugadores.js'), rutaHip = leer('src/routes/hipismo.js'), dbjs = leer('src/db.js');
-  check(/name="cTipo" value="tercio" checked/.test(html) && /name="cTipo" value="oficina"/.test(html) && /id="cDevuelvePregunta"/.test(html) && !/cliente normal|lleva % de devolución/.test(html.slice(html.indexOf('id="cTipoSel"'), html.indexOf('id="cTipoSel"') + 700)),
+  check(/name="cTipo" value="tercio" checked/.test(html) && /name="cTipo" value="oficina"/.test(html) && !/cliente normal|lleva % de devolución/.test(html.slice(html.indexOf('id="cTipoSel"'), html.indexOf('id="cTipoSel"') + 700)),
     '12a) el formulario tiene el selector Tipo (Tercio por defecto / Oficina), sin textos debajo de cada opción');
   check(/ICO_TIPO/.test(html) && /<circle cx="12" cy="8" r="4"\/>/.test(html) && /<rect x="4" y="3" width="16" height="18"/.test(html), '12b) cada tipo lleva su icono (persona = Tercio, edificio = Oficina)');
-  check(/\$\('cDevuelvePregunta'\)\.classList\.toggle\('oculto', !esOficina\)/.test(html) && /if \(tipoCliente === 'oficina' && valorRadio\('cDevuelve'\) === 'si'\)/.test(html) && /avalesPorcentaje, tipoCliente/.test(html),
-    '12c) un Tercio no ve ni envía las preguntas del % de devolución; el tipo viaja al servidor');
+  check(!/cDevuelvePregunta|cTercioNota/.test(html) && /if \(valorRadio\('cDevuelve'\) === 'si'\) \{\s*comisionPropia =/.test(html) && /avalesPorcentaje, tipoCliente/.test(html),
+    '12c) el Tercio TAMBIÉN lleva las preguntas del % de devolución (el tipo es solo una etiqueta); el tipo viaja al servidor');
+  check(/name="cPozoSi" value="libre"/.test(html) && /Tercio libre/.test(html) && /sinPozo: valorRadio\('cPozoSi'\) === 'no' && !\$\('cPagoDiario'\)\.checked/.test(html) && /cPozoExplica/.test(html),
+    '12c2) la pregunta del pozo tiene 3 opciones (No = sin pozo, Sí = con pozo, Tercio libre) y se explica cada una');
   check(/etiquetaTipo\(c\)/.test(html) && /cambiarTipoCliente\(/.test(html) && /\/tipo-cliente'/.test(html), '12d) la lista muestra la etiqueta del tipo y permite cambiarlo');
   check(/tipo_cliente text not null default 'tercio'/.test(dbjs) && /update jugadores set tipo_cliente = 'oficina' where coalesce\(comision_propia, 0\) > 0/.test(dbjs) && /if not exists \(select 1 from information_schema\.columns where table_name = 'jugadores' and column_name = 'tipo_cliente'\)/.test(dbjs),
     '12e) la columna se crea sola y clasifica UNA sola vez a los existentes (con % = oficina, sin % = tercio)');
   const sqlPend = leer('sql/pendiente-06-11-2026.sql'), sqlTodo = leer('sql/schema.sql');
   check(sqlPend.includes('tipo_cliente') && sqlTodo.includes(sqlPend.trim()), '12f) el SQL está en el archivo pendiente y al final de schema.sql (completo)');
-  check(/resolverTipoCliente/.test(rutaJug) && /tipoCliente === 'tercio'\) \{ comisionPropia = 0/.test(rutaJug) && /guardarTipoCliente\(jugador\.id, req\.grupoId, tipoCliente\)/.test(rutaJug), '12g) crear cliente guarda el tipo (aparte, tolera la columna ausente) y un Tercio no guarda %');
-  check(/router\.put\('\/clientes\/:id\/tipo-cliente'/.test(rutaHip) && /todavía tiene % de devolución/.test(rutaHip), '12h) la ruta de cambio de tipo rechaza pasar a Tercio a quien aún tiene %');
+  check(/resolverTipoCliente/.test(rutaJug) && !/tipoCliente === 'tercio'\) \{ comisionPropia = 0/.test(rutaJug) && /guardarTipoCliente\(jugador\.id, req\.grupoId, tipoCliente\)/.test(rutaJug) && /guardarSinPozo\(jugador\.id, req\.grupoId, req\.body\.sinPozo, tipo\)/.test(rutaJug),
+    '12g) crear cliente guarda el tipo y la marca "sin pozo" (aparte, toleran la columna ausente); un Tercio también guarda su %');
+  check(/router\.put\('\/clientes\/:id\/tipo-cliente'/.test(rutaHip) && !/todavía tiene % de devolución/.test(rutaHip) && /router\.put\('\/clientes\/:id\/sin-pozo'/.test(rutaHip) && /tipo_cuenta = 'libre'/.test(rutaHip), '12h) las rutas de cambio de tipo y de "sin pozo / libre" existen (el sin pozo solo aplica a clientes libres)');
+  check(/sin_pozo boolean not null default false/i.test(dbjs) && sqlTodo.includes('add column if not exists sin_pozo boolean not null default false') && leer('sql/pendiente-06-11-2026.sql').includes('sin_pozo'), '12h2) la columna sin_pozo se crea sola, está en schema.sql y en el pendiente');
+  const alertaPozo = leer('src/services/hipismoAlertaPozo.js');
+  check(/incluirSinPozo: true/.test(alertaPozo) && /sinPozo: !!c\.sinPozo/.test(alertaPozo) && /todavía NO tiene pozo: aún no puede jugar/.test(alertaPozo), '12h3) cargar una jugada a un cliente "sin pozo" genera la alerta (apostó X pero todavía no tiene pozo)');
+  const mejorasJs = leer('public/oficinas-mejoras.js');
+  check(/Sin pozo, aún no puede jugar/.test(mejorasJs) && /c\.sin_pozo === true/.test(mejorasJs) && /alternarSinPozo/.test(html) && /Tercio libre/.test(html), '12h4) la tabla de jugadas avisa de un cliente sin pozo y la lista permite pasarlo a libre o dejarlo sin pozo');
   check(/formato=oficinas&/.test(html) && /devolucion-propia/.test(html) && /\.lin-dev/.test(html), '12i) el Detallado de Oficinas pide el % dentro de la carrera y lo pinta');
   const informes = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
   const det = informes.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'gulfstream park', carreras: [

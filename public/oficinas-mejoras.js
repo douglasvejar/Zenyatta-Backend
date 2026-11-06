@@ -100,12 +100,16 @@ function revisarPozosTabla() {
   FILAS.forEach(f => { const k = normNombre(f.jugador); const m = Number(String(f.monto).replace(',', '.')) || 0; if (k && m > 0) suma.set(k, (suma.get(k) || 0) + m); });
   const pasados = [];
   suma.forEach((total, k) => { const p = POZOS_DISP.get(k); if (p && p.colocado > 0 && total > p.disponible + 0.004) pasados.push({ k, nombre: p.nombre, total, disponible: p.disponible }); });
-  const claves = new Set(pasados.map(x => x.k));
+  // Clientes libres marcados "sin pozo": todavía no pueden jugar (06-11-2026).
+  const sinPozo = [];
+  suma.forEach((total, k) => { const c = (typeof CLIENTES !== 'undefined' ? CLIENTES : []).find(x => !x.es_cuenta_comision && normNombre(x.nombre) === k); if (c && c.tipo_cuenta !== 'avalado' && !c.pago_diario && c.sin_pozo === true) sinPozo.push({ k, nombre: c.nombre, total }); });
+  const claves = new Set(pasados.concat(sinPozo).map(x => x.k));
   document.querySelectorAll('#jTbody tr').forEach((tr, i) => {
     const f = FILAS[i]; tr.classList.toggle('fila-pozo', !!(f && claves.has(normNombre(f.jugador))));
   });
-  if (!pasados.length) { caja.classList.add('oculto'); caja.innerHTML = ''; return; }
-  caja.innerHTML = '⚠️ <b>Pozo bajo:</b> ' + pasados.map(x => `${esc(nombreBonito(x.nombre))} tiene disponible ${INF.dinero(x.disponible)} y en esta carrera suma ${INF.dinero(x.total)}`).join(' · ') + '. Se puede guardar igual: solo es un aviso.';
+  if (!pasados.length && !sinPozo.length) { caja.classList.add('oculto'); caja.innerHTML = ''; return; }
+  caja.innerHTML = (pasados.length ? '⚠️ <b>Pozo bajo:</b> ' + pasados.map(x => `${esc(nombreBonito(x.nombre))} tiene disponible ${INF.dinero(x.disponible)} y en esta carrera suma ${INF.dinero(x.total)}`).join(' · ') + '. ' : '')
+    + (sinPozo.length ? '⛔ <b>Sin pozo, aún no puede jugar:</b> ' + sinPozo.map(x => `${esc(nombreBonito(x.nombre))} (suma ${INF.dinero(x.total)})`).join(' · ') + '. ' : '') + 'Se puede guardar igual: solo es un aviso.';
   caja.classList.remove('oculto');
 }
 

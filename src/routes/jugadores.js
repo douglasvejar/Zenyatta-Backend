@@ -241,6 +241,17 @@ function resolverTipoCliente(valor) {
   const v = String(valor || '').toLowerCase();
   return v === 'tercio' || v === 'oficina' ? v : null;
 }
+// "Sin pozo" (06-11-2026): solo cuenta para clientes libres. `sinPozo` solo se toca si viene como true/false; si el cliente pasa a tener pozo
+// (avalado) la marca se apaga sola. Se guarda aparte por si todavía no corrieron el SQL.
+async function guardarSinPozo(jugadorId, grupoId, sinPozo, tipo) {
+  const valor = typeof sinPozo === 'boolean' ? (tipo === 'avalado' ? false : sinPozo) : (tipo === 'avalado' ? false : null);
+  if (valor === null) return;
+  try {
+    await db.query('UPDATE jugadores SET sin_pozo = $1 WHERE id = $2 AND grupo_id = $3', [valor, jugadorId, grupoId]);
+  } catch (e) {
+    if (!(e && e.code === '42703')) throw e;
+  }
+}
 async function guardarTipoCliente(jugadorId, grupoId, tipo) {
   if (!tipo) return;
   try {
@@ -279,11 +290,10 @@ function respuestaSocioFallido(res, guardado, jugador, avalesFinal) {
 
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    let { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
+    const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Falta el nombre del jugador.' });
     const tipoCliente = resolverTipoCliente(req.body.tipoCliente);
-    // Un tercio no lleva % de devolución (solo las oficinas).
-    if (tipoCliente === 'tercio') { comisionPropia = 0; incluirPorcentajeEnJugadas = false; comisionPropiaFicha = ''; }
+
     const { tipo, marca: marcaPagoDiario } = resolverTipoYPagoDiario(tipoCuenta, req.body.pagoDiario);
     const monedaFinal = resolverMonedaJugador(monedaModoDe(req), moneda);
     const nombreNorm = normalizarNombreJugador(nombre);
@@ -301,6 +311,7 @@ router.post('/', asyncHandler(async (req, res) => {
       return nuevo;
     });
     await guardarTipoCliente(jugador.id, req.grupoId, tipoCliente);
+    await guardarSinPozo(jugador.id, req.grupoId, req.body.sinPozo, tipo);
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
@@ -338,6 +349,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     });
     const tipoClientePut = resolverTipoCliente(req.body.tipoCliente);
     await guardarTipoCliente(jugador.id, req.grupoId, tipoClientePut);
+    await guardarSinPozo(jugador.id, req.grupoId, req.body.sinPozo, tipo);
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);

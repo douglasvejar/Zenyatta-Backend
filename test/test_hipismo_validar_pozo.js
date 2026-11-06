@@ -8,7 +8,8 @@ const original = Module._load;
 const POZOS = { PEDRO: 100, ANA: 0, LUIS: -50, MARIO: 1000 };
 const JUGADORES = [
   { nombre: 'PEDRO', tipo_cuenta: 'avalado' }, { nombre: 'ANA', tipo_cuenta: 'avalado' },
-  { nombre: 'LUIS', tipo_cuenta: 'avalado' }, { nombre: 'MARIO', tipo_cuenta: 'avalado' }
+  { nombre: 'LUIS', tipo_cuenta: 'avalado' }, { nombre: 'MARIO', tipo_cuenta: 'avalado' },
+  { nombre: 'SINPOZO', tipo_cuenta: 'libre', sin_pozo: true }, { nombre: 'LIBRE2', tipo_cuenta: 'libre', sin_pozo: false }
 ];
 Module._load = function (request, parent, isMain) {
   const base = parent && parent.filename ? path.basename(parent.filename) : '';
@@ -21,7 +22,7 @@ Module._load = function (request, parent, isMain) {
   }
   return original.apply(this, arguments);
 };
-const { validarTerciosContraPozo } = require('../src/services/hipismoAlertaPozo');
+const { validarTerciosContraPozo, detectarApuestasSobrePozo, detectarPozoBajo, mensajeApuestaSobrePozo } = require('../src/services/hipismoAlertaPozo');
 Module._load = original;
 
 let ok = 0, mal = 0;
@@ -51,6 +52,14 @@ function chequear(nombre, cond, extra) { if (cond) { ok++; console.log('OK: ' + 
   chequear('5) montos 0 / nombres vacíos se ignoran', r.length === 0);
   r = await validarTerciosContraPozo('g', []);
   chequear('6) sin jugadas -> vacío', Array.isArray(r) && r.length === 0);
+  // 7) Cliente libre marcado "sin pozo" (06-11-2026): todavía no puede jugar nada; el libre sin marca sigue sin límites.
+  r = await validarTerciosContraPozo('g', [t('SINPOZO', '1p', 1, 10), t('LIBRE2', '1p', 2, 999999)]);
+  chequear('7a) el cliente "sin pozo" sale con TODAS sus jugadas sin alcanzar; el libre sin marca no sale', r.length === 1 && r[0].nombre === 'SINPOZO' && r[0].juegan.length === 0 && r[0].noAlcanzan.length === 1 && r[0].sinPozo === true, JSON.stringify(r));
+  const sobre = await detectarApuestasSobrePozo('g', [{ nombre: 'SINPOZO', monto: 25 }, { nombre: 'SINPOZO', monto: 5 }, { nombre: 'LIBRE2', monto: 500 }, { nombre: 'PEDRO', monto: 50 }]);
+  chequear('7b) la alerta de "apuesta más de lo que le queda" incluye al sin pozo (suma 30) y no al libre ni a Pedro (alcanza)', sobre.length === 1 && sobre[0].nombre === 'SINPOZO' && sobre[0].apostado === 30 && sobre[0].sinPozo === true, JSON.stringify(sobre));
+  chequear('7c) el mensaje dice que todavía no tiene pozo y no puede jugar', /todavía NO tiene pozo: aún no puede jugar/.test(mensajeApuestaSobrePozo(sobre[0], 'GULFSTREAM 3')), mensajeApuestaSobrePozo(sobre[0], 'X'));
+  const bajos = await detectarPozoBajo('g', ['SINPOZO', 'LIBRE2']);
+  chequear('7d) "pozo bajo" NO avisa de un cliente sin pozo (nunca tuvo pozo que se le acabe)', bajos.length === 0, JSON.stringify(bajos));
   console.log(`\n${ok} pruebas OK, ${mal} fallaron.`);
   process.exit(mal ? 1 : 0);
 })();

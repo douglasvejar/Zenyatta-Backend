@@ -2334,3 +2334,9 @@ do $$ begin
     update jugadores set tipo_cliente = 'oficina' where coalesce(comision_propia, 0) > 0;
   end if;
 end $$;
+
+-- 06-11-2026: POZO DEL CLIENTE en tres opciones al crearlo (Hipismo Oficinas): con pozo (avalado, puede jugar hasta lo que tenga), SIN pozo
+-- (todavía no puede jugar: cualquier jugada que se le cargue avisa) o libre (sin límites, como siempre). "Sin pozo" = cliente libre con
+-- jugadores.sin_pozo = true. Los clientes que ya existen quedan en false = libres sin límite. El servidor también lo aplica solo al arrancar.
+-- Es idempotente.
+alter table jugadores add column if not exists sin_pozo boolean not null default false;

@@ -5632,25 +5632,38 @@ router.get('/recargas-pago-diario', asyncHandler(async (req, res) => {
   });
 }));
 
-// Cambiar el tipo de un cliente (06-11-2026, Hipismo Oficinas: "tercio" = cliente normal, "oficina" = la que lleva % de devolución).
-// Pasar a tercio a quien todavía tiene % de devolución se rechaza: primero hay que quitarle ese % (en Hipismo Grupos Hípicos).
+// Cambiar el tipo de un cliente (06-11-2026, Hipismo Oficinas: "tercio" = cliente normal, "oficina" = oficina). Los dos pueden llevar % de devolución.
 router.put('/clientes/:id/tipo-cliente', asyncHandler(async (req, res) => {
   const tipo = String((req.body && req.body.tipoCliente) || '').toLowerCase();
   if (tipo !== 'tercio' && tipo !== 'oficina') return res.status(400).json({ error: 'El tipo debe ser "tercio" u "oficina".' });
   const id = String(req.params.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese cliente no existe.' });
-  const actual = await db.query('SELECT id, comision_propia FROM jugadores WHERE id = $1 AND grupo_id = $2 AND COALESCE(es_cuenta_comision, false) = false', [id, req.grupoId]);
-  if (!actual.rows.length) return res.status(404).json({ error: 'Ese cliente no existe.' });
-  if (tipo === 'tercio' && Number(actual.rows[0].comision_propia) > 0) {
-    return res.status(409).json({ error: 'Este cliente todavía tiene % de devolución. Quítaselo primero (en Hipismo Grupos Hípicos) para pasarlo a tercio.' });
-  }
   let r;
   try {
-    r = await db.query('UPDATE jugadores SET tipo_cliente = $1 WHERE id = $2 AND grupo_id = $3 RETURNING id, nombre, tipo_cliente', [tipo, id, req.grupoId]);
+    r = await db.query('UPDATE jugadores SET tipo_cliente = $1 WHERE id = $2 AND grupo_id = $3 AND COALESCE(es_cuenta_comision, false) = false RETURNING id, nombre, tipo_cliente', [tipo, id, req.grupoId]);
   } catch (e) {
     if (e && e.code === '42703') return res.status(409).json({ error: 'Falta correr el SQL pendiente en Supabase (columna jugadores.tipo_cliente).' });
     throw e;
   }
+  if (!r.rows.length) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  res.json({ ok: true, cliente: r.rows[0] });
+}));
+
+// "Sin pozo" / "libre" de un cliente libre (06-11-2026): sin pozo = todavía no puede jugar (avisa al cargarle jugadas); libre = sin límites.
+// Un cliente con pozo (avalado) no usa esta marca: se le quita dándole o quitándole el pozo.
+router.put('/clientes/:id/sin-pozo', asyncHandler(async (req, res) => {
+  const marca = req.body && req.body.sinPozo;
+  if (typeof marca !== 'boolean') return res.status(400).json({ error: 'Indica si el cliente queda sin pozo o libre.' });
+  const id = String(req.params.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Ese cliente no existe.' });
+  let r;
+  try {
+    r = await db.query("UPDATE jugadores SET sin_pozo = $1 WHERE id = $2 AND grupo_id = $3 AND tipo_cuenta = 'libre' AND COALESCE(es_cuenta_comision, false) = false RETURNING id, nombre, sin_pozo", [marca, id, req.grupoId]);
+  } catch (e) {
+    if (e && e.code === '42703') return res.status(409).json({ error: 'Falta correr el SQL pendiente en Supabase (columna jugadores.sin_pozo).' });
+    throw e;
+  }
+  if (!r.rows.length) return res.status(404).json({ error: 'Ese cliente no existe o ya tiene pozo.' });
   res.json({ ok: true, cliente: r.rows[0] });
 }));
 

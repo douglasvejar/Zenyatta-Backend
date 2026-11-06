@@ -50,7 +50,10 @@ async function recargasPagoDiarioSemana(grupoId, nombre, rango) {
   return Math.max(0, round2(Number(r.rows && r.rows[0] && r.rows[0].total) || 0));
 }
 
-async function clientesConPozoDisponible(grupoId, nombres) {
+// `opciones.incluirSinPozo` (06-11-2026): también devuelve a los clientes libres marcados "sin pozo" (todavía no pueden jugar), con base 0 y
+// disponible 0 y `sinPozo: true`. Solo las alertas de "apuesta más de lo que le queda" y Validar plano lo piden; "pozo bajo" no (nunca tuvieron pozo).
+async function clientesConPozoDisponible(grupoId, nombres, opciones) {
+  const incluirSinPozo = !!(opciones && opciones.incluirSinPozo);
   const consulta = condicion => db.query(
     `SELECT * FROM jugadores
       WHERE grupo_id = $1 AND nombre = ANY($2) AND ${condicion} AND COALESCE(es_cuenta_comision, false) = false`,
@@ -58,15 +61,25 @@ async function clientesConPozoDisponible(grupoId, nombres) {
   );
   let r;
   try {
-    r = await consulta("(tipo_cuenta = 'avalado' OR pago_diario = true)");
+    r = await consulta(incluirSinPozo ? "(tipo_cuenta = 'avalado' OR pago_diario = true OR (tipo_cuenta = 'libre' AND sin_pozo = true))" : "(tipo_cuenta = 'avalado' OR pago_diario = true)");
   } catch (e) {
     if (!e || e.code !== '42703') throw e;
-    r = await consulta("tipo_cuenta = 'avalado'");
+    try {
+      r = await consulta("(tipo_cuenta = 'avalado' OR pago_diario = true)");
+    } catch (e2) {
+      if (!e2 || e2.code !== '42703') throw e2;
+      r = await consulta("tipo_cuenta = 'avalado'");
+    }
   }
   // 28-10-2026: lo que ya tiene en juego en Hipismo (adelantadas pendientes) tampoco se puede volver a jugar.
   const enJuegoHipismo = await hipismoEnJuegoPorCliente(grupoId, r.rows.map(j => j.nombre));
   const salida = [];
   for (const jugador of r.rows) {
+    if (jugador.tipo_cuenta !== 'avalado' && !jugador.pago_diario) {
+      // libre marcado "sin pozo": todavía no puede jugar nada
+      if (incluirSinPozo && jugador.sin_pozo === true) salida.push({ jugador, base: 0, disponible: 0, pagoDiario: false, sinPozo: true });
+      continue;
+    }
     const pozo = await calcularPozoJugador(grupoId, jugador);
     let base = round2(pozo.pozoInicial);
     let disponible = round2(pozo.pozoDisponible - (enJuegoHipismo.get(jugador.nombre) || 0));
@@ -95,11 +108,11 @@ async function detectarApuestasSobrePozo(grupoId, apuestas) {
   if (!porNombre.size) return [];
 
   const sobre = [];
-  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porNombre.keys()))) {
+  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porNombre.keys()), { incluirSinPozo: true })) {
     const apostado = round2(porNombre.get(c.jugador.nombre));
     const disponible = c.disponible;
     if (apostado > Math.max(0, disponible) + 0.005) {
-      sobre.push({ nombre: c.jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - Math.max(0, disponible)) });
+      sobre.push({ nombre: c.jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - Math.max(0, disponible)), sinPozo: !!c.sinPozo });
     }
   }
   return sobre;
@@ -127,7 +140,7 @@ async function validarTerciosContraPozo(grupoId, tickets) {
   if (!porCliente.size) return [];
 
   const salida = [];
-  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porCliente.keys()))) {
+  for (const c of await clientesConPozoDisponible(grupoId, Array.from(porCliente.keys()), { incluirSinPozo: true })) {
     const jugador = c.jugador;
     const disponible = c.disponible;
     const tope = Math.max(0, disponible);
@@ -140,12 +153,13 @@ async function validarTerciosContraPozo(grupoId, tickets) {
     }
     if (!noAlcanzan.length) continue;
     const apostado = round2(juegan.concat(noAlcanzan).reduce((a, j) => a + j.monto, 0));
-    salida.push({ nombre: jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - tope), juegan, noAlcanzan });
+    salida.push({ nombre: jugador.nombre, apostado, pozoDisponible: disponible, faltante: round2(apostado - tope), juegan, noAlcanzan, sinPozo: !!c.sinPozo });
   }
   return salida;
 }
 
 function mensajeApuestaSobrePozo(s, etiqueta) {
+  if (s.sinPozo) return `${s.nombre} apostó ${fmt(s.apostado)}${etiqueta ? ' en ' + etiqueta : ''} pero todavía NO tiene pozo: aún no puede jugar.`;
   return `${s.nombre} apostó ${fmt(s.apostado)}${etiqueta ? ' en ' + etiqueta : ''} y su pozo disponible es ${fmt(s.pozoDisponible)} (se pasa por ${fmt(s.faltante)}).`;
 }
 
