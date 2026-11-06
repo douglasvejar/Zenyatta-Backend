@@ -428,17 +428,19 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   const opcionesHip = mock.match(/<option value="\$\{[^"]*h\.nombre[^"]*\}">[^`]*<\/option>/g) || [];
   const conBandera = opcionesHip.filter(o => /banderaPorPais/.test(o));
   check(conBandera.length >= 8 && conBandera.every(o => /h\.nombre\)?\} \$\{banderaPorPais\[h\.pais\]/.test(o)), '9e) en el módulo Hipismo/Grupos todas las listas de hipódromos llevan la bandera al final (' + conBandera.length + ' listas)');
-  // 9f) Buscador de hipódromos (06-11-2026): teclear filtra, no da vueltas
+  // 9f) Salto por letras (06-11-2026): la lista muestra todo y cada letra pasa al siguiente que empieza con ella, sin fin
   const vm = require('vm');
   const codigoBL = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'buscador-lista.js'), 'utf8');
   const ctxBL = { window: {}, document: { addEventListener() {}, removeEventListener() {} } };
   vm.createContext(ctxBL); vm.runInContext(codigoBL, ctxBL);
   const BL = ctxBL.window.BuscadorLista;
-  const ops = ['— Elige —', 'La Rinconada 🇻🇪', 'Valencia 🇻🇪', 'Tampa Bay Downs 🇺🇸', 'Turfway Park 🇺🇸', 'Santa Anita 🇺🇸', 'Oaklawn Park 🇺🇸'].map(t => ({ valor: t, texto: t, grupo: '', off: false }));
-  const fx = q => BL.filtrar(ops, q).map(o => o.texto.replace(/ 🇻🇪| 🇺🇸/, ''));
-  check(JSON.stringify(fx('t')) === JSON.stringify(['Tampa Bay Downs', 'Turfway Park']), '9f) escribir "t" deja SOLO los hipódromos con T (no rueda por la lista)');
-  check(JSON.stringify(fx('tam')) === JSON.stringify(['Tampa Bay Downs']) && fx('tt').length === 0, '9g) seguir escribiendo afina ("tam") y una letra repetida no da vueltas ("tt" no coincide)');
-  check(fx('sánta')[0] === 'Santa Anita' && fx('park').length === 2 && fx('')[0] === '— Elige —' && fx('').length === ops.length, '9h) ignora acentos, encuentra por palabra ("park") y sin texto muestra todo');
+  const ops = ['— Elige —', 'La Rinconada 🇻🇪', 'Valencia 🇻🇪', 'Tampa Bay Downs 🇺🇸', 'Turfway Park 🇺🇸', 'Santa Anita 🇺🇸', 'Tampa Extra 🇺🇸'].map(t => ({ valor: t, texto: t, grupo: '', off: false }));
+  let pos = 0; const vuelta = [];
+  for (let i = 0; i < 7; i++) { pos = BL.siguienteCoincidencia(ops, pos, 't'); vuelta.push(ops[pos].texto.replace(/ 🇺🇸/, '')); }
+  check(JSON.stringify(vuelta) === JSON.stringify(['Tampa Bay Downs', 'Turfway Park', 'Tampa Extra', 'Tampa Bay Downs', 'Turfway Park', 'Tampa Extra', 'Tampa Bay Downs']), '9f) pulsar "t" una y otra vez recorre los hipódromos con T y vuelve al primero, sin fin');
+  check(BL.siguienteCoincidencia(ops, 3, 'tt') === 4 && BL.siguienteCoincidencia(ops, 3, 'tam') === 3 && BL.siguienteCoincidencia(ops, 3, 'tur') === 4, '9g) "tt" equivale a pulsar t otra vez; varias letras distintas ("tam", "tur") buscan el nombre que empieza igual');
+  check(BL.siguienteCoincidencia(ops, 0, 'sánta') === 5 && BL.siguienteCoincidencia(ops, 0, 'park') === 4 && BL.siguienteCoincidencia(ops, 0, 'zzz') === -1, '9h) ignora acentos, encuentra por palabra ("park") y devuelve -1 si nada coincide');
+  check(!/filtrar/.test(codigoBL) && /bl-lista/.test(codigoBL), '9h2) la lista ya no se filtra: siempre se ven todos los hipódromos');
   const htmlMock = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
   const idsMock = ['selHipodromo', 'vpHipodromo', 'selHipodromoRemate', 'selHipodromoRemateManual', 'selHipodromoAdelantadas', 'selHipodromoTerciosAdelantadas', 'selHipodromoWinners', 'selHipodromoRevisar', 'selCmeHipodromo'];
   check(/<script src="buscador-lista\.js"><\/script>/.test(html) && /<script src="buscador-lista\.js"><\/script>/.test(htmlMock) && /<select id="jHipodromo" data-buscar/.test(html) && /<select id="rHipodromo" data-buscar/.test(html) && idsMock.every(i => new RegExp('<select id="' + i + '" data-buscar').test(htmlMock)), '9i) las listas de hipódromos de Oficinas y de Hipismo/Grupos usan el buscador');
