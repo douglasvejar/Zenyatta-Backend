@@ -95,8 +95,10 @@ function normalizarEntradas(filas) {
   const errores = [];
   (Array.isArray(filas) ? filas : []).forEach((f, i) => {
     if (!f) return;
-    const vacia = !String(f.jugador || '').trim() && !String(f.tipo || '').trim() && !String(f.caballo || '').trim() && (f.monto === '' || f.monto === undefined || f.monto === null);
-    if (vacia) return; // una fila en blanco de la tabla no es un error
+    // Una fila sin jugador y sin monto es una fila libre, no un error: la pantalla abre sola una fila nueva debajo (FILAS AUTOMÁTICAS) y
+    // la deja con el mismo tipo y caballo de la anterior; mientras nadie escriba el jugador ni el monto no cuenta (06-11-2026 / 10-11-2026).
+    const vacia = !String(f.jugador || '').trim() && (f.monto === '' || f.monto === undefined || f.monto === null || !String(f.monto).trim());
+    if (vacia) return;
     const n = i + 1;
     const jugador = nombreCanonico(f.jugador);
     const lado = String(f.lado || '').toLowerCase().replace('ó', 'o');

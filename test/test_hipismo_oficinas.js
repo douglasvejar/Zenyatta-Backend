@@ -489,6 +489,14 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/Saludos \$\{tituloNombre\(c\.nombre\)\}[\s\S]{0,200}oficina de confianza \$\{tituloNombre\(GRUPO\.nombre\)\}/.test(html) && /🏇/.test(html) && /💰/.test(html) && /💵/.test(html) && /operativo las 24 horas/.test(html), '12w) el mensaje a copiar lleva el nombre del cliente y de la oficina del grupo, con emojis de caballo y dinero');
   check(!/lk-ejemplo|Solo enlace/.test(html), '12x) la ventana Links no tiene cuadro de ejemplo ni botón "Solo enlace"');
   check(/function cargarLinks\(forzar\)[\s\S]{0,120}!CLIENTES\.length/.test(html), '12y) Links no vuelve a pedir la lista de clientes si ya está cargada (no pesa en Supabase)');
+  { const Fx = (j, l, t, c, m) => ({ jugador: j, lado: l, tipo: t, caballo: c, monto: m });
+    const base = [Fx('Andres', 'jugo', '2p', '8', 600), Fx('The book', 'dio', '2p', '8', 300), Fx('Robert', 'dio', '2p', '8', 300)];
+    const conLibre = oficinas.calcularCuadre(base.concat([Fx('', 'jugo', '2p', '8', '')]));
+    check(conLibre.cuadra === true && conLibre.errores.length === 0 && conLibre.mensajes.length === 0, '15a) la fila libre que abre sola la pantalla (con tipo y caballo ya puestos, sin jugador ni monto) NO cuenta como error: la carrera cuadra');
+    const sinJug = oficinas.calcularCuadre([Fx('', 'jugo', '2p', '8', 300), Fx('Pedro', 'dio', '2p', '8', 300)]);
+    const sinMonto = oficinas.calcularCuadre([Fx('Ana', 'jugo', '2p', '8', ''), Fx('Pedro', 'dio', '2p', '8', 300)]);
+    check(sinJug.cuadra === false && sinJug.errores[0].error === 'Falta el jugador.' && sinMonto.cuadra === false && /monto/.test(sinMonto.errores[0].error), '15b) una fila con monto pero sin jugador (o jugador sin monto) sigue siendo un error');
+    check(oficinas.emparejar(base.concat([Fx('', 'jugo', '2p', '8', '')])).length === 2, '15c) la fila libre tampoco entra al emparejamiento ni al guardado'); }
   check(/data-tab="pizarras"/.test(html) && /id="panel-pizarras"/.test(html) && /if \(t === 'pizarras'\) pzAbrirPestana\(\)/.test(html), '14a) existe la pestaña "Pizarras" de Oficinas');
   check(/async function pzGuardar\(\)[\s\S]{0,1800}\/api\/hipismo\/oficinas\/guardar[\s\S]{0,500}filas: r\.filas\.map\(filaDeServidor\)[\s\S]{0,400}\/api\/hipismo\/pizarras\/tercios\//.test(html), '14b) guardar la pizarra vuelve a guardar la carrera con TODAS sus jugadas (recalcula todas); las cargadas como plano usan /pizarras/tercios/:id');
   check(/Antes: \$\{r\.pizarra\}[\s\S]{0,200}Se recalcularán todas las jugadas/.test(html) && /No hay nada que cambiar|nada que cambiar/.test(html) && /todavía no tiene jugadas cargadas/.test(html), '14c) al modificar una pizarra ya cargada pide confirmación; sin jugadas ofrece ir a cargarlas');
