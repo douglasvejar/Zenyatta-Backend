@@ -1897,7 +1897,7 @@ function pintarRegistro() {
           <td>${c.estado === 'calculada' ? '<span class="tag">✅ Calculada</span>' : '<span class="tag pend">⏳ Pendiente de llegada</span>'}</td>
           <td>${c.pizarra ? esc(c.pizarra) : '—'}${c.ret ? ` <span class="sub-linea">ret. ${esc(c.ret)}</span>` : ''}</td>
           <td class="num">${c.filas}</td><td class="num">${c.jugadores}</td><td class="num">${INF.dinero(c.totalJugado)}</td>
-          <td class="num" style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Agregar jugadas nuevas a esta carrera sin tocar las que ya tiene" onclick="event.stopPropagation(); agregarDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">➕ Agregar</button> <button type="button" class="btn btn-sec btn-chico">✏️ Editar</button></td></tr>`).join('')}</tbody>
+          <td class="num" style="white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Agregar jugadas nuevas a esta carrera sin tocar las que ya tiene" onclick="event.stopPropagation(); agregarDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero})">➕ Agregar</button> <button type="button" class="btn btn-sec btn-chico">✏️ Editar</button>${puedeOficina('oficinas_eliminar') ? ` <button type="button" class="btn btn-peligro btn-chico" title="Eliminar esta carrera" onclick="event.stopPropagation(); eliminarDelRegistro(${h.hipodromoId ? `'${esc(h.hipodromoId)}'` : 'null'}, ${c.numero}, '${c.estado}', ${c.planoId ? `'${esc(c.planoId)}'` : 'null'})">🗑️ Eliminar</button>` : ''}</td></tr>`).join('')}</tbody>
       </table></div></div>`).join('');
 }
 async function agregarDelRegistro(hipodromoId, numero) {
@@ -1924,6 +1924,24 @@ async function abrirDelRegistro(hipodromoId, numero) {
   ponerCarrera(numero);
   await cambioCarrera();
   $('panel-jugadas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// Eliminar una carrera desde la lista del Registro (sin abrirla): pide confirmación; la calculada se va a la papelera de planos y deja
+// de contar en los balances; la pendiente de llegada se descarta. Mismas rutas y permiso (oficinas_eliminar) que "Eliminar carrera" dentro de la edición.
+async function eliminarDelRegistro(hipodromoId, numero, estado, planoId) {
+  const h = HIPODROMOS.find(x => x.id === hipodromoId);
+  const nombre = h ? nombreHip(h.nombre) : ((REGISTRO.hipodromos.find(x => x.hipodromoId === hipodromoId) || {}).nombre || 'este hipódromo');
+  if (!confirm(`¿Eliminar la carrera ${numero} de ${h ? nombre : nombreHip(nombre)} (${INF.fechaCorta(REGISTRO.fecha)})?` + (estado === 'calculada' ? '\nSe va a la papelera de planos y deja de contar en los balances.' : '\nEs una carrera pendiente de llegada: se descarta.'))) return;
+  msg('rMsg', '');
+  try {
+    if (estado === 'pendiente') {
+      if (!hipodromoId) throw new Error('No se encontró la carrera para eliminarla.');
+      await api(`/api/hipismo/oficinas/pendiente?hipodromoId=${encodeURIComponent(hipodromoId)}&carrera=${numero}&fecha=${encodeURIComponent(REGISTRO.fecha)}`, { method: 'DELETE' });
+    } else if (planoId) await api('/api/hipismo/planos/' + encodeURIComponent(planoId), { method: 'DELETE' });
+    else throw new Error('No se encontró la carrera para eliminarla.');
+  } catch (e) { return msg('rMsg', e.message, false); }
+  await cargarRegistro();
+  msg('rMsg', `🗑️ Carrera ${numero} eliminada.`, true);
+  if (typeof avisarPizarrasFaltan === 'function') avisarPizarrasFaltan();
 }
 function volverAlRegistro() { EDICION = null; irATab('registro'); }
 async function eliminarCarreraEnEdicion() {
