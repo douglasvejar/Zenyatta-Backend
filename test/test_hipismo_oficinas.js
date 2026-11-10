@@ -489,6 +489,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/Saludos \$\{tituloNombre\(c\.nombre\)\}[\s\S]{0,200}oficina de confianza \$\{tituloNombre\(GRUPO\.nombre\)\}/.test(html) && /🏇/.test(html) && /💰/.test(html) && /💵/.test(html) && /operativo las 24 horas/.test(html), '12w) el mensaje a copiar lleva el nombre del cliente y de la oficina del grupo, con emojis de caballo y dinero');
   check(!/lk-ejemplo|Solo enlace/.test(html), '12x) la ventana Links no tiene cuadro de ejemplo ni botón "Solo enlace"');
   check(/function cargarLinks\(forzar\)[\s\S]{0,120}!CLIENTES\.length/.test(html), '12y) Links no vuelve a pedir la lista de clientes si ya está cargada (no pesa en Supabase)');
+  check(/id="jAyudaGuardar"/.test(html) && /Para guardarla falta elegir/.test(html) && /CUADRE_OK && faltaHip/.test(html), '15d) si la carrera cuadra pero falta elegir hipódromo o carrera, la pantalla lo dice (y marca la casilla) en vez de dejar el botón gris sin explicación');
   { const Fx = (j, l, t, c, m) => ({ jugador: j, lado: l, tipo: t, caballo: c, monto: m });
     const base = [Fx('Andres', 'jugo', '2p', '8', 600), Fx('The book', 'dio', '2p', '8', 300), Fx('Robert', 'dio', '2p', '8', 300)];
     const conLibre = oficinas.calcularCuadre(base.concat([Fx('', 'jugo', '2p', '8', '')]));

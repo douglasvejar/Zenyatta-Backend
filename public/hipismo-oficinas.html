@@ -448,6 +448,7 @@
             <button type="button" class="btn btn-sec" id="btnCalcular" onclick="calcularVistaPrevia()" disabled>Calcular (vista previa)</button>
             <button type="button" class="btn" id="btnGuardar" onclick="guardarCarrera()" disabled>💾 Guardar carrera</button>
           </div>
+          <div class="nota" id="jAyudaGuardar" style="display:none;color:#b45309;font-weight:700;margin:8px 0 0;" role="status"></div>
           <div class="msg" id="jMsg"></div>
         </div>
 
@@ -1505,6 +1506,11 @@ function actualizarBotones() {
   const hayPizarra = !!$('jPizarra').value.trim();
   // Con llegada: guarda Y calcula. Sin llegada: guarda las jugadas "pendientes" (no afectan balances).
   const hayNuevas = !AGREGANDO || FILAS.slice(AGREGANDO.existentes).some(f => String(f.jugador || '').trim() || String(f.monto || '').trim());
+  // Por qué está apagado "Guardar": si la carrera ya cuadra pero falta elegir hipódromo o carrera, se dice (antes solo se veía el botón gris).
+  const ayuda = $('jAyudaGuardar'), faltaHip = !$('jHipodromo').value, faltaCar = !$('jCarrera').value;
+  $('jHipodromo').style.outline = CUADRE_OK && faltaHip ? '2px solid #d97706' : ''; $('jCarrera').style.outline = CUADRE_OK && !faltaHip && faltaCar ? '2px solid #d97706' : '';
+  ayuda.textContent = CUADRE_OK && (faltaHip || faltaCar) ? `✅ La carrera cuadra. Para guardarla falta elegir ${faltaHip ? 'el hipódromo' : 'la carrera'}${faltaHip && faltaCar ? ' y la carrera' : ''}.` : '';
+  ayuda.style.display = ayuda.textContent ? '' : 'none';
   $('btnGuardar').disabled = !(base && hayNuevas);
   $('btnGuardar').textContent = AGREGANDO ? (hayPizarra ? '💾 Guardar jugadas nuevas y calcular' : '💾 Guardar jugadas nuevas (sin llegada)') : (hayPizarra ? '💾 Guardar y calcular' : '💾 Guardar sin llegada');
   $('btnCalcular').disabled = !(base && hayPizarra);
