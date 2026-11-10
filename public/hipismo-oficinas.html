@@ -1407,15 +1407,15 @@ function pintarTabla(erroresPorFila) {
   $('jTbody').innerHTML = FILAS.map((f, i) => `
     <tr class="${malas.has(i + 1) ? 'fila-error' : ''}">
       <td class="n">${i + 1}</td>
-      <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
+      <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" autocomplete="off"></td>
       <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
       <td style="width:${usaPremioFila(f) ? 184 : 112}px;min-width:${usaPremioFila(f) ? 184 : 112}px;">${usaPremioFila(f)
-        ? `<div class="tipo-par"><input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)"><input class="tp-in" data-i="${i}" data-c="premio" value="${esc(f.premio || '')}" placeholder="${esMarcaFila(f) ? 'pp' : 'premio'}" title="${esMarcaFila(f) ? 'Premio de la marca: PP (completo), 10A9, 10A8, 10A7… también 10A7,5' : 'Premio de la jugada a premio: PP, 10A9 … 10A1, también 10A7,5'}" autocomplete="off"></div>`
-        : `<input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)">`}</td>
+        ? `<div class="tipo-par"><input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)"><input class="tp-in" data-i="${i}" data-c="premio" value="${esc(f.premio || '')}" title="${esMarcaFila(f) ? 'Premio de la marca: PP (completo), 10A9, 10A8, 10A7… también 10A7,5' : 'Premio de la jugada a premio: PP, 10A9 … 10A1, también 10A7,5'}" autocomplete="off"></div>`
+        : `<input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)">`}</td>
       <td style="width:${esMarcaFila(f) ? 130 : 100}px;">${esMarcaFila(f)
-        ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" placeholder="N.º" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" placeholder="N.º" autocomplete="off"></div>`
-        : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off">`}</td>
-      <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="Monto" autocomplete="off"></td>
+        ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" autocomplete="off"></div>`
+        : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" autocomplete="off">`}</td>
+      <td style="width:130px;"><input data-i="${i}" data-c="monto" inputmode="decimal" value="${esc(f.monto)}" autocomplete="off"></td>
       <td class="x" style="width:128px;white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Duplicar fila (Ctrl+D)" onclick="duplicarFila(${i})">⧉</button> <button type="button" class="btn btn-sec btn-chico" title="Contraparte: la misma jugada del otro lado (Jugó ⇄ Dio)" onclick="duplicarContraparte(${i})">⇄</button> <button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
   if (typeof marcarFilasNoExisten === 'function') marcarFilasNoExisten();

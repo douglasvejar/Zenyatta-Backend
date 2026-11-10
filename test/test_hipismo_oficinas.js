@@ -574,6 +574,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   // 18) Botón Eliminar en cada carrera del Registro de Jugadas (10-11-2026).
   check(/puedeOficina\('oficinas_eliminar'\) \? ` <button type="button" class="btn btn-peligro btn-chico" title="Eliminar esta carrera" onclick="event\.stopPropagation\(\); eliminarDelRegistro\(/.test(html) && /async function eliminarDelRegistro\(hipodromoId, numero, estado, planoId\)[\s\S]{0,1400}confirm\([\s\S]{0,900}oficinas\/pendiente\?hipodromoId=[\s\S]{0,300}\/api\/hipismo\/planos\/' \+ encodeURIComponent\(planoId\)[\s\S]{0,200}method: 'DELETE'[\s\S]{0,400}await cargarRegistro\(\)/.test(html),
     '18a) cada carrera del Registro tiene el botón Eliminar (con permiso oficinas_eliminar): pide confirmación, descarta la pendiente o manda la calculada a la papelera, y refresca la lista');
+  check(!/data-c="(jugador|tipo|premio|caballo|cab1|cab2|monto)"[^>]*placeholder=/.test(html.slice(html.indexOf('function pintarTabla'), html.indexOf("$('jTbody').addEventListener('input'"))), '18b) las casillas de la tabla de jugadas no llevan textos grises de ejemplo (Jugador, 2p/3n, N.º, Monto)');
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
