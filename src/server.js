@@ -151,6 +151,9 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html') || filePath.endsWith('.js')) {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (filePath.endsWith('.woff2')) {
+      // Fuente de banderas para Windows (public/banderas.js): no cambia, el navegador la guarda 30 días.
+      res.setHeader('Cache-Control', 'public, max-age=2592000');
     }
   }
 }));

@@ -524,6 +524,15 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   let compila = true; try { new (require('vm').Script)(scriptsPortal); } catch (e) { compila = false; }
   check(compila, '12o) el script de la página nueva compila');
 
+  // 16) Banderas en Windows (10-11-2026): Windows no trae banderas de países en su fuente de emojis y muestra "US" / "VE".
+  const banderasJs = leer('public/banderas.js');
+  const paginasBandera = ['cliente', 'grupo-cliente', 'grupo', 'hipismo-cliente-portal', 'hipismo-mockup', 'hipismo-mockup-1', 'hipismo-oficinas', 'superadmin'];
+  check(paginasBandera.every(p => /<script src="banderas\.js"><\/script>\s*<\/head>/.test(leer('public/' + p + '.html'))), '16a) todas las pantallas que muestran banderas cargan banderas.js');
+  check(require('fs').existsSync(path.join(__dirname, '..', 'public', 'fonts', 'TwemojiCountryFlags.woff2')) && require('fs').statSync(path.join(__dirname, '..', 'public', 'fonts', 'TwemojiCountryFlags.woff2')).size > 10000, '16b) la fuente de banderas está en public/fonts');
+  check(/if \(!emojiOk \|\| banderaOk\) return;/.test(banderasJs) && /unicode-range:/.test(banderasJs) && /"Inter"/.test(banderasJs) && /"Outfit"/.test(banderasJs) && /\.bl-panel/.test(banderasJs) && /catch \(e\)/.test(banderasJs), '16c) banderas.js solo actúa si el navegador NO dibuja banderas (Mac/móvil no descargan nada), cubre Inter/Outfit/buscador y no rompe la página si falla');
+  { let compilaB = true; try { new (require('vm').Script)(banderasJs); } catch (e) { compilaB = false; } check(compilaB, '16d) banderas.js compila'); }
+  check(/\.woff2'\)[\s\S]{0,200}max-age=2592000/.test(leer('src/server.js')), '16e) la fuente de banderas se guarda 30 días en el navegador (no se vuelve a pedir)');
+
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
