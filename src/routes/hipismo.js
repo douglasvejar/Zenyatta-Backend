@@ -1375,7 +1375,9 @@ function cuerpoPlanoDeOficina(req) {
   const parejas = oficinasCalc.emparejar(filas);
   return {
     texto: oficinasCalc.armarTextoPlano(parejas), pizarra, hipodromoId, carreraNumero, ret, fecha,
-    cruzaJugadas: !!cruzaJugadas
+    cruzaJugadas: !!cruzaJugadas,
+    // Premios "a premio" SIN % (el ganador cobra neto, sin el 5%): igual que en Grupos Hípicos, elegidos antes de calcular.
+    valoresSinComision: oficinasCalc.valoresSinComisionOficina(req.body)
   };
 }
 
@@ -1402,7 +1404,7 @@ router.post('/oficinas/guardar', asyncHandler(async (req, res) => {
   const cuerpo = cuerpoPlanoDeOficina(req);
   const out = await correrManejadorPlano(guardarPlanoHandler, req, cuerpo, { permitirSustituirPlano: true });
   if (out.status === 201 && out.body && out.body.plano) {
-    const { entradas } = oficinasCalc.normalizarEntradas(req.body.filas);
+    const { entradas } = oficinasCalc.normalizarEntradas(req.body.filas, cuerpo.valoresSinComision);
     await db.query('UPDATE hipismo_planos SET jugadas_oficina = $1 WHERE id = $2 AND grupo_id = $3', [JSON.stringify(entradas), out.body.plano.id, req.grupoId]);
     // Ya tiene llegada y está calculada: deja de estar "pendiente".
     await db.query(
@@ -1436,7 +1438,7 @@ router.post('/oficinas/pendiente', asyncHandler(async (req, res) => {
     [req.grupoId, nombreHip, carreraNumero, fecha]
   );
   if (rPlano.rows.length) return res.status(409).json({ error: 'Esta carrera ya está calculada: necesita su llegada (pizarra) para guardarla. Si quieres quitarla, elimínala.', calculada: true });
-  const { entradas } = oficinasCalc.normalizarEntradas(filas);
+  const { entradas } = oficinasCalc.normalizarEntradas(filas, oficinasCalc.valoresSinComisionOficina(req.body));
   await db.query(
     `INSERT INTO hipismo_oficinas_pendientes (grupo_id, hipodromo_id, hipodromo_nombre, carrera_numero, fecha, ret, cruza_jugadas, jugadas)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

@@ -375,7 +375,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     { jugador: 'RAUL', lado: 'dio', tipo: 'pp', caballo: '3x4', monto: 300 }]);
   check(parejaMarca.length === 1 && parejaMarca[0].tipo === 'pp' && parejaMarca[0].caballo === '4x3' && parejaMarca[0].jugador === 'LUSHO', '6h) Lusho va con el 4 en el plano');
   check(oficinas.tiposNoReconocidos([{ jugador: 'LUSHO', lado: 'jugo', tipo: '4×3', caballo: '4', monto: 300 }]).length === 0, '6i) el motor reconoce la marca escrita como 4×3');
-  check(/<option value="marca">/.test(html), '6j) la lista de tipos ofrece "marca"');
+  { const tiposJs = leer('public/oficinas-tipos.js'); check(/v: 'Marcas'/.test(tiposJs) && /a: 'MARCAS'/.test(tiposJs), '6j) la lista de tipos ofrece "marcas" (lista desplegable con colores, oficinas-tipos.js)'); }
   check(/function esMarcaFila/.test(html) && /data-c="cab1"/.test(html) && /data-c="cab2"/.test(html) && /class="cab-par"/.test(html), '6k) con Tipo "Marca" la casilla Caballo se parte en dos (cab1 vs cab2)');
   const ep = (premio, cab) => oficinas.normalizarEntradas([{ jugador: 'LUIS', lado: 'jugo', tipo: 'Marca', caballo: cab || '3x4', premio, monto: 100 }]);
   check(ep('', '3x4').entradas[0].tipo === 'pp' && ep('pp').entradas[0].tipo === 'pp', '6m) Marca sin premio o con "pp" = pp (completo)');
@@ -392,8 +392,8 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     { jugador: 'LUIS', lado: 'jugo', tipo: 'Marca', caballo: '3x4', premio: '10a8', monto: 100 },
     { jugador: 'RAUL', lado: 'dio', tipo: 'Marca', caballo: '4x3', premio: '10a8', monto: 100 }]);
   check(emp.length === 1 && emp[0].tipo === '10a8' && emp[0].caballo === '3x4', '6s) el plano queda "10a8 (3x4)" con Luis jugando el 3');
-  check(/id="dlPremios"/.test(html) && /data-c="premio"/.test(html) && /function filaDeServidor/.test(html), '6t) la casilla del premio sale solo con Marca y trae sus opciones (pp, 10a9, 10a8…)');
-  check(/esMarcaFila\(f\)\s*\?\s*170/.test(html), '6u) el premio solo aparece en filas de Marca');
+  { const tiposJs = leer('public/oficinas-tipos.js'); check(/data-c="premio"/.test(html) && /function filaDeServidor/.test(html) && ['PP', '10A9', '10A8', '10A7', '10A6', '10A5', '10A4', '10A3', '10A2', '10A1'].every(a => tiposJs.includes(`'${a}'`)), '6t) la casilla del premio sale con Marcas / A premio y trae sus opciones (PP, 10A9 … 10A1)'); }
+  check(/usaPremioFila\(f\)\s*\?\s*184/.test(html) && /function usaPremioFila\(f\) \{ return esMarcaFila\(f\) \|\| esAPremioFila\(f\)/.test(html), '6u) el premio solo aparece en filas de Marcas o A premio');
   check(/function sincronizarMarca/.test(html) && /\$\{a\}x\$\{b\}/.test(html), '6l) las dos casillas se juntan como "AxB" para el servidor');
 
   // ---- 7) Avisos en Jugadas: pizarras que faltan y carrera que ya tiene jugadas (06-11-2026) ----
@@ -532,6 +532,44 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/if \(!emojiOk \|\| banderaOk\) return;/.test(banderasJs) && /unicode-range:/.test(banderasJs) && /"Inter"/.test(banderasJs) && /"Outfit"/.test(banderasJs) && /\.bl-panel/.test(banderasJs) && /catch \(e\)/.test(banderasJs), '16c) banderas.js solo actúa si el navegador NO dibuja banderas (Mac/móvil no descargan nada), cubre Inter/Outfit/buscador y no rompe la página si falla');
   { let compilaB = true; try { new (require('vm').Script)(banderasJs); } catch (e) { compilaB = false; } check(compilaB, '16d) banderas.js compila'); }
   check(/\.woff2'\)[\s\S]{0,200}max-age=2592000/.test(leer('src/server.js')), '16e) la fuente de banderas se guarda 30 días en el navegador (no se vuelve a pedir)');
+
+  // 17) Tipo con lista desplegable: MARCAS, A PREMIO (un caballo, premio PP/10A9…10A1, caja Sin %) y PUESTOS (10-11-2026).
+  { const F = (jugador, lado, tipo, caballo, monto, premio) => ({ jugador, lado, tipo, caballo, monto, premio });
+    const tiposJs = leer('public/oficinas-tipos.js');
+    const ap = oficinas.normalizarEntradas([F('A', 'jugo', 'A premio', '5', '300', '10a8'), F('B', 'dio', 'a premio', '5', '300', '8'), F('C', 'jugo', 'A premio', '6', '100', '7,5'), F('D', 'jugo', 'A premio', '7', '50', 'pp')]);
+    check(ap.errores.length === 0 && ap.entradas[0].tipo === '10a8' && ap.entradas[0].caballo === '5' && ap.entradas[1].tipo === '10a8' && ap.entradas[2].tipo === '10a7,5' && ap.entradas[3].tipo === '10a10',
+      '17a) A premio + premio + UN caballo = jugada 10aN a ese caballo (el premio puede ir como 10a8, 8 o 7,5; PP a un caballo es 10a10)');
+    check(oficinas.normalizarEntradas([F('A', 'jugo', 'A premio', '5', '300', '')]).errores[0].error.includes('Elige el premio') && oficinas.normalizarEntradas([F('A', 'jugo', 'A premio', '3x4', '300', '10a8')]).errores[0].error.includes('UN solo caballo') && oficinas.normalizarEntradas([F('A', 'jugo', 'A premio', '5', '300', 'xx')]).errores[0].error.includes('No reconozco'),
+      '17b) A premio sin premio, con dos caballos o con un premio mal escrito se avisa antes de guardar');
+    check(oficinas.calcularCuadre([F('A', 'jugo', 'A premio', '5', '300', '10a8'), F('B', 'dio', 'A premio', '5', '100', '10a8'), F('C', 'dio', 'A premio', '5', '200', '10a8')]).cuadra
+      && !oficinas.calcularCuadre([F('A', 'jugo', 'A premio', '5', '300', '10a8'), F('B', 'dio', 'A premio', '5', '300', '10a7')]).cuadra,
+      '17c) el cuadre de una jugada a premio es por premio + caballo: 10a8 no se mezcla con 10a7');
+    check(['1p/2n', '2P/2N', '2p/3n', '3p/3n', '3p/4n', '4p/4n', '4p/5n', '5p/5n', '5p/6n', '6p/6n'].every(t => oficinas.tipoCanonico(t) === t.toLowerCase().replace('/', '-'))
+      && oficinas.tiposNoReconocidos(['1p/2n', '2p/2n', '2p/3n', '3p/3n', '3p/4n', '4p/4n', '4p/5n', '5p/5n', '5p/6n', '6p/6n', '2n', '3n', '4n', '5n', '6n', '4p', '5p', '6p', '1p'].map(t => F('A', 'jugo', t, '6', '10'))).length === 0,
+      '17d) los puestos con nini (1P/2N … 6P/6N), los nini (2N … 6N) y los puestos (1P … 6P) los entiende el motor');
+    { const mk = tipo => calcularPlano({ texto: oficinas.armarTextoPlano(oficinas.emparejar([F('A', 'jugo', tipo, '6', '100'), F('B', 'dio', tipo, '6', '100')])), pizarra: '1-2-3-4' });
+      const r2 = mk('2p/2n').tickets[0], r1 = mk('1p/2n').tickets[0];
+      // el caballo 6 no figura en la pizarra: pierde completo en ambos
+      check(r2.resultadoJugador === -100 && r1.resultadoJugador === -100, '17e) 1P/2N y 2P/2N se calculan con el motor de siempre (caballo fuera de la pizarra: pierde el monto)');
+      const g = tipo => calcularPlano({ texto: oficinas.armarTextoPlano(oficinas.emparejar([F('A', 'jugo', tipo, '2', '100'), F('B', 'dio', tipo, '2', '100')])), pizarra: '5-2-3' }).tickets[0].resultadoJugador;
+      check(g('2p/2n') === 47.5 && g('1p/2n') === -50 && g('2p') === 95 && g('2n') === 0, '17f) el caballo llega 2.º: 2P/2N gana la mitad (47,5 con el 5%), 1P/2N pierde la mitad, 2P gana 95 y 2N queda en 0'); }
+    { const t = '10a8 (5) con 100\nJuega LUIS\nConsigue RAUL';
+      const sin = calcularPlano({ texto: t, pizarra: '5-4', valoresSinComision: [8] }).tickets[0], con = calcularPlano({ texto: t, pizarra: '5-4', valoresSinComision: [] }).tickets[0];
+      check(sin.resultadoJugador === 80 && sin.sinComision === true && con.resultadoJugador === 76 && con.sinComision === false, '17g) un premio marcado Sin % paga NETO (80) y sin marcar cobra el 5% (76)'); }
+    const conSin = oficinas.normalizarEntradas([F('A', 'jugo', 'A premio', '5', '300', '10a8'), F('B', 'dio', 'A premio', '5', '300', '10a7,5'), F('C', 'jugo', '2p', '6', '10')], [8]).entradas;
+    check(conSin[0].sinPct === true && !conSin[1].sinPct && !conSin[2].sinPct, '17h) la jugada guarda si su premio iba Sin % (para reabrir y recalcular igual)');
+    check(oficinas.valoresSinComisionOficina({ valoresSinComision: [] }).length === 0 && oficinas.valoresSinComisionOficina({ valoresSinComision: [8, 7.5] }).join() === '8,7.5' && oficinas.valoresSinComisionOficina({ filas: [{ tipo: '10a8', sinPct: true }, { tipo: '2p', sinPct: true }, { tipo: '10a7,5', sinPct: true }] }).join() === '8,7.5',
+      '17i) los premios Sin % salen de lo que manda la pantalla (aunque sea vacío) o, al cambiar la pizarra de una carrera guardada, de las jugadas guardadas');
+    check(/valoresSinComision: oficinas\w*\.valoresSinComisionOficina\(req\.body\)/.test(rutaHip) && /normalizarEntradas\(req\.body\.filas, cuerpo\.valoresSinComision\)/.test(rutaHip) && /normalizarEntradas\(filas, oficinasCalc\.valoresSinComisionOficina\(req\.body\)\)/.test(rutaHip), '17j) calcular, guardar y guardar sin llegada llevan los premios Sin % (sin consultas ni columnas nuevas)');
+    check(/<script src="oficinas-tipos\.js"><\/script>/.test(html) && !/list="dlTipos"|list="dlPremios"/.test(html) && /class="tp-in" data-i="\$\{i\}" data-c="tipo"/.test(html) && /class="tp-in" data-i="\$\{i\}" data-c="premio"/.test(html), '17k) la tabla usa la lista desplegable propia en Tipo y Premio (ya no la lista simple del navegador)');
+    check(['MARCAS', 'A PREMIO'].every(a => tiposJs.includes(`a: '${a}'`)) && ['1P', '1P/2N', '2N', '2P/2N', '2P', '2P/3N', '3N', '3P/3N', '3P', '3P/4N', '4N', '4P/4N', '4P', '4P/5N', '5N', '5P/5N', '5P', '5P/6N', '6N', '6P/6N', '6P'].every(a => tiposJs.includes(`'${a}'`)) && /text-transform:uppercase/.test(tiposJs) && /\.tp-a\{color:#fff;background:#2f6764/.test(tiposJs),
+      '17l) la lista trae MARCAS, A PREMIO y los 21 puestos en MAYÚSCULAS, con el nombre en un color y la abreviación en otro');
+    check(/function pintarSinPct\(\)/.test(html) && /id="sinPctBox"/.test(html) && /valoresSinComision: valoresSinEnviar\(\)/.test(html) && /delete o\.sinPct/.test(html) && /function premioNumero\(premio\)/.test(html), '17m) la caja Sin % sale con los premios de la tabla y se manda al calcular/guardar');
+    check(/else if \(decimos && \/\^\\d\{1,2\}\$\/\.test\(cab\)\) \{ fila\.tipo = 'A premio'/.test(html) && /replace\('-', '\/'\)/.test(html) && /if \(f\.sinPct\) fila\.sinPct = true/.test(html), '17n) al reabrir una carrera, 10aN a un caballo se ve como A PREMIO, 1p-2n como 1P/2N y se recuerda el Sin %');
+    const inf17 = require(path.join(__dirname, '..', 'public', 'oficinas-informes.js'));
+    check(inf17.armarDetalleCliente({ dias: [{ fecha: '2026-11-06', hipodromos: [{ nombre: 'x', carreras: [{ carrera: 1, rol: 'jugador', modalidad: '1p-2n', caballo: '6', monto: 100, resultado: -100 }] }] }], resumen: { totalSemana: -100 } }).dias[0].hipodromos[0].carreras[0].lineas[0].texto.includes('1P/2N'), '17o) el Detallado muestra 1P/2N y no 1p-2n');
+    { let compilaT = true; try { new (require('vm').Script)(tiposJs); } catch (e) { compilaT = false; } check(compilaT, '17p) oficinas-tipos.js compila'); }
+  }
 
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);

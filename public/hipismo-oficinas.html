@@ -3,6 +3,7 @@
 <head>
 <script src="sesion-pestana.js"></script>
 <script src="buscador-lista.js"></script>
+<script src="oficinas-tipos.js"></script>
 <script src="marca-agua.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -238,8 +239,15 @@
   .tipo-par input { min-width: 0; }
   #jTbody td:nth-child(2) input { min-width: 120px; }
   #jTbody td:nth-child(3) select { min-width: 92px; }
-  .tipo-par input[data-c="tipo"] { width: 84px; flex: none; }
-  .tipo-par input[data-c="premio"] { width: 70px; flex: none; text-align: center; background: #fffbeb; border-color: #f3d9a4; }
+  .tipo-par input[data-c="tipo"] { width: 104px; flex: none; font-weight: 700; color: var(--accent-deep); }
+  .tipo-par input[data-c="premio"] { width: 68px; flex: none; text-align: center; background-color: #fffbeb; border-color: #f3d9a4; font-weight: 700; color: #8a5a00; }
+  #jTbody input[data-c="tipo"] { font-weight: 700; color: var(--accent-deep); }
+  /* Caja "Sin %" (premios a premio sin el 5%, como en Grupos Hípicos): sale solo si la tabla tiene premios 10aN. */
+  .sinpct { margin: 0 0 12px; border: 1px solid #f3d9a4; background: #fffbeb; border-radius: 10px; padding: 10px 12px; display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .sinpct .sp-tit { font-weight: 800; }
+  .sinpct .sp-nota { color: var(--text-dim); }
+  .sinpct button.sp-chip { border: 1.5px solid #e1c07a; background: #fff; border-radius: 20px; padding: 4px 12px; font-weight: 800; font-size: 12.5px; color: #8a5a00; cursor: pointer; font-family: inherit; }
+  .sinpct button.sp-chip.on { background: #b45309; border-color: #b45309; color: #fff; }
   .cab-par .vs { font-size: 11px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; }
   /* Detallado por Cliente — vista mejorada (06-11-2026): jugadas con chip Jugó/Dio, modalidad y caballos de colores. */
   .informe .det-dia .dia-tit { align-items: center; padding: 9px 12px; font-size: 15.5px; letter-spacing: .2px; }
@@ -434,6 +442,7 @@
         <div class="card">
           <h2>Jugadas de la carrera</h2>
           <div class="agregando-banner oculto" id="jAgregarBanner"><div id="jAgregarTxt"></div><button type="button" class="btn btn-sec btn-chico" onclick="cancelarAgregar()">Cancelar</button></div>
+          <div class="sinpct oculto" id="sinPctBox"></div>
           <div class="tabla-wrap">
             <table class="jugadas">
               <thead><tr><th></th><th>Jugador</th><th>Jugó / Dio</th><th>Tipo</th><th>Caballo</th><th>Monto</th><th></th></tr></thead>
@@ -953,12 +962,6 @@
   </div>
 </div>
 <datalist id="dlClientes"></datalist>
-<datalist id="dlPremios">
-  <option value="pp"><option value="10a9"><option value="10a8"><option value="10a7"><option value="10a6"><option value="10a5"><option value="10a4"><option value="10a3"><option value="10a2"><option value="10a1">
-</datalist>
-<datalist id="dlTipos">
-  <option value="1p"><option value="2p"><option value="3p"><option value="2n"><option value="3n"><option value="2y2"><option value="3y3"><option value="1/2"><option value="pp"><option value="marca">
-</datalist>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1273,6 +1276,7 @@ async function cargarClientes() {
 // JUGADAS
 // ------------------------------------------------------------------
 let FILAS = [];          // { jugador, lado, tipo, caballo, monto }
+let SIN_PCT = new Set();   // valores N (texto con punto: "8", "7.5") de los premios marcados "Sin %" (ver pintarSinPct)
 let AGREGANDO = null;    // { hipodromoId, fecha, carrera, existentes, conLlegada } mientras se agregan jugadas a una carrera ya cargada
 let CUADRE_OK = false;
 let TIMER_CUADRE = null;
@@ -1313,7 +1317,7 @@ function asegurarFilaLibre() {
 }
 function limpiarTabla() {
   salirAgregar();
-  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
+  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]);
   pintarTabla();
   programarCuadre();
 }
@@ -1329,10 +1333,54 @@ function quitarFila(i) {
 function filaDeServidor(f) {
   const fila = { jugador: nombreBonito(f.jugador), lado: f.lado, tipo: f.tipo, caballo: f.caballo, monto: String(f.monto) };
   const tipo = String(f.tipo || '').trim().toLowerCase();
-  if (/^\d{1,2}x\d{1,2}$/i.test(String(f.caballo || '').trim()) && (tipo === 'pp' || /^10a\d+([.,]\d+)?$/.test(tipo))) { fila.tipo = 'Marca'; fila.premio = tipo; }
+  const cab = String(f.caballo || '').trim();
+  const decimos = /^10a\d+([.,]\d+)?$/.test(tipo);
+  if (/^\d{1,2}x\d{1,2}$/i.test(cab) && (tipo === 'pp' || decimos)) { fila.tipo = 'Marcas'; fila.premio = tipo; }
+  // Jugada a premio: décimos (10aN) a UN solo caballo. 10a10 es el pelo a pelo (PP) a un caballo.
+  else if (decimos && /^\d{1,2}$/.test(cab)) { fila.tipo = 'A premio'; fila.premio = tipo === '10a10' ? 'pp' : tipo; }
+  // Puestos con nini: el motor los guarda como "1p-2n"; en la tabla se ven como 1P/2N.
+  else if (/^\d{1,2}p-\d{1,2}n$/.test(tipo)) fila.tipo = tipo.replace('-', '/');
+  if (f.sinPct) fila.sinPct = true;
   return fila;
 }
 function esMarcaFila(f) { return /^marcas?$/i.test(String((f && f.tipo) || '').trim()); }
+// Jugada a premio (un solo caballo): Tipo "A premio" + casilla de premio. Marcas y A premio usan la casilla de premio.
+function esAPremioFila(f) { return /^a?\s*premio$/i.test(String((f && f.tipo) || '').trim()); }
+function usaPremioFila(f) { return esMarcaFila(f) || esAPremioFila(f); }
+// ---------- Caja "Sin %" (como en Grupos Hípicos): premios 10aN de la carrera cuyo ganador cobra NETO, sin el 5% ----------
+// Solo salen los premios que hay en la tabla (10A8, 10A7,5…); PP no lleva chip. Se manda como valoresSinComision al calcular/guardar.
+function premioNumero(premio) {
+  const p = String(premio || '').trim().toLowerCase().replace(/\s+/g, '');
+  const m = p.match(/^(?:10a)?(\d+(?:[.,]\d+)?)$/);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(',', '.'));
+  return n > 0 && n < 10 ? String(n) : null;
+}
+function ponerFilas(filas) {
+  FILAS = filas;
+  SIN_PCT = new Set(filas.filter(f => f && f.sinPct).map(f => premioNumero(f.premio)).filter(Boolean));
+}
+function valoresSinPresentes() {
+  const v = new Set();
+  FILAS.forEach(f => { if (usaPremioFila(f)) { const n = premioNumero(f.premio); if (n) v.add(n); } });
+  return [...v].sort((a, b) => Number(b) - Number(a));
+}
+function valoresSinEnviar() { return valoresSinPresentes().filter(n => SIN_PCT.has(n)).map(Number); }
+function pintarSinPct() {
+  const caja = $('sinPctBox'); if (!caja) return;
+  const v = valoresSinPresentes();
+  if (!v.length) { caja.classList.add('oculto'); caja.innerHTML = ''; return; }
+  caja.classList.remove('oculto');
+  caja.innerHTML = `<span class="sp-tit">Sin % (a premio)</span><span class="sp-nota">Toca los premios que van sin 5% (el ganador cobra NETO):</span>` +
+    v.map(n => `<button type="button" class="sp-chip${SIN_PCT.has(n) ? ' on' : ''}" data-n="${n}" title="${SIN_PCT.has(n) ? 'Sin 5%: el ganador cobra neto. Toca para quitarlo.' : 'Con 5% como siempre. Toca para que el ganador cobre neto.'}">10A${String(n).replace('.', ',')}</button>`).join('');
+}
+$('sinPctBox').addEventListener('click', e => {
+  const b = e.target.closest('button.sp-chip'); if (!b) return;
+  const n = b.dataset.n;
+  if (SIN_PCT.has(n)) SIN_PCT.delete(n); else SIN_PCT.add(n);
+  pintarSinPct();
+  if (typeof programarCuadre === 'function') programarCuadre();
+});
 function partesMarca(f) {
   if (f.cab1 !== undefined || f.cab2 !== undefined) return [f.cab1 || '', f.cab2 || ''];
   const m = String(f.caballo || '').trim().match(/^(\d{1,2})\s*[x×]\s*(\d{1,2})$/i);
@@ -1361,9 +1409,9 @@ function pintarTabla(erroresPorFila) {
       <td class="n">${i + 1}</td>
       <td><input data-i="${i}" data-c="jugador" list="dlClientes" value="${esc(f.jugador)}" placeholder="Jugador" autocomplete="off"></td>
       <td style="width:130px;"><select data-i="${i}" data-c="lado" class="lado-${f.lado}"><option value="jugo"${f.lado === 'jugo' ? ' selected' : ''}>Jugó</option><option value="dio"${f.lado === 'dio' ? ' selected' : ''}>Dio</option></select></td>
-      <td style="width:${esMarcaFila(f) ? 170 : 110}px;min-width:${esMarcaFila(f) ? 170 : 110}px;">${esMarcaFila(f)
-        ? `<div class="tipo-par"><input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off"><input data-i="${i}" data-c="premio" list="dlPremios" value="${esc(f.premio || '')}" placeholder="pp" title="Premio de la marca: pp (completo), 10a9, 10a8, 10a7…" autocomplete="off"></div>`
-        : `<input data-i="${i}" data-c="tipo" list="dlTipos" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off">`}</td>
+      <td style="width:${usaPremioFila(f) ? 184 : 112}px;min-width:${usaPremioFila(f) ? 184 : 112}px;">${usaPremioFila(f)
+        ? `<div class="tipo-par"><input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)"><input class="tp-in" data-i="${i}" data-c="premio" value="${esc(f.premio || '')}" placeholder="${esMarcaFila(f) ? 'pp' : 'premio'}" title="${esMarcaFila(f) ? 'Premio de la marca: PP (completo), 10A9, 10A8, 10A7… también 10A7,5' : 'Premio de la jugada a premio: PP, 10A9 … 10A1, también 10A7,5'}" autocomplete="off"></div>`
+        : `<input class="tp-in" data-i="${i}" data-c="tipo" value="${esc(f.tipo)}" placeholder="2p, 3n…" autocomplete="off" title="Tipo de jugada: elige de la lista o escribe (2p, 3n, 1p/2n…)">`}</td>
       <td style="width:${esMarcaFila(f) ? 130 : 100}px;">${esMarcaFila(f)
         ? `<div class="cab-par" title="Marca: el caballo con el que juega contra el otro"><input data-i="${i}" data-c="cab1" inputmode="numeric" value="${esc(partesMarca(f)[0])}" placeholder="N.º" autocomplete="off"><span class="vs">vs</span><input data-i="${i}" data-c="cab2" inputmode="numeric" value="${esc(partesMarca(f)[1])}" placeholder="N.º" autocomplete="off"></div>`
         : `<input data-i="${i}" data-c="caballo" value="${esc(f.caballo)}" placeholder="N.º" autocomplete="off">`}</td>
@@ -1371,6 +1419,7 @@ function pintarTabla(erroresPorFila) {
       <td class="x" style="width:128px;white-space:nowrap;"><button type="button" class="btn btn-sec btn-chico" title="Duplicar fila (Ctrl+D)" onclick="duplicarFila(${i})">⧉</button> <button type="button" class="btn btn-sec btn-chico" title="Contraparte: la misma jugada del otro lado (Jugó ⇄ Dio)" onclick="duplicarContraparte(${i})">⇄</button> <button type="button" class="btn btn-peligro btn-chico" title="Quitar fila" onclick="quitarFila(${i})">✕</button></td>
     </tr>`).join('');
   if (typeof marcarFilasNoExisten === 'function') marcarFilasNoExisten();
+  pintarSinPct();
   if (AGREGANDO) document.querySelectorAll('#jTbody tr').forEach((tr, i) => {
     if (i < AGREGANDO.existentes) {
       tr.classList.add('fila-existente');
@@ -1383,6 +1432,7 @@ $('jTbody').addEventListener('input', e => {
   const t = e.target; if (!t.dataset || t.dataset.c === undefined) return;
   alEscribirFila(t);
   asegurarFilaLibre();
+  if (t.dataset.c === 'premio' || t.dataset.c === 'tipo') pintarSinPct();
   programarCuadre();
 });
 $('jTbody').addEventListener('change', e => {
@@ -1390,12 +1440,15 @@ $('jTbody').addEventListener('change', e => {
   const i = +t.dataset.i;
   alEscribirFila(t);
   // ¿La fila quedó como Marca (o dejó de serlo)? Entonces la casilla Caballo cambia de una a dos casillas.
-  if (t.dataset.c === 'tipo' && esMarcaFila(FILAS[i]) !== !!t.closest('tr').querySelector('[data-c="cab1"]')) {
-    // Al elegir "Marca": la casilla Caballo pasa a ser dos casillas (si ya había "4x3" se reparte solo).
+  const trF = t.closest('tr');
+  if (t.dataset.c === 'tipo' && (esMarcaFila(FILAS[i]) !== !!trF.querySelector('[data-c="cab1"]') || usaPremioFila(FILAS[i]) !== !!trF.querySelector('[data-c="premio"]'))) {
+    // Al elegir "Marcas": la casilla Caballo pasa a ser dos casillas (si ya había "4x3" se reparte solo). Al elegir "A premio":
+    // aparece la casilla del premio (un solo caballo). Con cualquier otro tipo la tabla es la de siempre.
     pintarTabla();
-    const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${esMarcaFila(FILAS[i]) ? 'premio' : 'caballo'}"]`);
+    const inp = document.querySelector(`#jTbody input[data-i="${i}"][data-c="${usaPremioFila(FILAS[i]) ? 'premio' : 'caballo'}"]`);
     if (inp) inp.focus();
   }
+  if (t.dataset.c === 'premio' || t.dataset.c === 'tipo') pintarSinPct();
   asegurarFilaLibre();
   programarCuadre();
 });
@@ -1521,7 +1574,7 @@ $('jPizarra').addEventListener('input', actualizarBotones);
 
 function cuerpoCarrera() {
   return {
-    filas: FILAS, pizarra: $('jPizarra').value.trim(), hipodromoId: $('jHipodromo').value,
+    filas: FILAS.map(f => { const o = Object.assign({}, f); delete o.sinPct; return o; }), valoresSinComision: valoresSinEnviar(), pizarra: $('jPizarra').value.trim(), hipodromoId: $('jHipodromo').value,
     carreraNumero: Number($('jCarrera').value), ret: $('jRet').value.trim(), fecha: $('jFecha').value,
     cruzaJugadas: !!(puedeCruzarJugadas() && $('jCruzar').checked)
   };
@@ -1581,7 +1634,7 @@ async function guardarCarrera() {
       return;
     }
     // Lista para la siguiente: tabla vacía, llegada vacía y la carrera que sigue.
-    FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)];
+    ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]);
     pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = puedeCruzarJugadas();
     pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
     $('jAviso').classList.add('oculto');
@@ -1650,7 +1703,7 @@ function salirAgregar() {
 }
 async function cancelarAgregar() {
   salirAgregar();
-  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = '';
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
   $('jAviso').classList.add('oculto');
@@ -1667,7 +1720,7 @@ async function agregarMasJugadas() {
       return msg('jMsg', 'Esa carrera se cargó como plano en Hipismo Grupos Hípicos y no tiene tabla: no se le pueden agregar jugadas desde aquí.', false);
     }
     salirAgregar();
-    FILAS = r.filas.map(filaDeServidor);
+    ponerFilas(r.filas.map(filaDeServidor));
     AGREGANDO = { hipodromoId: h, fecha, carrera: c, existentes: FILAS.length, conLlegada: !!r.pizarra };
     FILAS.push(filaVacia(null), filaVacia(null), filaVacia(null));
     $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
@@ -1732,7 +1785,7 @@ async function irAPizarraFalta(fecha, hipodromo, carrera) {
   const hip = HIPODROMOS.find(x => normNombre(x.nombre) === normNombre(hipodromo));
   if (!hip) return msg('jMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder abrir la carrera.', false);
   $('jFecha').value = fecha; $('jHipodromo').value = hip.id;
-  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = ''; msg('jMsg', '');
   await abrirSiguienteCarrera();
   ponerCarrera(carrera);
@@ -1760,7 +1813,7 @@ async function cambioCarrera(soloAvisar, preguntar) {
     if (!r.existe) { actualizarBotones(); return; }
     if (enEdicion()) { EDICION.estado = r.pendiente ? 'pendiente' : 'calculada'; EDICION.planoId = r.planoId || null; }
     if (r.filas && r.filas.length) {
-      FILAS = r.filas.map(filaDeServidor);
+      ponerFilas(r.filas.map(filaDeServidor));
       $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
       $('jCruzar').checked = !!r.cruzaJugadas;
       pintarTabla(); programarCuadre();
@@ -1864,7 +1917,7 @@ async function abrirDelRegistro(hipodromoId, numero) {
   msg('rMsg', '');
   EDICION = { fecha: REGISTRO.fecha, hipodromoId, carrera: numero, estado: null, planoId: null };
   $('jFecha').value = REGISTRO.fecha; $('jHipodromo').value = hipodromoId;
-  FILAS = [filaVacia(null), filaVacia(null), filaVacia(null)]; pintarTabla();
+  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = ''; $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
   irATab('jugadas');
   await abrirSiguienteCarrera();

@@ -66,6 +66,10 @@
 
   // ---------------- Detallado por Cliente ----------------
   // resp: respuesta de /clientes/:nombre/detalle-semana. Ordena por día > hipódromo > carrera y suma cada nivel.
+  // Puestos con nini: el motor los guarda como "1p-2n"; en pantalla se leen 1P/2N (como en la lista de Tipo).
+  function modalidadBonita(m) {
+    return String(m === undefined || m === null ? '' : m).replace(/^(\d{1,2})p-(\d{1,2})n$/i, (x, a, b) => `${a}P/${b}N`);
+  }
   function descripcionLinea(l) {
     if (l.tipo === 'traspaso') return 'Traspaso' + (l.nota ? ' — ' + l.nota : '');
     if (l.tipo === 'carga') return l.texto || 'Carga';
@@ -79,7 +83,7 @@
     let caballo = '';
     if (l.modalidad === 'pp' && l.caballoA !== undefined) caballo = `${l.caballoA}x${l.caballoB}`;
     else if (l.caballo !== undefined && l.caballo !== null) caballo = String(l.caballo).replace(/^\(|\)$/g, '');
-    const jugada = [l.modalidad, caballo ? `(${caballo})` : ''].filter(Boolean).join(' ');
+    const jugada = [modalidadBonita(l.modalidad), caballo ? `(${caballo})` : ''].filter(Boolean).join(' ');
     const monto = l.monto !== undefined && l.monto !== null ? ` con ${dinero(l.monto)}` : '';
     return [rol, jugada].filter(Boolean).join(' ') + monto || 'Jugada';
   }
@@ -93,7 +97,7 @@
     if (l.modalidad === 'pp' && l.caballoA !== undefined) caballo = `${l.caballoA}x${l.caballoB}`;
     else if (l.caballo !== undefined && l.caballo !== null) caballo = String(l.caballo).replace(/^\(|\)$/g, '');
     if (!rol && !l.modalidad && !caballo) return null;
-    return { rol, modalidad: l.modalidad ? String(l.modalidad) : '', caballo, monto: l.monto !== undefined && l.monto !== null ? dinero(l.monto) : '' };
+    return { rol, modalidad: l.modalidad ? modalidadBonita(l.modalidad) : '', caballo, monto: l.monto !== undefined && l.monto !== null ? dinero(l.monto) : '' };
   }
 
   // ---- Caballos de colores (mismos colores de gualdrapa que el portal del cliente: 1 rojo, 2 blanco, 3 azul, 4 amarillo…) ----

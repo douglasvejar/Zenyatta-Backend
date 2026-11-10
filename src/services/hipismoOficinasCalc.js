@@ -23,14 +23,20 @@
 // los que dieron en cualquier orden da los mismos totales por persona.
 // =================================================================
 const { round2 } = require('./hipismoAdelantadasCalc');
-const { calcularPlano, normalizarModalidadCombo } = require('./hipismoCalc');
+const { calcularPlano, normalizarModalidadCombo, parsearValoresSinComision } = require('./hipismoCalc');
 
 const LADOS = ['jugo', 'dio'];
 
 function nombreCanonico(n) {
   return String(n || '').trim().toUpperCase().replace(/\s+/g, ' ');
 }
+// Puestos combinados con nini (10-11-2026, lista desplegable de Tipo): "1P/2N" (un puesto y dos nini), "2P/3N", "5P/6N"… El motor ya
+// entiende la jugada mixta de dos modalidades con guion ("1p-2n": el monto se reparte mitad y mitad, el mismo resultado que 1y2),
+// así que solo se cambia la barra por el guion; los resultados salen de la misma fórmula de siempre.
 function tipoCanonico(t) {
+  const crudo = String(t || '').trim().replace(/\s+/g, '');
+  const mix = crudo.match(/^(\d{1,2})p\/(\d{1,2})n(?:ini)?$/i);
+  if (mix) return `${Number(mix[1])}p-${Number(mix[2])}n`;
   return normalizarModalidadCombo(String(t || '').trim()).replace(/\s+/g, ' ');
 }
 function caballoCanonico(c) {
@@ -67,6 +73,40 @@ function interpretarMarca(tipoCrudo, caballoCrudo, premioCrudo) {
   }
   return null;
 }
+// JUGADA A PREMIO (10-11-2026, lista desplegable de Tipo): Tipo "A premio" + casilla de premio (PP, 10A9 … 10A1, o 10A7,5) + UN solo
+// caballo (gana si llega primero y cobra N/10 del monto; pierde el monto si no). Un caballo contra otro NO es a premio: es MARCA.
+// El servidor recibe tipo "A premio", premio y caballo y lo convierte en lo que entiende el motor: tipo 10aN con ese caballo.
+// "PP" a un solo caballo es pelo a pelo = 10a10 (gana lo mismo que jugó si llega primero).
+// Devuelve null si el tipo no es "A premio"; { error } si falta o no se entiende el premio o si pusieron dos caballos.
+function interpretarAPremio(tipoCrudo, caballoCrudo, premioCrudo) {
+  const tipo = String(tipoCrudo || '').trim().replace(/\s+/g, '').toLowerCase();
+  if (!['apremio', 'premio', 'aprem'].includes(tipo)) return null;
+  const premioTxt = String(premioCrudo === undefined || premioCrudo === null ? '' : premioCrudo).trim();
+  if (!premioTxt) return { error: 'Elige el premio de la jugada a premio (10A9 … 10A1, o PP).' };
+  const premio = premioCanonico(premioTxt);
+  if (!premio) return { error: `No reconozco el premio "${premioTxt}" (usa 10A9 … 10A1, 10A7,5 o PP).` };
+  const caballo = caballoCanonico(caballoCrudo);
+  if (/^\d{1,2}x\d{1,2}$/.test(caballo)) return { error: 'Una jugada a premio se juega a UN solo caballo. Para un caballo contra otro usa MARCAS.' };
+  return { tipo: premio === 'pp' ? '10a10' : premio, caballo };
+}
+// Valor N de un premio "10aN" (null si el tipo no es de décimos).
+function valorPremio(tipo) {
+  const m = String(tipo || '').toLowerCase().match(/^10a(\d+(?:[.,]\d+)?)$/);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+// Premios SIN % de la carrera: lo que manda la pantalla (valoresSinComision, aunque sea vacío) o, si no manda nada (p. ej. al
+// cambiar la pizarra de una carrera ya guardada), los que quedaron marcados (sinPct) en las jugadas guardadas.
+function valoresSinComisionOficina(body) {
+  if (body && body.valoresSinComision !== undefined && body.valoresSinComision !== null) return parsearValoresSinComision(body.valoresSinComision);
+  const out = [];
+  (body && Array.isArray(body.filas) ? body.filas : []).forEach(f => {
+    if (!f || !f.sinPct) return;
+    const n = valorPremio(tipoCanonico(f.tipo));
+    if (n !== null && !out.includes(n)) out.push(n);
+  });
+  return out;
+}
+
 // "4x3" y "3x4" son el mismo cruce visto desde el otro lado: la clave los junta.
 function claveCaballo(c) {
   const cab = caballoCanonico(c);
@@ -90,7 +130,7 @@ function montoComoNumero(m) {
 }
 
 // Limpia y valida las filas de la tabla. Devuelve { entradas, errores } — errores por fila (1-based).
-function normalizarEntradas(filas) {
+function normalizarEntradas(filas, valoresSinComision) {
   const entradas = [];
   const errores = [];
   (Array.isArray(filas) ? filas : []).forEach((f, i) => {
@@ -103,15 +143,23 @@ function normalizarEntradas(filas) {
     const jugador = nombreCanonico(f.jugador);
     const lado = String(f.lado || '').toLowerCase().replace('ó', 'o');
     const marca = interpretarMarca(f.tipo, f.caballo, f.premio);
-    const tipo = marca ? marca.tipo : tipoCanonico(f.tipo);
-    const caballo = marca ? marca.caballo : caballoCanonico(f.caballo);
+    const aPremio = marca ? null : interpretarAPremio(f.tipo, f.caballo, f.premio);
+    const tipo = marca ? marca.tipo : (aPremio ? (aPremio.tipo || '') : tipoCanonico(f.tipo));
+    const caballo = marca ? marca.caballo : (aPremio ? (aPremio.caballo || '') : caballoCanonico(f.caballo));
     const monto = round2(montoComoNumero(f.monto));
     if (!jugador) errores.push({ fila: n, error: 'Falta el jugador.' });
     else if (!LADOS.includes(lado)) errores.push({ fila: n, error: 'Elige si jugó o dio.' });
+    else if (aPremio && aPremio.error) errores.push({ fila: n, error: aPremio.error });
     else if (!tipo) errores.push({ fila: n, error: 'Falta el tipo de jugada (2p, 3n…).' });
     else if (!caballo) errores.push({ fila: n, error: 'Falta el caballo.' });
     else if (!(monto > 0)) errores.push({ fila: n, error: 'El monto debe ser mayor que 0.' });
-    else entradas.push({ jugador, lado, tipo, caballo, monto });
+    else {
+      const entrada = { jugador, lado, tipo, caballo, monto };
+      // Premio marcado "sin %" para esta carrera: se guarda en la jugada para poder reabrirla y recalcularla igual.
+      const n10 = valorPremio(tipo);
+      if (n10 !== null && Array.isArray(valoresSinComision) && valoresSinComision.some(v => Math.abs(v - n10) < 0.001)) entrada.sinPct = true;
+      entradas.push(entrada);
+    }
   });
   return { entradas, errores };
 }
@@ -229,6 +277,6 @@ function tiposNoReconocidos(filas) {
 }
 
 module.exports = {
-  normalizarEntradas, interpretarMarca, premioCanonico, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
+  normalizarEntradas, interpretarMarca, interpretarAPremio, valoresSinComisionOficina, premioCanonico, calcularCuadre, emparejar, armarTextoPlano, tiposNoReconocidos,
   nombreCanonico, tipoCanonico, caballoCanonico, claveGrupo, montoComoNumero
 };
