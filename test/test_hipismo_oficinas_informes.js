@@ -309,6 +309,17 @@ async function invocarRuta(handler, req) {
   check(/inf-dia/.test(html) && /inf-hip/.test(html), '3) los bloques de día y de hipódromo están marcados para repetirlos en cada página');
   check(/Semana actual/.test(html) && /Semana anterior/.test(html) && /Ver rango/.test(html), '3) selector de semana + rango de fechas');
   const script = html.match(/<script>([\s\S]*?)<\/script>\s*<script src="oficinas-mejoras.js"><\/script>(?:\s*<script src="oficinas-socios.js"><\/script>)?\s*<\/body>/)[1];
+  // 2e) El "% devuelto" propio va SIEMPRE al final de las jugadas de su carrera (12-11-2026), aunque el servidor lo mande en medio.
+  { const dd = INF.armarDetalleCliente({ dias: [{ fecha: '2026-11-12', hipodromos: [{ nombre: 'Belmont Park', carreras: [
+      { carrera: 3, rol: 'jugador', modalidad: '1p', caballo: 2, monto: 270, resultado: 256.5 },
+      { tipo: 'devolucion-propia', carrera: 3, porcentaje: 2.5, monto: 630, resultado: 15.75 },
+      { carrera: 3, rol: 'jugador', modalidad: '1p', caballo: 2, monto: 360, resultado: 342 },
+      { carrera: 5, rol: 'jugador', modalidad: '1p', caballo: 5, monto: 700, resultado: 665 },
+      { tipo: 'devolucion-propia', carrera: 5, porcentaje: 2.5, monto: 1000, resultado: 25 },
+      { carrera: 5, rol: 'jugador', modalidad: '1p', caballo: 5, monto: 300, resultado: 285 }] }] }] });
+    const cs = dd.dias[0].hipodromos[0].carreras;
+    check(cs.every(c => c.lineas[c.lineas.length - 1].tipo === 'devolucion-propia' && c.lineas.filter(l => l.tipo === 'devolucion-propia').length === 1), '2e) el % devuelto queda al final de cada carrera, después de todas sus jugadas');
+    check(cs[0].total === 614.25 && cs[1].total === 975, '2f) acomodar el % devuelto no cambia el total de la carrera (614,25 y 975,00)'); }
   try { new Function(script); check(true, '3) el script de la pantalla compila'); } catch (e) { check(false, '3) error de sintaxis: ' + e.message); }
 
   global.Date = OriginalDate;

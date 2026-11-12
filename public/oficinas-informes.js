@@ -144,8 +144,12 @@
           if (!porCarrera.has(n)) porCarrera.set(n, []);
           porCarrera.get(n).push({ texto: descripcionLinea(l), resultado: r2(l.resultado), rol: l.rol || null, tipo: l.tipo || null, jugada: partesJugada(l) });
         });
+        // El "% devuelto" propio va SIEMPRE al final de las jugadas de su carrera (12-11-2026, a pedido del usuario: "la devolución siempre
+        // debe ir al final de las jugadas de cada carrera"). El servidor lo suma justo después de la jugada que lo generó, y así quedaba
+        // en medio de dos jugadas de la misma carrera. Solo cambia el orden; el total de la carrera es el mismo.
+        const alFinal = lineas => lineas.filter(x => x.tipo !== 'devolucion-propia').concat(lineas.filter(x => x.tipo === 'devolucion-propia'));
         const carreras = Array.from(porCarrera.entries()).sort((a, b) => a[0] - b[0]).map(([numero, lineas]) => ({
-          numero, lineas, total: r2(lineas.reduce((s, x) => s + x.resultado, 0))
+          numero, lineas: alFinal(lineas), total: r2(lineas.reduce((s, x) => s + x.resultado, 0))
         }));
         return { nombre: h.nombre, esCarreras: !h.tipo, carreras, total: r2(carreras.reduce((s, c) => s + c.total, 0)) };
       });
