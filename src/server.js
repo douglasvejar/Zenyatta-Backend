@@ -151,6 +151,9 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html') || filePath.endsWith('.js')) {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (filePath.endsWith('.png') && filePath.includes(path.sep + 'hipodromos' + path.sep)) {
+      // Logos de hipódromos para la imagen del plano (12-11-2026): archivos estáticos; el navegador los guarda 1 día.
+      res.setHeader('Cache-Control', 'public, max-age=86400');
     } else if (filePath.endsWith('.woff2')) {
       // Fuente de banderas para Windows (public/banderas.js): no cambia, el navegador la guarda 30 días.
       res.setHeader('Cache-Control', 'public, max-age=2592000');
