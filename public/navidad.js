@@ -2,12 +2,12 @@
 // Pedido del usuario (12-11-2026): "a todos los módulos agregarle arriba objetos de Navidad y un mensaje: Feliz Navidad y próspero
 // Año 2027 te desea LudoxApp". Es temporal: en enero se quita borrando la línea <script src="navidad.js"> de cada página
 // (o simplemente poniendo NAVIDAD_ACTIVA = false aquí abajo) y todo vuelve a como estaba. No toca ninguna otra cosa de la página.
-// Cada usuario puede ocultarla con la × (queda oculta mientras dure su sesión del navegador).
+// Es FIJA: no tiene botón para cerrarla (pedido del usuario, 12-11-2026); solo se quita desde aquí en enero.
 (function () {
   'use strict';
   const NAVIDAD_ACTIVA = true;
   if (!NAVIDAD_ACTIVA || window.__navidad) return; window.__navidad = true;
-  try { if (sessionStorage.getItem('ludox_navidad_oculta') === '1') return; } catch (e) { /* sin almacenamiento: se muestra */ }
+  try { sessionStorage.removeItem('ludox_navidad_oculta'); } catch (e) { /* sin almacenamiento: no importa */ }
   const COL = ['#e63946', '#f4b942', '#2a9d8f', '#3a86ff', '#ff7aa2'];
   const st = document.createElement('style');
   st.textContent = `
@@ -21,16 +21,14 @@
 .nav-msg b em{font-style:normal;color:#ffd166}
 .nav-msg span{display:block;font-size:12.5px;color:#cfe9dc;margin-top:2px;letter-spacing:.04em}
 .nav-deco{position:absolute;top:0;bottom:0;display:flex;align-items:flex-end;pointer-events:none}
-.nav-deco.izq{left:10px}.nav-deco.der{right:44px}
+.nav-deco.izq{left:10px}.nav-deco.der{right:14px}
 .nav-deco svg{height:60px;width:auto;display:block;overflow:visible}
 .nav-col{transform-origin:50% 0;animation:navBal 3.2s ease-in-out infinite}
 @keyframes navBal{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
 .nav-nieve{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .nav-nieve i{position:absolute;top:-8px;width:5px;height:5px;border-radius:50%;background:#fff;opacity:.85;animation:navCae linear infinite}
 @keyframes navCae{to{transform:translateY(80px) translateX(14px)}}
-.nav-x{position:absolute;right:10px;top:50%;transform:translateY(-50%);z-index:3;width:26px;height:26px;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff7e0;font-size:15px;line-height:26px;cursor:pointer}
-.nav-x:hover{background:rgba(255,255,255,.28)}
-@media (max-width:760px){.nav-franja{height:64px}.nav-msg{padding:14px 40px 0 14px}.nav-msg b{font-size:14.5px}.nav-msg span{font-size:11.5px;margin-top:1px}.nav-deco{display:none}}
+@media (max-width:760px){.nav-franja{height:64px}.nav-msg{padding:14px 14px 0}.nav-msg b{font-size:14.5px}.nav-msg span{font-size:11.5px;margin-top:1px}.nav-deco{display:none}}
 html.nav-activa .marca-esquina{top:78px!important}
 @media (max-width:760px){html.nav-activa .marca-esquina{top:72px!important}}
 @media (prefers-reduced-motion:reduce){.nav-bulbo,.nav-col,.nav-nieve i{animation:none}}`;
@@ -61,9 +59,7 @@ html.nav-activa .marca-esquina{top:78px!important}
   <div class="nav-luces">${luces}</div>
   <div class="nav-deco izq">${arbol()}${bola('#e63946', 0)}${regalo}${bola('#3a86ff', .6)}</div>
   <div class="nav-msg"><b>🎄 ¡Feliz Navidad y próspero <em>Año 2027</em>!</b><span>te desea LudoxApp</span></div>
-  <div class="nav-deco der">${bola('#f4b942', .3)}${baston}${bola('#ff7aa2', .9)}${regalo}${arbol()}</div>
-  <button type="button" class="nav-x" aria-label="Ocultar felicitación" title="Ocultar">×</button>`;
-  f.querySelector('.nav-x').addEventListener('click', () => { f.remove(); document.documentElement.classList.remove('nav-activa'); try { sessionStorage.setItem('ludox_navidad_oculta', '1'); } catch (e) { /* no crítico */ } });
+  <div class="nav-deco der">${bola('#f4b942', .3)}${baston}${bola('#ff7aa2', .9)}${regalo}${arbol()}</div>`;
   // A pantalla completa: si la página le pone relleno al <body> (20 px en varios módulos), la franja lo compensa para pegarse a los bordes.
   const ajustar = () => { try { const c = getComputedStyle(document.body); f.style.margin = `-${c.paddingTop} -${c.paddingRight} 0 -${c.paddingLeft}`; f.style.width = `calc(100% + ${parseFloat(c.paddingLeft) + parseFloat(c.paddingRight)}px)`; } catch (e) { /* no crítico */ } };
   const poner = () => { document.body.insertBefore(f, document.body.firstChild); document.documentElement.classList.add('nav-activa'); ajustar(); window.addEventListener('resize', ajustar); };

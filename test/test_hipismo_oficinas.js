@@ -601,6 +601,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     const pantallasNav = ['index', 'grupo', 'superadmin', 'cliente', 'grupo-cliente', 'hipismo-cliente-portal', 'oficinas-cliente-portal', 'hipismo-mockup', 'hipismo-oficinas'];
     check(pantallasNav.every(p => /<script src="navidad\.js"><\/script>/.test(leer('public/' + p + '.html'))), '18o) todas las pantallas (Deportes, Grupos, Oficinas, portales, Súper-admin, inicio) cargan navidad.js');
     check(/Feliz Navidad y próspero/.test(nav) && /Año 2027/.test(nav) && /te desea LudoxApp/.test(nav) && /NAVIDAD_ACTIVA = true/.test(nav) && /prefers-reduced-motion/.test(nav), '18p) la franja dice "Feliz Navidad y próspero Año 2027 te desea LudoxApp", se apaga con NAVIDAD_ACTIVA y respeta "reducir movimiento"');
+    check(!/nav-x/.test(nav) && !/sessionStorage\.setItem/.test(nav) && !/\.remove\(\)/.test(nav), '18p2) la franja es fija: no tiene botón × ni se puede ocultar');
     let compilaN = true; try { new (require('vm').Script)(nav); } catch (e) { compilaN = false; } check(compilaN, '18q) navidad.js compila'); }
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
