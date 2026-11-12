@@ -575,6 +575,16 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/puedeOficina\('oficinas_eliminar'\) \? ` <button type="button" class="btn btn-peligro btn-chico" title="Eliminar esta carrera" onclick="event\.stopPropagation\(\); eliminarDelRegistro\(/.test(html) && /async function eliminarDelRegistro\(hipodromoId, numero, estado, planoId\)[\s\S]{0,1400}confirm\([\s\S]{0,900}oficinas\/pendiente\?hipodromoId=[\s\S]{0,300}\/api\/hipismo\/planos\/' \+ encodeURIComponent\(planoId\)[\s\S]{0,200}method: 'DELETE'[\s\S]{0,400}await cargarRegistro\(\)/.test(html),
     '18a) cada carrera del Registro tiene el botón Eliminar (con permiso oficinas_eliminar): pide confirmación, descarta la pendiente o manda la calculada a la papelera, y refresca la lista');
   check(!/data-c="(jugador|tipo|premio|caballo|cab1|cab2|monto)"[^>]*placeholder=/.test(html.slice(html.indexOf('function pintarTabla'), html.indexOf("$('jTbody').addEventListener('input'"))), '18b) las casillas de la tabla de jugadas no llevan textos grises de ejemplo (Jugador, 2p/3n, N.º, Monto)');
+  // 18c) Mínimo 6 filas automáticas para ingresar jugadas (12-11-2026).
+  check(/const FILAS_MINIMAS = 6;/.test(html) && /function filasVacias\(\)/.test(html) && !/ponerFilas\(\[filaVacia\(null\), filaVacia\(null\), filaVacia\(null\)\]\)/.test(html) && !/filaVacia\(null\), filaVacia\(null\), filaVacia\(null\)/.test(html),
+    '18c) la tabla de jugadas arranca (y se rellena al quitar o reabrir) con un mínimo de 6 filas vacías');
+  // 18d) Bandeja de mensajes con el Súper-admin en Oficinas (12-11-2026): misma conversación que los Grupos.
+  { const chatJs = leer('public/oficinas-chat.js');
+    check(/<script src="oficinas-chat\.js"><\/script>/.test(html), '18d) hipismo-oficinas.html carga la bandeja de mensajes (oficinas-chat.js)');
+    check(['/api/hipismo/chat', '/api/hipismo/chat/conteo-no-leidos', '/api/hipismo/chat/marcar-leidos', "'/adjunto'"].every(r => chatJs.includes(r)), '18e) la bandeja usa las mismas rutas del chat de los Grupos (sin rutas ni tablas nuevas)');
+    check(/setInterval\(\(\) => \{ if \(!document\.hidden\) actualizarBadge\(\); \}, 25000\)/.test(chatJs) && /setInterval\(\(\) => \{ if \(!document\.hidden\) cargar\(\); \}, 8000\)/.test(chatJs) && /pedirAdjunto\(m\.id\)/.test(chatJs), '18f) ahorra consultas: conteo cada 25 s solo con la pestaña a la vista, lista cada 8 s solo con el chat abierto, adjuntos al verlos');
+    check(/Soporte — Súper-admin/.test(chatJs) && /Enter/.test(chatJs) && /MediaRecorder/.test(chatJs) && /remove\(\)/.test(chatJs), '18g) trae título de Súper-admin, Enter para enviar, notas de voz y se oculta si el usuario no tiene permiso de mensajes');
+    let compilaC = true; try { new (require('vm').Script)(chatJs); } catch (e) { compilaC = false; } check(compilaC, '18h) oficinas-chat.js compila'); }
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();

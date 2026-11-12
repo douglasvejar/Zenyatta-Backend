@@ -4,6 +4,7 @@
 <script src="sesion-pestana.js"></script>
 <script src="buscador-lista.js"></script>
 <script src="oficinas-tipos.js"></script>
+<script src="oficinas-chat.js"></script>
 <script src="marca-agua.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1284,6 +1285,9 @@ let ULTIMO_RESULTADO_TEXTO = '';
 let CARGADAS = [];
 let PENDIENTES = [];     // carreras guardadas sin llegada
 
+// La tabla siempre abre con al menos 6 filas libres (12-11-2026, a pedido del usuario: "coloca como mínimo 6 filas automático para ingresar jugadas").
+const FILAS_MINIMAS = 6;
+function filasVacias() { return Array.from({ length: FILAS_MINIMAS }, () => filaVacia(null)); }
 function filaVacia(base) {
   return { jugador: '', lado: 'jugo', tipo: base ? base.tipo : '', premio: base ? base.premio || '' : '', caballo: base ? base.caballo : '', monto: '' };
 }
@@ -1317,13 +1321,13 @@ function asegurarFilaLibre() {
 }
 function limpiarTabla() {
   salirAgregar();
-  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]);
+  ponerFilas(filasVacias());
   pintarTabla();
   programarCuadre();
 }
 function quitarFila(i) {
   FILAS.splice(i, 1);
-  if (!FILAS.length) FILAS.push(filaVacia(null));
+  while (FILAS.length < FILAS_MINIMAS) FILAS.push(filaVacia(null));   // nunca menos de 6 filas a la vista
   pintarTabla();
   programarCuadre();
 }
@@ -1634,7 +1638,7 @@ async function guardarCarrera() {
       return;
     }
     // Lista para la siguiente: tabla vacía, llegada vacía y la carrera que sigue.
-    ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]);
+    ponerFilas(filasVacias());
     pintarTabla(); $('jPizarra').value = ''; $('jRet').value = ''; $('jCruzar').checked = puedeCruzarJugadas();
     pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
     $('jAviso').classList.add('oculto');
@@ -1703,7 +1707,7 @@ function salirAgregar() {
 }
 async function cancelarAgregar() {
   salirAgregar();
-  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
+  ponerFilas(filasVacias()); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = '';
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });
   $('jAviso').classList.add('oculto');
@@ -1722,7 +1726,7 @@ async function agregarMasJugadas() {
     salirAgregar();
     ponerFilas(r.filas.map(filaDeServidor));
     AGREGANDO = { hipodromoId: h, fecha, carrera: c, existentes: FILAS.length, conLlegada: !!r.pizarra };
-    FILAS.push(filaVacia(null), filaVacia(null), filaVacia(null));
+    FILAS.push(...filasVacias());   // al agregar, 6 filas nuevas libres debajo de las que ya estaban
     $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
     $('jCruzar').checked = !!r.cruzaJugadas;
     if (r.pizarra) { $('jPizarra').readOnly = true; $('jRet').readOnly = true; $('jCruzar').disabled = true; }
@@ -1785,7 +1789,7 @@ async function irAPizarraFalta(fecha, hipodromo, carrera) {
   const hip = HIPODROMOS.find(x => normNombre(x.nombre) === normNombre(hipodromo));
   if (!hip) return msg('jMsg', 'Ese hipódromo ya no existe en el grupo: créalo de nuevo (mismo nombre) para poder abrir la carrera.', false);
   $('jFecha').value = fecha; $('jHipodromo').value = hip.id;
-  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
+  ponerFilas(filasVacias()); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = ''; msg('jMsg', '');
   await abrirSiguienteCarrera();
   ponerCarrera(carrera);
@@ -1814,6 +1818,7 @@ async function cambioCarrera(soloAvisar, preguntar) {
     if (enEdicion()) { EDICION.estado = r.pendiente ? 'pendiente' : 'calculada'; EDICION.planoId = r.planoId || null; }
     if (r.filas && r.filas.length) {
       ponerFilas(r.filas.map(filaDeServidor));
+      while (FILAS.length < FILAS_MINIMAS) FILAS.push(filaVacia(null));   // siempre al menos 6 filas a la vista
       $('jPizarra').value = r.pizarra || ''; $('jRet').value = r.ret || '';
       $('jCruzar').checked = !!r.cruzaJugadas;
       pintarTabla(); programarCuadre();
@@ -1917,7 +1922,7 @@ async function abrirDelRegistro(hipodromoId, numero) {
   msg('rMsg', '');
   EDICION = { fecha: REGISTRO.fecha, hipodromoId, carrera: numero, estado: null, planoId: null };
   $('jFecha').value = REGISTRO.fecha; $('jHipodromo').value = hipodromoId;
-  ponerFilas([filaVacia(null), filaVacia(null), filaVacia(null)]); pintarTabla();
+  ponerFilas(filasVacias()); pintarTabla();
   $('jPizarra').value = ''; $('jRet').value = ''; $('jResultadoCard').classList.add('oculto'); msg('jMsg', '');
   irATab('jugadas');
   await abrirSiguienteCarrera();
