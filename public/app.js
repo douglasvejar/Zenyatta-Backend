@@ -2433,6 +2433,19 @@ function cerrarSesion(mensaje) {
   // a "body.tema-deportes-claro" en el <style> de grupo.html. La pantalla
   // de login se queda con el tema oscuro (y su video de fondo) de siempre.
   document.body.classList.remove('tema-deportes-claro');
+  // AISLAMIENTO ENTRE GRUPOS (12-11-2026, a pedido del usuario: "cuando se pega la sábana y se procesa, si me salgo de ese grupo y entro a
+  // otro se queda la sábana del grupo anterior pegada con los resultados y todo, y eso no puede pasar"). Antes solo se escondía el panel y
+  // se mostraba el login, pero TODO lo demás quedaba vivo en la página (la sábana pegada, el resumen por cliente, los juegos, el plano, las
+  // listas cargadas y las variables internas), así que al entrar a otro grupo sin recargar se veía lo del anterior. Con ~8000 líneas de
+  // estado repartido, limpiar variable por variable es frágil: lo seguro es EMPEZAR DE CERO — se vacían los campos y se vuelve a cargar la
+  // página (navegación limpia, no "recargar", para que el navegador no restaure lo escrito en los cuadros de texto). El aviso de
+  // "sesión cerrada…" viaja en la bandera de un solo uso que intentarSesionGuardada() ya lee al arrancar. Mismo efecto para el cierre manual,
+  // por inactividad o por sesión vencida.
+  try {
+    document.querySelectorAll('textarea, input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio])').forEach(function (el) { el.value = ''; });
+    if (mensaje) localStorage.setItem('zenyatta_login_mensaje', mensaje);
+    window.location.replace(window.location.pathname + window.location.search);
+  } catch (e) { /* si algo falla, al menos queda el panel escondido y el login visible como antes */ }
 }
 
 // =================================================================
