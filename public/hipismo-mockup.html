@@ -10625,6 +10625,20 @@ function pimgSilk(n, px) {
   const c = PIMG_SILK[num] || ['#6b7280', '#fff'];
   return `<span class="pimg-silk" style="width:${px}px;height:${px}px;background:${c[0]};color:${c[1]};font-size:${Math.round(px * 0.52)}px;">${pimgEsc(n)}</span>`;
 }
+// Logos de hipódromos (12-11-2026): si el hipódromo del plano tiene logo en el catálogo, la tarjeta lo muestra a la
+// derecha del título (sobre una placa blanca, porque son logos pensados para fondo claro). Son archivos estáticos
+// en public/img/hipodromos/ (sin base de datos ni consultas a Supabase). Se reconoce por el NOMBRE del hipódromo
+// (sin tildes ni mayúsculas): basta que contenga alguna de las claves. Para agregar otro: subir el PNG a esa
+// carpeta y sumar una línea aquí. Sin logo en el catálogo, la tarjeta queda exactamente igual que antes.
+const PIMG_LOGOS_HIPODROMO = [
+  { claves: ['horseshoe indianapolis', 'indianapolis'], archivo: 'horseshoe-indianapolis.png' }
+];
+function pimgLogoHipodromo(nombre) {
+  const n = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!n) return null;
+  const hit = PIMG_LOGOS_HIPODROMO.find(l => l.claves.some(c => n.includes(c)));
+  return hit ? '/img/hipodromos/' + hit.archivo : null;
+}
 // Nivel de densidad según la cantidad de renglones (jugadas + adelantadas).
 function pimgNivel(n) {
   if (n <= 10) return { w: 1080, cols: 1, rowh: 58, fs: 28, silk: 46, cCli: '250px', cMod: '96px', cSilk: '56px', cMonto: '150px', cDa: '200px', perCol: 8, fl: 52, flfs: 30 };
@@ -10682,6 +10696,11 @@ function pimgAsegurarEstilos() {
   .pimg { font-family: 'Segoe UI', Carlito, Calibri, Arial, sans-serif; background:var(--pimg-bg); color:#14211b; box-sizing:border-box; }
   .pimg *, .pimg *::before { box-sizing:border-box; margin:0; padding:0; }
   .pimg-head { background:var(--pimg-c1); color:var(--pimg-fg); padding:18px 32px 16px; border-bottom:5px solid var(--pimg-c2); }
+  .pimg-head.con-logo { display:flex; align-items:center; justify-content:space-between; gap:28px; }
+  .pimg-head-txt { min-width:0; }
+  .pimg-head.con-logo .pimg-titulo { font-size:40px; }
+  .pimg-hlogo { flex:none; background:#fff; border-radius:14px; padding:8px 16px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.18); }
+  .pimg-hlogo img { display:block; max-height:72px; max-width:235px; width:auto; height:auto; }
   .pimg-grupo { font-size:22px; letter-spacing:.22em; text-transform:uppercase; color:var(--pimg-acc); font-weight:700; }
   .pimg-titulo { font-size:46px; font-weight:700; line-height:1.1; margin-top:2px; }
   .pimg-sub { font-size:22px; opacity:.85; margin-top:2px; }
@@ -10777,8 +10796,11 @@ function construirHtmlPlanoImagen(d, logoUrl, tema) {
   const fecha = pimgFechaLarga(d.fecha);
   const total = d.jugadas.length + adel.length;
   const t = pimgTema(tema);
+  const hLogo = pimgLogoHipodromo(d.hipodromo);
   const html = `<div class="pimg" style="width:${L.w}px;${t.estilo}">` +
-    `<div class="pimg-head"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>` +
+    (hLogo
+      ? `<div class="pimg-head con-logo"><div class="pimg-head-txt"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div><div class="pimg-hlogo"><img src="${pimgEsc(hLogo)}" alt=""></div></div>`
+      : `<div class="pimg-head"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>`) +
     `<div class="pimg-llegada"><div class="pimg-et">Llegada</div>${llegada}${ret}</div>` +
     cuerpo + res +
     `<div class="pimg-pie"><span>Tilde su jugada y se revisará</span><span>${total} jugada${total === 1 ? '' : 's'} · Reclamos al privado</span></div></div>`;

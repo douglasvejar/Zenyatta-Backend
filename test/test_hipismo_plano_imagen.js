@@ -151,6 +151,16 @@ async function invocarRuta(handler, req) {
   check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: '', carreraNumero: '' }) === 'TOTALES DE LA CARRERA EN EL GRUPO LUSHO', '17) sin carrera ni hipódromo: se omiten sin dejar huecos');
   check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: 'La Rinconada', carreraNumero: 3 }) === 'TOTALES DE LA CARRERA 3RA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO LUSHO', '18) 3ra se escribe 3RA');
 
+  // 19) Logo del hipódromo junto al título de la tarjeta (12-11-2026).
+  { const fs = require('fs'), path = require('path');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+    const bloque = html.slice(html.indexOf('const PIMG_LOGOS_HIPODROMO'), html.indexOf('function pimgNivel'));
+    const pimgLogoHipodromo = new Function(bloque + '; return pimgLogoHipodromo;')();
+    check(pimgLogoHipodromo('Horseshoe Indianapolis') === '/img/hipodromos/horseshoe-indianapolis.png' && pimgLogoHipodromo('  HORSESHOE   INDIANAPOLIS ') === '/img/hipodromos/horseshoe-indianapolis.png', '19) el logo se reconoce por el nombre del hipódromo (sin importar mayúsculas ni espacios)');
+    check(pimgLogoHipodromo('La Rinconada') === null && pimgLogoHipodromo('') === null && pimgLogoHipodromo(null) === null && pimgLogoHipodromo('Indiana Grand') === null, '19b) un hipódromo sin logo en el catálogo no lleva logo (la tarjeta queda como siempre)');
+    check(fs.existsSync(path.join(__dirname, '..', 'public', 'img', 'hipodromos', 'horseshoe-indianapolis.png')), '19c) el archivo del logo existe en public/img/hipodromos (estático, sin consultas a la base)');
+    check(/const hLogo = pimgLogoHipodromo\(d\.hipodromo\)/.test(html) && /class="pimg-head con-logo"/.test(html) && /class="pimg-hlogo"/.test(html), '19d) el encabezado de la tarjeta pone el logo a la derecha del título cuando hay logo'); }
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })();
