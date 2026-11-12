@@ -596,6 +596,12 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
       '18l) atajos "/" y Ctrl/Cmd+K, flechas, Enter y Esc; no hace consultas por cada letra (usa los clientes ya cargados)');
     check(/\.tabs \.tab\[data-tab\]/.test(bus) && /classList\.contains\('oculto'\)/.test(bus), '18m) solo ofrece las pantallas que el usuario puede ver (respeta permisos)');
     let compilaB = true; try { new (require('vm').Script)(bus); } catch (e) { compilaB = false; } check(compilaB, '18n) oficinas-buscador.js compila'); }
+  // 18o) Franja de Navidad (12-11-2026, temporal hasta enero): todas las pantallas de los módulos la cargan; se quita borrando la línea.
+  { const nav = leer('public/navidad.js');
+    const pantallasNav = ['index', 'grupo', 'superadmin', 'cliente', 'grupo-cliente', 'hipismo-cliente-portal', 'oficinas-cliente-portal', 'hipismo-mockup', 'hipismo-oficinas'];
+    check(pantallasNav.every(p => /<script src="navidad\.js"><\/script>/.test(leer('public/' + p + '.html'))), '18o) todas las pantallas (Deportes, Grupos, Oficinas, portales, Súper-admin, inicio) cargan navidad.js');
+    check(/Feliz Navidad y próspero/.test(nav) && /Año 2027/.test(nav) && /te desea LudoxApp/.test(nav) && /NAVIDAD_ACTIVA = true/.test(nav) && /prefers-reduced-motion/.test(nav), '18p) la franja dice "Feliz Navidad y próspero Año 2027 te desea LudoxApp", se apaga con NAVIDAD_ACTIVA y respeta "reducir movimiento"');
+    let compilaN = true; try { new (require('vm').Script)(nav); } catch (e) { compilaN = false; } check(compilaN, '18q) navidad.js compila'); }
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
