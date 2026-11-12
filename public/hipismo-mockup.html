@@ -10829,8 +10829,9 @@ function construirHtmlPlanoImagen(d, logoUrl, tema) {
   const fecha = pimgFechaLarga(d.fecha);
   const total = d.jugadas.length + adel.length;
   const t = pimgTema(tema);
-  const hLogo = pimgLogoHipodromo(d.hipodromo);
+  // Los nacionales (Venezuela) NUNCA llevan logo: su encabezado ya es la bandera (pedido del usuario, 12-11-2026).
   const nacional = pimgEsNacional(d.hipodromo);
+  const hLogo = nacional ? null : pimgLogoHipodromo(d.hipodromo);
   const html = `<div class="pimg" style="width:${L.w}px;${t.estilo}">` +
     (nacional
       ? `<div class="pimg-head-ve${hLogo ? ' con-logo' : ''}">${hLogo ? '' : pimgEstrellasVE()}<div class="pimg-head-txt"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>${hLogo ? `<div class="pimg-hlogo"><img src="${pimgEsc(hLogo)}" alt=""></div>` : ''}</div>`

@@ -171,6 +171,8 @@ async function invocarRuta(handler, req) {
     check(mk([])('La Rinconada') === true && mk([])('Valencia') === true && mk([])('Gulfstream Park') === false && mk([])('') === false, '20b) si no está en la lista, La Rinconada y Valencia se reconocen por nombre');
     check(/\.pimg-head-ve \{[^}]*#fcd116[^}]*#00247d[^}]*#cf142b/.test(html) && /pimg-ve-estrellas/.test(html) && /const nacional = pimgEsNacional\(d\.hipodromo\)/.test(html) && /\(nacional\s*\? `<div class="pimg-head-ve/.test(html), '20c) el encabezado nacional es la bandera (amarillo, azul, rojo con 8 estrellas), igual para todos los grupos'); }
 
+  { const h2 = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8'); check(/const hLogo = nacional \? null : pimgLogoHipodromo\(d\.hipodromo\)/.test(h2), '20d) los hipódromos nacionales nunca llevan logo (el encabezado ya es la bandera)'); }
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })();
