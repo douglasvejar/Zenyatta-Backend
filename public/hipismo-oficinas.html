@@ -6,6 +6,7 @@
 <script src="oficinas-tipos.js"></script>
 <script src="oficinas-chat.js"></script>
 <script src="marca-agua.js"></script>
+<script src="oficinas-buscador.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ludox Hipismo Oficinas 🏢 — Panel del Grupo</title>
@@ -32,6 +33,11 @@
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; padding: 14px 18px 0; }
   .marca { display: flex; align-items: center; gap: 10px; }
   .marca .logo-emoji { font-size: 26px; }
+  /* 12-11-2026: logo real de Ludox girando en la esquina superior izquierda (igual que en Grupos); el edificio queda quieto al lado. */
+  .marca .logo-giro { width: 42px; height: 42px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; perspective: 420px; }
+  .marca .logo-giro img { width: 100%; height: 100%; object-fit: contain; display: block; transform-style: preserve-3d; animation: logoGiroTopbar 6s linear infinite; filter: drop-shadow(0 4px 8px rgba(37,99,235,0.35)); will-change: transform; }
+  @keyframes logoGiroTopbar { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .marca .logo-giro img { animation: none; } }
   .marca h1 { font-size: 19px; font-weight: 800; }
   .marca .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
   .selector-modulo { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--card-border); border-radius: 30px; padding: 4px; flex-wrap: wrap; }
@@ -377,6 +383,7 @@
 
 <div class="topbar">
   <div class="marca">
+    <span class="logo-giro"><img src="img/logo-ludox-icono.png" alt="Ludox" width="42" height="42"></span>
     <span class="logo-emoji">🏢</span>
     <div>
       <h1>Ludox — Hipismo Oficinas</h1>

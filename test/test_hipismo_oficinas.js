@@ -585,6 +585,17 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     check(/setInterval\(\(\) => \{ if \(!document\.hidden\) actualizarBadge\(\); \}, 25000\)/.test(chatJs) && /setInterval\(\(\) => \{ if \(!document\.hidden\) cargar\(\); \}, 8000\)/.test(chatJs) && /pedirAdjunto\(m\.id\)/.test(chatJs), '18f) ahorra consultas: conteo cada 25 s solo con la pestaña a la vista, lista cada 8 s solo con el chat abierto, adjuntos al verlos');
     check(/Soporte — Súper-admin/.test(chatJs) && /Enter/.test(chatJs) && /MediaRecorder/.test(chatJs) && /remove\(\)/.test(chatJs), '18g) trae título de Súper-admin, Enter para enviar, notas de voz y se oculta si el usuario no tiene permiso de mensajes');
     let compilaC = true; try { new (require('vm').Script)(chatJs); } catch (e) { compilaC = false; } check(compilaC, '18h) oficinas-chat.js compila'); }
+  // 18i) Barra superior de Oficinas (12-11-2026): logo de Ludox girando a la izquierda (edificio quieto) + buscador general a la derecha.
+  { const bus = leer('public/oficinas-buscador.js');
+    check(/<span class="logo-giro"><img src="img\/logo-ludox-icono\.png"[^>]*><\/span>\s*<span class="logo-emoji">🏢<\/span>/.test(html) && /@keyframes logoGiroTopbar/.test(html) && /prefers-reduced-motion[^}]*logo-giro/.test(html),
+      '18i) el logo de Ludox gira en la esquina superior izquierda y el edificio 🏢 queda quieto a su lado (respeta "reducir movimiento")');
+    check(/<script src="oficinas-buscador\.js"><\/script>/.test(html) && html.indexOf('oficinas-buscador.js') < html.indexOf('</head>'), '18j) hipismo-oficinas.html carga oficinas-buscador.js en el head');
+    check(/Buscar módulo, pantalla o cliente/.test(bus) && /barra-der/.test(bus) && /'Pantallas'/.test(bus) && /nombre: 'Módulos'/.test(bus) && /nombre: 'Clientes'/.test(bus) && /verDetalleDe\(c\.nombre\)/.test(bus) && /irATab\(b\.dataset\.tab\)/.test(bus),
+      '18k) el buscador está arriba a la derecha y encuentra pantallas del menú, módulos y clientes (abre su Detallado)');
+    check(/Ctrl|ctrlKey/.test(bus) && /ArrowDown/.test(bus) && /Escape/.test(bus) && /pedirClientesSiFaltan/.test(bus) && !/fetch\(|api\(/.test(bus.replace(/cargarClientes/g, '')),
+      '18l) atajos "/" y Ctrl/Cmd+K, flechas, Enter y Esc; no hace consultas por cada letra (usa los clientes ya cargados)');
+    check(/\.tabs \.tab\[data-tab\]/.test(bus) && /classList\.contains\('oculto'\)/.test(bus), '18m) solo ofrece las pantallas que el usuario puede ver (respeta permisos)');
+    let compilaB = true; try { new (require('vm').Script)(bus); } catch (e) { compilaB = false; } check(compilaB, '18n) oficinas-buscador.js compila'); }
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
