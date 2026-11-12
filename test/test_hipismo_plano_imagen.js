@@ -161,6 +161,16 @@ async function invocarRuta(handler, req) {
     check(fs.existsSync(path.join(__dirname, '..', 'public', 'img', 'hipodromos', 'horseshoe-indianapolis.png')), '19c) el archivo del logo existe en public/img/hipodromos (estático, sin consultas a la base)');
     check(/const hLogo = pimgLogoHipodromo\(d\.hipodromo\)/.test(html) && /class="pimg-head con-logo"/.test(html) && /class="pimg-hlogo"/.test(html), '19d) el encabezado de la tarjeta pone el logo a la derecha del título cuando hay logo'); }
 
+  // 20) Hipódromos nacionales: encabezado con la bandera de Venezuela, para todos los grupos (12-11-2026).
+  { const fs = require('fs'), path = require('path');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+    const bloque = html.slice(html.indexOf('function pimgEsNacional'), html.indexOf('function pimgEstrellasVE'));
+    const mk = lista => new Function('HIPODROMOS', bloque + '; return pimgEsNacional;')(lista);
+    const lista = [{ nombre: 'Belmont Park', pais: 'US' }, { nombre: 'Maroñas', pais: 'VE' }];
+    check(mk(lista)('Maroñas') === true && mk(lista)('MAROÑAS') === true && mk(lista)('Belmont Park') === false, '20) es nacional según el país con que está creado el hipódromo (VE), sin importar mayúsculas');
+    check(mk([])('La Rinconada') === true && mk([])('Valencia') === true && mk([])('Gulfstream Park') === false && mk([])('') === false, '20b) si no está en la lista, La Rinconada y Valencia se reconocen por nombre');
+    check(/\.pimg-head-ve \{[^}]*#fcd116[^}]*#00247d[^}]*#cf142b/.test(html) && /pimg-ve-estrellas/.test(html) && /const nacional = pimgEsNacional\(d\.hipodromo\)/.test(html) && /\(nacional\s*\? `<div class="pimg-head-ve/.test(html), '20c) el encabezado nacional es la bandera (amarillo, azul, rojo con 8 estrellas), igual para todos los grupos'); }
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })();

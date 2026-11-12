@@ -10639,6 +10639,30 @@ function pimgLogoHipodromo(nombre) {
   const hit = PIMG_LOGOS_HIPODROMO.find(l => l.claves.some(c => n.includes(c)));
   return hit ? '/img/hipodromos/' + hit.archivo : null;
 }
+// Hipódromos NACIONALES (12-11-2026): el encabezado de la tarjeta es la bandera de Venezuela (franja amarilla, azul y
+// roja con sus 8 estrellas) en lugar del color del grupo — para TODOS los grupos, tengan el color que tengan. Se sabe
+// que es nacional por el país con que está creado el hipódromo (🇻🇪); si por algo no se encuentra en la lista, se
+// reconocen por nombre los dos de siempre.
+function pimgEsNacional(nombre) {
+  const n = String(nombre || '').trim().toLowerCase();
+  if (!n) return false;
+  const lista = (typeof HIPODROMOS !== 'undefined' && Array.isArray(HIPODROMOS)) ? HIPODROMOS : [];
+  const h = lista.find(x => String(x.nombre || '').trim().toLowerCase() === n);
+  if (h) return h.pais === 'VE';
+  return /rinconada|valencia/.test(n.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+}
+function pimgEstrellasVE() {
+  // 8 estrellas en arco (el centro más alto), sobre la franja azul. Son texto (★): html2canvas las dibuja sin problema.
+  const ancho = 330, est = 34, n = 8, alto = 16;
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    const t = (i - (n - 1) / 2) / ((n - 1) / 2);
+    const x = Math.round(i * (ancho - est) / (n - 1));
+    const y = Math.round(alto * t * t);
+    h += `<span style="left:${x}px;top:calc(50% - ${est / 2}px - ${alto / 2}px + ${y}px);">★</span>`;
+  }
+  return `<div class="pimg-ve-estrellas" style="width:${ancho}px;">${h}</div>`;
+}
 // Nivel de densidad según la cantidad de renglones (jugadas + adelantadas).
 function pimgNivel(n) {
   if (n <= 10) return { w: 1080, cols: 1, rowh: 58, fs: 28, silk: 46, cCli: '250px', cMod: '96px', cSilk: '56px', cMonto: '150px', cDa: '200px', perCol: 8, fl: 52, flfs: 30 };
@@ -10696,6 +10720,15 @@ function pimgAsegurarEstilos() {
   .pimg { font-family: 'Segoe UI', Carlito, Calibri, Arial, sans-serif; background:var(--pimg-bg); color:#14211b; box-sizing:border-box; }
   .pimg *, .pimg *::before { box-sizing:border-box; margin:0; padding:0; }
   .pimg-head { background:var(--pimg-c1); color:var(--pimg-fg); padding:18px 32px 16px; border-bottom:5px solid var(--pimg-c2); }
+  .pimg-head-ve { position:relative; display:flex; align-items:center; justify-content:space-between; gap:28px; padding:24px 32px; border-bottom:5px solid #0b1b3f; background:linear-gradient(to bottom,#fcd116 0,#fcd116 33.34%,#00247d 33.34%,#00247d 66.67%,#cf142b 66.67%,#cf142b 100%); color:#fff; }
+  .pimg-head-ve .pimg-head-txt { position:relative; z-index:1; background:rgba(255,255,255,.96); border-radius:16px; padding:12px 28px 12px; max-width:calc(100% - 380px); box-shadow:0 3px 10px rgba(0,0,0,.25); }
+  .pimg-head-ve.con-logo .pimg-head-txt { max-width:none; }
+  .pimg-head-ve .pimg-grupo { color:#cf142b; }
+  .pimg-head-ve .pimg-titulo { font-size:44px; color:#0b1b3f; }
+  .pimg-head-ve .pimg-sub { color:#4a5568; opacity:1; }
+  .pimg-head-ve .pimg-hlogo { position:relative; z-index:1; }
+  .pimg-ve-estrellas { position:absolute; right:40px; top:33.34%; height:33.33%; z-index:0; }
+  .pimg-ve-estrellas span { position:absolute; font-size:34px; line-height:34px; width:34px; height:34px; text-align:center; color:#fff; }
   .pimg-head.con-logo { display:flex; align-items:center; justify-content:space-between; gap:28px; }
   .pimg-head-txt { min-width:0; }
   .pimg-head.con-logo .pimg-titulo { font-size:40px; }
@@ -10797,8 +10830,11 @@ function construirHtmlPlanoImagen(d, logoUrl, tema) {
   const total = d.jugadas.length + adel.length;
   const t = pimgTema(tema);
   const hLogo = pimgLogoHipodromo(d.hipodromo);
+  const nacional = pimgEsNacional(d.hipodromo);
   const html = `<div class="pimg" style="width:${L.w}px;${t.estilo}">` +
-    (hLogo
+    (nacional
+      ? `<div class="pimg-head-ve${hLogo ? ' con-logo' : ''}">${hLogo ? '' : pimgEstrellasVE()}<div class="pimg-head-txt"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>${hLogo ? `<div class="pimg-hlogo"><img src="${pimgEsc(hLogo)}" alt=""></div>` : ''}</div>`
+      : hLogo
       ? `<div class="pimg-head con-logo"><div class="pimg-head-txt"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div><div class="pimg-hlogo"><img src="${pimgEsc(hLogo)}" alt=""></div></div>`
       : `<div class="pimg-head"><div class="pimg-grupo">${pimgEsc(d.grupo)}</div><div class="pimg-titulo">${pimgEsc(titulo)}</div><div class="pimg-sub">${pimgEsc(fecha)}</div></div>`) +
     `<div class="pimg-llegada"><div class="pimg-et">Llegada</div>${llegada}${ret}</div>` +
