@@ -159,7 +159,7 @@ async function invocarRuta(handler, req) {
     check(pimgLogoHipodromo('Horseshoe Indianapolis') === '/img/hipodromos/horseshoe-indianapolis.png' && pimgLogoHipodromo('  HORSESHOE   INDIANAPOLIS ') === '/img/hipodromos/horseshoe-indianapolis.png', '19) el logo se reconoce por el nombre del hipódromo (sin importar mayúsculas ni espacios)');
     check(pimgLogoHipodromo('La Rinconada') === null && pimgLogoHipodromo('') === null && pimgLogoHipodromo(null) === null && pimgLogoHipodromo('Indiana Grand') === null, '19b) un hipódromo sin logo en el catálogo no lleva logo (la tarjeta queda como siempre)');
     check(fs.existsSync(path.join(__dirname, '..', 'public', 'img', 'hipodromos', 'horseshoe-indianapolis.png')), '19c) el archivo del logo existe en public/img/hipodromos (estático, sin consultas a la base)');
-    check(/const hLogo = pimgLogoHipodromo\(d\.hipodromo\)/.test(html) && /class="pimg-head con-logo"/.test(html) && /class="pimg-hlogo"/.test(html), '19d) el encabezado de la tarjeta pone el logo a la derecha del título cuando hay logo'); }
+    check(/pimgLogoHipodromo\(d\.hipodromo\)/.test(html) && /class="pimg-head con-logo"/.test(html) && /class="pimg-hlogo"/.test(html), '19d) el encabezado de la tarjeta pone el logo a la derecha del título cuando hay logo'); }
 
   // 20) Hipódromos nacionales: encabezado con la bandera de Venezuela, para todos los grupos (12-11-2026).
   { const fs = require('fs'), path = require('path');
