@@ -10631,7 +10631,27 @@ function pimgSilk(n, px) {
 // (sin tildes ni mayúsculas): basta que contenga alguna de las claves. Para agregar otro: subir el PNG a esa
 // carpeta y sumar una línea aquí. Sin logo en el catálogo, la tarjeta queda exactamente igual que antes.
 const PIMG_LOGOS_HIPODROMO = [
-  { claves: ['horseshoe indianapolis', 'indianapolis'], archivo: 'horseshoe-indianapolis.png' }
+  { claves: ['horseshoe indianapolis', 'indianapolis'], archivo: 'horseshoe-indianapolis.png' },
+  { claves: ['aqueduct'], archivo: 'aqueduct.png' },
+  { claves: ['belmont'], archivo: 'belmont-park.png' },
+  { claves: ['charles town', 'charlestown'], archivo: 'charles-town.png' },
+  { claves: ['churchill downs'], archivo: 'churchill-downs.png' },
+  { claves: ['colonial downs'], archivo: 'colonial-downs.png' },
+  { claves: ['del mar'], archivo: 'del-mar.png' },
+  { claves: ['delaware park'], archivo: 'delaware-park.png' },
+  { claves: ['delta downs'], archivo: 'delta-downs.png' },
+  { claves: ['ellis park'], archivo: 'ellis-park.png' },
+  { claves: ['emerald downs'], archivo: 'emerald-downs.png' },
+  { claves: ['evangeline downs', 'evangeline'], archivo: 'evangeline-downs.png' },
+  { claves: ['fair grounds', 'fairgrounds'], archivo: 'fair-grounds.png' },
+  { claves: ['finger lakes'], archivo: 'finger-lakes.png' },
+  { claves: ['fonner park'], archivo: 'fonner-park.png' },
+  { claves: ['freehold'], archivo: 'freehold-raceway.png' },
+  { claves: ['gulfstream'], archivo: 'gulfstream-park.png' },
+  { claves: ['hawthorne'], archivo: 'hawthorne-race-course.png' },
+  { claves: ['keeneland'], archivo: 'keeneland.png' },
+  { claves: ['kentucky downs'], archivo: 'kentucky-downs.png' },
+  { claves: ['laurel park', 'laurel'], archivo: 'laurel-park.png' }
 ];
 function pimgLogoHipodromo(nombre) {
   const n = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -10733,7 +10753,7 @@ function pimgAsegurarEstilos() {
   .pimg-head-txt { min-width:0; }
   .pimg-head.con-logo .pimg-titulo { font-size:40px; }
   .pimg-hlogo { flex:none; background:#fff; border-radius:14px; padding:8px 16px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.18); }
-  .pimg-hlogo img { display:block; max-height:72px; max-width:235px; width:auto; height:auto; }
+  .pimg-hlogo img { display:block; max-height:88px; max-width:235px; width:auto; height:auto; }
   .pimg-grupo { font-size:22px; letter-spacing:.22em; text-transform:uppercase; color:var(--pimg-acc); font-weight:700; }
   .pimg-titulo { font-size:46px; font-weight:700; line-height:1.1; margin-top:2px; }
   .pimg-sub { font-size:22px; opacity:.85; margin-top:2px; }

@@ -173,6 +173,18 @@ async function invocarRuta(handler, req) {
 
   { const h2 = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8'); check(/const hLogo = nacional \? null : pimgLogoHipodromo\(d\.hipodromo\)/.test(h2), '20d) los hipódromos nacionales nunca llevan logo (el encabezado ya es la bandera)'); }
 
+  // 21) Catálogo de logos de hipódromos (12-11-2026): cada entrada apunta a un archivo que existe y reconoce el nombre del predeterminado.
+  { const fs = require('fs'), path = require('path');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-mockup.html'), 'utf8');
+    const bloque = html.slice(html.indexOf('const PIMG_LOGOS_HIPODROMO'), html.indexOf('function pimgNivel'));
+    const cat = new Function(bloque + '; return { PIMG_LOGOS_HIPODROMO, pimgLogoHipodromo };')();
+    const faltan = cat.PIMG_LOGOS_HIPODROMO.filter(l => !fs.existsSync(path.join(__dirname, '..', 'public', 'img', 'hipodromos', l.archivo))).map(l => l.archivo);
+    check(cat.PIMG_LOGOS_HIPODROMO.length >= 21 && faltan.length === 0, '21) cada logo del catálogo tiene su archivo en public/img/hipodromos' + (faltan.length ? ' (faltan: ' + faltan.join(', ') + ')' : ''));
+    const casos = { 'Aqueduct': 'aqueduct', 'Belmont Park': 'belmont-park', 'Charles Town': 'charles-town', 'Churchill Downs': 'churchill-downs', 'Colonial Downs': 'colonial-downs', 'Del Mar': 'del-mar', 'Delaware Park': 'delaware-park', 'Delta Downs': 'delta-downs', 'Ellis Park': 'ellis-park', 'Emerald Downs': 'emerald-downs', 'Evangeline Downs': 'evangeline-downs', 'Fair Grounds': 'fair-grounds', 'Finger Lakes': 'finger-lakes', 'Fonner Park': 'fonner-park', 'Freehold Raceway': 'freehold-raceway', 'Gulfstream Park': 'gulfstream-park', 'Hawthorne Race Course': 'hawthorne-race-course', 'Keeneland': 'keeneland', 'Kentucky Downs': 'kentucky-downs', 'Laurel Park': 'laurel-park', 'Horseshoe Indianapolis': 'horseshoe-indianapolis' };
+    const mal = Object.keys(casos).filter(n => cat.pimgLogoHipodromo(n) !== '/img/hipodromos/' + casos[n] + '.png');
+    check(mal.length === 0, '21b) cada hipódromo de la lista reconoce su propio logo' + (mal.length ? ' (fallan: ' + mal.join(', ') + ')' : ''));
+    check(['Del Mar', 'Delaware Park', 'Delta Downs'].every(n => cat.pimgLogoHipodromo(n) === '/img/hipodromos/' + casos[n] + '.png') && cat.pimgLogoHipodromo('Saratoga Race Course') === null && cat.pimgLogoHipodromo('Remington Park') === null, '21c) nombres parecidos (Del Mar / Delaware / Delta) no se confunden y los que no tienen logo siguen sin logo'); }
+
   console.log('\n' + pasaron + ' pruebas OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron > 0 ? 1 : 0);
 })();
