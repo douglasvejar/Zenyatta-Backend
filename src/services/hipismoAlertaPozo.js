@@ -131,6 +131,8 @@ async function detectarApuestasSobrePozo(grupoId, apuestas) {
 async function validarTerciosContraPozo(grupoId, tickets) {
   const porCliente = new Map();
   (tickets || []).forEach(t => {
+    // 13-11-2026: una jugada NULA por caballo retirado no gasta pozo.
+    if (t && t.nulaRetirado) return;
     const nombre = (t && t.clienteNombre ? String(t.clienteNombre) : '').trim();
     const monto = Math.abs(Number(t && t.monto));
     if (!nombre || !Number.isFinite(monto) || monto <= 0) return;

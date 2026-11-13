@@ -773,7 +773,27 @@ function normalizarPlanoSinResolver(texto) {
   return salida.join('\n');
 }
 
-function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
+// 13-11-2026 (retirados -> NULA): si CUALQUIER caballo de la jugada (simple, "4x3",
+// "6,10", marca, a premio, combinada...) figura como retirado en la carrera, la
+// jugada es PUSH: no se decide, queda en 0/0 para ambos lados (sin banqueo, sin
+// comision, no cuenta en % devuelto). Mismo criterio que ya aplicaba a las Jugadas
+// Adelantadas. `retirados` es un Set de enteros (ver parsearRetirados).
+function lineaNulaRetirado(lista) {
+  return `↩️ NULA: ${lista.length > 1 ? 'caballos ' + lista.join(', ') + ' retirados' : 'caballo ' + lista[0] + ' retirado'} (push)`;
+}
+function caballosDeJugada(caballoTxt) {
+  return (String(caballoTxt === undefined || caballoTxt === null ? '' : caballoTxt).match(/\d+/g) || []).map(n => parseInt(n, 10));
+}
+function jugadaConRetirado(caballoTxt, retirados) {
+  if (!retirados || !retirados.size) return false;
+  return caballosDeJugada(caballoTxt).some(n => retirados.has(n));
+}
+function retiradosDeJugada(caballoTxt, retirados) {
+  if (!retirados || !retirados.size) return [];
+  return caballosDeJugada(caballoTxt).filter(n => retirados.has(n));
+}
+
+function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [], retirados = null }) {
   const rank = parsearPizarra(pizarra);
   // 24-09-2026: se descarta el encabezado/pie que venga pegado en el
   // texto (ver la nota grande de limpiarEncabezadoYPie más arriba) ANTES
@@ -867,8 +887,10 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
     // al caballo, así que "sin comisión" en el lado que gana sigue
     // aplicando igual que en un "a premio" de un solo caballo.
     const sinComision = esModalidadSinComision(modalidadNorm, valoresSinComision);
-    const jRaw = resultado.j * monto, bRaw = resultado.b * monto;
-    if (!sinComision) { add(jugador, jRaw); add(banco, bRaw); }
+    // 13-11-2026: caballo retirado en la jugada -> NULA (push), 0 para todos.
+    const nulaRetirado = jugadaConRetirado(caballoGuardado, retirados);
+    const jRaw = nulaRetirado ? 0 : resultado.j * monto, bRaw = nulaRetirado ? 0 : resultado.b * monto;
+    if (!sinComision && !nulaRetirado) { add(jugador, jRaw); add(banco, bRaw); }
     const jMostrado = montoMostrado(jRaw, sinComision), bMostrado = montoMostrado(bRaw, sinComision);
     if (esCruzado) {
       // 29-09-2026: el texto de vuelta al operador ya no asume "pp" a
@@ -883,8 +905,9 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
       salidaLineas.push(`Juega ${formatNombre(jugador)} $ ${jMostrado >= 0 ? '+' : '-'}${formatMontoTabla(jMostrado)}`);
       salidaLineas.push(`Consigue ${formatNombre(banco)} $ ${bMostrado >= 0 ? '+' : '-'}${formatMontoTabla(bMostrado)}`);
     }
+    if (nulaRetirado) salidaLineas.push(lineaNulaRetirado(retiradosDeJugada(caballoGuardado, retirados)));
     salidaLineas.push('');
-    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: esPPLiteral ? 'pp' : modalidadNorm, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado, sinComision });
+    tickets.push({ clienteNombre: jugador, banqueroNombre: banco, modalidad: esPPLiteral ? 'pp' : modalidadNorm, caballo: caballoGuardado, monto, resultadoJugador: jMostrado, resultadoBanquero: bMostrado, sinComision, ...(nulaRetirado ? { nulaRetirado: true } : {}) });
   });
 
   const totalesFinales = {};
@@ -958,7 +981,9 @@ function calcularPlano({ texto, pizarra, cruzar, valoresSinComision = [] }) {
 // (monto/caballo) NUNCA cambia si va o no sin comisión, eso se decide
 // una sola vez, al calcular (ver POST /planos y la respuesta a la
 // pregunta del usuario: "solo antes de calcular").
-function recalcularTicket({ modalidad, caballo, monto, sinComision }, rank) {
+function recalcularTicket({ modalidad, caballo, monto, sinComision }, rank, retirados) {
+  // 13-11-2026: caballo retirado -> NULA (0/0), sin importar la pizarra.
+  if (jugadaConRetirado(caballo, retirados)) return { resultadoJugador: 0, resultadoBanquero: 0 };
   let resultado;
   const modalidadLower = String(modalidad).toLowerCase().trim();
   const caballoTxt = String(caballo);
@@ -1293,6 +1318,7 @@ function montoComoSeEscribe(n) {
 function armarSalidaLineasDeTickets(tickets, opciones) {
   const fiel = !!(opciones && opciones.fiel);
   const montoTxt = m => (fiel ? montoComoSeEscribe(m) : formatMontoTabla(m));
+  const retirados = opciones && opciones.retirados;
   const salidaLineas = [];
   tickets.forEach(t => {
     const cruzado = t.modalidad.toLowerCase() === 'pp' || (fiel && /^\d+\s*x\s*\d+$/i.test(String(t.caballo === undefined || t.caballo === null ? '' : t.caballo)));
@@ -1306,6 +1332,7 @@ function armarSalidaLineasDeTickets(tickets, opciones) {
       salidaLineas.push(`Juega ${formatNombre(t.clienteNombre)} $ ${t.resultadoJugador >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoJugador)}`);
       salidaLineas.push(`Consigue ${formatNombre(t.banqueroNombre)} $ ${t.resultadoBanquero >= 0 ? '+' : '-'}${formatMontoTabla(t.resultadoBanquero)}`);
     }
+    if (jugadaConRetirado(t.caballo, retirados)) salidaLineas.push(lineaNulaRetirado(retiradosDeJugada(t.caballo, retirados)));
     salidaLineas.push('');
   });
   return salidaLineas;
@@ -1401,5 +1428,7 @@ module.exports = {
   // 04-10-2026 (Jugadas entre Tercios Adelantadas — nuevo motor en
   // hipismoTerciosAdelantadasCalc.js, reusa esta misma función para el
   // cruce "pelo a pelo"/décimos en vez de reimplementarla aparte):
-  resolverCruzado, RANK_NO_COLOCO
+  resolverCruzado, RANK_NO_COLOCO,
+  // 13-11-2026 (retirados -> NULA en el plano normal):
+  jugadaConRetirado, retiradosDeJugada
 };

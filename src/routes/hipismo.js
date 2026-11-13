@@ -963,7 +963,7 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
   }
 
   const resultado = huboTexto
-    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision) })
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision), retirados: parsearRetirados(ret) })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
@@ -1142,7 +1142,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Falta el texto del plano.' });
   }
   const resultado = huboTexto
-    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision) })
+    ? calcularPlano({ texto, pizarra, cruzar: !!cruzaJugadas, valoresSinComision: parsearValoresSinComision(valoresSinComision), retirados: parsearRetirados(ret) })
     : { huboLineas: false, salidaLineas: [], sinReconocer: [], tickets: [], totalesFinales: {}, comisionTotal: 0 };
   if (huboTexto && !resultado.huboLineas) {
     return res.status(400).json({ error: 'No reconocí ninguna jugada en el texto — revisa el formato de las líneas.' });
@@ -1184,7 +1184,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
   // resultado de este mismo plano. (Las Adelantadas se revisan cuando se
   // cargan, no al resolverse, para no avisar dos veces la misma apuesta.)
   const alertasPozo = await alertarApuestasSobrePozo(req, {
-    apuestas: resultado.tickets.map(t => ({ nombre: t.clienteNombre, monto: t.monto })),
+    apuestas: resultado.tickets.filter(t => !t.nulaRetirado).map(t => ({ nombre: t.clienteNombre, monto: t.monto })),
     hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal,
     etiqueta: `${nombreHipodromoFinal} carrera ${carreraNumero}`
   });
@@ -1790,7 +1790,7 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   // sin_comision (24-09-2026) viaja tal cual quedó guardado ese ticket al
   // calcular el plano — editar monto/cliente/banquero NUNCA cambia si esa
   // línea va o no sin comisión (eso se decide una sola vez, al calcular).
-  const recalculado = recalcularTicket({ modalidad: ticket.modalidad, caballo: ticket.caballo, monto: montoFinal, sinComision: ticket.sin_comision }, rank);
+  const recalculado = recalcularTicket({ modalidad: ticket.modalidad, caballo: ticket.caballo, monto: montoFinal, sinComision: ticket.sin_comision }, rank, parsearRetirados(plano.ret));
   if (!recalculado) return res.status(400).json({ error: `No se pudo recalcular este ticket (modalidad "${ticket.modalidad}" no reconocida).` });
 
   const nombresNuevos = [];
@@ -1816,7 +1816,7 @@ router.put('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => {
   if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
     textoResultadoFinal = armarTextoResultado({
       nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
-      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { retirados: parsearRetirados(plano.ret) }),
       totalesFinales, totalJugadas: ticketsPlanos.length
     });
   }
@@ -1876,7 +1876,7 @@ router.delete('/planos/:id/tickets/:ticketId', asyncHandler(async (req, res) => 
   if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
     textoResultadoFinal = armarTextoResultado({
       nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
-      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { retirados: parsearRetirados(plano.ret) }),
       totalesFinales, totalJugadas: ticketsPlanos.length
     });
   }
@@ -3530,7 +3530,7 @@ router.put('/pizarras/tercios/:id', asyncHandler(async (req, res) => {
   const rTodosTickets = await db.query('SELECT * FROM hipismo_tickets WHERE plano_id = $1 ORDER BY creado_en', [plano.id]);
   const ticketsRecalculados = [];
   for (const t of rTodosTickets.rows) {
-    const recalculado = recalcularTicket({ modalidad: t.modalidad, caballo: t.caballo, monto: Number(t.monto), sinComision: t.sin_comision }, rank);
+    const recalculado = recalcularTicket({ modalidad: t.modalidad, caballo: t.caballo, monto: Number(t.monto), sinComision: t.sin_comision }, rank, parsearRetirados(plano.ret));
     if (!recalculado) return res.status(400).json({ error: `No se pudo recalcular el ticket de ${t.cliente_nombre} (modalidad "${t.modalidad}" no reconocida) con esta pizarra.` });
     ticketsRecalculados.push({ id: t.id, ...recalculado, raw: t });
   }
@@ -3545,7 +3545,7 @@ router.put('/pizarras/tercios/:id', asyncHandler(async (req, res) => {
   if (!/PARADA ADELANTADAS/.test(plano.texto_resultado || '')) {
     textoResultadoFinal = armarTextoResultado({
       nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
-      ret: plano.ret, pizarra: pizarraFinal, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos),
+      ret: plano.ret, pizarra: pizarraFinal, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { retirados: parsearRetirados(plano.ret) }),
       totalesFinales, totalJugadas: ticketsPlanos.length
     });
   }
@@ -4074,7 +4074,7 @@ router.get('/planos/:id/copia', asyncHandler(async (req, res) => {
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientos);
   let textoResultado = armarTextoResultado({
     nombreGrupo: req.grupo.nombre, hipodromoNombre: plano.hipodromo_nombre, carreraNumero: plano.carrera_numero,
-    ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { fiel: true }),
+    ret: plano.ret, pizarra: plano.pizarra, salidaLineas: armarSalidaLineasDeTickets(ticketsPlanos, { fiel: true, retirados: parsearRetirados(plano.ret) }),
     totalesFinales, incluirPie: !bloqueAdelantadas, totalJugadas: ticketsPlanos.length
   });
   if (bloqueAdelantadas) {
