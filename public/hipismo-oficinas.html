@@ -264,6 +264,14 @@
   .informe .det-hip .hip-tit { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 15px; }
   .informe .det-hip .hip-tit::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #3f8a85; }
   .informe .det-hip .hip-tit.otros::before { background: #94a3a0; }
+  /* 13-11-2026, a pedido del usuario: cada hipódromo en su propio cuadro + una línea divisora entre un hipódromo y el siguiente. */
+  .informe .det-hip { margin-top: 16px; padding: 4px 14px 12px; border: 2px solid #cfc5b2; border-radius: 18px; background: #faf6ee; }
+  .informe .det-hip .hip-tit { margin: 8px 0 10px; font-size: 17px; font-weight: 800; color: #1f4d4a; }
+  .informe .det-hip .hip-tit::before { width: 6px; height: 22px; }
+  .informe .det-hip .det-sub td { background: #ebe5da; }
+  .informe .det-hip + table { margin-top: 16px; }
+  .informe .hip-sep { display: flex; align-items: center; gap: 12px; margin: 22px 4px; color: #3f8a85; font-size: 14px; line-height: 1; }
+  .informe .hip-sep i { flex: 1; height: 0; border-top: 3px double #3f8a85; }
   .informe .car-caja { border-radius: 12px; box-shadow: 0 1px 3px rgba(20,83,45,0.08); }
   .informe .car-cab { display: flex; align-items: center; gap: 8px; }
   .informe .car-cab .car-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #2f6764; color: #fff; font-size: 12px; font-weight: 800; }
@@ -2408,8 +2416,9 @@ function pintarDetalle(nombre, resp) {
   const celdaLinea = l => l.jugada ? INF.jugadaHTML(l.jugada) : (l.tipo === 'devolucion-propia' ? `<span class="lin-dev">↩ ${esc(l.texto)}</span>` : `<span class="lin-otra">${esc(l.texto)}</span>`);
   det.dias.forEach(dia => {
     html += `<div class="inf-dia det-dia"><div class="dia-tit"><span>${INF.nombreDia(dia.fecha)} ${INF.fechaCorta(dia.fecha)}</span><span class="dia-monto ${signoDe(dia.total)}">${INF.dineroConSigno(dia.total)}</span></div>`;
-    dia.hipodromos.forEach(h => {
+    dia.hipodromos.forEach((h, hi) => {
       const titulo = h.esCarreras ? nombreHip(h.nombre) : h.nombre;
+      if (hi > 0) html += '<div class="hip-sep"><i></i><span>◆</span><i></i></div>';
       html += `<div class="inf-hip det-hip"><div class="hip-tit${h.esCarreras ? '' : ' otros'}">${esc(titulo)}</div>`;
       // Cada carrera va en su propio cuadro y el total de la carrera resalta al pie.
       h.carreras.forEach(c => {

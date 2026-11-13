@@ -603,6 +603,11 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
     check(/Feliz Navidad y próspero/.test(nav) && /Año 2027/.test(nav) && /te desea LudoxApp/.test(nav) && /NAVIDAD_ACTIVA = true/.test(nav) && /prefers-reduced-motion/.test(nav), '18p) la franja dice "Feliz Navidad y próspero Año 2027 te desea LudoxApp", se apaga con NAVIDAD_ACTIVA y respeta "reducir movimiento"');
     check(!/nav-x/.test(nav) && !/sessionStorage\.setItem/.test(nav) && !/\.remove\(\)/.test(nav), '18p2) la franja es fija: no tiene botón × ni se puede ocultar');
     let compilaN = true; try { new (require('vm').Script)(nav); } catch (e) { compilaN = false; } check(compilaN, '18q) navidad.js compila'); }
+  // 18r) Detallado por Cliente (13-11-2026): cada hipódromo en su propio cuadro + línea divisora entre hipódromos (pantalla del admin y link del cliente).
+  { const portal = leer('public/oficinas-cliente-portal.html');
+    const ok = h => /\.informe \.det-hip \{[^}]*border: 2px solid #cfc5b2[^}]*border-radius: 18px/.test(h) && /\.informe \.hip-sep \{/.test(h) && /if \(hi > 0\) html \+= '<div class="hip-sep"><i><\/i><span>◆<\/span><i><\/i><\/div>';/.test(h) && /forEach\(\(h, hi\) =>/.test(h);
+    check(ok(html), '18r) en Detallado por Cliente (administrador) cada hipódromo va en su cuadro y hay una línea divisora (◆) entre un hipódromo y el siguiente');
+    check(ok(portal), '18s) lo mismo en el link del cliente (oficinas-cliente-portal.html)'); }
   console.log(`\n${pasaron} pruebas OK, ${fallaron} fallaron.`);
   if (fallaron) process.exit(1);
 })();
