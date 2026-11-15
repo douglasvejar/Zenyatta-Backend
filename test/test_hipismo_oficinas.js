@@ -411,7 +411,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   check(/AGREGANDO = \{ hipodromoId/.test(html) && /tr\.classList\.add\('fila-existente'\)/.test(html) && /el\.disabled = true/.test(html), '8b) las jugadas que ya estaban quedan bloqueadas y las nuevas van debajo');
   check(/\$\('jPizarra'\)\.value = r\.pizarra \|\| ''; \$\('jRet'\)\.value = r\.ret \|\| ''/.test(html) && /\$\('jPizarra'\)\.readOnly = true/.test(html), '8c) la carrera se abre con la pizarra que ya tenía (bloqueada) para calcular las nuevas jugadas sin volver a cargarla');
   check(/Guardar jugadas nuevas y calcular/.test(html) && /se calcularon con la pizarra que ya tenía/.test(html), '8d) el botón y el mensaje hablan de jugadas nuevas calculadas con la pizarra existente');
-  check(/agregarDelRegistro/.test(html) && /➕ Agregar<\/button>/.test(html), '8e) el Registro tiene el botón "➕ Agregar" por carrera');
+  check(/agregarDelRegistro/.test(html) && /aria-label="Agregar jugadas"[^>]*>➕<\/button>/.test(html), '8e) el Registro tiene el botón "➕ Agregar" por carrera');
   check(/Cargada como plano en Grupos Hípicos \(sin tabla\): igual se muestra su pizarra/.test(html), '8f) una carrera cargada como plano también muestra su pizarra al elegirla');
   const oficinasMerge = oficinas.calcularCuadre([
     { jugador: 'LUIS', lado: 'jugo', tipo: '1p', caballo: '3', monto: 100 }, { jugador: 'RAUL', lado: 'dio', tipo: '1p', caballo: '3', monto: 100 },
@@ -572,7 +572,7 @@ function check(cond, msg) { if (cond) { pasaron++; console.log('OK:', msg); } el
   }
 
   // 18) Botón Eliminar en cada carrera del Registro de Jugadas (10-11-2026).
-  check(/puedeOficina\('oficinas_eliminar'\) \? ` <button type="button" class="btn btn-peligro btn-chico" title="Eliminar esta carrera" onclick="event\.stopPropagation\(\); eliminarDelRegistro\(/.test(html) && /async function eliminarDelRegistro\(hipodromoId, numero, estado, planoId\)[\s\S]{0,1400}confirm\([\s\S]{0,900}oficinas\/pendiente\?hipodromoId=[\s\S]{0,300}\/api\/hipismo\/planos\/' \+ encodeURIComponent\(planoId\)[\s\S]{0,200}method: 'DELETE'[\s\S]{0,400}await cargarRegistro\(\)/.test(html),
+  check(/puedeOficina\('oficinas_eliminar'\) \? `<button type="button" class="btn btn-chico reg-ib reg-del" title="Eliminar esta carrera" aria-label="Eliminar carrera" onclick="event\.stopPropagation\(\); eliminarDelRegistro\(/.test(html) && /async function eliminarDelRegistro\(hipodromoId, numero, estado, planoId\)[\s\S]{0,1400}confirm\([\s\S]{0,900}oficinas\/pendiente\?hipodromoId=[\s\S]{0,300}\/api\/hipismo\/planos\/' \+ encodeURIComponent\(planoId\)[\s\S]{0,200}method: 'DELETE'[\s\S]{0,400}await cargarRegistro\(\)/.test(html),
     '18a) cada carrera del Registro tiene el botón Eliminar (con permiso oficinas_eliminar): pide confirmación, descarta la pendiente o manda la calculada a la papelera, y refresca la lista');
   check(!/data-c="(jugador|tipo|premio|caballo|cab1|cab2|monto)"[^>]*placeholder=/.test(html.slice(html.indexOf('function pintarTabla'), html.indexOf("$('jTbody').addEventListener('input'"))), '18b) las casillas de la tabla de jugadas no llevan textos grises de ejemplo (Jugador, 2p/3n, N.º, Monto)');
   // 18c) Mínimo 6 filas automáticas para ingresar jugadas (12-11-2026).

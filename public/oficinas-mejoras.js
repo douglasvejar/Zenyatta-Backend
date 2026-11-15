@@ -114,22 +114,88 @@ function revisarPozosTabla() {
 }
 
 // ---------- 4. Registro: ver las jugadas y editar UNA jugada ----------
-async function verJugadasRegistro(btn, hipodromoId, numero) {
-  const tr = btn.closest('tr');
-  const siguiente = tr.nextElementSibling;
-  if (siguiente && siguiente.classList.contains('reg-detalle')) { siguiente.remove(); btn.textContent = '👁️ Jugadas'; return; }
-  btn.disabled = true;
-  let r;
-  try { r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(hipodromoId)}&carrera=${numero}&fecha=${encodeURIComponent(REGISTRO.fecha)}`); }
-  catch (e) { btn.disabled = false; return msg('rMsg', e.message, false); }
-  btn.disabled = false;
-  const filas = r.filas || [];
+// 15-11-2026 (mejora de la vista): panel de jugadas con chip Jugó/Dio, caballos de colores y cuadre; buscador de jugador del día.
+function regNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+async function filasDeCarreraRegistro(hipodromoId, numero) {
+  const clave = `${REGISTRO.fecha}|${hipodromoId}|${numero}`;
+  if (!REG_DET.has(clave)) {
+    const r = await api(`/api/hipismo/oficinas/carrera?hipodromoId=${encodeURIComponent(hipodromoId)}&carrera=${numero}&fecha=${encodeURIComponent(REGISTRO.fecha)}`);
+    REG_DET.set(clave, r.filas || []);
+  }
+  return REG_DET.get(clave);
+}
+function htmlDetalleRegistro(filas, hipodromoId, numero, q) {
+  if (!filas.length) return '<span class="sub-linea">Esta carrera se cargó como plano en Hipismo Grupos Hípicos: no tiene tabla de jugadas para mostrar.</span>';
+  let jugaron = 0, dieron = 0;
+  filas.forEach(f => { const m = Number(f.monto) || 0; if (f.lado === 'jugo') jugaron += m; else dieron += m; });
+  const cuadra = Math.abs(jugaron - dieron) < 0.005;
+  return `<table><thead><tr><th>#</th><th>Jugador</th><th>Jugó / Dio</th><th>Tipo</th><th>Caballo</th><th class="num">Monto</th><th></th></tr></thead><tbody>${filas.map((f, i) => {
+    const lado = f.lado === 'jugo' ? 'jugo' : 'dio';
+    return `<tr${q && regNorm(f.jugador).includes(q) ? ' class="reg-match"' : ''}><td>${i + 1}</td><td class="rj">${esc(nombreBonito(f.jugador))}</td><td><span class="reg-rol ${lado}">${lado === 'jugo' ? 'Jugó' : 'Dio'}</span></td><td><span class="reg-mod">${esc(f.tipo)}</span></td><td>${INF.caballosHTML(f.caballo)}</td><td class="num reg-monto ${lado}">${INF.dinero(f.monto)}</td>
+      <td class="num"><button type="button" class="btn btn-sec btn-chico" onclick="abrirDelRegistro('${esc(hipodromoId)}', ${numero}, ${i})">✏️ Corregir</button></td></tr>`;
+  }).join('')}</tbody></table><div class="reg-pie"><span>Jugaron <b>${INF.dinero(jugaron)}</b></span><span>Dieron <b>${INF.dinero(dieron)}</b></span>${cuadra ? '<span class="reg-cuadra">✅ Cuadra</span>' : `<span class="reg-cuadra no">⚠️ No cuadra: diferencia ${INF.dinero(Math.abs(jugaron - dieron))}</span>`}</div>`;
+}
+// Abre (o refresca) el panel de jugadas debajo de la fila de la carrera.
+async function abrirDetalleRegistro(tr, q) {
+  const hid = tr.dataset.hip, numero = Number(tr.dataset.num);
+  if (!hid) return false;
+  const filas = await filasDeCarreraRegistro(hid, numero);
+  const previo = tr.nextElementSibling;
+  if (previo && previo.classList.contains('reg-detalle')) previo.remove();
   const det = document.createElement('tr');
   det.className = 'reg-detalle';
-  det.innerHTML = `<td colspan="7" style="background:var(--card-2);padding:8px 12px;">${filas.length ? `<table class="tabla-simple" style="min-width:0;"><thead><tr><th>#</th><th>Jugador</th><th>Jugó / Dio</th><th>Tipo</th><th>Caballo</th><th class="num">Monto</th><th></th></tr></thead><tbody>${filas.map((f, i) => `<tr><td>${i + 1}</td><td>${esc(nombreBonito(f.jugador))}</td><td>${f.lado === 'jugo' ? 'Jugó' : 'Dio'}</td><td>${esc(f.tipo)}</td><td>${esc(f.caballo)}</td><td class="num">${INF.dinero(f.monto)}</td>
-      <td class="num"><button type="button" class="btn btn-sec btn-chico" onclick="abrirDelRegistro('${esc(hipodromoId)}', ${numero}, ${i})">✏️ Corregir esta jugada</button></td></tr>`).join('')}</tbody></table>` : '<span class="sub-linea">Esta carrera se cargó como plano en Hipismo Grupos Hípicos: no tiene tabla de jugadas para mostrar.</span>'}</td>`;
+  det.innerHTML = `<td colspan="7"><div class="reg-det-in">${htmlDetalleRegistro(filas, hid, numero, q || '')}</div></td>`;
   tr.after(det);
-  btn.textContent = '🙈 Ocultar';
+  tr.classList.add('abierta');
+  const b = tr.querySelector('.btn-ver-jugadas'); if (b) b.textContent = '🙈 Ocultar';
+  return true;
+}
+function cerrarDetalleRegistro(tr) {
+  const sig = tr.nextElementSibling;
+  if (sig && sig.classList.contains('reg-detalle')) sig.remove();
+  tr.classList.remove('abierta');
+  const b = tr.querySelector('.btn-ver-jugadas'); if (b) b.textContent = '👁️ Jugadas';
+}
+async function verJugadasRegistro(btn, hipodromoId, numero) {
+  const tr = btn.closest('tr');
+  const sig = tr.nextElementSibling;
+  if (sig && sig.classList.contains('reg-detalle')) return cerrarDetalleRegistro(tr);
+  btn.disabled = true;
+  try { await abrirDetalleRegistro(tr, ''); } catch (e) { msg('rMsg', e.message, false); }
+  btn.disabled = false;
+}
+async function verTodasJugadasRegistro(abrir) {
+  const trs = Array.from(document.querySelectorAll('#rLista tr.reg-fila')).filter(tr => !tr.hidden);
+  try {
+    if (abrir) await Promise.all(trs.map(tr => abrirDetalleRegistro(tr, regNorm(($('rBuscar') || {}).value))));
+    else trs.forEach(cerrarDetalleRegistro);
+  } catch (e) { msg('rMsg', e.message, false); }
+}
+// Buscador de jugador: trae las jugadas de las carreras del día (una sola vez, quedan guardadas) y deja solo las carreras donde juega.
+let REG_BUSQ = 0, REG_BUSQ_T = null;
+function buscarJugadorRegistro() { clearTimeout(REG_BUSQ_T); REG_BUSQ_T = setTimeout(correrBusquedaRegistro, 250); }
+async function correrBusquedaRegistro() {
+  const marca = ++REG_BUSQ;
+  const q = regNorm(($('rBuscar') || {}).value), info = $('rBuscarInfo');
+  const trs = Array.from(document.querySelectorAll('#rLista tr.reg-fila'));
+  const tarjetas = () => document.querySelectorAll('#rLista .reg-card-hip').forEach(c => { c.hidden = !c.querySelector('tr.reg-fila:not([hidden])'); });
+  if (!q) {
+    trs.forEach(tr => { tr.hidden = false; cerrarDetalleRegistro(tr); });
+    tarjetas(); if (info) info.textContent = ''; return;
+  }
+  if (info) info.textContent = 'Buscando…';
+  try { await Promise.all(trs.filter(tr => tr.dataset.hip).map(tr => filasDeCarreraRegistro(tr.dataset.hip, Number(tr.dataset.num)))); }
+  catch (e) { if (info) info.textContent = ''; return msg('rMsg', e.message, false); }
+  if (marca !== REG_BUSQ) return;
+  let hallados = 0;
+  for (const tr of trs) {
+    const filas = tr.dataset.hip ? (REG_DET.get(`${REGISTRO.fecha}|${tr.dataset.hip}|${tr.dataset.num}`) || []) : [];
+    const coincide = filas.some(f => regNorm(f.jugador).includes(q));
+    tr.hidden = !coincide;
+    if (coincide) { hallados++; await abrirDetalleRegistro(tr, q); } else cerrarDetalleRegistro(tr);
+  }
+  tarjetas();
+  if (info) info.textContent = hallados ? `${hallados} ${hallados === 1 ? 'carrera' : 'carreras'} con ese jugador.` : 'Ese jugador no aparece en las carreras de este día.';
 }
 (function enganchaRegistro() {
   const _ar = abrirDelRegistro;
@@ -140,20 +206,6 @@ async function verJugadasRegistro(btn, hipodromoId, numero) {
     if (!inp) return;
     const tr = inp.closest('tr'); if (tr) { tr.classList.add('fila-resaltada'); setTimeout(() => tr.classList.remove('fila-resaltada'), 4000); }
     inp.focus(); inp.select();
-  };
-  const _pr = pintarRegistro;
-  pintarRegistro = function () {
-    _pr.apply(this, arguments);
-    // agrega el botón "Jugadas" en cada fila de carrera (sin romper el clic de la fila, que sigue abriendo la carrera completa)
-    document.querySelectorAll('#rLista tr.reg-fila').forEach(tr => {
-      const m = /abrirDelRegistro\((?:'([^']*)'|null),\s*(\d+)\)/.exec(tr.getAttribute('onclick') || '');
-      const celda = tr.lastElementChild;
-      if (!m || !m[1] || !celda || celda.querySelector('.btn-ver-jugadas')) return;
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'btn btn-sec btn-chico btn-ver-jugadas'; b.style.marginRight = '6px'; b.textContent = '👁️ Jugadas';
-      b.setAttribute('onclick', `event.stopPropagation(); verJugadasRegistro(this, '${m[1]}', ${m[2]})`);
-      celda.prepend(b);
-    });
   };
 })();
 
