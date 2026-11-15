@@ -110,6 +110,37 @@
      llegada con colores y aros de podio, botones más limpios y el detalle de jugadas en un panel con su cuadre. */
   #rLista [hidden] { display: none !important; }
   #rLista .sub-linea { color: var(--text-dim); font-size: 12px; }
+  /* 15-11-2026: Historia de la Oficina — filas sombreadas intercaladas para separar un cliente de otro. */
+  .his-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+  @media (max-width: 800px) { .his-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .his-kpi { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 10px 14px; }
+  .his-kpi span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); font-weight: 700; }
+  .his-kpi b { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .his-herr { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
+  .his-herr input[type=search] { flex: 1; min-width: 200px; max-width: 320px; border: 1px solid var(--border-light); background: #fff; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13px; }
+  .informe table.his { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .informe table.his th, .informe table.his td { border-bottom: none; }
+  .informe table.his tr.grp th { text-align: center; font: 800 12px 'Outfit', sans-serif; letter-spacing: .3px; text-transform: none; color: #fff; padding: 7px 8px; }
+  .informe table.his tr.grp th.hc { background: transparent; color: #766f64; text-align: left; text-transform: uppercase; font: 700 10.5px 'Inter', sans-serif; letter-spacing: .7px; vertical-align: bottom; }
+  .informe table.his tr.grp th.g1 { background: #2f6764; } .informe table.his tr.grp th.gc { background: #3f8a85; }
+  .informe table.his tr.sub th { text-align: right; font-size: 10.5px; padding: 6px 8px; border-bottom: 2px solid #ddd5c6; }
+  .informe table.his tr.sub th.gc2 { text-align: left; }
+  .informe table.his .d { border-left: 3px double #cfc5b2; }
+  .informe table.his tbody tr:nth-child(odd) { background: #fffdf9; }
+  .informe table.his tbody tr:nth-child(even) { background: #e8e0d0; }
+  .informe table.his tbody td { padding: 9px 8px; border-bottom: 1px solid rgba(70,55,30,0.25); vertical-align: middle; }
+  .informe table.his tbody td.n, .informe table.his tfoot td.n { text-align: right; white-space: nowrap; }
+  .informe table.his tbody td.b1 { background: rgba(47,103,100,0.07); }
+  .informe table.his .pos { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; background: #f3efe8; border: 1px solid #cfc5b2; font: 800 12px 'Outfit', sans-serif; color: #2f6764; }
+  .informe table.his .pos.t1 { background: #f5c400; border-color: #d4a900; color: #3b2f00; } .informe table.his .pos.t2 { background: #d9dee3; border-color: #aab3bb; } .informe table.his .pos.t3 { background: #e4b98c; border-color: #c98a52; }
+  .informe table.his .nom { font-weight: 700; }
+  .informe table.his .com { font-weight: 800; color: #2f6764; }
+  .informe table.his .barra { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+  .informe table.his .barra .bg { flex: 1; height: 9px; border-radius: 5px; background: #f3efe8; overflow: hidden; }
+  .informe table.his .barra i { display: block; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #3f8a85, #5fa39b); }
+  .informe table.his .barra b { min-width: 46px; text-align: right; font-size: 12.5px; }
+  .informe table.his tfoot td { font-weight: 800; background: #ebe5da; padding: 9px 8px; border-top: 2px solid #cfc5b2; }
+  .informe table.his tfoot tr.otros td { font-weight: 600; background: #f6f1e7; border-top: 1px solid #ddd5c6; color: #5a554c; }
   .reg-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
   @media (max-width: 800px) { .reg-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .reg-kpi { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 10px 14px; }
@@ -474,6 +505,7 @@
     <button type="button" class="tab oculto" data-tab="comisionessocios" data-perm="oficinas_informes" onclick="irATab('comisionessocios')">🤝 Comisiones por Socios</button>
     <button type="button" class="tab" data-tab="detalle" data-perm="oficinas_informes" onclick="irATab('detalle')">🧾 Detallado por Cliente</button>
     <button type="button" class="tab" data-tab="comision" data-perm="oficinas_informes" onclick="irATab('comision')">🏆 Comisión por Carrera</button>
+    <button type="button" class="tab" data-tab="historia" data-perm="oficinas_informes" onclick="irATab('historia')">📖 Historia de la Oficina</button>
     <button type="button" class="tab" data-tab="links" onclick="irATab('links')">🔗 Links</button>
     <button type="button" class="tab" data-tab="historial" onclick="irATab('historial')">📜 Historial de Cambios</button>
     <button type="button" class="tab" data-tab="clientes" onclick="irATab('clientes')">👤 Crear Cliente u Oficina</button>
@@ -820,6 +852,28 @@
         <span class="toast" id="comToast"></span>
       </div>
       <div class="informe" id="comCaptura"><div class="vacio">Cargando…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== HISTORIA DE LA OFICINA (15-11-2026) ===================== -->
+  <section class="panel" id="panel-historia">
+    <div class="card">
+      <h2>📖 Historia de la Oficina</h2>
+      <p class="nota">Cada cliente que jugó en el período: cuántas jugadas tuvo, cuánto jugó y cuánto le produjo a la oficina en comisión (ya restando los % que se le devuelven). Solo salen los que tuvieron jugadas, del que más produce al que menos. Por defecto sale la semana actual de la oficina; con el rango eliges las fechas que quieras.</p>
+      <div id="hisPeriodo"></div>
+    </div>
+    <div class="his-kpis" id="hisKpis"></div>
+    <div class="card">
+      <div class="his-herr">
+        <input type="search" id="hisBuscar" placeholder="🔎 Buscar cliente…" oninput="filtrarHistoria()" autocomplete="off">
+        <span class="barra-export" style="margin:0;margin-left:auto;">
+          <button type="button" class="btn btn-sec" onclick="copiarImagenHD('hisCaptura','historia_de_la_oficina')">📸 Copiar imagen HD</button>
+          <button type="button" class="btn btn-sec" onclick="descargarPDF('hisCaptura','historia_de_la_oficina','hisToast')">📄 Descargar PDF</button>
+          <button type="button" class="btn btn-sec" onclick="exportarExcel('historia')">📊 Descargar Excel</button>
+          <span class="toast" id="hisToast"></span>
+        </span>
+      </div>
+      <div class="informe informe-ancho" id="hisCaptura"><div class="vacio">Cargando…</div></div>
     </div>
   </section>
 
@@ -1258,6 +1312,7 @@ function irATab(t) {
   if (t === 'controlpozos') cargarControlPozosOf();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();
+  if (t === 'historia') cargarHistoria();
   if (t === 'links') cargarLinks();
 }
 
@@ -2543,7 +2598,7 @@ function pintarComision(d) {
 
 // ---------- Copiar imagen HD y descargar PDF ----------
 function avisoInforme(id, texto, error) { const t = $(id); if (!t) return; t.textContent = texto; t.className = 'toast ' + (error ? 'error' : 'ok'); }
-function toastDe(idCaptura) { return { balCaptura: 'balToast', detCaptura: 'detToast', comCaptura: 'comToast' }[idCaptura]; }
+function toastDe(idCaptura) { return { balCaptura: 'balToast', detCaptura: 'detToast', comCaptura: 'comToast', hisCaptura: 'hisToast' }[idCaptura]; }
 async function copiarImagenHD(idCaptura, nombreArchivo) {
   const caja = $(idCaptura), aviso = toastDe(idCaptura);
   if (typeof html2canvas !== 'function') return avisoInforme(aviso, '⚠️ No se pudo cargar la herramienta de imagen (revisa la conexión).', true);
@@ -2688,6 +2743,7 @@ async function descargarPDF(idCaptura, nombreArchivo, idAviso) {
   iniciarPeriodo('sp', () => cargarSaldosPozos());
   iniciarPeriodo('det', cargarListaDetalle);
   iniciarPeriodo('com', cargarComision);
+  iniciarPeriodo('his', () => cargarHistoria());
   limpiarTabla();
   armarOpcionesCarrera();
   pintarCuadre({ hayJugadas: false, errores: [], detalle: [], cuadra: false });

@@ -1637,6 +1637,25 @@ router.get('/oficinas/comision-por-carrera', requierePermisoOficina('oficinas_in
   });
 }));
 
+// GET /oficinas/historia — HISTORIA DE LA OFICINA (15-11-2026): por cliente, cuántas jugadas tuvo, cuánto jugó y cuánto le produjo a la oficina
+// (comisión neta, la misma de Comisiones por Socios). Semana actual/anterior/hace2 de la oficina o un rango desde/hasta. Ver services/hipismoHistoriaOficina.js.
+router.get('/oficinas/historia', requierePermisoOficina('oficinas_informes'), asyncHandler(async (req, res) => {
+  const rangoPersonalizado = rangoPersonalizadoDeQuery(req);
+  const semana = ['actual', 'anterior', 'hace2'].includes(req.query.semana) ? req.query.semana : 'actual';
+  const offset = semana === 'anterior' ? -1 : (semana === 'hace2' ? -2 : 0);
+  const { desde, hasta } = rangoPersonalizado || await rangoSemanaGrupo(req.grupoId, hoyVenezuela(), offset);
+  const [cierre, movimiento, rJug] = await Promise.all([
+    construirCierreFinalHipismo(req.grupoId, desde, hasta, { comisionPorCliente: true }),
+    historiaOficina.obtenerMovimientoOficina(req.grupoId, desde, hasta),
+    db.query('SELECT nombre, es_cuenta_comision FROM jugadores WHERE grupo_id = $1', [req.grupoId])
+  ]);
+  const historia = historiaOficina.armarHistoriaOficina({ cierre, jugadores: rJug.rows, movimiento });
+  res.json({
+    grupoNombre: req.grupo.nombre, rango: { desde, hasta }, semana, rangoPersonalizado: !!rangoPersonalizado, numeroSemana: numeroSemanaISO(desde),
+    ...historia
+  });
+}));
+
 // GET /planos?fecha=&hipodromoId=&limite= : historial reciente (cabeceras).
 router.get('/planos', asyncHandler(async (req, res) => {
   const { fecha, hipodromoId, limite } = req.query;
@@ -5799,6 +5818,7 @@ router.get('/control-pozos', asyncHandler(async (req, res) => {
 // (La tabla es hipismo_socios; NO tiene relación con la tabla `socios` de Deportes.)
 // =================================================================
 const hipismoSocios = require('../services/hipismoSocios');
+const historiaOficina = require('../services/hipismoHistoriaOficina');
 const AVISO_FALTA_SQL_SOCIOS = 'Falta correr el SQL pendiente en Supabase (tabla hipismo_socios y columna jugadores.hipismo_socio_id).';
 const esErrorFaltaSocios = e => !!e && (e.code === '42P01' || e.code === '42703');
 

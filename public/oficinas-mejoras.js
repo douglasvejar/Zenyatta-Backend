@@ -297,6 +297,51 @@ function pintarHistorial() {
     : '<div class="vacio">No hay cambios con ese filtro.</div>';
 }
 
+// ---------- 5b. Historia de la Oficina (15-11-2026) ----------
+// Por cliente: jugadas, jugado y comisión que produce a la oficina (todo ítem va dentro de "Jugadas"). Sin jugadas no sale.
+let HISTORIA = null;
+async function cargarHistoria() {
+  const caja = $('hisCaptura');
+  caja.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const [d] = await Promise.all([api('/api/hipismo/oficinas/historia?' + queryPeriodo('his')), CLIENTES.length ? null : cargarClientes()]);
+    HISTORIA = d; window.__HIS = d; pintarHistoria();
+  } catch (e) { caja.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; }
+}
+function pintarHistoria() {
+  const d = HISTORIA; if (!d) return;
+  const dinero = n => INF.dinero(n);
+  const pct = n => String(Math.round(n * 10) / 10).replace('.', ',') + '%';
+  const max = d.filas.length ? Math.max(d.filas[0].comision, 0.01) : 1;
+  $('hisKpis').innerHTML = `<div class="his-kpi"><span>Clientes con jugadas</span><b>${d.totales.clientes}</b></div>
+    <div class="his-kpi"><span>Jugadas</span><b>${d.totales.jugadas}</b></div>
+    <div class="his-kpi"><span>Total jugado</span><b>${dinero(d.totales.jugado)}</b></div>
+    <div class="his-kpi"><span>Comisión de la oficina</span><b>${dinero(d.comisionOficina)}</b></div>`;
+  let html = cabeceraInforme('Historia de la Oficina', d);
+  if (!d.filas.length) {
+    html += '<div class="vacio">Nadie tuvo jugadas en este período.</div>';
+  } else {
+    const tipoDe = nombre => { const c = CLIENTES.find(x => !x.es_cuenta_comision && normNombre(x.nombre) === normNombre(nombre)); return c ? etiquetaTipo(c) : ''; };
+    html += `<table class="his"><thead>
+      <tr class="grp"><th class="hc" rowspan="2">#</th><th class="hc" rowspan="2">Cliente</th><th colspan="2" class="g1">🎯 Jugadas</th><th colspan="2" class="gc">PRODUCE A LA OFICINA</th></tr>
+      <tr class="sub"><th class="d">Jugadas</th><th>Jugado</th><th class="d">Comisión ▾</th><th class="gc2">% de la oficina</th></tr></thead><tbody id="hisTbody">
+      ${d.filas.map((f, i) => `<tr data-n="${esc(normNombre(f.nombre))}"><td><span class="pos ${i < 3 && f.comision > 0 ? 't' + (i + 1) : ''}">${i + 1}</span></td>
+        <td><span class="nom">${esc(nombreBonito(f.nombre))}</span> ${tipoDe(f.nombre)}</td>
+        <td class="n b1 d">${f.jugadas}</td><td class="n b1">${dinero(f.jugado)}</td>
+        <td class="n com d">${dinero(f.comision)}</td>
+        <td><div class="barra"><div class="bg"><i style="width:${Math.max(0, Math.min(100, f.comision / max * 100)).toFixed(0)}%"></i></div><b>${pct(f.porcentaje)}</b></div></td></tr>`).join('')}
+      </tbody><tfoot>
+      ${Math.abs(d.otros) >= 0.005 ? `<tr class="otros"><td></td><td colspan="3">Otros: ajustes, cuentas de comisión y clientes sin jugadas</td><td class="n d">${dinero(d.otros)}</td><td>${d.comisionOficina ? pct(d.otros / d.comisionOficina * 100) : ''}</td></tr>` : ''}
+      <tr><td></td><td>TOTAL</td><td class="n d">${d.totales.jugadas}</td><td class="n">${dinero(d.totales.jugado)}</td><td class="n d">${dinero(d.comisionOficina)}</td><td>100%</td></tr></tfoot></table>`;
+  }
+  ponerInforme('hisCaptura', html);
+  filtrarHistoria();
+}
+function filtrarHistoria() {
+  const q = normNombre(($('hisBuscar') || {}).value || '');
+  document.querySelectorAll('#hisTbody tr').forEach(tr => { tr.hidden = !!q && !(tr.dataset.n || '').includes(q); });
+}
+
 // ---------- 6. Excel ----------
 function exportarExcel(que) {
   if (que === 'balance') {
@@ -312,6 +357,13 @@ function exportarExcel(que) {
     if (Math.abs(d.otrosConceptos) >= 0.005) filas.push(['Comisión de jugadas adelantadas (no ligada a una carrera)', '', '', '', '', numExcel(d.otrosConceptos)]);
     filas.push(['COMISIÓN OFICINA', '', '', '', '', numExcel(d.comisionOficina)]);
     descargarExcel('comision_por_carrera', filas);
+  } else if (que === 'historia') {
+    const d = window.__HIS; if (!d) return;
+    const filas = [['#', 'Cliente', 'Jugadas', 'Jugado', 'Comisión que produce', '% de la oficina']];
+    d.filas.forEach((f, i) => filas.push([i + 1, nombreBonito(f.nombre), f.jugadas, numExcel(f.jugado), numExcel(f.comision), numExcel(f.porcentaje)]));
+    if (Math.abs(d.otros) >= 0.005) filas.push(['', 'Otros: ajustes, cuentas de comisión y clientes sin jugadas', '', '', numExcel(d.otros), '']);
+    filas.push(['', 'TOTAL', d.totales.jugadas, numExcel(d.totales.jugado), numExcel(d.comisionOficina), 100]);
+    descargarExcel('historia_de_la_oficina', filas);
   } else if (que === 'detalle') {
     const x = window.__DET; if (!x) return;
     const det = INF.armarDetalleCliente(x.resp);
