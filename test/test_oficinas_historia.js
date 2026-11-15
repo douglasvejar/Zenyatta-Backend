@@ -43,6 +43,9 @@ check(/async function cargarHistoria/.test(mej) && /function pintarHistoria/.tes
 check(!/Rinde sobre/i.test(html + mej), 'sin la columna "Rinde sobre lo jugado"');
 check(/nth-child\(even\) \{ background: #e8e0d0/.test(html), 'filas sombreadas intercaladas');
 check(/hisCaptura: 'hisToast'/.test(html), 'imagen/PDF con su aviso');
+check(/🏢 OFICINAS/.test(mej) && /👤 CLIENTES/.test(mej) && /his-cols/.test(mej) && /grid-template-columns: 1fr 1fr/.test(html), 'oficinas en una columna y clientes en otra, lado a lado');
+check(/tipoDeCliente\(c\) === 'oficina'/.test(mej) && /TOTAL GENERAL/.test(mej), 'se separan por tipo de cliente y hay total general');
+check(!/Cuadra La suma|Sin atribuir/.test(html + mej), 'sin el comentario de cuadre');
 try { new Function(mej); check(true, 'JS válido'); } catch (e) { check(false, e.message); }
 console.log(`${ok} OK, ${fail} fallas`);
 process.exit(fail ? 1 : 0);

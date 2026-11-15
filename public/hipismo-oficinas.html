@@ -135,10 +135,19 @@
   .informe table.his .pos.t1 { background: #f5c400; border-color: #d4a900; color: #3b2f00; } .informe table.his .pos.t2 { background: #d9dee3; border-color: #aab3bb; } .informe table.his .pos.t3 { background: #e4b98c; border-color: #c98a52; }
   .informe table.his .nom { font-weight: 700; }
   .informe table.his .com { font-weight: 800; color: #2f6764; }
-  .informe table.his .barra { display: flex; align-items: center; gap: 8px; min-width: 150px; }
-  .informe table.his .barra .bg { flex: 1; height: 9px; border-radius: 5px; background: #f3efe8; overflow: hidden; }
-  .informe table.his .barra i { display: block; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #3f8a85, #5fa39b); }
-  .informe table.his .barra b { min-width: 46px; text-align: right; font-size: 12.5px; }
+  .informe .his-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 4px; }
+  @media (max-width: 900px) { .informe .his-cols { grid-template-columns: 1fr; } }
+  .informe .his-sec { min-width: 0; }
+  .informe .his-tit { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 0 0 8px; padding: 8px 14px; border-radius: 12px; color: #fff; font: 800 16px 'Outfit', sans-serif; letter-spacing: .4px; }
+  .informe .his-tit.of { background: linear-gradient(100deg, #3730a3, #5a54c9); } .informe .his-tit.te { background: linear-gradient(100deg, #166534, #2f8a52); }
+  .informe .his-tit small { flex-basis: 100%; font: 700 11.5px 'Inter', sans-serif; opacity: .92; letter-spacing: 0; }
+  .informe table.his th, .informe table.his td { padding-left: 5px; padding-right: 5px; }
+  .informe table.his td.pc { font-weight: 700; font-size: 12.5px; }
+  .informe table.his tr.sub th { font-size: 10px; letter-spacing: .4px; }
+  .informe table.his-total { margin-top: 14px; }
+  .informe table.his-total td { padding: 9px 8px; }
+  .informe table.his-total tr.tg td { background: #2f6764; color: #fff; font-weight: 800; border-bottom: none; }
+  .informe table.his-total tr.otros td { background: #f6f1e7; color: #5a554c; font-weight: 600; border-bottom: 1px solid #ddd5c6; }
   .informe table.his tfoot td { font-weight: 800; background: #ebe5da; padding: 9px 8px; border-top: 2px solid #cfc5b2; }
   .informe table.his tfoot tr.otros td { font-weight: 600; background: #f6f1e7; border-top: 1px solid #ddd5c6; color: #5a554c; }
   .reg-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
@@ -859,13 +868,13 @@
   <section class="panel" id="panel-historia">
     <div class="card">
       <h2>📖 Historia de la Oficina</h2>
-      <p class="nota">Cada cliente que jugó en el período: cuántas jugadas tuvo, cuánto jugó y cuánto le produjo a la oficina en comisión (ya restando los % que se le devuelven). Solo salen los que tuvieron jugadas, del que más produce al que menos. Por defecto sale la semana actual de la oficina; con el rango eliges las fechas que quieras.</p>
+      <p class="nota">Cada oficina y cada cliente que jugó en el período (las oficinas en una columna y los clientes en otra): cuántas jugadas tuvo, cuánto jugó y cuánto le produjo a la oficina en comisión (ya restando los % que se le devuelven). Solo salen los que tuvieron jugadas, del que más produce al que menos en cada columna. Por defecto sale la semana actual de la oficina; con el rango eliges las fechas que quieras.</p>
       <div id="hisPeriodo"></div>
     </div>
     <div class="his-kpis" id="hisKpis"></div>
     <div class="card">
       <div class="his-herr">
-        <input type="search" id="hisBuscar" placeholder="🔎 Buscar cliente…" oninput="filtrarHistoria()" autocomplete="off">
+        <input type="search" id="hisBuscar" placeholder="🔎 Buscar oficina o cliente…" oninput="filtrarHistoria()" autocomplete="off">
         <span class="barra-export" style="margin:0;margin-left:auto;">
           <button type="button" class="btn btn-sec" onclick="copiarImagenHD('hisCaptura','historia_de_la_oficina')">📸 Copiar imagen HD</button>
           <button type="button" class="btn btn-sec" onclick="descargarPDF('hisCaptura','historia_de_la_oficina','hisToast')">📄 Descargar PDF</button>

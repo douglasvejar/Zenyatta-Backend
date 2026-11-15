@@ -312,34 +312,42 @@ function pintarHistoria() {
   const d = HISTORIA; if (!d) return;
   const dinero = n => INF.dinero(n);
   const pct = n => String(Math.round(n * 10) / 10).replace('.', ',') + '%';
-  const max = d.filas.length ? Math.max(d.filas[0].comision, 0.01) : 1;
-  $('hisKpis').innerHTML = `<div class="his-kpi"><span>Clientes con jugadas</span><b>${d.totales.clientes}</b></div>
+  // Oficinas y clientes van separados, cada uno en su columna (cada lista sigue ordenada del que más produce al que menos).
+  const esOficina = nombre => { const c = CLIENTES.find(x => !x.es_cuenta_comision && normNombre(x.nombre) === normNombre(nombre)); return !!c && tipoDeCliente(c) === 'oficina'; };
+  const oficinas = d.filas.filter(f => esOficina(f.nombre)), clientes = d.filas.filter(f => !esOficina(f.nombre));
+  $('hisKpis').innerHTML = `<div class="his-kpi"><span>Oficinas / Clientes</span><b>${oficinas.length} / ${clientes.length}</b></div>
     <div class="his-kpi"><span>Jugadas</span><b>${d.totales.jugadas}</b></div>
     <div class="his-kpi"><span>Total jugado</span><b>${dinero(d.totales.jugado)}</b></div>
     <div class="his-kpi"><span>Comisión de la oficina</span><b>${dinero(d.comisionOficina)}</b></div>`;
+  const seccion = (clase, titulo, quien, filas) => {
+    if (!filas.length) return '';
+    const sj = filas.reduce((a, f) => a + f.jugadas, 0), sm = INF.r2(filas.reduce((a, f) => a + f.jugado, 0)), sc = INF.r2(filas.reduce((a, f) => a + f.comision, 0));
+    const pg = d.comisionOficina ? sc / d.comisionOficina * 100 : 0;
+    return `<div class="his-sec"><div class="his-tit ${clase}">${titulo}<small>${filas.length} · ${sj} jugadas · ${dinero(sm)} jugado · ${dinero(sc)} comisión</small></div>
+      <table class="his"><thead>
+        <tr class="grp"><th class="hc" rowspan="2">#</th><th class="hc" rowspan="2">${quien}</th><th colspan="2" class="g1">🎯 Jugadas</th><th colspan="2" class="gc">PRODUCE</th></tr>
+        <tr class="sub"><th class="d">Cant.</th><th>Jugado</th><th class="d">Comisión ▾</th><th>%</th></tr></thead><tbody>
+        ${filas.map((f, i) => `<tr data-n="${esc(normNombre(f.nombre))}"><td><span class="pos ${i < 3 && f.comision > 0 ? 't' + (i + 1) : ''}">${i + 1}</span></td>
+          <td><span class="nom">${esc(nombreBonito(f.nombre))}</span></td>
+          <td class="n b1 d">${f.jugadas}</td><td class="n b1">${dinero(f.jugado)}</td>
+          <td class="n com d">${dinero(f.comision)}</td><td class="n pc">${pct(f.porcentaje)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td></td><td>TOTAL</td><td class="n d">${sj}</td><td class="n">${dinero(sm)}</td><td class="n d">${dinero(sc)}</td><td class="n pc">${pct(pg)}</td></tr></tfoot></table></div>`;
+  };
   let html = cabeceraInforme('Historia de la Oficina', d);
   if (!d.filas.length) {
     html += '<div class="vacio">Nadie tuvo jugadas en este período.</div>';
   } else {
-    const tipoDe = nombre => { const c = CLIENTES.find(x => !x.es_cuenta_comision && normNombre(x.nombre) === normNombre(nombre)); return c ? etiquetaTipo(c) : ''; };
-    html += `<table class="his"><thead>
-      <tr class="grp"><th class="hc" rowspan="2">#</th><th class="hc" rowspan="2">Cliente</th><th colspan="2" class="g1">🎯 Jugadas</th><th colspan="2" class="gc">PRODUCE A LA OFICINA</th></tr>
-      <tr class="sub"><th class="d">Jugadas</th><th>Jugado</th><th class="d">Comisión ▾</th><th class="gc2">% de la oficina</th></tr></thead><tbody id="hisTbody">
-      ${d.filas.map((f, i) => `<tr data-n="${esc(normNombre(f.nombre))}"><td><span class="pos ${i < 3 && f.comision > 0 ? 't' + (i + 1) : ''}">${i + 1}</span></td>
-        <td><span class="nom">${esc(nombreBonito(f.nombre))}</span> ${tipoDe(f.nombre)}</td>
-        <td class="n b1 d">${f.jugadas}</td><td class="n b1">${dinero(f.jugado)}</td>
-        <td class="n com d">${dinero(f.comision)}</td>
-        <td><div class="barra"><div class="bg"><i style="width:${Math.max(0, Math.min(100, f.comision / max * 100)).toFixed(0)}%"></i></div><b>${pct(f.porcentaje)}</b></div></td></tr>`).join('')}
-      </tbody><tfoot>
-      ${Math.abs(d.otros) >= 0.005 ? `<tr class="otros"><td></td><td colspan="3">Otros: ajustes, cuentas de comisión y clientes sin jugadas</td><td class="n d">${dinero(d.otros)}</td><td>${d.comisionOficina ? pct(d.otros / d.comisionOficina * 100) : ''}</td></tr>` : ''}
-      <tr><td></td><td>TOTAL</td><td class="n d">${d.totales.jugadas}</td><td class="n">${dinero(d.totales.jugado)}</td><td class="n d">${dinero(d.comisionOficina)}</td><td>100%</td></tr></tfoot></table>`;
+    html += `<div class="his-cols">${seccion('of', '🏢 OFICINAS', 'Oficina', oficinas)}${seccion('te', '👤 CLIENTES', 'Cliente', clientes)}</div>
+      <table class="his his-total"><tbody>
+      ${Math.abs(d.otros) >= 0.005 ? `<tr class="otros"><td>Otros: ajustes, cuentas de comisión y clientes sin jugadas</td><td class="n"></td><td class="n"></td><td class="n">${dinero(d.otros)}</td><td class="n">${d.comisionOficina ? pct(d.otros / d.comisionOficina * 100) : ''}</td></tr>` : ''}
+      <tr class="tg"><td>TOTAL GENERAL (oficinas + clientes)</td><td class="n">${d.totales.jugadas} jugadas</td><td class="n">${dinero(d.totales.jugado)}</td><td class="n">${dinero(d.comisionOficina)}</td><td class="n">100%</td></tr></tbody></table>`;
   }
   ponerInforme('hisCaptura', html);
   filtrarHistoria();
 }
 function filtrarHistoria() {
   const q = normNombre(($('hisBuscar') || {}).value || '');
-  document.querySelectorAll('#hisTbody tr').forEach(tr => { tr.hidden = !!q && !(tr.dataset.n || '').includes(q); });
+  document.querySelectorAll('#hisCaptura table.his:not(.his-total) tbody tr').forEach(tr => { tr.hidden = !!q && !(tr.dataset.n || '').includes(q); });
 }
 
 // ---------- 6. Excel ----------
@@ -359,10 +367,11 @@ function exportarExcel(que) {
     descargarExcel('comision_por_carrera', filas);
   } else if (que === 'historia') {
     const d = window.__HIS; if (!d) return;
-    const filas = [['#', 'Cliente', 'Jugadas', 'Jugado', 'Comisión que produce', '% de la oficina']];
-    d.filas.forEach((f, i) => filas.push([i + 1, nombreBonito(f.nombre), f.jugadas, numExcel(f.jugado), numExcel(f.comision), numExcel(f.porcentaje)]));
-    if (Math.abs(d.otros) >= 0.005) filas.push(['', 'Otros: ajustes, cuentas de comisión y clientes sin jugadas', '', '', numExcel(d.otros), '']);
-    filas.push(['', 'TOTAL', d.totales.jugadas, numExcel(d.totales.jugado), numExcel(d.comisionOficina), 100]);
+    const filas = [['Grupo', '#', 'Nombre', 'Jugadas', 'Jugado', 'Comisión que produce', '% de la oficina']];
+    const esOf = f => { const c = CLIENTES.find(x => !x.es_cuenta_comision && normNombre(x.nombre) === normNombre(f.nombre)); return !!c && tipoDeCliente(c) === 'oficina'; };
+    [['OFICINAS', d.filas.filter(esOf)], ['CLIENTES', d.filas.filter(f => !esOf(f))]].forEach(([g, lista]) => lista.forEach((f, i) => filas.push([g, i + 1, nombreBonito(f.nombre), f.jugadas, numExcel(f.jugado), numExcel(f.comision), numExcel(f.porcentaje)])));
+    if (Math.abs(d.otros) >= 0.005) filas.push(['', '', 'Otros: ajustes, cuentas de comisión y clientes sin jugadas', '', '', numExcel(d.otros), '']);
+    filas.push(['', '', 'TOTAL GENERAL', d.totales.jugadas, numExcel(d.totales.jugado), numExcel(d.comisionOficina), 100]);
     descargarExcel('historia_de_la_oficina', filas);
   } else if (que === 'detalle') {
     const x = window.__DET; if (!x) return;
