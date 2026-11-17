@@ -32,6 +32,20 @@ check(m.interpretarOferta('Ajá ksa') === null && m.interpretarOferta('me puedes
 o = m.interpretarOferta('Juego 4x1 doy a8');
 check(o && o.ok === false && /monto/.test(o.motivo), 'una oferta sin monto se rechaza');
 
+// 17-11-2026: formas naturales de escribir (prueba real en el grupo)
+o = m.interpretarOferta('Juego 3n del 5 400');
+check(o && o.ok && o.monto === 400 && JSON.stringify(o.apuesta.grupo) === '[5]' && o.apuesta.modalidad === '3n', '"Juego 3n del 5 400": el monto suelto al final se entiende');
+o = m.interpretarOferta('Juego 4x1 75');
+check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
+o = m.interpretarOferta('Juego 4 x 1 doy a8');
+check(o && o.ok === false && /monto/.test(o.motivo), '"4 x 1" no toma el 1 como monto');
+o = m.interpretarOferta('Juego 3n del 5');
+check(o && o.ok === false && /monto/.test(o.motivo), 'sin monto sigue pidiendo el monto');
+eq(m.interpretarAbrirCarrera('Abierta primera de churchill'), { hipodromo: 'churchill', carrera: 1 }, '"Abierta primera de churchill" abre la 1ra');
+eq(m.interpretarAbrirCarrera('Abre la 2da carrera de Mountaineer'), { hipodromo: 'Mountaineer', carrera: 2 }, '"Abre la 2da carrera de Mountaineer"');
+eq(m.interpretarAbrirCarrera('Abierta 3ra en La Rinconada'), { hipodromo: 'La Rinconada', carrera: 3 }, '"Abierta 3ra en La Rinconada"');
+check(m.interpretarAbrirCarrera('Abierta') === null && m.interpretarAbrirCarrera('Cerrado') === null, '"Abierta" sola o "Cerrado" no abren nada');
+
 // ---------- 2) Leer respuestas ----------
 eq(m.interpretarRespuesta('27'), { tipo: 'monto', monto: 27 }, 'respuesta "27" = 27');
 eq(m.interpretarRespuesta('J'), { tipo: 'todo' }, 'respuesta "J" = todo lo que quede');

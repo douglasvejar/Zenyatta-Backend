@@ -19,6 +19,7 @@ function consulta(text, params) {
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid/i.test(sql)) {
     return { rows: params[0] === JID ? [{ ...BD.grupo }] : [] };
   }
+  if (/^SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid FROM grupos WHERE id = \$1/i.test(sql)) return { rows: [BD.grupo] };
   if (/^SELECT id FROM grupos WHERE whatsapp_propio_activo = true/i.test(sql)) {
     if (BD.errorColumna) { const e = new Error('no existe la columna'); e.code = '42703'; throw e; }
     return { rows: BD.activos };
@@ -71,7 +72,7 @@ Object.assign(gestor._deps, {
   cargarBaileys: () => ({ default: makeWASocket, useMultiFileAuthState: async (dir) => ({ state: { dir }, saveCreds: () => {} }), DisconnectReason, fetchLatestBaileysVersion: async () => ({ version: [2, 3000, 1] }) }),
   cargarBoom: () => ({ Boom }),
   baseDir: () => base,
-  intentar: async (a) => { llamadas.push(a); return false; },
+  intentar: async (a) => { llamadas.push(a); if (a.anotar) a.anotar('Lo leyó el bot de jugadas'); return false; },
   alertar: (asunto, cuerpo) => { alertas.push(asunto); return Promise.resolve(); },
   esperar: async () => {},
   setTimeout: (fn, ms) => { const t = { fn, ms, limpiado: false }; timers.push(t); return t; }
@@ -113,6 +114,7 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   // ----- mensajes -----
   const mk = (jid, texto) => ({ key: { remoteJid: jid, id: 'M' + Math.random() }, message: { conversation: texto } });
   await s1.handlers['messages.upsert']({ messages: [mk(JID, 'Juego 4x1 con 75 doy a8')] });
+  check(gestor.estadoPublico(G).ultimo && /bot de jugadas/.test(gestor.estadoPublico(G).ultimo.motivo), 'el panel sabe que el último mensaje lo leyó el bot');
   check(llamadas.length === 1 && llamadas[0].grupoId === G && llamadas[0].remoteJid === JID && llamadas[0].texto === 'Juego 4x1 con 75 doy a8', 'un mensaje del grupo llega al bot de jugadas indicando de qué grupo es');
   check(llamadas[0].sock === s1 && typeof llamadas[0].ayudas === 'undefined' || llamadas[0].ayudas !== undefined, 'el bot recibe las ayudas');
   await s1.handlers['messages.upsert']({ messages: [mk('584121234567@s.whatsapp.net', 'hola')] });
@@ -181,6 +183,18 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   // grupoId equivocado o chat distinto: no le toca
   await glue.intentar({ sock: sockBot, msg: MSG('P2', 'Juego 4x1 con 75 doy a8', '584124537732@s.whatsapp.net'), remoteJid: '999@g.us', texto: 'Juego 4x1 con 75 doy a8', ayudas, grupoId: G });
   check(sockBot.enviados.length === 1, 'un chat que no es el elegido para ese número se ignora');
+  // el motivo del "ignorado" se ve en el panel (mensaje que entra por la conexión propia, chat distinto del elegido)
+  await gestor.iniciarSesion(G);
+  const sockNuevo = socks[socks.length - 1];
+  sockNuevo.handlers['connection.update']({ connection: 'open' });
+  gestor._deps.intentar = (a) => glue.intentar(a);
+  await sockNuevo.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '999@g.us', id: 'Z1' }, message: { conversation: 'hola' } }] });
+  check(/no es el elegido/.test((gestor.estadoPublico(G).ultimo || {}).motivo || ''), 'el panel explica por qué ignoró un mensaje de otro chat');
+  BD.grupo.activo = false; BD.grupo.whatsapp_propio_jid = '555@g.us';
+  glue._sesiones.clear();
+  await sockNuevo.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '555@g.us', id: 'Z2' }, message: { conversation: 'hola' } }] });
+  check(/INACTIVO/.test((gestor.estadoPublico(G).ultimo || {}).motivo || ''), 'y avisa si el grupo está inactivo');
+  BD.grupo.activo = true; BD.grupo.whatsapp_propio_jid = JID;
   // por la conexión general: se hace a un lado si el grupo tiene su número propio conectado
   const sockGeneral = { enviados: [], sendMessage: async (j, c) => { sockGeneral.enviados.push(c); return { key: { id: 'G' + sockGeneral.enviados.length } }; } };
   const sPropia = gestor._sesiones;

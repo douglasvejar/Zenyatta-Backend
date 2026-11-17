@@ -1768,6 +1768,10 @@
                   <span class="etiqueta">Número</span>
                   <span class="valor" id="wpPropioEstado">—</span>
                 </div>
+                <div class="detalle-fila" id="wpPropioUltimoFila" style="display:none;">
+                  <span class="etiqueta">Último mensaje que llegó</span>
+                  <span class="valor" id="wpPropioUltimo" style="text-align:right; font-size:12px;">—</span>
+                </div>
                 <div id="wpPropioQrCaja" style="display:none; margin-top:10px; gap:14px; align-items:center; flex-wrap:wrap;">
                   <img id="wpPropioQrImg" alt="Código QR" style="width:170px; height:170px; background:#fff; padding:6px; border-radius:8px;">
                   <small style="color:var(--text-dim); font-size:12px; max-width:320px;">En el teléfono: WhatsApp → Ajustes → Dispositivos vinculados → Vincular un dispositivo. Escanéalo con el chip que quieres dedicar a este grupo. El código se renueva solo.</small>
@@ -4540,6 +4544,14 @@ async function wpPropioCargar() {
   else if (d.tieneQr) html = '<span style="color:#b26a00; font-weight:600;">Esperando que escanees el QR…</span>';
   else html = '<span style="color:#b26a00;">' + (d.ultimoError ? d.ultimoError : 'Conectando…') + '</span>';
   estadoEl.innerHTML = html;
+  const filaUlt = document.getElementById('wpPropioUltimoFila');
+  if (filaUlt) {
+    filaUlt.style.display = d.conectado ? '' : 'none';
+    const ult = d.ultimo;
+    document.getElementById('wpPropioUltimo').textContent = ult
+      ? (new Date(ult.en).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' · ' + ult.motivo)
+      : 'Ninguno todavía (escribe algo en el grupo de WhatsApp)';
+  }
 
   btn('wpPropioBtnIniciar').style.display = (!d.vinculado || (!d.conectado && !d.tieneQr && d.ultimoError && d.ultimoError.indexOf('cerró') >= 0)) ? '' : 'none';
   btn('wpPropioBtnIniciar').textContent = d.vinculado ? '📱 Volver a vincular (nuevo QR)' : '📱 Vincular número propio';
@@ -4569,8 +4581,8 @@ async function wpPropioCargar() {
     } catch (e) { /* el próximo ciclo lo reintenta */ }
   }
   // Mientras haya algo por pasar (conectando / QR / reintento) se vuelve a mirar cada 3 s; conectado y estable, se deja de consultar.
-  const pendiente = d.vinculado && !d.conectado;
-  if (pendiente && !WP_PROPIO_TIMER) WP_PROPIO_TIMER = setInterval(wpPropioCargar, 3000);
+  const pendiente = d.vinculado;
+  if (pendiente && !WP_PROPIO_TIMER) WP_PROPIO_TIMER = setInterval(wpPropioCargar, d.conectado ? 5000 : 3000);
   if (!pendiente) wpPropioDetener();
 }
 async function wpPropioIniciar() {

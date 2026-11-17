@@ -85,6 +85,7 @@ function interpretarOferta(texto) {
   let cuota = null;
   let monto = null;
   let conRecibo = false;
+  let montoSuelto = false;
   const mC = t.match(/\b(doy|recibo|recibe|damos)\s*(?:a|@)?\s*(\d+(?:[.,]\d+)?)(?![\d])/i);
   if (mC) {
     lado = /^rec/i.test(mC[1]) ? 'recibo' : 'doy';
@@ -96,10 +97,10 @@ function interpretarOferta(texto) {
   if (mM) {
     monto = parseMontoChat(mM[1]);
     t = t.replace(mM[0], ' ');
-  } else if (conRecibo) {
-    // "Juego 4x5 recibo a 8 200": el monto va solo, al final.
-    const mFinal = t.match(new RegExp('(?:^|\\s)(' + MONTO_SRC + ')\\s*$'));
-    if (mFinal) { monto = parseMontoChat(mFinal[1]); t = t.replace(mFinal[0], ' '); }
+  } else {
+    // "Juego 4x5 recibo a 8 200" o "Juego 3n del 5 400": el monto va solo, al final. (No se toma un número pegado a una "x": "4 x 1".)
+    const mFinal = t.match(new RegExp('(?<![x×]\\s*)(?:^|\\s)(' + MONTO_SRC + ')\\s*$', 'i'));
+    if (mFinal) { monto = parseMontoChat(mFinal[1]); t = t.replace(mFinal[0], ' '); montoSuelto = true; }
   }
   if (monto === null || !(monto > 0)) return { ok: false, motivo: 'falta el monto' };
 
@@ -112,8 +113,10 @@ function interpretarOferta(texto) {
   const especFinal = (cuota !== null && !yaTieneDecimos) ? (espec + ' 10a' + cuota).trim() : espec;
 
   const prueba = calc.parsearLineaTerciosAdelantada('JUG ' + especFinal + ' con ' + montoParaLinea(monto) + ' da BAN');
-  if (!prueba.ok || prueba.errores.faltaApuesta) return { ok: false, motivo: 'no entendí la apuesta' };
-  if (prueba.jugadorNombre !== 'JUG' || prueba.banqueroNombre !== 'BAN') return { ok: false, motivo: 'no entendí la apuesta' };
+  // Si el número final se tomó como monto y lo que queda no es una apuesta, lo más probable es que simplemente faltó el monto.
+  const fallo = montoSuelto && !conRecibo ? 'falta el monto' : 'no entendí la apuesta';
+  if (!prueba.ok || prueba.errores.faltaApuesta) return { ok: false, motivo: fallo };
+  if (prueba.jugadorNombre !== 'JUG' || prueba.banqueroNombre !== 'BAN') return { ok: false, motivo: fallo };
 
   // "10@8" se guarda como "10a8" (misma jugada, una sola forma)
   const apuesta = { cruce: prueba.cruce, grupo: prueba.grupo, modalidad: prueba.modalidad ? String(prueba.modalidad).replace(/@/g, 'a') : prueba.modalidad };
@@ -174,8 +177,19 @@ function riesgoPorUnidad(apuesta) {
 // Reconocer a un administrador que abre/cierra carrera o pide el plano
 // ---------------------------------------------------------------
 const CARRERA_RE = /^(.+?)\s+(?:carrera\s+)?(\d{1,2})\s*(?:ra|era|da|ta|va|ma|na|er|do|to|vo|mo|no|a)?\.?\s*(?:carrera)?$/i;
+const ORDINALES_CARRERA = { primera: 1, primero: 1, segunda: 2, segundo: 2, tercera: 3, tercero: 3, cuarta: 4, cuarto: 4, quinta: 5, quinto: 5, sexta: 6, sexto: 6, septima: 7, septimo: 7, octava: 8, octavo: 8, novena: 9, noveno: 9, decima: 10, decimo: 10, undecima: 11, duodecima: 12 };
+// "Abierta primera de Churchill", "Abre la 2da carrera de Mountaineer", "Abierta 3ra en La Rinconada"
+const ABRIR_PALABRAS_RE = /^(?:abierta|abierto|abiertas|abre|abren|abran|abrir|abrimos|abrio)\s+(?:la\s+)?(?:carrera\s+)?(\S+?)(?:\s+carrera)?\s+(?:de|del|en)\s+(.+)$/i;
 function interpretarAbrirCarrera(texto) {
   const t = limpiar(texto);
+  const mp = t.match(ABRIR_PALABRAS_RE);
+  if (mp) {
+    const tok = mp[1].toLowerCase().replace(/[º°.]/g, '');
+    let n = ORDINALES_CARRERA[tok];
+    if (n === undefined) { const mn = tok.match(/^(\d{1,2})(?:ra|era|da|ta|va|ma|na|er|do|to|vo|mo|no|a)?$/); n = mn ? parseInt(mn[1], 10) : null; }
+    const hip = mp[2].replace(/\bcarrera\b/ig, '').trim();
+    if (n && n >= 1 && n <= 30 && hip) return { hipodromo: hip, carrera: n };
+  }
   if (!/carrera/i.test(t)) return null;
   const m = t.match(CARRERA_RE);
   if (!m) return null;

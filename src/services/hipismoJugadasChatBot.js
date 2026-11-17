@@ -62,6 +62,21 @@ async function grupoPropio(grupoId, jid) {
   return valor;
 }
 
+// Para el panel de Súper-admin: por qué el bot ignoró un mensaje que llegó por el número propio de un grupo.
+async function motivoSinGrupoPropio(grupoId, jid) {
+  try {
+    const r = await db.query('SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid FROM grupos WHERE id = $1', [grupoId]);
+    const g = r.rows[0];
+    if (!g) return 'No se encontró el grupo en el sistema';
+    if (!g.activo) return 'Ignorado: el grupo está INACTIVO (actívalo en la lista de Grupos de Súper-admin)';
+    if (!g.hipismo_chat_habilitado) return 'Ignorado: el servicio Corredores y Administración Inteligente no está contratado';
+    if (!g.whatsapp_propio_activo) return 'Ignorado: el número propio no está marcado como vinculado';
+    if (!g.whatsapp_propio_jid) return 'Ignorado: todavía no elegiste el grupo de WhatsApp (elígelo en el desplegable y toca Guardar grupo)';
+    if (g.whatsapp_propio_jid !== jid) return 'Ignorado: este chat no es el elegido para este número';
+  } catch (e) { /* sin detalle */ }
+  return 'Ignorado por el bot';
+}
+
 // Número -> cliente. Se comparan los últimos 10 dígitos (así "0414-1234567" y "+58 414 1234567" son el mismo).
 async function clientePorNumero(grupoId, jidReal) {
   const digitos = telefonoDeParticipante(jidReal);
@@ -220,12 +235,16 @@ function extraerCitadoId(msg) {
 // Devuelve true si el mensaje le tocaba a este bot (el grupo tiene el servicio y era una jugada, una respuesta o un comando de
 // administrador); false para que siga su camino normal (sábana, comandos de Deportes...).
 // `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` dice si puede abrir/cerrar/pedir plano.
-async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId }) {
+async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
   if (!texto || !remoteJid) return false;
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
   const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
-  if (!grupo) return false;
+  if (!grupo) {
+    if (grupoId && anotar) anotar(await motivoSinGrupoPropio(grupoId, remoteJid));
+    return false;
+  }
+  if (anotar) anotar('Lo leyó el bot de jugadas');
   // Si el grupo tiene su número propio conectado, la conexión general se hace a un lado (no se responde dos veces).
   if (!grupoId) {
     let propia = false;

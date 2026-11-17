@@ -59,6 +59,7 @@ function estadoPublico(grupoId) {
     tieneQr: !!s.ultimoQr && !s.conectado,
     ultimoError: s.ultimoError,
     numero: enmascararNumero(s.numero),
+    ultimo: s.ultimo || null,
     grupos: s.gruposDisponibles || []
   };
 }
@@ -98,12 +99,14 @@ function extraerTexto(msg) {
 // Un mensaje de WhatsApp que llegó por la conexión propia de este grupo.
 async function manejarMensaje(grupoId, sock, msg) {
   const remoteJid = msg && msg.key && msg.key.remoteJid;
-  if (!remoteJid || !String(remoteJid).endsWith('@g.us')) return;
+  const s = sesiones.get(String(grupoId));
+  const anotar = (motivo) => { if (s) s.ultimo = { en: new Date().toISOString(), chat: remoteJid, motivo }; };
+  if (!remoteJid || !String(remoteJid).endsWith('@g.us')) { anotar('Ignorado: es un chat privado, no un grupo'); return; }
   const texto = extraerTexto(msg);
-  if (!texto) return;
+  if (!texto) { anotar('Ignorado: el mensaje no tiene texto (foto, sticker...)'); return; }
   try {
     const ayudas = deps.ayudasBot()(sock, msg);
-    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas });
+    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar });
   } catch (e) {
     console.error('[whatsappSesionesGrupo] Error al procesar un mensaje del grupo ' + grupoId + ':', e);
   }
