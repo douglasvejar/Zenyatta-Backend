@@ -240,6 +240,18 @@ async function resolverNumeroRealDelRemitente(sock, msg, participantJid) {
       const real = await mapeo.getPNForLID(participantJid);
       if (typeof real === 'string' && real.includes('@')) return real;
     }
+
+    // 3) (17-11-2026) La lista de participantes del propio grupo: en los grupos que usan LID, cada participante trae su número real
+    //    junto al LID (campos jid / phoneNumber, o el id normal con el lid aparte). Se usa la metadata ya cacheada del grupo.
+    const grupoJid = msg && msg.key && msg.key.remoteJid;
+    if (sock && typeof sock.groupMetadata === 'function' && typeof grupoJid === 'string' && grupoJid.endsWith('@g.us')) {
+      const meta = await obtenerMetadataGrupoCacheada(sock, grupoJid);
+      const p = ((meta && meta.participants) || []).find(x => x && (x.id === participantJid || x.lid === participantJid));
+      if (p) {
+        const pn = [p.jid, p.phoneNumber, p.id].find(v => typeof v === 'string' && /^\d+(?::\d+)?(@s\.whatsapp\.net)?$/.test(v.replace(/@s\.whatsapp\.net$/, '')) && !v.endsWith('@lid'));
+        if (pn) return pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+      }
+    }
   } catch (e) {
     console.error('[whatsappBot] No se pudo resolver el número real detrás de un @lid (' + participantJid + '):', e.message);
   }

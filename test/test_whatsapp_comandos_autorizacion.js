@@ -318,6 +318,17 @@ function crearMensaje(texto, participante) {
   const conMapeo = await whatsappBot.resolverNumeroRealDelRemitente(sockConMapeo, { key: {} }, LID);
   check(conMapeo === JID_NORMAL, 'si no viene en el mensaje, se intenta con sock.signalRepository.lidMapping.getPNForLID()');
 
+  // 17-11-2026: el número real también sale de la lista de participantes del grupo (grupos que usan LID)
+  const GRUPO_G = '120363000000000001@g.us';
+  const sockConLista = { groupMetadata: async () => ({ participants: [{ id: LID, jid: '573025932077@s.whatsapp.net' }] }) };
+  check(await whatsappBot.resolverNumeroRealDelRemitente(sockConLista, { key: { remoteJid: GRUPO_G } }, LID) === '573025932077@s.whatsapp.net', 'si no hay otra forma, se saca de la lista de participantes del grupo (campo jid)');
+  const sockConLista2 = { groupMetadata: async () => ({ participants: [{ id: LID, phoneNumber: '573025932077@s.whatsapp.net' }, { id: 'otro@lid', phoneNumber: '584141111111@s.whatsapp.net' }] }) };
+  check(await whatsappBot.resolverNumeroRealDelRemitente(sockConLista2, { key: { remoteJid: GRUPO_G + 'x' } }, LID) === LID, 'sin chat de grupo (jid que no es @g.us) no consulta la lista');
+  const sockConLista3 = { groupMetadata: async () => ({ participants: [{ id: '573025932077@s.whatsapp.net', lid: LID }] }) };
+  check(await whatsappBot.resolverNumeroRealDelRemitente(sockConLista3, { key: { remoteJid: '120363000000000003@g.us' } }, LID) === '573025932077@s.whatsapp.net', 'y también cuando el id normal trae el lid aparte');
+  const sockConLista4 = { groupMetadata: async () => ({ participants: [{ id: 'otro@lid', jid: '584141111111@s.whatsapp.net' }] }) };
+  check(await whatsappBot.resolverNumeroRealDelRemitente(sockConLista4, { key: { remoteJid: '120363000000000004@g.us' } }, LID) === LID, 'si el participante no está en la lista, se devuelve el @lid tal cual');
+
   const sockMapeoQueFalla = { signalRepository: { lidMapping: { getPNForLID: async () => { throw new Error('no disponible'); } } } };
   const conMapeoQueFalla = await whatsappBot.resolverNumeroRealDelRemitente(sockMapeoQueFalla, { key: {} }, LID);
   check(conMapeoQueFalla === LID, 'si sock.signalRepository.lidMapping.getPNForLID() revienta, no se propaga el error — se devuelve el @lid tal cual');

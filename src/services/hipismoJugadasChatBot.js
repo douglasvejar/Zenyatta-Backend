@@ -254,6 +254,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
 
   const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
   const jidReal = await ayudas.resolverRemitente(jidCrudo);
+  if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
   const fromMe = !!(msg.key && msg.key.fromMe);
   const s = sesionDe(grupo, sock, remoteJid);
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
