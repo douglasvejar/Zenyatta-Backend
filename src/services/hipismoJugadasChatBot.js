@@ -16,7 +16,8 @@ const { clientesConPozoDisponible } = require('./hipismoAlertaPozo');
 const TEXTO_PLANO_BOT = 'Jugadas del chat de WhatsApp (bot)';
 const sesiones = new Map();        // grupoId -> { motor, cola, mensajes: Map(id -> msg) }
 const cacheGrupos = new Map();     // jid -> { valor, hasta }
-const cacheClientes = new Map();   // grupoId -> { lista, hasta }
+const cacheClientes = new Map();
+const MARCA_ADMIN = '__ADMIN__'; // en hipismo_chat_numeros: el número no es un cliente sino un administrador autorizado con "autorizar"   // grupoId -> { lista, hasta }
 const enviadosPorElBot = new Set();
 
 const normNombre = t => quitarTildes(String(t || '')).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -114,20 +115,26 @@ async function motivoSinGrupoPropio(grupoId, jid) {
 // Número -> cliente. Se comparan los últimos 10 dígitos (así "0414-1234567" y "+58 414 1234567" son el mismo).
 // `jids` puede ser un jid o varios (el real y el crudo): WhatsApp a veces muestra el @lid y a veces el teléfono, según la conexión,
 // así que se prueban todos contra los números asociados a mano y contra las fichas.
-async function clientePorNumero(grupoId, jids) {
-  const todos = [].concat(jids || []).map(j => telefonoDeParticipante(j)).filter((d, i, a) => d && a.indexOf(d) === i);
-  if (!todos.length) return null;
+async function cacheDeClientes(grupoId) {
   let c = cacheClientes.get(grupoId);
   if (!c || c.hasta < Date.now()) {
     const r = await db.query(`SELECT nombre, telefono FROM jugadores WHERE grupo_id = $1 AND telefono IS NOT NULL AND telefono <> '' AND COALESCE(es_cuenta_comision, false) = false`, [grupoId]);
     const mapa = new Map();
+    const admins = new Set();
     try {
       const rm = await db.query('SELECT digitos, jugador_nombre FROM hipismo_chat_numeros WHERE grupo_id = $1', [grupoId]);
-      rm.rows.forEach(f => mapa.set(String(f.digitos), f.jugador_nombre));
+      rm.rows.forEach(f => { if (f.jugador_nombre === MARCA_ADMIN) admins.add(String(f.digitos)); else mapa.set(String(f.digitos), f.jugador_nombre); });
     } catch (e) { if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudieron leer los números registrados a mano:', e.message); }
-    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), mapa, hasta: Date.now() + 60000 };
+    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), mapa, admins, hasta: Date.now() + 60000 };
     cacheClientes.set(grupoId, c);
   }
+  return c;
+}
+
+async function clientePorNumero(grupoId, jids) {
+  const todos = [].concat(jids || []).map(j => telefonoDeParticipante(j)).filter((d, i, a) => d && a.indexOf(d) === i);
+  if (!todos.length) return null;
+  const c = await cacheDeClientes(grupoId);
   for (const digitos of todos) if (c.mapa && c.mapa.has(digitos)) return c.mapa.get(digitos); // asociado a mano por un administrador ("registrar NOMBRE")
   const ult = s => s.slice(-10);
   for (const digitos of todos) {
@@ -135,6 +142,26 @@ async function clientePorNumero(grupoId, jids) {
     if (hallado) return hallado.nombre;
   }
   return null;
+}
+
+// Administradores autorizados con el comando "autorizar" (además del número de Súper-admin y del chip del bot).
+async function esAdminRegistrado(grupoId, jids) {
+  const todos = [].concat(jids || []).map(j => telefonoDeParticipante(j)).filter(Boolean);
+  if (!todos.length) return false;
+  try { const c = await cacheDeClientes(grupoId); return todos.some(d => c.admins && c.admins.has(d)); } catch (e) { return false; }
+}
+
+async function autorizarAdminManual(grupoId, { jid }, obtenerSock) {
+  const digitos = telefonoDeParticipante(jid);
+  if (!digitos) return { ok: false, motivo: 'No pude leer el número de esa persona.' };
+  if (obtenerSock && esDelBot(obtenerSock(), jid)) return { ok: false, motivo: 'Ese es el número del propio bot, no el de una persona.' };
+  await db.query(
+    `INSERT INTO hipismo_chat_numeros (grupo_id, digitos, jugador_nombre) VALUES ($1,$2,$3)
+     ON CONFLICT (grupo_id, digitos) DO UPDATE SET jugador_nombre = EXCLUDED.jugador_nombre`,
+    [grupoId, digitos, MARCA_ADMIN]
+  );
+  cacheClientes.delete(grupoId);
+  return { ok: true };
 }
 
 // Lo que le queda para jugar. Los clientes sin pozo (libres) no tienen tope. A lo que ya calcula el sistema ("en juego" de las
@@ -273,6 +300,7 @@ function sesionDe(grupo, sock, remoteJid) {
       cargarJugadas: q => cargarJugadas(grupo.id, q),
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
       registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
+      autorizarAdmin: x => autorizarAdminManual(grupo.id, x, () => s.sock),
       guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
       nota: t => { if (s.anotarActual) s.anotarActual(t); },
       responder: (texto, op) => enviar(s, texto, op || {}),
@@ -363,7 +391,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   const s = sesionDe(grupo, sock, remoteJid);
   s.anotarActual = anotar || null;
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
-  const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
+  const esAdmin = (await ayudas.esAdministrador(grupo, jidReal, fromMe)) || (await esAdminRegistrado(grupo.id, [jidReal, jidCrudo]));
   let citadoPart = extraerCitadoParticipante(msg);
   const citadoIdMsg = extraerCitadoId(msg);
   // Si el administrador responde al aviso "no está registrado" del bot, se registra a la persona a la que iba dirigido el aviso.
@@ -387,4 +415,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { intentar, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

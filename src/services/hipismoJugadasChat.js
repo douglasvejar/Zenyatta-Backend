@@ -180,15 +180,30 @@ function riesgoPorUnidad(apuesta) {
 const CARRERA_RE = /^(.+?)\s+(?:carrera\s+)?(\d{1,2})\s*(?:ra|era|da|ta|va|ma|na|er|do|to|vo|mo|no|a)?\.?\s*(?:carrera)?$/i;
 const ORDINALES_CARRERA = { primera: 1, primero: 1, segunda: 2, segundo: 2, tercera: 3, tercero: 3, cuarta: 4, cuarto: 4, quinta: 5, quinto: 5, sexta: 6, sexto: 6, septima: 7, septimo: 7, octava: 8, octavo: 8, novena: 9, noveno: 9, decima: 10, decimo: 10, undecima: 11, duodecima: 12 };
 // "Abierta primera de Churchill", "Abre la 2da carrera de Mountaineer", "Abierta 3ra en La Rinconada"
-const ABRIR_PALABRAS_RE = /^(?:abierta|abierto|abiertas|abre|abren|abran|abrir|abrimos|abrio)\s+(?:la\s+)?(?:carrera\s+)?(\S+?)(?:\s+carrera)?\s+(?:de|del|en)\s+(.+)$/i;
+const ABRIR_VERBO = '(?:abierta|abierto|abiertas|abre|abren|abran|abrir|abrimos|abrio)';
+const ABRIR_PALABRAS_RE = new RegExp('^' + ABRIR_VERBO + '[,:.]?\\s+(?:la\\s+)?(?:carrera\\s+)?(\\S+?)(?:\\s+carrera)?(?:\\s+(?:de|del|en))?\\s+(.+)$', 'i');
+// "Abierta gulf 8va", "Abierta gulfstream park 8va carrera": el hipódromo primero y el número al final
+const ABRIR_PALABRAS_INVERSO_RE = new RegExp('^' + ABRIR_VERBO + '[,:.]?\\s+(?:la\\s+)?(.+?)\\s+(?:de\\s+la\\s+)?(\\S+?)(?:\\s+carrera)?$', 'i');
+const numeroDeOrdinal = tok => {
+  const t = String(tok).toLowerCase().replace(/[º°.]/g, '');
+  if (ORDINALES_CARRERA[t] !== undefined) return ORDINALES_CARRERA[t];
+  const mn = t.match(/^(\d{1,2})(?:ra|era|da|ta|va|ma|na|er|do|to|vo|mo|no|a)?$/);
+  return mn ? parseInt(mn[1], 10) : null;
+};
+// "Abierta primera de Churchill", "Abre la 2da carrera de Mountaineer", "Abierta 3ra en La Rinconada", "Abierta 8va gulf", "Abierta gulf 8va"
 function interpretarAbrirCarrera(texto) {
   const t = limpiar(texto);
+  const limpiaHip = h => String(h).replace(/\bcarrera\b/ig, '').replace(/[.,;:!]+$/g, '').trim();
   const mp = t.match(ABRIR_PALABRAS_RE);
   if (mp) {
-    const tok = mp[1].toLowerCase().replace(/[º°.]/g, '');
-    let n = ORDINALES_CARRERA[tok];
-    if (n === undefined) { const mn = tok.match(/^(\d{1,2})(?:ra|era|da|ta|va|ma|na|er|do|to|vo|mo|no|a)?$/); n = mn ? parseInt(mn[1], 10) : null; }
-    const hip = mp[2].replace(/\bcarrera\b/ig, '').trim();
+    const n = numeroDeOrdinal(mp[1]);
+    const hip = limpiaHip(mp[2]);
+    if (n && n >= 1 && n <= 30 && hip) return { hipodromo: hip, carrera: n };
+  }
+  const mi = t.match(ABRIR_PALABRAS_INVERSO_RE);
+  if (mi) {
+    const n = numeroDeOrdinal(mi[2]);
+    const hip = limpiaHip(mi[1]);
     if (n && n >= 1 && n <= 30 && hip) return { hipodromo: hip, carrera: n };
   }
   if (!/carrera/i.test(t)) return null;
@@ -201,6 +216,7 @@ function interpretarAbrirCarrera(texto) {
 }
 const ES_CIERRE_RE = /^(?:cierra|cierre|cerrar|cerrada|cerrado|cierra la carrera|cerrar carrera)$/i;
 const ES_PLANO_RE = /^(?:plano|planos)$/i;
+const ES_AUTORIZAR_RE = /^(?:autorizar|autoriza|dar admin|hacer admin|admin)$/i;
 
 // ---------------------------------------------------------------
 // PLANO de la carrera
@@ -264,6 +280,23 @@ function crearMotor(deps) {
     const r = await deps.registrarNumero({ jid: m.citadoParticipante, nombre: nombre.trim() });
     if (r && r.ok) await deps.responder('✅ Listo: ese número quedó registrado como *' + r.nombre + '*. Ya puede jugar.', { citarId: m.id });
     else await deps.responder('⚠️ ' + ((r && r.motivo) || 'No se pudo registrar ese número.'), { citarId: m.id });
+  }
+  // Un administrador autoriza a otra persona (responde a su mensaje o al aviso "no autorizado" del bot con "autorizar"): desde entonces puede abrir/cerrar y pedir el plano.
+  async function autorizarAdmin(m) {
+    if (!deps.autorizarAdmin) return;
+    if (!m.citadoParticipante) { await deps.responder('⚠️ No sé a quién autorizar. Responde (cita) el mensaje de esa persona —o mi aviso "no autorizado" para ella— escribiendo: *autorizar*', { citarId: m.id }); return; }
+    const r = await deps.autorizarAdmin({ jid: m.citadoParticipante });
+    await deps.responder(r && r.ok ? '✅ Listo: ese número ahora es administrador (puede abrir y cerrar carreras y pedir el plano).' : '⚠️ ' + ((r && r.motivo) || 'No se pudo autorizar.'), { citarId: m.id });
+  }
+  async function avisarNoAdmin(m, que) {
+    if (!puedeAvisar('no-admin|' + m.remitente.jid, 60000)) { nota('Intentó ' + que + ' pero no es administrador (aviso ya dado hace poco)'); return; }
+    const jid = String((m.remitente && (m.remitente.jidReal || m.remitente.jid)) || '');
+    const dig = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+    const detalle = jid.endsWith('@lid')
+      ? '\n(WhatsApp oculta tu teléfono. Un administrador puede autorizarte respondiendo a este mensaje con *autorizar*.)'
+      : '\n(Número que veo: +' + dig + '. Un administrador puede autorizarte respondiendo a este mensaje con *autorizar*, o cargarlo en Súper-admin → Comandos por WhatsApp.)';
+    nota('Intentó ' + que + ' pero su número no está autorizado como administrador');
+    await deps.responder(etiquetaDe(m) + ' tu número no está autorizado para ' + que + '. Solo un administrador puede hacerlo.' + detalle, { ...mencion(m), registroDe: m.remitente.jid });
   }
   // "@@" marca dónde va la mención al jugador (quien conecta con WhatsApp la cambia por @número; ver hipismoJugadasChatBot.js)
   const mencion = m => ({ citarId: m.id, mencionar: m.remitente.jid, nombre: m.remitente.nombre });
@@ -435,6 +468,7 @@ function crearMotor(deps) {
     if (!texto) return;
     await cargarEstadoSiHaceFalta();
     if (m.esAdmin) {
+      if (ES_AUTORIZAR_RE.test(texto)) return autorizarAdmin(m);
       const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
       if (mReg) return registrarNumero(m, mReg[1]);
       const carr = interpretarAbrirCarrera(texto);
@@ -444,6 +478,11 @@ function crearMotor(deps) {
         if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
         return publicarPlano();
       }
+    }
+    if (!m.esAdmin) {
+      // Antes esto se ignoraba en silencio (parecía que el bot "no abría la carrera"): ahora se explica.
+      if (interpretarAbrirCarrera(texto)) return avisarNoAdmin(m, 'abrir carreras');
+      if (ES_CIERRE_RE.test(texto)) return avisarNoAdmin(m, 'cerrar carreras');
     }
     const oferta = interpretarOferta(texto);
     if (oferta !== null) return procesarOferta(m, oferta);

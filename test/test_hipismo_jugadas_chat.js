@@ -44,6 +44,10 @@ check(o && o.ok === false && /monto/.test(o.motivo), 'sin monto sigue pidiendo e
 eq(m.interpretarAbrirCarrera('Abierta primera de churchill'), { hipodromo: 'churchill', carrera: 1 }, '"Abierta primera de churchill" abre la 1ra');
 eq(m.interpretarAbrirCarrera('Abre la 2da carrera de Mountaineer'), { hipodromo: 'Mountaineer', carrera: 2 }, '"Abre la 2da carrera de Mountaineer"');
 eq(m.interpretarAbrirCarrera('Abierta 3ra en La Rinconada'), { hipodromo: 'La Rinconada', carrera: 3 }, '"Abierta 3ra en La Rinconada"');
+eq(m.interpretarAbrirCarrera('Abierta 8va de gulf'), { hipodromo: 'gulf', carrera: 8 }, '"Abierta 8va de gulf"');
+eq(m.interpretarAbrirCarrera('abierta 8va gulf'), { hipodromo: 'gulf', carrera: 8 }, '"abierta 8va gulf" (sin "de")');
+eq(m.interpretarAbrirCarrera('Abierta, 8va de gulf.'), { hipodromo: 'gulf', carrera: 8 }, 'con coma y punto final');
+eq(m.interpretarAbrirCarrera('Abierta gulfstream park 8va carrera'), { hipodromo: 'gulfstream park', carrera: 8 }, '"Abierta gulfstream park 8va carrera" (el número al final)');
 check(m.interpretarAbrirCarrera('Abierta') === null && m.interpretarAbrirCarrera('Cerrado') === null, '"Abierta" sola o "Cerrado" no abren nada');
 
 // ---------- 2) Leer respuestas ----------
@@ -259,6 +263,24 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofN.id }));
   check(notasMotor.some(t => /Jugada publicada por CACHACO/.test(t)) && notasMotor.some(t => /Se jugó: CACHACO con 10,00 contra MARVEL/.test(t)), 'el motor deja notas de lo que decidió (para el panel de Súper-admin)');
   delete deps.nota;
+
+  // no administradores que intentan abrir/cerrar: ya no se quedan sin respuesta
+  const nAd = enviadas.length;
+  await motor.procesarMensaje(msg('j_socio', 'Abierta 8va de gulf'));
+  check(enviadas.length === nAd + 1 && /no está autorizado para abrir carreras/.test(ultima().t) && ultima().op.registroDe === 'j_socio', 'un jugador escribe "Abierta 8va de gulf": el bot explica que no está autorizado (y deja marcado a quién autorizar)');
+  await motor.procesarMensaje(msg('j_socio', 'Abierta 8va de gulf'));
+  check(enviadas.length === nAd + 1, 'el mismo aviso no se repite a cada intento');
+  await motor.procesarMensaje(msg('j_marvel', 'Cerrado'));
+  check(/no está autorizado para cerrar carreras/.test(ultima().t) && motor.estado().abierta === true, 'un jugador escribe "Cerrado": se explica y la carrera sigue abierta');
+  const autorizados = [];
+  deps.autorizarAdmin = async x => { autorizados.push(x); return { ok: true }; };
+  await motor.procesarMensaje(msg('j_dreamy', 'autorizar', { esAdmin: true }));
+  check(autorizados.length === 0 && /No sé a quién autorizar/.test(ultima().t), '"autorizar" sin citar a nadie: pide citar');
+  await motor.procesarMensaje(msg('j_dreamy', 'autorizar', { esAdmin: true, citadoParticipante: 'j_socio' }));
+  check(autorizados.length === 1 && autorizados[0].jid === 'j_socio' && /ahora es administrador/.test(ultima().t), 'el administrador autoriza citando a la persona');
+  await motor.procesarMensaje(msg('j_marvel', 'autorizar', { citadoParticipante: 'j_socio' }));
+  check(autorizados.length === 1, 'un jugador no puede autorizar a nadie');
+  delete deps.autorizarAdmin;
 
   // Oferta que no se entiende: preguntar en el grupo
   await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));

@@ -111,15 +111,15 @@ const textoDe = e => e.contenido.text;
 
   // un jugador no puede abrir
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('CACHACO', 'Mountaineer 1ra carrera'));
-  check(enviados.length === 0, 'un jugador no puede abrir una carrera');
+  check(enviados.length === 1 && /no está autorizado para abrir carreras/.test(textoDe(ultimo())) && !/Carrera abierta/.test(textoDe(ultimo())), 'un jugador no puede abrir una carrera: el bot explica que su número no está autorizado (ya no se queda mudo)');
   // el administrador (número autorizado en Súper-admin) abre
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Mountaineer 1era carrera'));
-  check(enviados.length === 1 && /Carrera abierta/.test(textoDe(ultimo())), 'el número autorizado abre "Mountaineer 1era carrera" y el bot confirma');
+  check(enviados.length === 2 && /Carrera abierta/.test(textoDe(ultimo())), 'el número autorizado abre "Mountaineer 1era carrera" y el bot confirma');
 
   // Cachaco publica 120
   const of = mensaje('CACHACO', 'Juego 4 x 1 10a8 con 120');
   await whatsappBot.manejarMensajeEntrante(sock, of);
-  check(enviados.length === 1, 'publicar una jugada válida no genera mensaje');
+  check(enviados.length === 2, 'publicar una jugada válida no genera mensaje');
   // Marvel responde 22 (se identifica por su teléfono 0412-4537732)
   const r1 = mensaje('MARVEL', '22', of.key.id);
   await whatsappBot.manejarMensajeEntrante(sock, r1);
@@ -207,6 +207,22 @@ const textoDe = e => e.contenido.text;
   // aunque llegue el número del bot por otro camino, se rechaza
   const rBot = await glue._registrarNumeroManual(G, { jid: '98765432100@lid', nombre: 'tykhe' }, () => sock);
   check(rBot.ok === false && /propio bot/.test(rBot.motivo), 'el número (o @lid) del propio bot nunca se asocia a un cliente');
+  // "autorizar": un administrador autoriza a otra persona (responde a su aviso "no autorizado") y desde entonces puede abrir carreras
+  const jugadorQuiere = { key: { remoteJid: JID, participant: '44444444444@lid', id: 'ADM1', fromMe: false }, pushName: 'Socio', message: { conversation: 'Abierta 2da de mountaineer' } };
+  const ayS = () => whatsappBot.crearAyudasJugadasChat(sock, jugadorQuiere);
+  await glue.intentar({ sock, msg: jugadorQuiere, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: ayS() });
+  const avisoAdm = ultimo();
+  check(/no está autorizado para abrir carreras/.test(textoDe(avisoAdm)) && /autorizar/.test(textoDe(avisoAdm)), 'alguien que no es administrador intenta abrir: se le explica y se le dice cómo autorizarlo');
+  const autor = { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'AUT1', fromMe: false }, pushName: 'Admin', message: { extendedTextMessage: { text: 'autorizar', contextInfo: { stanzaId: avisoAdm.id, participant: '573246161764@s.whatsapp.net' } } } };
+  await glue.intentar({ sock, msg: autor, remoteJid: JID, texto: 'autorizar', ayudas: whatsappBot.crearAyudasJugadasChat(sock, autor) });
+  check(/ahora es administrador/.test(textoDe(ultimo())) && T.numeros.some(x => x.digitos === '44444444444' && x.jugador_nombre === '__ADMIN__'), 'el administrador responde "autorizar" al aviso y esa persona queda como administrador');
+  const jugadorAbre = { key: { remoteJid: JID, participant: '44444444444@lid', id: 'ADM2', fromMe: false }, pushName: 'Socio', message: { conversation: 'Abierta 2da de mountaineer' } };
+  await glue.intentar({ sock, msg: jugadorAbre, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorAbre) });
+  check(/Carrera abierta: \*Mountaineer, 2da Carrera\*/.test(textoDe(ultimo())), 'la persona autorizada ya puede abrir carreras (aunque WhatsApp oculte su teléfono)');
+  await glue.intentar({ sock, msg: { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'AB1', fromMe: false }, message: { conversation: 'Mountaineer 1era carrera' } }, remoteJid: JID, texto: 'Mountaineer 1era carrera', ayudas: whatsappBot.crearAyudasJugadasChat(sock, { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net' } }) });
+  check(!T.numeros.some(x => x.jugador_nombre === '__ADMIN__' && x.digitos === '573246161764'), 'el número del propio bot nunca queda como administrador autorizado');
+  // un administrador registrado no es tomado por cliente
+  check(await glue.clientePorNumero(G, '44444444444@lid') === null, 'un administrador autorizado no se confunde con un cliente');
   let notasT = [];
   await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid(), anotar: n => notasT.push(n) });
   check(notasT.some(n => /es el cliente TYKHE/.test(n)), 'el panel muestra que ese número es el cliente TYKHE');
