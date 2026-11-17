@@ -62,6 +62,27 @@ async function grupoPropio(grupoId, jid) {
   return valor;
 }
 
+// Un administrador asocia el número (o el código oculto @lid) de quien escribió con un cliente de la ficha: "registrar NOMBRE" citando su mensaje.
+async function registrarNumeroManual(grupoId, { jid, nombre }) {
+  const digitos = telefonoDeParticipante(jid);
+  if (!digitos) return { ok: false, motivo: 'No pude leer el número de esa persona.' };
+  const buscado = normNombre(nombre);
+  if (!buscado) return { ok: false, motivo: 'Escribe el nombre del cliente: *registrar NOMBRE*' };
+  const r = await db.query(`SELECT nombre FROM jugadores WHERE grupo_id = $1 AND COALESCE(es_cuenta_comision, false) = false`, [grupoId]);
+  const lista = r.rows.map(f => ({ nombre: f.nombre, n: normNombre(f.nombre) }));
+  let hallados = lista.filter(f => f.n === buscado);
+  if (hallados.length === 0) hallados = lista.filter(f => f.n.includes(buscado));
+  if (hallados.length === 0) return { ok: false, motivo: 'No encontré ningún cliente llamado "' + nombre + '" en este grupo.' };
+  if (hallados.length > 1) return { ok: false, motivo: 'Hay varios clientes que se parecen a "' + nombre + '" (' + hallados.slice(0, 4).map(f => f.nombre).join(', ') + '). Escribe el nombre completo.' };
+  await db.query(
+    `INSERT INTO hipismo_chat_numeros (grupo_id, digitos, jugador_nombre) VALUES ($1,$2,$3)
+     ON CONFLICT (grupo_id, digitos) DO UPDATE SET jugador_nombre = EXCLUDED.jugador_nombre`,
+    [grupoId, digitos, hallados[0].nombre]
+  );
+  cacheClientes.delete(grupoId);
+  return { ok: true, nombre: hallados[0].nombre };
+}
+
 // Para el panel de Súper-admin: por qué el bot ignoró un mensaje que llegó por el número propio de un grupo.
 async function motivoSinGrupoPropio(grupoId, jid) {
   try {
@@ -84,9 +105,15 @@ async function clientePorNumero(grupoId, jidReal) {
   let c = cacheClientes.get(grupoId);
   if (!c || c.hasta < Date.now()) {
     const r = await db.query(`SELECT nombre, telefono FROM jugadores WHERE grupo_id = $1 AND telefono IS NOT NULL AND telefono <> '' AND COALESCE(es_cuenta_comision, false) = false`, [grupoId]);
-    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), hasta: Date.now() + 60000 };
+    const mapa = new Map();
+    try {
+      const rm = await db.query('SELECT digitos, jugador_nombre FROM hipismo_chat_numeros WHERE grupo_id = $1', [grupoId]);
+      rm.rows.forEach(f => mapa.set(String(f.digitos), f.jugador_nombre));
+    } catch (e) { if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudieron leer los números registrados a mano:', e.message); }
+    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), mapa, hasta: Date.now() + 60000 };
     cacheClientes.set(grupoId, c);
   }
+  if (c.mapa && c.mapa.has(digitos)) return c.mapa.get(digitos); // asociado a mano por un administrador ("registrar NOMBRE")
   const ult = s => s.slice(-10);
   const hallado = c.lista.find(f => (f.digitos.length >= 10 && digitos.length >= 10) ? ult(f.digitos) === ult(digitos) : f.digitos === digitos);
   return hallado ? hallado.nombre : null;
@@ -227,6 +254,7 @@ function sesionDe(grupo, sock, remoteJid) {
       guardarJugada: j => guardarJugada(grupo.id, j),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
+      registrarNumero: x => registrarNumeroManual(grupo.id, x),
       guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
       responder: (texto, op) => enviar(s, texto, op || {}),
       publicar: texto => enviar(s, texto, {})
@@ -258,6 +286,12 @@ async function enviar(s, texto, op) {
   } catch (e) {
     console.error('[hipismoChat] No se pudo responder en el grupo ' + s.jid + ':', e.message);
   }
+}
+
+function extraerCitadoParticipante(msg) {
+  const m = msg && msg.message;
+  const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
+  return (ci && ci.participant) || null;
 }
 
 function extraerCitadoId(msg) {
@@ -296,7 +330,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
   const mensaje = {
-    texto, id: idMsg, citadoId: extraerCitadoId(msg), esAdmin,
+    texto, id: idMsg, citadoId: extraerCitadoId(msg), citadoParticipante: extraerCitadoParticipante(msg), esAdmin,
     remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
   };
   s.cola = s.cola.then(() => s.motor.procesarMensaje(mensaje)).catch(e => console.error('[hipismoChat] Error al procesar un mensaje:', e));

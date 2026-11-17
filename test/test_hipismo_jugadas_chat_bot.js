@@ -12,8 +12,9 @@ const GRUPO = { id: G, nombre: 'Dream', activo: true, whatsapp_grupo_jid: JID, w
 const T = {
   jugadores: [
     { nombre: 'CACHACO', telefono: '+57 323 3070494' }, { nombre: 'MARVEL', telefono: '0412-4537732' }, { nombre: 'NANA', telefono: '58 424 1746628' },
-    { nombre: 'RICARDO', telefono: '+1 (904) 767-0886' }
+    { nombre: 'RICARDO', telefono: '+1 (904) 767-0886' }, { nombre: 'TYKHE', telefono: '+57 302 5932077' }
   ],
+  numeros: [],
   hipodromos: [{ id: 'h1', nombre: 'Mountaineer' }, { id: 'h2', nombre: 'La Rinconada' }],
   planos: [], jugadas: [], chat: [], estado: null
 };
@@ -25,6 +26,14 @@ function consulta(text, params) {
     return { rows: (params[0] === JID && GRUPO.hipismo_chat_habilitado) ? [GRUPO] : [] };
   }
   if (/^SELECT nombre, telefono FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: T.jugadores };
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND COALESCE\(es_cuenta_comision, false\) = false/i.test(sql)) return { rows: T.jugadores.map(j => ({ nombre: j.nombre })) };
+  if (/^SELECT digitos, jugador_nombre FROM hipismo_chat_numeros WHERE grupo_id = \$1/i.test(sql)) return { rows: T.numeros.filter(x => x.grupo_id === params[0]) };
+  if (/^INSERT INTO hipismo_chat_numeros/i.test(sql)) {
+    const i = T.numeros.findIndex(x => x.grupo_id === params[0] && x.digitos === params[1]);
+    const f = { grupo_id: params[0], digitos: params[1], jugador_nombre: params[2] };
+    if (i >= 0) T.numeros[i] = f; else T.numeros.push(f);
+    return { rows: [] };
+  }
   if (/^SELECT nombre FROM hipismo_hipodromos WHERE grupo_id = \$1/i.test(sql)) return { rows: T.hipodromos };
   if (/^SELECT id FROM hipismo_hipodromos WHERE grupo_id = \$1 AND nombre = \$2/i.test(sql)) return { rows: T.hipodromos.filter(h => h.nombre === params[1]) };
   if (/^SELECT id, comision_porcentaje FROM hipismo_tercios_adelantadas_planos/i.test(sql)) {
@@ -151,6 +160,32 @@ const textoDe = e => e.contenido.text;
   const mLid = { key: { remoteJid: JID, participant: '99999999999@lid', id: 'LID1', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
   await glue.intentar({ sock, msg: mLid, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mLid), anotar: n => notas.push(n) });
   check(notas.some(n => /99999999999/.test(n) && /oculta/.test(n) && /ninguna ficha/.test(n)), 'si WhatsApp oculta el número, el panel lo explica y dice que ninguna ficha coincide');
+
+  // número oculto (@lid): el administrador lo asocia a mano con "registrar NOMBRE" citando su mensaje
+  const msgLid = { key: { remoteJid: JID, participant: '88888888888@lid', id: 'TYK1', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
+  const ayLid = () => whatsappBot.crearAyudasJugadasChat(sock, msgLid);
+  await glue.intentar({ sock, msg: msgLid, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid() });
+  check(/no está registrado como cliente/.test(textoDe(ultimo())) && /registrar NOMBRE_DEL_CLIENTE/.test(textoDe(ultimo())), 'un @lid sin asociar: se le avisa y se le da la pista al administrador');
+  const regMsg = (texto, citar) => ({ key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'REG' + (++seq), fromMe: false }, pushName: 'Admin', message: citar ? { extendedTextMessage: { text: texto, contextInfo: { stanzaId: 'TYK1', participant: '88888888888@lid' } } } : { conversation: texto } });
+  let mReg = regMsg('registrar tykhe', false);
+  await glue.intentar({ sock, msg: mReg, remoteJid: JID, texto: 'registrar tykhe', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mReg) });
+  check(/Responde \(cita\) el mensaje/.test(textoDe(ultimo())) && T.numeros.length === 0, 'registrar sin citar el mensaje de la persona: pide citarlo y no guarda nada');
+  mReg = regMsg('registrar nadie', true);
+  await glue.intentar({ sock, msg: mReg, remoteJid: JID, texto: 'registrar nadie', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mReg) });
+  check(/No encontré ningún cliente/.test(textoDe(ultimo())) && T.numeros.length === 0, 'registrar un nombre que no existe: avisa y no guarda');
+  const pideJugador = { key: { remoteJid: JID, participant: '88888888888@lid', id: 'TYK2', fromMe: false }, pushName: 'Tykhe', message: { extendedTextMessage: { text: 'registrar tykhe', contextInfo: { stanzaId: 'TYK1', participant: '88888888888@lid' } } } };
+  await glue.intentar({ sock, msg: pideJugador, remoteJid: JID, texto: 'registrar tykhe', ayudas: ayLid() });
+  check(T.numeros.length === 0, 'un jugador (no administrador) no puede registrar números');
+  mReg = regMsg('registrar tykhe', true);
+  await glue.intentar({ sock, msg: mReg, remoteJid: JID, texto: 'registrar tykhe', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mReg) });
+  check(/Listo: ese número quedó registrado como \*TYKHE\*/.test(textoDe(ultimo())) && T.numeros.length === 1 && T.numeros[0].digitos === '88888888888' && T.numeros[0].jugador_nombre === 'TYKHE', 'el administrador asocia el @lid con TYKHE y queda guardado');
+  const antesT = enviados.length;
+  const ofT = { key: { remoteJid: JID, participant: '88888888888@lid', id: 'TYK3', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
+  await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid() });
+  check(enviados.length === antesT, 'Tykhe ya es reconocido: publicar su jugada no genera "no está registrado"');
+  let notasT = [];
+  await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid(), anotar: n => notasT.push(n) });
+  check(notasT.some(n => /es el cliente TYKHE/.test(n)), 'el panel muestra que ese número es el cliente TYKHE');
 
   // plano desde la base de datos
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'plano'));

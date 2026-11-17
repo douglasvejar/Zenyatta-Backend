@@ -2383,3 +2383,13 @@ create table if not exists hipismo_chat_estado (
   fecha          date,
   actualizado_en timestamptz not null default now()
 );
+
+-- 17-11-2026: números (o códigos ocultos @lid de WhatsApp) que un administrador asoció a mano con un cliente del bot de jugadas
+-- ("registrar NOMBRE" citando el mensaje de esa persona). Sirve cuando WhatsApp no deja ver el teléfono real.
+create table if not exists hipismo_chat_numeros (
+  grupo_id       uuid not null references grupos(id) on delete cascade,
+  digitos        text not null,
+  jugador_nombre text not null,
+  creado_en      timestamptz not null default now(),
+  primary key (grupo_id, digitos)
+);

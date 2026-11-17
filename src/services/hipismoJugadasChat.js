@@ -250,6 +250,16 @@ function crearMotor(deps) {
     if (avisados.size > 500) avisados.delete(avisados.keys().next().value);
     return true;
   };
+  // Si WhatsApp oculta el teléfono (código interno @lid), el administrador puede asociarlo a mano: responde al mensaje de esa persona con "registrar NOMBRE".
+  const pistaRegistro = m => (String((m.remitente && (m.remitente.jidReal || m.remitente.jid)) || '').endsWith('@lid')
+    ? '\n(Administrador: WhatsApp oculta su teléfono. Responde a su mensaje con *registrar NOMBRE_DEL_CLIENTE*.)' : '');
+  async function registrarNumero(m, nombre) {
+    if (!deps.registrarNumero) return;
+    if (!m.citadoParticipante) { await deps.responder('⚠️ Responde (cita) el mensaje de esa persona escribiendo: *registrar NOMBRE_DEL_CLIENTE*', { citarId: m.id }); return; }
+    const r = await deps.registrarNumero({ jid: m.citadoParticipante, nombre: nombre.trim() });
+    if (r && r.ok) await deps.responder('✅ Listo: ese número quedó registrado como *' + r.nombre + '*. Ya puede jugar.', { citarId: m.id });
+    else await deps.responder('⚠️ ' + ((r && r.motivo) || 'No se pudo registrar ese número.'), { citarId: m.id });
+  }
   // "@@" marca dónde va la mención al jugador (quien conecta con WhatsApp la cambia por @número; ver hipismoJugadasChatBot.js)
   const mencion = m => ({ citarId: m.id, mencionar: m.remitente.jid, nombre: m.remitente.nombre });
   const etiquetaDe = () => '@@';
@@ -308,7 +318,7 @@ function crearMotor(deps) {
     }
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.', mencion(m));
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
       return;
     }
     const r = riesgoPorUnidad(o.apuesta);
@@ -328,7 +338,7 @@ function crearMotor(deps) {
     if (oferta.autorJid === m.remitente.jid) return; // responderse a uno mismo no hace nada
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.', mencion(m));
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
       return;
     }
     if (nombre === oferta.autorNombre) return;
@@ -403,6 +413,8 @@ function crearMotor(deps) {
     if (!texto) return;
     await cargarEstadoSiHaceFalta();
     if (m.esAdmin) {
+      const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
+      if (mReg) return registrarNumero(m, mReg[1]);
       const carr = interpretarAbrirCarrera(texto);
       if (carr) return abrirCarrera(m, carr);
       if (ES_CIERRE_RE.test(texto)) return cerrarCarrera(m);

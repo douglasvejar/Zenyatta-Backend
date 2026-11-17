@@ -195,6 +195,21 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_nadie', 'Juego 4x1 con 10 doy a8'));
   check(enviadas.length === antes2, 'sin repetir el aviso a cada mensaje');
 
+  // @lid: pista para el administrador y comando "registrar"
+  await motor.procesarMensaje(msg('99999@lid', 'Juego 4x1 con 10 doy a8'));
+  check(/no está registrado como cliente/.test(ultima().t) && /registrar NOMBRE_DEL_CLIENTE/.test(ultima().t), 'un número oculto (@lid) sin cliente: el aviso trae la pista "registrar NOMBRE_DEL_CLIENTE"');
+  const registros = [];
+  deps.registrarNumero = async x => { registros.push(x); return /^tykhe$/i.test(x.nombre) ? { ok: true, nombre: 'TYKHE' } : { ok: false, motivo: 'No encontré ningún cliente llamado "' + x.nombre + '" en este grupo.' }; };
+  await motor.procesarMensaje(msg('j_dreamy', 'registrar tykhe', { esAdmin: true }));
+  check(registros.length === 0 && /Responde \(cita\) el mensaje/.test(ultima().t), '"registrar" sin citar a la persona: pide citar su mensaje');
+  await motor.procesarMensaje(msg('j_dreamy', 'registrar tykhe', { esAdmin: true, citadoParticipante: '99999@lid' }));
+  check(registros.length === 1 && registros[0].jid === '99999@lid' && registros[0].nombre === 'tykhe' && /Listo: ese número quedó registrado como \*TYKHE\*/.test(ultima().t), 'el administrador registra: manda el @lid citado y el nombre, y confirma');
+  await motor.procesarMensaje(msg('j_dreamy', 'registrar fulano', { esAdmin: true, citadoParticipante: '99999@lid' }));
+  check(/No encontré ningún cliente/.test(ultima().t), 'si el cliente no existe, el administrador recibe el motivo');
+  await motor.procesarMensaje(msg('j_cachaco', 'registrar tykhe', { citadoParticipante: '99999@lid' }));
+  check(registros.length === 2, 'un jugador que escribe "registrar" no registra nada');
+  delete deps.registrarNumero;
+
   // Oferta que no se entiende: preguntar en el grupo
   await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));
   check(/no entendí tu jugada/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot pregunta y muestra cómo escribirla');
