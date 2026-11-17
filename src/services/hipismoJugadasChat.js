@@ -257,10 +257,10 @@ function crearMotor(deps) {
   };
   // Si WhatsApp oculta el teléfono (código interno @lid), el administrador puede asociarlo a mano: responde al mensaje de esa persona con "registrar NOMBRE".
   const pistaRegistro = m => (String((m.remitente && (m.remitente.jidReal || m.remitente.jid)) || '').endsWith('@lid')
-    ? '\n(Administrador: WhatsApp oculta su teléfono. Responde a su mensaje con *registrar NOMBRE_DEL_CLIENTE*.)' : '');
+    ? '\n(Administrador: WhatsApp oculta su teléfono. Responde a ESTE mensaje con *registrar NOMBRE_DEL_CLIENTE*.)' : '');
   async function registrarNumero(m, nombre) {
     if (!deps.registrarNumero) return;
-    if (!m.citadoParticipante) { await deps.responder('⚠️ Responde (cita) el mensaje de esa persona escribiendo: *registrar NOMBRE_DEL_CLIENTE*', { citarId: m.id }); return; }
+    if (!m.citadoParticipante) { await deps.responder('⚠️ No sé a quién registrar. Responde (cita) el mensaje de esa persona —o mi aviso "no está registrado" para ella— escribiendo: *registrar NOMBRE_DEL_CLIENTE*', { citarId: m.id }); return; }
     const r = await deps.registrarNumero({ jid: m.citadoParticipante, nombre: nombre.trim() });
     if (r && r.ok) await deps.responder('✅ Listo: ese número quedó registrado como *' + r.nombre + '*. Ya puede jugar.', { citarId: m.id });
     else await deps.responder('⚠️ ' + ((r && r.motivo) || 'No se pudo registrar ese número.'), { citarId: m.id });
@@ -325,7 +325,7 @@ function crearMotor(deps) {
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
       nota('Jugada publicada, pero quien la escribió no es un cliente registrado: no se guardó');
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), { ...mencion(m), registroDe: m.remitente.jid });
       return;
     }
     const r = riesgoPorUnidad(o.apuesta);
@@ -356,7 +356,7 @@ function crearMotor(deps) {
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
       nota('Respuesta a una parada, pero quien responde no es un cliente registrado: no se jugó');
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), { ...mencion(m), registroDe: m.remitente.jid });
       return;
     }
     if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }

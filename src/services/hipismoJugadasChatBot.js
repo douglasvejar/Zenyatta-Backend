@@ -63,11 +63,20 @@ async function grupoPropio(grupoId, jid) {
 }
 
 // Un administrador asocia el número (o el código oculto @lid) de quien escribió con un cliente de la ficha: "registrar NOMBRE" citando su mensaje.
-async function registrarNumeroManual(grupoId, { jid, jidReal, nombre }) {
+// El número (o @lid) del propio bot: nunca se asocia a un cliente (pasaba si el administrador respondía al mensaje del bot).
+function esDelBot(sock, jid) {
+  const u = sock && sock.user;
+  if (!u) return false;
+  const d = telefonoDeParticipante(jid);
+  return !!d && [u.id, u.lid, u.jid].some(x => x && telefonoDeParticipante(String(x)) === d);
+}
+
+async function registrarNumeroManual(grupoId, { jid, jidReal, nombre }, obtenerSock) {
   // Se guardan los dos: el código oculto (@lid) y, si se pudo resolver, el teléfono real (WhatsApp muestra uno u otro según la conexión).
   const lista0 = [jid, jidReal].map(j => telefonoDeParticipante(j)).filter((d, i, a) => d && a.indexOf(d) === i);
   const digitos = lista0[0];
   if (!digitos) return { ok: false, motivo: 'No pude leer el número de esa persona.' };
+  if (obtenerSock && lista0.some(j => esDelBot(obtenerSock(), j + '@s.whatsapp.net') )) return { ok: false, motivo: 'Ese es el número del propio bot, no el de un cliente. Responde al mensaje de la persona (o a mi aviso para ella).' };
   const buscado = normNombre(nombre);
   if (!buscado) return { ok: false, motivo: 'Escribe el nombre del cliente: *registrar NOMBRE*' };
   const r = await db.query(`SELECT nombre FROM jugadores WHERE grupo_id = $1 AND COALESCE(es_cuenta_comision, false) = false`, [grupoId]);
@@ -242,7 +251,7 @@ function fechaHoyVenezuela() {
 function sesionDe(grupo, sock, remoteJid) {
   let s = sesiones.get(grupo.id);
   if (!s) {
-    s = { cola: Promise.resolve(), mensajes: new Map(), sock: null, jid: remoteJid, motor: null };
+    s = { cola: Promise.resolve(), mensajes: new Map(), avisos: new Map(), sock: null, jid: remoteJid, motor: null };
     s.motor = motorChat.crearMotor({
       nombreGrupo: grupo.nombre,
       hoy: fechaHoyVenezuela,
@@ -263,7 +272,7 @@ function sesionDe(grupo, sock, remoteJid) {
       guardarJugada: j => guardarJugada(grupo.id, j),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
-      registrarNumero: x => registrarNumeroManual(grupo.id, x),
+      registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
       guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
       nota: t => { if (s.anotarActual) s.anotarActual(t); },
       responder: (texto, op) => enviar(s, texto, op || {}),
@@ -292,6 +301,7 @@ async function enviar(s, texto, op) {
   try {
     const enviado = await s.sock.sendMessage(s.jid, contenido, citado ? { quoted: citado } : undefined);
     const id = enviado && enviado.key && enviado.key.id;
+    if (id && op.registroDe) { s.avisos.set(id, op.registroDe); if (s.avisos.size > 200) s.avisos.delete(s.avisos.keys().next().value); } // aviso "no registrado": el admin puede responderle a ÉL con "registrar NOMBRE"
     if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
   } catch (e) {
     console.error('[hipismoChat] No se pudo responder en el grupo ' + s.jid + ':', e.message);
@@ -354,7 +364,11 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   s.anotarActual = anotar || null;
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
-  const citadoPart = extraerCitadoParticipante(msg);
+  let citadoPart = extraerCitadoParticipante(msg);
+  const citadoIdMsg = extraerCitadoId(msg);
+  // Si el administrador responde al aviso "no está registrado" del bot, se registra a la persona a la que iba dirigido el aviso.
+  if (citadoIdMsg && s.avisos.has(citadoIdMsg)) citadoPart = s.avisos.get(citadoIdMsg);
+  else if (citadoPart && esDelBot(sock, citadoPart)) citadoPart = null; // citó un mensaje del propio bot que no es un aviso conocido
 
   const mensaje = {
     texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
@@ -373,4 +387,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { intentar, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { intentar, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

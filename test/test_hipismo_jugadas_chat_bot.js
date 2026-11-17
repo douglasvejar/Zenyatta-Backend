@@ -89,7 +89,7 @@ let pasaron = 0, fallaron = 0;
 const check = (c, m) => { if (c) { pasaron++; console.log('OK:', m); } else { fallaron++; console.error('FALLÓ:', m); } };
 const enviados = [];
 let seq = 0;
-const sock = { sendMessage: async (jid, contenido, opciones) => { const id = 'BOT' + (++seq); enviados.push({ jid, contenido, opciones, id }); return { key: { id, remoteJid: jid, fromMe: true } }; } };
+const sock = { user: { id: '573246161764:3@s.whatsapp.net', lid: '98765432100:3@lid' }, sendMessage: async (jid, contenido, opciones) => { const id = 'BOT' + (++seq); enviados.push({ jid, contenido, opciones, id }); return { key: { id, remoteJid: jid, fromMe: true } }; } };
 const num = { CACHACO: '573233070494', MARVEL: '584124537732', NANA: '584241746628', RICARDO: '19047670886', ADMIN: '584141111111', DESCONOCIDO: '5999999999' };
 const guardados = {};
 function mensaje(quien, texto, citadoId, fromMe) {
@@ -189,6 +189,24 @@ const textoDe = e => e.contenido.text;
   const ofAlt = { key: { remoteJid: JID, participant: '88888888888@lid', participantAlt: '5491155550000@s.whatsapp.net', id: 'TYK4', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
   await glue.intentar({ sock, msg: ofAlt, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, ofAlt) });
   check(enviados.length === antesAlt, 'aunque ahora se vea el teléfono real (distinto al de la ficha), el cliente registrado a mano sigue siendo reconocido por su código @lid');
+  // el administrador responde al AVISO del bot (no al mensaje de la persona): se registra a la persona del aviso, no al bot
+  const nNum = T.numeros.length;
+  const ofW = { key: { remoteJid: JID, participant: '66666666666@lid', id: 'TYK5', fromMe: false }, pushName: 'Otro', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
+  T.numeros = T.numeros.filter(x => x.digitos !== '66666666666');
+  await glue.intentar({ sock, msg: ofW, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, ofW) });
+  const aviso = ultimo();
+  check(/no está registrado como cliente/.test(textoDe(aviso)) && /Responde a ESTE mensaje/.test(textoDe(aviso)), 'el aviso "no registrado" invita a responderlo con "registrar NOMBRE"');
+  const regAviso = { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'REG' + (++seq), fromMe: false }, pushName: 'Admin', message: { extendedTextMessage: { text: 'Registrar TYKHE', contextInfo: { stanzaId: aviso.id, participant: '573246161764@s.whatsapp.net' } } } };
+  await glue.intentar({ sock, msg: regAviso, remoteJid: JID, texto: 'Registrar TYKHE', ayudas: whatsappBot.crearAyudasJugadasChat(sock, regAviso) });
+  check(/Listo: ese número quedó registrado como \*TYKHE\*/.test(textoDe(ultimo())) && T.numeros.some(x => x.digitos === '66666666666' && x.jugador_nombre === 'TYKHE') && !T.numeros.some(x => x.digitos === '573246161764'), 'respondiendo al aviso del bot se registra a la persona del aviso, NO al número del bot');
+  // citar un mensaje del propio bot que no es un aviso conocido: no registra nada
+  const nAntesBot = T.numeros.length;
+  const regBot = { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'REG' + (++seq), fromMe: false }, pushName: 'Admin', message: { extendedTextMessage: { text: 'registrar tykhe', contextInfo: { stanzaId: 'MSG-VIEJO-DEL-BOT', participant: '573246161764@s.whatsapp.net' } } } };
+  await glue.intentar({ sock, msg: regBot, remoteJid: JID, texto: 'registrar tykhe', ayudas: whatsappBot.crearAyudasJugadasChat(sock, regBot) });
+  check(T.numeros.length === nAntesBot && /No sé a quién registrar/.test(textoDe(ultimo())), 'citar un mensaje cualquiera del bot no registra al bot como cliente: pide citar a la persona');
+  // aunque llegue el número del bot por otro camino, se rechaza
+  const rBot = await glue._registrarNumeroManual(G, { jid: '98765432100@lid', nombre: 'tykhe' }, () => sock);
+  check(rBot.ok === false && /propio bot/.test(rBot.motivo), 'el número (o @lid) del propio bot nunca se asocia a un cliente');
   let notasT = [];
   await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid(), anotar: n => notasT.push(n) });
   check(notasT.some(n => /es el cliente TYKHE/.test(n)), 'el panel muestra que ese número es el cliente TYKHE');
