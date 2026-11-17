@@ -2393,3 +2393,13 @@ create table if not exists hipismo_chat_numeros (
   creado_en      timestamptz not null default now(),
   primary key (grupo_id, digitos)
 );
+
+-- 17-11-2026: sesión de WhatsApp de cada número propio de un grupo, guardada en la base (antes eran archivos que Railway borraba en
+-- cada reinicio y obligaban a escanear el QR otra vez). `scope` = 'grupo-<id>'; `clave` = 'creds' o '<tipo>-<id>' de las llaves de Baileys.
+create table if not exists whatsapp_sesion_datos (
+  scope          text not null,
+  clave          text not null,
+  valor          text not null,
+  actualizado_en timestamptz not null default now(),
+  primary key (scope, clave)
+);

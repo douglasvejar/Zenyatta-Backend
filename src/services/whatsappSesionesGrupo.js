@@ -13,6 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const db = require('../db');
+const whatsappAuthDb = require('./whatsappAuthDb');
 
 const sesiones = new Map(); // grupoId -> { sock, gen, conectado, ultimoQr, ultimoError, gruposDisponibles, numero, reintento, cerrando }
 const ESPERA_REINTENTO_MS = 5000;
@@ -26,6 +27,16 @@ const deps = {
   intentar: (args) => require('./hipismoJugadasChatBot').intentar(args),
   ayudasBot: () => require('./whatsappBot').crearAyudasJugadasChat,
   alertar: (asunto, cuerpo) => require('./emailAlertas').enviarAlertaEmail(asunto, cuerpo).catch(() => {}),
+  // La sesión se guarda en la base de datos (sobrevive a reinicios sin necesitar un Volume en Railway). Si la tabla no existe o
+  // Baileys no trae las piezas, se usan archivos como antes.
+  crearAuth: async (id, baileys, dir) => {
+    if (baileys.initAuthCreds && baileys.BufferJSON && baileys.proto) {
+      try { return await whatsappAuthDb.authEnBaseDeDatos(db, 'grupo-' + String(id), baileys); }
+      catch (e) { console.error('[whatsappSesionesGrupo] No se pudo guardar la sesión del grupo ' + id + ' en la base de datos (¿corriste el SQL nuevo?), uso archivos:', e.message); }
+    }
+    return baileys.useMultiFileAuthState(dir);
+  },
+  borrarSesionBd: (id) => whatsappAuthDb.borrarSesion(db, 'grupo-' + String(id)),
   esperar: (ms) => new Promise(r => setTimeout(r, ms)),
   setTimeout: (fn, ms) => setTimeout(fn, ms)
 };
@@ -122,14 +133,15 @@ async function iniciarSesion(grupoId) {
   if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
   const gen = ++s.gen;
 
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = deps.cargarBaileys();
+  const baileys = deps.cargarBaileys();
+  const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = baileys;
   const { Boom } = deps.cargarBoom();
 
   const dir = carpetaDeSesion(id);
   fs.mkdirSync(dir, { recursive: true });
-  const yaTeniaSesion = fs.existsSync(path.join(dir, 'creds.json'));
-  const { state, saveCreds } = await useMultiFileAuthState(dir);
-  console.log('[whatsappSesionesGrupo] Grupo ' + id + ': ' + (yaTeniaSesion ? 'retomando la sesión guardada en ' : 'sin sesión guardada (pedirá QR) en ') + dir);
+  const { state, saveCreds } = await deps.crearAuth(id, baileys, dir);
+  const yaTeniaSesion = !!(state && state.creds && state.creds.registered) || fs.existsSync(path.join(dir, 'creds.json'));
+  console.log('[whatsappSesionesGrupo] Grupo ' + id + ': ' + (yaTeniaSesion ? 'retomando la sesión guardada (base de datos o carpeta ' + dir + ')' : 'sin sesión guardada (pedirá QR)'));
 
   let version;
   try { version = (await fetchLatestBaileysVersion()).version; } catch (e) { /* se sigue con la versión que trae la librería */ }
@@ -192,6 +204,7 @@ async function desvincular(grupoId) {
     }
     sesiones.delete(id);
   }
+  try { await deps.borrarSesionBd(id); } catch (e) { console.error('[whatsappSesionesGrupo] No se pudo borrar la sesión guardada en la base del grupo ' + id + ':', e.message); }
   try { fs.rmSync(carpetaDeSesion(id), { recursive: true, force: true }); } catch (e) {
     console.error('[whatsappSesionesGrupo] No se pudo borrar la carpeta de sesión del grupo ' + id + ':', e.message);
   }

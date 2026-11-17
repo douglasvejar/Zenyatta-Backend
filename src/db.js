@@ -62,6 +62,10 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas js
 pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado boolean NOT NULL DEFAULT false')
   .then(() => pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS whatsapp_propio_activo boolean NOT NULL DEFAULT false'))
   .then(() => pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS whatsapp_propio_jid text'))
+  .then(() => pool.query(`create table if not exists whatsapp_sesion_datos (
+    scope text not null, clave text not null, valor text not null, actualizado_en timestamptz not null default now(),
+    primary key (scope, clave)
+  )`))
   .then(() => pool.query(`create table if not exists hipismo_chat_numeros (
     grupo_id uuid not null references grupos(id) on delete cascade,
     digitos text not null, jugador_nombre text not null, creado_en timestamptz not null default now(),

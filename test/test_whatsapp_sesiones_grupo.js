@@ -73,6 +73,7 @@ Object.assign(gestor._deps, {
   cargarBaileys: () => ({ default: makeWASocket, useMultiFileAuthState: async (dir) => ({ state: { dir }, saveCreds: () => {} }), DisconnectReason, fetchLatestBaileysVersion: async () => ({ version: [2, 3000, 1] }) }),
   cargarBoom: () => ({ Boom }),
   baseDir: () => base,
+  borrarSesionBd: async () => {},
   intentar: async (a) => { llamadas.push(a); if (a.anotar) a.anotar('Lo leyó el bot de jugadas'); return false; },
   alertar: (asunto, cuerpo) => { alertas.push(asunto); return Promise.resolve(); },
   esperar: async () => {},
