@@ -38,6 +38,10 @@ eq(m.interpretarRespuesta('J'), { tipo: 'todo' }, 'respuesta "J" = todo lo que q
 eq(m.interpretarRespuesta('Jugo'), { tipo: 'todo' }, 'respuesta "Jugo" = todo');
 eq(m.interpretarRespuesta('Sf'), { tipo: 'sf' }, 'respuesta "Sf" se reconoce');
 eq(m.interpretarRespuesta('Se fue'), { tipo: 'sf' }, 'respuesta "Se fue" se reconoce');
+eq(m.interpretarRespuesta('SEFUE'), { tipo: 'sf' }, '"sefue" pegado también');
+eq(m.interpretarRespuesta('SF'), { tipo: 'sf' }, '"SF" en mayúsculas');
+eq(m.interpretarRespuesta('Se fue todo'), { tipo: 'sf' }, '"Se fue todo"');
+check(m.interpretarRespuesta('No') === null && m.interpretarRespuesta('Nada') === null, '"No" o "Nada" NO retiran jugadas');
 check(m.interpretarRespuesta('buenas tardes') === null, 'una charla cualquiera no es respuesta');
 
 // ---------- 3) Riesgo (cuadra con los avisos de Dreamy en el video) ----------
@@ -126,6 +130,29 @@ const ultima = () => enviadas[enviadas.length - 1];
   const g = guardadas[5];
   check(g.jugadorNombre === 'RAUL' && g.banqueroNombre === 'LUIS' && g.monto === 200 && g.apuesta.modalidad === '10a8' && JSON.stringify(g.apuesta.cruce) === '{"gruposA":[5],"gruposB":[4]}', 'con "recibo": Raúl juega 5x4 a 8 con 200 y Luis da (los caballos se invierten)');
   check(g.textoLinea === 'Juega RAUL 10A8 (5x4) con 200,00 da LUIS', 'la línea guardada queda lista para el sistema: ' + g.textoLinea);
+
+  // "Sf / Se fue": el jugador retira todas sus jugadas
+  const ofSf = msg('j_luis', 'Juego 4x1 con 80 doy a8');
+  const ofSf2 = msg('j_luis', 'Juego 3x2 con 50 doy a8');
+  await motor.procesarMensaje(ofSf); await motor.procesarMensaje(ofSf2);
+  const antesSf = guardadas.length;
+  await motor.procesarMensaje(msg('j_luis', 'Sf'));
+  const rSf = msg('j_marvel', '30', { citadoId: ofSf.id });
+  await motor.procesarMensaje(rSf);
+  check(guardadas.length === antesSf && ultima().t === '❌ Aquí nada, puso se fue' && ultima().op.citarId === rSf.id, 'Luis escribió "Sf": si Marvel le pone 30 a su jugada, el bot responde "Aquí nada, puso se fue" y no registra nada');
+  await motor.procesarMensaje(msg('j_ricardo', 'J', { citadoId: ofSf2.id }));
+  check(guardadas.length === antesSf && ultima().t === '❌ Aquí nada, puso se fue', 'también para su otra jugada abierta (se fueron TODAS)');
+  const ofNueva = msg('j_luis', 'Juego 4x1 con 40 doy a8');
+  await motor.procesarMensaje(ofNueva);
+  await motor.procesarMensaje(msg('j_marvel', '40', { citadoId: ofNueva.id }));
+  check(guardadas.length === antesSf + 1 && guardadas[antesSf].monto === 40, 'si Luis publica una jugada NUEVA después del "Se fue", esa sí se juega');
+  // "Se fue" como respuesta a otro y "sefue" suelto
+  const ofOtro = msg('j_kahelt', 'Juego 4x1 con 60 doy a8');
+  await motor.procesarMensaje(ofOtro);
+  await motor.procesarMensaje(msg('j_kahelt', 'sefue', { citadoId: ofNueva.id }));
+  const antesOtro = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', '20', { citadoId: ofOtro.id }));
+  check(guardadas.length === antesOtro && ultima().t === '❌ Aquí nada, puso se fue', '"sefue" (aunque sea como respuesta a otro mensaje) retira las jugadas de quien lo escribe');
 
   // Control de pozo al PUBLICAR
   await motor.procesarMensaje(msg('j_miel', 'Juego 4x1 10@8 con 60'));

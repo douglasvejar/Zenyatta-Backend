@@ -135,7 +135,8 @@ function interpretarRespuesta(texto) {
   const t = limpiar(texto).toLowerCase();
   if (!t) return null;
   if (/^(?:j|jugo|jugado|jugamos|juego|todo|jugo todo|j todo)$/.test(t)) return { tipo: 'todo' };
-  if (/^(?:sf|se fue|se fue todo|nada|no)$/.test(t)) return { tipo: 'sf' };
+  // "Sf" / "Se fue" / "Sefue": el jugador retira TODAS sus jugadas abiertas (ya no las va a jugar)
+  if (/^(?:sf|s\.f\.?|se ?fue(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
   const m = t.match(/^(?:j(?:ugo)?\s*)?(?:con\s+)?(\d+(?:[.,]\d+)?)$/);
   if (m) { const n = parseMontoChat(m[1]); if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) }; }
   return null;
@@ -276,6 +277,10 @@ function crearMotor(deps) {
     return etiquetaDe(m) + ' en esta parada tu disponible alcanza para ' + fmt(tope.max) + ' (ahí arriesgas ' + fmt(tope.disponible) + '). Por favor colócala por ese monto o menos.';
   }
 
+  function retirarOfertasDe(jid) {
+    ofertas.forEach(of => { if (of.autorJid === jid && of.restante > 0.005) of.seFue = true; });
+  }
+
   async function procesarOferta(m, o) {
     if (!ctx.abierta) {
       if (puedeAvisar('sin-carrera', 120000)) await deps.responder('⚠️ Todavía no hay una carrera abierta. Un administrador debe abrirla escribiendo, por ejemplo: *Mountaineer 1ra carrera*.', { citarId: m.id });
@@ -304,7 +309,6 @@ function crearMotor(deps) {
   async function procesarRespuesta(m, resp) {
     const oferta = ofertas.get(m.citadoId);
     if (!oferta || !ctx.abierta) return;
-    if (resp.tipo === 'sf') return;
     if (oferta.autorJid === m.remitente.jid) return; // responderse a uno mismo no hace nada
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
@@ -313,6 +317,7 @@ function crearMotor(deps) {
     }
     if (nombre === oferta.autorNombre) return;
     if (oferta.restante <= 0.005) { await deps.responder('❌ Nada, ya topada', { citarId: m.id }); return; }
+    if (oferta.seFue) { await deps.responder('❌ Aquí nada, puso se fue', { citarId: m.id }); return; }
 
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
     let monto = round2(Math.min(pedido, oferta.restante));
@@ -370,10 +375,10 @@ function crearMotor(deps) {
     }
     const oferta = interpretarOferta(texto);
     if (oferta !== null) return procesarOferta(m, oferta);
-    if (m.citadoId) {
-      const resp = interpretarRespuesta(texto);
-      if (resp) return procesarRespuesta(m, resp);
-    }
+    const resp = interpretarRespuesta(texto);
+    // "Sf"/"Se fue": sus jugadas abiertas se fueron. Si después alguien le responde (monto o J), el bot dice que no hay nada.
+    if (resp && resp.tipo === 'sf') { retirarOfertasDe(m.remitente.jid); return; }
+    if (resp && m.citadoId) return procesarRespuesta(m, resp);
   }
 
   return { procesarMensaje, estado: () => ({ ...ctx, jugadas: jugadas.length, ofertas: ofertas.size, sinPlano }), _ofertas: ofertas };
