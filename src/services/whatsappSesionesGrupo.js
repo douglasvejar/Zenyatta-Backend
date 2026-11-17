@@ -127,7 +127,9 @@ async function iniciarSesion(grupoId) {
 
   const dir = carpetaDeSesion(id);
   fs.mkdirSync(dir, { recursive: true });
+  const yaTeniaSesion = fs.existsSync(path.join(dir, 'creds.json'));
   const { state, saveCreds } = await useMultiFileAuthState(dir);
+  console.log('[whatsappSesionesGrupo] Grupo ' + id + ': ' + (yaTeniaSesion ? 'retomando la sesión guardada en ' : 'sin sesión guardada (pedirá QR) en ') + dir);
 
   let version;
   try { version = (await fetchLatestBaileysVersion()).version; } catch (e) { /* se sigue con la versión que trae la librería */ }
@@ -157,7 +159,10 @@ async function iniciarSesion(grupoId) {
         console.error('[whatsappSesionesGrupo] Grupo ' + id + ': ' + s.ultimoError);
         deps.alertar('🔴 LUDOX: se cayó el número propio de un grupo', 'El número propio del grupo ' + id + ' ya no está vinculado (WhatsApp cerró la sesión). Entra a Súper-admin → detalle del grupo → WhatsApp y vincúlalo de nuevo.');
       } else {
-        s.ultimoError = 'Se perdió la conexión, reintentando…';
+        const codigo = motivo && motivo.output ? motivo.output.statusCode : null;
+        const explicacion = { 440: 'la sesión se abrió en otro lugar (dos servidores usando el mismo número)', 515: 'WhatsApp pidió reiniciar la conexión (normal justo después de escanear el QR)', 428: 'WhatsApp cerró la conexión', 408: 'se agotó el tiempo de espera', 500: 'la sesión guardada está dañada', 503: 'WhatsApp no estaba disponible' }[codigo];
+        console.log('[whatsappSesionesGrupo] Grupo ' + id + ': conexión cerrada (código ' + codigo + (explicacion ? ' — ' + explicacion : '') + '), reintentando.');
+        s.ultimoError = 'Se perdió la conexión' + (codigo ? ' (código ' + codigo + (explicacion ? ': ' + explicacion : '') + ')' : '') + ', reintentando…';
         s.reintento = deps.setTimeout(() => {
           s.reintento = null;
           if (s.gen !== gen || s.cerrando) return;
