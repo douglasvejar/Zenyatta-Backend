@@ -663,6 +663,12 @@ async function manejarActualizacion(update, ctxExterno) {
       if (!usuario) return;
       return vincularChat(api, chatId, usuario, cmd[2]);
     }
+    // "/link PEDRO" (17-11-2026): pide el link de saldo de un cliente. Se trata igual que "link PEDRO" escrito
+    // sin la barra (ver detectarComando): solo administradores y solo en el grupo vinculado / central.
+    if (nombreCmd === 'link') {
+      if (esPrivado || !usuario) return;
+      return recibirTexto(ctx, chatId, usuario, 'link ' + String(cmd[2] || '').trim());
+    }
     return; // cualquier otro "/algo" se ignora
   }
 

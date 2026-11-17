@@ -229,6 +229,14 @@ function detectarComando(textoMensaje) {
     return { tipo: 'saldo_cliente', nombre: m[1].trim() };
   }
 
+  // "link <cliente>" (17-11-2026): pide el link de saldo de un cliente de Hipismo. En Telegram, con
+  // "privacidad desactivada" llega tal cual; si el comando viene como "/link@MiBot pedro" o "/link pedro",
+  // también se reconoce (se ignora la "/" y el "@usuario del bot").
+  m = limpio.match(/^\/?link(?:@[a-z0-9_]+)?\s+(.+)$/);
+  if (m && m[1].trim()) {
+    return { tipo: 'link_cliente', nombre: m[1].trim() };
+  }
+
   return null;
 }
 

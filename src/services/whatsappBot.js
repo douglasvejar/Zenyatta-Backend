@@ -981,12 +981,20 @@ async function cerrarDiaCompleto(sock, grupoId, jid, fecha) {
   return { accion: 'CERRADO', resp };
 }
 
+// "link <cliente>" (17-11-2026): manda el mensaje con el link de saldo del cliente (ver services/linkClienteChat.js).
+async function manejarComandoLinkCliente(sock, grupoId, jid, nombreBuscado) {
+  const texto = await require('./linkClienteChat').responderLinkCliente(grupoId, nombreBuscado);
+  await avisar(sock, jid, texto);
+  return { accion: 'LINK_CLIENTE', texto };
+}
+
 async function manejarComando(sock, grupoId, jid, comando) {
   try {
     if (comando.tipo === 'actualizar_sabana') return await manejarComandoActualizar(sock, grupoId, jid);
     if (comando.tipo === 'saldo_dia') return await manejarComandoSaldoDia(sock, grupoId, jid);
     if (comando.tipo === 'corte_semana') return await manejarComandoCorteSemana(sock, grupoId, jid);
     if (comando.tipo === 'saldo_cliente') return await manejarComandoSaldoCliente(sock, grupoId, jid, comando.nombre);
+    if (comando.tipo === 'link_cliente') return await manejarComandoLinkCliente(sock, grupoId, jid, comando.nombre);
   } catch (e) {
     console.error('[whatsappBot] Error al procesar el comando "' + comando.tipo + '" (grupo ' + grupoId + '):', e);
     await avisar(sock, jid, '⚠️ Ocurrió un error al procesar ese comando: ' + e.message);
@@ -1410,6 +1418,7 @@ module.exports = {
   cerrarDiaCompleto,
   registrarNotificadorProblemas,
   manejarComandoSaldoCliente,
+  manejarComandoLinkCliente,
   // Autorización de comandos (09-09-2026) — exportada aparte para
   // probarla directo (ver test_whatsapp_comandos_autorizacion.js).
   estaAutorizadoParaComandos,
