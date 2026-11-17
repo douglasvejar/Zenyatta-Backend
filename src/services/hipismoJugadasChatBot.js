@@ -188,7 +188,18 @@ function sesionDe(grupo, sock, remoteJid) {
     s.motor = motorChat.crearMotor({
       nombreGrupo: grupo.nombre,
       hoy: fechaHoyVenezuela,
-      identificar: async rem => clientePorNumero(grupo.id, rem.jidReal || rem.jid),
+      identificar: async rem => {
+        const jidVisto = rem.jidReal || rem.jid;
+        const nombre = await clientePorNumero(grupo.id, jidVisto);
+        if (!nombre) console.log('[hipismoChat] Grupo ' + grupo.id + ': ninguna ficha tiene el teléfono ' + (telefonoDeParticipante(jidVisto) || '?') + ' (jid visto: ' + jidVisto + ').');
+        // Para el panel de Súper-admin ("Último mensaje que llegó"): qué número vio el bot y si lo encontró en alguna ficha.
+        if (s.anotarActual) {
+          const dig = telefonoDeParticipante(jidVisto);
+          const oculto = String(jidVisto).endsWith('@lid');
+          s.anotarActual('Número que vio el bot: ' + (dig || '?') + (oculto ? ' (WhatsApp lo oculta: es un código interno, no un teléfono)' : '') + ' → ' + (nombre ? 'es el cliente ' + nombre : 'ninguna ficha tiene ese teléfono'));
+        }
+        return nombre;
+      },
       resolverHipodromo: t => resolverHipodromo(grupo.id, t),
       disponible: n => disponibleDe(grupo.id, n),
       guardarJugada: j => guardarJugada(grupo.id, j),
@@ -257,6 +268,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
   const fromMe = !!(msg.key && msg.key.fromMe);
   const s = sesionDe(grupo, sock, remoteJid);
+  s.anotarActual = anotar || null;
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
   const mensaje = {

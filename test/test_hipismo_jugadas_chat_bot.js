@@ -70,7 +70,7 @@ Module._load = function (request) {
 };
 process.env.DATABASE_URL = 'postgresql://fake/fake';
 const whatsappBot = require(path.join(__dirname, '..', 'src', 'services', 'whatsappBot'));
-require(path.join(__dirname, '..', 'src', 'services', 'hipismoJugadasChatBot')); // se carga ahora, con el pozo falso puesto
+const glue = require(path.join(__dirname, '..', 'src', 'services', 'hipismoJugadasChatBot')); // se carga ahora, con el pozo falso puesto
 Module._load = originalLoad;
 
 let pasaron = 0, fallaron = 0;
@@ -139,6 +139,16 @@ const textoDe = e => e.contenido.text;
   // número que no es cliente
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('DESCONOCIDO', 'Juego 4x1 con 10 doy a8'));
   check(/no está registrado como cliente/.test(textoDe(ultimo())), 'un número que no está en ninguna ficha: se le avisa que no está registrado');
+
+  // panel de Súper-admin: qué número vio el bot y si lo encontró en alguna ficha
+  let notas = [];
+  const mAnota = mensaje('MARVEL', 'Juego 4x1 con 10 doy a8');
+  await glue.intentar({ sock, msg: mAnota, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mAnota), anotar: n => notas.push(n) });
+  check(notas.some(n => /584124537732/.test(n) && /es el cliente MARVEL/.test(n)), 'el panel muestra el número que vio el bot y el cliente al que corresponde');
+  notas = [];
+  const mLid = { key: { remoteJid: JID, participant: '99999999999@lid', id: 'LID1', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
+  await glue.intentar({ sock, msg: mLid, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mLid), anotar: n => notas.push(n) });
+  check(notas.some(n => /99999999999/.test(n) && /oculta/.test(n) && /ninguna ficha/.test(n)), 'si WhatsApp oculta el número, el panel lo explica y dice que ninguna ficha coincide');
 
   // plano desde la base de datos
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'plano'));
