@@ -15,7 +15,7 @@ const T = {
     { nombre: 'RICARDO', telefono: '+1 (904) 767-0886' }
   ],
   hipodromos: [{ id: 'h1', nombre: 'Mountaineer' }, { id: 'h2', nombre: 'La Rinconada' }],
-  planos: [], jugadas: [], chat: []
+  planos: [], jugadas: [], chat: [], estado: null
 };
 let contador = 0;
 function consulta(text, params) {
@@ -51,6 +51,8 @@ function consulta(text, params) {
       return a ? { jugador_nombre: a.jugador_nombre, banquero_nombre: a.banquero_nombre, monto: a.monto, es_cruce: a.es_cruce, grupo_caballos: a.grupo_caballos, cruce_grupo_a: a.cruce_grupo_a, cruce_grupo_b: a.cruce_grupo_b, modalidad: a.modalidad } : null;
     }).filter(Boolean) };
   }
+  if (/^INSERT INTO hipismo_chat_estado/i.test(sql)) { T.estado = { hipodromo: params[1], carrera: params[2], abierta: params[3], fecha: params[4] }; return { rows: [] }; }
+  if (/^SELECT hipodromo, carrera, abierta, to_char\(fecha, 'YYYY-MM-DD'\) AS fecha FROM hipismo_chat_estado/i.test(sql)) return { rows: T.estado ? [T.estado] : [] };
   if (/^(ALTER|create|do \$\$|alter)/i.test(sql)) return { rows: [] };
   throw new Error('BD falsa: consulta no prevista: ' + sql.slice(0, 160));
 }
@@ -154,6 +156,20 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'plano'));
   const plano = textoDe(ultimo());
   check(/Sistema Dream/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /Juega Cachaco 10A8 \(5x4\) con 200,00 da Marvel/.test(plano) && /Total jugadas: 3/.test(plano), 'el plano sale de las jugadas guardadas, con "Total jugadas: 3"');
+
+  // el servidor se reinicia con la carrera abierta: se retoma desde la base y se sigue jugando
+  glue._sesiones.clear();
+  const antesR = enviados.length;
+  const ofR = mensaje('CACHACO', 'Juego 4x1 con 15 doy a8');
+  await whatsappBot.manejarMensajeEntrante(sock, ofR);
+  check(enviados.length === antesR, 'tras un reinicio la carrera sigue abierta: publicar una jugada no genera "no hay carrera abierta"');
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('MARVEL', '5', ofR.key.id));
+  check(textoDe(ultimo()) === '✅ Aquí jugaron', 'y las respuestas se registran como siempre');
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Cerrado'));
+  glue._sesiones.clear();
+  const ofC = mensaje('CACHACO', 'Juego 4x1 con 15 doy a8');
+  await whatsappBot.manejarMensajeEntrante(sock, ofC);
+  check(/no hay una carrera abierta/i.test(textoDe(ultimo())), 'si la carrera estaba cerrada antes del reinicio, sigue cerrada');
 
   // mensajes del propio bot no se vuelven a procesar
   const antes = enviados.length;

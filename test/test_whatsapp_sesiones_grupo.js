@@ -25,6 +25,7 @@ function consulta(text, params) {
     return { rows: BD.activos };
   }
   if (/^UPDATE grupos SET whatsapp_propio_activo = false/i.test(sql)) { BD.updates.push(params); return { rows: [] }; }
+  if (/^SELECT hipodromo, carrera, abierta, to_char/i.test(sql)) return { rows: [] };
   if (/^SELECT nombre, telefono FROM jugadores/i.test(sql)) return { rows: [{ nombre: 'MARVEL', telefono: '0412-4537732' }] };
   if (/^(ALTER|create|do \$\$|alter)/i.test(sql)) return { rows: [] };
   throw new Error('BD falsa: consulta no prevista: ' + sql.slice(0, 140));

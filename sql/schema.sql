@@ -2373,3 +2373,13 @@ create index if not exists idx_hipismo_chat_jugadas_adelantada on hipismo_chat_j
 -- whatsapp_propio_jid = el chat de WhatsApp (de ese número) donde trabaja el bot.
 alter table grupos add column if not exists whatsapp_propio_activo boolean not null default false;
 alter table grupos add column if not exists whatsapp_propio_jid text;
+
+-- 17-11-2026: carrera abierta/cerrada del bot de jugadas del chat (para que un reinicio del servidor no la pierda).
+create table if not exists hipismo_chat_estado (
+  grupo_id       uuid primary key references grupos(id) on delete cascade,
+  hipodromo      text,
+  carrera        integer,
+  abierta        boolean not null default false,
+  fecha          date,
+  actualizado_en timestamptz not null default now()
+);

@@ -268,12 +268,14 @@ function crearMotor(deps) {
     ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy();
     ofertas.clear(); sinPlano = 0;
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
+    await guardarEstado();
     await deps.responder('✅ Carrera abierta: *' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera*. Ya recibo jugadas.' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
   }
 
   async function cerrarCarrera(m) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear();
+    await guardarEstado();
     await deps.responder('🔒 Carrera cerrada: *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera*. Ya no recibo jugadas. Plano final (queda esperando la pizarra):', { citarId: m.id });
     await publicarPlano();
   }
@@ -375,9 +377,31 @@ function crearMotor(deps) {
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
 
+  // Si el servidor se reinició con una carrera abierta, se retoma desde la base (solo del mismo día). Las jugadas ofrecidas que
+  // esperaban respuesta no se recuperan: quien quiera jugar debe volver a publicarlas.
+  let estadoCargado = false;
+  async function cargarEstadoSiHaceFalta() {
+    if (estadoCargado) return;
+    estadoCargado = true;
+    if (!deps.cargarEstado) return;
+    try {
+      const e = await deps.cargarEstado();
+      if (e && e.hipodromo && e.carrera && e.fecha === deps.hoy()) {
+        ctx.hipodromo = e.hipodromo; ctx.carrera = e.carrera; ctx.abierta = !!e.abierta; ctx.fecha = e.fecha;
+        jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera });
+      }
+    } catch (err) { console.error('[hipismoChat] No se pudo retomar la carrera abierta:', err.message); }
+  }
+  async function guardarEstado() {
+    if (!deps.guardarEstado) return;
+    try { await deps.guardarEstado({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, abierta: ctx.abierta, fecha: ctx.fecha }); }
+    catch (err) { console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message); }
+  }
+
   async function procesarMensaje(m) {
     const texto = limpiar(m.texto);
     if (!texto) return;
+    await cargarEstadoSiHaceFalta();
     if (m.esAdmin) {
       const carr = interpretarAbrirCarrera(texto);
       if (carr) return abrirCarrera(m, carr);

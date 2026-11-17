@@ -158,6 +158,28 @@ async function guardarJugada(grupoId, j) {
   });
 }
 
+// Carrera abierta/cerrada de cada grupo, para que un reinicio del servidor no la pierda.
+async function cargarEstadoCarrera(grupoId) {
+  try {
+    const r = await db.query(`SELECT hipodromo, carrera, abierta, to_char(fecha, 'YYYY-MM-DD') AS fecha FROM hipismo_chat_estado WHERE grupo_id = $1`, [grupoId]);
+    return r.rows[0] || null;
+  } catch (e) {
+    if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudo leer el estado de la carrera:', e.message);
+    return null;
+  }
+}
+async function guardarEstadoCarrera(grupoId, e) {
+  try {
+    await db.query(
+      `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en) VALUES ($1,$2,$3,$4,$5,now())
+       ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now()`,
+      [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha]
+    );
+  } catch (err) {
+    if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message);
+  }
+}
+
 // Las jugadas de la carrera, tal cual están hoy en el sistema (si alguien borró o editó una desde "Revisar Jugadas", el plano lo refleja).
 async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
   const r = await db.query(
@@ -204,6 +226,8 @@ function sesionDe(grupo, sock, remoteJid) {
       disponible: n => disponibleDe(grupo.id, n),
       guardarJugada: j => guardarJugada(grupo.id, j),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
+      cargarEstado: () => cargarEstadoCarrera(grupo.id),
+      guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
       responder: (texto, op) => enviar(s, texto, op || {}),
       publicar: texto => enviar(s, texto, {})
     });
