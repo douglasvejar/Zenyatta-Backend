@@ -286,6 +286,25 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('CACHACO', 'hola buenas'));
   check(enviados.length === antes, 'una charla cualquiera no genera respuesta');
 
+  // ---------- PIZARRA desde el chat (el cálculo real vive en el manejador de Cargar Planos: aquí se prueba con uno falso) ----------
+  const llamadasPlano = [];
+  let respuestaPlano = { status: 201, body: { textoResultado: '*Sistema Dream*\nGANAN: Marvel\nPIERDEN: Cachaco' } };
+  glue._ext.guardarPlano = async (g, body) => { llamadasPlano.push({ g, body }); return respuestaPlano; };
+  const pubPizarra = enviados.length;
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4 Ret 7'));
+  const cuerpo = llamadasPlano[0] && llamadasPlano[0].body;
+  check(llamadasPlano.length === 1 && llamadasPlano[0].g === G && cuerpo.texto === '' && cuerpo.pizarra === '3.1.2.4' && cuerpo.ret === '7' && cuerpo.hipodromoNombre === 'Mountaineer' && cuerpo.carreraNumero === 1, 'el administrador escribe "Pizarra 3.1.2.4 Ret 7": el bot manda a calcular la carrera con plano vacío, la llegada y los retirados');
+  check(enviados.length === pubPizarra + 2 && /Pizarra cargada: \*Mountaineer, 1era Carrera\*/.test(textoDe(enviados[pubPizarra])) && /GANAN: Marvel/.test(textoDe(ultimo())), 'el bot avisa y publica en el grupo el plano con quién gana y quién pierde');
+  respuestaPlano = { status: 409, body: { error: 'YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA.', planoYaRegistrado: true } };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(/No pude cargar la pizarra: esa carrera ya tiene un plano registrado/.test(textoDe(ultimo())), 'si la carrera ya tenía plano, el bot lo explica (hay que borrarlo en Eliminar Planos)');
+  respuestaPlano = { status: 400, body: { error: 'Falta el texto del plano.' } };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(/no encontré jugadas pendientes del bot/.test(textoDe(ultimo())), 'si no había jugadas pendientes del bot, lo dice');
+  respuestaPlano = { status: 400, body: { error: 'Hipódromo no encontrado.' } };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(/No pude cargar la pizarra: Hipódromo no encontrado/.test(textoDe(ultimo())), 'cualquier otro error del sistema se muestra tal cual');
+
   Date.now = realNow;
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);

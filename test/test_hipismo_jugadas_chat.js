@@ -313,6 +313,33 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: of5.id }));
   check(guardadas.length === antes3, 'con la carrera cerrada ya no se registra nada');
 
+  // ---------- PIZARRA desde el chat ----------
+  eq(m.interpretarPizarra('Pizarra 6.10.4.8.2'), { llegada: '6.10.4.8.2', ret: '' }, '"Pizarra 6.10.4.8.2"');
+  eq(m.interpretarPizarra('pizarra 6-10-4-8-2'), { llegada: '6.10.4.8.2', ret: '' }, 'con guiones');
+  eq(m.interpretarPizarra('Llegada: 6 10 4 8 Ret 3, 7'), { llegada: '6.10.4.8', ret: '3, 7' }, '"Llegada: 6 10 4 8 Ret 3, 7" (con retirados)');
+  check(m.interpretarPizarra('Pizarra') === null && m.interpretarPizarra('Pizarra 6') === null && m.interpretarPizarra('Pizarra: .....') === null, 'sin llegada válida no es una pizarra');
+  eq(m.interpretarRetirados('Ret 3, 7'), '3, 7', '"Ret 3, 7"');
+  const pizarras = [];
+  deps.cargarPizarra = async x => { pizarras.push(x); return { ok: true, texto: '*RESULTADO DE LA CARRERA*\nGANAN: Marvel' }; };
+  await motor.procesarMensaje(msg('j_dreamy', 'Mountaineer 2da carrera', { esAdmin: true }));
+  await motor.procesarMensaje(msg('j_dreamy', 'Pizarra 3.1.2.4', { esAdmin: true }));
+  check(pizarras.length === 0 && /no hay jugadas del bot para calcular/.test(ultima().t), 'pizarra en una carrera sin jugadas: avisa y no calcula nada');
+  const ofP = msg('j_cachaco', 'Juego 4x1 con 75 doy a8');
+  await motor.procesarMensaje(ofP);
+  await motor.procesarMensaje(msg('j_marvel', '50', { citadoId: ofP.id }));
+  await motor.procesarMensaje(msg('j_curioso', 'Pizarra 3.1.2.4'));
+  check(pizarras.length === 0 && /no está autorizado para cargar la pizarra/.test(ultima().t), 'un jugador no puede cargar la pizarra: se le explica');
+  await motor.procesarMensaje(msg('j_dreamy', 'Ret 7', { esAdmin: true }));
+  check(/Retirados anotados: 7/.test(ultima().t), '"Ret 7" anota los retirados de la carrera');
+  await motor.procesarMensaje(msg('j_dreamy', 'Pizarra 3-1-2-4', { esAdmin: true }));
+  check(pizarras.length === 1 && pizarras[0].hipodromo === 'Mountaineer' && pizarras[0].carrera === 2 && pizarras[0].pizarra === '3.1.2.4' && pizarras[0].ret === '7' && pizarras[0].fecha === '2026-11-16', 'el administrador escribe la pizarra: se calcula esa carrera con la llegada y los retirados anotados');
+  check(motor.estado().abierta === false, 'la pizarra cierra la carrera');
+  check(/Pizarra cargada: \*Mountaineer, 2da Carrera\* — llegada 3\.1\.2\.4 \(Ret: 7\)/.test(enviadas[enviadas.length - 1].t) && publicadas[publicadas.length - 1] === '*RESULTADO DE LA CARRERA*\nGANAN: Marvel', 'el bot avisa y publica el resultado (quién gana y quién pierde)');
+  deps.cargarPizarra = async () => ({ ok: false, motivo: 'esa carrera ya tiene un plano registrado.' });
+  await motor.procesarMensaje(msg('j_dreamy', 'Pizarra 1.2.3', { esAdmin: true }));
+  check(/No pude cargar la pizarra: esa carrera ya tiene un plano registrado/.test(ultima().t), 'si el sistema rechaza el cálculo, el bot dice el motivo');
+  delete deps.cargarPizarra;
+
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

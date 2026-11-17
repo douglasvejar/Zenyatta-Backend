@@ -271,6 +271,20 @@ async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
   }));
 }
 
+// Cargar la pizarra desde el chat: usa el mismo manejador de "Cargar Planos" (plano vacío + pizarra) y devuelve el texto del resultado.
+// `ext` se puede reemplazar en las pruebas.
+const ext = { guardarPlano: (grupoId, body) => require('../routes/hipismo').guardarPlanoParaBot(grupoId, body) };
+async function cargarPizarraChat(grupoId, { hipodromo, carrera, fecha, pizarra, ret }) {
+  let out;
+  try { out = await ext.guardarPlano(grupoId, { texto: '', pizarra, hipodromoNombre: hipodromo, carreraNumero: carrera, fecha, ret: ret || '' }); }
+  catch (e) { console.error('[hipismoChat] Error al cargar la pizarra:', e); return { ok: false, motivo: 'error interno al calcular (' + e.message + ')' }; }
+  if (out && out.status === 201 && out.body && out.body.textoResultado) return { ok: true, texto: out.body.textoResultado };
+  const err = out && out.body && out.body.error;
+  if (out && out.status === 409) return { ok: false, motivo: 'esa carrera ya tiene un plano registrado. Para volver a calcularla, bórralo primero en Eliminar Planos del panel.' };
+  if (err && /Falta el texto del plano/i.test(err)) return { ok: false, motivo: 'no encontré jugadas pendientes del bot para esa carrera (¿ya se calcularon o se borraron?).' };
+  return { ok: false, motivo: err || 'no se pudo calcular la carrera.' };
+}
+
 function fechaHoyVenezuela() {
   return require('./fechaVenezuela').fechaVenezuelaHoy();
 }
@@ -303,6 +317,7 @@ function sesionDe(grupo, sock, remoteJid) {
       autorizarAdmin: x => autorizarAdminManual(grupo.id, x, () => s.sock),
       guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
       nota: t => { if (s.anotarActual) s.anotarActual(t); },
+      cargarPizarra: x => cargarPizarraChat(grupo.id, x),
       responder: (texto, op) => enviar(s, texto, op || {}),
       publicar: texto => enviar(s, texto, {})
     });
@@ -415,4 +430,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

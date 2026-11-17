@@ -7410,4 +7410,14 @@ router.post('/chat/marcar-leidos', asyncHandler(async (req, res) => {
   res.status(204).end();
 }));
 
+// 17-11-2026 — Bot de jugadas del chat de WhatsApp: un administrador escribe "Pizarra 6.10.4.8.2" y el bot guarda la carrera con ese
+// mismo manejador de Cargar Planos (plano vacío: las jugadas pendientes del bot de esa carrera se resuelven y entran a los saldos).
+// Devuelve { status, body } igual que correrManejadorPlano (201 = guardado; 400/409 = body.error explica).
+router.guardarPlanoParaBot = async function guardarPlanoParaBot(grupoId, body) {
+  const rg = await db.query('SELECT * FROM grupos WHERE id = $1', [grupoId]);
+  if (!rg.rows.length) return { status: 404, body: { error: 'Grupo no encontrado.' } };
+  const reqBot = { grupoId, grupo: rg.rows[0], rol: 'admin', nombreActor: 'Bot de WhatsApp', body: {}, query: {}, params: {} };
+  return correrManejadorPlano(guardarPlanoHandler, reqBot, body);
+};
+
 module.exports = router;

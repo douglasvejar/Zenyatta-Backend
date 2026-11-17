@@ -216,6 +216,23 @@ function interpretarAbrirCarrera(texto) {
 }
 const ES_CIERRE_RE = /^(?:cierra|cierre|cerrar|cerrada|cerrado|cierra la carrera|cerrar carrera)$/i;
 const ES_PLANO_RE = /^(?:plano|planos)$/i;
+// "Pizarra 6.10.4.8.2", "pizarra 6-10-4-8-2", "Llegada: 6 10 4 8", opcional "... Ret 3, 7" al final; y "Ret 3" suelto.
+const PIZARRA_RE = /^(?:pizarra|llegada)\s*[:=-]?\s*(\d[\d\s.,\-\/]*?)(?:\s+(?:ret|retirados?)\s*[:=-]?\s*(\d[\d\s.,\-\/y]*))?\s*$/i;
+const RET_RE = /^(?:ret|retirados?|retirado)\s*[:=-]?\s*(\d[\d\s.,\-\/y]*)$/i;
+const numerosDe = t => String(t || '').split(/[^0-9]+/).filter(Boolean).map(n => String(parseInt(n, 10)));
+function interpretarPizarra(texto) {
+  const m = limpiar(texto).match(PIZARRA_RE);
+  if (!m) return null;
+  const llegada = numerosDe(m[1]);
+  if (llegada.length < 2) return null;
+  return { llegada: llegada.join('.'), ret: m[2] ? numerosDe(m[2]).join(', ') : '' };
+}
+function interpretarRetirados(texto) {
+  const m = limpiar(texto).match(RET_RE);
+  if (!m) return null;
+  const n = numerosDe(m[1]);
+  return n.length ? n.join(', ') : null;
+}
 const ES_AUTORIZAR_RE = /^(?:autorizar|autoriza|dar admin|hacer admin|admin)$/i;
 
 // ---------------------------------------------------------------
@@ -256,7 +273,7 @@ const CADA_N_JUGADAS_PLANO = 4;
 // Una parada publicada vale como máximo 3 minutos: si responden después, "Aquí nada" (por tiempo).
 const VIGENCIA_PARADA_MS = 3 * 60 * 1000;
 function crearMotor(deps) {
-  const ctx = { hipodromo: null, carrera: null, abierta: false, fecha: null };
+  const ctx = { hipodromo: null, carrera: null, abierta: false, fecha: null, ret: '' };
   const ofertas = new Map();
   let jugadas = [];
   let sinPlano = 0;
@@ -280,6 +297,25 @@ function crearMotor(deps) {
     const r = await deps.registrarNumero({ jid: m.citadoParticipante, nombre: nombre.trim() });
     if (r && r.ok) await deps.responder('✅ Listo: ese número quedó registrado como *' + r.nombre + '*. Ya puede jugar.', { citarId: m.id });
     else await deps.responder('⚠️ ' + ((r && r.motivo) || 'No se pudo registrar ese número.'), { citarId: m.id });
+  }
+  // El administrador escribe la pizarra (llegada): el bot calcula las jugadas de la carrera, las guarda en los saldos y publica el resultado.
+  async function cargarPizarra(m, datos) {
+    if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera para ponerle pizarra. Abre una primero (ej.: Gulfstream Park 5ta carrera).', { citarId: m.id }); return; }
+    if (!deps.cargarPizarra) return;
+    if (!jugadas.length) { await deps.responder('⚠️ En *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera* no hay jugadas del bot para calcular.', { citarId: m.id }); return; }
+    if (ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); } // la pizarra cierra la carrera
+    const ret = datos.ret || ctx.ret || '';
+    nota('Pizarra ' + datos.llegada + (ret ? ' con retirados ' + ret : '') + ': calculando la carrera');
+    const r = await deps.cargarPizarra({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, fecha: ctx.fecha, pizarra: datos.llegada, ret });
+    if (!r || !r.ok) { await deps.responder('⚠️ No pude cargar la pizarra: ' + ((r && r.motivo) || 'error desconocido') , { citarId: m.id }); return; }
+    ctx.ret = '';
+    await deps.responder('🏁 Pizarra cargada: *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera* — llegada ' + datos.llegada + (ret ? ' (Ret: ' + ret + ')' : '') + '. Calculé las jugadas y ya quedaron en los saldos de los clientes:', { citarId: m.id });
+    await deps.publicar(r.texto);
+  }
+  async function anotarRetirados(m, ret) {
+    if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta para anotar retirados.', { citarId: m.id }); return; }
+    ctx.ret = ret;
+    await deps.responder('✅ Retirados anotados: ' + ret + '. Cuando tengas la llegada escribe: *Pizarra 6.10.4.8.2*', { citarId: m.id });
   }
   // Un administrador autoriza a otra persona (responde a su mensaje o al aviso "no autorizado" del bot con "autorizar"): desde entonces puede abrir/cerrar y pedir el plano.
   async function autorizarAdmin(m) {
@@ -313,7 +349,7 @@ function crearMotor(deps) {
       await deps.responder('⚠️ No encontré el hipódromo "' + datos.hipodromo + '" en la lista de este grupo. Revisa el nombre (ej.: Mountaineer 1ra carrera).', { citarId: m.id });
       return;
     }
-    ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy();
+    ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy(); ctx.ret = '';
     ofertas.clear(); sinPlano = 0;
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
     await guardarEstado();
@@ -469,6 +505,10 @@ function crearMotor(deps) {
     await cargarEstadoSiHaceFalta();
     if (m.esAdmin) {
       if (ES_AUTORIZAR_RE.test(texto)) return autorizarAdmin(m);
+      const piz = interpretarPizarra(texto);
+      if (piz) return cargarPizarra(m, piz);
+      const retx = interpretarRetirados(texto);
+      if (retx) return anotarRetirados(m, retx);
       const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
       if (mReg) return registrarNumero(m, mReg[1]);
       const carr = interpretarAbrirCarrera(texto);
@@ -483,6 +523,7 @@ function crearMotor(deps) {
       // Antes esto se ignoraba en silencio (parecía que el bot "no abría la carrera"): ahora se explica.
       if (interpretarAbrirCarrera(texto)) return avisarNoAdmin(m, 'abrir carreras');
       if (ES_CIERRE_RE.test(texto)) return avisarNoAdmin(m, 'cerrar carreras');
+      if (interpretarPizarra(texto)) return avisarNoAdmin(m, 'cargar la pizarra');
     }
     const oferta = interpretarOferta(texto);
     if (oferta !== null) return procesarOferta(m, oferta);
@@ -496,6 +537,6 @@ function crearMotor(deps) {
 }
 
 module.exports = {
-  crearMotor, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
+  crearMotor, interpretarPizarra, interpretarRetirados, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
   armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };
