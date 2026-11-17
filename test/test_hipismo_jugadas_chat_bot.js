@@ -39,6 +39,7 @@ function consulta(text, params) {
   if (/^SELECT id, comision_porcentaje FROM hipismo_tercios_adelantadas_planos/i.test(sql)) {
     return { rows: T.planos.filter(p => p.grupo_id === params[0] && p.hipodromo_nombre === params[1] && String(p.fecha) === String(params[2]) && p.texto_original === params[3]) };
   }
+  if (T.fallar && /^INSERT INTO hipismo_tercios_adelantadas_jugadas/i.test(sql)) throw new Error('fallo simulado');
   if (/^INSERT INTO hipismo_tercios_adelantadas_planos/i.test(sql)) {
     const p = { id: 'p' + (++contador), grupo_id: params[0], hipodromo_id: params[1], hipodromo_nombre: params[2], fecha: params[3], comision_porcentaje: 5, texto_original: params[4] };
     T.planos.push(p); return { rows: [p] };
@@ -187,10 +188,41 @@ const textoDe = e => e.contenido.text;
   await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid(), anotar: n => notasT.push(n) });
   check(notasT.some(n => /es el cliente TYKHE/.test(n)), 'el panel muestra que ese número es el cliente TYKHE');
 
+  // vigencia de 3 minutos con la hora real del mensaje de WhatsApp (messageTimestamp, en segundos)
+  const mT = (quien, texto, citadoId, seg, extraCtx) => {
+    const id = 'W' + (++seq);
+    const m = { key: { remoteJid: JID, participant: num[quien] + '@s.whatsapp.net', id, fromMe: false }, pushName: quien, messageTimestamp: seg,
+      message: citadoId ? { extendedTextMessage: { text: texto, contextInfo: { stanzaId: citadoId, ...(extraCtx || {}) } } } : { conversation: texto } };
+    guardados[id] = m; return m;
+  };
+  const base = 1800000000;
+  const ofV = mT('CACHACO', 'Juego 4x1 con 20 doy a8', null, base);
+  await whatsappBot.manejarMensajeEntrante(sock, ofV);
+  const nJug = T.jugadas.length;
+  await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV.key.id, base + 200));
+  check(T.jugadas.length === nJug && /Aquí nada, pasaron más de 3 minutos/.test(textoDe(ultimo())), 'con la hora real de WhatsApp: respondieron 200 s después y el bot dice "Aquí nada" por tiempo');
+  const ofV2 = mT('CACHACO', 'Juego 4x1 con 20 doy a8', null, base + 300);
+  await whatsappBot.manejarMensajeEntrante(sock, ofV2);
+  await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV2.key.id, base + 300 + 100));
+  check(T.jugadas.length === nJug + 1 && enviados.slice(-2).some(e => textoDe(e) === '✅ Aquí jugaron'), 'respondieron a los 100 s: "Aquí jugaron"');
+  // el bot no conocía la parada (reinicio): lo dice en vez de quedarse callado
+  await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', 'ID-QUE-EL-BOT-NO-VIO', base + 400, { quotedMessage: { conversation: 'Juego 3n del 1 400' } }));
+  check(/Aquí nada, esa parada ya no está activa/.test(textoDe(ultimo())), 'respuesta a una parada que el bot no vio: avisa en vez de quedarse mudo (usa el texto citado)');
+  // un error interno ya no deja al bot mudo
+  const antesErr = enviados.length;
+  const oldQ = glue._sesiones.values().next().value.motor;
+  const ofE = mT('CACHACO', 'Juego 4x1 con 20 doy a8', null, base + 500);
+  await whatsappBot.manejarMensajeEntrante(sock, ofE);
+  const antesNum = T.jugadas.length;
+  T.fallar = true;
+  await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofE.key.id, base + 510));
+  T.fallar = false;
+  check(enviados.length === antesErr + 1 && /error interno/.test(textoDe(ultimo())) && T.jugadas.length === antesNum, 'si algo falla por dentro, el bot avisa en el grupo en vez de quedarse mudo');
+
   // plano desde la base de datos
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'plano'));
   const plano = textoDe(ultimo());
-  check(/Sistema Dream/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /Juega Cachaco 10A8 \(5x4\) con 200,00 da Marvel/.test(plano) && /Total jugadas: 3/.test(plano), 'el plano sale de las jugadas guardadas, con "Total jugadas: 3"');
+  check(/Sistema Dream/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /Juega Cachaco 10A8 \(5x4\) con 200,00 da Marvel/.test(plano) && new RegExp('Total jugadas: ' + T.jugadas.length + '$').test(plano), 'el plano sale de las jugadas guardadas, con su "Total jugadas"');
 
   // el servidor se reinicia con la carrera abierta: se retoma desde la base y se sigue jugando
   glue._sesiones.clear();

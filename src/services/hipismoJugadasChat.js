@@ -139,7 +139,8 @@ function interpretarRespuesta(texto) {
   if (!t) return null;
   if (/^(?:j|jugo|jugado|jugamos|juego|todo|jugo todo|j todo)$/.test(t)) return { tipo: 'todo' };
   // "Sf" / "Se fue" / "Sefue": el jugador retira TODAS sus jugadas abiertas (ya no las va a jugar)
-  if (/^(?:sf|s\.f\.?|se ?fue(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
+  // (también las erratas comunes: "sedue", "se due", "se fie", "se fye", "s f")
+  if (/^(?:s\.? ?f\.?|se ?[fd][uyi]e(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
   const m = t.match(/^(?:j(?:ugo)?\s*)?(?:con\s+)?(\d+(?:[.,]\d+)?)$/);
   if (m) { const n = parseMontoChat(m[1]); if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) }; }
   return null;
@@ -236,6 +237,8 @@ function armarPlanoChat({ nombreGrupo, fecha, hipodromo, carrera, jugadas }) {
 // mensaje = { texto, id, citadoId, remitente: { jid, nombre }, esAdmin }
 // ---------------------------------------------------------------
 const CADA_N_JUGADAS_PLANO = 4;
+// Una parada publicada vale como máximo 3 minutos: si responden después, "Aquí nada" (por tiempo).
+const VIGENCIA_PARADA_MS = 3 * 60 * 1000;
 function crearMotor(deps) {
   const ctx = { hipodromo: null, carrera: null, abierta: false, fecha: null };
   const ofertas = new Map();
@@ -243,6 +246,8 @@ function crearMotor(deps) {
   let sinPlano = 0;
   const avisados = new Map(); // clave -> ms del último aviso (evita repetir el mismo reclamo)
 
+  const nota = t => { try { if (deps.nota) deps.nota(t); } catch (e) { /* solo informativo */ } };
+  const tiempoDe = m => (Number(m.ts) > 0 ? Number(m.ts) : Date.now());
   const puedeAvisar = (clave, ms) => {
     const ahora = Date.now();
     if (avisados.has(clave) && ahora - avisados.get(clave) < ms) return false;
@@ -313,37 +318,51 @@ function crearMotor(deps) {
       return;
     }
     if (!o.ok) {
+      nota('Jugada publicada pero no se entendió (' + o.motivo + ')');
       await deps.responder(etiquetaDe(m) + ' no entendí tu jugada (' + o.motivo + '). Escríbela así: *Juego 4x1 con 75 doy a8*', mencion(m));
       return;
     }
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
+      nota('Jugada publicada, pero quien la escribió no es un cliente registrado: no se guardó');
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
       return;
     }
     const r = riesgoPorUnidad(o.apuesta);
     const factor = o.lado === 'doy' ? r.jugador : r.banquero; // quien publica "doy" juega; quien publica "recibo" da
     const tope = await topeDe(nombre, factor);
     if (o.monto > tope.max + 0.005) {
+      nota('Jugada publicada por ' + nombre + ' pero su disponible no alcanza (' + (tope.disponible === null ? '?' : fmt(tope.disponible)) + '): no se guardó');
       await deps.responder(textoSinDisponible(m, tope, factor), mencion(m));
       return;
     }
-    ofertas.set(m.id, { id: m.id, autorJid: m.remitente.jid, autorNombre: nombre, autorEtiqueta: m.remitente.nombre, lado: o.lado, apuesta: o.apuesta, monto: o.monto, restante: o.monto });
+    nota('Jugada publicada por ' + nombre + ' (' + fmt(o.monto) + '): queda abierta 3 minutos esperando respuestas');
+    ofertas.set(m.id, { id: m.id, ts: tiempoDe(m), autorJid: m.remitente.jid, autorNombre: nombre, autorEtiqueta: m.remitente.nombre, lado: o.lado, apuesta: o.apuesta, monto: o.monto, restante: o.monto });
     if (ofertas.size > 400) ofertas.delete(ofertas.keys().next().value);
   }
 
   async function procesarRespuesta(m, resp) {
     const oferta = ofertas.get(m.citadoId);
-    if (!oferta || !ctx.abierta) return;
-    if (oferta.autorJid === m.remitente.jid) return; // responderse a uno mismo no hace nada
-    const nombre = await deps.identificar(m.remitente);
-    if (!nombre) {
-      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 600000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
+    if (!ctx.abierta) { nota('Respuesta recibida pero no hay carrera abierta'); return; }
+    if (!oferta) {
+      // La parada que citó no la conoce el bot (se publicó antes de abrir la carrera, antes de un reinicio del servidor, o no era una jugada).
+      if (m.citadoTexto && interpretarOferta(m.citadoTexto) !== null) {
+        nota('Respondieron a una parada que el bot no tiene en memoria (se publicó antes de abrir la carrera o antes de reiniciar el servidor)');
+        await deps.responder('❌ Aquí nada, esa parada ya no está activa. Que la publiquen de nuevo.', { citarId: m.id });
+      } else nota('Respuesta a un mensaje que no es una parada conocida: se ignora');
       return;
     }
-    if (nombre === oferta.autorNombre) return;
-    if (oferta.restante <= 0.005) { await deps.responder('❌ Nada, ya topada', { citarId: m.id }); return; }
-    if (oferta.seFue) { await deps.responder('❌ Aquí nada, puso se fue', { citarId: m.id }); return; }
+    if (oferta.autorJid === m.remitente.jid) { nota('Respuesta a su propia parada: no hace nada'); return; } // responderse a uno mismo no hace nada
+    const nombre = await deps.identificar(m.remitente);
+    if (!nombre) {
+      nota('Respuesta a una parada, pero quien responde no es un cliente registrado: no se jugó');
+      if (puedeAvisar('sin-cliente|' + m.remitente.jid, 60000)) await deps.responder(etiquetaDe(m) + ' tu número no está registrado como cliente. Avísale al administrador para que lo registre.' + pistaRegistro(m), mencion(m));
+      return;
+    }
+    if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }
+    if (oferta.restante <= 0.005) { nota(nombre + ' respondió pero la parada ya estaba topada'); await deps.responder('❌ Aquí nada, ya está topada', { citarId: m.id }); return; }
+    if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('❌ Aquí nada, puso se fue', { citarId: m.id }); return; }
+    if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) { nota(nombre + ' respondió pasados los 3 minutos de vigencia de la parada'); await deps.responder('❌ Aquí nada, pasaron más de 3 minutos desde que se publicó la parada', { citarId: m.id }); return; }
 
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
     let monto = round2(Math.min(pedido, oferta.restante));
@@ -356,6 +375,7 @@ function crearMotor(deps) {
 
     const topeResp = await topeDe(nombre, factorRespondedor);
     if (monto > topeResp.max + 0.005) {
+      nota(nombre + ' respondió pero su disponible no alcanza: no se jugó');
       await deps.responder(textoSinDisponible(m, topeResp, factorRespondedor), mencion(m));
       return;
     }
@@ -365,7 +385,8 @@ function crearMotor(deps) {
       monto = round2(Math.max(0, topeAutor.max));
       if (monto <= 0.005) {
         oferta.restante = 0;
-        await deps.responder('❌ Nada, el que publicó esa parada ya no tiene disponible', { citarId: m.id });
+        nota('El que publicó ' + oferta.autorNombre + ' ya no tiene disponible: no se jugó');
+        await deps.responder('❌ Aquí nada, el que publicó esa parada ya no tiene disponible', { citarId: m.id });
         return;
       }
     }
@@ -383,6 +404,7 @@ function crearMotor(deps) {
     jugadas.push(jugada);
     sinPlano++;
     const parcial = monto + 0.005 < pedido;
+    nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
     await deps.responder('✅ Aquí jugaron' + (parcial ? ' ' + fmt(monto) + ' (era lo que quedaba)' : ''), { citarId: m.id });
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
@@ -427,7 +449,7 @@ function crearMotor(deps) {
     if (oferta !== null) return procesarOferta(m, oferta);
     const resp = interpretarRespuesta(texto);
     // "Sf"/"Se fue": sus jugadas abiertas se fueron. Si después alguien le responde (monto o J), el bot dice que no hay nada.
-    if (resp && resp.tipo === 'sf') { retirarOfertasDe(m.remitente.jid); return; }
+    if (resp && resp.tipo === 'sf') { nota('Puso "se fue": sus paradas abiertas quedan muertas'); retirarOfertasDe(m.remitente.jid); return; }
     if (resp && m.citadoId) return procesarRespuesta(m, resp);
   }
 
@@ -436,5 +458,5 @@ function crearMotor(deps) {
 
 module.exports = {
   crearMotor, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
-  armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO
+  armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };

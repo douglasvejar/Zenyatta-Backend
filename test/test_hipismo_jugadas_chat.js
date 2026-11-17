@@ -127,7 +127,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   check(ultima().t === '✅ Aquí jugaron', '"J" por todo lo que quedaba: confirma sin aclaración extra');
   // ya topada
   await motor.procesarMensaje(msg('j_kahelt', '50', { citadoId: of1.id }));
-  check(guardadas.length === 3 && ultima().t === '❌ Nada, ya topada', 'cuando ya no queda nada: "❌ Nada, ya topada"');
+  check(guardadas.length === 3 && ultima().t === '❌ Aquí nada, ya está topada', 'cuando ya no queda nada: "❌ Aquí nada, ya está topada"');
 
   // Parcial: oferta de 300, uno juega 200, otro pide J ... solo 100
   const of2 = msg('j_luis', 'Juego 2p del 8 con 300');
@@ -210,6 +210,56 @@ const ultima = () => enviadas[enviadas.length - 1];
   check(registros.length === 2, 'un jugador que escribe "registrar" no registra nada');
   delete deps.registrarNumero;
 
+  // Vigencia de la parada: 3 minutos
+  const T0 = Date.now();
+  const ofT = msg('j_cachaco', 'Juego 4x1 con 75 doy a8', { ts: T0 });
+  await motor.procesarMensaje(ofT);
+  const antesT = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofT.id, ts: T0 + 181000 }));
+  check(guardadas.length === antesT && /^❌ Aquí nada, pasaron más de 3 minutos/.test(ultima().t), 'a los 3 minutos y un segundo la parada venció: "Aquí nada" por tiempo y no se registra');
+  await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofT.id, ts: T0 + 180000 }));
+  check(guardadas.length === antesT && /pasaron más de 3 minutos/.test(ultima().t), 'justo a los 3 minutos ya no vale');
+  const ofT2 = msg('j_cachaco', 'Juego 4x1 con 75 doy a8', { ts: T0 });
+  await motor.procesarMensaje(ofT2);
+  await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofT2.id, ts: T0 + 179000 }));
+  check(guardadas.length === antesT + 1 && ultima().t === '✅ Aquí jugaron', 'a los 2:59 todavía vale: "Aquí jugaron"');
+  // "se fue" en todas sus variantes (también errores de tecleo)
+  for (const frase of ['sf', 'Se fue', 'sefue', 'sedue', 'se due', 'S F', 'sf.', 'se fueron']) {
+    const ofS = msg('j_cachaco', 'Juego 4x1 con 75 doy a8');
+    await motor.procesarMensaje(ofS);
+    await motor.procesarMensaje(msg('j_cachaco', frase));
+    const g0 = guardadas.length;
+    await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofS.id }));
+    check(guardadas.length === g0 && ultima().t === '❌ Aquí nada, puso se fue', '"' + frase + '" mata la parada: el bot responde "Aquí nada, puso se fue"');
+  }
+  // lo ya jugado antes del "se fue" se conserva y lo que se publica después de él vale
+  const ofA = msg('j_cachaco', 'Juego 4x1 con 100 doy a8');
+  await motor.procesarMensaje(ofA);
+  await motor.procesarMensaje(msg('j_marvel', '30', { citadoId: ofA.id }));
+  const gA = guardadas.length;
+  await motor.procesarMensaje(msg('j_cachaco', 'se fue'));
+  await motor.procesarMensaje(msg('j_marvel', '30', { citadoId: ofA.id }));
+  check(guardadas.length === gA && ultima().t === '❌ Aquí nada, puso se fue', 'lo que sobraba de la parada murió con el "se fue" (lo jugado antes se mantiene)');
+  const ofB = msg('j_cachaco', 'Juego 4x1 con 40 doy a8');
+  await motor.procesarMensaje(ofB);
+  await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofB.id }));
+  check(guardadas.length === gA + 1 && ultima().t === '✅ Aquí jugaron', 'una parada publicada DESPUÉS del "se fue" es nueva y sí vale');
+  // parada que el bot no tiene en memoria (reinicio / publicada antes de abrir)
+  const nAntes = enviadas.length;
+  await motor.procesarMensaje(msg('j_marvel', '20', { citadoId: 'DESCONOCIDA', citadoTexto: 'Juego 4x1 con 75 doy a8' }));
+  check(/^❌ Aquí nada, esa parada ya no está activa/.test(ultima().t), 'respuesta a una parada que el bot no conoce: avisa "Aquí nada" y que la publiquen de nuevo');
+  await motor.procesarMensaje(msg('j_marvel', '20', { citadoId: 'OTRO', citadoTexto: 'hola buenas' }));
+  check(enviadas.length === nAntes + 1, 'responder con un monto a una charla cualquiera no genera mensaje');
+  // el aviso de "no registrado" se vuelve a dar pasado un minuto
+  // notas para el panel
+  const notasMotor = [];
+  deps.nota = t => notasMotor.push(t);
+  const ofN = msg('j_cachaco', 'Juego 4x1 con 75 doy a8');
+  await motor.procesarMensaje(ofN);
+  await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofN.id }));
+  check(notasMotor.some(t => /Jugada publicada por CACHACO/.test(t)) && notasMotor.some(t => /Se jugó: CACHACO con 10,00 contra MARVEL/.test(t)), 'el motor deja notas de lo que decidió (para el panel de Súper-admin)');
+  delete deps.nota;
+
   // Oferta que no se entiende: preguntar en el grupo
   await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));
   check(/no entendí tu jugada/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot pregunta y muestra cómo escribirla');
@@ -234,6 +284,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   const antesCierre = publicadas.length;
   await motor.procesarMensaje(msg('j_dreamy', 'cierra', { esAdmin: true }));
   check(motor.estado().abierta === false && publicadas.length === antesCierre + 1 && /Plano final/.test(ultima().t), 'el administrador cierra: avisa y publica el plano final');
+  check(/1\) Juega Cachaco/.test(publicadas[publicadas.length - 1]) && new RegExp('Total jugadas: ' + guardadas.length + '$').test(publicadas[publicadas.length - 1]), 'el plano final trae TODAS las jugadas que hubo en la carrera');
   const antes3 = guardadas.length;
   const of5 = msg('j_luis', 'Juego 4x1 con 10 doy a8');
   await motor.procesarMensaje(of5);

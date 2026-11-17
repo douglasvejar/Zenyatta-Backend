@@ -256,6 +256,7 @@ function sesionDe(grupo, sock, remoteJid) {
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
       registrarNumero: x => registrarNumeroManual(grupo.id, x),
       guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
+      nota: t => { if (s.anotarActual) s.anotarActual(t); },
       responder: (texto, op) => enviar(s, texto, op || {}),
       publicar: texto => enviar(s, texto, {})
     });
@@ -294,6 +295,21 @@ function extraerCitadoParticipante(msg) {
   return (ci && ci.participant) || null;
 }
 
+// Texto del mensaje que se está respondiendo (WhatsApp lo trae dentro de la respuesta): sirve para reconocer una parada aunque el bot ya no la tenga en memoria.
+function extraerCitadoTexto(msg) {
+  const m = msg && msg.message;
+  const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
+  const q = ci && ci.quotedMessage;
+  return (q && (q.conversation || (q.extendedTextMessage && q.extendedTextMessage.text))) || null;
+}
+
+// Hora en que escribieron el mensaje (milisegundos). WhatsApp la manda en segundos (a veces como objeto Long).
+function tiempoDeMensaje(msg) {
+  const t = msg && msg.messageTimestamp;
+  const n = t && typeof t === 'object' && typeof t.toNumber === 'function' ? t.toNumber() : Number(t);
+  return n > 0 ? n * 1000 : null;
+}
+
 function extraerCitadoId(msg) {
   const m = msg && msg.message;
   const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
@@ -330,10 +346,18 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
   const mensaje = {
-    texto, id: idMsg, citadoId: extraerCitadoId(msg), citadoParticipante: extraerCitadoParticipante(msg), esAdmin,
+    texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: extraerCitadoParticipante(msg), citadoTexto: extraerCitadoTexto(msg), esAdmin,
     remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
   };
-  s.cola = s.cola.then(() => s.motor.procesarMensaje(mensaje)).catch(e => console.error('[hipismoChat] Error al procesar un mensaje:', e));
+  s.cola = s.cola.then(() => s.motor.procesarMensaje(mensaje)).catch(async e => {
+    console.error('[hipismoChat] Error al procesar un mensaje:', e);
+    if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
+    // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).
+    if (Date.now() - (s.ultimoAvisoError || 0) > 60000) {
+      s.ultimoAvisoError = Date.now();
+      await enviar(s, '⚠️ No pude procesar ese mensaje por un error interno. Avisa al administrador.', { citarId: idMsg });
+    }
+  });
   await s.cola;
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
