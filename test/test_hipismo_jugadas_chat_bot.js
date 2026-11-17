@@ -184,6 +184,11 @@ const textoDe = e => e.contenido.text;
   const ofT = { key: { remoteJid: JID, participant: '88888888888@lid', id: 'TYK3', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
   await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid() });
   check(enviados.length === antesT, 'Tykhe ya es reconocido: publicar su jugada no genera "no está registrado"');
+  // el mismo cliente, pero ahora WhatsApp (tras reconectar) deja ver su teléfono real —distinto al de la ficha— junto al @lid: sigue reconocido por lo registrado
+  const antesAlt = enviados.length;
+  const ofAlt = { key: { remoteJid: JID, participant: '88888888888@lid', participantAlt: '5491155550000@s.whatsapp.net', id: 'TYK4', fromMe: false }, pushName: 'Tykhe', message: { conversation: 'Juego 4x1 con 10 doy a8' } };
+  await glue.intentar({ sock, msg: ofAlt, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: whatsappBot.crearAyudasJugadasChat(sock, ofAlt) });
+  check(enviados.length === antesAlt, 'aunque ahora se vea el teléfono real (distinto al de la ficha), el cliente registrado a mano sigue siendo reconocido por su código @lid');
   let notasT = [];
   await glue.intentar({ sock, msg: ofT, remoteJid: JID, texto: 'Juego 4x1 con 10 doy a8', ayudas: ayLid(), anotar: n => notasT.push(n) });
   check(notasT.some(n => /es el cliente TYKHE/.test(n)), 'el panel muestra que ese número es el cliente TYKHE');

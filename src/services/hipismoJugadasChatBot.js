@@ -63,8 +63,10 @@ async function grupoPropio(grupoId, jid) {
 }
 
 // Un administrador asocia el número (o el código oculto @lid) de quien escribió con un cliente de la ficha: "registrar NOMBRE" citando su mensaje.
-async function registrarNumeroManual(grupoId, { jid, nombre }) {
-  const digitos = telefonoDeParticipante(jid);
+async function registrarNumeroManual(grupoId, { jid, jidReal, nombre }) {
+  // Se guardan los dos: el código oculto (@lid) y, si se pudo resolver, el teléfono real (WhatsApp muestra uno u otro según la conexión).
+  const lista0 = [jid, jidReal].map(j => telefonoDeParticipante(j)).filter((d, i, a) => d && a.indexOf(d) === i);
+  const digitos = lista0[0];
   if (!digitos) return { ok: false, motivo: 'No pude leer el número de esa persona.' };
   const buscado = normNombre(nombre);
   if (!buscado) return { ok: false, motivo: 'Escribe el nombre del cliente: *registrar NOMBRE*' };
@@ -74,11 +76,13 @@ async function registrarNumeroManual(grupoId, { jid, nombre }) {
   if (hallados.length === 0) hallados = lista.filter(f => f.n.includes(buscado));
   if (hallados.length === 0) return { ok: false, motivo: 'No encontré ningún cliente llamado "' + nombre + '" en este grupo.' };
   if (hallados.length > 1) return { ok: false, motivo: 'Hay varios clientes que se parecen a "' + nombre + '" (' + hallados.slice(0, 4).map(f => f.nombre).join(', ') + '). Escribe el nombre completo.' };
-  await db.query(
-    `INSERT INTO hipismo_chat_numeros (grupo_id, digitos, jugador_nombre) VALUES ($1,$2,$3)
-     ON CONFLICT (grupo_id, digitos) DO UPDATE SET jugador_nombre = EXCLUDED.jugador_nombre`,
-    [grupoId, digitos, hallados[0].nombre]
-  );
+  for (const d of lista0) {
+    await db.query(
+      `INSERT INTO hipismo_chat_numeros (grupo_id, digitos, jugador_nombre) VALUES ($1,$2,$3)
+       ON CONFLICT (grupo_id, digitos) DO UPDATE SET jugador_nombre = EXCLUDED.jugador_nombre`,
+      [grupoId, d, hallados[0].nombre]
+    );
+  }
   cacheClientes.delete(grupoId);
   return { ok: true, nombre: hallados[0].nombre };
 }
@@ -99,9 +103,11 @@ async function motivoSinGrupoPropio(grupoId, jid) {
 }
 
 // Número -> cliente. Se comparan los últimos 10 dígitos (así "0414-1234567" y "+58 414 1234567" son el mismo).
-async function clientePorNumero(grupoId, jidReal) {
-  const digitos = telefonoDeParticipante(jidReal);
-  if (!digitos) return null;
+// `jids` puede ser un jid o varios (el real y el crudo): WhatsApp a veces muestra el @lid y a veces el teléfono, según la conexión,
+// así que se prueban todos contra los números asociados a mano y contra las fichas.
+async function clientePorNumero(grupoId, jids) {
+  const todos = [].concat(jids || []).map(j => telefonoDeParticipante(j)).filter((d, i, a) => d && a.indexOf(d) === i);
+  if (!todos.length) return null;
   let c = cacheClientes.get(grupoId);
   if (!c || c.hasta < Date.now()) {
     const r = await db.query(`SELECT nombre, telefono FROM jugadores WHERE grupo_id = $1 AND telefono IS NOT NULL AND telefono <> '' AND COALESCE(es_cuenta_comision, false) = false`, [grupoId]);
@@ -113,10 +119,13 @@ async function clientePorNumero(grupoId, jidReal) {
     c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), mapa, hasta: Date.now() + 60000 };
     cacheClientes.set(grupoId, c);
   }
-  if (c.mapa && c.mapa.has(digitos)) return c.mapa.get(digitos); // asociado a mano por un administrador ("registrar NOMBRE")
+  for (const digitos of todos) if (c.mapa && c.mapa.has(digitos)) return c.mapa.get(digitos); // asociado a mano por un administrador ("registrar NOMBRE")
   const ult = s => s.slice(-10);
-  const hallado = c.lista.find(f => (f.digitos.length >= 10 && digitos.length >= 10) ? ult(f.digitos) === ult(digitos) : f.digitos === digitos);
-  return hallado ? hallado.nombre : null;
+  for (const digitos of todos) {
+    const hallado = c.lista.find(f => (f.digitos.length >= 10 && digitos.length >= 10) ? ult(f.digitos) === ult(digitos) : f.digitos === digitos);
+    if (hallado) return hallado.nombre;
+  }
+  return null;
 }
 
 // Lo que le queda para jugar. Los clientes sin pozo (libres) no tienen tope. A lo que ya calcula el sistema ("en juego" de las
@@ -239,7 +248,7 @@ function sesionDe(grupo, sock, remoteJid) {
       hoy: fechaHoyVenezuela,
       identificar: async rem => {
         const jidVisto = rem.jidReal || rem.jid;
-        const nombre = await clientePorNumero(grupo.id, jidVisto);
+        const nombre = await clientePorNumero(grupo.id, [rem.jidReal, rem.jid]);
         if (!nombre) console.log('[hipismoChat] Grupo ' + grupo.id + ': ninguna ficha tiene el teléfono ' + (telefonoDeParticipante(jidVisto) || '?') + ' (jid visto: ' + jidVisto + ').');
         // Para el panel de Súper-admin ("Último mensaje que llegó"): qué número vio el bot y si lo encontró en alguna ficha.
         if (s.anotarActual) {
@@ -345,8 +354,10 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   s.anotarActual = anotar || null;
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = await ayudas.esAdministrador(grupo, jidReal, fromMe);
+  const citadoPart = extraerCitadoParticipante(msg);
+
   const mensaje = {
-    texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: extraerCitadoParticipante(msg), citadoTexto: extraerCitadoTexto(msg), esAdmin,
+    texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
     remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
   };
   s.cola = s.cola.then(() => s.motor.procesarMensaje(mensaje)).catch(async e => {
