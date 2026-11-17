@@ -2367,3 +2367,9 @@ create table if not exists hipismo_chat_jugadas (
 );
 create index if not exists idx_hipismo_chat_jugadas_carrera on hipismo_chat_jugadas(grupo_id, fecha, hipodromo_nombre, carrera_numero);
 create index if not exists idx_hipismo_chat_jugadas_adelantada on hipismo_chat_jugadas(adelantada_jugada_id);
+
+-- 17-11-2026: número de WhatsApp PROPIO por grupo (servicio "Corredores y Administración Inteligente").
+-- whatsapp_propio_activo = el grupo tiene su número vinculado (se vuelve a conectar solo al arrancar el servidor);
+-- whatsapp_propio_jid = el chat de WhatsApp (de ese número) donde trabaja el bot.
+alter table grupos add column if not exists whatsapp_propio_activo boolean not null default false;
+alter table grupos add column if not exists whatsapp_propio_jid text;

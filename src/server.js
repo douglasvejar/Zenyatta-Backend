@@ -85,6 +85,11 @@ if (process.env.WHATSAPP_BOT_ACTIVADO === 'true') {
   require('./services/whatsappBot').iniciarBotWhatsApp().catch((err) => {
     console.error('[whatsappBot] No se pudo arrancar el bot de WhatsApp (el resto del servidor sigue funcionando normal):', err);
   });
+  // Números propios por grupo (17-11-2026, "Corredores y Administración Inteligente"): se levantan, de a uno, los grupos que ya
+  // tenían su número vinculado. Un error acá nunca tumba el servidor.
+  require('./services/whatsappSesionesGrupo').arrancarSesionesGuardadas().catch((err) => {
+    console.error('[whatsappSesionesGrupo] No se pudieron arrancar los números propios por grupo:', err);
+  });
 }
 
 // =================================================================

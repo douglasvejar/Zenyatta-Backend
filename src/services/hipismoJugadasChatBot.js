@@ -40,6 +40,28 @@ async function grupoDelChat(jid) {
   return valor;
 }
 
+// Grupo cuando el mensaje llegó por la conexión PROPIA de ese grupo (whatsappSesionesGrupo.js): el grupo ya se sabe, y el chat de
+// WhatsApp es el que Súper-admin eligió para ese número (grupos.whatsapp_propio_jid).
+async function grupoPropio(grupoId, jid) {
+  const clave = 'propio|' + grupoId + '|' + jid;
+  const c = cacheGrupos.get(clave);
+  if (c && c.hasta > Date.now()) return c.valor;
+  let valor = null;
+  try {
+    const r = await db.query(
+      `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero
+         FROM grupos
+        WHERE id = $1 AND whatsapp_propio_jid = $2 AND whatsapp_propio_activo = true AND hipismo_chat_habilitado = true AND activo = true`,
+      [grupoId, jid]
+    );
+    valor = r.rows[0] || null;
+  } catch (e) {
+    if (!e || e.code !== '42703') console.error('[hipismoChat] No se pudo leer el grupo del número propio:', e.message);
+  }
+  cacheGrupos.set(clave, { valor, hasta: Date.now() + 30000 });
+  return valor;
+}
+
 // Número -> cliente. Se comparan los últimos 10 dígitos (así "0414-1234567" y "+58 414 1234567" son el mismo).
 async function clientePorNumero(grupoId, jidReal) {
   const digitos = telefonoDeParticipante(jidReal);
@@ -194,15 +216,22 @@ function extraerCitadoId(msg) {
   return (ci && ci.stanzaId) || null;
 }
 
+// `grupoId` solo viene cuando el mensaje entró por el número propio de ese grupo.
 // Devuelve true si el mensaje le tocaba a este bot (el grupo tiene el servicio y era una jugada, una respuesta o un comando de
 // administrador); false para que siga su camino normal (sábana, comandos de Deportes...).
 // `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` dice si puede abrir/cerrar/pedir plano.
-async function intentar({ sock, msg, remoteJid, texto, ayudas }) {
+async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId }) {
   if (!texto || !remoteJid) return false;
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
-  const grupo = await grupoDelChat(remoteJid);
+  const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
   if (!grupo) return false;
+  // Si el grupo tiene su número propio conectado, la conexión general se hace a un lado (no se responde dos veces).
+  if (!grupoId) {
+    let propia = false;
+    try { propia = require('./whatsappSesionesGrupo').estaConectada(grupo.id); } catch (e) { /* sin gestor: sigue la general */ }
+    if (propia) return false;
+  }
 
   const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
   const jidReal = await ayudas.resolverRemitente(jidCrudo);

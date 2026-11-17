@@ -616,6 +616,20 @@ async function avisarFoto(sock, jid, imagen, caption, intento = 1) {
   }
 }
 
+// Ayudas que el bot de jugadas del chat necesita de este archivo (quién es el remitente real y quién es administrador). Las usan
+// tanto la conexión general como las conexiones propias por grupo (whatsappSesionesGrupo.js).
+function crearAyudasJugadasChat(sock, msg) {
+  return {
+    resolverRemitente: jid => resolverNumeroRealDelRemitente(sock, msg, jid),
+    esAdministrador: async (grupo, jidReal, fromMe) => {
+      if (fromMe) return true; // el propio número del bot (el dueño escribiendo desde su teléfono)
+      if (!grupo.comandos_whatsapp_habilitado) return false;
+      const conf = normalizarTelefono(grupo.comandos_whatsapp_numero);
+      return !!conf && telefonoDeParticipante(jidReal) === conf;
+    }
+  };
+}
+
 async function extraerTexto(msg) {
   if (!msg || !msg.message) return null;
   return (
@@ -1026,15 +1040,7 @@ async function manejarMensajeEntrante(sock, msg) {
     try {
       await require('./hipismoJugadasChatBot').intentar({
         sock, msg, remoteJid, texto,
-        ayudas: {
-          resolverRemitente: jid => resolverNumeroRealDelRemitente(sock, msg, jid),
-          esAdministrador: async (grupo, jidReal, fromMe) => {
-            if (fromMe) return true; // el propio número del bot (el dueño escribiendo desde su teléfono)
-            if (!grupo.comandos_whatsapp_habilitado) return false;
-            const conf = normalizarTelefono(grupo.comandos_whatsapp_numero);
-            return !!conf && telefonoDeParticipante(jidReal) === conf;
-          }
-        }
+        ayudas: crearAyudasJugadasChat(sock, msg)
       });
     } catch (e) {
       console.error('[whatsappBot] Error en el bot de jugadas del chat (no afecta a lo demás):', e.message);
@@ -1404,6 +1410,7 @@ async function olvidarSesionWhatsapp() {
   try {
     if (fs.existsSync(sessionDir)) {
       for (const nombre of fs.readdirSync(sessionDir)) {
+        if (nombre === 'grupos') continue; // sesiones propias por grupo (whatsappSesionesGrupo.js): no se tocan
         fs.rmSync(path.join(sessionDir, nombre), { recursive: true, force: true });
       }
     }
@@ -1418,6 +1425,7 @@ async function olvidarSesionWhatsapp() {
 
 module.exports = {
   iniciarBotWhatsApp,
+  crearAyudasJugadasChat,
   obtenerEstadoConexion,
   obtenerSockActivo,
   refrescarGruposDisponibles,

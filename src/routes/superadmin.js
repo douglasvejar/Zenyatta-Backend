@@ -637,6 +637,66 @@ router.patch('/grupos/:id/hipismo-chat-habilitado', asyncHandler(async (req, res
   res.json({ hipismoChatHabilitado: r.rows[0].hipismo_chat_habilitado });
 }));
 
+// NÚMERO DE WHATSAPP PROPIO DE CADA GRUPO (17-11-2026): cada grupo puede vincular su propio número (su propio QR) para el servicio
+// "Corredores y Administración Inteligente", en vez de compartir el número general. Ver src/services/whatsappSesionesGrupo.js.
+async function filaWhatsappPropio(id) {
+  const r = await db.query('SELECT id, whatsapp_propio_activo, whatsapp_propio_jid FROM grupos WHERE id = $1', [id]);
+  return r.rows[0] || null;
+}
+
+router.get('/grupos/:id/whatsapp-propio', asyncHandler(async (req, res) => {
+  const fila = await filaWhatsappPropio(req.params.id);
+  if (!fila) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  const gestor = require('../services/whatsappSesionesGrupo');
+  const estado = gestor.estadoPublico(req.params.id);
+  res.json({ ...estado, vinculado: !!fila.whatsapp_propio_activo, jid: fila.whatsapp_propio_jid || null });
+}));
+
+router.post('/grupos/:id/whatsapp-propio/iniciar', asyncHandler(async (req, res) => {
+  const fila = await filaWhatsappPropio(req.params.id);
+  if (!fila) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  await db.query('UPDATE grupos SET whatsapp_propio_activo = true WHERE id = $1', [req.params.id]);
+  try {
+    await require('../services/whatsappSesionesGrupo').iniciarSesion(req.params.id);
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo arrancar la conexión: ' + e.message });
+  }
+  res.json({ ok: true });
+}));
+
+router.get('/grupos/:id/whatsapp-propio/qr.png', asyncHandler(async (req, res) => {
+  const qr = require('../services/whatsappSesionesGrupo').obtenerQr(req.params.id);
+  if (!qr) return res.status(404).json({ error: 'Todavía no hay un código QR para este grupo — espera unos segundos.' });
+  const QRCode = require('qrcode');
+  const buffer = await QRCode.toBuffer(qr, { type: 'png', width: 320, margin: 2 });
+  res.set('Cache-Control', 'no-store');
+  res.type('png').send(buffer);
+}));
+
+router.post('/grupos/:id/whatsapp-propio/refrescar', asyncHandler(async (req, res) => {
+  try {
+    const grupos = await require('../services/whatsappSesionesGrupo').refrescarGrupos(req.params.id);
+    res.json({ grupos });
+  } catch (e) {
+    res.status(409).json({ error: e.message });
+  }
+}));
+
+router.patch('/grupos/:id/whatsapp-propio/jid', asyncHandler(async (req, res) => {
+  const jid = (req.body && typeof req.body.jid === 'string' && req.body.jid.trim()) || null;
+  if (jid && !/@g\.us$/.test(jid)) return res.status(400).json({ error: 'Ese no es el identificador de un grupo de WhatsApp (debe terminar en @g.us).' });
+  const r = await db.query('UPDATE grupos SET whatsapp_propio_jid = $1 WHERE id = $2 RETURNING whatsapp_propio_jid', [jid, req.params.id]);
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ jid: r.rows[0].whatsapp_propio_jid });
+}));
+
+router.post('/grupos/:id/whatsapp-propio/desvincular', asyncHandler(async (req, res) => {
+  const fila = await filaWhatsappPropio(req.params.id);
+  if (!fila) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  await require('../services/whatsappSesionesGrupo').desvincular(req.params.id);
+  res.json({ ok: true });
+}));
+
 router.patch('/grupos/:id/whatsapp-habilitado', asyncHandler(async (req, res) => {
   const { habilitado } = req.body;
   const r = await db.query(
