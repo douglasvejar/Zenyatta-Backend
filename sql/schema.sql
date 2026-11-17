@@ -2340,3 +2340,30 @@ end $$;
 -- jugadores.sin_pozo = true. Los clientes que ya existen quedan en false = libres sin límite. El servidor también lo aplica solo al arrancar.
 -- Es idempotente.
 alter table jugadores add column if not exists sin_pozo boolean not null default false;
+
+-- =================================================================
+-- CORREDORES Y ADMINISTRACIÓN INTELIGENTE (17-11-2026, a pedido del usuario: "un bot que haga todo lo que hace Dreamy en el
+-- grupo de WhatsApp"). Servicio aparte que el Súper-admin activa o desactiva para cada grupo (junto con el servicio de WhatsApp y el
+-- grupo vinculado). El bot lee en el chat las jugadas que publican los clientes ("Juego 4x1 con 75 doy a8"), empareja las respuestas
+-- ("200", "J"), cuida el pozo de los dos lados, confirma ("✅ Aquí jugaron") y arma el plano. Cada jugada confirmada se guarda en
+-- "Jugadas entre Tercios Adelantadas" (pendiente: se resuelve sola al cargar la pizarra) y queda registrada aparte en hipismo_chat_jugadas
+-- (con el riesgo de cada lado, para que el pozo disponible lo tenga en cuenta). Es idempotente.
+-- =================================================================
+alter table grupos add column if not exists hipismo_chat_habilitado boolean not null default false;
+create table if not exists hipismo_chat_jugadas (
+  id                    uuid primary key default gen_random_uuid(),
+  grupo_id              uuid not null references grupos(id) on delete cascade,
+  fecha                 date not null,
+  hipodromo_nombre      text not null,
+  carrera_numero        integer not null,
+  jugador_nombre        text not null,
+  banquero_nombre       text not null,
+  monto                 numeric not null,
+  riesgo_jugador        numeric not null default 0,
+  riesgo_banquero       numeric not null default 0,
+  texto_linea           text not null,
+  adelantada_jugada_id  uuid references hipismo_tercios_adelantadas_jugadas(id) on delete set null,
+  creado_en             timestamptz not null default now()
+);
+create index if not exists idx_hipismo_chat_jugadas_carrera on hipismo_chat_jugadas(grupo_id, fecha, hipodromo_nombre, carrera_numero);
+create index if not exists idx_hipismo_chat_jugadas_adelantada on hipismo_chat_jugadas(adelantada_jugada_id);

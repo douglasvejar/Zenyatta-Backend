@@ -1020,6 +1020,26 @@ async function manejarMensajeEntrante(sock, msg) {
     const texto = await extraerTexto(msg);
     if (!texto) return;
 
+    // BOT DE JUGADAS DEL CHAT — HIPISMO (17-11-2026): si este grupo tiene el servicio (Súper-admin), el bot lee las jugadas que
+    // publican los clientes, empareja las respuestas, cuida el pozo y arma el plano. No interfiere con "SABANA DE JUGADAS" ni con los
+    // comandos de Deportes: lo que no le toca, sigue su camino de siempre.
+    try {
+      await require('./hipismoJugadasChatBot').intentar({
+        sock, msg, remoteJid, texto,
+        ayudas: {
+          resolverRemitente: jid => resolverNumeroRealDelRemitente(sock, msg, jid),
+          esAdministrador: async (grupo, jidReal, fromMe) => {
+            if (fromMe) return true; // el propio número del bot (el dueño escribiendo desde su teléfono)
+            if (!grupo.comandos_whatsapp_habilitado) return false;
+            const conf = normalizarTelefono(grupo.comandos_whatsapp_numero);
+            return !!conf && telefonoDeParticipante(jidReal) === conf;
+          }
+        }
+      });
+    } catch (e) {
+      console.error('[whatsappBot] Error en el bot de jugadas del chat (no afecta a lo demás):', e.message);
+    }
+
     const { esSabana, esFinal, fecha: fechaDetectada, fechaEncontrada, textoLimpio } = detectarTriggerSabana(texto);
 
     // Comandos de chat cortos (09-09-2026: "actualizar sabana"/"act",

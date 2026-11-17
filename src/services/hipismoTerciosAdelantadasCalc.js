@@ -496,6 +496,7 @@ function parsearPlanoTerciosAdelantadas(texto) {
 }
 
 module.exports = {
+  tokenEsModalidadValida, // 17-11-2026: lo usa el bot de jugadas del chat (hipismoJugadasChat.js)
   parsearLineaTerciosAdelantada,
   resolverLineaTerciosAdelantada,
   parsearPlanoTerciosAdelantadas,

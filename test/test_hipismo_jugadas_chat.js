@@ -1,0 +1,189 @@
+// =================================================================
+// PRUEBA: bot de jugadas del chat de Hipismo (17-11-2026) — con los mensajes REALES del video del grupo AMERICANAS DREAM.
+// Motor puro: todo lo externo (clientes, pozo, guardado, respuestas) va con piezas falsas.
+// =================================================================
+const path = require('path');
+const m = require(path.join(__dirname, '..', 'src', 'services', 'hipismoJugadasChat'));
+
+let pasaron = 0, fallaron = 0;
+const check = (c, msg) => { if (c) { pasaron++; console.log('OK:', msg); } else { fallaron++; console.error('FALLÓ:', msg); } };
+const eq = (a, b, msg) => check(JSON.stringify(a) === JSON.stringify(b), msg + (JSON.stringify(a) === JSON.stringify(b) ? '' : '  -> obtuve ' + JSON.stringify(a)));
+
+// ---------- 1) Leer ofertas ----------
+let o = m.interpretarOferta('Juego 4x1 con 75 doy a8');
+check(o.ok && o.lado === 'doy' && o.monto === 75 && JSON.stringify(o.apuesta.cruce) === '{"gruposA":[4],"gruposB":[1]}' && o.apuesta.modalidad === '10a8', '"Juego 4x1 con 75 doy a8": juega el que publica, 4 contra 1, 10a8, monto 75');
+o = m.interpretarOferta('Juego 4x5 recibo a 8 200');
+check(o.ok && o.lado === 'recibo' && o.monto === 200 && o.apuesta.modalidad === '10a8' && JSON.stringify(o.apuesta.cruce) === '{"gruposA":[4],"gruposB":[5]}', '"Juego 4x5 recibo a 8 200": recibe, monto 200 (el monto va solo al final)');
+o = m.interpretarOferta('Juego 2y2 y 2p del 5 con 40');
+check(o.ok && JSON.stringify(o.apuesta.grupo) === '[5]' && o.apuesta.modalidad === '2y2-2p' && o.monto === 40, '"Juego 2y2 y 2p del 5 con 40": combo 2y2 + 2p del caballo 5');
+o = m.interpretarOferta('Juego 4x1 10@8 con 60');
+check(o.ok && o.apuesta.modalidad === '10a8' && o.monto === 60 && o.lado === 'doy', '"10@8" es lo mismo que 10a8');
+o = m.interpretarOferta('Juego 4 x 1 10a8 con 120');
+check(o.ok && JSON.stringify(o.apuesta.cruce) === '{"gruposA":[4],"gruposB":[1]}' && o.monto === 120, '"4 x 1" con espacios es 4x1');
+o = m.interpretarOferta('Juego 4x1 con 9.50 doy a8');
+check(o.ok && o.monto === 9.5, '9.50 es nueve con cincuenta (no 950)');
+o = m.interpretarOferta('Juego 1x4 recibo a7 con 30');
+check(o.ok && o.lado === 'recibo' && o.apuesta.modalidad === '10a7' && o.monto === 30, '"Juego 1x4 recibo a7 con 30"');
+o = m.interpretarOferta('Juego 4.1x5 con 12');
+check(o.ok && JSON.stringify(o.apuesta.cruce) === '{"gruposA":[4,1],"gruposB":[5]}' && o.apuesta.modalidad === null, '"4.1x5": 2 caballos contra 1, pelo a pelo');
+o = m.interpretarOferta('Juego 4x1 recibo a8 con 1.250,50');
+check(o.ok && o.monto === 1250.5, '1.250,50 es mil doscientos cincuenta con cincuenta');
+check(m.interpretarOferta('Ajá ksa') === null && m.interpretarOferta('me puedes enviar el racing de Montaner por favor') === null && m.interpretarOferta('27') === null, 'lo que no empieza con "Juego" no es una oferta');
+o = m.interpretarOferta('Juego 4x1 doy a8');
+check(o && o.ok === false && /monto/.test(o.motivo), 'una oferta sin monto se rechaza');
+
+// ---------- 2) Leer respuestas ----------
+eq(m.interpretarRespuesta('27'), { tipo: 'monto', monto: 27 }, 'respuesta "27" = 27');
+eq(m.interpretarRespuesta('J'), { tipo: 'todo' }, 'respuesta "J" = todo lo que quede');
+eq(m.interpretarRespuesta('Jugo'), { tipo: 'todo' }, 'respuesta "Jugo" = todo');
+eq(m.interpretarRespuesta('Sf'), { tipo: 'sf' }, 'respuesta "Sf" se reconoce');
+eq(m.interpretarRespuesta('Se fue'), { tipo: 'sf' }, 'respuesta "Se fue" se reconoce');
+check(m.interpretarRespuesta('buenas tardes') === null, 'una charla cualquiera no es respuesta');
+
+// ---------- 3) Riesgo (cuadra con los avisos de Dreamy en el video) ----------
+let r = m.riesgoPorUnidad(m.interpretarOferta('Juego 4x1 10a8 con 10').apuesta);
+check(Math.abs(r.jugador - 1) < 1e-9 && Math.abs(r.banquero - 0.8) < 1e-9, 'cruce 10a8: quien juega arriesga 100% y quien da arriesga 80%');
+r = m.riesgoPorUnidad(m.interpretarOferta('Juego 1x4 10a7 con 10').apuesta);
+check(Math.abs(r.banquero - 0.7) < 1e-9, 'cruce 10a7: quien da arriesga 70% (20 de disponible alcanza para 28,57)');
+r = m.riesgoPorUnidad(m.interpretarOferta('Juego 2y2 y 2p del 5 con 40').apuesta);
+check(r.jugador > 0.99 && r.banquero > 0.99, 'combo en un caballo: ambos lados arriesgan el monto completo');
+
+// ---------- 4) Escenario completo ----------
+const CLIENTES = { j_cachaco: 'CACHACO', j_marvel: 'MARVEL', j_flow: 'NANA', j_miel: 'MIEL', j_kahelt: 'KAHELT', j_luis: 'LUIS', j_raul: 'RAUL', j_bestia: 'BESTIA', j_ricardo: 'RICARDO' };
+const DISP = { NANA: { limitado: true, disponible: 20 }, MIEL: { limitado: true, disponible: 0.96 }, RICARDO: { limitado: true, disponible: 1000 } };
+const guardadas = [], enviadas = [], publicadas = [];
+const deps = {
+  nombreGrupo: 'Dream',
+  hoy: () => '2026-11-16',
+  identificar: async rem => CLIENTES[rem.jid] || null,
+  resolverHipodromo: async t => (/mountaineer/i.test(t) ? 'Mountaineer' : null),
+  disponible: async n => DISP[n] || { limitado: false, disponible: 0 },
+  guardarJugada: async j => {
+    guardadas.push(j);
+    if (DISP[j.jugadorNombre]) DISP[j.jugadorNombre].disponible = Math.round((DISP[j.jugadorNombre].disponible - j.riesgoJugador) * 100) / 100;
+    if (DISP[j.banqueroNombre]) DISP[j.banqueroNombre].disponible = Math.round((DISP[j.banqueroNombre].disponible - j.riesgoBanquero) * 100) / 100;
+  },
+  cargarJugadas: async () => [],
+  responder: async (t, op) => { enviadas.push({ t, op }); },
+  publicar: async t => { publicadas.push(t); }
+};
+const motor = m.crearMotor(deps);
+let n = 0;
+const ADMIN = { jid: 'j_dreamy', nombre: 'Dreamy' };
+const msg = (jid, texto, extra) => ({ texto, id: 'id' + (++n), citadoId: null, remitente: { jid, nombre: jid.replace('j_', '') }, esAdmin: false, ...(extra || {}) });
+const ultima = () => enviadas[enviadas.length - 1];
+
+(async function main() {
+  // sin carrera abierta
+  await motor.procesarMensaje(msg('j_cachaco', 'Juego 4x1 con 75 doy a8'));
+  check(enviadas.length === 1 && /no hay una carrera abierta|Todavía no hay una carrera abierta/i.test(ultima().t), 'sin carrera abierta: avisa que un administrador debe abrirla');
+  await motor.procesarMensaje(msg('j_cachaco', 'Juego 4x1 con 75 doy a8'));
+  check(enviadas.length === 1, 'el mismo aviso no se repite a cada mensaje');
+
+  // un NO administrador no puede abrir
+  await motor.procesarMensaje(msg('j_cachaco', 'Mountaineer 1ra carrera'));
+  check(motor.estado().abierta === false, 'un jugador no puede abrir la carrera');
+  await motor.procesarMensaje(msg('j_dreamy', 'Mountaineer 1era carrera', { esAdmin: true }));
+  check(motor.estado().abierta === true && motor.estado().hipodromo === 'Mountaineer' && motor.estado().carrera === 1, 'el administrador abre "Mountaineer 1era carrera"');
+  await motor.procesarMensaje(msg('j_dreamy', 'Gulfstream 3ra carrera', { esAdmin: true }));
+  check(motor.estado().carrera === 1 && /No encontré el hipódromo/.test(ultima().t), 'un hipódromo que el grupo no tiene no abre nada');
+
+  // Cachaco publica 120; Marvel 22; Nana(FlowSport) 25
+  const of1 = msg('j_cachaco', 'Juego 4 x 1 10a8 con 120');
+  const antesEnv = enviadas.length;
+  await motor.procesarMensaje(of1);
+  check(enviadas.length === antesEnv, 'publicar una jugada válida no genera ningún mensaje (como en el video)');
+  const rMarvel = msg('j_marvel', '22', { citadoId: of1.id });
+  await motor.procesarMensaje(rMarvel);
+  check(guardadas.length === 1 && guardadas[0].jugadorNombre === 'CACHACO' && guardadas[0].banqueroNombre === 'MARVEL' && guardadas[0].monto === 22, '"22" de Marvel: juega Cachaco, da Marvel, 22');
+  check(ultima().t === '✅ Aquí jugaron' && ultima().op.citarId === rMarvel.id, 'responde "✅ Aquí jugaron" citando el mensaje de Marvel');
+  await motor.procesarMensaje(msg('j_flow', '25', { citadoId: of1.id }));
+  check(guardadas.length === 2 && guardadas[1].banqueroNombre === 'NANA' && guardadas[1].monto === 25, 'FlowSport es el cliente NANA (se identifica por su número): da 25');
+  check(guardadas[1].riesgoBanquero === 20 && guardadas[1].riesgoJugador === 25, 'el riesgo guardado: banquero 25 x 80% = 20, jugador 25');
+  check(DISP.NANA.disponible === 0, 'el disponible de Nana bajó a 0 tras arriesgar 20');
+
+  // J toma lo que queda: 120 - 22 - 25 = 73
+  const rJ = msg('j_ricardo', 'J', { citadoId: of1.id });
+  await motor.procesarMensaje(rJ);
+  check(guardadas.length === 3 && guardadas[2].monto === 73 && guardadas[2].banqueroNombre === 'RICARDO', '"J" juega exactamente lo que quedaba (73)');
+  check(ultima().t === '✅ Aquí jugaron', '"J" por todo lo que quedaba: confirma sin aclaración extra');
+  // ya topada
+  await motor.procesarMensaje(msg('j_kahelt', '50', { citadoId: of1.id }));
+  check(guardadas.length === 3 && ultima().t === '❌ Nada, ya topada', 'cuando ya no queda nada: "❌ Nada, ya topada"');
+
+  // Parcial: oferta de 300, uno juega 200, otro pide J ... solo 100
+  const of2 = msg('j_luis', 'Juego 2p del 8 con 300');
+  await motor.procesarMensaje(of2);
+  await motor.procesarMensaje(msg('j_marvel', '200', { citadoId: of2.id }));
+  check(guardadas[3].monto === 200, 'oferta de 300, responden 200: juegan 200');
+  await motor.procesarMensaje(msg('j_ricardo', '200', { citadoId: of2.id }));
+  check(guardadas[4].monto === 100 && /Aquí jugaron 100,00 \(era lo que quedaba\)/.test(ultima().t), 'piden 200 pero solo quedaban 100: juegan 100 y el bot lo aclara');
+
+  // Roles con "recibo": Luis recibe, Raul responde J => Raul JUEGA 5x4 a 8 con 200, y Luis da
+  const of3 = msg('j_luis', 'Juego 4x5 recibo a 8 200');
+  await motor.procesarMensaje(of3);
+  await motor.procesarMensaje(msg('j_raul', 'J', { citadoId: of3.id }));
+  const g = guardadas[5];
+  check(g.jugadorNombre === 'RAUL' && g.banqueroNombre === 'LUIS' && g.monto === 200 && g.apuesta.modalidad === '10a8' && JSON.stringify(g.apuesta.cruce) === '{"gruposA":[5],"gruposB":[4]}', 'con "recibo": Raúl juega 5x4 a 8 con 200 y Luis da (los caballos se invierten)');
+  check(g.textoLinea === 'Juega RAUL 10A8 (5x4) con 200,00 da LUIS', 'la línea guardada queda lista para el sistema: ' + g.textoLinea);
+
+  // Control de pozo al PUBLICAR
+  await motor.procesarMensaje(msg('j_miel', 'Juego 4x1 10@8 con 60'));
+  check(/solo tienes 0,96 disponible para jugar\. Por favor coloca la parada por ese monto o menos\./.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96: "solo tienes 0,96 disponible para jugar..." (y lo menciona)');
+  const nOfertas = motor._ofertas.size;
+  check(![...motor._ofertas.values()].some(x => x.autorNombre === 'MIEL'), 'esa jugada NO queda publicada');
+  DISP.NANA.disponible = 20;
+  await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 30'));
+  check(/en esta parada tu disponible alcanza para 28,57 \(ahí arriesgas 20,00\)/.test(ultima().t), 'FlowSport recibiendo a7 con 20 de pozo: "alcanza para 28,57 (ahí arriesgas 20)"');
+  await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 28,57'));
+  check([...motor._ofertas.values()].some(x => x.autorNombre === 'NANA' && x.monto === 28.57), 'con 28,57 sí queda publicada');
+
+  // Control de pozo al RESPONDER
+  const of4 = msg('j_kahelt', 'Juego 4x1 con 75 doy a8');
+  await motor.procesarMensaje(of4);
+  const antes = guardadas.length;
+  await motor.procesarMensaje(msg('j_miel', '50', { citadoId: of4.id }));
+  check(guardadas.length === antes && /Miel|miel|@@/.test(ultima().t) && /0,96|alcanza/.test(ultima().t), 'Miel responde 50 pero solo tiene 0,96 de disponible (da a 8 arriesga 0,8): no se registra y se le avisa');
+  await motor.procesarMensaje(msg('j_kahelt', '30', { citadoId: of4.id }));
+  check(guardadas.length === antes, 'responderse a uno mismo no juega nada');
+
+  // Número desconocido
+  await motor.procesarMensaje(msg('j_nadie', 'Juego 4x1 con 10 doy a8'));
+  check(/no está registrado como cliente/.test(ultima().t), 'un número que no es cliente: se le avisa');
+  const antes2 = enviadas.length;
+  await motor.procesarMensaje(msg('j_nadie', 'Juego 4x1 con 10 doy a8'));
+  check(enviadas.length === antes2, 'sin repetir el aviso a cada mensaje');
+
+  // Oferta que no se entiende: preguntar en el grupo
+  await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));
+  check(/no entendí tu jugada/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot pregunta y muestra cómo escribirla');
+
+  // Plano: cada 4 jugadas nuevas se publicó solo
+  check(publicadas.length >= 1, 'cada 4 jugadas nuevas el bot publica el plano (' + publicadas.length + ' veces hasta ahora)');
+  const antesPl = publicadas.length;
+  await motor.procesarMensaje(msg('j_cachaco', 'plano'));
+  check(publicadas.length === antesPl, 'un jugador no puede pedir el plano');
+  await motor.procesarMensaje(msg('j_dreamy', 'Plano', { esAdmin: true }));
+  check(publicadas.length === antesPl + 1, 'un administrador pide "plano" y sale');
+  const plano = publicadas[publicadas.length - 1];
+  check(/Sistema Dream/.test(plano) && /Lunes, 16 de Noviembre de 2026/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /Pizarra: \.\.\.\.\./.test(plano) && /\*TERCIOS\*/.test(plano), 'encabezado del plano como el de Dreamy');
+  check(/1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /2\) Juega Cachaco 10A8 \(4x1\) con 25,00 da Nana/.test(plano), 'líneas "Juega Cachaco 10A8 (4x1) con 22,00 da Marvel"');
+  check(/Juega Bestia|Juega Luis 2P \(8\) con 300|Juega Luis 2P \(8\) con 200,00 da Marvel/.test(plano) || /2P \(8\) con 200,00/.test(plano), 'una jugada de grupo se ve "2P (8)"');
+  check(/Juega Raul 10A8 \(5x4\) con 200,00 da Luis/.test(plano), 'la jugada "recibo" sale con Raúl jugando 5x4');
+  check(new RegExp('Total jugadas: ' + guardadas.length + '$').test(plano), 'cierra con "Total jugadas: ' + guardadas.length + '"');
+
+  // Cierre
+  await motor.procesarMensaje(msg('j_cachaco', 'cierra'));
+  check(motor.estado().abierta === true, 'un jugador no puede cerrar');
+  const antesCierre = publicadas.length;
+  await motor.procesarMensaje(msg('j_dreamy', 'cierra', { esAdmin: true }));
+  check(motor.estado().abierta === false && publicadas.length === antesCierre + 1 && /Plano final/.test(ultima().t), 'el administrador cierra: avisa y publica el plano final');
+  const antes3 = guardadas.length;
+  const of5 = msg('j_luis', 'Juego 4x1 con 10 doy a8');
+  await motor.procesarMensaje(of5);
+  await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: of5.id }));
+  check(guardadas.length === antes3, 'con la carrera cerrada ya no se registra nada');
+
+  console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
+  process.exit(fallaron ? 1 : 0);
+})().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

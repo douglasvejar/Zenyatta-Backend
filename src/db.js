@@ -58,6 +58,20 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas js
   .catch((err) => console.warn('[db] No se pudo asegurar la columna grupos.funciones_habilitadas (corre sql/schema.sql en Supabase):', err.message));
 
 // 25-10-2026: marca "pago diario" de los clientes (ver sql/schema.sql); se crea sola igual que la de arriba.
+// 17-11-2026: "Corredores y Administración Inteligente" (bot de jugadas del chat de Hipismo, ver sql/schema.sql).
+pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado boolean NOT NULL DEFAULT false')
+  .then(() => pool.query(`create table if not exists hipismo_chat_jugadas (
+    id uuid primary key default gen_random_uuid(),
+    grupo_id uuid not null references grupos(id) on delete cascade,
+    fecha date not null, hipodromo_nombre text not null, carrera_numero integer not null,
+    jugador_nombre text not null, banquero_nombre text not null, monto numeric not null,
+    riesgo_jugador numeric not null default 0, riesgo_banquero numeric not null default 0,
+    texto_linea text not null,
+    adelantada_jugada_id uuid references hipismo_tercios_adelantadas_jugadas(id) on delete set null,
+    creado_en timestamptz not null default now())`))
+  .then(() => pool.query('create index if not exists idx_hipismo_chat_jugadas_carrera on hipismo_chat_jugadas(grupo_id, fecha, hipodromo_nombre, carrera_numero)'))
+  .catch((err) => console.warn('[db] No se pudo asegurar Corredores y Administración Inteligente (corre sql/schema.sql en Supabase):', err.message));
+
 pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS pago_diario boolean NOT NULL DEFAULT false')
   .catch((err) => console.warn('[db] No se pudo asegurar la columna jugadores.pago_diario (corre sql/schema.sql en Supabase):', err.message));
 

@@ -204,4 +204,4 @@ function mensajePozoBajo(b, etiqueta) {
   return `${quien} tiene POCO POZO${donde}: le quedan ${fmt(b.pozoDisponible)} de ${fmt(b.pozoInicial)} (${b.porcentaje}%).`;
 }
 
-module.exports = { detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo, PORCENTAJE_POZO_BAJO, CUENTA_RECARGAS_PAGO_DIARIO };
+module.exports = { clientesConPozoDisponible, detectarApuestasSobrePozo, mensajeApuestaSobrePozo, validarTerciosContraPozo, detectarPozoBajo, mensajePozoBajo, PORCENTAJE_POZO_BAJO, CUENTA_RECARGAS_PAGO_DIARIO };

@@ -222,7 +222,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
     // base64 completo en este SELECT inflaría la respuesta de "detalle"
     // sin necesidad, solo hace falta saber SI existe uno.
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo, hipismo_chat_habilitado
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -274,6 +274,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     temaColorSecundario: grupo.tema_color_secundario,
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
+    hipismoChatHabilitado: !!grupo.hipismo_chat_habilitado,
     telegramHabilitado: !!grupo.telegram_habilitado,
     telegramChatId: grupo.telegram_chat_id || null,
     telegramCodigoVinculo: grupo.telegram_codigo_vinculo || null,
@@ -624,6 +625,18 @@ router.post('/grupos/:id/borrar-fechas', asyncHandler(async (req, res) => {
 //     que le hubiera dejado cambiarlo él mismo (riesgo de que apunte el
 //     bot a cualquier grupo de WhatsApp que quisiera).
 // =================================================================
+// CORREDORES Y ADMINISTRACIÓN INTELIGENTE (17-11-2026): servicio aparte (bot que lee las jugadas del chat de WhatsApp, cuida el pozo y
+// arma el plano). Exclusivo del Súper-admin; además necesita el servicio de WhatsApp y el grupo de WhatsApp vinculado.
+router.patch('/grupos/:id/hipismo-chat-habilitado', asyncHandler(async (req, res) => {
+  const { habilitado } = req.body;
+  const r = await db.query(
+    'UPDATE grupos SET hipismo_chat_habilitado = $1 WHERE id = $2 RETURNING id, hipismo_chat_habilitado',
+    [!!habilitado, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ hipismoChatHabilitado: r.rows[0].hipismo_chat_habilitado });
+}));
+
 router.patch('/grupos/:id/whatsapp-habilitado', asyncHandler(async (req, res) => {
   const { habilitado } = req.body;
   const r = await db.query(
