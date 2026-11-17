@@ -2,14 +2,16 @@
 // cuenta libre/avalado y su pozo) + Avales ("Avalados por").
 const express = require('express');
 const db = require('../db');
-const { requiereGrupo, requierePermiso, monedaModoDe } = require('../middleware/auth');
+const { requiereGrupo, requierePermiso, requiereAlgunoDe, monedaModoDe } = require('../middleware/auth');
 const { calcularPozoJugador, rangoSemanaActualPozo } = require('../services/pozo');
 const { buscarOCrearFicha } = require('../services/hipismoComisionPropia');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requiereGrupo);
-router.use(requierePermiso('jugador'));
+// 17-11-2026: el alta/edición de clientes también la usa Hipismo (sección "Clientes, Avales y Registro de Saldos"): un grupo que solo tiene
+// Hipismo contratado no tiene la sección de Deportes "jugador" y no podía crear clientes. Basta con cualquiera de las dos.
+router.use(requiereAlgunoDe('jugador', 'hip_clientes'));
 
 // Resuelve la moneda a guardar para un cliente (18-09-2026, "moneda del
 // grupo" — ver la nota grande en sql/schema.sql). Si el grupo está fijo
