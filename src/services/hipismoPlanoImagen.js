@@ -40,7 +40,7 @@ function ordenarTotales(totalesFinales) {
 }
 
 function armarDatosImagenPlano({ grupoNombre, hipodromoNombre, carreraNumero, fecha, ret, pizarra, tickets, totalesFinales, movimientosAdelantadas }) {
-  const llegada = String(pizarra || '').trim().split(/[\s,]+/).filter(Boolean);
+  const llegada = String(pizarra || '').trim().split(/[\s,.\-\/;]+/).filter(Boolean);
   const retirados = Array.from(parsearRetirados(ret)).sort((a, b) => a - b);
   const jugadas = (tickets || []).map(t => ({
     cliente: formatNombre(t.clienteNombre),

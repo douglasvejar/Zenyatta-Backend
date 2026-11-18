@@ -119,6 +119,11 @@ async function invocarRuta(handler, req) {
     '4) primera jugada: Sammy 1p al 3 con 225 da Zenyatta = +213,75');
   check(d && d.jugadas[1].cliente === 'Mujica' && d.jugadas[1].resultado === -450, '5) segunda jugada: Mujica pierde -450');
   check(d && JSON.stringify(d.llegada) === JSON.stringify(['3', '4', '8', '1', '7']) && JSON.stringify(d.retirados) === '[6]', '6) llegada 3 4 8 1 7 y retirado 6');
+  {
+    const { armarDatosImagenPlano } = require('../src/services/hipismoPlanoImagen');
+    const ll = p => JSON.stringify(armarDatosImagenPlano({ grupoNombre: 'G', hipodromoNombre: 'Belmont Park', carreraNumero: 6, fecha: '2026-11-18', ret: '', pizarra: p, tickets: [], totalesFinales: {} }).llegada);
+    check(ll('8.5') === '["8","5"]' && ll('6.10.4.8.2') === '["6","10","4","8","2"]' && ll('8,5') === '["8","5"]' && ll('8 5') === '["8","5"]' && ll('8-5') === '["8","5"]', '6b) la llegada con puntos (como la escribe el bot: 8.5) sale como puestos separados, no como una sola bolita');
+  }
   check(d && d.textoAcompanante === 'TOTALES DE LA CARRERA 11MA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO ZENYATTA', '7) texto de acompañamiento exacto -- fue: ' + (d && d.textoAcompanante));
   // Mismas cifras que el texto del plano.
   const txt = salida.textoResultado;
