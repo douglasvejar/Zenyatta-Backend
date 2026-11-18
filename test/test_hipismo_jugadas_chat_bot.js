@@ -289,7 +289,8 @@ const textoDe = e => e.contenido.text;
 
   // ---------- PIZARRA desde el chat (el cálculo real vive en el manejador de Cargar Planos: aquí se prueba con uno falso) ----------
   const llamadasPlano = [];
-  let respuestaPlano = { status: 201, body: { textoResultado: '*Sistema Dream*\nGANAN: Marvel\nPIERDEN: Cachaco' } };
+  // Forma REAL de la respuesta de guardar (POST /planos): el texto va en plano.texto_resultado (no hay textoResultado).
+  let respuestaPlano = { status: 201, body: { plano: { texto_resultado: '*Sistema Dream*\nGANAN: Marvel\nPIERDEN: Cachaco' }, datosImagen: null } };
   glue._ext.guardarPlano = async (g, body) => { llamadasPlano.push({ g, body }); return respuestaPlano; };
   const pubPizarra = enviados.length;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4 Ret 7'));
@@ -312,7 +313,7 @@ const textoDe = e => e.contenido.text;
   const pedidosImagen = [];
   const generarOriginal = glue._ext.generarImagen;
   glue._ext.generarImagen = async (g, datos) => { pedidosImagen.push({ g, datos }); return PNG; };
-  respuestaPlano = { status: 201, body: { textoResultado: '*Sistema Dream*\nGANAN: Marvel', datosImagen: { grupo: 'Dream', textoAcompanante: 'TOTALES DE LA CARRERA 1ERA EN EL HIPÓDROMO MOUNTAINEER EN EL GRUPO DREAM' } } };
+  respuestaPlano = { status: 201, body: { plano: { texto_resultado: '*Sistema Dream*\nGANAN: Marvel' }, datosImagen: { grupo: 'Dream', textoAcompanante: 'TOTALES DE LA CARRERA 1ERA EN EL HIPÓDROMO MOUNTAINEER EN EL GRUPO DREAM' } } };
   const antesImg = enviados.length;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
   check(pedidosImagen.length === 1 && pedidosImagen[0].g === G && pedidosImagen[0].datos.grupo === 'Dream', 'con el grupo en "imagen" el bot dibuja la tarjeta con los datos del plano');
@@ -327,6 +328,10 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
   check(pedidosImagen.length === pedidosAntes && /GANAN: Marvel/.test(textoDe(ultimo())), 'con el grupo en "texto" no se dibuja nada y sale el plano de siempre');
   glue._ext.generarImagen = generarOriginal;
+
+  respuestaPlano = { status: 201, body: { plano: {}, datosImagen: null } };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(/Carrera calculada y guardada/.test(textoDe(ultimo())) && !/No pude cargar/.test(textoDe(ultimo())), 'si se guardó (201) pero no hay texto, no se dice que falló');
 
   Date.now = realNow;
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');

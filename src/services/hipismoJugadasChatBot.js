@@ -281,7 +281,11 @@ async function cargarPizarraChat(grupoId, { hipodromo, carrera, fecha, pizarra, 
   let out;
   try { out = await ext.guardarPlano(grupoId, { texto: '', pizarra, hipodromoNombre: hipodromo, carreraNumero: carrera, fecha, ret: ret || '' }); }
   catch (e) { console.error('[hipismoChat] Error al cargar la pizarra:', e); return { ok: false, motivo: 'error interno al calcular (' + e.message + ')' }; }
-  if (out && out.status === 201 && out.body && out.body.textoResultado) return { ok: true, texto: out.body.textoResultado, datosImagen: out.body.datosImagen || null };
+  // POST /planos (guardar) responde 201 con { plano, datosImagen, ... }: el texto del resultado va en plano.texto_resultado
+  // (textoResultado solo viene en "calcular"). Se aceptan las dos formas.
+  const textoOk = out && out.body && (out.body.textoResultado || (out.body.plano && out.body.plano.texto_resultado));
+  if (out && out.status === 201 && textoOk) return { ok: true, texto: textoOk, datosImagen: out.body.datosImagen || null };
+  if (out && out.status === 201) return { ok: true, texto: 'Carrera calculada y guardada en los saldos de los clientes.', datosImagen: out.body && out.body.datosImagen || null };
   const err = out && out.body && out.body.error;
   if (out && out.status === 409) return { ok: false, motivo: 'esa carrera ya tiene un plano registrado. Para volver a calcularla, bórralo primero en Eliminar Planos del panel.' };
   if (err && /Falta el texto del plano/i.test(err)) return { ok: false, motivo: 'no encontré jugadas pendientes del bot para esa carrera (¿ya se calcularon o se borraron?).' };
