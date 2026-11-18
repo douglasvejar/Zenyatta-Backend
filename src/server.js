@@ -193,6 +193,13 @@ process.on('unhandledRejection', (err) => {
   console.error('Promesa rechazada sin atrapar (revisar si falta algún asyncHandler):', err);
 });
 
+// Lo mismo para una excepción que nadie atrapó (por ejemplo, un error que lanza la librería de WhatsApp dentro de un evento de la
+// conexión): antes tumbaba todo el servidor ("Deploy Crashed" en Railway, y el bot quedaba mudo hasta el reinicio). Ahora se deja
+// en el log con su detalle y el servidor sigue atendiendo. (Si es algo de verdad fatal, Railway igual lo reinicia al fallar.)
+process.on('uncaughtException', (err, origen) => {
+  console.error('[CRASH EVITADO] Excepción sin atrapar (' + (origen || '?') + '):', err && err.stack ? err.stack : err);
+});
+
 // =================================================================
 // DIAGNÓSTICO DE CLAVES DE "1H" (03-10-2026) — a pedido del usuario,
 // después de un caso real (ticket de HANRY, "Colombia rl 1h -0.5") que
