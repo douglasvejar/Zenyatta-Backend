@@ -305,7 +305,7 @@ const ultima = () => enviadas[enviadas.length - 1];
 
   // Oferta que no se entiende: preguntar en el grupo
   await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));
-  check(/MALO, debe corregir: su jugada está mal escrita/.test(ultima().t) && /falta el monto/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot dice MALO, debe corregir, y muestra cómo escribirla');
+  check(/MALO, debe corregir: su jugada está mal escrita/.test(ultima().t) && /falta el monto/.test(ultima().t) && !/Escríbela así/.test(ultima().t), 'una jugada sin monto: el bot dice MALO, debe corregir (sin ejemplo)');
 
   // ---- Términos: roles de quien publica y de quien responde ----
   eq(m.interpretarRespuesta('jugue 200'), { tipo: 'monto', monto: 200, rol: 'juega' }, '"jugué 200" = quiere jugar 200');

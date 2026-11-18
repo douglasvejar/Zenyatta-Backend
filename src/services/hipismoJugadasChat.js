@@ -503,7 +503,7 @@ function crearMotor(deps) {
   async function paradaMalEscrita(m, motivo) {
     marcarMala(m);
     nota('Parada mal escrita' + (motivo ? ' (' + motivo + ')' : '') + ': se le pide que la corrija');
-    await deps.responder(etiquetaDe(m) + ' ❌ MALO, debe corregir: su jugada está mal escrita' + (motivo ? ' (' + motivo + ')' : '') + '. Escríbela así: *Juego 4x1 con 75 doy a8*', mencion(m));
+    await deps.responder(etiquetaDe(m) + ' ❌ MALO, debe corregir: su jugada está mal escrita' + (motivo ? ' (' + motivo + ')' : '') + '.', mencion(m));
   }
 
   function retirarOfertasDe(jid) {
