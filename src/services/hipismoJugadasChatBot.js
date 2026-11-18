@@ -13,7 +13,7 @@ const motorChat = require('./hipismoJugadasChat');
 const { normalizarTelefono, telefonoDeParticipante, quitarTildes } = require('./whatsappTrigger');
 const { clientesConPozoDisponible } = require('./hipismoAlertaPozo');
 
-const TEXTO_PLANO_BOT = 'Jugadas del chat de WhatsApp (bot)';
+const TEXTO_PLANO_BOT = motorChat.TEXTO_PLANO_BOT; // la usa también routes/hipismo.js para mostrar estas jugadas en TERCIOS
 const sesiones = new Map();        // grupoId -> { motor, cola, mensajes: Map(id -> msg) }
 const cacheGrupos = new Map();     // jid -> { valor, hasta }
 const cacheClientes = new Map();

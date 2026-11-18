@@ -724,9 +724,10 @@ async function guardarResolucionAdelantadas(client, req, resueltas, pizarra) {
 // falta_banquero (filtro en la consulta) — esas quedan 'pendiente' con
 // su error hasta que el operador las corrija (PUT /tercios-adelantadas/
 // jugadas/:id).
+const { TEXTO_PLANO_BOT } = require('../services/hipismoJugadasChat');
 async function buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha }) {
   const r = await db.query(
-    `SELECT j.* FROM hipismo_tercios_adelantadas_jugadas j
+    `SELECT j.*, p.texto_original AS plano_texto_original FROM hipismo_tercios_adelantadas_jugadas j
        JOIN hipismo_tercios_adelantadas_planos p ON p.id = j.plano_id
       WHERE j.grupo_id = $1 AND p.hipodromo_nombre = $2 AND j.carrera_numero = $3 AND p.fecha = $4
         AND j.estado = 'pendiente' AND j.falta_monto = false AND j.falta_jugador = false AND j.falta_banquero = false
@@ -746,7 +747,7 @@ async function buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carrer
 // ADELANTADAS" del texto, en vez de tener un bloque aparte.
 async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha, pizarra, ret }) {
   const pendientes = await buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha });
-  if (!pendientes.length) return { resueltas: [], movimientos: [] };
+  if (!pendientes.length) return { resueltas: [], movimientos: [], jugadasChat: [] };
 
   const rank = parsearPizarraRank(pizarra);
   const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret });
@@ -777,13 +778,51 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
       id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'resuelto',
       resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado), comisionGrupo: round2(r.comisionGrupo),
       comisionPorcentaje: Number(j.comision_porcentaje),
+      // 18-11-2026: las jugadas que el bot leyó del chat de WhatsApp son jugadas EN VIVO: en el plano resuelto salen en TERCIOS
+      // (no en PARADA ADELANTADAS). Solo cambia cómo se muestran: se guardan y suman a los saldos igual que siempre.
+      vistaChat: j.plano_texto_original === TEXTO_PLANO_BOT ? {
+        jugador: j.jugador_nombre, banquero: j.banquero_nombre, modalidad: j.modalidad, monto: Number(j.monto), esCruce: !!j.es_cruce,
+        grupo: j.es_cruce ? null : j.grupo_caballos, gruposA: j.es_cruce ? j.cruce_grupo_a : null, gruposB: j.es_cruce ? j.cruce_grupo_b : null,
+        resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado)
+      } : null,
       movimientos: [{ nombre: j.jugador_nombre, monto: r.montoJugadorMostrado, seccion: 'tercios' }, { nombre: j.banquero_nombre, monto: r.montoBanqueroMostrado, seccion: 'tercios' }]
     };
   });
 
-  const movimientos = [];
-  resueltas.forEach(r => movimientos.push(...r.movimientos));
-  return { resueltas, movimientos };
+  const movimientos = [], jugadasChat = [];
+  resueltas.forEach(r => { if (r.vistaChat) jugadasChat.push(r.vistaChat); else movimientos.push(...r.movimientos); });
+  return { resueltas, movimientos, jugadasChat };
+}
+
+// Suma al plano de Tercios (texto e imagen) las jugadas resueltas que vinieron del chat de WhatsApp, con las MISMAS líneas que una
+// jugada de Tercios normal ("2P (8) con 300,00 / Juega X $ +.. / Consigue Y $ -.."). Solo es presentación: no toca lo que se guarda.
+const listaCaballos = v => (Array.isArray(v) ? v : (typeof v === 'string' ? JSON.parse(v) : [])).join('.');
+function extenderPlanoConJugadasChat(base, jugadasChat) {
+  if (!jugadasChat || !jugadasChat.length) return base;
+  const salidaLineas = base.salidaLineas.slice(), totalesFinales = Object.assign({}, base.totalesFinales), tickets = base.tickets.slice();
+  const sg = v => (v >= 0 ? '+' : '-') + formatMontoTabla(v);
+  jugadasChat.forEach(v => {
+    const mod = String(v.modalidad || 'pp').toUpperCase() === 'PP' ? 'pp' : String(v.modalidad).toUpperCase();
+    if (v.esCruce) {
+      const a = listaCaballos(v.gruposA), b = listaCaballos(v.gruposB);
+      salidaLineas.push(`${mod} (${a}x${b}) con ${formatMontoTabla(v.monto)}`);
+      salidaLineas.push(`(${a}) ${formatNombre(v.jugador)} $ ${sg(v.resultadoJugador)}`);
+      salidaLineas.push(`(${b}) ${formatNombre(v.banquero)} $ ${sg(v.resultadoBanquero)}`);
+    } else {
+      salidaLineas.push(`${mod} (${listaCaballos(v.grupo)}) con ${formatMontoTabla(v.monto)}`);
+      salidaLineas.push(`Juega ${formatNombre(v.jugador)} $ ${sg(v.resultadoJugador)}`);
+      salidaLineas.push(`Consigue ${formatNombre(v.banquero)} $ ${sg(v.resultadoBanquero)}`);
+    }
+    salidaLineas.push('');
+    totalesFinales[v.jugador] = round2((totalesFinales[v.jugador] || 0) + v.resultadoJugador);
+    totalesFinales[v.banquero] = round2((totalesFinales[v.banquero] || 0) + v.resultadoBanquero);
+    tickets.push({
+      clienteNombre: v.jugador, banqueroNombre: v.banquero, modalidad: mod === 'pp' ? 'PP' : mod,
+      caballo: v.esCruce ? listaCaballos(v.gruposA) + 'x' + listaCaballos(v.gruposB) : listaCaballos(v.grupo),
+      monto: v.monto, resultadoJugador: v.resultadoJugador, resultadoBanquero: v.resultadoBanquero
+    });
+  });
+  return { salidaLineas, totalesFinales, tickets };
 }
 
 // Persiste la resolución ya calculada arriba — SOLO la llama POST
@@ -952,9 +991,9 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
   // carrera contra la pizarra que se está calculando. Sus movimientos se
   // mezclan en el MISMO array que alimenta "PARADA ADELANTADAS" (a
   // pedido del usuario: "saldran en el apartado de jugadas adelantadas").
-  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = (hipodromoNombre && carreraNumero)
+  const { resueltas: resueltasTercios, movimientos: movimientosTercios, jugadasChat } = (hipodromoNombre && carreraNumero)
     ? await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carreraNumero, fecha: fechaFinal, pizarra, ret })
-    : { resueltas: [], movimientos: [] };
+    : { resueltas: [], movimientos: [], jugadasChat: [] };
   movimientosParaTexto.push(...movimientosTercios);
 
   const huboTexto = !!(texto && texto.trim());
@@ -972,6 +1011,7 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
   if (await rechazarClientesInexistentes(req, res, resultado.tickets.flatMap(t => [t.clienteNombre, t.banqueroNombre]))) return;
 
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  const vista = extenderPlanoConJugadasChat(resultado, jugadasChat); // jugadas del chat de WhatsApp: salen en TERCIOS
   // 23-09-2026, a pedido del usuario (pegó un plano real donde el aviso
   // "PLANO REFERENCIAL" quedaba en el medio del mensaje, arriba de
   // "PARADA ADELANTADAS", en vez de al final de todo): cuando esta
@@ -984,15 +1024,15 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
     carreraNumero: carreraNumero || '',
     ret,
     pizarra,
-    salidaLineas: resultado.salidaLineas,
-    totalesFinales: resultado.totalesFinales,
+    salidaLineas: vista.salidaLineas,
+    totalesFinales: vista.totalesFinales,
     incluirPie: !bloqueAdelantadas,
     // "Total Jugadas: N" (23-09-2026) — ver la nota grande en
     // hipismoCalc.js/armarTextoResultado. Cuenta los tickets de Tercios de
     // ESTA carrera puntual (huboTexto puede ser false si el plano solo
     // trajo la pizarra para resolver adelantadas — ahí tickets.length ya
     // da 0 solo, sin necesitar chequear huboTexto acá).
-    totalJugadas: resultado.tickets.length
+    totalJugadas: vista.tickets.length
   });
   if (bloqueAdelantadas) {
     textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
@@ -1064,7 +1104,7 @@ const calcularPlanoHandler = asyncHandler(async (req, res) => {
     // Datos para "Copiar en imagen" (07-10-2026): mismas fuentes que el texto de arriba.
     datosImagen: armarDatosImagenPlano({
       grupoNombre: req.grupo.nombre, hipodromoNombre: hipodromoNombre || '', carreraNumero, fecha: fechaFinal, ret, pizarra,
-      tickets: resultado.tickets, totalesFinales: resultado.totalesFinales, movimientosAdelantadas: movimientosParaTexto
+      tickets: vista.tickets, totalesFinales: vista.totalesFinales, movimientosAdelantadas: movimientosParaTexto
     }),
     totalesFinales: balance.totales,
     comisionTotal: balance.comision,
@@ -1129,7 +1169,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
   const { resueltas, movimientosParaTexto } = await calcularResolucionAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra, ret });
   // "Jugadas entre Tercios Adelantadas" (04-10-2026) — mismo gancho, ver
   // la nota grande en POST /planos/calcular.
-  const { resueltas: resueltasTercios, movimientos: movimientosTercios } = await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra, ret });
+  const { resueltas: resueltasTercios, movimientos: movimientosTercios, jugadasChat } = await calcularResolucionTerciosAdelantadas(req, { hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, pizarra, ret });
   movimientosParaTexto.push(...movimientosTercios);
 
   // 23-09-2026, a pedido del usuario ("si llega a quedar alguna jugada
@@ -1149,6 +1189,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
   }
 
   const bloqueAdelantadas = armarBloqueAdelantadas(movimientosParaTexto);
+  const vista = extenderPlanoConJugadasChat(resultado, jugadasChat); // jugadas del chat de WhatsApp: salen en TERCIOS (no se guardan como tickets: ya están guardadas)
   // Ver la nota grande en POST /planos/calcular: el pie "PLANO
   // REFERENCIAL" se omite acá adentro cuando hay adelantadas para que
   // quede siempre como lo ÚLTIMO del mensaje, después de "PARADA
@@ -1159,10 +1200,10 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     carreraNumero,
     ret,
     pizarra,
-    salidaLineas: resultado.salidaLineas,
-    totalesFinales: resultado.totalesFinales,
+    salidaLineas: vista.salidaLineas,
+    totalesFinales: vista.totalesFinales,
     incluirPie: !bloqueAdelantadas,
-    totalJugadas: resultado.tickets.length
+    totalJugadas: vista.tickets.length
   });
   if (bloqueAdelantadas) {
     textoResultado += '\n\n' + bloqueAdelantadas + '\n------------------------------\n------------------------------\n' + PIE_PLANO_DEFECTO;
@@ -1241,7 +1282,7 @@ const guardarPlanoHandler = asyncHandler(async (req, res) => {
     plano,
     datosImagen: armarDatosImagenPlano({
       grupoNombre: req.grupo.nombre, hipodromoNombre: nombreHipodromoFinal, carreraNumero, fecha: fechaFinal, ret, pizarra,
-      tickets: resultado.tickets, totalesFinales: resultado.totalesFinales, movimientosAdelantadas: movimientosParaTexto
+      tickets: vista.tickets, totalesFinales: vista.totalesFinales, movimientosAdelantadas: movimientosParaTexto
     }),
     totalesFinales: balance.totales,
     comisionTotal: balance.comision,
@@ -7413,6 +7454,7 @@ router.post('/chat/marcar-leidos', asyncHandler(async (req, res) => {
 // 17-11-2026 — Bot de jugadas del chat de WhatsApp: un administrador escribe "Pizarra 6.10.4.8.2" y el bot guarda la carrera con ese
 // mismo manejador de Cargar Planos (plano vacío: las jugadas pendientes del bot de esa carrera se resuelven y entran a los saldos).
 // Devuelve { status, body } igual que correrManejadorPlano (201 = guardado; 400/409 = body.error explica).
+router.extenderPlanoConJugadasChat = extenderPlanoConJugadasChat; // para las pruebas
 router.guardarPlanoParaBot = async function guardarPlanoParaBot(grupoId, body) {
   const rg = await db.query('SELECT * FROM grupos WHERE id = $1', [grupoId]);
   if (!rg.rows.length) return { status: 404, body: { error: 'Grupo no encontrado.' } };
