@@ -13716,8 +13716,12 @@ async function enviarAjustePozo(jugadorId, montoInputId, motivoInputId, onOk) {
   const monto = Number(document.getElementById(montoInputId).value);
   if (!monto || isNaN(monto)) { alert('El ajuste tiene que ser un número distinto de 0 (positivo para aumentar, negativo para disminuir).'); return; }
   const motivo = document.getElementById(motivoInputId).value.trim();
+  // Un cliente nuevo queda "Libre" (sin pozo): el primer ajuste le asigna el pozo (pasa a Avalado con ese monto).
+  const cli = (typeof CLIENTES_HIPISMO_CACHE !== 'undefined' ? CLIENTES_HIPISMO_CACHE : []).find(x => String(x.id) === String(jugadorId));
+  const asignarPozo = !!cli && cli.tipo_cuenta !== 'avalado';
+  if (asignarPozo && monto < 0) { alert('Este cliente todavía no tiene pozo: el primer ajuste debe ser positivo (el pozo que le vas a asignar).'); return; }
   try {
-    await apiHipismo(`/api/jugadores/${jugadorId}/pozo-ajuste`, { method: 'POST', body: JSON.stringify({ monto, motivo }) });
+    await apiHipismo(`/api/jugadores/${jugadorId}/pozo-ajuste`, { method: 'POST', body: JSON.stringify({ monto, motivo: motivo || (asignarPozo ? 'Pozo inicial' : ''), ...(asignarPozo ? { asignarPozo: true } : {}) }) });
   } catch (e) {
     alert('No se pudo ajustar el pozo: ' + e.message);
     return;
@@ -13747,19 +13751,19 @@ function filaHistorialPozoHtml(a) {
   </tr>`;
 }
 
-// Select de cliente de "✏️ Ajustar pozo" (solo los de cuenta Avalado —
-// los "Libre" no tienen pozo). Se repuebla cada vez que se refresca la
+// Select de cliente de "✏️ Ajustar pozo" (todos los clientes; a un "Libre" el primer ajuste le asigna el pozo). Se repuebla cada vez que se refresca la
 // lista de Clientes (cargarClientesReales()), para no depender de un
 // pedido aparte.
 function poblarSelectPozoAjusteCliente() {
   const sel = document.getElementById('selPozoAjusteCliente');
   if (!sel) return;
   const idPrevio = sel.value;
+  // Se listan TODOS los clientes: los "Libre" (sin pozo todavía, p. ej. recién registrados) también, para poder asignarles su pozo.
   const avalados = CLIENTES_HIPISMO_CACHE
-    .filter(j => j.tipo_cuenta === 'avalado')
+    .filter(j => !j.es_cuenta_comision)
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   sel.innerHTML = '<option value="">— Elige un cliente —</option>' +
-    avalados.map(j => `<option value="${j.id}">${formatNombre(j.nombre)}</option>`).join('');
+    avalados.map(j => `<option value="${j.id}">${formatNombre(j.nombre)}${j.tipo_cuenta === 'avalado' ? '' : ' (sin pozo todavía)'}</option>`).join('');
   if (idPrevio && avalados.some(j => String(j.id) === String(idPrevio))) sel.value = idPrevio;
 }
 
@@ -13773,7 +13777,9 @@ async function cambiarClientePozoAjuste() {
     return;
   }
   const j = CLIENTES_HIPISMO_CACHE.find(x => String(x.id) === String(id));
-  infoEl.innerHTML = j ? `Pozo asignado de <b>${formatNombre(j.nombre)}</b>: ${formatMontoTabla(j.pozo_inicial || 0)} — cada semana nueva vuelve a empezar en este monto.` : '';
+  infoEl.innerHTML = !j ? '' : (j.tipo_cuenta === 'avalado'
+    ? `Pozo asignado de <b>${formatNombre(j.nombre)}</b>: ${formatMontoTabla(j.pozo_inicial || 0)} — cada semana nueva vuelve a empezar en este monto.`
+    : `<b>${formatNombre(j.nombre)}</b> todavía no tiene pozo (es cliente Libre). Escribe el pozo que le vas a asignar y al aplicar pasa a Avalado con ese monto.`);
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>';
   const historial = await obtenerHistorialPozo(id);
   tbody.innerHTML = historial.length

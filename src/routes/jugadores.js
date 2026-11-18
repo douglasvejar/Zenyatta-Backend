@@ -423,6 +423,8 @@ router.post('/:id/pozo-ajuste', asyncHandler(async (req, res) => {
       );
       return { ...jugador, pozo_inicial: pozoResultante };
     });
+    // Al asignarle pozo a un cliente libre, la marca "sin pozo" se apaga sola (igual que al editar su ficha).
+    if (req.body.asignarPozo === true && jugadorActualizado.tipo_cuenta === 'avalado') { try { await guardarSinPozo(jugadorActualizado.id, req.grupoId, undefined, 'avalado'); } catch (e) { /* la marca es secundaria: el pozo ya quedó asignado */ } }
     res.json(jugadorActualizado);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message || 'No se pudo ajustar el pozo.' });
