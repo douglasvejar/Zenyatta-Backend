@@ -46,7 +46,7 @@ function carpetaDeSesion(grupoId) {
 }
 
 function estadoVacio() {
-  return { sock: null, gen: 0, conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], numero: null, reintento: null, cerrando: false };
+  return { sock: null, gen: 0, conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], numero: null, reintento: null, cerrando: false, eventos: 0, ultimoEvento: null, conectadoEn: null, reconexiones: 0, ultimoCodigo: null };
 }
 
 function numeroDeSock(sock) {
@@ -71,6 +71,8 @@ function estadoPublico(grupoId) {
     ultimoError: s.ultimoError,
     numero: enmascararNumero(s.numero),
     ultimo: s.ultimo || null,
+    // Diagnóstico (18-11-2026): ¿WhatsApp le entrega eventos a este número? ¿se reconecta seguido?
+    eventos: s.eventos || 0, ultimoEvento: s.ultimoEvento || null, conectadoEn: s.conectadoEn || null, reconexiones: s.reconexiones || 0, ultimoCodigo: s.ultimoCodigo || null,
     grupos: s.gruposDisponibles || []
   };
 }
@@ -114,6 +116,12 @@ async function manejarMensaje(grupoId, sock, msg) {
   const anotar = (motivo) => { if (s) s.ultimo = { en: new Date().toISOString(), chat: remoteJid, motivo }; };
   if (!remoteJid || !String(remoteJid).endsWith('@g.us')) { anotar('Ignorado: es un chat privado, no un grupo'); return; }
   const texto = extraerTexto(msg);
+  // messageStubType 2 = CIPHERTEXT: WhatsApp entregó el mensaje pero esta sesión no pudo descifrarlo (llaves guardadas dañadas o incompletas).
+  if (!texto && msg && msg.messageStubType === 2) {
+    console.error('[whatsappSesionesGrupo] Grupo ' + grupoId + ': NO se pudo descifrar un mensaje de ' + remoteJid + ' (' + ((msg.messageStubParameters || [])[0] || 'sin detalle') + ').');
+    anotar('⚠️ Llegó un mensaje pero NO se pudo descifrar: la sesión guardada está dañada. Usa "Volver a vincular" y escanea el QR otra vez.');
+    return;
+  }
   if (!texto) { anotar('Ignorado: el mensaje no tiene texto (foto, sticker...)'); return; }
   try {
     const ayudas = deps.ayudasBot()(sock, msg);
@@ -155,7 +163,7 @@ async function iniciarSesion(grupoId) {
     const { connection, lastDisconnect, qr } = update;
     if (qr) { s.ultimoQr = qr; s.conectado = false; }
     if (connection === 'open') {
-      s.conectado = true; s.ultimoQr = null; s.ultimoError = null;
+      s.conectado = true; s.ultimoQr = null; s.ultimoError = null; s.conectadoEn = new Date().toISOString(); s.eventos = 0; s.ultimoEvento = null;
       s.numero = numeroDeSock(sock);
       console.log('[whatsappSesionesGrupo] Grupo ' + id + ': conectado con su número propio.');
       listarGrupos(s);
@@ -172,6 +180,7 @@ async function iniciarSesion(grupoId) {
         deps.alertar('🔴 LUDOX: se cayó el número propio de un grupo', 'El número propio del grupo ' + id + ' ya no está vinculado (WhatsApp cerró la sesión). Entra a Súper-admin → detalle del grupo → WhatsApp y vincúlalo de nuevo.');
       } else {
         const codigo = motivo && motivo.output ? motivo.output.statusCode : null;
+        s.reconexiones = (s.reconexiones || 0) + 1; s.ultimoCodigo = codigo;
         const explicacion = { 440: 'la sesión se abrió en otro lugar (dos servidores usando el mismo número)', 515: 'WhatsApp pidió reiniciar la conexión (normal justo después de escanear el QR)', 428: 'WhatsApp cerró la conexión', 408: 'se agotó el tiempo de espera', 500: 'la sesión guardada está dañada', 503: 'WhatsApp no estaba disponible' }[codigo];
         console.log('[whatsappSesionesGrupo] Grupo ' + id + ': conexión cerrada (código ' + codigo + (explicacion ? ' — ' + explicacion : '') + '), reintentando.');
         s.ultimoError = 'Se perdió la conexión' + (codigo ? ' (código ' + codigo + (explicacion ? ': ' + explicacion : '') + ')' : '') + ', reintentando…';
@@ -186,6 +195,9 @@ async function iniciarSesion(grupoId) {
 
   sock.ev.on('messages.upsert', async (evento) => {
     if (s.gen !== gen) return;
+    const n = (evento.messages || []).length;
+    s.eventos = (s.eventos || 0) + n; s.ultimoEvento = { en: new Date().toISOString(), tipo: evento.type || null, n };
+    console.log('[whatsappSesionesGrupo] Grupo ' + id + ': llegaron ' + n + ' mensaje(s) (tipo ' + (evento.type || '?') + ')');
     for (const msg of (evento.messages || [])) await manejarMensaje(id, sock, msg);
   });
 

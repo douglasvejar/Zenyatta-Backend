@@ -4566,9 +4566,14 @@ async function wpPropioCargar() {
   if (filaUlt) {
     filaUlt.style.display = d.conectado ? '' : 'none';
     const ult = d.ultimo;
-    document.getElementById('wpPropioUltimo').textContent = ult
-      ? (new Date(ult.en).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' · ' + ult.motivo)
-      : 'Ninguno todavía (escribe algo en el grupo de WhatsApp)';
+    const hora = iso => new Date(iso).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    let txtUlt = ult ? (hora(ult.en) + ' · ' + ult.motivo) : 'Ninguno todavía (escribe algo en el grupo de WhatsApp)';
+    // Diagnóstico: cuántos mensajes le entregó WhatsApp a este número desde que se conectó, y si se ha reconectado seguido.
+    const partes = [];
+    partes.push('WhatsApp le entregó ' + (d.eventos || 0) + ' mensaje(s)' + (d.ultimoEvento ? ' (el último a las ' + hora(d.ultimoEvento.en) + ')' : ''));
+    if (d.conectadoEn) partes.push('conectado desde las ' + hora(d.conectadoEn));
+    if (d.reconexiones) partes.push(d.reconexiones + ' reconexión(es)' + (d.ultimoCodigo ? ', última con código ' + d.ultimoCodigo : ''));
+    document.getElementById('wpPropioUltimo').innerHTML = saEsc(txtUlt) + '<br><span style="color:var(--text-dim);">' + saEsc(partes.join(' · ')) + '</span>';
   }
 
   btn('wpPropioBtnIniciar').style.display = (!d.vinculado || (!d.conectado && !d.tieneQr && d.ultimoError && d.ultimoError.indexOf('cerró') >= 0)) ? '' : 'none';
