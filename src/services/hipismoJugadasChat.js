@@ -75,10 +75,12 @@ function apuestaSegura(a) {
 // ---------------------------------------------------------------
 // monto: "75", "9.50", "13,00", "1.250,50"
 const MONTO_SRC = '\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?';
-const VERBO_OFERTA_RE = /^(?:juego|juega|jugar|jugando|jugamos)\b\s*/i;
+const VERBO_OFERTA_RE = /^(?:juego|juega|jugar|jugando|jugamos|consigo|consigue)\b\s*/i;
 function interpretarOferta(texto) {
   let t = limpiar(texto);
   if (!VERBO_OFERTA_RE.test(t)) return null;
+  // "Consigo 3n del 1 200": el que publica quiere BANQUEAR (da la jugada); "Juego ...": el que publica quiere JUGAR.
+  const banquea = /^consig/i.test(t);
   t = t.replace(VERBO_OFERTA_RE, '');
 
   let lado = 'doy';
@@ -103,6 +105,7 @@ function interpretarOferta(texto) {
     if (mFinal) { monto = parseMontoChat(mFinal[1]); t = t.replace(mFinal[0], ' '); montoSuelto = true; }
   }
   if (monto === null || !(monto > 0)) return { ok: false, motivo: 'falta el monto' };
+  if (banquea) lado = 'recibo';
 
   t = t.replace(/(\d)\s*x\s*(\d)/gi, '$1x$2').trim();
   let tokens = t.split(/\s+/).filter(Boolean);
@@ -143,8 +146,55 @@ function interpretarRespuesta(texto) {
   if (/^(?:s\.? ?f\.?|se ?[fd][uyi]e(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
   const m = t.match(/^(?:j(?:ugo)?\s*)?(?:con\s+)?(\d+(?:[.,]\d+)?)$/);
   if (m) { const n = parseMontoChat(m[1]); if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) }; }
+  // Con el rol dicho en claro: "jugué 200" (quiere JUGAR) / "doy 200", "consigo 200" (quiere DAR = banquear).
+  // Sirve para detectar el error de término: los dos quieren jugar o los dos quieren dar.
+  const mR = t.match(/^(jugue|jugamos|juego|jugar|doy|damos|consigo|consigue|banqueo)(?:\s+(?:con\s+)?(\d+(?:[.,]\d+)?))?$/);
+  if (mR) {
+    const rol = /^(?:jug|juego)/.test(mR[1]) ? 'juega' : 'da';
+    if (mR[2] === undefined) return rol === 'juega' && !/^jugue$/.test(mR[1]) ? null : { tipo: 'todo', rol };
+    const n = parseMontoChat(mR[2]);
+    if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n), rol };
+  }
   return null;
 }
+
+// Mal término: los dos quieren jugar ("Juego 2p del 8 300" / "jugué 200") o los dos quieren dar ("Consigo 3n del 1 200" / "doy 200").
+// oferta.lado 'doy' = el que publicó JUEGA; 'recibo' = el que publicó DA (banquea).
+function conflictoDeRol(ladoOferta, resp) {
+  if (!resp || !resp.rol) return null;
+  if (ladoOferta === 'doy' && resp.rol === 'juega') return '❌ Aquí nada, mal término: ambos juegan.';
+  if (ladoOferta === 'recibo' && resp.rol === 'da') return '❌ Aquí nada, error de término: ambos dan.';
+  return null;
+}
+
+// "jhuego 2p del 8 300", "2p del 8 300", "juegoo 3n del 1 200": parece una parada (tiene apuesta y monto) pero no empieza con un verbo
+// válido, así que no se sabe si juega o banquea. Se compara la 1ª palabra con los verbos por parecido.
+const VERBOS_PARADA = ['juego', 'juega', 'jugar', 'jugo', 'jugue', 'jugamos', 'jugando', 'consigo', 'consigue', 'doy', 'damos', 'recibo', 'banqueo'];
+function distancia(a, b) {
+  const d = [];
+  for (let i = 0; i <= a.length; i++) { d[i] = [i]; }
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function primeraPalabraEsVerbo(palabra) {
+  const w = palabra.toLowerCase();
+  if (!/^[a-z]+$/.test(w)) return false;
+  return VERBOS_PARADA.some(v => distancia(w, v) <= 2);
+}
+function pareceParadaMalEscrita(texto) {
+  const t = limpiar(texto);
+  if (!t || t.length > 120) return false;
+  if (interpretarOferta(t) !== null) return false; // ya es una parada (bien o mal escrita): se trata aparte
+  if (interpretarRespuesta(t)) return false;
+  const intentos = [t];
+  const mP = t.match(/^(\S+)\s+(.+)$/);
+  if (mP && primeraPalabraEsVerbo(mP[1])) intentos.push(mP[2]);
+  return intentos.some(x => { const o = interpretarOferta('juego ' + x); return !!(o && o.ok); });
+}
+// Texto que alguien escribe para "tomar" una parada (J, un monto, ok, dale…).
+const INTENTO_JUGAR_RE = /^(?:j\w*|ok(?:ey)?|dale|listo|va|vamos|si|de una|acepto|tomo|tomado|lo tomo|doy\b.*|consigo\b.*|\d+(?:[.,]\d+)?)$/;
+const pareceIntentoDeJugar = texto => INTENTO_JUGAR_RE.test(limpiar(texto).toLowerCase());
 
 // ---------------------------------------------------------------
 // RIESGO: lo peor que puede perder cada lado por unidad de monto (fracción del monto). Se calcula con el MISMO motor que
@@ -439,6 +489,16 @@ function crearMotor(deps) {
     return etiquetaDe(m) + ' en esta parada tu disponible alcanza para ' + fmt(tope.max) + ' (ahí arriesgas ' + fmt(tope.disponible) + '). Por favor colócala por ese monto o menos.';
   }
 
+  // Paradas mal escritas (id -> ts): si alguien les responde, el bot dice "Aquí nada, parada mal escrita".
+  const malas = new Map();
+  function marcarMala(m) { malas.set(m.id, tiempoDe(m)); if (malas.size > 400) malas.delete(malas.keys().next().value); }
+  const TXT_MALA_RESPUESTA = '❌ Aquí nada, parada mal escrita.';
+  async function paradaMalEscrita(m, motivo) {
+    marcarMala(m);
+    nota('Parada mal escrita' + (motivo ? ' (' + motivo + ')' : '') + ': se le pide que la corrija');
+    await deps.responder(etiquetaDe(m) + ' ❌ MALO, debe corregir: su jugada está mal escrita' + (motivo ? ' (' + motivo + ')' : '') + '. Escríbela así: *Juego 4x1 con 75 doy a8*', mencion(m));
+  }
+
   function retirarOfertasDe(jid) {
     ofertas.forEach(of => { if (of.autorJid === jid && of.restante > 0.005) of.seFue = true; });
   }
@@ -449,9 +509,7 @@ function crearMotor(deps) {
       return;
     }
     if (!o.ok) {
-      nota('Jugada publicada pero no se entendió (' + o.motivo + ')');
-      await deps.responder(etiquetaDe(m) + ' no entendí tu jugada (' + o.motivo + '). Escríbela así: *Juego 4x1 con 75 doy a8*', mencion(m));
-      return;
+      return paradaMalEscrita(m, o.motivo);
     }
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
@@ -477,13 +535,25 @@ function crearMotor(deps) {
     if (!ctx.abierta) { nota('Respuesta recibida pero no hay carrera abierta'); return; }
     if (!oferta) {
       // La parada que citó no la conoce el bot (se publicó antes de abrir la carrera, antes de un reinicio del servidor, o no era una jugada).
-      if (m.citadoTexto && interpretarOferta(m.citadoTexto) !== null) {
+      const citada = m.citadoTexto ? interpretarOferta(m.citadoTexto) : null;
+      if (malas.has(m.citadoId) || (m.citadoTexto && (pareceParadaMalEscrita(m.citadoTexto) || (citada && !citada.ok)))) {
+        nota('Respondieron a una parada mal escrita: no se juega');
+        await deps.responder(TXT_MALA_RESPUESTA, { citarId: m.id });
+        return;
+      }
+      if (citada && citada.ok) {
+        const conf = conflictoDeRol(citada.lado, resp);
+        if (conf) { nota('Mal término al responder una parada que el bot no tiene en memoria'); await deps.responder(conf, { citarId: m.id }); return; }
+      }
+      if (citada !== null) {
         nota('Respondieron a una parada que el bot no tiene en memoria (se publicó antes de abrir la carrera o antes de reiniciar el servidor)');
         await deps.responder('❌ Aquí nada, esa parada ya no está activa. Que la publiquen de nuevo.', { citarId: m.id });
       } else nota('Respuesta a un mensaje que no es una parada conocida: se ignora');
       return;
     }
     if (oferta.autorJid === m.remitente.jid) { nota('Respuesta a su propia parada: no hace nada'); return; } // responderse a uno mismo no hace nada
+    const conflicto = conflictoDeRol(oferta.lado, resp);
+    if (conflicto) { nota('Mal término: ' + conflicto.replace('❌ Aquí nada, ', '')); await deps.responder(conflicto, { citarId: m.id }); return; }
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
       nota('Respuesta a una parada, pero quien responde no es un cliente registrado: no se jugó');
@@ -595,13 +665,21 @@ function crearMotor(deps) {
     const resp = interpretarRespuesta(texto);
     // "Sf"/"Se fue": sus jugadas abiertas se fueron. Si después alguien le responde (monto o J), el bot dice que no hay nada.
     if (resp && resp.tipo === 'sf') { nota('Puso "se fue": sus paradas abiertas quedan muertas'); retirarOfertasDe(m.remitente.jid); return; }
+    // Responder a una parada mal escrita (con "J", un monto, "ok"…): no se juega nada.
+    if (m.citadoId && ctx.abierta && (resp || pareceIntentoDeJugar(texto)) && (malas.has(m.citadoId) || (m.citadoTexto && (pareceParadaMalEscrita(m.citadoTexto) || (interpretarOferta(m.citadoTexto) || { ok: true }).ok === false)))) {
+      nota('Respondieron a una parada mal escrita: no se juega');
+      await deps.responder(TXT_MALA_RESPUESTA, { citarId: m.id });
+      return;
+    }
     if (resp && m.citadoId) return procesarRespuesta(m, resp);
+    // Parece una parada (tiene apuesta y monto) pero no dice si juega o banquea ("jhuego 2p del 8 300"): hay que corregirla.
+    if (!resp && ctx.abierta && pareceParadaMalEscrita(texto)) return paradaMalEscrita(m, 'no dice si juega o da');
   }
 
   return { procesarMensaje, estado: () => ({ ...ctx, jugadas: jugadas.length, ofertas: ofertas.size, sinPlano }), _ofertas: ofertas };
 }
 
 module.exports = {
-  TEXTO_PLANO_BOT: 'Jugadas del chat de WhatsApp (bot)', crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
+  TEXTO_PLANO_BOT: 'Jugadas del chat de WhatsApp (bot)', crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, conflictoDeRol, pareceParadaMalEscrita, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
   armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };

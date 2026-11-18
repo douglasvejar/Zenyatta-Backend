@@ -305,7 +305,50 @@ const ultima = () => enviadas[enviadas.length - 1];
 
   // Oferta que no se entiende: preguntar en el grupo
   await motor.procesarMensaje(msg('j_kahelt', 'Juego 4x1 doy a8'));
-  check(/no entendí tu jugada/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot pregunta y muestra cómo escribirla');
+  check(/MALO, debe corregir: su jugada está mal escrita/.test(ultima().t) && /falta el monto/.test(ultima().t) && /Juego 4x1 con 75 doy a8/.test(ultima().t), 'una jugada sin monto: el bot dice MALO, debe corregir, y muestra cómo escribirla');
+
+  // ---- Términos: roles de quien publica y de quien responde ----
+  eq(m.interpretarRespuesta('jugue 200'), { tipo: 'monto', monto: 200, rol: 'juega' }, '"jugué 200" = quiere jugar 200');
+  eq(m.interpretarRespuesta('Doy 200'), { tipo: 'monto', monto: 200, rol: 'da' }, '"doy 200" = quiere dar 200');
+  eq(m.interpretarRespuesta('consigo 50'), { tipo: 'monto', monto: 50, rol: 'da' }, '"consigo 50" = quiere dar 50');
+  eq(m.interpretarRespuesta('200'), { tipo: 'monto', monto: 200 }, 'el monto solo sigue siendo neutro (sirve para jugar o para dar)');
+  eq(m.interpretarOferta('consigo 3n del 1 200').lado, 'recibo', '"Consigo 3n del 1 200": quien publica quiere banquear');
+  eq(m.interpretarOferta('Consigo 3n del 1 200').monto, 200, '"Consigo": el monto se entiende igual');
+  check(m.conflictoDeRol('doy', { rol: 'juega' }) && m.conflictoDeRol('recibo', { rol: 'da' }) && !m.conflictoDeRol('doy', { rol: 'da' }) && !m.conflictoDeRol('recibo', { rol: 'juega' }) && !m.conflictoDeRol('doy', {}), 'solo hay conflicto cuando los dos piden el mismo rol');
+  check(m.pareceParadaMalEscrita('jhuego 2p del 8 300') && m.pareceParadaMalEscrita('2p del 8 300') && m.pareceParadaMalEscrita('juegoo 3n del 1 200'), 'detecta paradas con verbo mal escrito o sin verbo');
+  check(!m.pareceParadaMalEscrita('hola buenas tardes') && !m.pareceParadaMalEscrita('el 8 es mi caballo') && !m.pareceParadaMalEscrita('Juego 2p del 8 300') && !m.pareceParadaMalEscrita('200'), 'la charla normal, una parada buena o un monto suelto no se marcan como mal escritas');
+
+  const ofJ = msg('j_cachaco', 'Juego 2p del 8 300');
+  await motor.procesarMensaje(ofJ);
+  const gT = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', 'jugue 200', { citadoId: ofJ.id }));
+  check(guardadas.length === gT && ultima().t === '❌ Aquí nada, mal término: ambos juegan.', 'publican "Juego…" y responden "jugué 200": Aquí nada, mal término, ambos juegan');
+  await motor.procesarMensaje(msg('j_marvel', 'doy 100', { citadoId: ofJ.id }));
+  check(guardadas.length === gT + 1 && ultima().t === '✅ Aquí jugaron' && guardadas[gT].jugadorNombre === 'CACHACO' && guardadas[gT].banqueroNombre === 'MARVEL', 'publican "Juego…" y responden "doy 100": sí vale (uno juega y el otro da)');
+  const ofC = msg('j_cachaco', 'Consigo 3n del 1 200');
+  await motor.procesarMensaje(ofC);
+  const gC = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', 'doy 200', { citadoId: ofC.id }));
+  check(guardadas.length === gC && ultima().t === '❌ Aquí nada, error de término: ambos dan.', 'publican "Consigo…" y responden "doy 200": Aquí nada, error de término, ambos dan');
+  await motor.procesarMensaje(msg('j_marvel', 'jugue 100', { citadoId: ofC.id }));
+  check(guardadas.length === gC + 1 && guardadas[gC].jugadorNombre === 'MARVEL' && guardadas[gC].banqueroNombre === 'CACHACO', 'publican "Consigo…" y responden "jugué 100": sí vale (juega el que responde)');
+
+  // Parada mal escrita
+  const ofM = msg('j_cachaco', 'jhuego 2p del 8 300');
+  await motor.procesarMensaje(ofM);
+  check(/MALO, debe corregir: su jugada está mal escrita/.test(ultima().t) && ultima().op.mencionar === 'j_cachaco', 'parada con el verbo mal escrito ("jhuego…"): MALO, debe corregir, su jugada está mal escrita');
+  const gM = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', 'j', { citadoId: ofM.id, citadoTexto: 'jhuego 2p del 8 300' }));
+  check(guardadas.length === gM && ultima().t === '❌ Aquí nada, parada mal escrita.', 'responder "j" a una parada mal escrita: Aquí nada, parada mal escrita');
+  await motor.procesarMensaje(msg('j_marvel', '200', { citadoId: ofM.id }));
+  check(guardadas.length === gM && ultima().t === '❌ Aquí nada, parada mal escrita.', 'responder un monto a una parada mal escrita: también Aquí nada');
+  await motor.procesarMensaje(msg('j_marvel', 'jugo 200', { citadoId: 'XYZ', citadoTexto: 'Juego 4x1 doy a8' }));
+  check(guardadas.length === gM && ultima().t === '❌ Aquí nada, parada mal escrita.', 'responder a una parada sin monto (el bot la vio mal escrita): Aquí nada, parada mal escrita');
+  await motor.procesarMensaje(msg('j_cachaco', '2p del 8 300'));
+  check(/MALO, debe corregir/.test(ultima().t), 'una parada sin verbo ("2p del 8 300"): no se sabe si juega o da → MALO, debe corregir');
+  const nCh = enviadas.length;
+  await motor.procesarMensaje(msg('j_cachaco', 'buenas tardes muchachos'));
+  check(enviadas.length === nCh, 'la charla normal no recibe respuesta');
 
   // Plano: cada 4 jugadas nuevas se publicó solo
   check(publicadas.length >= 1, 'cada 4 jugadas nuevas el bot publica el plano (' + publicadas.length + ' veces hasta ahora)');
