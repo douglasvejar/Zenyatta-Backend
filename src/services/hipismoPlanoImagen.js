@@ -5,7 +5,7 @@
 // lo que jugó cada cliente (modalidad + caballo, monto, quién da, resultado),
 // el logo del grupo de fondo y, abajo, ordenado, quiénes ganan y quiénes
 // pierden; y que al pegarla en WhatsApp vaya acompañada del texto
-// "TOTALES DE LA CARRERA XXXX EN EL HIPÓDROMO XXXX EN EL GRUPO XXXX".
+// "*TOTALES 7MA CARRERA DE BELMONT PARK, GRUPO XXXX* 💰🏇" (entre asteriscos: negrita de WhatsApp).
 //
 // La imagen se dibuja en el navegador (public/hipismo-mockup.html); este
 // archivo solo arma los DATOS, con las MISMAS fuentes que el texto del plano
@@ -20,15 +20,18 @@ const { agruparSeccionesAdelantadas, parsearRetirados } = require('./hipismoAdel
 
 const { redondear2: redondear } = require('./redondeo');
 
-// "TOTALES DE LA CARRERA 11MA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO ZENYATTA"
+// "*TOTALES 11MA CARRERA DE LA RINCONADA, GRUPO ZENYATTA* 💰🏇"
 // (todo en mayúsculas, como lo pidió el usuario). Si falta la carrera o el
 // hipódromo se omite esa parte en vez de dejar un hueco.
 function armarTextoAcompanante({ grupoNombre, hipodromoNombre, carreraNumero }) {
   const carrera = (carreraNumero !== undefined && carreraNumero !== null && String(carreraNumero).trim() !== '')
-    ? ` ${ordinalCarrera(carreraNumero)}` : '';
-  const hipodromo = hipodromoNombre && String(hipodromoNombre).trim() ? ` EN EL HIPÓDROMO ${String(hipodromoNombre).trim()}` : '';
-  const grupo = grupoNombre && String(grupoNombre).trim() ? ` EN EL GRUPO ${String(grupoNombre).trim()}` : '';
-  return `TOTALES DE LA CARRERA${carrera}${hipodromo}${grupo}`.toUpperCase();
+    ? ` ${ordinalCarrera(carreraNumero)} CARRERA` : '';
+  const hip = hipodromoNombre && String(hipodromoNombre).trim() ? String(hipodromoNombre).trim() : '';
+  const grp = grupoNombre && String(grupoNombre).trim() ? String(grupoNombre).trim() : '';
+  const hipodromo = hip ? ` DE ${hip}` : '';
+  const grupo = grp ? `${hip ? ',' : ''} GRUPO ${grp}` : '';
+  // Entre asteriscos para que WhatsApp lo muestre en negrita, con el dinero y el caballo de carreras al final.
+  return `*${`TOTALES${carrera}${hipodromo}${grupo}`.toUpperCase()}* \u{1F4B0}\u{1F3C7}`;
 }
 
 function ordenarTotales(totalesFinales) {

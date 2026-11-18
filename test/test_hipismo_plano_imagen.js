@@ -119,12 +119,13 @@ async function invocarRuta(handler, req) {
     '4) primera jugada: Sammy 1p al 3 con 225 da Zenyatta = +213,75');
   check(d && d.jugadas[1].cliente === 'Mujica' && d.jugadas[1].resultado === -450, '5) segunda jugada: Mujica pierde -450');
   check(d && JSON.stringify(d.llegada) === JSON.stringify(['3', '4', '8', '1', '7']) && JSON.stringify(d.retirados) === '[6]', '6) llegada 3 4 8 1 7 y retirado 6');
+  check(require('../src/services/hipismoPlanoImagen').armarTextoAcompanante({ grupoNombre: 'Prueba Sabanas', hipodromoNombre: 'Belmont Park', carreraNumero: 7 }) === '*TOTALES 7MA CARRERA DE BELMONT PARK, GRUPO PRUEBA SABANAS* 💰🏇', '6c) pie de foto como lo pidió el usuario: en negrita de WhatsApp y con dinero y caballo');
   {
     const { armarDatosImagenPlano } = require('../src/services/hipismoPlanoImagen');
     const ll = p => JSON.stringify(armarDatosImagenPlano({ grupoNombre: 'G', hipodromoNombre: 'Belmont Park', carreraNumero: 6, fecha: '2026-11-18', ret: '', pizarra: p, tickets: [], totalesFinales: {} }).llegada);
     check(ll('8.5') === '["8","5"]' && ll('6.10.4.8.2') === '["6","10","4","8","2"]' && ll('8,5') === '["8","5"]' && ll('8 5') === '["8","5"]' && ll('8-5') === '["8","5"]', '6b) la llegada con puntos (como la escribe el bot: 8.5) sale como puestos separados, no como una sola bolita');
   }
-  check(d && d.textoAcompanante === 'TOTALES DE LA CARRERA 11MA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO ZENYATTA', '7) texto de acompañamiento exacto -- fue: ' + (d && d.textoAcompanante));
+  check(d && d.textoAcompanante === '*TOTALES 11MA CARRERA DE LA RINCONADA, GRUPO ZENYATTA* 💰🏇', '7) texto de acompañamiento exacto -- fue: ' + (d && d.textoAcompanante));
   // Mismas cifras que el texto del plano.
   const txt = salida.textoResultado;
   const gan = (d && d.ganan.map(([n, v]) => n + ' +' + v)) || [];
@@ -153,8 +154,8 @@ async function invocarRuta(handler, req) {
   check(sec[1].filas[0].cliente === 'Halland' && sec[1].filas[0].item === 'Marcas' && sec[1].filas[0].resultado === 100, '15) Marcas Adelantadas: Halland con el ítem genérico "Marcas", nunca un banqueador real');
   check(sec[2].filas[0].cliente === 'Pepe' && sec[2].filas[0].item === '' && sec[2].filas[0].resultado === 40, '16) Jugadas entre Tercios Adelantadas: Pepe por nombre, sin ítem ni porcentaje');
   check(!/%/.test(JSON.stringify(p.adelantadas)), '16b) ninguna sección muestra porcentajes');
-  check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: '', carreraNumero: '' }) === 'TOTALES DE LA CARRERA EN EL GRUPO LUSHO', '17) sin carrera ni hipódromo: se omiten sin dejar huecos');
-  check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: 'La Rinconada', carreraNumero: 3 }) === 'TOTALES DE LA CARRERA 3RA EN EL HIPÓDROMO LA RINCONADA EN EL GRUPO LUSHO', '18) 3ra se escribe 3RA');
+  check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: '', carreraNumero: '' }) === '*TOTALES GRUPO LUSHO* 💰🏇', '17) sin carrera ni hipódromo: se omiten sin dejar huecos');
+  check(armarTextoAcompanante({ grupoNombre: 'Lusho', hipodromoNombre: 'La Rinconada', carreraNumero: 3 }) === '*TOTALES 3RA CARRERA DE LA RINCONADA, GRUPO LUSHO* 💰🏇', '18) 3ra se escribe 3RA');
 
   // 19) Logo del hipódromo junto al título de la tarjeta (12-11-2026).
   { const fs = require('fs'), path = require('path');
