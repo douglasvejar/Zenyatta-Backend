@@ -174,12 +174,12 @@ const ultima = () => enviadas[enviadas.length - 1];
 
   // Control de pozo al PUBLICAR
   await motor.procesarMensaje(msg('j_miel', 'Juego 4x1 10@8 con 60'));
-  check(/solo tienes 0,96 disponible para jugar\. Por favor coloca la parada por ese monto o menos\./.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96: "solo tienes 0,96 disponible para jugar..." (y lo menciona)');
+  check(/^Saludos @@, dispone de un saldo de 0,96\. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas\.$/.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96 publica 60: "Saludos @Miel, dispone de un saldo de 0,96. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas." (y la menciona)');
   const nOfertas = motor._ofertas.size;
   check(![...motor._ofertas.values()].some(x => x.autorNombre === 'MIEL'), 'esa jugada NO queda publicada');
   DISP.NANA.disponible = 20;
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 30'));
-  check(/en esta parada tu disponible alcanza para 28,57 \(ahí arriesgas 20,00\)/.test(ultima().t), 'FlowSport recibiendo a7 con 20 de pozo: "alcanza para 28,57 (ahí arriesgas 20)"');
+  check(/^Saludos @@, dispone de un saldo de 20,00\./.test(ultima().t), 'FlowSport recibiendo a7 con 30 y solo 20 de saldo: se le avisa su saldo (20,00) y que juegue con él o menos');
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 28,57'));
   check([...motor._ofertas.values()].some(x => x.autorNombre === 'NANA' && x.monto === 28.57), 'con 28,57 sí queda publicada');
 
@@ -188,9 +188,26 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(of4);
   const antes = guardadas.length;
   await motor.procesarMensaje(msg('j_miel', '50', { citadoId: of4.id }));
-  check(guardadas.length === antes && /Miel|miel|@@/.test(ultima().t) && /0,96|alcanza/.test(ultima().t), 'Miel responde 50 pero solo tiene 0,96 de disponible (da a 8 arriesga 0,8): no se registra y se le avisa');
+  check(guardadas.length === antes + 1 && guardadas[antes].monto === 1.2 && guardadas[antes].banqueroNombre === 'MIEL', 'Miel responde 50 pero su saldo (0,96, da a 8 arriesga 0,8) solo alcanza para 1,20: se juega 1,20');
+  check(ultima().t === '✅ @@ Aquí solo 1,20 por saldo de @@2' && ultima().op.mencionar === 'j_kahelt' && ultima().op.mencionar2 === 'j_miel', 'avisa "@(el que publicó) Aquí solo 1,20 por saldo de @(Miel)" etiquetando a las dos personas');
   await motor.procesarMensaje(msg('j_kahelt', '30', { citadoId: of4.id }));
-  check(guardadas.length === antes, 'responderse a uno mismo no juega nada');
+  check(guardadas.length === antes + 1, 'responderse a uno mismo no juega nada');
+  // saldo en 0: no se juega nada y se le avisa su saldo
+  DISP.MIEL.disponible = 0;
+  await motor.procesarMensaje(msg('j_miel', 'J', { citadoId: of4.id }));
+  check(guardadas.length === antes + 1 && /^Saludos @@, dispone de un saldo de 0,00\./.test(ultima().t), 'con saldo 0 no se juega y se le dice "dispone de un saldo de 0,00..."');
+
+  // Ejemplo del usuario: a un cliente le quedan 300 y marca "J" en una parada de 1.000: se juegan solo 300 y se etiqueta a las dos personas
+  DISP.LUIS = { limitado: true, disponible: 300 };
+  const of1000 = msg('j_kahelt', 'Juego 4x1 con 1000 recibo a8');
+  await motor.procesarMensaje(of1000);
+  const gAntes = guardadas.length;
+  await motor.procesarMensaje(msg('j_luis', 'J', { citadoId: of1000.id }));
+  check(guardadas.length === gAntes + 1 && guardadas[gAntes].monto === 300 && guardadas[gAntes].jugadorNombre === 'LUIS', 'saldo 300 y "J" en una parada de 1.000: se juegan 300');
+  check(ultima().t === '✅ @@ Aquí solo 300,00 por saldo de @@2' && ultima().op.mencionar === 'j_kahelt' && ultima().op.mencionar2 === 'j_luis', '"@(el de la parada) Aquí solo 300,00 por saldo de @(Luis)"');
+  await motor.procesarMensaje(msg('j_luis', '500', { citadoId: of1000.id }));
+  check(guardadas.length === gAntes + 1 && /dispone de un saldo de 0,00/.test(ultima().t), 'Luis ya gastó los 300: si marca 500 no se juega y se le avisa su saldo (0,00)');
+  DISP.LUIS.disponible = 300;
 
   // Número desconocido
   await motor.procesarMensaje(msg('j_nadie', 'Juego 4x1 con 10 doy a8'));

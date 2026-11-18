@@ -354,17 +354,17 @@ function sesionDe(grupo, sock, remoteJid) {
 
 async function enviar(s, texto, op) {
   const contenido = { text: texto };
-  if (op.mencionar) {
-    const dig = telefonoDeParticipante(op.mencionar);
-    if (dig && !String(op.mencionar).endsWith('@lid')) {
-      contenido.text = texto.replace('@@', '@' + dig);
-      contenido.mentions = [op.mencionar];
-    } else {
-      contenido.text = texto.replace('@@', '@' + (op.nombre || ''));
-    }
-  } else {
-    contenido.text = texto.replace('@@', '');
-  }
+  // '@@' = a quien se menciona (op.mencionar); '@@2' = una segunda persona (op.mencionar2). Sin persona, la marca se quita.
+  const menciones = [];
+  const poner = (marca, jid, nombre) => {
+    if (!contenido.text.includes(marca)) return;
+    const dig = jid ? telefonoDeParticipante(jid) : null;
+    if (jid && dig && !String(jid).endsWith('@lid')) { contenido.text = contenido.text.replace(marca, '@' + dig); menciones.push(jid); }
+    else contenido.text = contenido.text.replace(marca, jid ? '@' + (nombre || '') : '');
+  };
+  poner('@@2', op.mencionar2, op.nombre2);
+  poner('@@', op.mencionar, op.nombre);
+  if (menciones.length) contenido.mentions = menciones;
   const citado = op.citarId ? s.mensajes.get(op.citarId) : null;
   try {
     const enviado = await s.sock.sendMessage(s.jid, contenido, citado ? { quoted: citado } : undefined);
