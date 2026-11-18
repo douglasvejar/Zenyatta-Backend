@@ -333,6 +333,18 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', 'jugue 100', { citadoId: ofC.id }));
   check(guardadas.length === gC + 1 && guardadas[gC].jugadorNombre === 'MARVEL' && guardadas[gC].banqueroNombre === 'CACHACO', 'publican "Consigo…" y responden "jugué 100": sí vale (juega el que responde)');
 
+  eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 200" = monto neutro');
+  const ofPon = msg('j_cachaco', 'juego 2p del 8 300');
+  await motor.procesarMensaje(ofPon);
+  const gPon = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', 'ponte 200', { citadoId: ofPon.id }));
+  check(guardadas.length === gPon + 1 && guardadas[gPon].jugadorNombre === 'CACHACO' && guardadas[gPon].banqueroNombre === 'MARVEL' && guardadas[gPon].monto === 200 && ultima().t === '✅ Aquí jugaron', '"juego 2p del 8 300" y responden "ponte 200": van jugando 200 (juega quien publicó)');
+  const ofPon2 = msg('j_cachaco', 'consigo 2p del 8 400');
+  await motor.procesarMensaje(ofPon2);
+  const gPon2 = guardadas.length;
+  await motor.procesarMensaje(msg('j_marvel', 'ponte 100', { citadoId: ofPon2.id }));
+  check(guardadas.length === gPon2 + 1 && guardadas[gPon2].jugadorNombre === 'MARVEL' && guardadas[gPon2].banqueroNombre === 'CACHACO' && guardadas[gPon2].monto === 100 && ultima().t === '✅ Aquí jugaron', '"consigo 2p del 8 400" y responden "ponte 100": van jugando (juega el que responde)');
+
   // Parada mal escrita
   const ofM = msg('j_cachaco', 'jhuego 2p del 8 300');
   await motor.procesarMensaje(ofM);

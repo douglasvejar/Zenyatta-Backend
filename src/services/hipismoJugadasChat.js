@@ -146,6 +146,13 @@ function interpretarRespuesta(texto) {
   if (/^(?:s\.? ?f\.?|se ?[fd][uyi]e(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
   const m = t.match(/^(?:j(?:ugo)?\s*)?(?:con\s+)?(\d+(?:[.,]\d+)?)$/);
   if (m) { const n = parseMontoChat(m[1]); if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) }; }
+  // "ponte 200" / "ponte": se pone del lado contrario de quien publicó (neutro, como un monto solo).
+  const mP = t.match(/^pon(?:te|ete|me)(?:\s+(?:con\s+)?(\d+(?:[.,]\d+)?))?$/);
+  if (mP) {
+    if (mP[1] === undefined) return { tipo: 'todo' };
+    const n = parseMontoChat(mP[1]);
+    if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) };
+  }
   // Con el rol dicho en claro: "jugué 200" (quiere JUGAR) / "doy 200", "consigo 200" (quiere DAR = banquear).
   // Sirve para detectar el error de término: los dos quieren jugar o los dos quieren dar.
   const mR = t.match(/^(jugue|jugamos|juego|jugar|doy|damos|consigo|consigue|banqueo)(?:\s+(?:con\s+)?(\d+(?:[.,]\d+)?))?$/);
@@ -193,7 +200,7 @@ function pareceParadaMalEscrita(texto) {
   return intentos.some(x => { const o = interpretarOferta('juego ' + x); return !!(o && o.ok); });
 }
 // Texto que alguien escribe para "tomar" una parada (J, un monto, ok, dale…).
-const INTENTO_JUGAR_RE = /^(?:j\w*|ok(?:ey)?|dale|listo|va|vamos|si|de una|acepto|tomo|tomado|lo tomo|doy\b.*|consigo\b.*|\d+(?:[.,]\d+)?)$/;
+const INTENTO_JUGAR_RE = /^(?:j\w*|pon(?:te|ete|me)\b.*|ok(?:ey)?|dale|listo|va|vamos|si|de una|acepto|tomo|tomado|lo tomo|doy\b.*|consigo\b.*|\d+(?:[.,]\d+)?)$/;
 const pareceIntentoDeJugar = texto => INTENTO_JUGAR_RE.test(limpiar(texto).toLowerCase());
 
 // ---------------------------------------------------------------
