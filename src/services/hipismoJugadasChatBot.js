@@ -273,16 +273,36 @@ async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
 
 // Cargar la pizarra desde el chat: usa el mismo manejador de "Cargar Planos" (plano vacío + pizarra) y devuelve el texto del resultado.
 // `ext` se puede reemplazar en las pruebas.
-const ext = { guardarPlano: (grupoId, body) => require('../routes/hipismo').guardarPlanoParaBot(grupoId, body) };
+const ext = {
+  guardarPlano: (grupoId, body) => require('../routes/hipismo').guardarPlanoParaBot(grupoId, body),
+  generarImagen: (grupoId, datos) => require('./hipismoPlanoImagenServidor').generarImagenPlano({ grupoId, datos })
+};
 async function cargarPizarraChat(grupoId, { hipodromo, carrera, fecha, pizarra, ret }) {
   let out;
   try { out = await ext.guardarPlano(grupoId, { texto: '', pizarra, hipodromoNombre: hipodromo, carreraNumero: carrera, fecha, ret: ret || '' }); }
   catch (e) { console.error('[hipismoChat] Error al cargar la pizarra:', e); return { ok: false, motivo: 'error interno al calcular (' + e.message + ')' }; }
-  if (out && out.status === 201 && out.body && out.body.textoResultado) return { ok: true, texto: out.body.textoResultado };
+  if (out && out.status === 201 && out.body && out.body.textoResultado) return { ok: true, texto: out.body.textoResultado, datosImagen: out.body.datosImagen || null };
   const err = out && out.body && out.body.error;
   if (out && out.status === 409) return { ok: false, motivo: 'esa carrera ya tiene un plano registrado. Para volver a calcularla, bórralo primero en Eliminar Planos del panel.' };
   if (err && /Falta el texto del plano/i.test(err)) return { ok: false, motivo: 'no encontré jugadas pendientes del bot para esa carrera (¿ya se calcularon o se borraron?).' };
   return { ok: false, motivo: err || 'no se pudo calcular la carrera.' };
+}
+
+// Cómo publica el bot el plano ya resuelto (al cargar la pizarra): 'texto' (el plano de siempre) o 'imagen' (la tarjeta con la llegada,
+// las jugadas y quiénes ganan/pierden, con el texto "TOTALES DE LA CARRERA ..." de pie de foto). Se elige por grupo en Súper-admin.
+async function formatoPlanoDe(grupoId) {
+  try {
+    const r = await db.query('SELECT hipismo_chat_plano_formato FROM grupos WHERE id = $1', [grupoId]);
+    return r.rows[0] && r.rows[0].hipismo_chat_plano_formato === 'imagen' ? 'imagen' : 'texto';
+  } catch (e) { return 'texto'; }
+}
+async function publicarResultadoPlano(s, grupoId, r) {
+  if ((await formatoPlanoDe(grupoId)) === 'imagen' && r.datosImagen) {
+    const png = await ext.generarImagen(grupoId, r.datosImagen);
+    if (png && await enviarImagen(s, png, r.datosImagen.textoAcompanante)) return;
+    if (s.anotarActual) s.anotarActual('No se pudo enviar la imagen del plano: se envió en texto');
+  }
+  await enviar(s, r.texto, {});
 }
 
 function fechaHoyVenezuela() {
@@ -319,7 +339,8 @@ function sesionDe(grupo, sock, remoteJid) {
       nota: t => { if (s.anotarActual) s.anotarActual(t); },
       cargarPizarra: x => cargarPizarraChat(grupo.id, x),
       responder: (texto, op) => enviar(s, texto, op || {}),
-      publicar: texto => enviar(s, texto, {})
+      publicar: texto => enviar(s, texto, {}),
+      publicarResultado: r => publicarResultadoPlano(s, grupo.id, r)
     });
     sesiones.set(grupo.id, s);
   }
@@ -351,6 +372,19 @@ async function enviar(s, texto, op) {
   }
 }
 
+// Manda una imagen (PNG) al grupo con su pie de foto. Devuelve true si salió.
+async function enviarImagen(s, png, pie) {
+  try {
+    const enviado = await s.sock.sendMessage(s.jid, { image: png, caption: pie || '' });
+    const id = enviado && enviado.key && enviado.key.id;
+    if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
+    return true;
+  } catch (e) {
+    console.error('[hipismoChat] No se pudo enviar la imagen en el grupo ' + s.jid + ':', e.message);
+    return false;
+  }
+}
+
 function extraerCitadoParticipante(msg) {
   const m = msg && msg.message;
   const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
@@ -362,7 +396,7 @@ function extraerCitadoTexto(msg) {
   const m = msg && msg.message;
   const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
   const q = ci && ci.quotedMessage;
-  return (q && (q.conversation || (q.extendedTextMessage && q.extendedTextMessage.text))) || null;
+  return (q && (q.conversation || (q.extendedTextMessage && q.extendedTextMessage.text) || (q.imageMessage && q.imageMessage.caption))) || null;
 }
 
 // Hora en que escribieron el mensaje (milisegundos). WhatsApp la manda en segundos (a veces como objeto Long).

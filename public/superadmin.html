@@ -1819,6 +1819,18 @@
               </div>
               <button type="button" class="btn-secundario" id="btnToggleHipismoChat" onclick="toggleHipismoChatGrupo()" style="margin-top:6px;"></button>
 
+              <div id="hipismoChatFormatoCaja" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border, #ddd);">
+                <h4 style="margin:0 0 4px; font-size:14px;">Plano resuelto (al cargar la pizarra desde el chat)</h4>
+                <p style="margin:0 0 8px; color:var(--text-dim); font-size:12px;">Cuando el administrador escribe la pizarra en el grupo (<i>pizarra 4 5 6 7</i>, o <i>pizarra 5ta de gulf 4,5,6,7</i>, o respondiendo el plano), el bot calcula la carrera y publica el plano resuelto. Elige cómo lo envía este grupo.</p>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <select id="hipismoChatFormatoSelect" onchange="cambiarFormatoPlanoChat(this.value)" style="padding:6px 10px; border-radius:6px;">
+                    <option value="texto">En texto (el plano de siempre)</option>
+                    <option value="imagen">En imagen (tarjeta con la llegada, jugadas y quiénes ganan/pierden)</option>
+                  </select>
+                  <span id="hipismoChatFormatoMsg" style="font-size:12px; color:var(--text-dim);"></span>
+                </div>
+              </div>
+
               <div id="wpPropioCaja" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border, #ddd);">
                 <h4 style="margin:0 0 4px; font-size:14px;">Número de WhatsApp de este grupo</h4>
                 <p style="margin:0 0 8px; color:var(--text-dim); font-size:12px;">Por defecto el grupo usa el número general. Con un número propio (un chip dedicado) este grupo no comparte conexión con los demás. Solo se usa para este servicio: la sábana y los comandos siguen por el número general.</p>
@@ -4122,6 +4134,8 @@ async function abrirDetalleGrupo(id, nombre) {
 
     GRUPO_HIPISMO_CHAT_HABILITADO = !!d.hipismoChatHabilitado;
     pintarEstadoHipismoChat();
+    const selFormato = document.getElementById('hipismoChatFormatoSelect');
+    if (selFormato) selFormato.value = d.hipismoChatPlanoFormato === 'imagen' ? 'imagen' : 'texto';
     wpPropioDetener();
     wpPropioCargar();
     GRUPO_WHATSAPP_HABILITADO = !!d.whatsappHabilitado;
@@ -4651,6 +4665,18 @@ async function toggleHipismoChatGrupo() {
     pintarEstadoHipismoChat();
   } catch (e) {
     alert('No se pudo actualizar el servicio Corredores y Administración Inteligente: ' + e.message);
+  }
+}
+
+// Formato del plano resuelto que publica el bot (18-11-2026): ver src/routes/superadmin.js (hipismo-chat-plano-formato).
+async function cambiarFormatoPlanoChat(formato) {
+  if (!GRUPO_DETALLE_ID) return;
+  const msg = document.getElementById('hipismoChatFormatoMsg');
+  try {
+    const r = await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/hipismo-chat-plano-formato', { method: 'PATCH', body: JSON.stringify({ formato }) });
+    if (msg) { msg.textContent = '✅ Guardado: ' + (r.hipismoChatPlanoFormato === 'imagen' ? 'en imagen' : 'en texto'); setTimeout(() => { msg.textContent = ''; }, 4000); }
+  } catch (e) {
+    if (msg) msg.textContent = '⚠️ ' + e.message;
   }
 }
 

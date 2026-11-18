@@ -216,16 +216,63 @@ function interpretarAbrirCarrera(texto) {
 }
 const ES_CIERRE_RE = /^(?:cierra|cierre|cerrar|cerrada|cerrado|cierra la carrera|cerrar carrera)$/i;
 const ES_PLANO_RE = /^(?:plano|planos)$/i;
-// "Pizarra 6.10.4.8.2", "pizarra 6-10-4-8-2", "Llegada: 6 10 4 8", opcional "... Ret 3, 7" al final; y "Ret 3" suelto.
-const PIZARRA_RE = /^(?:pizarra|llegada)\s*[:=-]?\s*(\d[\d\s.,\-\/]*?)(?:\s+(?:ret|retirados?)\s*[:=-]?\s*(\d[\d\s.,\-\/y]*))?\s*$/i;
+// La pizarra (llegada) la escribe el administrador. Acepta, con cualquier separador (espacio, coma, punto, guion o barra) y los puestos que haga falta:
+//   "Pizarra 6.10.4.8.2"            -> la carrera abierta (o la del plano que está respondiendo)
+//   "llegada 4,5,6,7", "pizarra 4/5/6/7", "pizarra 4-5-6-7 ret 3"
+//   "Pizarra 5ta de gulf 4,5,6,7"   -> esa carrera (también "pizarra gulf 5ta 4 5 6 7" o "pizarra 5ta 4 5 6 7")
+// y "Ret 3" suelto para anotar retirados. Devuelve { llegada:'6.10.4.8.2', ret:'3, 7', hipodromo?:'gulf', carrera?:5 }.
+const PIZARRA_INICIO_RE = /^(?:pizarra|llegada)\s*[:=-]?\s*(.+)$/i;
+const RET_COLA_RE = /\s+(?:ret|retirados?)\s*[:=-]?\s*(\d[\d\s.,\-\/y]*)$/i;
+const SOLO_NUMEROS_RE = /^\d[\d\s.,\-\/]*$/;
+const PIZARRA_CON_CARRERA_RE = /^(.*[a-záéíóúñ])\s*[:=-]?\s*(\d[\d\s.,\-\/]*)$/i;
 const RET_RE = /^(?:ret|retirados?|retirado)\s*[:=-]?\s*(\d[\d\s.,\-\/y]*)$/i;
 const numerosDe = t => String(t || '').split(/[^0-9]+/).filter(Boolean).map(n => String(parseInt(n, 10)));
+// "5ta de gulf" / "gulf 5ta" / "gulfstream park 5ta carrera" / "5ta" / "carrera 5" -> { hipodromo, carrera }
+function carreraDePrefijo(pref) {
+  const soloNumero = String(pref).match(/^(?:la\s+)?(?:carrera\s+)?(\S+?)(?:\s+carrera)?$/i);
+  if (soloNumero) {
+    const n = numeroDeOrdinal(soloNumero[1]);
+    if (n && n >= 1 && n <= 30) return { hipodromo: '', carrera: n };
+  }
+  const r = interpretarAbrirCarrera('abierta ' + pref);
+  return r ? { hipodromo: r.hipodromo, carrera: r.carrera } : null;
+}
 function interpretarPizarra(texto) {
-  const m = limpiar(texto).match(PIZARRA_RE);
-  if (!m) return null;
-  const llegada = numerosDe(m[1]);
+  const mi = limpiar(texto).match(PIZARRA_INICIO_RE);
+  if (!mi) return null;
+  let resto = mi[1].trim();
+  let ret = '';
+  const mr = resto.match(RET_COLA_RE);
+  if (mr) { ret = numerosDe(mr[1]).join(', '); resto = resto.slice(0, mr.index).trim(); }
+  let carrera = null;
+  let llegada;
+  if (SOLO_NUMEROS_RE.test(resto)) llegada = numerosDe(resto);
+  else {
+    const mc = resto.match(PIZARRA_CON_CARRERA_RE);
+    if (!mc) return null;
+    carrera = carreraDePrefijo(mc[1].trim().replace(/[:=\-]+$/, '').trim());
+    if (!carrera) return null;
+    llegada = numerosDe(mc[2]);
+  }
   if (llegada.length < 2) return null;
-  return { llegada: llegada.join('.'), ret: m[2] ? numerosDe(m[2]).join(', ') : '' };
+  const out = { llegada: llegada.join('.'), ret };
+  if (carrera) { out.carrera = carrera.carrera; if (carrera.hipodromo) out.hipodromo = carrera.hipodromo; }
+  return out;
+}
+// Del texto de un plano que publicó el bot ("Gulfstream Park, 5ta Carrera" + "Lunes, 5 de Octubre de 2026") saca qué carrera es:
+// así el administrador puede responder (citar) ese plano con "pizarra 4 5 6 7".
+function carreraDePlanoCitado(texto) {
+  if (!texto) return null;
+  const t = String(texto);
+  const mc = t.match(/^[ \t*_]*(.+?),\s*(\d{1,2})[a-zºª°]*\s+carrera\b/im);
+  if (!mc) return null;
+  const out = { hipodromo: mc[1].trim(), carrera: parseInt(mc[2], 10), fecha: null };
+  const md = t.match(/(\d{1,2})\s+de\s+([a-záéíóúñ]+)\s+de\s+(\d{4})/i);
+  if (md) {
+    const mes = MESES.findIndex(x => x.toLowerCase() === md[2].toLowerCase());
+    if (mes >= 0) out.fecha = md[3] + '-' + String(mes + 1).padStart(2, '0') + '-' + String(parseInt(md[1], 10)).padStart(2, '0');
+  }
+  return out;
 }
 function interpretarRetirados(texto) {
   const m = limpiar(texto).match(RET_RE);
@@ -299,18 +346,33 @@ function crearMotor(deps) {
     else await deps.responder('⚠️ ' + ((r && r.motivo) || 'No se pudo registrar ese número.'), { citarId: m.id });
   }
   // El administrador escribe la pizarra (llegada): el bot calcula las jugadas de la carrera, las guarda en los saldos y publica el resultado.
+  // ¿Qué carrera? 1) la que diga el mensaje ("pizarra 5ta de gulf 4,5,6,7"); 2) la del plano que está respondiendo (citando); 3) la carrera actual.
   async function cargarPizarra(m, datos) {
-    if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera para ponerle pizarra. Abre una primero (ej.: Gulfstream Park 5ta carrera).', { citarId: m.id }); return; }
     if (!deps.cargarPizarra) return;
-    if (!jugadas.length) { await deps.responder('⚠️ En *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera* no hay jugadas del bot para calcular.', { citarId: m.id }); return; }
-    if (ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); } // la pizarra cierra la carrera
-    const ret = datos.ret || ctx.ret || '';
-    nota('Pizarra ' + datos.llegada + (ret ? ' con retirados ' + ret : '') + ': calculando la carrera');
-    const r = await deps.cargarPizarra({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, fecha: ctx.fecha, pizarra: datos.llegada, ret });
-    if (!r || !r.ok) { await deps.responder('⚠️ No pude cargar la pizarra: ' + ((r && r.motivo) || 'error desconocido') , { citarId: m.id }); return; }
-    ctx.ret = '';
-    await deps.responder('🏁 Pizarra cargada: *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera* — llegada ' + datos.llegada + (ret ? ' (Ret: ' + ret + ')' : '') + '. Calculé las jugadas y ya quedaron en los saldos de los clientes:', { citarId: m.id });
-    await deps.publicar(r.texto);
+    const citada = carreraDePlanoCitado(m.citadoTexto);
+    const hipPedido = datos.hipodromo || (citada && citada.hipodromo) || ctx.hipodromo || '';
+    const carreraN = datos.carrera || (citada && citada.carrera) || ctx.carrera;
+    if (!hipPedido || !carreraN) {
+      await deps.responder('⚠️ No sé a qué carrera ponerle la pizarra. Responde (cita) el plano de esa carrera escribiendo: *pizarra 4 5 6 7*, o escribe la carrera completa: *pizarra 5ta de gulf 4,5,6,7*', { citarId: m.id });
+      return;
+    }
+    let hip = hipPedido;
+    if (hipPedido !== ctx.hipodromo && deps.resolverHipodromo) {
+      hip = await deps.resolverHipodromo(hipPedido);
+      if (!hip) { await deps.responder('⚠️ No encuentro el hipódromo "' + hipPedido + '" entre los de este grupo. Escríbelo como en tus listas (ej.: Gulfstream Park).', { citarId: m.id }); return; }
+    }
+    const fecha = (citada && citada.fecha) || ctx.fecha || deps.hoy();
+    const esActual = hip === ctx.hipodromo && carreraN === ctx.carrera && fecha === ctx.fecha;
+    const cuantas = esActual ? jugadas.length : ((await deps.cargarJugadas({ fecha, hipodromo: hip, carrera: carreraN })) || []).length;
+    if (!cuantas) { await deps.responder('⚠️ En *' + hip + ', ' + ORDINAL_CARRERA(carreraN) + ' Carrera* no hay jugadas del bot pendientes para calcular (¿ya se cargó su pizarra, o no hubo jugadas?).', { citarId: m.id }); return; }
+    if (esActual && ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); } // la pizarra cierra la carrera
+    const ret = datos.ret || (esActual ? ctx.ret : '') || '';
+    nota('Pizarra ' + datos.llegada + (ret ? ' con retirados ' + ret : '') + ': calculando ' + hip + ' ' + carreraN);
+    const r = await deps.cargarPizarra({ hipodromo: hip, carrera: carreraN, fecha, pizarra: datos.llegada, ret });
+    if (!r || !r.ok) { await deps.responder('⚠️ No pude cargar la pizarra: ' + ((r && r.motivo) || 'error desconocido'), { citarId: m.id }); return; }
+    if (esActual) ctx.ret = '';
+    await deps.responder('🏁 Pizarra cargada: *' + hip + ', ' + ORDINAL_CARRERA(carreraN) + ' Carrera* — llegada ' + datos.llegada + (ret ? ' (Ret: ' + ret + ')' : '') + '. Calculé las jugadas y ya quedaron en los saldos de los clientes:', { citarId: m.id });
+    if (deps.publicarResultado) await deps.publicarResultado(r); else await deps.publicar(r.texto);
   }
   async function anotarRetirados(m, ret) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta para anotar retirados.', { citarId: m.id }); return; }
@@ -540,6 +602,6 @@ function crearMotor(deps) {
 }
 
 module.exports = {
-  crearMotor, interpretarPizarra, interpretarRetirados, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
+  crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
   armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };

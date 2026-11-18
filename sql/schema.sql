@@ -2350,6 +2350,8 @@ alter table jugadores add column if not exists sin_pozo boolean not null default
 -- (con el riesgo de cada lado, para que el pozo disponible lo tenga en cuenta). Es idempotente.
 -- =================================================================
 alter table grupos add column if not exists hipismo_chat_habilitado boolean not null default false;
+-- 18-11-2026: cómo publica el bot el plano ya resuelto al cargar la pizarra desde el chat: 'texto' (el de siempre) o 'imagen' (tarjeta + pie de foto). Se elige en Súper-admin.
+alter table grupos add column if not exists hipismo_chat_plano_formato text not null default 'texto';
 create table if not exists hipismo_chat_jugadas (
   id                    uuid primary key default gen_random_uuid(),
   grupo_id              uuid not null references grupos(id) on delete cascade,

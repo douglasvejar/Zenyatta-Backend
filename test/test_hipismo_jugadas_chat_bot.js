@@ -25,6 +25,7 @@ function consulta(text, params) {
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid = \$1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true/i.test(sql)) {
     return { rows: (params[0] === JID && GRUPO.hipismo_chat_habilitado) ? [GRUPO] : [] };
   }
+  if (/^SELECT hipismo_chat_plano_formato FROM grupos WHERE id = \$1/i.test(sql)) return { rows: [{ hipismo_chat_plano_formato: T.formato || 'texto' }] };
   if (/^SELECT nombre, telefono FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: T.jugadores };
   if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND COALESCE\(es_cuenta_comision, false\) = false/i.test(sql)) return { rows: T.jugadores.map(j => ({ nombre: j.nombre })) };
   if (/^SELECT digitos, jugador_nombre FROM hipismo_chat_numeros WHERE grupo_id = \$1/i.test(sql)) return { rows: T.numeros.filter(x => x.grupo_id === params[0]) };
@@ -304,6 +305,28 @@ const textoDe = e => e.contenido.text;
   respuestaPlano = { status: 400, body: { error: 'Hipódromo no encontrado.' } };
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
   check(/No pude cargar la pizarra: Hipódromo no encontrado/.test(textoDe(ultimo())), 'cualquier otro error del sistema se muestra tal cual');
+
+  // ---------- Plano resuelto en IMAGEN o en TEXTO según el grupo (18-11-2026) ----------
+  T.formato = 'imagen';
+  const PNG = Buffer.from('PNG-FALSO');
+  const pedidosImagen = [];
+  const generarOriginal = glue._ext.generarImagen;
+  glue._ext.generarImagen = async (g, datos) => { pedidosImagen.push({ g, datos }); return PNG; };
+  respuestaPlano = { status: 201, body: { textoResultado: '*Sistema Dream*\nGANAN: Marvel', datosImagen: { grupo: 'Dream', textoAcompanante: 'TOTALES DE LA CARRERA 1ERA EN EL HIPÓDROMO MOUNTAINEER EN EL GRUPO DREAM' } } };
+  const antesImg = enviados.length;
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(pedidosImagen.length === 1 && pedidosImagen[0].g === G && pedidosImagen[0].datos.grupo === 'Dream', 'con el grupo en "imagen" el bot dibuja la tarjeta con los datos del plano');
+  check(enviados.length === antesImg + 2 && Buffer.isBuffer(ultimo().contenido.image) && ultimo().contenido.caption === 'TOTALES DE LA CARRERA 1ERA EN EL HIPÓDROMO MOUNTAINEER EN EL GRUPO DREAM' && !ultimo().contenido.text, 'envía la imagen con el pie "TOTALES DE LA CARRERA ..." y no el texto');
+  glue._ext.generarImagen = async () => null;
+  const antesImg2 = enviados.length;
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(enviados.length === antesImg2 + 2 && /GANAN: Marvel/.test(textoDe(ultimo())), 'si la imagen no se pudo dibujar, el bot manda el plano en texto (nunca se queda sin publicar)');
+  T.formato = 'texto';
+  const pedidosAntes = pedidosImagen.length;
+  glue._ext.generarImagen = async (g, datos) => { pedidosImagen.push({ g, datos }); return PNG; };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(pedidosImagen.length === pedidosAntes && /GANAN: Marvel/.test(textoDe(ultimo())), 'con el grupo en "texto" no se dibuja nada y sale el plano de siempre');
+  glue._ext.generarImagen = generarOriginal;
 
   Date.now = realNow;
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');

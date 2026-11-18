@@ -222,7 +222,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     // grupo/:grupoId (mismo endpoint que ya usaba cliente.html) — traer el
     // base64 completo en este SELECT inflaría la respuesta de "detalle"
     // sin necesidad, solo hace falta saber SI existe uno.
-    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo, hipismo_chat_habilitado
+    `SELECT id, nombre, email, activo, creado_en, ultimo_login_en, ultimo_login_ip, ultimo_login_user_agent, (logo_url IS NOT NULL OR logo_base64 IS NOT NULL) AS tiene_logo, tema_color_primario, tema_color_secundario, whatsapp_habilitado, whatsapp_grupo_jid, sabana_muestra, comandos_whatsapp_habilitado, comandos_whatsapp_numero, modulo_deportes_habilitado, modulo_hipismo_habilitado, modulo_hipismo_oficinas_habilitado, hipismo_cruzar_habilitado, telegram_habilitado, telegram_chat_id, telegram_codigo_vinculo, hipismo_chat_habilitado, hipismo_chat_plano_formato
      FROM grupos WHERE id = $1`,
     [id]
   );
@@ -275,6 +275,7 @@ router.get('/grupos/:id/detalle', asyncHandler(async (req, res) => {
     whatsappHabilitado: grupo.whatsapp_habilitado,
     whatsappGrupoJid: grupo.whatsapp_grupo_jid,
     hipismoChatHabilitado: !!grupo.hipismo_chat_habilitado,
+    hipismoChatPlanoFormato: grupo.hipismo_chat_plano_formato === 'imagen' ? 'imagen' : 'texto',
     telegramHabilitado: !!grupo.telegram_habilitado,
     telegramChatId: grupo.telegram_chat_id || null,
     telegramCodigoVinculo: grupo.telegram_codigo_vinculo || null,
@@ -635,6 +636,18 @@ router.patch('/grupos/:id/hipismo-chat-habilitado', asyncHandler(async (req, res
   );
   if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
   res.json({ hipismoChatHabilitado: r.rows[0].hipismo_chat_habilitado });
+}));
+
+// Formato del plano ya resuelto que publica el bot al cargar la pizarra desde el chat (18-11-2026): 'texto' o 'imagen'.
+router.patch('/grupos/:id/hipismo-chat-plano-formato', asyncHandler(async (req, res) => {
+  const formato = req.body && req.body.formato;
+  if (formato !== 'texto' && formato !== 'imagen') return res.status(400).json({ error: 'El formato debe ser "texto" o "imagen".' });
+  const r = await db.query(
+    'UPDATE grupos SET hipismo_chat_plano_formato = $1 WHERE id = $2 RETURNING id, hipismo_chat_plano_formato',
+    [formato, req.params.id]
+  );
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Grupo no encontrado.' });
+  res.json({ hipismoChatPlanoFormato: r.rows[0].hipismo_chat_plano_formato });
 }));
 
 // NÚMERO DE WHATSAPP PROPIO DE CADA GRUPO (17-11-2026): cada grupo puede vincular su propio número (su propio QR) para el servicio
