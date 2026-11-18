@@ -433,6 +433,7 @@ function crearMotor(deps) {
     if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('❌ Aquí nada, puso se fue', { citarId: m.id }); return; }
     if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) { nota(nombre + ' respondió pasados los 3 minutos de vigencia de la parada'); await deps.responder('❌ Aquí nada, pasaron más de 3 minutos desde que se publicó la parada', { citarId: m.id }); return; }
 
+    const restanteAntes = oferta.restante; // lo que le quedaba a la parada cuando respondieron
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
     let monto = round2(Math.min(pedido, oferta.restante));
 
@@ -472,9 +473,11 @@ function crearMotor(deps) {
     oferta.restante = round2(oferta.restante - monto);
     jugadas.push(jugada);
     sinPlano++;
-    const parcial = monto + 0.005 < pedido;
+    // Se aclara cuánto se jugó cuando es menos de lo pedido ("más de lo que quedaba") o cuando la parada ya había sido tomada en parte
+    // y respondieron "J"/"jugo" (juegan solo lo que quedaba): "✅ Aquí jugaron 100,00".
+    const parcial = monto + 0.005 < pedido || (resp.tipo === 'todo' && restanteAntes + 0.005 < oferta.monto);
     nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
-    await deps.responder('✅ Aquí jugaron' + (parcial ? ' ' + fmt(monto) + ' (era lo que quedaba)' : ''), { citarId: m.id });
+    await deps.responder('✅ Aquí jugaron' + (parcial ? ' ' + fmt(monto) : ''), { citarId: m.id });
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
 

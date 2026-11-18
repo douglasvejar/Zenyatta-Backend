@@ -128,7 +128,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   const rJ = msg('j_ricardo', 'J', { citadoId: of1.id });
   await motor.procesarMensaje(rJ);
   check(guardadas.length === 3 && guardadas[2].monto === 73 && guardadas[2].banqueroNombre === 'RICARDO', '"J" juega exactamente lo que quedaba (73)');
-  check(ultima().t === '✅ Aquí jugaron', '"J" por todo lo que quedaba: confirma sin aclaración extra');
+  check(ultima().t === '✅ Aquí jugaron 73,00', '"J" sobre una parada ya tomada en parte: aclara cuánto se jugó (73,00)');
   // ya topada
   await motor.procesarMensaje(msg('j_kahelt', '50', { citadoId: of1.id }));
   check(guardadas.length === 3 && ultima().t === '❌ Aquí nada, ya está topada', 'cuando ya no queda nada: "❌ Aquí nada, ya está topada"');
@@ -139,7 +139,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', '200', { citadoId: of2.id }));
   check(guardadas[3].monto === 200, 'oferta de 300, responden 200: juegan 200');
   await motor.procesarMensaje(msg('j_ricardo', '200', { citadoId: of2.id }));
-  check(guardadas[4].monto === 100 && /Aquí jugaron 100,00 \(era lo que quedaba\)/.test(ultima().t), 'piden 200 pero solo quedaban 100: juegan 100 y el bot lo aclara');
+  check(guardadas[4].monto === 100 && ultima().t === '✅ Aquí jugaron 100,00', 'piden 200 pero solo quedaban 100: juegan 100 y el bot responde "Aquí jugaron 100,00"');
 
   // Roles con "recibo": Luis recibe, Raul responde J => Raul JUEGA 5x4 a 8 con 200, y Luis da
   const of3 = msg('j_luis', 'Juego 4x5 recibo a 8 200');
@@ -199,6 +199,27 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_nadie', 'Juego 4x1 con 10 doy a8'));
   check(enviadas.length === antes2, 'sin repetir el aviso a cada mensaje');
 
+  // Parada de 400 que ya fue tomada en parte: "J", "jugo" o un monto mayor juegan solo lo que queda y el bot dice cuánto
+  const ofQ = msg('j_cachaco', 'Juego 4x1 con 400 doy a8');
+  await motor.procesarMensaje(ofQ);
+  await motor.procesarMensaje(msg('j_marvel', '300', { citadoId: ofQ.id }));
+  check(ultima().t === '✅ Aquí jugaron', 'juegan 300 de 400 (lo que pidieron): "Aquí jugaron" sin monto');
+  await motor.procesarMensaje(msg('j_luis', 'J', { citadoId: ofQ.id }));
+  check(guardadas[guardadas.length - 1].monto === 100 && ultima().t === '✅ Aquí jugaron 100,00', 'quedaban 100 y responden "J": se juegan 100 y el bot responde "Aquí jugaron 100,00"');
+  const ofQ2 = msg('j_cachaco', 'Juego 4x1 con 400 doy a8');
+  await motor.procesarMensaje(ofQ2);
+  await motor.procesarMensaje(msg('j_marvel', '300', { citadoId: ofQ2.id }));
+  await motor.procesarMensaje(msg('j_luis', 'jugo', { citadoId: ofQ2.id }));
+  check(ultima().t === '✅ Aquí jugaron 100,00', '"jugo" cuenta igual que "J"');
+  const ofQ3 = msg('j_cachaco', 'Juego 4x1 con 400 doy a8');
+  await motor.procesarMensaje(ofQ3);
+  await motor.procesarMensaje(msg('j_marvel', '300', { citadoId: ofQ3.id }));
+  await motor.procesarMensaje(msg('j_luis', '250', { citadoId: ofQ3.id }));
+  check(ultima().t === '✅ Aquí jugaron 100,00', 'quedaban 100 y piden 250: juegan 100 y el bot lo dice');
+  const ofQ4 = msg('j_cachaco', 'Juego 4x1 con 80 doy a8');
+  await motor.procesarMensaje(ofQ4);
+  await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofQ4.id }));
+  check(ultima().t === '✅ Aquí jugaron', '"J" sobre una parada intacta juega todo y responde "Aquí jugaron" sin monto');
   // @lid: pista para el administrador y comando "registrar"
   await motor.procesarMensaje(msg('99999@lid', 'Juego 4x1 con 10 doy a8'));
   check(/no está registrado como cliente/.test(ultima().t) && /registrar NOMBRE_DEL_CLIENTE/.test(ultima().t), 'un número oculto (@lid) sin cliente: el aviso trae la pista "registrar NOMBRE_DEL_CLIENTE"');
