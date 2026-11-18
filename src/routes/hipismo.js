@@ -749,6 +749,13 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
   const pendientes = await buscarTerciosAdelantadasPendientes(req, { hipodromoNombre, carreraNumero, fecha });
   if (!pendientes.length) return { resueltas: [], movimientos: [], jugadasChat: [] };
 
+  // 18-11-2026: vista de una jugada del chat de WhatsApp para el TERCIOS del plano (ver extenderPlanoConJugadasChat). Una jugada que no se
+  // decidió (ej.: 2N cuando el caballo no entró en ese puesto, o un caballo retirado) también sale, con 0,00 para los dos.
+  const vistaChatDe = (j, rJ, rB, sinDecidir) => (j.plano_texto_original !== TEXTO_PLANO_BOT ? null : {
+    jugador: j.jugador_nombre, banquero: j.banquero_nombre, modalidad: j.modalidad, monto: Number(j.monto), esCruce: !!j.es_cruce,
+    grupo: j.es_cruce ? null : j.grupo_caballos, gruposA: j.es_cruce ? j.cruce_grupo_a : null, gruposB: j.es_cruce ? j.cruce_grupo_b : null,
+    resultadoJugador: rJ, resultadoBanquero: rB, sinDecidir: !!sinDecidir
+  });
   const rank = parsearPizarraRank(pizarra);
   const retirados = await obtenerRetiradosCarrera(req, { hipodromoNombre, carreraNumero, fecha, ret });
   const resueltas = pendientes.map(j => {
@@ -758,7 +765,7 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
     if (apuestaConRetirado(j.es_cruce ? [j.cruce_grupo_a, j.cruce_grupo_b] : [j.grupo_caballos], retirados)) {
       return {
         id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'sin_decidir',
-        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, comisionPorcentaje: Number(j.comision_porcentaje), retirado: true, movimientos: []
+        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, comisionPorcentaje: Number(j.comision_porcentaje), retirado: true, vistaChat: vistaChatDe(j, 0, 0, true), movimientos: []
       };
     }
     const linea = {
@@ -771,7 +778,7 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
     if (!r.decidida) {
       return {
         id: j.id, jugador: j.jugador_nombre, banquero: j.banquero_nombre, estadoNuevo: 'sin_decidir',
-        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, comisionPorcentaje: Number(j.comision_porcentaje), movimientos: []
+        resultadoJugador: 0, resultadoBanquero: 0, comisionGrupo: 0, comisionPorcentaje: Number(j.comision_porcentaje), vistaChat: vistaChatDe(j, 0, 0, true), movimientos: []
       };
     }
     return {
@@ -780,11 +787,7 @@ async function calcularResolucionTerciosAdelantadas(req, { hipodromoNombre, carr
       comisionPorcentaje: Number(j.comision_porcentaje),
       // 18-11-2026: las jugadas que el bot leyó del chat de WhatsApp son jugadas EN VIVO: en el plano resuelto salen en TERCIOS
       // (no en PARADA ADELANTADAS). Solo cambia cómo se muestran: se guardan y suman a los saldos igual que siempre.
-      vistaChat: j.plano_texto_original === TEXTO_PLANO_BOT ? {
-        jugador: j.jugador_nombre, banquero: j.banquero_nombre, modalidad: j.modalidad, monto: Number(j.monto), esCruce: !!j.es_cruce,
-        grupo: j.es_cruce ? null : j.grupo_caballos, gruposA: j.es_cruce ? j.cruce_grupo_a : null, gruposB: j.es_cruce ? j.cruce_grupo_b : null,
-        resultadoJugador: round2(r.montoJugadorMostrado), resultadoBanquero: round2(r.montoBanqueroMostrado)
-      } : null,
+      vistaChat: vistaChatDe(j, round2(r.montoJugadorMostrado), round2(r.montoBanqueroMostrado), false),
       movimientos: [{ nombre: j.jugador_nombre, monto: r.montoJugadorMostrado, seccion: 'tercios' }, { nombre: j.banquero_nombre, monto: r.montoBanqueroMostrado, seccion: 'tercios' }]
     };
   });
@@ -814,8 +817,10 @@ function extenderPlanoConJugadasChat(base, jugadasChat) {
       salidaLineas.push(`Consigue ${formatNombre(v.banquero)} $ ${sg(v.resultadoBanquero)}`);
     }
     salidaLineas.push('');
-    totalesFinales[v.jugador] = round2((totalesFinales[v.jugador] || 0) + v.resultadoJugador);
-    totalesFinales[v.banquero] = round2((totalesFinales[v.banquero] || 0) + v.resultadoBanquero);
+    if (!v.sinDecidir) { // una jugada que no se decidió sale con 0,00 pero no mete a nadie en GANAN/PIERDEN
+      totalesFinales[v.jugador] = round2((totalesFinales[v.jugador] || 0) + v.resultadoJugador);
+      totalesFinales[v.banquero] = round2((totalesFinales[v.banquero] || 0) + v.resultadoBanquero);
+    }
     tickets.push({
       clienteNombre: v.jugador, banqueroNombre: v.banquero, modalidad: mod === 'pp' ? 'PP' : mod,
       caballo: v.esCruce ? listaCaballos(v.gruposA) + 'x' + listaCaballos(v.gruposB) : listaCaballos(v.grupo),

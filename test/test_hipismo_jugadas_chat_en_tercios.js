@@ -36,6 +36,16 @@ const normales = { salidaLineas: ['2p (8) con 100,00', 'Juega Luis $ +50,00', 'C
 const mezcla = router.extenderPlanoConJugadasChat(normales, [v1]);
 check(mezcla.tickets.length === 2 && mezcla.salidaLineas.length === 8 && mezcla.totalesFinales.LUIS === 50 && mezcla.totalesFinales.GOKU === 437, 'junto a jugadas normales: se agregan al final, sin mezclar nombres');
 
+// jugadas que no se decidieron (ej.: 2N): salen en el plano con 0,00 y no meten a nadie en GANAN/PIERDEN
+const nd = { jugador: 'TYKHE', banquero: 'GOKU', modalidad: '2N', monto: 290, esCruce: false, grupo: [8], gruposA: null, gruposB: null, resultadoJugador: 0, resultadoBanquero: 0, sinDecidir: true };
+const v4 = { jugador: 'GOKU', banquero: 'TYKHE', modalidad: '3N', monto: 500, esCruce: false, grupo: [8], gruposA: null, gruposB: null, resultadoJugador: 475, resultadoBanquero: -500 };
+const nd2 = { ...nd, monto: 110 };
+const sd = router.extenderPlanoConJugadasChat(vacio, [nd, v4, nd2]);
+check(sd.salidaLineas.slice(0, 3).join('|') === '2N (8) con 290,00|Juega Tykhe $ +0,00|Consigue Goku $ +0,00', 'una jugada sin decidir sale con 0,00 para los dos');
+check(sd.tickets.length === 3 && Object.keys(sd.totalesFinales).sort().join() === 'GOKU,TYKHE' && sd.totalesFinales.GOKU === 475 && sd.totalesFinales.TYKHE === -500, 'las 3 cuentan en el plano y los totales solo suman la decidida');
+const soloNd = router.extenderPlanoConJugadasChat(vacio, [nd]);
+check(Object.keys(soloNd.totalesFinales).length === 0 && soloNd.tickets.length === 1, 'si solo hubo jugadas sin decidir, nadie aparece en GANAN/PIERDEN');
+
 // datos de la imagen
 const img = armarDatosImagenPlano({ grupoNombre: 'prueba sabanas', hipodromoNombre: 'Gulfstream Park', carreraNumero: 13, fecha: '2026-11-17', ret: '', pizarra: '1.2.5.3', tickets: base.tickets, totalesFinales: base.totalesFinales, movimientosAdelantadas: [] });
 check(img.jugadas.length === 1 && img.jugadas[0].cliente === 'Goku' && img.jugadas[0].monto === 460 && img.jugadas[0].resultado === 437 && img.adelantadas === null, 'en la imagen: la jugada va en la tabla principal, no en adelantadas');
