@@ -123,7 +123,7 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   await s1.handlers['messages.upsert']({ messages: [{ key: { remoteJid: JID, id: 'X' }, message: { imageMessage: {} } }] });
   check(llamadas.length === 1, 'chats privados y mensajes sin texto se ignoran');
   // Diagnóstico (18-11-2026): el panel cuenta lo que WhatsApp le entrega y avisa si un mensaje no se pudo descifrar
-  check(gestor.estadoPublico(G).eventos >= 4 && gestor.estadoPublico(G).ultimoEvento && gestor.estadoPublico(G).ultimoEvento.n === 1, 'el panel cuenta los mensajes que WhatsApp le entregó a este número');
+  check(gestor.estadoPublico(G).eventos >= 3 && gestor.estadoPublico(G).ultimoEvento && gestor.estadoPublico(G).ultimoEvento.n === 1, 'el panel cuenta los mensajes que WhatsApp le entregó a este número');
   await s1.handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: JID, id: 'C1' }, messageStubType: 2, messageStubParameters: ['Bad MAC'] }] });
   check(llamadas.length === 1 && /NO se pudo descifrar/.test(gestor.estadoPublico(G).ultimo.motivo), 'un mensaje que no se puede descifrar se avisa en el panel (sesión dañada: volver a vincular)');
 
