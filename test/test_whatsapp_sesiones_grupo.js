@@ -49,10 +49,10 @@ const check = (c, m) => { if (c) { pasaron++; console.log('OK:', m); } else { fa
 
 // ---------- Baileys falso ----------
 const socks = [];
-function makeWASocket() {
+function makeWASocket(args) {
   const handlers = {};
   const sock = {
-    handlers, terminado: false, cerroSesion: false, enviados: [],
+    handlers, argsCreacion: args, terminado: false, cerroSesion: false, enviados: [],
     user: { id: '584121234567:12@s.whatsapp.net' },
     ev: { on: (n, f) => { handlers[n] = f; } },
     end() { sock.terminado = true; },
@@ -247,6 +247,15 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   const nSocks3b = socks.length; reloj(60);
   await gestor._latido(); await new Promise(r => setTimeout(r, 20));
   check(socks.length === nSocks3b, 'con mensajes entregándose no se reinicia nada, aunque pase el tiempo');
+
+  // 3b) Buffer de eventos de Baileys retenido (causa del "Conectado con 0 mensajes"): se libera a la fuerza a los 30 s
+  let bufferActivo = true, flushes = 0;
+  sT5.ev.isBuffering = () => bufferActivo; sT5.ev.flush = () => { flushes++; bufferActivo = false; };
+  await gestor._latido();
+  check(flushes === 0, 'buffer retenido hace menos de 30 s: todavía no se toca');
+  RELOJ.t += 31000; await gestor._latido();
+  check(flushes === 1 && gestor.estadoPublico('t1').flushForzados === 1, 'buffer retenido más de 30 s: se libera a la fuerza y queda anotado');
+  check(socks[socks.length - 1].argsCreacion && socks[socks.length - 1].argsCreacion.syncFullHistory === false && socks[socks.length - 1].argsCreacion.shouldSyncHistoryMessage() === false, 'el socket se crea sin sincronizar historial (evita que el buffer se cuelgue)');
 
   // 4) Código 440 (el número se abrió en otro lugar): espera más para no entrar en pelea
   sT5.handlers['connection.update']({ connection: 'close', lastDisconnect: { error: { statusCode: 440 } } });

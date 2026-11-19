@@ -38,6 +38,7 @@ const SIN_MENSAJES_MS = 3 * 60 * 1000; // "Conectado" pero 0 mensajes durante es
 const REFRESCO_BASE_MS = 10 * 60 * 1000;
 const REFRESCO_MAX_MS = 2 * 60 * 60 * 1000;
 const CADA_N_LATIDOS_RECONCILIAR = 6;
+const BUFFER_MAX_MS = 30 * 1000;
 
 const sesiones = new Map(); // grupoId -> { sock, gen, conectado, ultimoQr, ultimoError, gruposDisponibles, numero, reintento, cerrando }
 const ESPERA_REINTENTO_MS = 5000;
@@ -117,7 +118,7 @@ function estadoPublico(grupoId) {
     ultimo: s.ultimo || null,
     // Diagnóstico (18-11-2026): ¿WhatsApp le entrega eventos a este número? ¿se reconecta seguido?
     eventos: s.eventos || 0, ultimoEvento: s.ultimoEvento || null, conectadoEn: s.conectadoEn || null, reconexiones: s.reconexiones || 0, ultimoCodigo: s.ultimoCodigo || null,
-    esperandoTurno: !s.turno, refrescos: s.refrescos || 0, ultimoRefresco: s.ultimoRefresco || null,
+    esperandoTurno: !s.turno, refrescos: s.refrescos || 0, ultimoRefresco: s.ultimoRefresco || null, flushForzados: s.flushForzados || 0,
     grupos: s.gruposDisponibles || []
   };
 }
@@ -223,6 +224,18 @@ async function latido() {
         continue;
       }
       const ahora = deps.ahora();
+      // Red de seguridad: si el buffer de eventos de Baileys lleva más de 30 s retenido, se libera a la fuerza (así los mensajes llegan).
+      try {
+        const ev = s.sock && s.sock.ev;
+        if (s.conectado && ev && typeof ev.isBuffering === 'function' && ev.isBuffering()) {
+          s.bufferDesde = s.bufferDesde || ahora;
+          if (ahora - s.bufferDesde > BUFFER_MAX_MS) {
+            s.flushForzados = (s.flushForzados || 0) + 1; s.bufferDesde = null;
+            console.error('[whatsappSesionesGrupo] Grupo ' + id + ': Baileys tenía los mensajes retenidos (buffer) más de 30 s — se liberan a la fuerza (vez ' + s.flushForzados + ').');
+            ev.flush();
+          }
+        } else s.bufferDesde = null;
+      } catch (e) { /* nada */ }
       const edad = s.conectado && s.conectadoEn ? ahora - Date.parse(s.conectadoEn) : 0;
       if (s.conectado && (s.eventos || 0) === 0 && edad >= SIN_MENSAJES_MS && ahora >= (s.proximoRefresco || 0)) {
         s.refrescos = (s.refrescos || 0) + 1;
@@ -314,7 +327,10 @@ async function iniciarSesionInterna(grupoId) {
   let version;
   try { version = (await fetchLatestBaileysVersion()).version; } catch (e) { /* se sigue con la versión que trae la librería */ }
 
-  const sock = makeWASocket({ auth: state, version });
+  // Sin sincronizar historial (19-11-2026): Baileys, al reconectar una sesión ya guardada, RETIENE todos los mensajes en un buffer
+  // hasta terminar de sincronizar; si esa sincronización se queda colgada, el buffer no se libera nunca y WhatsApp aparece
+  // "Conectado" pero messages.upsert jamás se dispara (justo el síntoma de "0 mensajes"). El bot no necesita el historial.
+  const sock = makeWASocket({ auth: state, version, syncFullHistory: false, shouldSyncHistoryMessage: () => false });
   s.sock = sock;
   sock.ev.on('creds.update', saveCreds);
 
