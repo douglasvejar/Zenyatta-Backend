@@ -167,6 +167,8 @@ async function autorizarAdminManual(grupoId, { jid }, obtenerSock) {
 // Lo que le queda para jugar. Los clientes sin pozo (libres) no tienen tope. A lo que ya calcula el sistema ("en juego" de las
 // adelantadas descuenta solo el monto del que juega) se le corrige lo que ESTE bot ya confirmó y sigue pendiente:
 // el jugador arriesga su monto (ya descontado) y el que da arriesga su parte (monto x N/10 en 10aN), que antes no se descontaba.
+const MINUTOS_ESPERA_PIZARRA = 10;
+const VIGENCIA_ESPERA_SQL = "((c.cerrada_en IS NULL AND c.creado_en > now() - interval '3 hours') OR c.cerrada_en > now() - interval '" + MINUTOS_ESPERA_PIZARRA + " minutes')";
 async function disponibleDe(grupoId, nombre) {
   const filas = await clientesConPozoDisponible(grupoId, [nombre], { incluirSinPozo: true });
   if (!filas.length) return { limitado: false, disponible: 0 };
@@ -174,21 +176,31 @@ async function disponibleDe(grupoId, nombre) {
   if (c.sinPozo) return { limitado: true, disponible: 0, detalle: 'Cuenta de ' + nombre + ': cliente Libre marcado "sin pozo" (todavía no tiene pozo asignado)' };
   let disp = Number(c.disponible) || 0;
   const dispSistema = disp;
+  // Jugadas del bot que esperan la pizarra (plano en espera: NO son adelantadas, todavía no están en ningún saldo). Descuentan el riesgo de cada
+  // lado mientras la carrera está abierta o hasta 10 min después de cerrada; sin pizarra pasado ese tiempo se liberan.
+  // (Las de versiones anteriores, ligadas a una adelantada pendiente, se siguen corrigiendo como antes.)
   const r = await db.query(
-    `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.riesgo_jugador, c.riesgo_banquero
+    `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.riesgo_jugador, c.riesgo_banquero, c.adelantada_jugada_id
        FROM hipismo_chat_jugadas c
-       JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id
-      WHERE c.grupo_id = $1 AND a.estado = 'pendiente' AND (c.jugador_nombre = $2 OR c.banquero_nombre = $2)`,
+       LEFT JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id
+      WHERE c.grupo_id = $1 AND (c.jugador_nombre = $2 OR c.banquero_nombre = $2)
+        AND ((c.adelantada_jugada_id IS NOT NULL AND a.estado = 'pendiente')
+          OR (c.adelantada_jugada_id IS NULL AND c.resuelta = false AND ${VIGENCIA_ESPERA_SQL}))`,
     [grupoId, nombre]
   );
   r.rows.forEach(f => {
-    if (f.jugador_nombre === nombre) disp += (Number(f.monto) || 0) - (Number(f.riesgo_jugador) || 0);
-    if (f.banquero_nombre === nombre) disp -= Number(f.riesgo_banquero) || 0;
+    if (f.adelantada_jugada_id) { // versión anterior: el "en juego" de la adelantada ya descontó el monto completo del que juega
+      if (f.jugador_nombre === nombre) disp += (Number(f.monto) || 0) - (Number(f.riesgo_jugador) || 0);
+      if (f.banquero_nombre === nombre) disp -= Number(f.riesgo_banquero) || 0;
+    } else {
+      if (f.jugador_nombre === nombre) disp -= Number(f.riesgo_jugador) || 0;
+      if (f.banquero_nombre === nombre) disp -= Number(f.riesgo_banquero) || 0;
+    }
   });
   const f2 = x => (Math.round(x * 100) / 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return {
     limitado: true, disponible: Math.round(disp * 100) / 100,
-    detalle: 'Cuenta de ' + nombre + ': pozo asignado ' + f2(Number(c.base) || 0) + ' · disponible del sistema (pozo + resultados − en juego) ' + f2(dispSistema) + ' · ajuste por paradas del bot pendientes ' + f2(disp - dispSistema) + ' · queda ' + f2(disp)
+    detalle: 'Cuenta de ' + nombre + ': pozo asignado ' + f2(Number(c.base) || 0) + ' · disponible del sistema (pozo + resultados − en juego) ' + f2(dispSistema) + ' · ajuste por paradas del bot en espera de pizarra ' + f2(disp - dispSistema) + ' · queda ' + f2(disp)
   };
 }
 
@@ -203,40 +215,14 @@ async function resolverHipodromo(grupoId, texto) {
   return parecidos.length === 1 ? parecidos[0].nombre : null;
 }
 
+// El bot NO guarda nada como "adelantada": la jugada espera aquí (plano en espera de la pizarra, máx. unos minutos). Al cargar la pizarra el
+// bot hace lo mismo que el empleado: pega el plano en Cargar Planos, calcula y confirma (ver cargarPizarraChat).
 async function guardarJugada(grupoId, j) {
-  await db.transaccion(async client => {
-    let rp = await client.query(
-      `SELECT id, comision_porcentaje FROM hipismo_tercios_adelantadas_planos
-        WHERE grupo_id = $1 AND hipodromo_nombre = $2 AND fecha = $3 AND texto_original = $4 ORDER BY creado_en LIMIT 1`,
-      [grupoId, j.hipodromo, j.fecha, TEXTO_PLANO_BOT]
-    );
-    if (!rp.rows.length) {
-      const rh = await client.query('SELECT id FROM hipismo_hipodromos WHERE grupo_id = $1 AND nombre = $2', [grupoId, j.hipodromo]);
-      rp = await client.query(
-        `INSERT INTO hipismo_tercios_adelantadas_planos (grupo_id, hipodromo_id, hipodromo_nombre, fecha, comision_porcentaje, texto_original)
-         VALUES ($1,$2,$3,$4,5,$5) RETURNING id, comision_porcentaje`,
-        [grupoId, rh.rows[0] ? rh.rows[0].id : null, j.hipodromo, j.fecha, TEXTO_PLANO_BOT]
-      );
-    }
-    const plano = rp.rows[0];
-    const a = j.apuesta;
-    const rj = await client.query(
-      `INSERT INTO hipismo_tercios_adelantadas_jugadas
-         (plano_id, grupo_id, jugador_nombre, banquero_nombre, carrera_numero, es_cruce, grupo_caballos, cruce_grupo_a, cruce_grupo_b, modalidad, monto, comision_porcentaje, texto_original, falta_monto, falta_jugador, falta_banquero)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false,false,false) RETURNING id`,
-      [plano.id, grupoId, j.jugadorNombre, j.banqueroNombre, j.carrera, !!a.cruce, a.cruce ? null : JSON.stringify(a.grupo || null),
-        a.cruce ? JSON.stringify(a.cruce.gruposA) : null, a.cruce ? JSON.stringify(a.cruce.gruposB) : null, a.modalidad || null, j.monto, plano.comision_porcentaje, j.textoLinea]
-    );
-    await client.query(
-      `INSERT INTO hipismo_chat_jugadas (grupo_id, fecha, hipodromo_nombre, carrera_numero, jugador_nombre, banquero_nombre, monto, riesgo_jugador, riesgo_banquero, texto_linea, adelantada_jugada_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [grupoId, j.fecha, j.hipodromo, j.carrera, j.jugadorNombre, j.banqueroNombre, j.monto, j.riesgoJugador, j.riesgoBanquero, j.textoLinea, rj.rows[0].id]
-    );
-  });
-  // Igual que al cargarla a mano: si al jugador le quedó poco pozo, queda la alerta en Administración > Alertas. Nunca impide guardar.
-  try {
-    await ext.alertarPozoBajo(grupoId, { nombres: [j.jugadorNombre], hipodromoNombre: j.hipodromo, fecha: j.fecha, etiqueta: 'tercios adelantadas de ' + j.hipodromo, excluir: [] });
-  } catch (e) { console.warn('[hipismoChat] No se pudo revisar el pozo bajo (la jugada ya quedó guardada):', e.message); }
+  await db.query(
+    `INSERT INTO hipismo_chat_jugadas (grupo_id, fecha, hipodromo_nombre, carrera_numero, jugador_nombre, banquero_nombre, monto, riesgo_jugador, riesgo_banquero, texto_linea, apuesta)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [grupoId, j.fecha, j.hipodromo, j.carrera, j.jugadorNombre, j.banqueroNombre, j.monto, j.riesgoJugador, j.riesgoBanquero, j.textoLinea, JSON.stringify(j.apuesta || null)]
+  );
 }
 
 // Carrera abierta/cerrada de cada grupo, para que un reinicio del servidor no la pierda.
@@ -259,25 +245,41 @@ async function guardarEstadoCarrera(grupoId, e) {
   } catch (err) {
     if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message);
   }
+  // Al cerrar la carrera sus jugadas en espera empiezan a contar los minutos para soltar el saldo; si se reabre, vuelven a contar como abiertas.
+  try {
+    if (e.hipodromo && e.carrera && e.fecha) {
+      await db.query(
+        `UPDATE hipismo_chat_jugadas SET cerrada_en = ${e.abierta ? 'NULL' : 'now()'}
+          WHERE grupo_id = $1 AND fecha = $2 AND hipodromo_nombre = $3 AND carrera_numero = $4 AND resuelta = false AND adelantada_jugada_id IS NULL${e.abierta ? '' : ' AND cerrada_en IS NULL'}`,
+        [grupoId, e.fecha, e.hipodromo, e.carrera]
+      );
+    }
+  } catch (err) {
+    if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo marcar la hora de cierre de las jugadas:', err.message);
+  }
 }
 
 // Las jugadas de la carrera, tal cual están hoy en el sistema (si alguien borró o editó una desde "Revisar Jugadas", el plano lo refleja).
 async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
   const r = await db.query(
-    `SELECT a.jugador_nombre, a.banquero_nombre, a.monto, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad
+    `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad
        FROM hipismo_chat_jugadas c
-       JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id
+       LEFT JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id
       WHERE c.grupo_id = $1 AND c.fecha = $2 AND c.hipodromo_nombre = $3 AND c.carrera_numero = $4
+        AND (c.adelantada_jugada_id IS NOT NULL OR c.resuelta = false)
       ORDER BY c.creado_en`,
     [grupoId, fecha, hipodromo, carrera]
   );
   const lista = v => (Array.isArray(v) ? v : (typeof v === 'string' ? JSON.parse(v) : []));
-  return r.rows.map(f => ({
-    jugadorNombre: f.jugador_nombre, banqueroNombre: f.banquero_nombre, monto: Number(f.monto),
-    apuesta: f.es_cruce
-      ? { cruce: { gruposA: lista(f.cruce_grupo_a), gruposB: lista(f.cruce_grupo_b) }, grupo: null, modalidad: f.modalidad }
-      : { cruce: null, grupo: lista(f.grupo_caballos), modalidad: f.modalidad }
-  }));
+  return r.rows.map(f => {
+    const ap = typeof f.apuesta === 'string' ? JSON.parse(f.apuesta) : f.apuesta;
+    return {
+      jugadorNombre: f.jugador_nombre, banqueroNombre: f.banquero_nombre, monto: Number(f.monto),
+      apuesta: ap || (f.es_cruce
+        ? { cruce: { gruposA: lista(f.cruce_grupo_a), gruposB: lista(f.cruce_grupo_b) }, grupo: null, modalidad: f.modalidad }
+        : { cruce: null, grupo: lista(f.grupo_caballos), modalidad: f.modalidad })
+    };
+  });
 }
 
 // Cargar la pizarra desde el chat: usa el mismo manejador de "Cargar Planos" (plano vacío + pizarra) y devuelve el texto del resultado.
@@ -287,10 +289,40 @@ const ext = {
   alertarPozoBajo: (grupoId, datos) => require('../routes/hipismo').alertarPozoBajoParaBot(grupoId, datos),
   generarImagen: (grupoId, datos) => require('./hipismoPlanoImagenServidor').generarImagenPlano({ grupoId, datos })
 };
+// Lo que hace el empleado a mano: arma el plano con las jugadas que esperaban (el mismo formato de líneas que se pega en Cargar Planos),
+// le pone la pizarra y lo calcula y confirma con el MISMO manejador de "Cargar Planos". Todo lo demás (saldos, tickets, alertas, plano) sale igual.
+function lineaParaCargarPlanos(f) {
+  const a = typeof f.apuesta === 'string' ? JSON.parse(f.apuesta) : (f.apuesta || {});
+  const modalidad = a.modalidad || (a.cruce ? 'pp' : '1P'); // sin modalidad: un cruce es "pp (AxB)"; un caballo solo es a ganador (1P)
+  const jugada = motorChat.apuestaSegura({ cruce: a.cruce || null, grupo: a.grupo || null, modalidad });
+  const monto = motorChat.montoParaLinea(Number(f.monto));
+  const j = String(f.jugador_nombre).trim(), b = String(f.banquero_nombre).trim();
+  // El parser de la línea espera nombres de una sola palabra. Con espacios se usa el modelo de 3 líneas de "Copiar plano sin resolver"
+  // (el mismo que el empleado pega en Cargar Planos), que sí los lee.
+  if (/\s/.test(j) || /\s/.test(b)) return jugada + ' con ' + monto + '\nJuega ' + j + '\nConsigue ' + b;
+  return 'Juega ' + j + ' ' + jugada + ' con ' + monto + ' da ' + b;
+}
+async function jugadasEnEspera(grupoId, { fecha, hipodromo, carrera }) {
+  const r = await db.query(
+    `SELECT c.id, c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta FROM hipismo_chat_jugadas c
+      WHERE c.grupo_id = $1 AND c.fecha = $2 AND c.hipodromo_nombre = $3 AND c.carrera_numero = $4 AND c.adelantada_jugada_id IS NULL AND c.resuelta = false
+      ORDER BY c.creado_en`,
+    [grupoId, fecha, hipodromo, carrera]
+  );
+  return r.rows;
+}
 async function cargarPizarraChat(grupoId, { hipodromo, carrera, fecha, pizarra, ret }) {
-  let out;
-  try { out = await ext.guardarPlano(grupoId, { texto: '', pizarra, hipodromoNombre: hipodromo, carreraNumero: carrera, fecha, ret: ret || '' }); }
+  let out, espera = [];
+  try {
+    espera = await jugadasEnEspera(grupoId, { fecha, hipodromo, carrera });
+    const texto = espera.map(lineaParaCargarPlanos).join('\n');
+    out = await ext.guardarPlano(grupoId, { texto, pizarra, hipodromoNombre: hipodromo, carreraNumero: carrera, fecha, ret: ret || '' });
+  }
   catch (e) { console.error('[hipismoChat] Error al cargar la pizarra:', e); return { ok: false, motivo: 'error interno al calcular (' + e.message + ')' }; }
+  if (out && out.status === 201 && espera.length) {
+    try { await db.query('UPDATE hipismo_chat_jugadas SET resuelta = true WHERE id = ANY($1)', [espera.map(f => f.id)]); }
+    catch (e) { console.error('[hipismoChat] No se pudieron marcar las jugadas como calculadas:', e.message); }
+  }
   // POST /planos (guardar) responde 201 con { plano, datosImagen, ... }: el texto del resultado va en plano.texto_resultado
   // (textoResultado solo viene en "calcular"). Se aceptan las dos formas.
   const textoOk = out && out.body && (out.body.textoResultado || (out.body.plano && out.body.plano.texto_resultado));
@@ -323,6 +355,21 @@ function fechaHoyVenezuela() {
   return require('./fechaVenezuela').fechaVenezuelaHoy();
 }
 
+// Si a los 10 min de cerrada la carrera todavía no llegó la pizarra, se avisa en el grupo: sus jugadas dejan de descontar saldo.
+function programarAvisoPizarra(s, grupoId, e) {
+  if (!e || !e.hipodromo || !e.carrera || !e.fecha) return;
+  if (s.avisoPizarra) clearTimeout(s.avisoPizarra);
+  s.avisoPizarra = setTimeout(async () => {
+    s.avisoPizarra = null;
+    try {
+      const pend = await jugadasEnEspera(grupoId, { fecha: e.fecha, hipodromo: e.hipodromo, carrera: e.carrera });
+      if (!pend.length) return;
+      await enviar(s, '⚠️ El plano de *' + e.hipodromo + ', ' + e.carrera + 'ª carrera* lleva más de ' + MINUTOS_ESPERA_PIZARRA + ' minutos esperando la pizarra. Sus jugadas ya no descuentan el saldo de los clientes. Un administrador debe cargarla (por ejemplo: *pizarra 3 1 2 4*).', {});
+    } catch (err) { console.error('[hipismoChat] No se pudo revisar el plano en espera:', err.message); }
+  }, (MINUTOS_ESPERA_PIZARRA * 60 + 5) * 1000);
+  if (s.avisoPizarra.unref) s.avisoPizarra.unref();
+}
+
 function sesionDe(grupo, sock, remoteJid) {
   let s = sesiones.get(grupo.id);
   if (!s) {
@@ -349,7 +396,11 @@ function sesionDe(grupo, sock, remoteJid) {
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
       registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
       autorizarAdmin: x => autorizarAdminManual(grupo.id, x, () => s.sock),
-      guardarEstado: e => guardarEstadoCarrera(grupo.id, e),
+      guardarEstado: async e => {
+        await guardarEstadoCarrera(grupo.id, e);
+        if (e.abierta) { if (s.avisoPizarra) { clearTimeout(s.avisoPizarra); s.avisoPizarra = null; } return; }
+        programarAvisoPizarra(s, grupo.id, e);
+      },
       nota: t => { if (s.anotarActual) s.anotarActual(t); },
       cargarPizarra: x => cargarPizarraChat(grupo.id, x),
       responder: (texto, op) => enviar(s, texto, op || {}),
@@ -485,4 +536,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { cargarPizarraChat, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

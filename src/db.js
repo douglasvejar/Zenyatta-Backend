@@ -90,6 +90,10 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado 
     adelantada_jugada_id uuid references hipismo_tercios_adelantadas_jugadas(id) on delete set null,
     creado_en timestamptz not null default now())`))
   .then(() => pool.query('create index if not exists idx_hipismo_chat_jugadas_carrera on hipismo_chat_jugadas(grupo_id, fecha, hipodromo_nombre, carrera_numero)'))
+  // 19-11-2026: las jugadas del bot esperan en esta tabla hasta que se carga la pizarra (ahí se hace lo mismo que el empleado: Cargar Planos -> Calcular -> Confirmar).
+  .then(() => pool.query('ALTER TABLE hipismo_chat_jugadas ADD COLUMN IF NOT EXISTS apuesta jsonb'))
+  .then(() => pool.query('ALTER TABLE hipismo_chat_jugadas ADD COLUMN IF NOT EXISTS cerrada_en timestamptz'))
+  .then(() => pool.query('ALTER TABLE hipismo_chat_jugadas ADD COLUMN IF NOT EXISTS resuelta boolean NOT NULL DEFAULT false'))
   .catch((err) => console.warn('[db] No se pudo asegurar Corredores y Administración Inteligente (corre sql/schema.sql en Supabase):', err.message));
 
 pool.query('ALTER TABLE jugadores ADD COLUMN IF NOT EXISTS pago_diario boolean NOT NULL DEFAULT false')

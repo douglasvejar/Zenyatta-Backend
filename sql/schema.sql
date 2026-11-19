@@ -2369,6 +2369,12 @@ create table if not exists hipismo_chat_jugadas (
 );
 create index if not exists idx_hipismo_chat_jugadas_carrera on hipismo_chat_jugadas(grupo_id, fecha, hipodromo_nombre, carrera_numero);
 create index if not exists idx_hipismo_chat_jugadas_adelantada on hipismo_chat_jugadas(adelantada_jugada_id);
+-- 19-11-2026: el bot YA NO guarda sus jugadas como "adelantadas pendientes": esperan aquí (plano en espera de la pizarra) y, al cargar la
+-- pizarra, se hace lo mismo que el empleado (Cargar Planos -> Calcular -> Confirmar plano). `apuesta` = la apuesta estructurada,
+-- `cerrada_en` = cuándo se cerró su carrera (pasados 10 min sin pizarra dejan de descontar saldo), `resuelta` = ya se calculó en un plano.
+alter table hipismo_chat_jugadas add column if not exists apuesta jsonb;
+alter table hipismo_chat_jugadas add column if not exists cerrada_en timestamptz;
+alter table hipismo_chat_jugadas add column if not exists resuelta boolean not null default false;
 
 -- 17-11-2026: número de WhatsApp PROPIO por grupo (servicio "Corredores y Administración Inteligente").
 -- whatsapp_propio_activo = el grupo tiene su número vinculado (se vuelve a conectar solo al arrancar el servidor);

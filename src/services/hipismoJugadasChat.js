@@ -729,5 +729,5 @@ function crearMotor(deps) {
 
 module.exports = {
   TEXTO_PLANO_BOT: 'Jugadas del chat de WhatsApp (bot)', crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, conflictoDeRol, pareceParadaMalEscrita, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
-  armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
+  armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, montoParaLinea, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };

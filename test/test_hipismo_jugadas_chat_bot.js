@@ -16,7 +16,11 @@ const T = {
   ],
   numeros: [],
   hipodromos: [{ id: 'h1', nombre: 'Mountaineer' }, { id: 'h2', nombre: 'La Rinconada' }],
-  planos: [], jugadas: [], chat: [], estado: null
+  planos: [], adelantadas: [], chat: [], estado: null,
+  // vista cómoda de lo que el bot guardó (lo que antes se escribía en adelantadas): ahora vive solo en hipismo_chat_jugadas (plano en espera)
+  get jugadas() {
+    return this.chat.map(c => { const a = JSON.parse(c.apuesta || 'null') || {}; return { jugador_nombre: c.jugador_nombre, banquero_nombre: c.banquero_nombre, monto: c.monto, carrera_numero: c.carrera_numero, es_cruce: !!a.cruce, modalidad: a.modalidad, cruce_grupo_a: a.cruce ? JSON.stringify(a.cruce.gruposA) : null, cruce_grupo_b: a.cruce ? JSON.stringify(a.cruce.gruposB) : null }; });
+  }
 };
 let contador = 0;
 function consulta(text, params) {
@@ -37,30 +41,33 @@ function consulta(text, params) {
   }
   if (/^SELECT nombre FROM hipismo_hipodromos WHERE grupo_id = \$1/i.test(sql)) return { rows: T.hipodromos };
   if (/^SELECT id FROM hipismo_hipodromos WHERE grupo_id = \$1 AND nombre = \$2/i.test(sql)) return { rows: T.hipodromos.filter(h => h.nombre === params[1]) };
-  if (/^SELECT id, comision_porcentaje FROM hipismo_tercios_adelantadas_planos/i.test(sql)) {
-    return { rows: T.planos.filter(p => p.grupo_id === params[0] && p.hipodromo_nombre === params[1] && String(p.fecha) === String(params[2]) && p.texto_original === params[3]) };
-  }
-  if (T.fallar && /^INSERT INTO hipismo_tercios_adelantadas_jugadas/i.test(sql)) throw new Error('fallo simulado');
-  if (/^INSERT INTO hipismo_tercios_adelantadas_planos/i.test(sql)) {
-    const p = { id: 'p' + (++contador), grupo_id: params[0], hipodromo_id: params[1], hipodromo_nombre: params[2], fecha: params[3], comision_porcentaje: 5, texto_original: params[4] };
-    T.planos.push(p); return { rows: [p] };
-  }
-  if (/^INSERT INTO hipismo_tercios_adelantadas_jugadas/i.test(sql)) {
-    const f = { id: 'a' + (++contador), plano_id: params[0], jugador_nombre: params[2], banquero_nombre: params[3], carrera_numero: params[4], es_cruce: params[5], grupo_caballos: params[6], cruce_grupo_a: params[7], cruce_grupo_b: params[8], modalidad: params[9], monto: params[10], comision_porcentaje: params[11], texto_original: params[12], estado: 'pendiente' };
-    T.jugadas.push(f); return { rows: [{ id: f.id }] };
-  }
+  // El bot NO toca las tablas de adelantadas: si lo hiciera, la BD falsa lanzaría "consulta no prevista".
+  if (T.fallar && /^INSERT INTO hipismo_chat_jugadas/i.test(sql)) throw new Error('fallo simulado');
   if (/^INSERT INTO hipismo_chat_jugadas/i.test(sql)) {
-    T.chat.push({ grupo_id: params[0], fecha: params[1], hipodromo_nombre: params[2], carrera_numero: params[3], jugador_nombre: params[4], banquero_nombre: params[5], monto: params[6], riesgo_jugador: params[7], riesgo_banquero: params[8], texto_linea: params[9], adelantada_jugada_id: params[10], creado_en: new Date() });
+    T.chat.push({ id: 'c' + (++contador), grupo_id: params[0], fecha: params[1], hipodromo_nombre: params[2], carrera_numero: params[3], jugador_nombre: params[4], banquero_nombre: params[5], monto: params[6], riesgo_jugador: params[7], riesgo_banquero: params[8], texto_linea: params[9], apuesta: params[10], resuelta: false, cerrada_en: null, adelantada_jugada_id: null, creado_en: new Date() });
     return { rows: [] };
   }
-  if (/FROM hipismo_chat_jugadas c JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id WHERE c.grupo_id = \$1 AND a.estado = 'pendiente'/i.test(sql)) {
-    return { rows: T.chat.filter(c => c.jugador_nombre === params[1] || c.banquero_nombre === params[1]).map(c => ({ ...c, estado: (T.jugadas.find(j => j.id === c.adelantada_jugada_id) || {}).estado })).filter(c => c.estado === 'pendiente') };
+  // jugadas que esperan la pizarra y todavía descuentan saldo (carrera abierta, o cerrada hace menos de 10 min)
+  if (/^SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.riesgo_jugador, c.riesgo_banquero, c.adelantada_jugada_id FROM hipismo_chat_jugadas c LEFT JOIN hipismo_tercios_adelantadas_jugadas a/i.test(sql)) {
+    const ahora = Date.now();
+    return { rows: T.chat.filter(c => (c.jugador_nombre === params[1] || c.banquero_nombre === params[1]) && !c.resuelta && !c.adelantada_jugada_id &&
+      ((!c.cerrada_en && c.creado_en.getTime() > ahora - 3 * 3600e3) || (c.cerrada_en && new Date(c.cerrada_en).getTime() > ahora - 10 * 60e3))) };
   }
-  if (/FROM hipismo_chat_jugadas c JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id WHERE c.grupo_id = \$1 AND c.fecha = \$2/i.test(sql)) {
-    return { rows: T.chat.filter(c => c.hipodromo_nombre === params[2] && c.carrera_numero === params[3]).map(c => {
-      const a = T.jugadas.find(j => j.id === c.adelantada_jugada_id);
-      return a ? { jugador_nombre: a.jugador_nombre, banquero_nombre: a.banquero_nombre, monto: a.monto, es_cruce: a.es_cruce, grupo_caballos: a.grupo_caballos, cruce_grupo_a: a.cruce_grupo_a, cruce_grupo_b: a.cruce_grupo_b, modalidad: a.modalidad } : null;
-    }).filter(Boolean) };
+  if (/^SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad FROM hipismo_chat_jugadas c LEFT JOIN/i.test(sql)) {
+    return { rows: T.chat.filter(c => c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.resuelta) };
+  }
+  if (/^SELECT c.id, c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta FROM hipismo_chat_jugadas c WHERE/i.test(sql)) {
+    return { rows: T.chat.filter(c => c.grupo_id === params[0] && c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.adelantada_jugada_id && !c.resuelta) };
+  }
+  const mCierre = sql.match(/^UPDATE hipismo_chat_jugadas SET cerrada_en = (NULL|now\(\)) WHERE/i);
+  if (mCierre) {
+    T.chat.filter(c => c.grupo_id === params[0] && c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.resuelta && !c.adelantada_jugada_id && (mCierre[1] === 'NULL' || !c.cerrada_en))
+      .forEach(c => { c.cerrada_en = mCierre[1] === 'NULL' ? null : new Date(); });
+    return { rows: [] };
+  }
+  if (/^UPDATE hipismo_chat_jugadas SET resuelta = true WHERE id = ANY\(\$1\)/i.test(sql)) {
+    T.chat.filter(c => params[0].includes(c.id)).forEach(c => { c.resuelta = true; });
+    return { rows: [] };
   }
   if (/^INSERT INTO hipismo_chat_estado/i.test(sql)) { T.estado = { hipodromo: params[1], carrera: params[2], abierta: params[3], fecha: params[4] }; return { rows: [] }; }
   if (/^SELECT hipodromo, carrera, abierta, to_char\(fecha, 'YYYY-MM-DD'\) AS fecha FROM hipismo_chat_estado/i.test(sql)) return { rows: T.estado ? [T.estado] : [] };
@@ -72,12 +79,12 @@ const fakePool = function () {
   this.connect = async () => ({ query: async (t, p) => consulta(t, p), release() {} });
   this.on = () => {};
 };
-// pozo falso (el cálculo real del pozo ya tiene sus propias pruebas): disponible base por cliente
+// pozo falso (el cálculo real del pozo ya tiene sus propias pruebas): disponible del sistema = pozo; el bot descuenta lo suyo en espera de pizarra
 const POZO = { NANA: 20, RICARDO: 1000 };
 Module._load = function (request) {
   if (request === 'pg') return { Pool: fakePool };
   if (/hipismoAlertaPozo$/.test(request)) {
-    return { clientesConPozoDisponible: async (g, nombres) => nombres.filter(n => POZO[n] !== undefined).map(n => ({ jugador: { nombre: n }, base: POZO[n], disponible: POZO[n] - T.jugadas.filter(j => j.jugador_nombre === n).reduce((a, j) => a + Number(j.monto), 0), pagoDiario: false })) };
+    return { clientesConPozoDisponible: async (g, nombres) => nombres.filter(n => POZO[n] !== undefined).map(n => ({ jugador: { nombre: n }, base: POZO[n], disponible: POZO[n], pagoDiario: false })) };
   }
   return originalLoad.apply(this, arguments);
 };
@@ -125,9 +132,9 @@ const textoDe = e => e.contenido.text;
   const r1 = mensaje('MARVEL', '22', of.key.id);
   await whatsappBot.manejarMensajeEntrante(sock, r1);
   check(textoDe(ultimo()) === '✅ Aquí jugaron' && ultimo().opciones && ultimo().opciones.quoted === r1, 'responde "✅ Aquí jugaron" CITANDO el mensaje de Marvel');
-  check(T.jugadas.length === 1 && T.jugadas[0].jugador_nombre === 'CACHACO' && T.jugadas[0].banquero_nombre === 'MARVEL' && Number(T.jugadas[0].monto) === 22 && T.jugadas[0].es_cruce === true && T.jugadas[0].modalidad === '10a8', 'se guardó en Jugadas entre Tercios Adelantadas (pendiente): Cachaco 10a8 4x1 con 22 da Marvel');
+  check(T.jugadas.length === 1 && T.jugadas[0].jugador_nombre === 'CACHACO' && T.jugadas[0].banquero_nombre === 'MARVEL' && Number(T.jugadas[0].monto) === 22 && T.jugadas[0].es_cruce === true && T.jugadas[0].modalidad === '10a8', 'quedó en espera de la pizarra: Cachaco 10a8 4x1 con 22 da Marvel');
   check(JSON.parse(T.jugadas[0].cruce_grupo_a)[0] === 4 && JSON.parse(T.jugadas[0].cruce_grupo_b)[0] === 1, 'los caballos 4 y 1 quedaron en su lugar');
-  check(T.planos.length === 1 && T.planos[0].hipodromo_nombre === 'Mountaineer' && T.jugadas[0].carrera_numero === 1, 'quedó en un plano de Mountaineer, carrera 1, del día');
+  check(T.planos.length === 0 && T.adelantadas.length === 0 && T.chat[0].hipodromo_nombre === 'Mountaineer' && T.chat[0].carrera_numero === 1 && T.chat[0].resuelta === false && T.chat[0].adelantada_jugada_id === null, 'es un plano en espera de la pizarra (Mountaineer, carrera 1): NO se escribe ninguna jugada adelantada ni plano');
   check(T.chat.length === 1 && T.chat[0].riesgo_banquero === 17.6 && T.chat[0].riesgo_jugador === 22, 'se registró el riesgo de cada lado (banquero 22 x 80% = 17,60)');
 
   // FlowSport (NANA) tiene 20 de pozo: pide 25 a 10a8 => arriesga 20 => alcanza justo
@@ -272,7 +279,22 @@ const textoDe = e => e.contenido.text;
   check(enviados.length === antesR, 'tras un reinicio la carrera sigue abierta: publicar una jugada no genera "no hay carrera abierta"');
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('MARVEL', '5', ofR.key.id));
   check(textoDe(ultimo()) === '✅ Aquí jugaron', 'y las respuestas se registran como siempre');
+  const stReal = global.setTimeout; const avisosPizarra = [];
+  global.setTimeout = (fn, ms, ...a) => { if (ms === 605000) { avisosPizarra.push(fn); return { unref() {} }; } return stReal(fn, ms, ...a); };
+  const nEsperaAntes = T.chat.filter(c => !c.resuelta).length;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Cerrado'));
+  global.setTimeout = stReal;
+  check(avisosPizarra.length === 1 && T.chat.length > 0 && T.chat.every(c => c.cerrada_en), 'al cerrar la carrera se anota la hora de cierre de las jugadas en espera y se programa el aviso de los 10 minutos');
+  // tope por saldo: mientras espera la pizarra, la jugada de Nana (da 25 a 10a8 = arriesga 20 de su pozo de 20) descuenta; a los 10 min sin pizarra se libera
+  const dNana = await glue.disponibleDe(G, 'NANA');
+  check(dNana.limitado && dNana.disponible === 0, 'esperando la pizarra, lo que arriesga Nana (20 de su pozo de 20) sigue descontado: le queda 0,00');
+  T.chat.forEach(c => { c.cerrada_en = new Date(Date.now() - 15 * 60e3); });
+  const dNana2 = await glue.disponibleDe(G, 'NANA');
+  check(dNana2.disponible === 20, 'pasados 10 minutos sin pizarra, esas jugadas dejan de descontar: Nana vuelve a tener sus 20');
+  const antesAv = enviados.length;
+  await avisosPizarra[0]();
+  check(enviados.length === antesAv + 1 && /lleva más de 10 minutos esperando la pizarra/.test(textoDe(ultimo())) && /Mountaineer, 1ª carrera/.test(textoDe(ultimo())), 'a los 10 minutos sin pizarra el bot avisa en el grupo que ya no descuentan saldo');
+  T.chat.forEach(c => { c.cerrada_en = new Date(); });
   glue._sesiones.clear();
   const ofC = mensaje('CACHACO', 'Juego 4x1 con 15 doy a8');
   await whatsappBot.manejarMensajeEntrante(sock, ofC);
@@ -292,11 +314,21 @@ const textoDe = e => e.contenido.text;
   // Forma REAL de la respuesta de guardar (POST /planos): el texto va en plano.texto_resultado (no hay textoResultado).
   let respuestaPlano = { status: 201, body: { plano: { texto_resultado: '*Sistema Dream*\nGANAN: Marvel\nPIERDEN: Cachaco' }, datosImagen: null } };
   glue._ext.guardarPlano = async (g, body) => { llamadasPlano.push({ g, body }); return respuestaPlano; };
+  // si el cálculo falla (p. ej. ya había plano), las jugadas siguen en espera: no se marcan como calculadas
+  respuestaPlano = { status: 409, body: { error: 'YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA.', planoYaRegistrado: true } };
+  await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
+  check(T.chat.every(c => !c.resuelta), 'si Cargar Planos no pudo guardar, las jugadas del bot siguen en espera (no se pierden)');
+  llamadasPlano.length = 0;
+  respuestaPlano = { status: 201, body: { plano: { texto_resultado: '*Sistema Dream*\nGANAN: Marvel\nPIERDEN: Cachaco' }, datosImagen: null } };
   const pubPizarra = enviados.length;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4 Ret 7'));
   const cuerpo = llamadasPlano[0] && llamadasPlano[0].body;
-  check(llamadasPlano.length === 1 && llamadasPlano[0].g === G && cuerpo.texto === '' && cuerpo.pizarra === '3.1.2.4' && cuerpo.ret === '7' && cuerpo.hipodromoNombre === 'Mountaineer' && cuerpo.carreraNumero === 1, 'el administrador escribe "Pizarra 3.1.2.4 Ret 7": el bot manda a calcular la carrera con plano vacío, la llegada y los retirados');
+  const lineasPlano = (cuerpo.texto || '').split('\n');
+  check(lineasPlano.length === nEsperaAntes && lineasPlano.every(l => /^Juega \S+ 10A8 \((4x1|5x4)\) con \d+,\d\d da \S+$/.test(l)) && lineasPlano[0] === 'Juega CACHACO 10A8 (4x1) con 22,00 da MARVEL', 'el bot pega en Cargar Planos el MISMO texto que pegaría el empleado: una línea "Juega X 10A8 (4x1) con M da Y" por cada parada confirmada');
+  check(llamadasPlano.length === 1 && llamadasPlano[0].g === G && cuerpo.pizarra === '3.1.2.4' && cuerpo.ret === '7' && cuerpo.hipodromoNombre === 'Mountaineer' && cuerpo.carreraNumero === 1, 'el administrador escribe "Pizarra 3.1.2.4 Ret 7": el bot calcula la carrera (como Calcular + Confirmar plano) con la llegada y los retirados');
   check(enviados.length === pubPizarra + 2 && /Pizarra cargada: \*Mountaineer, 1era Carrera\*/.test(textoDe(enviados[pubPizarra])) && /GANAN: Marvel/.test(textoDe(ultimo())), 'el bot avisa y publica en el grupo el plano con quién gana y quién pierde');
+  check(T.chat.every(c => c.resuelta) && T.adelantadas.length === 0, 'al guardarse el plano (201) las jugadas del bot quedan calculadas y siguen sin existir como adelantadas');
+  check((await glue.disponibleDe(G, 'NANA')).disponible === 20, 'ya calculadas, dejan de descontar del saldo (a partir de ahí lo lleva el sistema con el plano normal)');
   respuestaPlano = { status: 409, body: { error: 'YA TIENES UN PLANO REGISTRADO EN ESTA CARRERA.', planoYaRegistrado: true } };
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
   check(/No pude cargar la pizarra: esa carrera ya tiene un plano registrado/.test(textoDe(ultimo())), 'si la carrera ya tenía plano, el bot lo explica (hay que borrarlo en Eliminar Planos)');
