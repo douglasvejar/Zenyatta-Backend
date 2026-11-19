@@ -492,8 +492,8 @@ function crearMotor(deps) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear();
     await guardarEstado();
-    // Todo en negrita y cursiva (*_línea_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
-    const bc = t => '*_' + t + '_*';
+    // Todo en MAYÚSCULA, negrita y cursiva (*_LÍNEA_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
+    const bc = t => '*_' + t.toUpperCase() + '_*';
     await deps.responder([
       bc('🔒❌ Carrera cerrada se dio la partida en ' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera. Ya no se reciben mas jugadas,❌🔒'),
       bc('🚫 NO HAY MAS JUGADA🚫'),
