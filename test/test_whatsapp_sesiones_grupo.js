@@ -67,6 +67,7 @@ const DisconnectReason = { loggedOut: 401 };
 class Boom { constructor(e) { this.output = { statusCode: (e && e.statusCode) || 500 }; } }
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wsg-'));
 const alertas = [];
+const INTERVALOS = [];
 const TURNO = { ok: true, soltados: [] };
 const RELOJ = { t: Date.parse('2026-11-19T20:00:00Z') };
 const timers = [];
@@ -81,7 +82,7 @@ Object.assign(gestor._deps, {
   esperar: async () => {},
   setTimeout: (fn, ms) => { const t = { fn, ms, limpiado: false }; timers.push(t); return t; },
   // Turno de conexión, vigilante y reloj falsos (19-11-2026)
-  setIntervalo: () => ({ falso: true }),
+  setIntervalo: (fn, ms) => { INTERVALOS.push({ fn, ms }); return { falso: true }; },
   ahora: () => RELOJ.t,
   tomarTurno: async () => TURNO.ok,
   soltarTurno: async (id) => { TURNO.soltados.push(id); },
@@ -270,6 +271,17 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   check(gestor.estadoPublico('t1').sinBuffer === true, 'el buffer de eventos de la librería queda anulado (los mensajes no se retienen)');
   await sT5.handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: '999@g.us', id: 'LAG1' }, messageTimestamp: Math.floor(RELOJ.t / 1000) - 7, message: { conversation: 'x' } }] });
   check(gestor.estadoPublico('t1').ultimoEvento.retrasoSeg === 7, 'el panel muestra el retraso (segundos) con que llegó el último mensaje');
+
+  // 3e) Liberador cada 1 s: en esta versión de Baileys cada mensaje vuelve a retener el buffer y nadie lo libera
+  const sFl = gestor._sesiones.get('t1').sock;
+  let retenido = true, liberado = 0;
+  sFl.ev.isBuffering = () => retenido; sFl.ev.flush = () => { liberado++; retenido = false; };
+  const liberador = INTERVALOS.filter(i => i.ms === 1000).pop();
+  check(!!liberador, 'cada socket arranca un liberador que corre cada 1 segundo');
+  liberador.fn();
+  check(liberado === 1, 'si hay mensajes retenidos, el liberador los suelta (retraso máximo 1 s)');
+  liberador.fn();
+  check(liberado === 1, 'y si no hay nada retenido no hace nada');
 
   // 4) Código 440 (el número se abrió en otro lugar): espera más para no entrar en pelea
   sT5.handlers['connection.update']({ connection: 'close', lastDisconnect: { error: { statusCode: 440 } } });

@@ -206,6 +206,7 @@ function programarReintento(id, s, ms) {
 function cerrarSocket(s) {
   s.gen++; s.conectado = false;
   if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
+  if (s.flusher) { try { clearInterval(s.flusher); } catch (e) { /* nada */ } s.flusher = null; }
   if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
 }
 
@@ -307,6 +308,7 @@ async function iniciarSesionInterna(grupoId) {
   if (!s) { s = estadoVacio(); sesiones.set(id, s); }
   s.cerrando = false;
   if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
+  if (s.flusher) { try { clearInterval(s.flusher); } catch (e) { /* nada */ } s.flusher = null; }
   if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
   const gen = ++s.gen;
   asegurarLatido();
@@ -347,6 +349,14 @@ async function iniciarSesionInterna(grupoId) {
   // contestó una carrera abierta 4 min tarde). Este bot no necesita ese orden consolidado: se anula el buffer para que cada
   // mensaje llegue a messages.upsert apenas se descifra.
   try { if (sock.ev && typeof sock.ev.buffer === 'function') { sock.ev.buffer = () => {}; s.sinBuffer = true; } } catch (e) { /* si no se puede, queda el vigilante de 30 s */ }
+  // CAUSA REAL (19-11-2026, confirmada en el log de Railway: un lote de mensajes "append" cada ~40 s): en esta versión de Baileys cada
+  // mensaje que entra llama a createBufferedFunction -> buffer() y ya NO se libera solo ("lo controla la máquina de estados", que
+  // con la sincronización de historial apagada nunca vuelve a liberar). Resultado: el buffer queda retenido para siempre y los mensajes
+  // solo salían cuando el vigilante los liberaba a la fuerza. Se libera cada 1 s mientras haya algo retenido: retraso máximo de 1 s.
+  if (s.flusher) { try { clearInterval(s.flusher); } catch (e) { /* nada */ } }
+  s.flusher = deps.setIntervalo(() => {
+    try { if (s.sock === sock && sock.ev && typeof sock.ev.isBuffering === 'function' && sock.ev.isBuffering() && typeof sock.ev.flush === 'function') sock.ev.flush(); } catch (e) { /* nada */ }
+  }, 1000);
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
