@@ -286,6 +286,13 @@ function interpretarAbrirCarrera(texto) {
 }
 const ES_CIERRE_RE = /^(?:cierra|cierre|cerrar|cerrada|cerrado|cierra la carrera|cerrar carrera)$/i;
 const ES_PLANO_RE = /^(?:plano|planos)$/i;
+// "ERROR" (19-11-2026): un cliente dice que su última jugada tiene un error. El bot le pregunta al otro si se la quita (ver marcarError).
+const ES_ERROR_RE = /^(?:(?:hay|un|puse|puso|marca|marco|coloco|coloque|tengo)\s+)*(?:erro(?:r|res)?|errro|errror|eror|erorr)(?:\s+(?:en|de|mi|la|su|esa|esta|jugada|parada|monto|plano))*$/i;
+const normRespuesta = t => quitarTildes(String(t || '').toLowerCase()).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const SI_QUITAR_RE = /^(?:si+|dale|ok|okey|listo|claro|afirmativo|de una|quitala|borrala|quitarla|borrarla|se la quito|se la quita|se la borro|se la borra|si se la quito|si se la quita|si se la borro|si quitala|si borrala|si senor|si claro)$/;
+const NO_QUITAR_RE = /^(?:no+|nop|nope|nel|negativo|no se la quito|no se la quita|no se la borro|no se la borra|no la quito|no la borro|no senor|no gracias|jugando|que juegue|sigue|siga|dejarla|dejala|que siga|va jugando|vamos jugando)$/;
+const ESPERA_LLAMADO_ERROR_MS = 35 * 1000;
+const MAX_LLAMADOS_ERROR = 3;
 // La pizarra (llegada) la escribe el administrador. Acepta, con cualquier separador (espacio, coma, punto, guion o barra) y los puestos que haga falta:
 //   "Pizarra 6.10.4.8.2"            -> la carrera abierta (o la del plano que está respondiendo)
 //   "llegada 4,5,6,7", "pizarra 4/5/6/7", "pizarra 4-5-6-7 ret 3"
@@ -379,7 +386,7 @@ function armarPlanoChat({ nombreGrupo, fecha, hipodromo, carrera, jugadas }) {
 //   identificar(remitente) -> Promise<string|null>        nombre del cliente en el sistema (por su número)
 //   resolverHipodromo(texto) -> Promise<string|null>      nombre exacto del hipódromo del grupo
 //   disponible(nombreCliente) -> Promise<{limitado:boolean, disponible:number}>
-//   guardarJugada(j) -> Promise<void>                     j = { fecha, hipodromo, carrera, jugadorNombre, banqueroNombre, apuesta, monto, riesgoJugador, riesgoBanquero, textoLinea }
+//   guardarJugada(j) -> Promise<id|void>                     j = { fecha, hipodromo, carrera, jugadorNombre, banqueroNombre, apuesta, monto, riesgoJugador, riesgoBanquero, textoLinea }
 //   cargarJugadas({fecha,hipodromo,carrera}) -> Promise<[{jugadorNombre,banqueroNombre,apuesta,monto}]>
 //   responder(texto, { citarId, mencionar }) -> Promise<void>
 //   publicar(texto) -> Promise<void>                      mensaje suelto al grupo (plano)
@@ -395,6 +402,11 @@ function crearMotor(deps) {
   let jugadas = [];
   let sinPlano = 0;
   const avisados = new Map(); // clave -> ms del último aviso (evita repetir el mismo reclamo)
+  // Jugadas que el bot guardó en la carrera actual con quién las hizo (para el flujo "ERROR") y casos de error en curso.
+  let registros = [];
+  const casosError = new Map(); // id de la jugada -> caso
+  const adminsVistos = new Map(); // dígitos -> jid con el que escribió un administrador
+  const esperaError = () => (Number(deps.esperaErrorMs) > 0 ? Number(deps.esperaErrorMs) : ESPERA_LLAMADO_ERROR_MS);
 
   const nota = t => { try { if (deps.nota) deps.nota(t); } catch (e) { /* solo informativo */ } };
   const tiempoDe = m => (Number(m.ts) > 0 ? Number(m.ts) : Date.now());
@@ -435,12 +447,12 @@ function crearMotor(deps) {
     const esActual = hip === ctx.hipodromo && carreraN === ctx.carrera && fecha === ctx.fecha;
     const cuantas = esActual ? jugadas.length : ((await deps.cargarJugadas({ fecha, hipodromo: hip, carrera: carreraN })) || []).length;
     if (!cuantas) { await deps.responder('⚠️ En *' + hip + ', ' + ORDINAL_CARRERA(carreraN) + ' Carrera* no hay jugadas del bot pendientes para calcular (¿ya se cargó su pizarra, o no hubo jugadas?).', { citarId: m.id }); return; }
-    if (esActual && ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); } // la pizarra cierra la carrera
+    if (esActual && ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); await cerrarCasosError(); } // la pizarra cierra la carrera
     const ret = datos.ret || (esActual ? ctx.ret : '') || '';
     nota('Pizarra ' + datos.llegada + (ret ? ' con retirados ' + ret : '') + ': calculando ' + hip + ' ' + carreraN);
     const r = await deps.cargarPizarra({ hipodromo: hip, carrera: carreraN, fecha, pizarra: datos.llegada, ret });
     if (!r || !r.ok) { await deps.responder('⚠️ No pude cargar la pizarra: ' + ((r && r.motivo) || 'error desconocido'), { citarId: m.id }); return; }
-    if (esActual) ctx.ret = '';
+    if (esActual) { ctx.ret = ''; cancelarCasosError(); registros = []; }
     await deps.responder('🏁 Pizarra cargada: *' + hip + ', ' + ORDINAL_CARRERA(carreraN) + ' Carrera* — llegada ' + datos.llegada + (ret ? ' (Ret: ' + ret + ')' : '') + '. Calculé las jugadas y ya quedaron en los saldos de los clientes:', { citarId: m.id });
     if (deps.publicarResultado) await deps.publicarResultado(r); else await deps.publicar(r.texto);
   }
@@ -470,6 +482,104 @@ function crearMotor(deps) {
   const mencion = m => ({ citarId: m.id, mencionar: m.remitente.jid, nombre: m.remitente.nombre });
   const etiquetaDe = () => '@@';
 
+  // ---------------- "ERROR": quitar una jugada si el otro involucrado acepta ----------------
+  function cancelarCasosError() { casosError.forEach(c => { if (c.timer) clearTimeout(c.timer); }); casosError.clear(); }
+  const opError = (c, extra) => ({ citarId: c.citarId, ...extra });
+  async function llamarError(c) {
+    c.llamados++;
+    nota('ERROR de ' + c.marcador.nombre + ': llamado ' + c.llamados + ' a ' + c.otro.nombre);
+    await deps.responder('*SALUDOS, AQUÍ EL TERCIO @@ MARCA ERROR, ¿SE LA QUITA?* @@2', opError(c, { mencionar: c.marcador.jid, nombre: c.marcador.etiqueta, mencionar2: c.otro.jid, nombre2: c.otro.etiqueta }));
+  }
+  function programarLlamado(c) {
+    if (c.timer) clearTimeout(c.timer);
+    c.timer = setTimeout(async () => {
+      c.timer = null;
+      if (!casosError.has(c.id) || c.estado !== 'preguntando') return;
+      try {
+        if (!ctx.abierta) { await cerrarCasosError(); return; }
+        if (c.llamados < MAX_LLAMADOS_ERROR) { await llamarError(c); programarLlamado(c); return; }
+        await escalarAdmins(c);
+      } catch (e) { console.error('[hipismoChat] Error en el llamado por "error":', e.message); }
+    }, esperaError());
+    if (c.timer.unref) c.timer.unref();
+  }
+  async function escalarAdmins(c) {
+    c.estado = 'admins';
+    const lista = [];
+    const vistos = new Set();
+    const agregar = (jid, nombre) => { const d = String(jid || '').split('@')[0].split(':')[0]; if (d && !vistos.has(d)) { vistos.add(d); lista.push({ jid, nombre }); } };
+    adminsVistos.forEach(jid => agregar(jid, ''));
+    try { ((deps.listarAdmins && await deps.listarAdmins()) || []).forEach(a => agregar(a.jid, a.nombre)); } catch (e) { /* solo se etiqueta a los que se conocen */ }
+    nota('ERROR de ' + c.marcador.nombre + ': ' + c.otro.nombre + ' no respondió tras ' + c.llamados + ' llamados; se etiqueta a los administradores');
+    await deps.responder('*ATENCIÓN ADMINISTRADORES: EL TERCIO @@ MARCÓ ERROR Y @@2 NO RESPONDIÓ. ¿SE LA QUITAN O VAN JUGANDO? (RESPONDAN: QUITAR / VAN JUGANDO)* @@L',
+      opError(c, { mencionar: c.marcador.jid, nombre: c.marcador.etiqueta, mencionar2: c.otro.jid, nombre2: c.otro.etiqueta, mencionarLista: lista }));
+  }
+  // La carrera se cerró (o se cargó la pizarra) con casos sin resolver: la jugada sigue en el plano.
+  async function cerrarCasosError() {
+    const casos = [...casosError.values()];
+    for (const c of casos) {
+      if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+      casosError.delete(c.id);
+      if (c.estado === 'admins') continue; // ya se llamó a los administradores
+      try { await deps.responder('*LA CARRERA SE CERRÓ Y @@ NO SE LA BORRÓ, VAN JUGANDO* @@2', opError(c, { mencionar: c.otro.jid, nombre: c.otro.etiqueta, mencionar2: c.marcador.jid, nombre2: c.marcador.etiqueta })); }
+      catch (e) { console.error('[hipismoChat] No se pudo avisar el cierre de un caso de error:', e.message); }
+    }
+  }
+  async function marcarError(m) {
+    if (!ctx.hipodromo || !registros.length || !deps.eliminarJugada) return false;
+    const nombre = await deps.identificar(m.remitente);
+    if (!nombre) return false;
+    const mias = registros.filter(r => r.jugada.id && (r.jugada.jugadorNombre === nombre || r.jugada.banqueroNombre === nombre));
+    if (!mias.length) { nota('Escribió "error" pero el bot no tiene jugadas suyas en esta carrera'); return false; }
+    // Si cita el mensaje de la jugada (la parada o la confirmación), es esa; si no, la última suya.
+    const citada = m.citadoId ? mias.find(r => r.ofertaId === m.citadoId || r.respId === m.citadoId) : null;
+    const reg = citada || mias[mias.length - 1];
+    if (casosError.has(reg.jugada.id)) { nota('Ya hay un llamado en curso por esa jugada'); return true; }
+    const esAutor = reg.autor.nombre === nombre;
+    const c = { id: reg.jugada.id, reg, estado: 'preguntando', llamados: 0, timer: null,
+      citarId: reg.ofertaId || reg.respId,
+      marcador: esAutor ? reg.autor : reg.resp, otro: esAutor ? reg.resp : reg.autor };
+    // el mensaje citado: la parada si el bot todavía la tiene en memoria (el motor de WhatsApp la busca por id); si no, el de quien marcó el error
+    casosError.set(c.id, c);
+    await llamarError(c);
+    programarLlamado(c);
+    return true;
+  }
+  // Respuesta al llamado: el otro involucrado dice sí/no (o un administrador, tras ser llamado). Devuelve true si el mensaje era para un caso.
+  async function responderCaso(m, texto) {
+    if (!casosError.size) return false;
+    const t = normRespuesta(texto);
+    if (!t || t.length > 40) return false;
+    const si = SI_QUITAR_RE.test(t) || (m.esAdmin && /^(?:quitar|quitarla|borrar|borrarla)$/.test(t));
+    const no = !si && (NO_QUITAR_RE.test(t) || (m.esAdmin && /^(?:van jugando|vamos jugando|que juegue|sigue)$/.test(t)));
+    if (!si && !no) return false;
+    let caso = null, comoAdmin = false;
+    for (const c of casosError.values()) if (c.estado === 'preguntando' && c.otro.jid === m.remitente.jid) { caso = c; break; }
+    if (!caso) {
+      const n = await deps.identificar(m.remitente);
+      if (n) for (const c of casosError.values()) if (c.estado === 'preguntando' && c.otro.nombre === n) { caso = c; break; }
+    }
+    if (!caso && m.esAdmin) { caso = [...casosError.values()].find(c => c.estado === 'admins') || null; comoAdmin = !!caso; }
+    if (!caso) return false;
+    if (caso.timer) { clearTimeout(caso.timer); caso.timer = null; }
+    casosError.delete(caso.id);
+    const A = { mencionar: caso.otro.jid, nombre: caso.otro.etiqueta, mencionar2: caso.marcador.jid, nombre2: caso.marcador.etiqueta };
+    if (si) {
+      const r = await deps.eliminarJugada(caso.id);
+      if (!r || !r.ok) { await deps.responder('⚠️ No pude borrar esa jugada (' + ((r && r.motivo) || 'ya no existe o ya fue calculada') + '). Un administrador debe revisarla en JUGADAS BOT IA.', { citarId: m.id }); return true; }
+      registros = registros.filter(x => x !== caso.reg);
+      jugadas = jugadas.filter(j => j !== caso.reg.jugada);
+      nota('ERROR: se borró la jugada de ' + caso.marcador.nombre + ' (' + (comoAdmin ? 'decidió un administrador' : caso.otro.nombre + ' aceptó') + ')');
+      await deps.responder(comoAdmin
+        ? '*LISTO, UN ADMINISTRADOR AUTORIZÓ BORRAR LA JUGADA DE @@2 CON @@, AQUÍ NADA SE LA BORRARON*'
+        : '*MUCHAS GRACIAS ESTIMADO TERCIO @@ QUE SE LA ESTÁ BORRANDO, AQUÍ NADA SE LA BORRARON* @@2', { citarId: m.id, ...A });
+    } else {
+      nota('ERROR: ' + (comoAdmin ? 'un administrador decidió' : caso.otro.nombre + ' no la borró') + ': la jugada sigue en el plano');
+      await deps.responder(comoAdmin ? '*VAN JUGANDO POR DECISIÓN DEL ADMINISTRADOR, LA JUGADA VA AL PLANO* @@ @@2' : '*VAN JUGANDO YA QUE @@ NO SE LA BORRÓ, LA JUGADA VA AL PLANO* @@2', { citarId: m.id, ...A });
+    }
+    return true;
+  }
+
   async function publicarPlano() {
     sinPlano = 0;
     await deps.publicar(armarPlanoChat({ nombreGrupo: deps.nombreGrupo, fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera, jugadas }));
@@ -482,7 +592,7 @@ function crearMotor(deps) {
       return;
     }
     ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy(); ctx.ret = '';
-    ofertas.clear(); sinPlano = 0;
+    ofertas.clear(); sinPlano = 0; cancelarCasosError(); registros = [];
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
     await guardarEstado();
     await deps.responder('*✅ Carrera abierta: ' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
@@ -503,6 +613,7 @@ function crearMotor(deps) {
       bc('NOS REGIMOS POR EL CHAT📲 Y NUESTROS REGLAMENTOS ‼️'),
       bc('JUEGA GANA Y COBRA SEGURO EN ' + String(deps.nombreGrupo || '').toUpperCase())
     ].join('\n'), { citarId: m.id });
+    await cerrarCasosError();
     await publicarPlano();
   }
 
@@ -652,9 +763,13 @@ function crearMotor(deps) {
       riesgoJugador: round2(monto * r.jugador), riesgoBanquero: round2(monto * r.banquero),
       textoLinea: 'Juega ' + jugadorNombre + ' ' + apuestaSegura(apuestaJug) + ' con ' + montoParaLinea(monto) + ' da ' + banqueroNombre
     };
-    await deps.guardarJugada(jugada);
+    const idGuardada = await deps.guardarJugada(jugada);
+    if (idGuardada) jugada.id = idGuardada;
     oferta.restante = round2(oferta.restante - monto);
     jugadas.push(jugada);
+    registros.push({ jugada, ofertaId: oferta.id, respId: m.id,
+      autor: { jid: oferta.autorJid, nombre: oferta.autorNombre, etiqueta: oferta.autorEtiqueta },
+      resp: { jid: m.remitente.jid, nombre, etiqueta: m.remitente.nombre } });
     sinPlano++;
     // Se aclara cuánto se jugó cuando es menos de lo pedido ("más de lo que quedaba") o cuando la parada ya había sido tomada en parte
     // y respondieron "J"/"jugo" (juegan solo lo que quedaba): "✅ Aquí jugaron 100,00".
@@ -696,6 +811,7 @@ function crearMotor(deps) {
     const texto = limpiar(m.texto);
     if (!texto) return;
     await cargarEstadoSiHaceFalta();
+    if (m.esAdmin && m.remitente && m.remitente.jid) { adminsVistos.set(String(m.remitente.jid).split('@')[0].split(':')[0], m.remitente.jid); if (adminsVistos.size > 50) adminsVistos.delete(adminsVistos.keys().next().value); }
     if (m.esAdmin) {
       if (ES_AUTORIZAR_RE.test(texto)) return autorizarAdmin(m);
       const piz = interpretarPizarra(texto);
@@ -718,6 +834,8 @@ function crearMotor(deps) {
       if (ES_CIERRE_RE.test(texto)) return avisarNoAdmin(m, 'cerrar carreras');
       if (interpretarPizarra(texto)) return avisarNoAdmin(m, 'cargar la pizarra');
     }
+    if (ES_ERROR_RE.test(normRespuesta(texto)) && await marcarError(m)) return;
+    if (casosError.size && await responderCaso(m, texto)) return;
     const oferta = interpretarOferta(texto);
     if (oferta !== null) return procesarOferta(m, oferta);
     const resp = interpretarRespuesta(texto);

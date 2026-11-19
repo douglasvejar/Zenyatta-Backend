@@ -45,7 +45,7 @@ function consulta(text, params) {
   if (T.fallar && /^INSERT INTO hipismo_chat_jugadas/i.test(sql)) throw new Error('fallo simulado');
   if (/^INSERT INTO hipismo_chat_jugadas/i.test(sql)) {
     T.chat.push({ id: 'c' + (++contador), grupo_id: params[0], fecha: params[1], hipodromo_nombre: params[2], carrera_numero: params[3], jugador_nombre: params[4], banquero_nombre: params[5], monto: params[6], riesgo_jugador: params[7], riesgo_banquero: params[8], texto_linea: params[9], apuesta: params[10], resuelta: false, cerrada_en: null, adelantada_jugada_id: null, creado_en: new Date() });
-    return { rows: [] };
+    return { rows: [{ id: T.chat[T.chat.length - 1].id }] };
   }
   // jugadas que esperan la pizarra y todavía descuentan saldo (carrera abierta, o cerrada hace menos de 10 min)
   if (/^SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.riesgo_jugador, c.riesgo_banquero, c.adelantada_jugada_id FROM hipismo_chat_jugadas c LEFT JOIN hipismo_tercios_adelantadas_jugadas a/i.test(sql)) {
@@ -58,6 +58,11 @@ function consulta(text, params) {
   }
   if (/^SELECT c.id, c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta FROM hipismo_chat_jugadas c WHERE/i.test(sql)) {
     return { rows: T.chat.filter(c => c.grupo_id === params[0] && c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.adelantada_jugada_id && !c.resuelta) };
+  }
+  if (/^DELETE FROM hipismo_chat_jugadas WHERE id = \$1 AND grupo_id = \$2 AND resuelta = false AND adelantada_jugada_id IS NULL RETURNING id/i.test(sql)) {
+    const i = T.chat.findIndex(c => c.id === params[0] && c.grupo_id === params[1] && !c.resuelta && !c.adelantada_jugada_id);
+    if (i < 0) return { rows: [] };
+    const [f] = T.chat.splice(i, 1); return { rows: [{ id: f.id }] };
   }
   const mCierre = sql.match(/^UPDATE hipismo_chat_jugadas SET cerrada_en = (NULL|now\(\)) WHERE/i);
   if (mCierre) {
@@ -385,6 +390,21 @@ const textoDe = e => e.contenido.text;
     const sF2 = { sock: { sendMessage: async (jid, contenido) => { e2.push(contenido); return { key: { id: 'x' } }; } }, jid: 'g@g.us', mensajes: new Map(), avisos: new Map() };
     await require('../src/services/hipismoJugadasChatBot')._enviar(sF2, 'Hola @@', { mencionar: 'raro', nombre: 'Pepe' });
     check(e2[0].text === 'Hola @Pepe' && !e2[0].mentions, 'si el jid no se puede leer, no se inventa una etiqueta: queda el nombre en texto');
+  }
+
+  // "ERROR" en el chat: borrar la jugada en espera y listar administradores para etiquetarlos
+  {
+    T.chat.push({ id: 'cE1', grupo_id: G, fecha: '2026-11-19', hipodromo_nombre: 'Mountaineer', carrera_numero: 2, jugador_nombre: 'CACHACO', banquero_nombre: 'MARVEL', monto: 5, resuelta: false, cerrada_en: null, adelantada_jugada_id: null, creado_en: new Date(), apuesta: null });
+    const antesN = T.chat.length, id0 = 'cE1';
+    const r1 = await glue.eliminarJugadaEnEspera(G, id0), r2 = await glue.eliminarJugadaEnEspera(G, id0);
+    check(r1.ok === true && T.chat.length === antesN - 1 && r2.ok === false, 'eliminarJugadaEnEspera borra una jugada en espera una sola vez');
+    const adm = await glue.listarAdministradores({ id: G, comandos_whatsapp_numero: '+58 414 1111111' });
+    check(adm.some(a => a.jid === '584141111111@s.whatsapp.net'), 'los administradores conocidos incluyen el número de Súper-admin');
+    const enviadosTest = [];
+    const sFalso = { sock: { sendMessage: async (jid, contenido) => { enviadosTest.push(contenido); return { key: { id: 'x' } }; } }, jid: 'g@g.us', mensajes: new Map(), avisos: new Map() };
+    await glue._enviar(sFalso, '*ATENCIÓN ADMINISTRADORES: EL TERCIO @@ MARCÓ ERROR Y @@2 NO RESPONDIÓ* @@L', { mencionar: '98765432100@lid', nombre: 'A', mencionar2: '584142222222@s.whatsapp.net', nombre2: 'B', mencionarLista: adm });
+    const c = enviadosTest[0];
+    check(c.text.startsWith('*ATENCIÓN ADMINISTRADORES: EL TERCIO @98765432100 MARCÓ ERROR Y @584142222222 NO RESPONDIÓ* @') && c.text.includes('@584141111111') && c.mentions.includes('584141111111@s.whatsapp.net') && c.mentions.includes('98765432100@lid'), 'el llamado a los administradores los etiqueta de verdad a todos');
   }
 
   Date.now = realNow;

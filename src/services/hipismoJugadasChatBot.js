@@ -225,11 +225,27 @@ async function resolverHipodromo(grupoId, texto) {
 // El bot NO guarda nada como "adelantada": la jugada espera aquí (plano en espera de la pizarra, máx. unos minutos). Al cargar la pizarra el
 // bot hace lo mismo que el empleado: pega el plano en Cargar Planos, calcula y confirma (ver cargarPizarraChat).
 async function guardarJugada(grupoId, j) {
-  await db.query(
+  const r = await db.query(
     `INSERT INTO hipismo_chat_jugadas (grupo_id, fecha, hipodromo_nombre, carrera_numero, jugador_nombre, banquero_nombre, monto, riesgo_jugador, riesgo_banquero, texto_linea, apuesta)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [grupoId, j.fecha, j.hipodromo, j.carrera, j.jugadorNombre, j.banqueroNombre, j.monto, j.riesgoJugador, j.riesgoBanquero, j.textoLinea, JSON.stringify(j.apuesta || null)]
   );
+  return r && r.rows && r.rows[0] ? r.rows[0].id : null;
+}
+
+// "ERROR" en el chat: el otro involucrado (o un administrador) aceptó quitar la jugada. Solo se borran las que siguen en espera de la pizarra.
+async function eliminarJugadaEnEspera(grupoId, id) {
+  const r = await db.query('DELETE FROM hipismo_chat_jugadas WHERE id = $1 AND grupo_id = $2 AND resuelta = false AND adelantada_jugada_id IS NULL RETURNING id', [id, grupoId]);
+  return r.rows.length ? { ok: true } : { ok: false, motivo: 'ya no está en espera' };
+}
+
+// Administradores conocidos del grupo (para etiquetarlos cuando nadie responde a un "error"): el número de Súper-admin y los autorizados con "autorizar".
+async function listarAdministradores(grupo) {
+  const lista = [];
+  const dig = telefonoDeParticipante(String(grupo.comandos_whatsapp_numero || '').replace(/\D/g, '') + '@s.whatsapp.net');
+  if (dig) lista.push({ jid: dig + '@s.whatsapp.net', nombre: '' });
+  try { const c = await cacheDeClientes(grupo.id); c.admins.forEach(d => lista.push({ jid: d + '@s.whatsapp.net', nombre: '' })); } catch (e) { /* solo se etiqueta a los conocidos */ }
+  return lista;
 }
 
 // Carrera abierta/cerrada de cada grupo, para que un reinicio del servidor no la pierda.
@@ -399,6 +415,8 @@ function sesionDe(grupo, sock, remoteJid) {
       resolverHipodromo: t => resolverHipodromo(grupo.id, t),
       disponible: n => disponibleDe(grupo.id, n),
       guardarJugada: j => guardarJugada(grupo.id, j),
+      eliminarJugada: id => eliminarJugadaEnEspera(grupo.id, id),
+      listarAdmins: () => listarAdministradores(grupo),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
       cargarEstado: () => cargarEstadoCarrera(grupo.id),
       registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
@@ -432,6 +450,11 @@ async function enviar(s, texto, op) {
     if (m) { contenido.text = contenido.text.replace(marca, '@' + m[1]); menciones.push(m[1] + '@' + m[2]); }
     else contenido.text = contenido.text.replace(marca, jid ? '@' + (nombre || '') : '');
   };
+  if (contenido.text.includes('@@L')) { // lista de personas (administradores): "@a @b @c"
+    const trozos = [];
+    (op.mencionarLista || []).forEach(p => { const m = p && p.jid ? String(p.jid).match(/^(\d+)(?::\d+)?@(s\.whatsapp\.net|lid)$/) : null; if (m) { trozos.push('@' + m[1]); menciones.push(m[1] + '@' + m[2]); } });
+    contenido.text = contenido.text.replace('@@L', trozos.join(' '));
+  }
   poner('@@3', op.mencionar3, op.nombre3);
   poner('@@2', op.mencionar2, op.nombre2);
   poner('@@', op.mencionar, op.nombre);
@@ -545,4 +568,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { cargarPizarraChat, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
