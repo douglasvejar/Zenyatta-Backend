@@ -2405,6 +2405,14 @@
          del Administrador, nunca delegables — mismo criterio que ya usa
          el backend real (requiereAdministrador en routes/empleados.js y
          en el PATCH nuevo de routes/grupo.js). -->
+    <!-- JUGADAS BOT IA (19-11-2026): solo aparece si el grupo tiene contratado el bot de Corredores (lo decide jugadas-bot-ia.js con
+         GET /api/hipismo/bot/estado). "Planos" = todos los planos del bot con la alerta "FALTA PIZARRA"; "Editar Jugadas" = agregar/editar/eliminar. -->
+    <button type="button" class="nav-item nav-parent" id="navParentBotIA" style="display:none" onclick="toggleGrupo('botIA')">🤖<span class="nav-lbl"> Jugadas Bot IA </span><span id="badgeBotIA" class="bot-badge-menu" style="display:none"></span><span id="caretBotIA">▾</span></button>
+    <div class="nav-children" id="grupoBotIA" style="display:none">
+      <button type="button" class="nav-item nav-child" data-vista="botPlanos" style="display:none" onclick="mostrarVista('botPlanos', this)">📋<span class="nav-lbl"> Planos</span></button>
+      <button type="button" class="nav-item nav-child" data-vista="botEditar" style="display:none" onclick="mostrarVista('botEditar', this)">✏️<span class="nav-lbl"> Editar Jugadas</span></button>
+    </div>
+
     <button type="button" class="nav-item nav-parent" id="navParentAjustesHip" onclick="toggleGrupo('ajustes')">⚙️<span class="nav-lbl"> Ajustes </span><span id="caretAjustes">▾</span></button>
     <div class="nav-children" id="grupoAjustes">
       <button type="button" class="nav-item nav-child" data-vista="preferencias" onclick="mostrarVista('preferencias', this)"><span class="nav-lbl"> Preferencias</span></button>
@@ -4629,6 +4637,10 @@ Pizarra: [se llena al calcular]
         <div id="listaEliminarWinners"><div class="resultado-vacio">Cargando…</div></div>
       </div>
     </section>
+
+    <!-- JUGADAS BOT IA (19-11-2026) — el contenido lo arma public/jugadas-bot-ia.js -->
+    <section class="vista" id="vista-botPlanos"><div class="card" id="botPlanosRaiz"></div></section>
+    <section class="vista" id="vista-botEditar"><div class="card" id="botEditarRaiz"></div></section>
 
     <!-- "Pizarras" (01-10-2026) — ver la nota grande de GET/PUT/DELETE
          /pizarras en routes/hipismo.js. Editar una modalidad RECALCULA
@@ -7594,6 +7606,7 @@ function seccionHabilitadaHip(clave) {
   return GRUPO.funcionesHabilitadas.includes(clave);
 }
 function vistaHabilitadaHip(vista) {
+  if (vista === 'botPlanos' || vista === 'botEditar') return !!window.BOT_IA_HABILITADO; // JUGADAS BOT IA: solo con el bot contratado
   const sec = SECCION_DE_VISTA_HIP[vista];
   return !sec || seccionHabilitadaHip(sec);
 }
@@ -19632,6 +19645,7 @@ mostrarBienvenidaSiCorrespondeHip();
      public/app.js (Saldos Semana de Deportes) — CDN público (cdnjs), sin
      vendorizar, mismas versiones, para que Pozos y Balance General puedan
      copiar imagen HD / descargar PDF / descargar Excel igual que Deportes. -->
+<script src="jugadas-bot-ia.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

@@ -7474,4 +7474,7 @@ router.alertarPozoBajoParaBot = async function alertarPozoBajoParaBot(grupoId, d
   return alertarPozoBajo(reqBot, datos);
 };
 
+// JUGADAS BOT IA (19-11-2026): planos del bot, pizarra y edición de jugadas, solo para los grupos con el bot contratado.
+router.use('/bot', require('./hipismoJugadasBot')({ registrarAlerta, hipismoPlanosPapelera }));
+
 module.exports = router;
