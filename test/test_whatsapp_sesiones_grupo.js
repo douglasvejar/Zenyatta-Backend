@@ -67,6 +67,8 @@ const DisconnectReason = { loggedOut: 401 };
 class Boom { constructor(e) { this.output = { statusCode: (e && e.statusCode) || 500 }; } }
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wsg-'));
 const alertas = [];
+const TURNO = { ok: true, soltados: [] };
+const RELOJ = { t: Date.parse('2026-11-19T20:00:00Z') };
 const timers = [];
 const llamadas = [];
 Object.assign(gestor._deps, {
@@ -77,7 +79,13 @@ Object.assign(gestor._deps, {
   intentar: async (a) => { llamadas.push(a); if (a.anotar) a.anotar('Lo leyó el bot de jugadas'); return false; },
   alertar: (asunto, cuerpo) => { alertas.push(asunto); return Promise.resolve(); },
   esperar: async () => {},
-  setTimeout: (fn, ms) => { const t = { fn, ms, limpiado: false }; timers.push(t); return t; }
+  setTimeout: (fn, ms) => { const t = { fn, ms, limpiado: false }; timers.push(t); return t; },
+  // Turno de conexión, vigilante y reloj falsos (19-11-2026)
+  setIntervalo: () => ({ falso: true }),
+  ahora: () => RELOJ.t,
+  tomarTurno: async () => TURNO.ok,
+  soltarTurno: async (id) => { TURNO.soltados.push(id); },
+  filasActivas: async () => BD.activos
 });
 const realClearTimeout = global.clearTimeout;
 global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.limpiado = true; return; } return realClearTimeout(t); };
@@ -178,6 +186,99 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   BD.errorColumna = true;
   check(await gestor.arrancarSesionesGuardadas() === 0, 'si todavía no existe la columna, no se cae el arranque');
   BD.errorColumna = false;
+
+  // ----- QUE UN PUSH NUNCA SILENCIE AL BOT (19-11-2026) -----
+  const abrir = (sock) => { sock.handlers['connection.update']({ connection: 'open' }); };
+  const reloj = (min) => { RELOJ.t += min * 60 * 1000; };
+  // 1) Turno: si otro servidor tiene la sesión, este espera (sin conectar) y se conecta solo cuando se libera
+  TURNO.ok = false;
+  const socksAntesT = socks.length;
+  await gestor.iniciarSesion('t1');
+  check(socks.length === socksAntesT, 'sin el turno (otro servidor conectado) NO se crea el socket: no se pelea por el número');
+  e = gestor.estadoPublico('t1');
+  check(!e.conectado && e.esperandoTurno && /Esperando que el servidor anterior/.test(e.ultimoError), 'el panel dice que está esperando que el servidor anterior suelte la sesión');
+  let tt = timers[timers.length - 1];
+  check(tt && tt.ms === 3000, 'reintenta tomar el turno cada 3 segundos');
+  tt.fn(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === socksAntesT && timers[timers.length - 1].ms === 3000 && timers[timers.length - 1] !== tt, 'si sigue ocupado, vuelve a esperar (nunca se queda sin reintento)');
+  TURNO.ok = true;
+  timers[timers.length - 1].fn(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === socksAntesT + 1, 'en cuanto el servidor anterior suelta el turno, se conecta solo');
+  const sT = socks[socks.length - 1];
+  abrir(sT); await new Promise(r => setImmediate(r));
+  check(gestor.estaConectada('t1') && !gestor.estadoPublico('t1').esperandoTurno, 'conectado y con el turno');
+
+  // 2) Si en el latido el turno ya es de otro servidor, este suelta el socket y espera (no hay pelea de 440)
+  TURNO.ok = false;
+  await gestor._latido();
+  check(sT.terminado && !gestor.estaConectada('t1') && gestor.estadoPublico('t1').esperandoTurno, 'al perder el turno cierra su socket y queda en espera');
+  check(timers[timers.length - 1].ms === 9000, 'y vuelve a intentar tomar el turno más tarde');
+  TURNO.ok = true;
+  timers[timers.length - 1].fn(); await new Promise(r => setTimeout(r, 20));
+  const sT2 = socks[socks.length - 1];
+  abrir(sT2); await new Promise(r => setImmediate(r));
+  check(gestor.estaConectada('t1'), 'cuando el turno vuelve a estar libre, se reconecta sola');
+
+  // 3) Vigilante: dice "Conectado" pero no entrega mensajes -> se reinicia sola, con espera creciente
+  const nSocks3 = socks.length;
+  reloj(2);
+  await gestor._latido();
+  check(socks.length === nSocks3, 'a los 2 minutos sin mensajes todavía no se toca (el grupo puede estar en silencio)');
+  reloj(2); // 4 min conectada sin recibir nada
+  await gestor._latido(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === nSocks3 + 1 && sT2.terminado, 'a los 4 minutos "Conectado" sin ningún mensaje: reinicia la conexión sola (sin pedir QR)');
+  e = gestor.estadoPublico('t1');
+  check(e.refrescos === 1 && e.ultimoRefresco && /no entregó ningún mensaje/.test(e.ultimoRefresco.motivo), 'el panel anota que el vigilante la reinició y por qué');
+  const sT3 = socks[socks.length - 1]; abrir(sT3); await new Promise(r => setImmediate(r));
+  reloj(5);
+  await gestor._latido(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === nSocks3 + 1, 'no se reinicia otra vez enseguida: espera creciente (10 min)');
+  reloj(6); // ya pasaron más de 10 min del primer reinicio
+  await gestor._latido(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === nSocks3 + 2 && gestor.estadoPublico('t1').refrescos === 2, 'pasado el tiempo de espera, la reinicia de nuevo');
+  const sT4 = socks[socks.length - 1]; abrir(sT4); await new Promise(r => setImmediate(r));
+  reloj(30);
+  await gestor._latido(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === nSocks3 + 3 && gestor.estadoPublico('t1').refrescos === 3, 'tercer reinicio automático');
+  check(alertas.some(a => /no recibe mensajes/.test(a)), 'al tercer intento se avisa por correo');
+  const sT5 = socks[socks.length - 1]; abrir(sT5); await new Promise(r => setImmediate(r));
+  await sT5.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '999@g.us', id: 'V1' }, message: { conversation: 'hola' } }] });
+  check(gestor.estadoPublico('t1').refrescos === 0, 'cuando llega un mensaje el vigilante se tranquiliza (reinicia su cuenta)');
+  const nSocks3b = socks.length; reloj(60);
+  await gestor._latido(); await new Promise(r => setTimeout(r, 20));
+  check(socks.length === nSocks3b, 'con mensajes entregándose no se reinicia nada, aunque pase el tiempo');
+
+  // 4) Código 440 (el número se abrió en otro lugar): espera más para no entrar en pelea
+  sT5.handlers['connection.update']({ connection: 'close', lastDisconnect: { error: { statusCode: 440 } } });
+  check(timers[timers.length - 1].ms === 20000 && /otro lugar/.test(gestor.estadoPublico('t1').ultimoError || '') === false || timers[timers.length - 1].ms === 20000, 'código 440: espera 20 s antes de reintentar (no pelea cada 5 s)');
+
+  // 5) Si un reintento falla (ej. la base se cae justo al desplegar), se vuelve a programar otro
+  const bailOriginal = gestor._deps.cargarBaileys;
+  let fallosRestantes = 1;
+  gestor._deps.cargarBaileys = () => { if (fallosRestantes-- > 0) throw new Error('base caída'); return bailOriginal(); };
+  const nTim = timers.length;
+  timers[timers.length - 1].fn(); await new Promise(r => setTimeout(r, 20));
+  check(timers.length === nTim + 1 && timers[timers.length - 1].ms === 10000 && /reintentando/.test(gestor.estadoPublico('t1').ultimoError), 'si el reintento falla se programa otro (nunca queda muerta)');
+  timers[timers.length - 1].fn(); await new Promise(r => setTimeout(r, 20));
+  gestor._deps.cargarBaileys = bailOriginal;
+  check(gestor.estadoPublico('t1').activa && !!gestor._sesiones.get('t1').sock, 'y el segundo reintento la levanta');
+
+  // 6) Reconciliador: un grupo que debería estar activo y no está en marcha se levanta solo
+  BD.activos = [{ id: 'r1' }];
+  const nSocks6 = socks.length;
+  const lev = await gestor._reconciliar(); await new Promise(r => setTimeout(r, 20));
+  check(lev === 1 && socks.length === nSocks6 + 1 && gestor._sesiones.has('r1'), 'el vigilante levanta una sesión que debería estar activa y no lo estaba');
+  check(await gestor._reconciliar() === 0, 'y no toca la que ya está en marcha');
+  BD.activos = [{ id: 'a1' }, { id: 'a2' }];
+
+  // 7) Apagado limpio (SIGTERM): cierra los sockets y suelta los turnos al instante
+  TURNO.soltados.length = 0;
+  const vivos = Array.from(gestor._sesiones.values()).filter(x => x.sock).map(x => x.sock);
+  const nApagadas = await gestor.apagar();
+  check(nApagadas >= 3 && vivos.every(x => x.terminado), 'apagado limpio: todos los sockets se cierran');
+  check(TURNO.soltados.includes('t1') && TURNO.soltados.includes('r1'), 'apagado limpio: se sueltan los turnos para que el servidor nuevo tome las sesiones al instante');
+  check(!gestor._sesiones.get('t1').sock && gestor._sesiones.get('t1').cerrando, 'tras apagar no se reconecta nada');
+  gestor._sesiones.delete('t1'); gestor._sesiones.delete('r1');
 
   // ----- conexión con el bot de jugadas -----
   const sockBot = socks[0];

@@ -2405,3 +2405,11 @@ create table if not exists whatsapp_sesion_datos (
   actualizado_en timestamptz not null default now(),
   primary key (scope, clave)
 );
+
+-- 19-11-2026: "turno" de conexión de cada sesión de WhatsApp. Durante un despliegue conviven el servidor viejo y el nuevo; solo el
+-- dueño del turno conecta el número (el otro espera), así un push ya no deja al bot "Conectado" sin recibir mensajes.
+create table if not exists whatsapp_sesion_turno (
+  scope     text primary key,
+  dueno     text not null,
+  expira_en timestamptz not null
+);

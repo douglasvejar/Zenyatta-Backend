@@ -67,6 +67,9 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado 
     scope text not null, clave text not null, valor text not null, actualizado_en timestamptz not null default now(),
     primary key (scope, clave)
   )`))
+  .then(() => pool.query(`create table if not exists whatsapp_sesion_turno (
+    scope text primary key, dueno text not null, expira_en timestamptz not null
+  )`))
   .then(() => pool.query(`create table if not exists hipismo_chat_numeros (
     grupo_id uuid not null references grupos(id) on delete cascade,
     digitos text not null, jugador_nombre text not null, creado_en timestamptz not null default now(),

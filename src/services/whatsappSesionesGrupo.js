@@ -12,8 +12,32 @@
 // =================================================================
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const db = require('../db');
 const whatsappAuthDb = require('./whatsappAuthDb');
+
+// =================================================================
+// QUE UN PUSH NUNCA SILENCIE AL BOT (19-11-2026)
+// Al desplegar, Railway deja el servidor viejo y el nuevo vivos a la vez durante unos segundos y los dos usaban la MISMA sesión de
+// WhatsApp (guardada en la base): se echaban uno al otro, y a veces el que quedaba decía "Conectado" pero WhatsApp ya no le entregaba
+// mensajes. Ahora hay tres defensas:
+//   1) TURNO: cada sesión tiene un "turno" en la base (tabla whatsapp_sesion_turno). Solo UN servidor a la vez puede conectarla; el
+//      nuevo espera (y se conecta solo) hasta que el viejo la suelta. El turno se renueva cada 10 s y caduca solo a los 30 s si el
+//      servidor muere sin avisar.
+//   2) APAGADO LIMPIO: al recibir SIGTERM (Railway apagando el servidor viejo) se cierra el socket y se suelta el turno al instante.
+//   3) VIGILANTE: cada 10 s revisa todo. Si una conexión dice "Conectado" pero lleva minutos sin entregar ni un mensaje, la
+//      reinicia sola (sin pedir QR) con espera creciente; si una sesión no está levantada, la levanta; si falla un reintento,
+//      vuelve a programar otro. Nada de esto necesita que alguien entre al panel.
+// =================================================================
+const INSTANCIA = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_REPLICA_ID || 'local') + ':' + process.pid + ':' + crypto.randomBytes(3).toString('hex');
+const TURNO_TTL_S = 30;
+const LATIDO_MS = 10 * 1000;
+const ESPERA_TURNO_MS = 3000;
+const ESPERA_CONFLICTO_MS = 20000; // código 440: alguien más usa el número; no entrar en pelea cada 5 s
+const SIN_MENSAJES_MS = 3 * 60 * 1000; // "Conectado" pero 0 mensajes durante este tiempo => se reinicia la conexión
+const REFRESCO_BASE_MS = 10 * 60 * 1000;
+const REFRESCO_MAX_MS = 2 * 60 * 60 * 1000;
+const CADA_N_LATIDOS_RECONCILIAR = 6;
 
 const sesiones = new Map(); // grupoId -> { sock, gen, conectado, ultimoQr, ultimoError, gruposDisponibles, numero, reintento, cerrando }
 const ESPERA_REINTENTO_MS = 5000;
@@ -38,7 +62,27 @@ const deps = {
   },
   borrarSesionBd: (id) => whatsappAuthDb.borrarSesion(db, 'grupo-' + String(id)),
   esperar: (ms) => new Promise(r => setTimeout(r, ms)),
-  setTimeout: (fn, ms) => setTimeout(fn, ms)
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  setIntervalo: (fn, ms) => { const t = setInterval(fn, ms); if (t && t.unref) t.unref(); return t; },
+  ahora: () => Date.now(),
+  // Turno de conexión (ver arriba). true = este servidor puede conectar/seguir conectado; false = otro servidor la tiene.
+  tomarTurno: async (id) => {
+    const consultar = () => db.query(
+      `INSERT INTO whatsapp_sesion_turno (scope, dueno, expira_en) VALUES ($1, $2, now() + $3::int * interval '1 second')
+       ON CONFLICT (scope) DO UPDATE SET dueno = EXCLUDED.dueno, expira_en = EXCLUDED.expira_en
+       WHERE whatsapp_sesion_turno.dueno = EXCLUDED.dueno OR whatsapp_sesion_turno.expira_en < now()
+       RETURNING dueno`, ['grupo-' + String(id), INSTANCIA, TURNO_TTL_S]);
+    try { return (await consultar()).rows.length > 0; }
+    catch (e) {
+      if (!e || e.code !== '42P01') throw e;
+      await db.query('create table if not exists whatsapp_sesion_turno (scope text primary key, dueno text not null, expira_en timestamptz not null)');
+      return (await consultar()).rows.length > 0;
+    }
+  },
+  soltarTurno: async (id) => {
+    try { await db.query('DELETE FROM whatsapp_sesion_turno WHERE scope = $1 AND dueno = $2', ['grupo-' + String(id), INSTANCIA]); } catch (e) { /* caduca solo en 30 s */ }
+  },
+  filasActivas: async () => (await db.query('SELECT id FROM grupos WHERE whatsapp_propio_activo = true AND activo = true')).rows
 };
 
 function carpetaDeSesion(grupoId) {
@@ -46,7 +90,7 @@ function carpetaDeSesion(grupoId) {
 }
 
 function estadoVacio() {
-  return { sock: null, gen: 0, conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], numero: null, reintento: null, cerrando: false, eventos: 0, ultimoEvento: null, conectadoEn: null, reconexiones: 0, ultimoCodigo: null };
+  return { sock: null, gen: 0, conectado: false, ultimoQr: null, ultimoError: null, gruposDisponibles: [], numero: null, reintento: null, cerrando: false, eventos: 0, ultimoEvento: null, conectadoEn: null, reconexiones: 0, ultimoCodigo: null, turno: false, refrescos: 0, proximoRefresco: 0, ultimoRefresco: null };
 }
 
 function numeroDeSock(sock) {
@@ -73,6 +117,7 @@ function estadoPublico(grupoId) {
     ultimo: s.ultimo || null,
     // Diagnóstico (18-11-2026): ¿WhatsApp le entrega eventos a este número? ¿se reconecta seguido?
     eventos: s.eventos || 0, ultimoEvento: s.ultimoEvento || null, conectadoEn: s.conectadoEn || null, reconexiones: s.reconexiones || 0, ultimoCodigo: s.ultimoCodigo || null,
+    esperandoTurno: !s.turno, refrescos: s.refrescos || 0, ultimoRefresco: s.ultimoRefresco || null,
     grupos: s.gruposDisponibles || []
   };
 }
@@ -131,8 +176,109 @@ async function manejarMensaje(grupoId, sock, msg) {
   }
 }
 
+// Programa (y si falla, vuelve a programar) un nuevo intento de levantar la sesión. Nunca se queda sin reintento.
+function programarReintento(id, s, ms) {
+  if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
+  const gen = s.gen;
+  s.reintento = deps.setTimeout(() => {
+    s.reintento = null;
+    if (s.gen !== gen || s.cerrando) return;
+    iniciarSesion(id).catch(e => {
+      console.error('[whatsappSesionesGrupo] Error al reconectar el grupo ' + id + ' (se vuelve a intentar):', e && e.message ? e.message : e);
+      s.ultimoError = 'No se pudo reconectar (' + (e && e.message ? e.message : 'error') + '), reintentando…';
+      if (!s.cerrando) programarReintento(id, s, ESPERA_REINTENTO_MS * 2);
+    });
+  }, ms);
+}
+
+// Cierra el socket de esta sesión sin tocar la sesión guardada (no desvincula, no pide QR).
+function cerrarSocket(s) {
+  s.gen++; s.conectado = false;
+  if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
+  if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
+}
+
+// VIGILANTE (cada 10 s): renueva el turno, detecta turnos perdidos y conexiones "Conectado" que no entregan mensajes.
+let latidoTimer = null, latidos = 0, latidoEnCurso = false;
+function asegurarLatido() {
+  if (latidoTimer) return;
+  latidoTimer = deps.setIntervalo(() => { latido().catch(e => console.error('[whatsappSesionesGrupo] Error del vigilante:', e && e.message ? e.message : e)); }, LATIDO_MS);
+}
+
+async function latido() {
+  if (latidoEnCurso) return;
+  latidoEnCurso = true;
+  try {
+    latidos++;
+    for (const [id, s] of Array.from(sesiones.entries())) {
+      if (s.cerrando || !s.turno) continue;
+      let sigoSiendoYo;
+      try { sigoSiendoYo = await deps.tomarTurno(id); } catch (e) { continue; } // fallo pasajero de la base: se intenta en el próximo latido
+      if (s.cerrando || !s.turno) continue;
+      if (!sigoSiendoYo) {
+        console.error('[whatsappSesionesGrupo] Grupo ' + id + ': otro servidor tomó el turno de esta sesión; este queda en espera para no pelear por el número.');
+        cerrarSocket(s); s.turno = false;
+        s.ultimoError = 'Esperando que el otro servidor suelte la sesión de WhatsApp…';
+        programarReintento(id, s, ESPERA_TURNO_MS * 3);
+        continue;
+      }
+      const ahora = deps.ahora();
+      const edad = s.conectado && s.conectadoEn ? ahora - Date.parse(s.conectadoEn) : 0;
+      if (s.conectado && (s.eventos || 0) === 0 && edad >= SIN_MENSAJES_MS && ahora >= (s.proximoRefresco || 0)) {
+        s.refrescos = (s.refrescos || 0) + 1;
+        s.proximoRefresco = ahora + Math.min(REFRESCO_MAX_MS, REFRESCO_BASE_MS * Math.pow(2, s.refrescos - 1));
+        s.ultimoRefresco = { en: new Date(ahora).toISOString(), n: s.refrescos, motivo: 'Decía "Conectado" pero WhatsApp no entregó ningún mensaje en ' + Math.round(edad / 60000) + ' min' };
+        console.error('[whatsappSesionesGrupo] Grupo ' + id + ': conectado hace ' + Math.round(edad / 60000) + ' min sin recibir ni un mensaje — se reinicia la conexión sola (intento ' + s.refrescos + ').');
+        if (s.refrescos === 3) deps.alertar('🟠 LUDOX: el bot de WhatsApp conecta pero no recibe mensajes', 'El número propio del grupo ' + id + ' lleva ' + s.refrescos + ' reinicios automáticos diciendo "Conectado" sin recibir mensajes (puede ser que el grupo esté en silencio, o que la sesión guardada esté dañada). Si en el grupo sí están escribiendo: Súper-admin → detalle del grupo → WhatsApp → "Volver a vincular".');
+        iniciarSesion(id).catch(e => {
+          console.error('[whatsappSesionesGrupo] Error al reiniciar el grupo ' + id + ':', e && e.message ? e.message : e);
+          if (!s.cerrando) programarReintento(id, s, ESPERA_REINTENTO_MS);
+        });
+      }
+    }
+    if (latidos % CADA_N_LATIDOS_RECONCILIAR === 0) await reconciliar();
+  } finally { latidoEnCurso = false; }
+}
+
+// Levanta las sesiones que deberían estar activas (grupos con número propio) y no están en marcha (porque falló el arranque, etc.).
+async function reconciliar() {
+  let filas;
+  try { filas = await deps.filasActivas(); } catch (e) { return 0; }
+  let levantadas = 0;
+  for (const f of filas) {
+    const s = sesiones.get(String(f.id));
+    if (s && (s.sock || s.reintento || s.cerrando || s.iniciando || s.ultimoError && /cerró la sesión/.test(s.ultimoError))) continue;
+    levantadas++;
+    console.log('[whatsappSesionesGrupo] Vigilante: el grupo ' + f.id + ' debería estar conectado y no lo está; se levanta.');
+    iniciarSesion(f.id).catch(e => {
+      const st = sesiones.get(String(f.id));
+      console.error('[whatsappSesionesGrupo] Vigilante: no se pudo levantar el grupo ' + f.id + ':', e && e.message ? e.message : e);
+      if (st && !st.cerrando) programarReintento(String(f.id), st, ESPERA_REINTENTO_MS);
+    });
+  }
+  return levantadas;
+}
+
+// Apagado limpio (SIGTERM de Railway): cierra los sockets y suelta los turnos para que el servidor nuevo tome las sesiones al instante.
+async function apagar() {
+  if (latidoTimer) { try { clearInterval(latidoTimer); } catch (e) { /* nada */ } latidoTimer = null; }
+  const ids = [];
+  for (const [id, s] of sesiones.entries()) { s.cerrando = true; ids.push([id, s.turno]); cerrarSocket(s); s.turno = false; }
+  await deps.esperar(800); // deja terminar los guardados de llaves que estaban en curso
+  for (const [id, tenia] of ids) { if (tenia) await deps.soltarTurno(id); }
+  return ids.length;
+}
+
 // Arranca (o reinicia) la conexión propia de un grupo. Devuelve cuando el socket ya quedó armado (no espera al QR).
 async function iniciarSesion(grupoId) {
+  const id = String(grupoId);
+  let s0 = sesiones.get(id);
+  if (!s0) { s0 = estadoVacio(); sesiones.set(id, s0); }
+  s0.iniciando = (s0.iniciando || 0) + 1; // para que el vigilante no la arranque dos veces a la vez
+  try { return await iniciarSesionInterna(id); } finally { s0.iniciando--; }
+}
+
+async function iniciarSesionInterna(grupoId) {
   const id = String(grupoId);
   let s = sesiones.get(id);
   if (!s) { s = estadoVacio(); sesiones.set(id, s); }
@@ -140,6 +286,20 @@ async function iniciarSesion(grupoId) {
   if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
   if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
   const gen = ++s.gen;
+  asegurarLatido();
+
+  // Turno: solo un servidor a la vez conecta esta sesión (el nuevo espera a que el viejo la suelte).
+  let tengoTurno = false;
+  try { tengoTurno = await deps.tomarTurno(id); }
+  catch (e) { console.error('[whatsappSesionesGrupo] Grupo ' + id + ': no se pudo reservar el turno en la base, reintento:', e.message); s.ultimoError = 'No se pudo hablar con la base de datos, reintentando…'; }
+  if (s.gen !== gen || s.cerrando) return null;
+  if (!tengoTurno) {
+    s.turno = false; s.conectado = false;
+    if (!/^No se pudo hablar/.test(s.ultimoError || '')) s.ultimoError = 'Esperando que el servidor anterior suelte la sesión de WhatsApp (se conecta sola en cuanto la suelte)…';
+    programarReintento(id, s, ESPERA_TURNO_MS);
+    return null;
+  }
+  s.turno = true;
 
   const baileys = deps.cargarBaileys();
   const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = baileys;
@@ -163,7 +323,7 @@ async function iniciarSesion(grupoId) {
     const { connection, lastDisconnect, qr } = update;
     if (qr) { s.ultimoQr = qr; s.conectado = false; }
     if (connection === 'open') {
-      s.conectado = true; s.ultimoQr = null; s.ultimoError = null; s.conectadoEn = new Date().toISOString(); s.eventos = 0; s.ultimoEvento = null;
+      s.conectado = true; s.ultimoQr = null; s.ultimoError = null; s.conectadoEn = new Date(deps.ahora()).toISOString(); s.eventos = 0; s.ultimoEvento = null;
       s.numero = numeroDeSock(sock);
       console.log('[whatsappSesionesGrupo] Grupo ' + id + ': conectado con su número propio.');
       listarGrupos(s);
@@ -184,11 +344,7 @@ async function iniciarSesion(grupoId) {
         const explicacion = { 440: 'la sesión se abrió en otro lugar (dos servidores usando el mismo número)', 515: 'WhatsApp pidió reiniciar la conexión (normal justo después de escanear el QR)', 428: 'WhatsApp cerró la conexión', 408: 'se agotó el tiempo de espera', 500: 'la sesión guardada está dañada', 503: 'WhatsApp no estaba disponible' }[codigo];
         console.log('[whatsappSesionesGrupo] Grupo ' + id + ': conexión cerrada (código ' + codigo + (explicacion ? ' — ' + explicacion : '') + '), reintentando.');
         s.ultimoError = 'Se perdió la conexión' + (codigo ? ' (código ' + codigo + (explicacion ? ': ' + explicacion : '') + ')' : '') + ', reintentando…';
-        s.reintento = deps.setTimeout(() => {
-          s.reintento = null;
-          if (s.gen !== gen || s.cerrando) return;
-          iniciarSesion(id).catch(e => console.error('[whatsappSesionesGrupo] Error al reconectar el grupo ' + id + ':', e));
-        }, ESPERA_REINTENTO_MS);
+        programarReintento(id, s, codigo === 440 ? ESPERA_CONFLICTO_MS : ESPERA_REINTENTO_MS);
       }
     }
   });
@@ -197,6 +353,7 @@ async function iniciarSesion(grupoId) {
     if (s.gen !== gen) return;
     const n = (evento.messages || []).length;
     s.eventos = (s.eventos || 0) + n; s.ultimoEvento = { en: new Date().toISOString(), tipo: evento.type || null, n };
+    s.refrescos = 0; s.proximoRefresco = 0; // la conexión sí está entregando mensajes: se reinicia el vigilante
     console.log('[whatsappSesionesGrupo] Grupo ' + id + ': llegaron ' + n + ' mensaje(s) (tipo ' + (evento.type || '?') + ')');
     for (const msg of (evento.messages || [])) await manejarMensaje(id, sock, msg);
   });
@@ -230,18 +387,27 @@ async function arrancarSesionesGuardadas() {
     const r = await db.query('SELECT id FROM grupos WHERE whatsapp_propio_activo = true AND activo = true');
     filas = r.rows;
   } catch (e) {
-    if (!e || e.code !== '42703') console.error('[whatsappSesionesGrupo] No se pudieron leer los grupos con número propio:', e.message);
+    if (!e || e.code !== '42703') {
+      console.error('[whatsappSesionesGrupo] No se pudieron leer los grupos con número propio (se reintenta en 15 s):', e.message);
+      deps.setTimeout(() => { arrancarSesionesGuardadas().catch(() => {}); }, 15000);
+    }
     return 0;
   }
+  asegurarLatido(); // el vigilante queda corriendo aunque este arranque falle
   for (const f of filas) {
-    try { await iniciarSesion(f.id); } catch (e) { console.error('[whatsappSesionesGrupo] No se pudo arrancar el grupo ' + f.id + ':', e.message); }
+    try { await iniciarSesion(f.id); }
+    catch (e) {
+      console.error('[whatsappSesionesGrupo] No se pudo arrancar el grupo ' + f.id + ' (se reintenta):', e.message);
+      const st = sesiones.get(String(f.id));
+      if (st && !st.cerrando) programarReintento(String(f.id), st, ESPERA_REINTENTO_MS * 2);
+    }
     await deps.esperar(ESPERA_ENTRE_ARRANQUES_MS);
   }
   return filas.length;
 }
 
 module.exports = {
-  iniciarSesion, desvincular, arrancarSesionesGuardadas, refrescarGrupos,
+  iniciarSesion, desvincular, arrancarSesionesGuardadas, refrescarGrupos, apagar,
   estadoPublico, estaConectada, obtenerQr, carpetaDeSesion, enmascararNumero,
-  _deps: deps, _sesiones: sesiones
+  _deps: deps, _sesiones: sesiones, _latido: latido, _reconciliar: reconciliar, _constantes: { SIN_MENSAJES_MS, REFRESCO_BASE_MS, REFRESCO_MAX_MS, TURNO_TTL_S }
 };

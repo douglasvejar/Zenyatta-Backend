@@ -234,6 +234,24 @@ if (process.env.DATABASE_URL) {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const servidor = app.listen(PORT, () => {
   console.log('Ludox backend corriendo en http://localhost:' + PORT);
 });
+
+// APAGADO LIMPIO (19-11-2026): Railway manda SIGTERM al servidor viejo cuando entra el nuevo. Antes de salir se cierran los
+// números de WhatsApp y se suelta su "turno" en la base, así el servidor nuevo toma la sesión al instante y el bot no se queda mudo.
+let apagandoServidor = false;
+async function apagarLimpio(senal) {
+  if (apagandoServidor) return;
+  apagandoServidor = true;
+  console.log('[apagado] Recibí ' + senal + ': cierro WhatsApp con calma y suelto el turno antes de salir.');
+  const tope = setTimeout(() => process.exit(0), 8000); // nunca quedarse colgado
+  try {
+    if (process.env.WHATSAPP_BOT_ACTIVADO === 'true') await require('./services/whatsappSesionesGrupo').apagar();
+  } catch (e) { console.error('[apagado] Error al cerrar WhatsApp:', e && e.message ? e.message : e); }
+  try { servidor.close(); } catch (e) { /* nada */ }
+  clearTimeout(tope);
+  process.exit(0);
+}
+process.on('SIGTERM', () => { apagarLimpio('SIGTERM'); });
+process.on('SIGINT', () => { apagarLimpio('SIGINT'); });
