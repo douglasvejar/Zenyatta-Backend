@@ -492,7 +492,17 @@ function crearMotor(deps) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear();
     await guardarEstado();
-    await deps.responder('*🔒 Carrera cerrada se dio la partida en ' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera. Ya no se reciben mas jugadas,*\n*éxitos a todos en sus apuestas, al tener pizarra oficial se enviaran los totales de esta carrera 💰🐎💰🐎*', { citarId: m.id });
+    // Todo en negrita y cursiva (*_línea_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
+    const bc = t => '*_' + t + '_*';
+    await deps.responder([
+      bc('🔒❌ Carrera cerrada se dio la partida en ' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera. Ya no se reciben mas jugadas,❌🔒'),
+      bc('🚫 NO HAY MAS JUGADA🚫'),
+      bc('🚫 NO HAY MAS JUGADA🚫'),
+      bc('éxitos a todos en sus apuestas, al tener pizarra oficial se enviaran los totales de esta carrera 💰🐎💰🐎'),
+      bc('🔒 CARRERA CERRADA🔒'),
+      bc('NOS REGIMOS POR EL CHAT📲 Y NUESTROS REGLAMENTOS ‼️'),
+      bc('JUEGA GANA Y COBRA SEGURO EN ' + String(deps.nombreGrupo || '').toUpperCase())
+    ].join('\n'), { citarId: m.id });
     await publicarPlano();
   }
 
