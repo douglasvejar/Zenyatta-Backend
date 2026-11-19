@@ -39,6 +39,7 @@ const REFRESCO_BASE_MS = 10 * 60 * 1000;
 const REFRESCO_MAX_MS = 2 * 60 * 60 * 1000;
 const CADA_N_LATIDOS_RECONCILIAR = 6;
 const BUFFER_MAX_MS = 30 * 1000;
+const MAX_EDAD_MENSAJE_MS = 4 * 60 * 1000;
 
 const sesiones = new Map(); // grupoId -> { sock, gen, conectado, ultimoQr, ultimoError, gruposDisponibles, numero, reintento, cerrando }
 const ESPERA_REINTENTO_MS = 5000;
@@ -169,6 +170,15 @@ async function manejarMensaje(grupoId, sock, msg) {
     return;
   }
   if (!texto) { anotar('Ignorado: el mensaje no tiene texto (foto, sticker...)'); return; }
+  // Mensajes viejos (19-11-2026): al reconectar, WhatsApp entrega de golpe lo que se escribió mientras estuvo caído (tipo "append": ej. 72 de
+  // una vez). Ejecutar comandos o jugadas de hace rato (abrir/cerrar carreras, registrar jugadas dos veces) sería peligroso: solo se
+  // atienden los de los últimos MAX_EDAD_MENSAJE_MS (cubre un deploy normal); los más viejos se ignoran y se anota en el panel.
+  const t = msg && msg.messageTimestamp;
+  const seg = t && typeof t === 'object' && typeof t.toNumber === 'function' ? t.toNumber() : Number(t);
+  if (seg > 0 && deps.ahora() - seg * 1000 > MAX_EDAD_MENSAJE_MS) {
+    anotar('Ignorado: mensaje viejo (de hace ' + Math.round((deps.ahora() - seg * 1000) / 60000) + ' min, llegó retrasado al reconectar)');
+    return;
+  }
   try {
     const ayudas = deps.ayudasBot()(sock, msg);
     await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar });

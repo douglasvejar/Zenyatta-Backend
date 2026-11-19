@@ -257,6 +257,14 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   check(flushes === 1 && gestor.estadoPublico('t1').flushForzados === 1, 'buffer retenido más de 30 s: se libera a la fuerza y queda anotado');
   check(socks[socks.length - 1].argsCreacion && socks[socks.length - 1].argsCreacion.syncFullHistory === false && socks[socks.length - 1].argsCreacion.shouldSyncHistoryMessage() === false, 'el socket se crea sin sincronizar historial (evita que el buffer se cuelgue)');
 
+  // 3c) Mensajes viejos entregados de golpe al reconectar no se ejecutan
+  const nLl = llamadas.length;
+  const segAhora = Math.floor(RELOJ.t / 1000);
+  await sT5.handlers['messages.upsert']({ type: 'append', messages: [{ key: { remoteJid: JID, id: 'OLD1' }, messageTimestamp: segAhora - 600, message: { conversation: 'abierta 5ta de gulf' } }] });
+  check(llamadas.length === nLl && /mensaje viejo/.test((gestor._sesiones.get('t1').ultimo || {}).motivo || ''), 'un mensaje de hace 10 min (entregado tarde al reconectar) se ignora y el panel lo explica');
+  await sT5.handlers['messages.upsert']({ type: 'append', messages: [{ key: { remoteJid: JID, id: 'NEW1' }, messageTimestamp: { toNumber: () => segAhora - 60 }, message: { conversation: 'abierta 5ta de gulf' } }] });
+  check(llamadas.length === nLl + 1, 'uno de hace 1 min (lo escrito durante el deploy) sí se atiende');
+
   // 4) Código 440 (el número se abrió en otro lugar): espera más para no entrar en pelea
   sT5.handlers['connection.update']({ connection: 'close', lastDisconnect: { error: { statusCode: 440 } } });
   check(timers[timers.length - 1].ms === 20000 && /otro lugar/.test(gestor.estadoPublico('t1').ultimoError || '') === false || timers[timers.length - 1].ms === 20000, 'código 440: espera 20 s antes de reintentar (no pelea cada 5 s)');
