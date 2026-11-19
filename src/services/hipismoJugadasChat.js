@@ -485,14 +485,14 @@ function crearMotor(deps) {
     ofertas.clear(); sinPlano = 0;
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
     await guardarEstado();
-    await deps.responder('✅ Carrera abierta: *' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera*. Ya recibo jugadas.' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
+    await deps.responder('*✅ Carrera abierta: ' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
   }
 
   async function cerrarCarrera(m) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear();
     await guardarEstado();
-    await deps.responder('🔒 Carrera cerrada: *' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera*. Ya no recibo jugadas. Plano final (queda esperando la pizarra):', { citarId: m.id });
+    await deps.responder('*🔒 Carrera cerrada se dio la partida en ' + ctx.hipodromo + ', ' + ORDINAL_CARRERA(ctx.carrera) + ' Carrera. Ya no se reciben mas jugadas,*\n*éxitos a todos en sus apuestas, al tener pizarra oficial se enviaran los totales de esta carrera 💰🐎💰🐎*', { citarId: m.id });
     await publicarPlano();
   }
 
@@ -552,7 +552,7 @@ function crearMotor(deps) {
       }
       // Tiene saldo pero menos de lo que puso: se le pide corregir, y la parada queda abierta: al recibir respuestas se juega solo su disponible.
       nota('Jugada publicada por ' + nombre + ' por ' + fmt(o.monto) + ' pero su disponible para esta jugada es ' + fmt(tope.max) + ': se le pidió corregir; si le responden se juega solo su disponible' + (tope.detalle ? '. ' + tope.detalle : ''));
-      await deps.responder(etiquetaDe(m) + ' Favor corregir monto, su monto disponible para jugadas es de ' + fmt(tope.max) + '. En caso de recibir alguna respuesta, jugará solo su disponible.', mencion(m));
+      await deps.responder('*🚨🚨🚨🚨🚨*\n' + etiquetaDe(m) + ' *Favor corregir monto, su monto disponible para jugadas es de ' + fmt(tope.max) + '. En caso de recibir alguna respuesta, jugará solo su disponible.*', mencion(m));
     }
     nota('Jugada publicada por ' + nombre + ' (' + fmt(o.monto) + '): queda abierta 3 minutos esperando respuestas');
     ofertas.set(m.id, { id: m.id, ts: tiempoDe(m), autorJid: m.remitente.jid, autorNombre: nombre, autorEtiqueta: m.remitente.nombre, lado: o.lado, apuesta: o.apuesta, monto: o.monto, restante: o.monto });
@@ -596,7 +596,7 @@ function crearMotor(deps) {
     }
     if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }
     if (oferta.restante <= 0.005) { nota(nombre + ' respondió pero la parada ya estaba topada'); await deps.responder('❌ Aquí nada, ya está topada', { citarId: m.id }); return; }
-    if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('❌ Aquí nada, puso se fue', { citarId: m.id }); return; }
+    if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', { citarId: m.id }); return; }
     if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) { nota(nombre + ' respondió pasados los 3 minutos de vigencia de la parada'); await deps.responder('❌ Aquí nada, pasaron más de 3 minutos desde que se publicó la parada', { citarId: m.id }); return; }
 
     const restanteAntes = oferta.restante; // lo que le quedaba a la parada cuando respondieron

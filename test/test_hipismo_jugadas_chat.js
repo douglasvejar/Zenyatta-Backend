@@ -157,9 +157,9 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_luis', 'Sf'));
   const rSf = msg('j_marvel', '30', { citadoId: ofSf.id });
   await motor.procesarMensaje(rSf);
-  check(guardadas.length === antesSf && ultima().t === '❌ Aquí nada, puso se fue' && ultima().op.citarId === rSf.id, 'Luis escribió "Sf": si Marvel le pone 30 a su jugada, el bot responde "Aquí nada, puso se fue" y no registra nada');
+  check(guardadas.length === antesSf && ultima().t === '*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*' && ultima().op.citarId === rSf.id, 'Luis escribió "Sf": si Marvel le pone 30 a su jugada, el bot responde "Aquí nada, puso se fue" y no registra nada');
   await motor.procesarMensaje(msg('j_ricardo', 'J', { citadoId: ofSf2.id }));
-  check(guardadas.length === antesSf && ultima().t === '❌ Aquí nada, puso se fue', 'también para su otra jugada abierta (se fueron TODAS)');
+  check(guardadas.length === antesSf && ultima().t === '*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', 'también para su otra jugada abierta (se fueron TODAS)');
   const ofNueva = msg('j_luis', 'Juego 4x1 con 40 doy a8');
   await motor.procesarMensaje(ofNueva);
   await motor.procesarMensaje(msg('j_marvel', '40', { citadoId: ofNueva.id }));
@@ -170,11 +170,11 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_kahelt', 'sefue', { citadoId: ofNueva.id }));
   const antesOtro = guardadas.length;
   await motor.procesarMensaje(msg('j_marvel', '20', { citadoId: ofOtro.id }));
-  check(guardadas.length === antesOtro && ultima().t === '❌ Aquí nada, puso se fue', '"sefue" (aunque sea como respuesta a otro mensaje) retira las jugadas de quien lo escribe');
+  check(guardadas.length === antesOtro && ultima().t === '*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', '"sefue" (aunque sea como respuesta a otro mensaje) retira las jugadas de quien lo escribe');
 
   // Control de pozo al PUBLICAR: con saldo pero menos de lo puesto, se le pide corregir y la parada queda abierta (juega solo su disponible)
   await motor.procesarMensaje(msg('j_miel', 'Juego 4x1 10@8 con 60'));
-  check(/^@@ Favor corregir monto, su monto disponible para jugadas es de 0,96\. En caso de recibir alguna respuesta, jugará solo su disponible\.$/.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96 publica 60: "@Miel Favor corregir monto, su monto disponible para jugadas es de 0,96. En caso de recibir alguna respuesta, jugará solo su disponible."');
+  check(/^\*🚨🚨🚨🚨🚨\*\n@@ \*Favor corregir monto, su monto disponible para jugadas es de 0,96\. En caso de recibir alguna respuesta, jugará solo su disponible\.\*$/.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96 publica 60: "@Miel Favor corregir monto, su monto disponible para jugadas es de 0,96. En caso de recibir alguna respuesta, jugará solo su disponible."');
   check([...motor._ofertas.values()].some(x => x.autorNombre === 'MIEL' && x.monto === 60), 'esa parada SÍ queda abierta (con lo que puso)');
   // sin nada de saldo: no se registra y quien responde recibe la explicación
   const dispMiel = DISP.MIEL.disponible;
@@ -188,7 +188,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   const nOfertas = motor._ofertas.size;
   DISP.NANA.disponible = 20;
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 30'));
-  check(/^@@ Favor corregir monto, su monto disponible para jugadas es de 28,57\./.test(ultima().t), 'FlowSport recibiendo a7 con 30 y 20 de saldo: "Favor corregir monto, su monto disponible para jugadas es de 28,57"');
+  check(/^\*🚨🚨🚨🚨🚨\*\n@@ \*Favor corregir monto, su monto disponible para jugadas es de 28,57\./.test(ultima().t), 'FlowSport recibiendo a7 con 30 y 20 de saldo: "Favor corregir monto, su monto disponible para jugadas es de 28,57"');
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 28,57'));
   check([...motor._ofertas.values()].some(x => x.autorNombre === 'NANA' && x.monto === 28.57), 'con 28,57 sí queda publicada');
 
@@ -222,7 +222,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   DISP.BESTIA = { limitado: true, disponible: 1732.7 };
   const ofGrande = msg('j_bestia', 'Juego 3p del 1 2000');
   await motor.procesarMensaje(ofGrande);
-  check(/^@@ Favor corregir monto, su monto disponible para jugadas es de 1\.732,70\. En caso de recibir alguna respuesta, jugará solo su disponible\.$/.test(ultima().t) && ultima().op.mencionar === 'j_bestia', 'saldo 1.732,70 y publica 2000: se le etiqueta "Favor corregir monto, su monto disponible para jugadas es de 1.732,70..."');
+  check(/^\*🚨🚨🚨🚨🚨\*\n@@ \*Favor corregir monto, su monto disponible para jugadas es de 1\.732,70\. En caso de recibir alguna respuesta, jugará solo su disponible\.\*$/.test(ultima().t) && ultima().op.mencionar === 'j_bestia', 'saldo 1.732,70 y publica 2000: se le etiqueta "Favor corregir monto, su monto disponible para jugadas es de 1.732,70..."');
   const gG = guardadas.length;
   await motor.procesarMensaje(msg('j_raul', 'J', { citadoId: ofGrande.id }));
   check(guardadas.length === gG + 1 && guardadas[gG].monto === 1732.7 && guardadas[gG].jugadorNombre === 'BESTIA' && guardadas[gG].banqueroNombre === 'RAUL', 'otro cliente marca J: juegan solo 1.732,70');
@@ -293,7 +293,7 @@ const ultima = () => enviadas[enviadas.length - 1];
     await motor.procesarMensaje(msg('j_cachaco', frase));
     const g0 = guardadas.length;
     await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofS.id }));
-    check(guardadas.length === g0 && ultima().t === '❌ Aquí nada, puso se fue', '"' + frase + '" mata la parada: el bot responde "Aquí nada, puso se fue"');
+    check(guardadas.length === g0 && ultima().t === '*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', '"' + frase + '" mata la parada: el bot responde "Aquí nada, puso se fue"');
   }
   // lo ya jugado antes del "se fue" se conserva y lo que se publica después de él vale
   const ofA = msg('j_cachaco', 'Juego 4x1 con 100 doy a8');
@@ -302,7 +302,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   const gA = guardadas.length;
   await motor.procesarMensaje(msg('j_cachaco', 'se fue'));
   await motor.procesarMensaje(msg('j_marvel', '30', { citadoId: ofA.id }));
-  check(guardadas.length === gA && ultima().t === '❌ Aquí nada, puso se fue', 'lo que sobraba de la parada murió con el "se fue" (lo jugado antes se mantiene)');
+  check(guardadas.length === gA && ultima().t === '*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', 'lo que sobraba de la parada murió con el "se fue" (lo jugado antes se mantiene)');
   const ofB = msg('j_cachaco', 'Juego 4x1 con 40 doy a8');
   await motor.procesarMensaje(ofB);
   await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofB.id }));
@@ -423,7 +423,7 @@ eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 2
   check(motor.estado().abierta === true, 'un jugador no puede cerrar');
   const antesCierre = publicadas.length;
   await motor.procesarMensaje(msg('j_dreamy', 'cierra', { esAdmin: true }));
-  check(motor.estado().abierta === false && publicadas.length === antesCierre + 1 && /Plano final/.test(ultima().t), 'el administrador cierra: avisa y publica el plano final');
+  check(motor.estado().abierta === false && publicadas.length === antesCierre + 1 && enviadas.slice(-2).some(e => e.t === '*🔒 Carrera cerrada se dio la partida en Mountaineer, 1era Carrera. Ya no se reciben mas jugadas,*\n*éxitos a todos en sus apuestas, al tener pizarra oficial se enviaran los totales de esta carrera 💰🐎💰🐎*'), 'el administrador cierra: avisa (en negrita, línea por línea) y publica el plano final');
   check(/1\) Juega Cachaco/.test(publicadas[publicadas.length - 1]) && new RegExp('Total jugadas: ' + guardadas.length + '$').test(publicadas[publicadas.length - 1]), 'el plano final trae TODAS las jugadas que hubo en la carrera');
   const antes3 = guardadas.length;
   const of5 = msg('j_luis', 'Juego 4x1 con 10 doy a8');

@@ -122,7 +122,7 @@ const textoDe = e => e.contenido.text;
   check(enviados.length === 1 && /no está autorizado para abrir carreras/.test(textoDe(ultimo())) && !/Carrera abierta/.test(textoDe(ultimo())), 'un jugador no puede abrir una carrera: el bot explica que su número no está autorizado (ya no se queda mudo)');
   // el administrador (número autorizado en Súper-admin) abre
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Mountaineer 1era carrera'));
-  check(enviados.length === 2 && /Carrera abierta/.test(textoDe(ultimo())), 'el número autorizado abre "Mountaineer 1era carrera" y el bot confirma');
+  check(enviados.length === 2 && textoDe(ultimo()) === '*✅ Carrera abierta: Mountaineer, 1era Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*', 'el número autorizado abre "Mountaineer 1era carrera" y el bot confirma');
 
   // Cachaco publica 120
   const of = mensaje('CACHACO', 'Juego 4 x 1 10a8 con 120');
@@ -226,7 +226,7 @@ const textoDe = e => e.contenido.text;
   check(/ahora es administrador/.test(textoDe(ultimo())) && T.numeros.some(x => x.digitos === '44444444444' && x.jugador_nombre === '__ADMIN__'), 'el administrador responde "autorizar" al aviso y esa persona queda como administrador');
   const jugadorAbre = { key: { remoteJid: JID, participant: '44444444444@lid', id: 'ADM2', fromMe: false }, pushName: 'Socio', message: { conversation: 'Abierta 2da de mountaineer' } };
   await glue.intentar({ sock, msg: jugadorAbre, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorAbre) });
-  check(/Carrera abierta: \*Mountaineer, 2da Carrera\*/.test(textoDe(ultimo())), 'la persona autorizada ya puede abrir carreras (aunque WhatsApp oculte su teléfono)');
+  check(/Carrera abierta: Mountaineer, 2da Carrera\.\*/.test(textoDe(ultimo())), 'la persona autorizada ya puede abrir carreras (aunque WhatsApp oculte su teléfono)');
   await glue.intentar({ sock, msg: { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'AB1', fromMe: false }, message: { conversation: 'Mountaineer 1era carrera' } }, remoteJid: JID, texto: 'Mountaineer 1era carrera', ayudas: whatsappBot.crearAyudasJugadasChat(sock, { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net' } }) });
   check(!T.numeros.some(x => x.jugador_nombre === '__ADMIN__' && x.digitos === '573246161764'), 'el número del propio bot nunca queda como administrador autorizado');
   // un administrador registrado no es tomado por cliente
