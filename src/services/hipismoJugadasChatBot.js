@@ -84,7 +84,14 @@ async function registrarNumeroManual(grupoId, { jid, jidReal, nombre }, obtenerS
   const lista = r.rows.map(f => ({ nombre: f.nombre, n: normNombre(f.nombre) }));
   let hallados = lista.filter(f => f.n === buscado);
   if (hallados.length === 0) hallados = lista.filter(f => f.n.includes(buscado));
-  if (hallados.length === 0) return { ok: false, motivo: 'No encontré ningún cliente llamado "' + nombre + '" en este grupo.' };
+  // "registrar tom slayer" cuando la ficha se llama "SLAYER": también sirve si el nombre de la ficha está dentro de lo escrito
+  if (hallados.length === 0) hallados = lista.filter(f => f.n.length >= 3 && (' ' + buscado + ' ').includes(' ' + f.n + ' '));
+  if (hallados.length === 0) {
+    const nombres = lista.map(f => f.nombre).sort((a, b) => a.localeCompare(b)).slice(0, 40);
+    return { ok: false, motivo: 'No encontré ningún cliente llamado "' + nombre + '" en este grupo.' +
+      (nombres.length ? '\n\nClientes registrados: ' + nombres.join(', ') + '.\nResponde de nuevo con el nombre exacto de la lista.' : '') +
+      '\nSi es un cliente nuevo, créalo primero en *Clientes* del panel y luego responde otra vez *registrar NOMBRE*.' };
+  }
   if (hallados.length > 1) return { ok: false, motivo: 'Hay varios clientes que se parecen a "' + nombre + '" (' + hallados.slice(0, 4).map(f => f.nombre).join(', ') + '). Escribe el nombre completo.' };
   for (const d of lista0) {
     await db.query(

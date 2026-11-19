@@ -181,7 +181,7 @@ const textoDe = e => e.contenido.text;
   check(/Responde \(cita\) el mensaje/.test(textoDe(ultimo())) && T.numeros.length === 0, 'registrar sin citar el mensaje de la persona: pide citarlo y no guarda nada');
   mReg = regMsg('registrar nadie', true);
   await glue.intentar({ sock, msg: mReg, remoteJid: JID, texto: 'registrar nadie', ayudas: whatsappBot.crearAyudasJugadasChat(sock, mReg) });
-  check(/No encontré ningún cliente/.test(textoDe(ultimo())) && T.numeros.length === 0, 'registrar un nombre que no existe: avisa y no guarda');
+  check(/No encontré ningún cliente/.test(textoDe(ultimo())) && /Clientes registrados: .*CACHACO.*MARVEL/.test(textoDe(ultimo())) && /créalo primero en \*Clientes\*/.test(textoDe(ultimo())) && T.numeros.length === 0, 'registrar un nombre que no existe: avisa, muestra la lista de clientes del grupo para elegir el nombre exacto y no guarda');
   const pideJugador = { key: { remoteJid: JID, participant: '88888888888@lid', id: 'TYK2', fromMe: false }, pushName: 'Tykhe', message: { extendedTextMessage: { text: 'registrar tykhe', contextInfo: { stanzaId: 'TYK1', participant: '88888888888@lid' } } } };
   await glue.intentar({ sock, msg: pideJugador, remoteJid: JID, texto: 'registrar tykhe', ayudas: ayLid() });
   check(T.numeros.length === 0, 'un jugador (no administrador) no puede registrar números');
