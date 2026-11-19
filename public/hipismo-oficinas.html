@@ -263,6 +263,29 @@
   .tipo-op.on { border-color: var(--accent-grass); background: #e6f2f0; color: var(--accent-deep); }
   .tipo-op:focus-within { outline: 2px solid var(--accent-grass); outline-offset: 2px; }
   .ico-tipo { width: 20px; height: 20px; flex: none; }
+  /* Lista de clientes ordenada (19-11-2026): nombre + etiquetas, una columna por dato y una sola columna de acciones (Editar, Pozo y menú "⋯"). */
+  table.lista.clientes { table-layout: auto; }
+  table.lista.clientes td { vertical-align: middle; padding: 12px 8px; }
+  table.lista.clientes tbody tr:hover { background: rgba(47,103,100,0.05); }
+  table.lista.clientes th.acc { text-align: right; }
+  table.lista.clientes .tag, table.lista.clientes .tag-pozo, table.lista.clientes .tag-tipo { white-space: nowrap; }
+  table.lista.clientes td:nth-child(1) { min-width: 130px; } table.lista.clientes td:nth-child(2) { min-width: 105px; } table.lista.clientes td:nth-child(3) { min-width: 130px; } table.lista.clientes td:nth-child(4) { min-width: 90px; }
+  #panel-clientes .dos-col { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+  @media (max-width: 1150px) { #panel-clientes .dos-col { grid-template-columns: 1fr; } }
+  .cli-nom { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 15px; line-height: 1.2; }
+  .cli-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 5px; }
+  .cli-chips .tag-tipo { margin: 0; vertical-align: baseline; }
+  .cli-chips .tag { margin: 0; }
+  .cli-sub { display: block; font-size: 11.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.3; }
+  .cli-col { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .cli-pozo { font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .cli-acc { display: flex; gap: 6px; justify-content: flex-end; align-items: center; white-space: nowrap; }
+  .cli-resumen { font-size: 12px; color: var(--text-dim); margin: 2px 0 0; }
+  #menuCli { position: fixed; z-index: 9999; min-width: 220px; background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 14px 34px rgba(40,30,10,0.2); padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+  #menuCli button { text-align: left; background: transparent; border: 0; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text); }
+  #menuCli button:hover, #menuCli button:focus-visible { background: var(--ok-bg); outline: none; }
+  #menuCli button.peligro { color: var(--danger); } #menuCli button.peligro:hover { background: var(--danger-bg); }
+  #menuCli hr { border: 0; border-top: 1px solid var(--card-border); margin: 4px 2px; }
   .tag-pozo { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; }
   .tag-pozo.sin { background: #fdecea; color: #b42318; border: 1px solid #f3b9b3; } .tag-pozo.libre { background: #eef3f1; color: #476b66; border: 1px solid #cfdcd8; }
   .tag-tipo { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 9px; margin-left: 6px; vertical-align: 1px; }
@@ -976,11 +999,11 @@
 
       <div class="card">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <h2>Clientes</h2><span class="espacio"></span>
+          <div><h2>Clientes</h2><div class="cli-resumen" id="cResumen"></div></div><span class="espacio"></span>
           <input type="search" id="cBuscar" placeholder="Buscar cliente…" style="max-width:240px;" oninput="pintarClientes()">
         </div>
         <div style="overflow-x:auto;margin-top:8px;">
-          <table class="lista"><thead><tr><th>Cliente</th><th>% que se le devuelve</th><th>Le genera % a</th><th class="num">Pozo</th></tr></thead><tbody id="cLista"></tbody></table>
+          <table class="lista clientes"><thead><tr><th>Cliente</th><th>% que se le devuelve</th><th>Le genera % a</th><th>Pozo</th><th class="acc">Acciones</th></tr></thead><tbody id="cLista"></tbody></table>
         </div>
       </div>
     </div>
@@ -2368,21 +2391,58 @@ async function aplicarPozoCliente() {
 }
 function pintarClientes() {
   const q = normNombre($('cBuscar').value);
-  const filas = CLIENTES.filter(c => !c.es_cuenta_comision && (!q || normNombre(c.nombre).includes(q)));
+  const reales = CLIENTES.filter(c => !c.es_cuenta_comision);
+  const filas = reales.filter(c => !q || normNombre(c.nombre).includes(q));
+  const nOf = reales.filter(c => tipoDeCliente(c) === 'oficina').length;
+  $('cResumen').textContent = reales.length ? `${reales.length} en total · ${nOf} oficina${nOf === 1 ? '' : 's'} · ${reales.length - nOf} tercio${reales.length - nOf === 1 ? '' : 's'}${q ? ` · ${filas.length} coinciden` : ''}` : '';
   $('cLista').innerHTML = filas.length ? filas.map(c => {
+    const id = esc(c.id);
     const pct = Number(c.comision_propia) || 0;
-    const devuelve = pct > 0 ? `<span class="tag">${fmt(pct)}%</span> ${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}` : '—';
-    const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.avaladorNombre || a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
+    const devuelve = pct > 0
+      ? `<div class="cli-col"><span class="tag">${fmt(pct)}%</span><span class="cli-sub" style="margin:0;">${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'en la ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}</span></div>`
+      : '<span style="color:var(--text-dim)">—</span>';
+    const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.avaladorNombre || a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('');
     const tienePozo = c.tipo_cuenta === 'avalado';
     // Cliente libre (sin pozo): "Sin pozo" = todavía no puede jugar; "Libre" = sin límites. Un pago diario usa sus recargas, no esta marca.
     const sinPozo = !tienePozo && !c.pago_diario && c.sin_pozo === true, libre = !tienePozo && !c.pago_diario && !sinPozo;
-    const estadoPozo = tienePozo ? '<b>' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</b>'
-      : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">Tercio libre</span>' : '<span style="color:var(--text-dim)">—</span>'));
-    const botonLibre = tienePozo || c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? 'Pasar a libre' : 'Marcar sin pozo'}</button>`;
-    const pozo = `<span style="white-space:nowrap;">${estadoPozo} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button> ${botonLibre}</span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-chico" style="margin-top:4px;" onclick="editarClienteOficina('${esc(c.id)}')">✏️ Editar</button> <button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`} ${puedeOficina('oficinas_eliminar') ? `<button type="button" class="btn btn-peligro btn-chico" style="margin-top:4px;" onclick="eliminarClienteOficina('${esc(c.id)}')">🗑️ Eliminar</button>` : ''}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
-  }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
+    const estadoPozo = tienePozo ? '<span class="cli-pozo">' + INF.dinero(redondearCentavos(c.pozo_inicial)) + '</span>'
+      : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">' + (tipoDeCliente(c) === 'oficina' ? 'Libre' : 'Tercio libre') + '</span>' : '<span class="tag">💵 Pago diario</span>'));
+    const chips = etiquetaTipo(c) + (c.pago_diario ? '<span class="tag">💵 Pago diario</span>' : '') + (window.etiquetaSocioDe ? window.etiquetaSocioDe(c).replace(/^\s+/, '') : '') + (c.activo === false ? '<span class="tag" style="background:#eee;color:#666;border-color:#ccc;">Inactivo</span>' : '');
+    return `<tr>
+      <td><div class="cli-nom">${esc(nombreBonito(c.nombre))}</div><div class="cli-chips">${chips}</div></td>
+      <td>${devuelve}</td>
+      <td>${avales ? '<div class="cli-col">' + avales + '</div>' : '<span style="color:var(--text-dim)">—</span>'}</td>
+      <td><div class="cli-col">${estadoPozo}${tienePozo ? '<span class="cli-sub" style="margin:0;">pozo base</span>' : ''}</div></td>
+      <td><div class="cli-acc"><button type="button" class="btn btn-chico" onclick="editarClienteOficina('${id}')">✏️ Editar</button><button type="button" class="btn btn-sec btn-chico" title="Más acciones" aria-haspopup="menu" aria-label="Más acciones de ${esc(nombreBonito(c.nombre))}" onclick="menuCliente(event, '${id}')">⋯</button></div></td></tr>`;
+  }).join('') : `<tr><td colspan="5" style="color:var(--text-dim);padding:14px;">${CLIENTES.length ? 'Ningún cliente coincide con la búsqueda.' : 'Todavía no hay clientes.'}</td></tr>`;
 }
+// Menú "⋯ Más" de cada cliente (19-11-2026): flotante, para que no lo recorte la tabla. Las acciones son las de siempre.
+function cerrarMenuCliente() { const m = document.getElementById('menuCli'); if (m) m.remove(); }
+function menuCliente(ev, id) {
+  ev.stopPropagation();
+  const abierto = document.getElementById('menuCli'); const mismo = abierto && abierto.dataset.id === String(id);
+  cerrarMenuCliente(); if (mismo) return;
+  const c = CLIENTES.find(x => String(x.id) === String(id)); if (!c) return;
+  const esOf = tipoDeCliente(c) === 'oficina', tienePozo = c.tipo_cuenta === 'avalado';
+  const sinPozo = !tienePozo && !c.pago_diario && c.sin_pozo === true;
+  const items = [];
+  items.push(`<button type="button" role="menuitem" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '💰 Subir o bajar el pozo' : '💰 Darle pozo'}</button>`);
+  items.push(`<button type="button" role="menuitem" onclick="cambiarTipoCliente('${esc(c.id)}', '${esOf ? 'tercio' : 'oficina'}')">${esOf ? '🧍 Pasar a Tercio' : '🏢 Pasar a Oficina'}</button>`);
+  if (!esOf || c.pago_diario) items.push(`<button type="button" role="menuitem" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? '💵 Quitar pago diario' : '💵 Marcar pago diario'}</button>`);
+  if (!tienePozo && !c.pago_diario) items.push(`<button type="button" role="menuitem" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? '🔓 Pasar a libre (sin límite)' : '⛔ Marcar sin pozo'}</button>`);
+  if (puedeOficina('oficinas_eliminar')) items.push(`<hr><button type="button" role="menuitem" class="peligro" onclick="eliminarClienteOficina('${esc(c.id)}')">🗑️ Eliminar</button>`);
+  const m = document.createElement('div');
+  m.id = 'menuCli'; m.dataset.id = String(id); m.setAttribute('role', 'menu'); m.innerHTML = items.join('');
+  document.body.appendChild(m);
+  const r = ev.currentTarget.getBoundingClientRect(), mh = m.offsetHeight, mw = m.offsetWidth;
+  m.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + 'px';
+  m.style.top = (r.bottom + mh + 8 > window.innerHeight ? Math.max(8, r.top - mh - 4) : r.bottom + 4) + 'px';
+  const primero = m.querySelector('button'); if (primero) primero.focus();
+}
+document.addEventListener('click', cerrarMenuCliente);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMenuCliente(); });
+window.addEventListener('scroll', cerrarMenuCliente, true);
+window.addEventListener('resize', cerrarMenuCliente);
 
 // ------------------------------------------------------------------
 // CREAR HIPÓDROMO

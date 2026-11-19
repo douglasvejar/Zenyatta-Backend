@@ -39,7 +39,7 @@ const check = (c, m) => { if (c) { ok++; console.log('OK:', m); } else { mal++; 
   check(r.renombrado === false && log.length === 0, 'mismo nombre (solo cambia mayúsculas/espacios): no hace nada');
 
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'hipismo-oficinas.html'), 'utf8');
-  check(/onclick="editarClienteOficina\('\$\{esc\(c\.id\)\}'\)">✏️ Editar<\/button>/.test(html), 'Oficinas: cada cliente de la lista tiene el botón ✏️ Editar');
+  check(/onclick="editarClienteOficina\('\$\{id\}'\)">✏️ Editar<\/button>/.test(html), 'Oficinas: cada cliente de la lista tiene el botón ✏️ Editar');
   check(/function editarClienteOficina\(id\)/.test(html) && /method: 'PUT', body: JSON\.stringify\(cuerpo\)/.test(html), 'Oficinas: Editar guarda con PUT /api/jugadores/:id');
   check(/cuerpo\.modeloComision = editando\.modelo_comision/.test(html) && /cuerpo\.modulosAnclados = !!editando\.modulos_anclados/.test(html), 'Oficinas: al editar se conservan modelo de comisión, moneda y anclado (el PUT reemplaza la ficha completa)');
   check(/cancelarEdicionCliente\(\)/.test(html) && /id="cBtnCancelar"/.test(html), 'Oficinas: hay botón para cancelar la edición');
