@@ -228,6 +228,10 @@ async function guardarJugada(grupoId, j) {
       [grupoId, j.fecha, j.hipodromo, j.carrera, j.jugadorNombre, j.banqueroNombre, j.monto, j.riesgoJugador, j.riesgoBanquero, j.textoLinea, rj.rows[0].id]
     );
   });
+  // Igual que al cargarla a mano: si al jugador le quedó poco pozo, queda la alerta en Administración > Alertas. Nunca impide guardar.
+  try {
+    await ext.alertarPozoBajo(grupoId, { nombres: [j.jugadorNombre], hipodromoNombre: j.hipodromo, fecha: j.fecha, etiqueta: 'tercios adelantadas de ' + j.hipodromo, excluir: [] });
+  } catch (e) { console.warn('[hipismoChat] No se pudo revisar el pozo bajo (la jugada ya quedó guardada):', e.message); }
 }
 
 // Carrera abierta/cerrada de cada grupo, para que un reinicio del servidor no la pierda.
@@ -275,6 +279,7 @@ async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
 // `ext` se puede reemplazar en las pruebas.
 const ext = {
   guardarPlano: (grupoId, body) => require('../routes/hipismo').guardarPlanoParaBot(grupoId, body),
+  alertarPozoBajo: (grupoId, datos) => require('../routes/hipismo').alertarPozoBajoParaBot(grupoId, datos),
   generarImagen: (grupoId, datos) => require('./hipismoPlanoImagenServidor').generarImagenPlano({ grupoId, datos })
 };
 async function cargarPizarraChat(grupoId, { hipodromo, carrera, fecha, pizarra, ret }) {

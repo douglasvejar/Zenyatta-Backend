@@ -102,7 +102,7 @@ function ejecutarQuery(text, params) {
     TABLAS.hipismo_tercios_adelantadas_jugadas.push(fila);
     return { rows: [fila] };
   }
-  if (/^SELECT j\.\* FROM hipismo_tercios_adelantadas_jugadas j\s+JOIN hipismo_tercios_adelantadas_planos p/i.test(sql)) {
+  if (/^SELECT j\.\*(?:, p\.texto_original AS plano_texto_original)? FROM hipismo_tercios_adelantadas_jugadas j\s+JOIN hipismo_tercios_adelantadas_planos p/i.test(sql)) {
     const [grupoId, hipodromoNombre, carreraNumero, fecha] = params;
     const filas = TABLAS.hipismo_tercios_adelantadas_jugadas
       .filter(j => j.grupo_id === grupoId && String(j.carrera_numero) === String(carreraNumero) && j.estado === 'pendiente' && !j.falta_monto && !j.falta_jugador && !j.falta_banquero)

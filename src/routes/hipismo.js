@@ -7467,4 +7467,11 @@ router.guardarPlanoParaBot = async function guardarPlanoParaBot(grupoId, body) {
   return correrManejadorPlano(guardarPlanoHandler, reqBot, body);
 };
 
+// Aviso de POCO POZO igual que al cargar Jugadas entre Tercios Adelantadas a mano (alertarPozoBajo): lo usa el bot de WhatsApp cada vez
+// que registra una jugada, para que en Administración > Alertas salga lo mismo que saldría si el operador la hubiera cargado.
+router.alertarPozoBajoParaBot = async function alertarPozoBajoParaBot(grupoId, datos) {
+  const reqBot = { grupoId, rol: 'admin', nombreActor: 'Bot de WhatsApp', body: {}, query: {}, params: {} };
+  return alertarPozoBajo(reqBot, datos);
+};
+
 module.exports = router;
