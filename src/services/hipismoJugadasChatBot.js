@@ -171,8 +171,9 @@ async function disponibleDe(grupoId, nombre) {
   const filas = await clientesConPozoDisponible(grupoId, [nombre], { incluirSinPozo: true });
   if (!filas.length) return { limitado: false, disponible: 0 };
   const c = filas[0];
-  if (c.sinPozo) return { limitado: true, disponible: 0 };
+  if (c.sinPozo) return { limitado: true, disponible: 0, detalle: 'Cuenta de ' + nombre + ': cliente Libre marcado "sin pozo" (todavía no tiene pozo asignado)' };
   let disp = Number(c.disponible) || 0;
+  const dispSistema = disp;
   const r = await db.query(
     `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.riesgo_jugador, c.riesgo_banquero
        FROM hipismo_chat_jugadas c
@@ -184,7 +185,11 @@ async function disponibleDe(grupoId, nombre) {
     if (f.jugador_nombre === nombre) disp += (Number(f.monto) || 0) - (Number(f.riesgo_jugador) || 0);
     if (f.banquero_nombre === nombre) disp -= Number(f.riesgo_banquero) || 0;
   });
-  return { limitado: true, disponible: Math.round(disp * 100) / 100 };
+  const f2 = x => (Math.round(x * 100) / 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return {
+    limitado: true, disponible: Math.round(disp * 100) / 100,
+    detalle: 'Cuenta de ' + nombre + ': pozo asignado ' + f2(Number(c.base) || 0) + ' · disponible del sistema (pozo + resultados − en juego) ' + f2(dispSistema) + ' · ajuste por paradas del bot pendientes ' + f2(disp - dispSistema) + ' · queda ' + f2(disp)
+  };
 }
 
 async function resolverHipodromo(grupoId, texto) {

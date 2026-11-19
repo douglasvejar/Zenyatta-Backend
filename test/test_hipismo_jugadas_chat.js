@@ -174,12 +174,17 @@ const ultima = () => enviadas[enviadas.length - 1];
 
   // Control de pozo al PUBLICAR
   await motor.procesarMensaje(msg('j_miel', 'Juego 4x1 10@8 con 60'));
-  check(/^Saludos @@, dispone de un saldo de 0,96\. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas\.$/.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96 publica 60: "Saludos @Miel, dispone de un saldo de 0,96. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas." (y la menciona)');
+  check(/^Saludos @@ \(Miel\), dispone de un saldo de 0,96\. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas\.$/.test(ultima().t) && ultima().op.mencionar === 'j_miel', 'Miel con 0,96 publica 60: "Saludos @Miel, dispone de un saldo de 0,96. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas." (y la menciona)');
+  // responder a una parada que no se registró por falta de saldo: el bot lo explica (antes decía "ya no está activa")
+  const ofMiel = msg('j_miel', 'Juego 4x1 10@8 con 70');
+  await motor.procesarMensaje(ofMiel);
+  await motor.procesarMensaje(msg('j_marvel', '20', { citadoId: ofMiel.id, citadoTexto: 'Juego 4x1 10@8 con 70' }));
+  check(/^❌ Aquí nada, esa parada no quedó registrada: quien la publicó no tiene saldo disponible/.test(ultima().t), 'responder a una parada rechazada por saldo: "esa parada no quedó registrada: quien la publicó no tiene saldo"');
   const nOfertas = motor._ofertas.size;
   check(![...motor._ofertas.values()].some(x => x.autorNombre === 'MIEL'), 'esa jugada NO queda publicada');
   DISP.NANA.disponible = 20;
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 30'));
-  check(/^Saludos @@, dispone de un saldo de 20,00\./.test(ultima().t), 'FlowSport recibiendo a7 con 30 y solo 20 de saldo: se le avisa su saldo (20,00) y que juegue con él o menos');
+  check(/^Saludos @@ \(Nana\), dispone de un saldo de 20,00\./.test(ultima().t), 'FlowSport recibiendo a7 con 30 y solo 20 de saldo: se le avisa su saldo (20,00) y que juegue con él o menos');
   await motor.procesarMensaje(msg('j_flow', 'Juego 1x4 recibo a7 con 28,57'));
   check([...motor._ofertas.values()].some(x => x.autorNombre === 'NANA' && x.monto === 28.57), 'con 28,57 sí queda publicada');
 
@@ -195,7 +200,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   // saldo en 0: no se juega nada y se le avisa su saldo
   DISP.MIEL.disponible = 0;
   await motor.procesarMensaje(msg('j_miel', 'J', { citadoId: of4.id }));
-  check(guardadas.length === antes + 1 && /^Saludos @@, dispone de un saldo de 0,00\./.test(ultima().t), 'con saldo 0 no se juega y se le dice "dispone de un saldo de 0,00..."');
+  check(guardadas.length === antes + 1 && /^Saludos @@ \([A-Za-z]+\), dispone de un saldo de 0,00\./.test(ultima().t), 'con saldo 0 no se juega y se le dice "dispone de un saldo de 0,00..."');
 
   // Ejemplo del usuario: a un cliente le quedan 300 y marca "J" en una parada de 1.000: se juegan solo 300 y se etiqueta a las dos personas
   DISP.LUIS = { limitado: true, disponible: 300 };
@@ -350,7 +355,11 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', 'jugue 100', { citadoId: ofC.id }));
   check(guardadas.length === gC + 1 && guardadas[gC].jugadorNombre === 'MARVEL' && guardadas[gC].banqueroNombre === 'CACHACO', 'publican "Consigo…" y responden "jugué 100": sí vale (juega el que responde)');
 
-  eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 200" = monto neutro');
+  eq(m.interpretarOferta('Juego 2000 3p del 1'), { ok: true, lado: 'doy', monto: 2000, apuesta: { cruce: null, grupo: [1], modalidad: '3p' }, cuota: null }, '"Juego 2000 3p del 1": juega 2000 a 3 puestos del caballo 1 (monto pegado al verbo)');
+eq(m.interpretarOferta('Juego 3p del 1 2000').monto, 2000, 'el monto al final sigue funcionando');
+check(m.interpretarOferta('Juego 2.000 3p del 1').monto === 2000 && m.interpretarOferta('Juego 2000 4x1 doy a8').apuesta.modalidad === '10a8' && m.interpretarOferta('Consigo 500 3n del 1').lado === 'recibo', 'monto con punto de miles, con cruce y cuota, y con "Consigo" también se entienden');
+check(m.interpretarOferta('Juego 2000 hola').ok === false && m.interpretarOferta('Juego 2000').ok === false, 'sin una apuesta reconocible sigue siendo "mal escrita"');
+eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 200" = monto neutro');
   const ofPon = msg('j_cachaco', 'juego 2p del 8 300');
   await motor.procesarMensaje(ofPon);
   const gPon = guardadas.length;

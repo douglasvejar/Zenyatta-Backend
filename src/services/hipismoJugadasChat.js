@@ -76,7 +76,7 @@ function apuestaSegura(a) {
 // monto: "75", "9.50", "13,00", "1.250,50"
 const MONTO_SRC = '\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?';
 const VERBO_OFERTA_RE = /^(?:juego|juega|jugar|jugando|jugamos|consigo|consigue)\b\s*/i;
-function interpretarOferta(texto) {
+function interpretarOfertaBase(texto) {
   let t = limpiar(texto);
   if (!VERBO_OFERTA_RE.test(t)) return null;
   // "Consigo 3n del 1 200": el que publica quiere BANQUEAR (da la jugada); "Juego ...": el que publica quiere JUGAR.
@@ -124,6 +124,19 @@ function interpretarOferta(texto) {
   // "10@8" se guarda como "10a8" (misma jugada, una sola forma)
   const apuesta = { cruce: prueba.cruce, grupo: prueba.grupo, modalidad: prueba.modalidad ? String(prueba.modalidad).replace(/@/g, 'a') : prueba.modalidad };
   return { ok: true, lado, monto: round2(monto), apuesta, cuota };
+}
+
+// Además del monto al final o con "con" ("Juego 3p del 1 2000", "Juego 3p del 1 con 2000"), se acepta el monto pegado al verbo:
+// "Juego 2000 3p del 1" = juega 2000 a 3 puestos del caballo 1. Solo se prueba si la forma normal no se entendió.
+function interpretarOferta(texto) {
+  const r = interpretarOfertaBase(texto);
+  if (r === null || r.ok) return r;
+  const m = limpiar(texto).match(new RegExp('^(juego|juega|jugar|jugando|jugamos|consigo|consigue)\\s+(' + MONTO_SRC + ')\\s+(\\S.*)$', 'i'));
+  if (m) {
+    const r2 = interpretarOfertaBase(m[1] + ' ' + m[3] + ' con ' + m[2]);
+    if (r2 && r2.ok) return r2;
+  }
+  return r;
 }
 
 // Quién juega y quién da, y cómo queda la apuesta desde el lado del que JUEGA.
@@ -488,17 +501,20 @@ function crearMotor(deps) {
     const d = await deps.disponible(nombre);
     if (!d || !d.limitado) return { limitado: false, disponible: null, max: Infinity };
     const disponible = Math.max(0, round2(d.disponible));
-    return { limitado: true, disponible, max: Math.floor((disponible / factor) * 100 + 1e-9) / 100 };
+    return { limitado: true, disponible, detalle: d.detalle || '', max: Math.floor((disponible / factor) * 100 + 1e-9) / 100 };
   }
   // Quien publica (o responde) con más de lo que puede jugar su saldo: tope = pozo + lo que va ganando - lo que va perdiendo - lo que ya tiene en juego.
-  function textoSinDisponible(m, tope) {
-    return 'Saludos ' + etiquetaDe(m) + ', dispone de un saldo de ' + fmt(tope.disponible) + '. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas.';
+  const nombreBonito = n => String(n || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+  function textoSinDisponible(m, tope, cliente) {
+    return 'Saludos ' + etiquetaDe(m) + (cliente ? ' (' + nombreBonito(cliente) + ')' : '') + ', dispone de un saldo de ' + fmt(tope.disponible) + '. Favor jugar con su saldo disponible o un monto menor, pedimos disculpas.';
   }
 
   // Paradas mal escritas (id -> ts): si alguien les responde, el bot dice "Aquí nada, parada mal escrita".
   const malas = new Map();
   function marcarMala(m) { malas.set(m.id, tiempoDe(m)); if (malas.size > 400) malas.delete(malas.keys().next().value); }
   const TXT_MALA_RESPUESTA = '❌ Aquí nada, parada mal escrita.';
+  const sinSaldoIds = new Map(); // paradas que no se registraron porque quien las publicó no tenía saldo (id -> ts)
+  function marcarSinSaldo(m) { sinSaldoIds.set(m.id, tiempoDe(m)); if (sinSaldoIds.size > 400) sinSaldoIds.delete(sinSaldoIds.keys().next().value); }
   async function paradaMalEscrita(m, motivo) {
     marcarMala(m);
     nota('Parada mal escrita' + (motivo ? ' (' + motivo + ')' : '') + ': se le pide que la corrija');
@@ -527,8 +543,9 @@ function crearMotor(deps) {
     const factor = o.lado === 'doy' ? r.jugador : r.banquero; // quien publica "doy" juega; quien publica "recibo" da
     const tope = await topeDe(nombre, factor);
     if (o.monto > tope.max + 0.005) {
-      nota('Jugada publicada por ' + nombre + ' pero su disponible no alcanza (' + (tope.disponible === null ? '?' : fmt(tope.disponible)) + '): no se guardó');
-      await deps.responder(textoSinDisponible(m, tope), mencion(m));
+      nota('Jugada publicada por ' + nombre + ' pero su disponible no alcanza (' + (tope.disponible === null ? '?' : fmt(tope.disponible)) + '): no se guardó' + (tope.detalle ? '. ' + tope.detalle : ''));
+      marcarSinSaldo(m);
+      await deps.responder(textoSinDisponible(m, tope, nombre), mencion(m));
       return;
     }
     nota('Jugada publicada por ' + nombre + ' (' + fmt(o.monto) + '): queda abierta 3 minutos esperando respuestas');
@@ -545,6 +562,11 @@ function crearMotor(deps) {
       if (malas.has(m.citadoId) || (m.citadoTexto && (pareceParadaMalEscrita(m.citadoTexto) || (citada && !citada.ok)))) {
         nota('Respondieron a una parada mal escrita: no se juega');
         await deps.responder(TXT_MALA_RESPUESTA, { citarId: m.id });
+        return;
+      }
+      if (sinSaldoIds.has(m.citadoId)) {
+        nota('Respondieron a una parada que no se registró por falta de saldo de quien la publicó');
+        await deps.responder('❌ Aquí nada, esa parada no quedó registrada: quien la publicó no tiene saldo disponible para ese monto.', { citarId: m.id });
         return;
       }
       if (citada && citada.ok) {
@@ -586,8 +608,8 @@ function crearMotor(deps) {
     const topeResp = await topeDe(nombre, factorRespondedor);
     if (monto > topeResp.max + 0.005) {
       if (topeResp.max < 0.01) {
-        nota(nombre + ' respondió pero no tiene saldo disponible: no se jugó');
-        await deps.responder(textoSinDisponible(m, topeResp), mencion(m));
+        nota(nombre + ' respondió pero no tiene saldo disponible: no se jugó' + (topeResp.detalle ? '. ' + topeResp.detalle : ''));
+        await deps.responder(textoSinDisponible(m, topeResp, nombre), mencion(m));
         return;
       }
       monto = round2(topeResp.max);

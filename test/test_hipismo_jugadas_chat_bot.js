@@ -140,7 +140,7 @@ const textoDe = e => e.contenido.text;
   const r3 = mensaje('NANA', '10', of2.key.id);
   await whatsappBot.manejarMensajeEntrante(sock, r3);
   const av = ultimo();
-  check(T.jugadas.length === 2 && /dispone de un saldo de 0,00/.test(textoDe(av)) && av.contenido.mentions && av.contenido.mentions[0] === num.NANA + '@s.whatsapp.net' && textoDe(av).startsWith('Saludos @' + num.NANA), 'Nana ya no tiene pozo: no se registra, se le avisa y se la menciona con @' + num.NANA);
+  check(T.jugadas.length === 2 && /dispone de un saldo de 0,00/.test(textoDe(av)) && av.contenido.mentions && av.contenido.mentions[0] === num.NANA + '@s.whatsapp.net' && textoDe(av).startsWith('Saludos @' + num.NANA + ' (Nana)'), 'Nana ya no tiene pozo: no se registra, se le avisa y se la menciona con @' + num.NANA);
 
   // recibo: roles invertidos y guardado con caballos invertidos
   const of3 = mensaje('MARVEL', 'Juego 4x5 recibo a 8 200');
