@@ -54,6 +54,14 @@ const nuevoId = (prefijo) => prefijo + '-' + (seq++);
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
   if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+  // 19-11-2026: PUT lee el nombre previo del cliente (para renombrarlo en sus jugadas si cambia) -- ver services/hipismoRenombrarCliente.js.
+  if (/^SELECT nombre FROM jugadores WHERE id = \$1 AND grupo_id = \$2 FOR UPDATE$/i.test(sql)) {
+    const f = TABLAS.jugadores.find(j => j.id === params[0] && j.grupo_id === params[1]);
+    return { rows: f ? [{ nombre: f.nombre }] : [] };
+  }
+  if (/^SELECT nombre FROM jugadores WHERE grupo_id = \$1 AND id <> \$2$/i.test(sql)) return { rows: TABLAS.jugadores.filter(j => j.grupo_id === params[0] && j.id !== params[1]).map(j => ({ nombre: j.nombre })) };
+  if (/^(SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) /i.test(sql)) return { rows: [] };
+  if (/^(UPDATE hipismo_|DELETE FROM hipismo_pozos_excluidos|SELECT 1 FROM hipismo_pozos_excluidos|SELECT \(SELECT COUNT\(DISTINCT t\.plano_id\))/i.test(sql)) return { rows: [{ n: 0 }] };
 
   // ---- GET /revisar-comisiones-automaticas ----
   if (/^SELECT j\.id, j\.nombre, j\.comision_propia, j\.cuenta_comision_id, cc\.nombre AS ficha_nombre\s+FROM jugadores j\s+LEFT JOIN jugadores cc ON cc\.id = j\.cuenta_comision_id\s+WHERE j\.grupo_id = \$1\s+AND NOT COALESCE\(j\.es_cuenta_comision, false\)\s+AND j\.comision_propia > 0\s+AND NOT COALESCE\(j\.incluir_porcentaje_en_jugadas, false\)/i.test(sql)) {

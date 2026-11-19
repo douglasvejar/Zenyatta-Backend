@@ -36,6 +36,8 @@ function ejecutarQuery(text, params) {
     j.nombre = params[0]; j.tipo_cuenta = params[4]; j.pozo_inicial = params[5];
     return { rows: [j] };
   }
+  if (/^UPDATE jugadores SET (sin_pozo|tipo_cliente) = /i.test(sql)) return { rows: [] };
+  if (/^(SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) /i.test(sql)) return { rows: [] };
   if (/^UPDATE jugadores SET pago_diario = \$1/i.test(sql)) {
     if (!columnaExiste) { const e = new Error('no existe la columna'); e.code = '42703'; throw e; }
     const j = JUG.find(x => x.id === params[1] && x.grupo_id === params[2]);

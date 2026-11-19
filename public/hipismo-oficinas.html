@@ -890,8 +890,9 @@
   <section class="panel" id="panel-clientes">
     <div class="dos-col">
       <div class="card">
-        <h2>Crear cliente u oficina</h2>
+        <h2 id="cTitulo">Crear cliente u oficina</h2>
         <p class="nota">Los clientes son los mismos de Hipismo Grupos Hípicos: lo que crees aquí aparece allá y al revés.</p>
+        <div class="nota" id="cAvisoEdicion" style="display:none;border:1px solid var(--card-border);border-radius:10px;padding:9px 11px;margin-bottom:10px;background:var(--warn-bg);">✏️ <b>Editando a <span id="cEditandoNombre"></span>.</b> Si cambias el <b>nombre</b>, se actualiza solo en todas sus jugadas ya cargadas. Si cambias o agregas un <b>%</b>, se recalculan automáticamente todas sus carreras (también las de días anteriores) y los saldos y comisiones salen con el % nuevo.</div>
         <div class="campo"><label for="cNombre">Nombre del cliente u oficina</label><input type="text" id="cNombre" autocomplete="off"></div>
         <div class="fila-campos campo">
           <div><label for="cTelefono">Teléfono (opcional)</label><input type="text" id="cTelefono" autocomplete="off"></div>
@@ -962,7 +963,8 @@
         </div>
 
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn" onclick="guardarCliente()">Guardar</button>
+          <button type="button" class="btn" id="cBtnGuardar" onclick="guardarCliente()">Guardar</button>
+          <button type="button" class="btn btn-sec" id="cBtnCancelar" style="display:none;" onclick="cancelarEdicionCliente()">Cancelar edición</button>
         </div>
         <div class="msg" id="cMsg"></div>
       </div>
@@ -2161,11 +2163,67 @@ function clienteRealPorNombre(nombre) {
   const n = normNombre(nombre); if (!n) return null;
   return CLIENTES.find(c => !c.es_cuenta_comision && normNombre(c.nombre) === n) || null;
 }
+// EDITAR un cliente u oficina (19-11-2026, a pedido del usuario: botón "Editar" para cambiar el nombre y agregar o cambiar los % que se
+// le devuelven o que produce). Usa el mismo formulario de crear, cargado con los datos actuales; guarda con PUT /api/jugadores/:id.
+// El servidor renombra al cliente en todas sus jugadas y los % se leen de su ficha en cada reporte, así que sus carreras se recalculan solas.
+let EDITANDO_CLIENTE = null;
+function ponerRadio(nombre, valor) { const r = document.querySelector(`input[name="${nombre}"][value="${valor}"]`); if (r) r.checked = true; }
+function editarClienteOficina(id) {
+  const c = CLIENTES.find(x => String(x.id) === String(id)); if (!c) return;
+  EDITANDO_CLIENTE = c;
+  msg('cMsg', '');
+  $('cNombre').value = nombreBonito(c.nombre); $('cTelefono').value = c.telefono || ''; $('cNotas').value = c.notas || '';
+  ponerRadio('cTipo', tipoDeCliente(c));
+  actualizarPreguntasCliente();
+  $('cPagoDiario').checked = !!c.pago_diario && tipoDeCliente(c) !== 'oficina';
+  if ($('cSocio')) $('cSocio').value = c.hipismo_socio_id || '';
+  const pct = Number(c.comision_propia) || 0;
+  ponerRadio('cDevuelve', pct > 0 ? 'si' : 'no');
+  $('cPorcentaje').value = pct > 0 ? String(pct) : '';
+  ponerRadio('cDonde', c.incluir_porcentaje_en_jugadas || !c.cc_propio_nombre ? 'jugadas' : 'ficha');
+  $('cFicha').value = c.cc_propio_nombre ? nombreBonito(c.cc_propio_nombre) : '';
+  $('cAvales').innerHTML = '';
+  const avales = Array.isArray(c.avalesPorcentaje) ? c.avalesPorcentaje : [];
+  ponerRadio('cGenera', avales.length ? 'si' : 'no');
+  avales.forEach(a => { agregarAval(); const f = $('cAvales').lastElementChild; f.querySelector('.av-nombre').value = nombreBonito(a.avaladorNombre || a.fichaNombre || a.ficha_nombre || a.nombre || ''); f.querySelector('.av-pct').value = String(Number(a.porcentaje) || ''); });
+  const conPozo = c.tipo_cuenta === 'avalado';
+  ponerRadio('cPozoSi', conPozo ? 'si' : (c.sin_pozo === true && !c.pago_diario ? 'no' : 'libre'));
+  $('cPozo').value = conPozo ? String(redondearCentavos(c.pozo_inicial)) : '';
+  actualizarPreguntasCliente();
+  // El monto del pozo que ya tiene no se pisa desde aquí: se sube o baja con "± Pozo" de la lista (queda con historial).
+  $('cPozo').readOnly = conPozo;
+  $('cPozo').title = conPozo ? 'Para subir o bajar el pozo usa “± Pozo” en la lista de clientes (queda con historial).' : '';
+  $('cTitulo').textContent = 'Editar ' + (tipoDeCliente(c) === 'oficina' ? 'oficina' : 'cliente');
+  $('cEditandoNombre').textContent = nombreBonito(c.nombre);
+  $('cAvisoEdicion').style.display = '';
+  $('cBtnGuardar').textContent = '💾 Guardar cambios';
+  $('cBtnCancelar').style.display = '';
+  $('cNombre').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  $('cNombre').focus();
+}
+function salirDeEdicionCliente() {
+  EDITANDO_CLIENTE = null;
+  $('cTitulo').textContent = 'Crear cliente u oficina';
+  $('cAvisoEdicion').style.display = 'none';
+  $('cBtnGuardar').textContent = 'Guardar';
+  $('cBtnCancelar').style.display = 'none';
+  $('cPozo').readOnly = false; $('cPozo').title = '';
+}
+function limpiarFormularioCliente() {
+  $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
+  $('cPozo').value = ''; $('cPagoDiario').checked = false; if ($('cSocio')) $('cSocio').value = ''; ponerRadio('cPozoSi', 'no');
+  ponerRadio('cDevuelve', 'no'); ponerRadio('cTipo', 'tercio'); ponerRadio('cGenera', 'no'); ponerRadio('cDonde', 'jugadas');
+  $('cAvales').innerHTML = '';
+  actualizarPreguntasCliente();
+}
+function cancelarEdicionCliente() { salirDeEdicionCliente(); limpiarFormularioCliente(); msg('cMsg', ''); }
 async function guardarCliente() {
   msg('cMsg', '');
   const nombre = $('cNombre').value.trim();
   if (!nombre) return msg('cMsg', 'Escribe el nombre del cliente.', false);
-  if (clienteRealPorNombre(nombre)) return msg('cMsg', 'Ya existe un cliente con ese nombre.', false);
+  const editando = EDITANDO_CLIENTE;
+  const otro = clienteRealPorNombre(nombre);
+  if (otro && !(editando && String(otro.id) === String(editando.id))) return msg('cMsg', 'Ya existe un cliente con ese nombre.', false);
 
   let pozoInicial = 0;
   if (valorRadio('cPozoSi') === 'si') {
@@ -2204,24 +2262,36 @@ async function guardarCliente() {
   for (const d of destinos) {
     const k = normNombre(d); if (vistos.has(k)) continue; vistos.add(k);
     const real = clienteRealPorNombre(d);
+    if (real && editando && String(real.id) === String(editando.id)) continue;
     if (real && !confirm('"' + nombreBonito(real.nombre) + '" ya existe como cliente (con sus propias jugadas).\n\nAceptar = sí, este % cae directo en su ficha y se mezcla con sus jugadas normales.\nCancelar = no, voy a corregir el nombre.')) return;
   }
-  try {
-    await api('/api/jugadores', { method: 'POST', body: JSON.stringify({
-      nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked, ...($('cSocio') ? { socioId: $('cSocio').value || null } : {}),
-      comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje, tipoCliente,
-      sinPozo: valorRadio('cPozoSi') === 'no' && !$('cPagoDiario').checked
-    }) });
-  } catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
+  const cuerpo = {
+    nombre, telefono: $('cTelefono').value.trim(), notas: $('cNotas').value.trim(), activo: editando ? editando.activo !== false : true, tipoCuenta: pozoInicial > 0 ? 'avalado' : 'libre', pozoInicial, pagoDiario: $('cPagoDiario').checked, ...($('cSocio') ? { socioId: $('cSocio').value || null } : {}),
+    comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, avalesPorcentaje, tipoCliente,
+    sinPozo: valorRadio('cPozoSi') === 'no' && !$('cPagoDiario').checked
+  };
+  if (editando) {
+    // El PUT reemplaza la ficha completa: lo que este formulario no muestra se conserva tal cual estaba.
+    cuerpo.modeloComision = editando.modelo_comision || null; cuerpo.moneda = editando.moneda || 'USD'; cuerpo.modulosAnclados = !!editando.modulos_anclados;
+    let resp;
+    try { resp = await api('/api/jugadores/' + encodeURIComponent(editando.id), { method: 'PUT', body: JSON.stringify(cuerpo) }); }
+    catch (e) { return msg('cMsg', 'No se pudo guardar: ' + e.message, false); }
+    const cambioNombre = normNombre(nombre) !== normNombre(editando.nombre);
+    const cambioPct = (Number(editando.comision_propia) || 0) !== comisionPropia
+      || JSON.stringify((editando.avalesPorcentaje || []).map(a => [normNombre(a.avaladorNombre || a.fichaNombre || ''), Number(a.porcentaje)]).sort())
+      !== JSON.stringify(avalesPorcentaje.map(a => [normNombre(a.fichaNombre), Number(a.porcentaje)]).sort());
+    const partes = ['✅ Cambios guardados.'];
+    if (cambioNombre) partes.push(`El nombre nuevo ya está en ${resp && resp.carrerasRenombradas ? resp.carrerasRenombradas + ' carrera(s) ya cargada(s)' : 'todas sus jugadas'}.`);
+    if (cambioPct) partes.push('Todas sus carreras se recalcularon con el % nuevo.');
+    salirDeEdicionCliente(); limpiarFormularioCliente();
+    await cargarClientes();
+    msg('cMsg', partes.join(' '), true);
+    return;
+  }
+  try { await api('/api/jugadores', { method: 'POST', body: JSON.stringify(cuerpo) }); }
+  catch (e) { return msg('cMsg', 'No se pudo crear el cliente: ' + e.message, false); }
   msg('cMsg', '✅ Cliente creado.', true);
-  $('cNombre').value = ''; $('cTelefono').value = ''; $('cNotas').value = ''; $('cPorcentaje').value = ''; $('cFicha').value = '';
-  $('cPozo').value = ''; $('cPagoDiario').checked = false; if ($('cSocio')) $('cSocio').value = ''; document.querySelector('input[name="cPozoSi"][value="no"]').checked = true;
-  document.querySelector('input[name="cDevuelve"][value="no"]').checked = true;
-  document.querySelector('input[name="cTipo"][value="tercio"]').checked = true;
-  document.querySelector('input[name="cGenera"][value="no"]').checked = true;
-  document.querySelector('input[name="cDonde"][value="jugadas"]').checked = true;
-  $('cAvales').innerHTML = '';
-  actualizarPreguntasCliente();
+  limpiarFormularioCliente();
   await cargarClientes();
 }
 async function alternarSinPozo(id, valor) {
@@ -2296,7 +2366,7 @@ function pintarClientes() {
   $('cLista').innerHTML = filas.length ? filas.map(c => {
     const pct = Number(c.comision_propia) || 0;
     const devuelve = pct > 0 ? `<span class="tag">${fmt(pct)}%</span> ${c.incluir_porcentaje_en_jugadas ? 'incluido en sus jugadas' : (c.cc_propio_nombre ? 'ficha ' + esc(nombreBonito(c.cc_propio_nombre)) : '')}` : '—';
-    const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
+    const avales = (c.avalesPorcentaje || []).map(a => `<span class="tag">${esc(nombreBonito(a.avaladorNombre || a.fichaNombre || a.ficha_nombre || a.nombre || ''))} ${fmt(a.porcentaje)}%</span>`).join('') || '—';
     const tienePozo = c.tipo_cuenta === 'avalado';
     // Cliente libre (sin pozo): "Sin pozo" = todavía no puede jugar; "Libre" = sin límites. Un pago diario usa sus recargas, no esta marca.
     const sinPozo = !tienePozo && !c.pago_diario && c.sin_pozo === true, libre = !tienePozo && !c.pago_diario && !sinPozo;
@@ -2304,7 +2374,7 @@ function pintarClientes() {
       : (sinPozo ? '<span class="tag-pozo sin">Sin pozo</span>' : (libre ? '<span class="tag-pozo libre">Tercio libre</span>' : '<span style="color:var(--text-dim)">—</span>'));
     const botonLibre = tienePozo || c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" onclick="alternarSinPozo('${esc(c.id)}', ${sinPozo ? 'false' : 'true'})">${sinPozo ? 'Pasar a libre' : 'Marcar sin pozo'}</button>`;
     const pozo = `<span style="white-space:nowrap;">${estadoPozo} <button type="button" class="btn btn-sec btn-chico" onclick="abrirPozoCliente('${esc(c.id)}')">${tienePozo ? '± Pozo' : 'Dar pozo'}</button> ${botonLibre}</span>`;
-    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`} ${puedeOficina('oficinas_eliminar') ? `<button type="button" class="btn btn-peligro btn-chico" style="margin-top:4px;" onclick="eliminarClienteOficina('${esc(c.id)}')">🗑️ Eliminar</button>` : ''}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
+    return `<tr><td><b>${esc(nombreBonito(c.nombre))}</b>${c.activo === false ? ' <span style="color:var(--text-dim)">(inactivo)</span>' : ''}${etiquetaTipo(c)}${c.pago_diario ? ' <span class="tag">💵 Pago diario</span>' : ''}${window.etiquetaSocioDe ? window.etiquetaSocioDe(c) : ''}<div><button type="button" class="btn btn-chico" style="margin-top:4px;" onclick="editarClienteOficina('${esc(c.id)}')">✏️ Editar</button> <button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="cambiarTipoCliente('${esc(c.id)}', '${tipoDeCliente(c) === 'oficina' ? 'tercio' : 'oficina'}')">${tipoDeCliente(c) === 'oficina' ? 'Pasar a Tercio' : 'Pasar a Oficina'}</button> ${tipoDeCliente(c) === 'oficina' && !c.pago_diario ? '' : `<button type="button" class="btn btn-sec btn-chico" style="margin-top:4px;" onclick="alternarPagoDiario('${esc(c.id)}', ${c.pago_diario ? 'false' : 'true'})">${c.pago_diario ? 'Quitar pago diario' : '💵 Marcar pago diario'}</button>`} ${puedeOficina('oficinas_eliminar') ? `<button type="button" class="btn btn-peligro btn-chico" style="margin-top:4px;" onclick="eliminarClienteOficina('${esc(c.id)}')">🗑️ Eliminar</button>` : ''}</div></td><td>${devuelve}</td><td>${avales}</td><td class="num">${pozo}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="color:var(--text-dim);padding:14px;">Todavía no hay clientes.</td></tr>';
 }
 

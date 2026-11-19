@@ -5,6 +5,7 @@ const db = require('../db');
 const { requiereGrupo, requierePermiso, requiereAlgunoDe, monedaModoDe } = require('../middleware/auth');
 const { calcularPozoJugador, rangoSemanaActualPozo } = require('../services/pozo');
 const { buscarOCrearFicha } = require('../services/hipismoComisionPropia');
+const { renombrarClienteEnHipismo } = require('../services/hipismoRenombrarCliente');
 const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
@@ -335,7 +336,13 @@ router.put('/:id', asyncHandler(async (req, res) => {
     const nombreNorm = normalizarNombreJugador(nombre);
     const avalesFinal = await normalizarAvalesPorcentaje(req.grupoId, avalesPorcentaje, req.params.id, nombreNorm);
     const cuentaComisionIdFinal = await resolverCuentaComisionPropiaId(req.grupoId, { comisionPropia, incluirPorcentajeEnJugadas, comisionPropiaFicha, nombreNormalizado: nombreNorm });
+    // 19-11-2026: si el nombre cambia, todo lo ya jugado con el nombre viejo se mueve al nuevo en la MISMA transacción (ver
+    // services/hipismoRenombrarCliente.js). Los % (propio, ficha, avales) no hay que "recalcularlos": los reportes los leen de la ficha.
+    let resumenRenombre = { renombrado: false, carreras: 0 };
+    let nombrePrevio = null;
     const jugador = await db.transaccion(async (client) => {
+      const rPrev = await client.query('SELECT nombre FROM jugadores WHERE id = $1 AND grupo_id = $2 FOR UPDATE', [req.params.id, req.grupoId]);
+      nombrePrevio = rPrev.rows[0] ? rPrev.rows[0].nombre : null;
       const r = await client.query(
         `UPDATE jugadores SET nombre = $1, telefono = $2, notas = $3, activo = $4, tipo_cuenta = $5,
            pozo_inicial = $6, comision_propia = $7, modelo_comision = $8, moneda = $9, auto_creado = false, modulos_anclados = $10,
@@ -347,8 +354,13 @@ router.put('/:id', asyncHandler(async (req, res) => {
       if (r.rows.length === 0) { const err = new Error('Jugador no encontrado.'); err.status = 404; throw err; }
       const actualizado = r.rows[0];
       await reemplazarAvalesPorcentaje(client, req.grupoId, actualizado.id, avalesFinal);
+      if (nombrePrevio && nombrePrevio !== actualizado.nombre) {
+        const rOtros = await client.query('SELECT nombre FROM jugadores WHERE grupo_id = $1 AND id <> $2', [req.grupoId, actualizado.id]);
+        resumenRenombre = await renombrarClienteEnHipismo(client, req.grupoId, nombrePrevio, actualizado.nombre, rOtros.rows.map(f => f.nombre));
+      }
       return actualizado;
     });
+    if (resumenRenombre.renombrado) { try { require('../services/hipismoJugadasChatBot').olvidarClientes(req.grupoId); } catch (e) { /* el bot no está cargado */ } }
     const tipoClientePut = resolverTipoCliente(req.body.tipoCliente);
     await guardarTipoCliente(jugador.id, req.grupoId, tipoClientePut);
     await guardarSinPozo(jugador.id, req.grupoId, req.body.sinPozo, tipo);
@@ -356,7 +368,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
     if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
-    res.json({ ...jugador, ...(tipoClientePut ? { tipo_cliente: tipoClientePut } : {}), pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
+    res.json({ ...jugador, ...(tipoClientePut ? { tipo_cliente: tipoClientePut } : {}), pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal, renombrado: resumenRenombre.renombrado, carrerasRenombradas: resumenRenombre.carreras });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ya existe un jugador con ese nombre en este grupo.' });
     if (e.status) return res.status(e.status).json({ error: e.message });

@@ -11547,8 +11547,9 @@ async function guardarDetalleCliente(id) {
     modulosAnclados: j ? !!j.modulos_anclados : false,
     avalesPorcentaje
   };
+  let resp = null;
   try {
-    await apiHipismo(`/api/jugadores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    resp = await apiHipismo(`/api/jugadores/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   } catch (e) {
     alert('No se pudo guardar: ' + e.message);
     return;
@@ -11556,7 +11557,8 @@ async function guardarDetalleCliente(id) {
   await cargarClientesReales();
   CLIENTE_DETALLE_ID = id;
   await pintarFichaCliente();
-  alert('✅ Cliente actualizado.');
+  // 19-11-2026: si cambió el nombre, el servidor lo movió a todas sus jugadas; los % se leen de la ficha, así que sus carreras ya salen con el % nuevo.
+  alert('✅ Cliente actualizado.' + (resp && resp.renombrado ? '\nEl nombre nuevo ya está en ' + (resp.carrerasRenombradas ? resp.carrerasRenombradas + ' carrera(s) ya cargada(s).' : 'todas sus jugadas.') : '') + '\nSus carreras se recalculan solas con los % de su ficha.');
 }
 
 // "Eliminar cliente" desde la ficha (29-09-2026, ver la nota grande del

@@ -568,4 +568,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+// 19-11-2026: al renombrar/editar un cliente el bot olvida su lista de clientes en memoria (se vuelve a leer en la próxima jugada).
+function olvidarClientes(grupoId) { cacheClientes.delete(grupoId); }
+
+module.exports = { olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
