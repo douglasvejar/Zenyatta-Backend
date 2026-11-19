@@ -509,6 +509,7 @@
     <button type="button" class="tab" data-tab="balance" data-perm="oficinas_informes" onclick="irATab('balance')">💰 Balance General</button>
     <button type="button" class="tab" data-tab="saldospozos" data-perm="oficinas_informes" onclick="irATab('saldospozos')">🏦 Saldos con Pozos</button>
     <button type="button" class="tab" data-tab="recargas" data-perm="oficinas_saldos" onclick="irATab('recargas')">💵 Recargas y Retiros</button>
+    <button type="button" class="tab" data-tab="traspasos" data-perm="oficinas_saldos" onclick="irATab('traspasos')">🔄 Traspasos</button>
     <button type="button" class="tab" data-tab="controlpozos" data-perm="oficinas_saldos" onclick="irATab('controlpozos')">🚦 Control de Pozos</button>
     <button type="button" class="tab oculto" data-tab="balancesocios" data-perm="oficinas_informes" onclick="irATab('balancesocios')">🤝 Balance por Socios</button>
     <button type="button" class="tab oculto" data-tab="comisionessocios" data-perm="oficinas_informes" onclick="irATab('comisionessocios')">🤝 Comisiones por Socios</button>
@@ -712,7 +713,6 @@
       <div class="subtabs">
         <button type="button" class="subtab activa" data-sub="recargas" onclick="irASubSaldos('recargas')">💵 Recargas pago diario</button>
         <button type="button" class="subtab" data-sub="retiros" onclick="irASubSaldos('retiros')">💸 Retiros</button>
-        <button type="button" class="subtab" data-sub="traspasos" onclick="irASubSaldos('traspasos')">🔄 Traspaso de saldo</button>
       </div>
       <div class="subpanel activo" id="subpanel-recargas">
         <div class="fila-campos" style="margin-bottom:12px;">
@@ -742,16 +742,22 @@
         <h3 style="margin:18px 0 6px;font-size:16px;">Retiros registrados</h3>
         <div id="rtLista"></div>
       </div>
-      <div class="subpanel" id="subpanel-traspasos">
-        <p class="nota">Le resta saldo a un cliente y se lo suma a otro, el mismo día. Se ve en el Balance General y en el detallado de cada cliente, y los totales siguen sumando 0. Si te equivocas, anúlalo en la lista de abajo.</p>
+    </div>
+  </section>
+
+  <!-- ===================== TRASPASOS (19-11-2026) ===================== -->
+  <section class="panel" id="panel-traspasos">
+    <div class="card">
+      <h2>🔄 Traspasos</h2>
+      <p class="nota">Pasa saldo de una oficina o cliente a otro, el mismo día: <b>RAUL −50 / LUIS +50</b>. Es un <b>monto neto</b>: no lleva el 5% y <b>no cambia la comisión de la oficina</b> porque lo que baja para uno sube para el otro (los totales siguen sumando 0). En la ficha de cada uno sale como un ítem <b>TRASPASO</b> (de quién viene o a quién va) y cuenta en su saldo y en el Balance General. Si te equivocas, anúlalo en la lista de abajo.</p>
         <div class="fila-campos" style="margin-bottom:10px;">
-          <div><label for="tsBuscar">Buscar cliente</label><input type="text" id="tsBuscar" placeholder="Escribe para filtrar…" autocomplete="off" oninput="poblarSelectsTraspaso()"></div>
+          <div><label for="tsBuscar">Buscar cliente u oficina</label><input type="text" id="tsBuscar" placeholder="Escribe para filtrar…" autocomplete="off" oninput="poblarSelectsTraspaso()"></div>
           <div><label for="tsOrigen">De (sale el saldo) *</label><select id="tsOrigen" onchange="pintarPistaTraspaso()"></select></div>
           <div><label for="tsDestino">A (recibe el saldo) *</label><select id="tsDestino" onchange="pintarPistaTraspaso()"></select></div>
-          <div><label for="tsMonto">Monto *</label><input type="number" id="tsMonto" step="0.01" min="0" placeholder="Ej: 20,00" oninput="pintarPistaTraspaso()"></div>
+          <div><label for="tsMonto">Monto neto *</label><input type="number" id="tsMonto" step="0.01" min="0" placeholder="Ej: 50,00" oninput="pintarPistaTraspaso()"></div>
           <div><label for="tsFecha">Fecha</label><input type="date" id="tsFecha"></div>
         </div>
-        <div class="campo" style="margin-bottom:10px;"><label for="tsNota">Nota (opcional)</label><input type="text" id="tsNota" placeholder="Ej: Traspaso de saldo" autocomplete="off"></div>
+        <div class="campo" style="margin-bottom:10px;"><label for="tsNota">Nota (opcional)</label><input type="text" id="tsNota" placeholder="Ej: arreglo de cuentas" autocomplete="off"></div>
         <div class="nota" id="tsPista" style="margin-top:6px;"></div>
         <div class="acciones-tabla">
           <button type="button" class="btn" id="tsGuardar" onclick="guardarTraspaso()">🔄 Traspasar</button>
@@ -760,7 +766,6 @@
         <div class="msg" id="tsMsg"></div>
         <h3 style="margin:18px 0 6px;font-size:16px;">Traspasos hechos</h3>
         <div id="tsLista"></div>
-      </div>
     </div>
   </section>
 
@@ -1320,6 +1325,7 @@ function irATab(t) {
   if (t === 'balance') cargarBalance();
   if (t === 'saldospozos') cargarSaldosPozos();
   if (t === 'recargas') entrarRecargas();
+  if (t === 'traspasos') entrarTraspasos();
   if (t === 'controlpozos') cargarControlPozosOf();
   if (t === 'detalle') cargarListaDetalle();
   if (t === 'comision') cargarComision();

@@ -170,11 +170,14 @@ const control = require('../src/services/hipismoOficinasControl');
 
 
   // ---------- 8) traspaso de saldo, socio al crear cliente y Excel del Registro ----------
-  ['subpanel-traspasos', 'tsOrigen', 'tsDestino', 'tsGuardar', 'cSocioBloque', 'excelRegistro()'].forEach(k => check(html.includes(k), `pantalla: hipismo-oficinas.html contiene ${k}`));
+  ['panel-traspasos', 'tsOrigen', 'tsDestino', 'tsGuardar', 'cSocioBloque', 'excelRegistro()'].forEach(k => check(html.includes(k), `pantalla: hipismo-oficinas.html contiene ${k}`));
   ['entrarTraspasos', 'guardarTraspaso', 'anularTraspaso', 'excelTraspasos', 'excelRegistro'].forEach(k => check(saldos.includes('function ' + k), `oficinas-saldos.js define ${k}`));
   check(saldos.includes('/api/hipismo/comisiones/traspaso') && saldos.includes('/api/hipismo/traspasos-saldo'), 'traspaso: usa las rutas de siempre (comisiones/traspaso y traspasos-saldo)');
   check(/socioId: \$\('cSocio'\)\.value \|\| null/.test(html), 'crear cliente: manda socioId solo cuando el bloque de socio está en pantalla');
   check(socios.includes('pintarSocioCliente') && socios.includes('etiquetaSocioDe'), 'oficinas-socios.js arma el bloque "¿Pertenece a un socio?" y la etiqueta del socio en la lista');
+  // 19-11-2026: Traspasos tiene su propia pestaña en el menú (con el candado de saldos), ya no es una subpestaña de Recargas y Retiros.
+  check(/data-tab="traspasos" data-perm="oficinas_saldos"[^>]*>🔄 Traspasos<\/button>/.test(html) && !html.includes('data-sub="traspasos"') && /if \(t === 'traspasos'\) entrarTraspasos\(\)/.test(html), 'traspaso: botón propio "🔄 Traspasos" en el menú (permiso oficinas_saldos) y ya no vive dentro de Recargas');
+  check(/'TRASPASO'/.test(fs.readFileSync(path.join(__dirname, '..', 'public', 'oficinas-informes.js'), 'utf8')), 'traspaso: la ficha del cliente lo escribe como ítem TRASPASO');
   const rutaTras = buscar('post', '/comisiones/traspaso'), rutaAnular = buscar('delete', '/traspasos-saldo/:id');
   check(!!rutaTras && rutaTras[1].length > 2, 'permisos: POST /comisiones/traspaso lleva candado de Oficinas');
   check(!!rutaAnular && rutaAnular[1].length > 2, 'permisos: anular un traspaso lleva candado de Oficinas');

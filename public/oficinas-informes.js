@@ -71,7 +71,12 @@
     return String(m === undefined || m === null ? '' : m).replace(/^(\d{1,2})p-(\d{1,2})n$/i, (x, a, b) => `${a}P/${b}N`);
   }
   function descripcionLinea(l) {
-    if (l.tipo === 'traspaso') return 'Traspaso' + (l.nota ? ' — ' + l.nota : '');
+    if (l.tipo === 'traspaso') {
+      // 19-11-2026: ítem TRASPASO en la ficha, con quién lo mandó (+) o a quién fue (−); la nota solo si la escribió el usuario.
+      const nota = l.nota && l.nota !== 'Traspaso de saldo' ? l.nota : '';
+      const otro = l.contraparte ? String(l.contraparte).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : '';
+      return 'TRASPASO' + (otro ? (Number(l.resultado) >= 0 ? ' de ' : ' a ') + otro : '') + (nota ? ' — ' + nota : '');
+    }
     if (l.tipo === 'carga') return l.texto || 'Carga';
     if (l.tipo === 'devolucion-propia') return `% devuelto${l.porcentaje !== undefined ? ' ' + l.porcentaje + '% de ' + dinero(l.monto) : ''}`;
     if (l.tipo === 'comision') {

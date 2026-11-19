@@ -143,7 +143,7 @@ async function verComprobante(id) {
 function irASubSaldos(sub) {
   document.querySelectorAll('#panel-recargas .subtab').forEach(b => b.classList.toggle('activa', b.dataset.sub === sub));
   document.querySelectorAll('#panel-recargas .subpanel').forEach(p => p.classList.toggle('activo', p.id === 'subpanel-' + sub));
-  if (sub === 'recargas') pintarRecargas(); else if (sub === 'traspasos') entrarTraspasos(); else entrarRetiros();
+  if (sub === 'recargas') pintarRecargas(); else entrarRetiros();
 }
 async function entrarRecargas() {
   const f = $('rcFecha'); if (f && !f.value) f.value = fechaHoyVenezuela();
@@ -151,7 +151,6 @@ async function entrarRecargas() {
   await cargarMetodosPago();
   const activa = document.querySelector('#panel-recargas .subtab.activa');
   if (activa && activa.dataset.sub === 'retiros') await entrarRetiros();
-  else if (activa && activa.dataset.sub === 'traspasos') await entrarTraspasos();
   else await pintarRecargas();
 }
 
@@ -410,7 +409,7 @@ function poblarSelectsTraspaso() {
 }
 function pintarPistaTraspaso() {
   const o = $('tsOrigen').value, d = $('tsDestino').value, m = Number($('tsMonto').value) || 0;
-  $('tsPista').textContent = (o && d && m > 0) ? `${nombreBonito(o)} −${INF.dinero(m)} / ${nombreBonito(d)} +${INF.dinero(m)}` : '';
+  $('tsPista').textContent = (o && d && m > 0) ? `${nombreBonito(o)} −${INF.dinero(m)} / ${nombreBonito(d)} +${INF.dinero(m)} · monto neto: sin 5% y no afecta la comisión` : '';
 }
 async function guardarTraspaso() {
   const origen = $('tsOrigen').value, destino = $('tsDestino').value, monto = Number($('tsMonto').value);
@@ -421,7 +420,7 @@ async function guardarTraspaso() {
   if (!confirm(`¿Traspasar ${INF.dinero(monto)} de ${nombreBonito(origen)} a ${nombreBonito(destino)}?`)) return;
   $('tsGuardar').disabled = true;
   try {
-    await api('/api/hipismo/comisiones/traspaso', { method: 'POST', body: JSON.stringify({ clienteOrigen: origen, clienteDestino: destino, monto, fecha, nota: nota || 'Traspaso de saldo' }) });
+    await api('/api/hipismo/comisiones/traspaso', { method: 'POST', body: JSON.stringify({ clienteOrigen: origen, clienteDestino: destino, monto, fecha, nota: nota || '' }) });
     msg('tsMsg', `✅ Listo: ${INF.dinero(monto)} de ${nombreBonito(origen)} a ${nombreBonito(destino)}.`, true);
     $('tsMonto').value = ''; $('tsNota').value = ''; pintarPistaTraspaso();
     await pintarTraspasos();
@@ -433,7 +432,7 @@ async function pintarTraspasos() {
   try { TRASPASOS = (await api('/api/hipismo/traspasos-saldo')).traspasos || []; }
   catch (e) { cont.innerHTML = `<div class="vacio" style="color:var(--danger)">${esc(e.message)}</div>`; return; }
   if (!TRASPASOS.length) { cont.innerHTML = '<div class="vacio">Todavía no se ha hecho ningún traspaso.</div>'; return; }
-  cont.innerHTML = TRASPASOS.map(t => `<div class="mov-fila"><span class="rec-linea">🔄 <b>${INF.fechaCorta(t.fecha)}</b> — ${esc(nombreBonito(t.origen))} → ${esc(nombreBonito(t.destino))}<span class="rec-sep">·</span><b>${INF.dinero(t.monto)}</b>${t.nota ? ` <span class="rec-chip">${esc(t.nota)}</span>` : ''}</span>
+  cont.innerHTML = TRASPASOS.map(t => `<div class="mov-fila"><span class="rec-linea">🔄 <b>${INF.fechaCorta(t.fecha)}</b> — ${esc(nombreBonito(t.origen))} → ${esc(nombreBonito(t.destino))}<span class="rec-sep">·</span><b>${INF.dinero(t.monto)}</b>${t.nota && t.nota !== 'Traspaso de saldo' ? ` <span class="rec-chip">${esc(t.nota)}</span>` : ''}</span>
     <span class="mov-acc"><button type="button" class="btn btn-peligro btn-chico" onclick="anularTraspaso('${esc(t.id)}')">🗑️ Anular</button></span></div>`).join('');
 }
 async function anularTraspaso(id) {
