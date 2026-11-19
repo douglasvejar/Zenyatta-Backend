@@ -333,6 +333,15 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Pizarra 3.1.2.4'));
   check(/Carrera calculada y guardada/.test(textoDe(ultimo())) && !/No pude cargar/.test(textoDe(ultimo())), 'si se guardó (201) pero no hay texto, no se dice que falló');
 
+  // Mensaje con tres etiquetas (el de la parada, el que respondió y el que se quedó sin pozo): cada @@ se cambia por su @número y la lista no repite personas
+  {
+    const enviadosTest = [];
+    const sFalso = { sock: { sendMessage: async (jid, contenido) => { enviadosTest.push(contenido); return { key: { id: 'x' } }; } }, jid: 'g@g.us', mensajes: new Map(), avisos: new Map() };
+    await require('../src/services/hipismoJugadasChatBot')._enviar(sFalso, '✅ @@ @@2 Aquí solo jugaron 1.732,70 por pozo de @@3', { mencionar: '584141111111@s.whatsapp.net', nombre: 'A', mencionar2: '584142222222@s.whatsapp.net', nombre2: 'B', mencionar3: '584141111111@s.whatsapp.net', nombre3: 'A' });
+    const c = enviadosTest[0];
+    check(c.text === '✅ @584141111111 @584142222222 Aquí solo jugaron 1.732,70 por pozo de @584141111111' && c.mentions.length === 2, 'un mensaje con tres etiquetas sale con sus @números y sin repetir personas en la lista de menciones');
+  }
+
   Date.now = realNow;
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);

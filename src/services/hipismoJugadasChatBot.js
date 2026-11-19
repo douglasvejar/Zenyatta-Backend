@@ -364,7 +364,7 @@ function sesionDe(grupo, sock, remoteJid) {
 
 async function enviar(s, texto, op) {
   const contenido = { text: texto };
-  // '@@' = a quien se menciona (op.mencionar); '@@2' = una segunda persona (op.mencionar2). Sin persona, la marca se quita.
+  // '@@' = a quien se menciona (op.mencionar); '@@2' y '@@3' = otras personas (op.mencionar2/3). Sin persona, la marca se quita.
   const menciones = [];
   const poner = (marca, jid, nombre) => {
     if (!contenido.text.includes(marca)) return;
@@ -372,9 +372,10 @@ async function enviar(s, texto, op) {
     if (jid && dig && !String(jid).endsWith('@lid')) { contenido.text = contenido.text.replace(marca, '@' + dig); menciones.push(jid); }
     else contenido.text = contenido.text.replace(marca, jid ? '@' + (nombre || '') : '');
   };
+  poner('@@3', op.mencionar3, op.nombre3);
   poner('@@2', op.mencionar2, op.nombre2);
   poner('@@', op.mencionar, op.nombre);
-  if (menciones.length) contenido.mentions = menciones;
+  if (menciones.length) contenido.mentions = menciones.filter((j, i, a) => a.indexOf(j) === i);
   const citado = op.citarId ? s.mensajes.get(op.citarId) : null;
   try {
     const enviado = await s.sock.sendMessage(s.jid, contenido, citado ? { quoted: citado } : undefined);
@@ -478,4 +479,4 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 
-module.exports = { _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

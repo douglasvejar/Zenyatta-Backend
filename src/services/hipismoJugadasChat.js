@@ -543,10 +543,16 @@ function crearMotor(deps) {
     const factor = o.lado === 'doy' ? r.jugador : r.banquero; // quien publica "doy" juega; quien publica "recibo" da
     const tope = await topeDe(nombre, factor);
     if (o.monto > tope.max + 0.005) {
-      nota('Jugada publicada por ' + nombre + ' pero su disponible no alcanza (' + (tope.disponible === null ? '?' : fmt(tope.disponible)) + '): no se guardó' + (tope.detalle ? '. ' + tope.detalle : ''));
-      marcarSinSaldo(m);
-      await deps.responder(textoSinDisponible(m, tope, nombre), mencion(m));
-      return;
+      if (tope.max < 0.01) {
+        // Sin nada de saldo: la parada no se registra.
+        nota('Jugada publicada por ' + nombre + ' pero no tiene saldo disponible: no se guardó' + (tope.detalle ? '. ' + tope.detalle : ''));
+        marcarSinSaldo(m);
+        await deps.responder(textoSinDisponible(m, tope, nombre), mencion(m));
+        return;
+      }
+      // Tiene saldo pero menos de lo que puso: se le pide corregir, y la parada queda abierta: al recibir respuestas se juega solo su disponible.
+      nota('Jugada publicada por ' + nombre + ' por ' + fmt(o.monto) + ' pero su disponible para esta jugada es ' + fmt(tope.max) + ': se le pidió corregir; si le responden se juega solo su disponible' + (tope.detalle ? '. ' + tope.detalle : ''));
+      await deps.responder(etiquetaDe(m) + ' Favor corregir monto, su monto disponible para jugadas es de ' + fmt(tope.max) + '. En caso de recibir alguna respuesta, jugará solo su disponible.', mencion(m));
     }
     nota('Jugada publicada por ' + nombre + ' (' + fmt(o.monto) + '): queda abierta 3 minutos esperando respuestas');
     ofertas.set(m.id, { id: m.id, ts: tiempoDe(m), autorJid: m.remitente.jid, autorNombre: nombre, autorEtiqueta: m.remitente.nombre, lado: o.lado, apuesta: o.apuesta, monto: o.monto, restante: o.monto });
@@ -646,11 +652,11 @@ function crearMotor(deps) {
     nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
     if (limitadoPor) {
       // "@(el que publicó) Aquí solo 300 por saldo de @(el que respondió)" — se etiqueta a la otra persona y se nombra a la que se quedó sin saldo.
-      const op = limitadoPor === 'resp'
-        ? { citarId: m.id, mencionar: oferta.autorJid, nombre: oferta.autorEtiqueta, mencionar2: m.remitente.jid, nombre2: m.remitente.nombre }
-        : { citarId: m.id, mencionar: m.remitente.jid, nombre: m.remitente.nombre, mencionar2: oferta.autorJid, nombre2: oferta.autorEtiqueta };
-      nota('Saldo limitado: se jugó solo ' + fmt(monto) + ' por el saldo de ' + (limitadoPor === 'resp' ? nombre : oferta.autorNombre));
-      await deps.responder('✅ @@ Aquí solo ' + fmt(monto) + ' por saldo de @@2', op);
+      // "Aquí solo jugaron 1.732,70 por pozo de @(el que se quedó sin saldo)", etiquetando a las dos personas.
+      const limitado = limitadoPor === 'resp' ? { jid: m.remitente.jid, nombre: m.remitente.nombre } : { jid: oferta.autorJid, nombre: oferta.autorEtiqueta };
+      const op = { citarId: m.id, mencionar: oferta.autorJid, nombre: oferta.autorEtiqueta, mencionar2: m.remitente.jid, nombre2: m.remitente.nombre, mencionar3: limitado.jid, nombre3: limitado.nombre };
+      nota('Saldo limitado: se jugó solo ' + fmt(monto) + ' por el pozo de ' + (limitadoPor === 'resp' ? nombre : oferta.autorNombre));
+      await deps.responder('✅ @@ @@2 Aquí solo jugaron ' + fmt(monto) + ' por pozo de @@3', op);
     } else await deps.responder('✅ Aquí jugaron' + (parcial ? ' ' + fmt(monto) : ''), { citarId: m.id });
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
