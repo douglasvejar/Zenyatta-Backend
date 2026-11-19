@@ -374,6 +374,19 @@ const textoDe = e => e.contenido.text;
     check(c.text === '✅ @584141111111 @584142222222 Aquí solo jugaron 1.732,70 por pozo de @584141111111' && c.mentions.length === 2, 'un mensaje con tres etiquetas sale con sus @números y sin repetir personas en la lista de menciones');
   }
 
+  // Etiquetas reales también con el código oculto (@lid): texto "@código" + el mismo jid en `mentions` (antes salía "@Nombre" sin etiquetar a nadie)
+  {
+    const enviadosTest = [];
+    const sFalso = { sock: { sendMessage: async (jid, contenido) => { enviadosTest.push(contenido); return { key: { id: 'x' } }; } }, jid: 'g@g.us', mensajes: new Map(), avisos: new Map() };
+    await require('../src/services/hipismoJugadasChatBot')._enviar(sFalso, '✅ @@ @@2 Aquí solo jugaron 195,00 por pozo de @@3', { mencionar: '98765432100:7@lid', nombre: 'Tykhe', mencionar2: '584141111111@s.whatsapp.net', nombre2: 'B', mencionar3: '55555555555@lid', nombre3: 'tomsito' });
+    const c = enviadosTest[0];
+    check(c.text === '✅ @98765432100 @584141111111 Aquí solo jugaron 195,00 por pozo de @55555555555' && c.mentions.length === 3 && ['98765432100@lid', '584141111111@s.whatsapp.net', '55555555555@lid'].every(j => c.mentions.includes(j)), 'las personas con número oculto (@lid) también se etiquetan de verdad: "@código" en el texto y su jid en las menciones');
+    const e2 = [];
+    const sF2 = { sock: { sendMessage: async (jid, contenido) => { e2.push(contenido); return { key: { id: 'x' } }; } }, jid: 'g@g.us', mensajes: new Map(), avisos: new Map() };
+    await require('../src/services/hipismoJugadasChatBot')._enviar(sF2, 'Hola @@', { mencionar: 'raro', nombre: 'Pepe' });
+    check(e2[0].text === 'Hola @Pepe' && !e2[0].mentions, 'si el jid no se puede leer, no se inventa una etiqueta: queda el nombre en texto');
+  }
+
   Date.now = realNow;
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);

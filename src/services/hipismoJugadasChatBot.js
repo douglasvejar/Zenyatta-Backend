@@ -424,10 +424,12 @@ async function enviar(s, texto, op) {
   const contenido = { text: texto };
   // '@@' = a quien se menciona (op.mencionar); '@@2' y '@@3' = otras personas (op.mencionar2/3). Sin persona, la marca se quita.
   const menciones = [];
+  // Etiqueta REAL: en el texto va "@<número>" y el mismo jid en `mentions` (así WhatsApp lo convierte en el nombre de la persona y le llega el aviso).
+  // Vale el teléfono (@s.whatsapp.net) y también el código oculto (@lid): en grupos que usan códigos ocultos WhatsApp etiqueta con ese mismo código.
   const poner = (marca, jid, nombre) => {
     if (!contenido.text.includes(marca)) return;
-    const dig = jid ? telefonoDeParticipante(jid) : null;
-    if (jid && dig && !String(jid).endsWith('@lid')) { contenido.text = contenido.text.replace(marca, '@' + dig); menciones.push(jid); }
+    const m = jid ? String(jid).match(/^(\d+)(?::\d+)?@(s\.whatsapp\.net|lid)$/) : null;
+    if (m) { contenido.text = contenido.text.replace(marca, '@' + m[1]); menciones.push(m[1] + '@' + m[2]); }
     else contenido.text = contenido.text.replace(marca, jid ? '@' + (nombre || '') : '');
   };
   poner('@@3', op.mencionar3, op.nombre3);
