@@ -119,7 +119,7 @@ function estadoPublico(grupoId) {
     ultimo: s.ultimo || null,
     // Diagnóstico (18-11-2026): ¿WhatsApp le entrega eventos a este número? ¿se reconecta seguido?
     eventos: s.eventos || 0, ultimoEvento: s.ultimoEvento || null, conectadoEn: s.conectadoEn || null, reconexiones: s.reconexiones || 0, ultimoCodigo: s.ultimoCodigo || null,
-    esperandoTurno: !s.turno, refrescos: s.refrescos || 0, ultimoRefresco: s.ultimoRefresco || null, flushForzados: s.flushForzados || 0,
+    esperandoTurno: !s.turno, refrescos: s.refrescos || 0, ultimoRefresco: s.ultimoRefresco || null, flushForzados: s.flushForzados || 0, sinBuffer: !!s.sinBuffer,
     grupos: s.gruposDisponibles || []
   };
 }
@@ -342,6 +342,11 @@ async function iniciarSesionInterna(grupoId) {
   // "Conectado" pero messages.upsert jamás se dispara (justo el síntoma de "0 mensajes"). El bot no necesita el historial.
   const sock = makeWASocket({ auth: state, version, syncFullHistory: false, shouldSyncHistoryMessage: () => false });
   s.sock = sock;
+  // SIN BUFFER (19-11-2026): Baileys retiene los mensajes (ev.buffer) mientras procesa cada notificación y, tras reconectar, hasta
+  // terminar de ponerse al día; con muchos mensajes pendientes o una consulta lenta eso significaba minutos de silencio (el bot
+  // contestó una carrera abierta 4 min tarde). Este bot no necesita ese orden consolidado: se anula el buffer para que cada
+  // mensaje llegue a messages.upsert apenas se descifra.
+  try { if (sock.ev && typeof sock.ev.buffer === 'function') { sock.ev.buffer = () => {}; s.sinBuffer = true; } } catch (e) { /* si no se puede, queda el vigilante de 30 s */ }
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
@@ -378,10 +383,21 @@ async function iniciarSesionInterna(grupoId) {
   sock.ev.on('messages.upsert', async (evento) => {
     if (s.gen !== gen) return;
     const n = (evento.messages || []).length;
-    s.eventos = (s.eventos || 0) + n; s.ultimoEvento = { en: new Date().toISOString(), tipo: evento.type || null, n };
+    // Retraso: cuánto tardó en llegar a este servidor lo que escribieron (si crece, el problema está en WhatsApp/la librería, no en el bot).
+    let retrasoMax = null;
+    for (const m of (evento.messages || [])) {
+      const t = m && m.messageTimestamp; const seg = t && typeof t === 'object' && typeof t.toNumber === 'function' ? t.toNumber() : Number(t);
+      if (seg > 0) { const r = Math.round((deps.ahora() - seg * 1000) / 1000); if (retrasoMax === null || r > retrasoMax) retrasoMax = r; }
+    }
+    s.eventos = (s.eventos || 0) + n; s.ultimoEvento = { en: new Date().toISOString(), tipo: evento.type || null, n, retrasoSeg: retrasoMax };
     s.refrescos = 0; s.proximoRefresco = 0; // la conexión sí está entregando mensajes: se reinicia el vigilante
-    console.log('[whatsappSesionesGrupo] Grupo ' + id + ': llegaron ' + n + ' mensaje(s) (tipo ' + (evento.type || '?') + ')');
-    for (const msg of (evento.messages || [])) await manejarMensaje(id, sock, msg);
+    console.log('[whatsappSesionesGrupo] Grupo ' + id + ': llegaron ' + n + ' mensaje(s) (tipo ' + (evento.type || '?') + (retrasoMax !== null ? ', el más viejo de hace ' + retrasoMax + ' s' : '') + ')');
+    for (const msg of (evento.messages || [])) {
+      const t0 = deps.ahora();
+      await manejarMensaje(id, sock, msg);
+      const dur = deps.ahora() - t0;
+      if (dur > 3000) console.error('[whatsappSesionesGrupo] Grupo ' + id + ': un mensaje tardó ' + Math.round(dur / 1000) + ' s en procesarse.');
+    }
   });
 
   return sock;

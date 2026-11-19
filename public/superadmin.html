@@ -4570,7 +4570,7 @@ async function wpPropioCargar() {
     let txtUlt = ult ? (hora(ult.en) + ' · ' + ult.motivo) : 'Ninguno todavía (escribe algo en el grupo de WhatsApp)';
     // Diagnóstico: cuántos mensajes le entregó WhatsApp a este número desde que se conectó, y si se ha reconectado seguido.
     const partes = [];
-    partes.push('WhatsApp le entregó ' + (d.eventos || 0) + ' mensaje(s)' + (d.ultimoEvento ? ' (el último a las ' + hora(d.ultimoEvento.en) + ')' : ''));
+    partes.push('WhatsApp le entregó ' + (d.eventos || 0) + ' mensaje(s)' + (d.ultimoEvento ? ' (el último a las ' + hora(d.ultimoEvento.en) + (d.ultimoEvento.retrasoSeg != null ? ', con ' + d.ultimoEvento.retrasoSeg + ' s de retraso' : '') + ')' : ''));
     if (d.conectadoEn) partes.push('conectado desde las ' + hora(d.conectadoEn));
     if (d.reconexiones) partes.push(d.reconexiones + ' reconexión(es)' + (d.ultimoCodigo ? ', última con código ' + d.ultimoCodigo : ''));
     if (d.flushForzados) partes.push('se liberaron ' + d.flushForzados + ' vez/veces los mensajes retenidos por la librería (arreglado solo)');

@@ -466,7 +466,13 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
     texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
     remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
   };
-  s.cola = s.cola.then(() => s.motor.procesarMensaje(mensaje)).catch(async e => {
+  // Tope de 45 s por mensaje (19-11-2026): si un envío o una consulta se queda colgado, la cola del grupo NO se atasca para siempre.
+  const conTope = (p) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => { console.error('[hipismoChat] Un mensaje tardó más de 45 s y se siguió con el próximo (grupo ' + grupo.id + ').'); if (anotar) anotar('Este mensaje tardó más de 45 s en procesarse (se siguió con el próximo)'); resolve(); }, 45000);
+    if (t.unref) t.unref();
+    Promise.resolve(p).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+  s.cola = s.cola.then(() => conTope(s.motor.procesarMensaje(mensaje))).catch(async e => {
     console.error('[hipismoChat] Error al procesar un mensaje:', e);
     if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
     // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).

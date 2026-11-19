@@ -54,7 +54,7 @@ function makeWASocket(args) {
   const sock = {
     handlers, argsCreacion: args, terminado: false, cerroSesion: false, enviados: [],
     user: { id: '584121234567:12@s.whatsapp.net' },
-    ev: { on: (n, f) => { handlers[n] = f; } },
+    ev: { on: (n, f) => { handlers[n] = f; }, buffer: function bufferOriginal() { sock.bufferReal = true; } },
     end() { sock.terminado = true; },
     async logout() { sock.cerroSesion = true; },
     async groupFetchAllParticipating() { return { [JID]: { id: JID, subject: 'AMERICANAS DREAM' } }; },
@@ -264,6 +264,12 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   check(llamadas.length === nLl && /mensaje viejo/.test((gestor._sesiones.get('t1').ultimo || {}).motivo || ''), 'un mensaje de hace 10 min (entregado tarde al reconectar) se ignora y el panel lo explica');
   await sT5.handlers['messages.upsert']({ type: 'append', messages: [{ key: { remoteJid: JID, id: 'NEW1' }, messageTimestamp: { toNumber: () => segAhora - 60 }, message: { conversation: 'abierta 5ta de gulf' } }] });
   check(llamadas.length === nLl + 1, 'uno de hace 1 min (lo escrito durante el deploy) sí se atiende');
+
+  // 3d) Sin buffer: el socket nuevo trae el buffer anulado y el panel mide el retraso de los mensajes
+  const sNB = socks[socks.length - 1];
+  check(gestor.estadoPublico('t1').sinBuffer === true, 'el buffer de eventos de la librería queda anulado (los mensajes no se retienen)');
+  await sT5.handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: '999@g.us', id: 'LAG1' }, messageTimestamp: Math.floor(RELOJ.t / 1000) - 7, message: { conversation: 'x' } }] });
+  check(gestor.estadoPublico('t1').ultimoEvento.retrasoSeg === 7, 'el panel muestra el retraso (segundos) con que llegó el último mensaje');
 
   // 4) Código 440 (el número se abrió en otro lugar): espera más para no entrar en pelea
   sT5.handlers['connection.update']({ connection: 'close', lastDisconnect: { error: { statusCode: 440 } } });
