@@ -12,6 +12,7 @@ const db = require('../db');
 const motorChat = require('./hipismoJugadasChat');
 const { normalizarTelefono, telefonoDeParticipante, quitarTildes } = require('./whatsappTrigger');
 const { clientesConPozoDisponible } = require('./hipismoAlertaPozo');
+const libreta = require('./hipismoLibreta'); // el teléfono de la ficha funciona como libreta de contactos (ver ese archivo)
 
 const TEXTO_PLANO_BOT = motorChat.TEXTO_PLANO_BOT; // la usa también routes/hipismo.js para mostrar estas jugadas en TERCIOS
 const sesiones = new Map();        // grupoId -> { motor, cola, mensajes: Map(id -> msg) }
@@ -132,7 +133,7 @@ async function cacheDeClientes(grupoId) {
       const rm = await db.query('SELECT digitos, jugador_nombre FROM hipismo_chat_numeros WHERE grupo_id = $1', [grupoId]);
       rm.rows.forEach(f => { if (f.jugador_nombre === MARCA_ADMIN) admins.add(String(f.digitos)); else mapa.set(String(f.digitos), f.jugador_nombre); });
     } catch (e) { if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudieron leer los números registrados a mano:', e.message); }
-    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), mapa, admins, hasta: Date.now() + 60000 };
+    c = { lista: r.rows.map(f => ({ nombre: f.nombre, digitos: normalizarTelefono(f.telefono) })).filter(f => f.digitos.length >= 7), fichas: r.rows.map(f => ({ nombre: f.nombre, telefono: f.telefono })), mapa, admins, hasta: Date.now() + 60000 };
     cacheClientes.set(grupoId, c);
   }
   return c;
@@ -149,6 +150,31 @@ async function clientePorNumero(grupoId, jids) {
     if (hallado) return hallado.nombre;
   }
   return null;
+}
+
+// Libreta de contactos (20-11-2026): si el número que escribió no coincide con ninguna ficha tal cual (WhatsApp lo oculta como @lid), se le
+// pregunta a WhatsApp a qué cuenta pertenece el teléfono guardado de cada ficha y se busca por ahí. Así el bot reconoce al cliente por
+// el teléfono de su ficha y NO pide "registrar" en el chat. Nunca lanza error: si algo falla, queda como antes (no registrado).
+async function clientePorLibreta(grupoId, sock, jids) {
+  if (!sock) return null;
+  try {
+    const c = await cacheDeClientes(grupoId);
+    if (!c.fichas || !c.fichas.length) return null;
+    const existe = n => n && c.fichas.some(f => f.nombre === n) ? n : null;
+    let nombre = existe(libreta.nombreDe(grupoId, jids));
+    if (nombre) {
+      if (libreta.conviene(grupoId, false)) libreta.sincronizar(grupoId, sock, c.fichas).catch(() => {}); // refresco en segundo plano
+      return nombre;
+    }
+    if (libreta.conviene(grupoId, true)) {
+      await libreta.sincronizar(grupoId, sock, c.fichas);
+      nombre = existe(libreta.nombreDe(grupoId, jids));
+    }
+    return nombre;
+  } catch (e) {
+    console.error('[hipismoChat] Libreta de contactos:', e && e.message);
+    return null;
+  }
 }
 
 // Administradores autorizados con el comando "autorizar" (además del número de Súper-admin y del chip del bot).
@@ -402,7 +428,8 @@ function sesionDe(grupo, sock, remoteJid) {
       hoy: fechaHoyVenezuela,
       identificar: async rem => {
         const jidVisto = rem.jidReal || rem.jid;
-        const nombre = await clientePorNumero(grupo.id, [rem.jidReal, rem.jid]);
+        let nombre = await clientePorNumero(grupo.id, [rem.jidReal, rem.jid]);
+        if (!nombre) nombre = await clientePorLibreta(grupo.id, s.sock, [rem.jidReal, rem.jid]);
         if (!nombre) console.log('[hipismoChat] Grupo ' + grupo.id + ': ninguna ficha tiene el teléfono ' + (telefonoDeParticipante(jidVisto) || '?') + ' (jid visto: ' + jidVisto + ').');
         // Para el panel de Súper-admin ("Último mensaje que llegó"): qué número vio el bot y si lo encontró en alguna ficha.
         if (s.anotarActual) {
@@ -569,6 +596,6 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
 }
 
 // 19-11-2026: al renombrar/editar un cliente el bot olvida su lista de clientes en memoria (se vuelve a leer en la próxima jugada).
-function olvidarClientes(grupoId) { cacheClientes.delete(grupoId); }
+function olvidarClientes(grupoId) { cacheClientes.delete(grupoId); libreta.invalidar(grupoId); }
 
-module.exports = { olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { clientePorLibreta, olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

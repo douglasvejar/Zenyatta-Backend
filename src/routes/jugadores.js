@@ -291,6 +291,9 @@ function respuestaSocioFallido(res, guardado, jugador, avalesFinal) {
   return false;
 }
 
+// El bot de chat guarda un momento la lista de clientes y sus teléfonos: al crear/editar/borrar una ficha se le avisa para que la relea.
+function olvidarClientesDelBot(grupoId) { try { require('../services/hipismoJugadasChatBot').olvidarClientes(grupoId); } catch (e) { /* el bot no está cargado */ } }
+
 router.post('/', asyncHandler(async (req, res) => {
   try {
     const { nombre, telefono, notas, activo, tipoCuenta, pozoInicial, comisionPropia, modeloComision, moneda, modulosAnclados, avalesPorcentaje, incluirPorcentajeEnJugadas, comisionPropiaFicha } = req.body;
@@ -317,6 +320,7 @@ router.post('/', asyncHandler(async (req, res) => {
     await guardarSinPozo(jugador.id, req.grupoId, req.body.sinPozo, tipo);
     const guardado = await guardarMarcaPagoDiario(jugador.id, req.grupoId, marcaPagoDiario);
     if (!guardado.ok) return res.status(503).json({ error: AVISO_FALTA_PAGO_DIARIO, sinColumna: true, jugador: { ...jugador, avalesPorcentaje: avalesFinal } });
+    olvidarClientesDelBot(req.grupoId);
     const guardadoSocio = await guardarSocioDeJugador(jugador.id, req.grupoId, req.body.socioId);
     if (!guardadoSocio.ok && respuestaSocioFallido(res, guardadoSocio, jugador, avalesFinal)) return;
     res.status(201).json({ ...jugador, ...(tipoCliente ? { tipo_cliente: tipoCliente } : {}), pago_diario: marcaPagoDiario === null ? !!jugador.pago_diario : marcaPagoDiario, hipismo_socio_id: req.body.socioId === undefined ? (jugador.hipismo_socio_id || null) : (req.body.socioId || null), avalesPorcentaje: avalesFinal });
@@ -360,7 +364,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
       }
       return actualizado;
     });
-    if (resumenRenombre.renombrado) { try { require('../services/hipismoJugadasChatBot').olvidarClientes(req.grupoId); } catch (e) { /* el bot no está cargado */ } }
+    olvidarClientesDelBot(req.grupoId); // nombre, teléfono o % cambiados: el bot vuelve a leer la ficha (libreta de contactos)
     const tipoClientePut = resolverTipoCliente(req.body.tipoCliente);
     await guardarTipoCliente(jugador.id, req.grupoId, tipoClientePut);
     await guardarSinPozo(jugador.id, req.grupoId, req.body.sinPozo, tipo);
@@ -397,6 +401,7 @@ router.patch('/:id/modulos-anclados', asyncHandler(async (req, res) => {
 // jugadas ya procesadas, que vive en tickets_historial por nombre).
 router.delete('/:id', asyncHandler(async (req, res) => {
   await db.query('DELETE FROM jugadores WHERE id = $1 AND grupo_id = $2', [req.params.id, req.grupoId]);
+  olvidarClientesDelBot(req.grupoId);
   res.status(204).end();
 }));
 
