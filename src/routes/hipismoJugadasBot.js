@@ -11,6 +11,7 @@ const express = require('express');
 const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
 const motor = require('../services/hipismoJugadasChat');
+const { requiereAdministrador } = require('../middleware/auth');
 
 const fechaHoyVenezuela = () => new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,6 +53,39 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
     req.botHabilitado = !!(r.rows[0] && r.rows[0].hipismo_chat_habilitado);
     if (!req.botHabilitado && req.path !== '/estado') return res.status(403).json({ error: 'Este grupo no tiene contratado el bot de Corredores y Administración Inteligente.' });
     next();
+  }));
+
+  router.use('/conexion', requiereAdministrador);
+  router.get('/conexion', asyncHandler(async (req, res) => {
+    const gestor = require('../services/whatsappSesionesGrupo');
+    const { conectado, tieneQr, numero, ultimoError } = gestor.estadoPublico(req.grupoId);
+    const r = await db.query(
+      'SELECT whatsapp_propio_activo, whatsapp_propio_jid, whatsapp_propio_chats FROM grupos WHERE id = $1',
+      [req.grupoId]
+    );
+    const fila = r.rows[0];
+    const chats = fila.whatsapp_propio_chats || (fila.whatsapp_propio_jid ? [fila.whatsapp_propio_jid] : []);
+    const qr = tieneQr && gestor.obtenerQr(req.grupoId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      conectado, numero, ultimoError, vinculando: !!fila.whatsapp_propio_activo && !conectado,
+      chatsAutorizados: chats.length,
+      qr: qr ? await require('qrcode').toDataURL(qr, { width: 320, margin: 2 }) : null
+    });
+  }));
+
+  router.post('/conexion/iniciar', asyncHandler(async (req, res) => {
+    const gestor = require('../services/whatsappSesionesGrupo');
+    if (gestor.estaConectada(req.grupoId)) return res.json({ ok: true });
+    const r = await db.query(
+      `UPDATE grupos SET whatsapp_propio_activo = true,
+         whatsapp_propio_chats = COALESCE(whatsapp_propio_chats, array_remove(ARRAY[whatsapp_propio_jid], NULL))
+       WHERE id = $1 AND activo = true AND hipismo_chat_habilitado = true RETURNING id`,
+      [req.grupoId]
+    );
+    if (!r.rowCount) return res.status(403).json({ error: 'Súper-admin debe habilitar Bot IA para este grupo.' });
+    await gestor.iniciarSesion(req.grupoId);
+    res.json({ ok: true });
   }));
 
   async function nombreCliente(grupoId, texto) {

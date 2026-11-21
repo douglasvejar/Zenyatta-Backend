@@ -15,8 +15,7 @@ const { clientesConPozoDisponible } = require('./hipismoAlertaPozo');
 const libreta = require('./hipismoLibreta'); // el teléfono de la ficha funciona como libreta de contactos (ver ese archivo)
 
 const TEXTO_PLANO_BOT = motorChat.TEXTO_PLANO_BOT; // la usa también routes/hipismo.js para mostrar estas jugadas en TERCIOS
-const sesiones = new Map();        // grupoId -> { motor, cola, mensajes: Map(id -> msg) }
-const cacheGrupos = new Map();     // jid -> { valor, hasta }
+const sesiones = new Map();        // Una sesión de carrera por grupo de Ludox y chat de WhatsApp.
 const cacheClientes = new Map();
 const MARCA_ADMIN = '__ADMIN__'; // en hipismo_chat_numeros: el número no es un cliente sino un administrador autorizado con "autorizar"   // grupoId -> { lista, hasta }
 const enviadosPorElBot = new Set();
@@ -24,43 +23,38 @@ const enviadosPorElBot = new Set();
 const normNombre = t => quitarTildes(String(t || '')).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 async function grupoDelChat(jid) {
-  const c = cacheGrupos.get(jid);
-  if (c && c.hasta > Date.now()) return c.valor;
   let valor = null;
   try {
     const r = await db.query(
       `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero
          FROM grupos
-        WHERE whatsapp_grupo_jid = $1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true`,
+        WHERE whatsapp_grupo_jid = $1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true
+          AND whatsapp_propio_chats IS NULL`,
       [jid]
     );
     valor = r.rows[0] || null;
   } catch (e) {
     if (!e || e.code !== '42703') console.error('[hipismoChat] No se pudo leer el grupo del chat:', e.message);
   }
-  cacheGrupos.set(jid, { valor, hasta: Date.now() + 30000 });
   return valor;
 }
 
 // Grupo cuando el mensaje llegó por la conexión PROPIA de ese grupo (whatsappSesionesGrupo.js): el grupo ya se sabe, y el chat de
-// WhatsApp es el que Súper-admin eligió para ese número (grupos.whatsapp_propio_jid).
+// WhatsApp debe estar en la lista autorizada por Súper-admin.
 async function grupoPropio(grupoId, jid) {
-  const clave = 'propio|' + grupoId + '|' + jid;
-  const c = cacheGrupos.get(clave);
-  if (c && c.hasta > Date.now()) return c.valor;
   let valor = null;
   try {
     const r = await db.query(
-      `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero
+      `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid
          FROM grupos
-        WHERE id = $1 AND whatsapp_propio_jid = $2 AND whatsapp_propio_activo = true AND hipismo_chat_habilitado = true AND activo = true`,
+        WHERE id = $1 AND $2 = ANY(COALESCE(whatsapp_propio_chats, ARRAY[whatsapp_propio_jid]))
+          AND whatsapp_propio_activo = true AND hipismo_chat_habilitado = true AND activo = true`,
       [grupoId, jid]
     );
     valor = r.rows[0] || null;
   } catch (e) {
     if (!e || e.code !== '42703') console.error('[hipismoChat] No se pudo leer el grupo del número propio:', e.message);
   }
-  cacheGrupos.set(clave, { valor, hasta: Date.now() + 30000 });
   return valor;
 }
 
@@ -108,14 +102,14 @@ async function registrarNumeroManual(grupoId, { jid, jidReal, nombre }, obtenerS
 // Para el panel de Súper-admin: por qué el bot ignoró un mensaje que llegó por el número propio de un grupo.
 async function motivoSinGrupoPropio(grupoId, jid) {
   try {
-    const r = await db.query('SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid FROM grupos WHERE id = $1', [grupoId]);
+    const r = await db.query('SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid, whatsapp_propio_chats FROM grupos WHERE id = $1', [grupoId]);
     const g = r.rows[0];
     if (!g) return 'No se encontró el grupo en el sistema';
     if (!g.activo) return 'Ignorado: el grupo está INACTIVO (actívalo en la lista de Grupos de Súper-admin)';
     if (!g.hipismo_chat_habilitado) return 'Ignorado: el servicio Corredores y Administración Inteligente no está contratado';
     if (!g.whatsapp_propio_activo) return 'Ignorado: el número propio no está marcado como vinculado';
-    if (!g.whatsapp_propio_jid) return 'Ignorado: todavía no elegiste el grupo de WhatsApp (elígelo en el desplegable y toca Guardar grupo)';
-    if (g.whatsapp_propio_jid !== jid) return 'Ignorado: este chat no es el elegido para este número';
+    const autorizados = g.whatsapp_propio_chats || (g.whatsapp_propio_jid ? [g.whatsapp_propio_jid] : []);
+    if (!autorizados.includes(jid)) return 'Ignorado: Súper-admin no autorizó este chat';
   } catch (e) { /* sin detalle */ }
   return 'Ignorado por el bot';
 }
@@ -275,8 +269,12 @@ async function listarAdministradores(grupo) {
 }
 
 // Carrera abierta/cerrada de cada grupo, para que un reinicio del servidor no la pierda.
-async function cargarEstadoCarrera(grupoId) {
+async function cargarEstadoCarrera(grupoId, chatJid) {
   try {
+    if (chatJid) {
+      const r = await db.query('SELECT estado FROM hipismo_chat_estado_por_chat WHERE grupo_id = $1 AND chat_jid = $2', [grupoId, chatJid]);
+      return r.rows[0]?.estado || null;
+    }
     const r = await db.query(`SELECT hipodromo, carrera, abierta, to_char(fecha, 'YYYY-MM-DD') AS fecha FROM hipismo_chat_estado WHERE grupo_id = $1`, [grupoId]);
     return r.rows[0] || null;
   } catch (e) {
@@ -284,13 +282,21 @@ async function cargarEstadoCarrera(grupoId) {
     return null;
   }
 }
-async function guardarEstadoCarrera(grupoId, e) {
+async function guardarEstadoCarrera(grupoId, e, chatJid) {
   try {
-    await db.query(
-      `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en) VALUES ($1,$2,$3,$4,$5,now())
-       ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now()`,
-      [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha]
-    );
+    if (chatJid) {
+      await db.query(
+        `INSERT INTO hipismo_chat_estado_por_chat (grupo_id, chat_jid, estado) VALUES ($1, $2, $3)
+         ON CONFLICT (grupo_id, chat_jid) DO UPDATE SET estado = EXCLUDED.estado`,
+        [grupoId, chatJid, JSON.stringify({ hipodromo: e.hipodromo, carrera: e.carrera, abierta: !!e.abierta, fecha: e.fecha })]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en) VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now()`,
+        [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha]
+      );
+    }
   } catch (err) {
     if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message);
   }
@@ -419,10 +425,12 @@ function programarAvisoPizarra(s, grupoId, e) {
   if (s.avisoPizarra.unref) s.avisoPizarra.unref();
 }
 
-function sesionDe(grupo, sock, remoteJid) {
-  let s = sesiones.get(grupo.id);
+function sesionDe(grupo, sock, remoteJid, propia) {
+  const clave = JSON.stringify([grupo.id, remoteJid]);
+  const chatEstado = propia && grupo.whatsapp_propio_jid !== remoteJid ? remoteJid : null;
+  let s = sesiones.get(clave);
   if (!s) {
-    s = { cola: Promise.resolve(), mensajes: new Map(), avisos: new Map(), sock: null, jid: remoteJid, motor: null };
+    s = { mensajes: new Map(), avisos: new Map(), sock: null, jid: remoteJid, motor: null };
     s.motor = motorChat.crearMotor({
       nombreGrupo: grupo.nombre,
       hoy: fechaHoyVenezuela,
@@ -445,11 +453,11 @@ function sesionDe(grupo, sock, remoteJid) {
       eliminarJugada: id => eliminarJugadaEnEspera(grupo.id, id),
       listarAdmins: () => listarAdministradores(grupo),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
-      cargarEstado: () => cargarEstadoCarrera(grupo.id),
+      cargarEstado: () => cargarEstadoCarrera(grupo.id, chatEstado),
       registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
       autorizarAdmin: x => autorizarAdminManual(grupo.id, x, () => s.sock),
       guardarEstado: async e => {
-        await guardarEstadoCarrera(grupo.id, e);
+        await guardarEstadoCarrera(grupo.id, e, chatEstado);
         if (e.abierta) { if (s.avisoPizarra) { clearTimeout(s.avisoPizarra); s.avisoPizarra = null; } return; }
         programarAvisoPizarra(s, grupo.id, e);
       },
@@ -459,7 +467,7 @@ function sesionDe(grupo, sock, remoteJid) {
       publicar: texto => enviar(s, texto, {}),
       publicarResultado: r => publicarResultadoPlano(s, grupo.id, r)
     });
-    sesiones.set(grupo.id, s);
+    sesiones.set(clave, s);
   }
   s.sock = sock; s.jid = remoteJid;
   return s;
@@ -541,6 +549,8 @@ function extraerCitadoId(msg) {
 // Devuelve true si el mensaje le tocaba a este bot (el grupo tiene el servicio y era una jugada, una respuesta o un comando de
 // administrador); false para que siga su camino normal (sábana, comandos de Deportes...).
 // `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` dice si puede abrir/cerrar/pedir plano.
+const colasPorGrupo = new Map();
+
 async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
   if (!texto || !remoteJid) return false;
   const idMsg = msg.key && msg.key.id;
@@ -562,7 +572,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
   const jidReal = await ayudas.resolverRemitente(jidCrudo);
   if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
   const fromMe = !!(msg.key && msg.key.fromMe);
-  const s = sesionDe(grupo, sock, remoteJid);
+  const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
   s.anotarActual = anotar || null;
   if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
   const esAdmin = (await ayudas.esAdministrador(grupo, jidReal, fromMe)) || (await esAdminRegistrado(grupo.id, [jidReal, jidCrudo]));
@@ -582,7 +592,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
     if (t.unref) t.unref();
     Promise.resolve(p).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
   });
-  s.cola = s.cola.then(() => conTope(s.motor.procesarMensaje(mensaje))).catch(async e => {
+  const cola = (colasPorGrupo.get(grupo.id) || Promise.resolve()).then(() => conTope(s.motor.procesarMensaje(mensaje))).catch(async e => {
     console.error('[hipismoChat] Error al procesar un mensaje:', e);
     if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
     // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).
@@ -591,7 +601,10 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
       await enviar(s, '⚠️ No pude procesar ese mensaje por un error interno. Avisa al administrador.', { citarId: idMsg });
     }
   });
-  await s.cola;
+  colasPorGrupo.set(grupo.id, cola);
+  try { await cola; } finally {
+    if (colasPorGrupo.get(grupo.id) === cola) colasPorGrupo.delete(grupo.id);
+  }
   return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
 }
 

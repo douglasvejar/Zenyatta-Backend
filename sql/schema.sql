@@ -2381,6 +2381,14 @@ alter table hipismo_chat_jugadas add column if not exists resuelta boolean not n
 -- whatsapp_propio_jid = el chat de WhatsApp (de ese número) donde trabaja el bot.
 alter table grupos add column if not exists whatsapp_propio_activo boolean not null default false;
 alter table grupos add column if not exists whatsapp_propio_jid text;
+alter table grupos add column if not exists whatsapp_propio_chats text[];
+
+create table if not exists hipismo_chat_estado_por_chat (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  chat_jid text not null,
+  estado jsonb not null,
+  primary key (grupo_id, chat_jid)
+);
 
 -- 17-11-2026: carrera abierta/cerrada del bot de jugadas del chat (para que un reinicio del servidor no la pierda).
 create table if not exists hipismo_chat_estado (

@@ -2367,6 +2367,7 @@
   @media (max-width: 380px) {
     #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
   }
+  #navBotIA[hidden] { display: none; }
 </style>
 <script src="navidad.js"></script>
 <script src="banderas.js"></script>
@@ -2532,6 +2533,8 @@
            usa "Eliminar Planos", ver vista-eliminarWinners más abajo. -->
       <button type="button" class="nav-item nav-child" data-vista="eliminarWinners" onclick="mostrarVista('eliminarWinners', this)">🗑️<span class="nav-lbl"> Eliminar Winners</span></button>
     </div>
+
+    <button type="button" class="nav-item" id="navBotIA" hidden onclick="mostrarVista('botIA', this)">🤖<span class="nav-lbl"> Bot IA</span></button>
 
     <button type="button" class="nav-item" data-vista="pozos" onclick="mostrarVista('pozos', this)">💰<span class="nav-lbl"> Pozos</span></button>
     <!-- 28-10-2026: "Control de Pozos" -- tablero con una fila por cliente con pozo o de pago diario (ver vista-controlPozos). -->
@@ -4108,6 +4111,21 @@
               <span class="monto" id="montoComisionesSinDevolucionesTotal">$ 0,00</span>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="vista" id="vista-botIA">
+      <div class="card">
+        <h2>Bot IA</h2>
+        <p class="desc">Vincula un número de WhatsApp para los chats de Hipismo que autorice Súper-admin.</p>
+        <p id="botIAConexion" role="status">Consultando conexión…</p>
+        <div id="botIAQr" hidden>
+          <p>En el teléfono abre WhatsApp → Dispositivos vinculados → Vincular un dispositivo y escanea el código.</p>
+          <img id="botIAQrImagen" width="280" height="280" alt="Código QR para vincular el Bot IA" style="max-width:100%; height:auto;">
+        </div>
+        <div class="btn-fila">
+          <button type="button" class="btn btn-primario" id="botIAIniciar" hidden onclick="iniciarConexionBotIA()">Vincular WhatsApp</button>
         </div>
       </div>
     </section>
@@ -8118,6 +8136,55 @@ function pintarLogosGrupo() {
 // ------------------------------------------------------------------
 // Navegación (sidebar + subnav) — solo maqueta visual
 // ------------------------------------------------------------------
+var botIATimer;
+let botIAConsultando = false;
+
+async function cargarConexionBotIA() {
+  const vista = document.getElementById('vista-botIA');
+  if (!vista.classList.contains('activa') || botIAConsultando) return;
+  const estado = document.getElementById('botIAConexion');
+  const caja = document.getElementById('botIAQr');
+  const imagen = document.getElementById('botIAQrImagen');
+  const boton = document.getElementById('botIAIniciar');
+  botIAConsultando = true;
+  try {
+    const data = await apiHipismo('/api/hipismo/bot/conexion');
+    caja.hidden = !data.qr;
+    if (data.qr) { if (imagen.getAttribute('src') !== data.qr) imagen.src = data.qr; }
+    else imagen.removeAttribute('src');
+    boton.hidden = data.conectado || !!data.qr || (data.vinculando && !data.ultimoError);
+    boton.textContent = data.vinculando ? 'Volver a intentar' : 'Vincular WhatsApp';
+    if (data.conectado) {
+      estado.textContent = 'WhatsApp conectado' + (data.numero ? ' · ' + data.numero : '') + ' · Chats autorizados: ' + data.chatsAutorizados;
+    } else if (data.qr) {
+      estado.textContent = 'Escanea el código para conectar WhatsApp.';
+    } else {
+      estado.textContent = data.ultimoError || (data.vinculando ? 'Preparando el código QR…' : 'WhatsApp pendiente de vincular.');
+    }
+  } catch (e) {
+    caja.hidden = boton.hidden = true;
+    imagen.removeAttribute('src');
+    estado.textContent = e.message;
+  } finally {
+    botIAConsultando = false;
+    if (vista.classList.contains('activa')) botIATimer = setTimeout(cargarConexionBotIA, 3000);
+  }
+}
+
+async function iniciarConexionBotIA() {
+  const boton = document.getElementById('botIAIniciar');
+  clearTimeout(botIATimer);
+  boton.disabled = true;
+  try {
+    await apiHipismo('/api/hipismo/bot/conexion/iniciar', { method: 'POST' });
+    await cargarConexionBotIA();
+  } catch (e) {
+    document.getElementById('botIAConexion').textContent = e.message;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 function mostrarVista(id, btn) {
   // 13-10-2026: una sección apagada para este grupo no se abre (ni por la alerta flotante ni a mano).
   if (typeof vistaHabilitadaHip === 'function' && !vistaHabilitadaHip(id)) return;
@@ -8147,6 +8214,8 @@ function mostrarVista(id, btn) {
   // filtro (semana/fecha) que ya tenía elegido, así siempre refleja el
   // estado real más reciente sin depender de que el operador se acuerde
   // de refrescar.
+  clearTimeout(botIATimer);
+  if (id === 'botIA') cargarConexionBotIA();
   if (typeof movAlCambiarVista === 'function') movAlCambiarVista(id);
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }
@@ -20781,5 +20850,12 @@ mostrarBienvenidaSiCorrespondeHip();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+if (TOKEN && GRUPO && GRUPO.rol !== 'empleado') {
+  apiHipismo('/api/hipismo/bot/estado').then(estado => {
+    document.getElementById('navBotIA').hidden = !estado.habilitado;
+  }).catch(() => {});
+}
+</script>
 </body>
 </html>

@@ -16,7 +16,7 @@ const T = {
   ],
   numeros: [],
   hipodromos: [{ id: 'h1', nombre: 'Mountaineer' }, { id: 'h2', nombre: 'La Rinconada' }],
-  planos: [], adelantadas: [], chat: [], estado: null,
+  planos: [], adelantadas: [], chat: [], estado: null, estadosPorChat: new Map(),
   // vista cómoda de lo que el bot guardó (lo que antes se escribía en adelantadas): ahora vive solo en hipismo_chat_jugadas (plano en espera)
   get jugadas() {
     return this.chat.map(c => { const a = JSON.parse(c.apuesta || 'null') || {}; return { jugador_nombre: c.jugador_nombre, banquero_nombre: c.banquero_nombre, monto: c.monto, carrera_numero: c.carrera_numero, es_cruce: !!a.cruce, modalidad: a.modalidad, cruce_grupo_a: a.cruce ? JSON.stringify(a.cruce.gruposA) : null, cruce_grupo_b: a.cruce ? JSON.stringify(a.cruce.gruposB) : null }; });
@@ -28,6 +28,18 @@ function consulta(text, params) {
   if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) return { rows: [] };
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid = \$1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true/i.test(sql)) {
     return { rows: (params[0] === JID && GRUPO.hipismo_chat_habilitado) ? [GRUPO] : [] };
+  }
+  if (/FROM grupos WHERE id = \$1 AND \$2 = ANY/i.test(sql)) {
+    const autorizado = GRUPO.whatsapp_propio_chats.includes(params[1]);
+    return { rows: params[0] === G && autorizado && GRUPO.hipismo_chat_habilitado ? [GRUPO] : [] };
+  }
+  if (/^SELECT estado FROM hipismo_chat_estado_por_chat/i.test(sql)) {
+    const estado = T.estadosPorChat.get(params[1]);
+    return { rows: estado ? [{ estado }] : [] };
+  }
+  if (/^INSERT INTO hipismo_chat_estado_por_chat/i.test(sql)) {
+    T.estadosPorChat.set(params[1], JSON.parse(params[2]));
+    return { rows: [] };
   }
   if (/^SELECT hipismo_chat_plano_formato FROM grupos WHERE id = \$1/i.test(sql)) return { rows: [{ hipismo_chat_plano_formato: T.formato || 'texto' }] };
   if (/^SELECT nombre, telefono FROM jugadores WHERE grupo_id = \$1/i.test(sql)) return { rows: T.jugadores };
@@ -119,8 +131,6 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'Mountaineer 1ra carrera'));
   check(enviados.length === 0, 'con el servicio apagado en Súper-admin, el bot no hace nada');
   GRUPO.hipismo_chat_habilitado = true;
-  // la caché de 30 s: se salta moviendo el reloj
-  const realNow = Date.now; Date.now = () => realNow() + 31000;
 
   // un jugador no puede abrir
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('CACHACO', 'Mountaineer 1ra carrera'));
@@ -407,7 +417,28 @@ const textoDe = e => e.contenido.text;
     check(c.text.startsWith('*ATENCIÓN ADMINISTRADORES: EL TERCIO @98765432100 MARCÓ ERROR Y @584142222222 NO RESPONDIÓ* @') && c.text.includes('@584141111111') && c.mentions.includes('584141111111@s.whatsapp.net') && c.mentions.includes('98765432100@lid'), 'el llamado a los administradores los etiqueta de verdad a todos');
   }
 
-  Date.now = realNow;
+  {
+    const americanas = '111@g.us';
+    const nacionales = '222@g.us';
+    GRUPO.whatsapp_propio_chats = [americanas, nacionales];
+    const mandar = (jid, texto) => {
+      const msg = mensaje('ADMIN', texto);
+      msg.key.remoteJid = jid;
+      const ayudas = { resolverRemitente: async j => j, esAdministrador: async () => true };
+      return glue.intentar({ grupoId: G, sock, msg, remoteJid: jid, texto, ayudas });
+    };
+    await Promise.all([mandar(americanas, 'Mountaineer 1era carrera'), mandar(nacionales, 'La Rinconada 2da carrera')]);
+    check(T.estadosPorChat.get(americanas)?.hipodromo === 'Mountaineer' &&
+      T.estadosPorChat.get(nacionales)?.hipodromo === 'La Rinconada', 'dos chats autorizados guardan carreras distintas para el mismo grupo');
+    glue._sesiones.clear();
+    await mandar(americanas, 'cerrar');
+    check(T.estadosPorChat.get(americanas)?.abierta === false &&
+      T.estadosPorChat.get(nacionales)?.abierta === true, 'tras reiniciar, cerrar Americanas mantiene abierta Nacionales');
+    GRUPO.whatsapp_propio_chats = [americanas];
+    const antes = enviados.length;
+    await mandar(nacionales, 'La Rinconada 3era carrera');
+    check(enviados.length === antes && T.estadosPorChat.get(nacionales)?.carrera === 2, 'retirar la autorización detiene el chat de inmediato');
+  }
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);
 })().catch(e => { console.error('ERROR en la prueba:', e); process.exit(1); });

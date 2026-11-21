@@ -13,13 +13,13 @@ const G = 'grupo-uno', JID = '120363000000000077@g.us';
 const BD = { grupo: { id: G, nombre: 'Dream', activo: true, whatsapp_propio_jid: JID, whatsapp_propio_activo: true, hipismo_chat_habilitado: true, comandos_whatsapp_habilitado: true, comandos_whatsapp_numero: '+58 414 1111111' }, updates: [], activos: [{ id: 'a1' }, { id: 'a2' }], errorColumna: false };
 function consulta(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
-  if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE id = \$1 AND whatsapp_propio_jid = \$2/i.test(sql)) {
-    return { rows: (params[0] === G && params[1] === JID) ? [BD.grupo] : [] };
+  if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid FROM grupos WHERE id = \$1 AND \$2 = ANY/i.test(sql)) {
+    return { rows: (params[0] === G && params[1] === BD.grupo.whatsapp_propio_jid && BD.grupo.activo) ? [BD.grupo] : [] };
   }
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid/i.test(sql)) {
     return { rows: params[0] === JID ? [{ ...BD.grupo }] : [] };
   }
-  if (/^SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid FROM grupos WHERE id = \$1/i.test(sql)) return { rows: [BD.grupo] };
+  if (/^SELECT activo, hipismo_chat_habilitado, whatsapp_propio_activo, whatsapp_propio_jid, whatsapp_propio_chats FROM grupos WHERE id = \$1/i.test(sql)) return { rows: [BD.grupo] };
   if (/^SELECT id FROM grupos WHERE whatsapp_propio_activo = true/i.test(sql)) {
     if (BD.errorColumna) { const e = new Error('no existe la columna'); e.code = '42703'; throw e; }
     return { rows: BD.activos };
@@ -331,7 +331,7 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   sockNuevo.handlers['connection.update']({ connection: 'open' });
   gestor._deps.intentar = (a) => glue.intentar(a);
   await sockNuevo.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '999@g.us', id: 'Z1' }, message: { conversation: 'hola' } }] });
-  check(/no es el elegido/.test((gestor.estadoPublico(G).ultimo || {}).motivo || ''), 'el panel explica por qué ignoró un mensaje de otro chat');
+  check(/no autorizó este chat/.test((gestor.estadoPublico(G).ultimo || {}).motivo || ''), 'el panel explica por qué ignoró un mensaje de otro chat');
   BD.grupo.activo = false; BD.grupo.whatsapp_propio_jid = '555@g.us';
   glue._sesiones.clear();
   await sockNuevo.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '555@g.us', id: 'Z2' }, message: { conversation: 'hola' } }] });

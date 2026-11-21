@@ -8,7 +8,7 @@
 //   - Se vuelve a levantar sola al arrancar el servidor para los grupos que ya la tenían vinculada (grupos.whatsapp_propio_activo).
 //   - Mientras esté conectada, la conexión general NO procesa las jugadas de ese grupo (para no responder dos veces); si se cae, la
 //     general vuelve a hacerse cargo si es que está en ese chat.
-// Columnas en `grupos`: whatsapp_propio_activo (boolean) y whatsapp_propio_jid (el chat de WhatsApp donde trabaja el bot).
+// La conexión es por grupo de Ludox. Los chats autorizados se guardan aparte en whatsapp_propio_chats.
 // =================================================================
 const path = require('path');
 const fs = require('fs');
@@ -378,7 +378,7 @@ async function iniciarSesionInterna(grupoId) {
         s.ultimoError = 'WhatsApp cerró la sesión de este número — hay que volver a vincularlo (escanear un QR nuevo).';
         s.ultimoQr = null;
         console.error('[whatsappSesionesGrupo] Grupo ' + id + ': ' + s.ultimoError);
-        deps.alertar('🔴 LUDOX: se cayó el número propio de un grupo', 'El número propio del grupo ' + id + ' ya no está vinculado (WhatsApp cerró la sesión). Entra a Súper-admin → detalle del grupo → WhatsApp y vincúlalo de nuevo.');
+        deps.alertar('🔴 LUDOX: se cayó el número propio de un grupo', 'El número propio del grupo ' + id + ' ya no está vinculado (WhatsApp cerró la sesión). Entra a Bot IA en el portal de Hipismo del grupo y vincúlalo de nuevo.');
       } else {
         const codigo = motivo && motivo.output ? motivo.output.statusCode : null;
         s.reconexiones = (s.reconexiones || 0) + 1; s.ultimoCodigo = codigo;
@@ -429,7 +429,7 @@ async function desvincular(grupoId) {
   try { fs.rmSync(carpetaDeSesion(id), { recursive: true, force: true }); } catch (e) {
     console.error('[whatsappSesionesGrupo] No se pudo borrar la carpeta de sesión del grupo ' + id + ':', e.message);
   }
-  await db.query('UPDATE grupos SET whatsapp_propio_activo = false, whatsapp_propio_jid = NULL WHERE id = $1', [grupoId]);
+  await db.query('UPDATE grupos SET whatsapp_propio_activo = false WHERE id = $1', [grupoId]);
 }
 
 // Al arrancar el servidor: levanta, de a una, las conexiones de los grupos que ya tenían número propio.

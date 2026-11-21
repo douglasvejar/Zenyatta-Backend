@@ -1811,8 +1811,8 @@
 
             <div style="margin:26px 0 6px; padding:9px 12px; border-radius:8px; background:rgba(127,127,127,.14); font-weight:700; font-size:15px;">🏇 Hipismo (caballos)<div style="font-weight:400; font-size:12px; color:var(--text-dim); margin-top:2px;">Corredores y Administración Inteligente: el bot que lee las jugadas del chat, con su número de WhatsApp propio.</div></div>
             <div class="modal-seccion">
-              <h3>Corredores y Administración Inteligente</h3>
-              <p style="margin-top:-6px; color:var(--text-dim); font-size:12px;">Servicio aparte (plus) para Hipismo: un bot en el grupo de WhatsApp del cliente lee las jugadas que publican los jugadores, empareja las respuestas ("200", "J"), cuida el pozo de los dos lados, confirma cada jugada y arma el plano. Funciona con el número general (grupo vinculado en la sección de abajo) o, mejor, con un número propio de este grupo (justo aquí abajo). Cada cliente debe tener su teléfono en la ficha.</p>
+              <h3>Bot IA de Hipismo</h3>
+              <p>Habilita el servicio para este grupo de Ludox. El bot lee jugadas, controla el pozo y prepara el plano en los chats autorizados. Cada cliente debe tener su teléfono en la ficha.</p>
               <div class="detalle-fila">
                 <span class="etiqueta">Servicio</span>
                 <span class="valor" id="hipismoChatHabilitadoEstado"></span>
@@ -1832,30 +1832,15 @@
               </div>
 
               <div id="wpPropioCaja" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border, #ddd);">
-                <h4 style="margin:0 0 4px; font-size:14px;">Número de WhatsApp de este grupo</h4>
-                <p style="margin:0 0 8px; color:var(--text-dim); font-size:12px;">Por defecto el grupo usa el número general. Con un número propio (un chip dedicado) este grupo no comparte conexión con los demás. Solo se usa para este servicio: la sábana y los comandos siguen por el número general.</p>
-                <div class="detalle-fila">
-                  <span class="etiqueta">Número</span>
-                  <span class="valor" id="wpPropioEstado">—</span>
-                </div>
-                <div class="detalle-fila" id="wpPropioUltimoFila" style="display:none;">
-                  <span class="etiqueta">Último mensaje que llegó</span>
-                  <span class="valor" id="wpPropioUltimo" style="text-align:right; font-size:12px;">—</span>
-                </div>
-                <div id="wpPropioQrCaja" style="display:none; margin-top:10px; gap:14px; align-items:center; flex-wrap:wrap;">
-                  <img id="wpPropioQrImg" alt="Código QR" style="width:170px; height:170px; background:#fff; padding:6px; border-radius:8px;">
-                  <small style="color:var(--text-dim); font-size:12px; max-width:320px;">En el teléfono: WhatsApp → Ajustes → Dispositivos vinculados → Vincular un dispositivo. Escanéalo con el chip que quieres dedicar a este grupo. El código se renueva solo.</small>
-                </div>
-                <div id="wpPropioChatCaja" style="display:none; margin-top:10px;">
-                  <label for="wpPropioSelect" style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px;">Grupo de WhatsApp donde trabaja el bot</label>
-                  <select id="wpPropioSelect" style="width:100%;"></select>
-                  <small id="wpPropioAyuda" style="display:block; color:var(--text-dim); font-size:12px; margin-top:4px;">Agrega este número como miembro del grupo de WhatsApp del cliente y toca "Actualizar lista".</small>
-                </div>
+                <h4>Chats autorizados de WhatsApp</h4>
+                <p>El administrador conecta el número desde Bot IA en su portal. Selecciona aquí los chats donde podrá trabajar, por ejemplo Americanas y Nacionales.</p>
+                <p id="wpPropioEstado" role="status"></p>
+                <fieldset id="wpPropioChats">
+                  <legend>Chats de WhatsApp</legend>
+                </fieldset>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-                  <button type="button" class="btn-secundario" id="wpPropioBtnIniciar" onclick="wpPropioIniciar()">📱 Vincular número propio</button>
-                  <button type="button" class="btn-secundario" id="wpPropioBtnRefrescar" onclick="wpPropioRefrescar()" style="display:none;">🔄 Actualizar lista</button>
-                  <button type="button" class="btn-secundario" id="wpPropioBtnGuardar" onclick="wpPropioGuardarJid()" style="display:none;">Guardar grupo</button>
-                  <button type="button" class="btn-secundario" id="wpPropioBtnDesvincular" onclick="wpPropioDesvincular()" style="display:none; color:#c62828;">🗑️ Desvincular número</button>
+                  <button type="button" class="btn-secundario" id="wpPropioBtnRefrescar" onclick="wpPropioRefrescar()">Actualizar lista</button>
+                  <button type="button" class="btn-secundario" id="wpPropioBtnGuardar" onclick="wpPropioGuardarChats()">Guardar autorización</button>
                 </div>
                 <div id="wpPropioMsg" style="font-size:12px; margin-top:6px;"></div>
               </div>
@@ -4136,7 +4121,7 @@ async function abrirDetalleGrupo(id, nombre) {
     pintarEstadoHipismoChat();
     const selFormato = document.getElementById('hipismoChatFormatoSelect');
     if (selFormato) selFormato.value = d.hipismoChatPlanoFormato === 'imagen' ? 'imagen' : 'texto';
-    wpPropioDetener();
+    wpPropioMsg('');
     wpPropioCargar();
     GRUPO_WHATSAPP_HABILITADO = !!d.whatsappHabilitado;
     document.getElementById('whatsappJidInputSuperadmin').value = d.whatsappGrupoJid || '';
@@ -4177,7 +4162,6 @@ async function abrirDetalleGrupo(id, nombre) {
 function cerrarDetalleGrupo() {
   document.getElementById('modalDetalleFondo').style.display = 'none';
   GRUPO_DETALLE_ID = null;
-  wpPropioDetener();
 }
 
 // =================================================================
@@ -4534,123 +4518,72 @@ async function toggleHipismoCruzarGrupo() {
 // =================================================================
 let GRUPO_WHATSAPP_HABILITADO = false;
 
-// NÚMERO DE WHATSAPP PROPIO POR GRUPO (17-11-2026): ver src/routes/superadmin.js (/grupos/:id/whatsapp-propio/...).
-let WP_PROPIO_TIMER = null;
-let WP_PROPIO_QR_URL = null;
-function wpPropioMsg(t, error) {
-  const el = document.getElementById('wpPropioMsg');
-  if (!el) return;
-  el.style.color = error ? '#c62828' : '#2e7d32';
-  el.textContent = t || '';
+function wpPropioMsg(texto) {
+  document.getElementById('wpPropioMsg').textContent = texto;
 }
-function wpPropioDetener() { if (WP_PROPIO_TIMER) { clearInterval(WP_PROPIO_TIMER); WP_PROPIO_TIMER = null; } }
+
 async function wpPropioCargar() {
-  const estadoEl = document.getElementById('wpPropioEstado');
-  if (!estadoEl || !GRUPO_DETALLE_ID) { wpPropioDetener(); return; }
-  const idPedido = GRUPO_DETALLE_ID;
-  let d;
+  const id = GRUPO_DETALLE_ID;
+  if (!id) return;
+  const estado = document.getElementById('wpPropioEstado');
+  const lista = document.getElementById('wpPropioChats');
+  const refrescar = document.getElementById('wpPropioBtnRefrescar');
+  const guardar = document.getElementById('wpPropioBtnGuardar');
+  lista.querySelectorAll('label').forEach(el => el.remove());
+  estado.textContent = 'Consultando conexión…';
+  refrescar.disabled = guardar.disabled = true;
   try {
-    d = await apiSuperadmin('/api/superadmin/grupos/' + idPedido + '/whatsapp-propio');
-  } catch (e) { estadoEl.innerHTML = '<span style="color:#c62828;">No se pudo leer el estado</span>'; return; }
-  if (idPedido !== GRUPO_DETALLE_ID) return; // cambió de grupo mientras tanto
-  const qrCaja = document.getElementById('wpPropioQrCaja');
-  const chatCaja = document.getElementById('wpPropioChatCaja');
-  const btn = id => document.getElementById(id);
-  let html;
-  if (!d.vinculado) html = '<span style="color:#888;">Usa el número general</span>';
-  else if (d.conectado) html = '<span style="color:#2e7d32; font-weight:600;">Conectado' + (d.numero ? ' · ' + d.numero : '') + '</span>';
-  else if (d.tieneQr) html = '<span style="color:#b26a00; font-weight:600;">Esperando que escanees el QR…</span>';
-  else html = '<span style="color:#b26a00;">' + (d.ultimoError ? d.ultimoError : 'Conectando…') + '</span>';
-  estadoEl.innerHTML = html;
-  const filaUlt = document.getElementById('wpPropioUltimoFila');
-  if (filaUlt) {
-    filaUlt.style.display = d.conectado ? '' : 'none';
-    const ult = d.ultimo;
-    const hora = iso => new Date(iso).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    let txtUlt = ult ? (hora(ult.en) + ' · ' + ult.motivo) : 'Ninguno todavía (escribe algo en el grupo de WhatsApp)';
-    // Diagnóstico: cuántos mensajes le entregó WhatsApp a este número desde que se conectó, y si se ha reconectado seguido.
-    const partes = [];
-    partes.push('WhatsApp le entregó ' + (d.eventos || 0) + ' mensaje(s)' + (d.ultimoEvento ? ' (el último a las ' + hora(d.ultimoEvento.en) + (d.ultimoEvento.retrasoSeg != null ? ', con ' + d.ultimoEvento.retrasoSeg + ' s de retraso' : '') + ')' : ''));
-    if (d.conectadoEn) partes.push('conectado desde las ' + hora(d.conectadoEn));
-    if (d.reconexiones) partes.push(d.reconexiones + ' reconexión(es)' + (d.ultimoCodigo ? ', última con código ' + d.ultimoCodigo : ''));
-    if (d.flushForzados) partes.push('se liberaron ' + d.flushForzados + ' vez/veces los mensajes retenidos por la librería (arreglado solo)');
-    if (d.ultimoRefresco) partes.push('el vigilante reinició la conexión solo a las ' + hora(d.ultimoRefresco.en) + ' (' + d.ultimoRefresco.motivo + ')');
-    document.getElementById('wpPropioUltimo').innerHTML = saEsc(txtUlt) + '<br><span style="color:var(--text-dim);">' + saEsc(partes.join(' · ')) + '</span>';
+    const data = await apiSuperadmin('/api/superadmin/grupos/' + id + '/whatsapp-propio');
+    if (id !== GRUPO_DETALLE_ID) return;
+    const chats = new Map(data.grupos.map(g => [g.jid, g.nombre]));
+    for (const jid of data.autorizados) if (!chats.has(jid)) chats.set(jid, jid);
+    for (const [jid, nombre] of chats) {
+      const label = document.createElement('label');
+      label.style.display = 'block';
+      const control = document.createElement('input');
+      control.type = 'checkbox';
+      control.value = jid;
+      control.checked = data.autorizados.includes(jid);
+      label.append(control, ' ' + nombre + (nombre === jid ? '' : ' · ' + jid));
+      lista.append(label);
+    }
+    estado.textContent = data.conectado ? 'Número conectado · ' + (data.numero || 'WhatsApp') : 'Pendiente de vincular desde el portal del grupo.';
+    refrescar.disabled = guardar.disabled = false;
+  } catch (e) {
+    if (id === GRUPO_DETALLE_ID) estado.textContent = e.message;
   }
-
-  btn('wpPropioBtnIniciar').style.display = (!d.vinculado || (!d.conectado && !d.tieneQr && d.ultimoError && d.ultimoError.indexOf('cerró') >= 0)) ? '' : 'none';
-  btn('wpPropioBtnIniciar').textContent = d.vinculado ? '📱 Volver a vincular (nuevo QR)' : '📱 Vincular número propio';
-  btn('wpPropioBtnDesvincular').style.display = d.vinculado ? '' : 'none';
-  btn('wpPropioBtnRefrescar').style.display = d.conectado ? '' : 'none';
-  btn('wpPropioBtnGuardar').style.display = d.conectado ? '' : 'none';
-  chatCaja.style.display = d.conectado ? 'block' : 'none';
-  qrCaja.style.display = d.tieneQr ? 'flex' : 'none';
-
-  if (d.conectado) {
-    const sel = document.getElementById('wpPropioSelect');
-    const actual = sel.value || d.jid || '';
-    sel.innerHTML = '<option value="">— Elige un grupo de WhatsApp —</option>';
-    (d.grupos || []).forEach(g => { const o = document.createElement('option'); o.value = g.jid; o.textContent = g.nombre + ' (' + g.jid + ')'; sel.appendChild(o); });
-    if (d.jid && !(d.grupos || []).some(g => g.jid === d.jid)) { const o = document.createElement('option'); o.value = d.jid; o.textContent = d.jid + ' (guardado)'; sel.appendChild(o); }
-    sel.value = actual;
-  }
-  if (d.tieneQr) {
-    try {
-      const res = await fetch('/api/superadmin/grupos/' + idPedido + '/whatsapp-propio/qr.png?t=' + Date.now(), { headers: { 'Authorization': 'Bearer ' + SECRET } });
-      if (res.ok) {
-        const blob = await res.blob();
-        if (WP_PROPIO_QR_URL) URL.revokeObjectURL(WP_PROPIO_QR_URL);
-        WP_PROPIO_QR_URL = URL.createObjectURL(blob);
-        document.getElementById('wpPropioQrImg').src = WP_PROPIO_QR_URL;
-      }
-    } catch (e) { /* el próximo ciclo lo reintenta */ }
-  }
-  // Mientras haya algo por pasar (conectando / QR / reintento) se vuelve a mirar cada 3 s; conectado y estable, se deja de consultar.
-  const pendiente = d.vinculado;
-  if (pendiente && !WP_PROPIO_TIMER) WP_PROPIO_TIMER = setInterval(wpPropioCargar, d.conectado ? 5000 : 3000);
-  if (!pendiente) wpPropioDetener();
 }
-async function wpPropioIniciar() {
-  if (!GRUPO_DETALLE_ID) return;
-  wpPropioMsg('Arrancando la conexión…');
-  try {
-    await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-propio/iniciar', { method: 'POST' });
-    wpPropioMsg('');
-    wpPropioDetener();
-    setTimeout(wpPropioCargar, 1500);
-    if (!WP_PROPIO_TIMER) WP_PROPIO_TIMER = setInterval(wpPropioCargar, 3000);
-  } catch (e) { wpPropioMsg(e.message, true); }
-}
+
 async function wpPropioRefrescar() {
-  if (!GRUPO_DETALLE_ID) return;
+  const id = GRUPO_DETALLE_ID;
   wpPropioMsg('Actualizando lista…');
   try {
-    await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-propio/refrescar', { method: 'POST' });
+    await apiSuperadmin('/api/superadmin/grupos/' + id + '/whatsapp-propio/refrescar', { method: 'POST' });
+    if (id !== GRUPO_DETALLE_ID) return;
     wpPropioMsg('');
     await wpPropioCargar();
-  } catch (e) { wpPropioMsg(e.message, true); }
-}
-async function wpPropioGuardarJid() {
-  if (!GRUPO_DETALLE_ID) return;
-  const jid = document.getElementById('wpPropioSelect').value;
-  try {
-    await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-propio/jid', { method: 'PATCH', body: JSON.stringify({ jid }) });
-    wpPropioMsg(jid ? 'Listo: el bot trabajará en ese grupo de WhatsApp.' : 'Se quitó el grupo de WhatsApp.');
-  } catch (e) { wpPropioMsg(e.message, true); }
-}
-async function wpPropioDesvincular() {
-  if (!GRUPO_DETALLE_ID) return;
-  if (!confirm('¿Desvincular el número propio de este grupo? Se cierra su sesión de WhatsApp y habrá que escanear un QR nuevo para volver a usarlo.')) return;
-  try {
-    await apiSuperadmin('/api/superadmin/grupos/' + GRUPO_DETALLE_ID + '/whatsapp-propio/desvincular', { method: 'POST' });
-    wpPropioMsg('Número desvinculado.');
-    wpPropioDetener();
+  } catch (e) {
+    if (id !== GRUPO_DETALLE_ID) return;
+    wpPropioMsg(e.message);
     await wpPropioCargar();
-  } catch (e) { wpPropioMsg(e.message, true); }
+  }
 }
 
-// CORREDORES Y ADMINISTRACIÓN INTELIGENTE (17-11-2026): ver src/routes/superadmin.js (hipismo-chat-habilitado).
-let GRUPO_HIPISMO_CHAT_HABILITADO = false;
+async function wpPropioGuardarChats() {
+  const id = GRUPO_DETALLE_ID;
+  const chats = Array.from(document.querySelectorAll('#wpPropioChats input:checked'), el => el.value);
+  const boton = document.getElementById('wpPropioBtnGuardar');
+  boton.disabled = true;
+  try {
+    await apiSuperadmin('/api/superadmin/grupos/' + id + '/whatsapp-propio/chats', { method: 'PATCH', body: JSON.stringify({ chats }) });
+    if (id === GRUPO_DETALLE_ID) wpPropioMsg('Autorización guardada.');
+  } catch (e) {
+    if (id === GRUPO_DETALLE_ID) wpPropioMsg(e.message);
+  } finally {
+    if (id === GRUPO_DETALLE_ID) boton.disabled = false;
+  }
+}
+
 function pintarEstadoHipismoChat() {
   const estadoEl = document.getElementById('hipismoChatHabilitadoEstado');
   const boton = document.getElementById('btnToggleHipismoChat');
