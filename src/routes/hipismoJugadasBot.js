@@ -58,7 +58,7 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
   router.use('/conexion', requiereAdministrador);
   router.get('/conexion', asyncHandler(async (req, res) => {
     const gestor = require('../services/whatsappSesionesGrupo');
-    const { conectado, tieneQr, numero, ultimoError, ultimo, ultimoEvento } = gestor.estadoPublico(req.grupoId);
+    const { conectado, tieneQr, numero, ultimoError, ultimo, ultimoEvento, requiereNuevoQr } = gestor.estadoPublico(req.grupoId);
     const r = await db.query(
       'SELECT whatsapp_propio_activo, whatsapp_propio_jid, whatsapp_propio_chats FROM grupos WHERE id = $1',
       [req.grupoId]
@@ -68,7 +68,7 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
     const qr = tieneQr && gestor.obtenerQr(req.grupoId);
     res.set('Cache-Control', 'no-store');
     res.json({
-      conectado, numero, ultimoError, ultimo, ultimoEvento, vinculando: !!fila.whatsapp_propio_activo && !conectado,
+      conectado, numero, ultimoError, ultimo, ultimoEvento, requiereNuevoQr, vinculando: !!fila.whatsapp_propio_activo && !conectado,
       chatsAutorizados: chats.length,
       qr: qr ? await require('qrcode').toDataURL(qr, { width: 320, margin: 2 }) : null
     });

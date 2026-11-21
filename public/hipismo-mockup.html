@@ -8167,7 +8167,7 @@ async function cargarConexionBotIA() {
     else imagen.removeAttribute('src');
     reconectar.hidden = !data.conectado;
     boton.hidden = data.conectado || !!data.qr || (data.vinculando && !data.ultimoError);
-    boton.textContent = data.vinculando ? 'Volver a intentar' : 'Vincular WhatsApp';
+    boton.textContent = data.requiereNuevoQr ? 'Generar nuevo QR' : data.vinculando ? 'Volver a intentar' : 'Vincular WhatsApp';
     if (data.conectado) {
       estado.textContent = 'WhatsApp conectado' + (data.numero ? ' · ' + data.numero : '') + ' · Chats autorizados: ' + data.chatsAutorizados;
     } else if (data.qr) {

@@ -163,7 +163,15 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   check(alertas.length === 1 && /número propio/.test(alertas[0]), 'se manda el correo de alerta');
 
   // ----- volver a vincular -----
+  const credencialVencida = path.join(gestor.carpetaDeSesion(G), 'creds.json');
+  fs.writeFileSync(credencialVencida, '{}');
+  const borrarOriginal = gestor._deps.borrarSesionBd;
+  const sesionesBorradas = [];
+  gestor._deps.borrarSesionBd = async id => { sesionesBorradas.push(id); };
+  check(e.requiereNuevoQr, 'el portal distingue una sesión cerrada que requiere un QR nuevo');
   await gestor.iniciarSesion(G);
+  check(sesionesBorradas.join() === G && !fs.existsSync(credencialVencida), 'descarta las credenciales vencidas de este grupo antes de generar el QR');
+  gestor._deps.borrarSesionBd = borrarOriginal;
   check(socks.length === 3, 'volver a vincular crea una conexión nueva');
   socks[2].handlers['connection.update']({ qr: 'QR-2' });
   check(gestor.estadoPublico(G).tieneQr, 'y muestra su QR nuevo');

@@ -114,6 +114,7 @@ function estadoPublico(grupoId) {
     activa: true,
     conectado: !!s.conectado,
     tieneQr: !!s.ultimoQr && !s.conectado,
+    requiereNuevoQr: !!s.requiereNuevoQr,
     ultimoError: s.ultimoError,
     numero: enmascararNumero(s.numero),
     ultimo: s.ultimo || null,
@@ -336,6 +337,14 @@ async function iniciarSesionInterna(grupoId) {
   const { Boom } = deps.cargarBoom();
 
   const dir = carpetaDeSesion(id);
+  // Tras un logout confirmado, reutilizar las credenciales vuelve a provocar el mismo cierre.
+  // Se eliminan solo después de tomar el turno de esta sesión.
+  if (s.requiereNuevoQr) {
+    await deps.borrarSesionBd(id);
+    fs.rmSync(dir, { recursive: true, force: true });
+    s.requiereNuevoQr = false;
+    s.ultimoError = null;
+  }
   fs.mkdirSync(dir, { recursive: true });
   const { state, saveCreds } = await deps.crearAuth(id, baileys, dir);
   const yaTeniaSesion = !!(state && state.creds && state.creds.registered) || fs.existsSync(path.join(dir, 'creds.json'));
@@ -362,7 +371,7 @@ async function iniciarSesionInterna(grupoId) {
   s.flusher = deps.setIntervalo(() => {
     try { if (s.sock === sock && sock.ev && typeof sock.ev.isBuffering === 'function' && sock.ev.isBuffering() && typeof sock.ev.flush === 'function') sock.ev.flush(); } catch (e) { /* nada */ }
   }, 1000);
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', () => { if (s.gen === gen && !s.requiereNuevoQr) return saveCreds(); });
 
   sock.ev.on('connection.update', (update) => {
     if (s.gen !== gen) return; // un socket viejo ya reemplazado
@@ -382,6 +391,7 @@ async function iniciarSesionInterna(grupoId) {
       if (cerroSesion) {
         s.ultimoError = 'WhatsApp cerró la sesión de este número — hay que volver a vincularlo (escanear un QR nuevo).';
         s.ultimoQr = null;
+        s.requiereNuevoQr = true;
         console.error('[whatsappSesionesGrupo] Grupo ' + id + ': ' + s.ultimoError);
         deps.alertar('🔴 LUDOX: se cayó el número propio de un grupo', 'El número propio del grupo ' + id + ' ya no está vinculado (WhatsApp cerró la sesión). Entra a Bot IA en el portal de Hipismo del grupo y vincúlalo de nuevo.');
       } else {
