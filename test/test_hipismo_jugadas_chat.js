@@ -173,7 +173,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', '200', { citadoId: of2.id }));
   check(guardadas[3].monto === 200, 'oferta de 300, responden 200: juegan 200');
   await motor.procesarMensaje(msg('j_ricardo', '200', { citadoId: of2.id }));
-  check(guardadas[4].monto === 100 && ultima().t === '✅ Aquí jugaron 100,00', 'piden 200 pero solo quedaban 100: juegan 100 y el bot responde "Aquí jugaron 100,00"');
+  check(guardadas[4].monto === 100 && ultima().t === '✅ Aquí solo 100,00', 'piden 200 pero solo quedaban 100: juegan 100 y el bot responde "Aquí solo 100,00"');
 
   // Roles con "recibo": Luis recibe, Raul responde J => Raul JUEGA 5x4 a 8 con 200, y Luis da
   const of3 = msg('j_luis', 'Juego 4x5 recibo a 8 200');
@@ -287,7 +287,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(ofQ3);
   await motor.procesarMensaje(msg('j_marvel', '300', { citadoId: ofQ3.id }));
   await motor.procesarMensaje(msg('j_luis', '250', { citadoId: ofQ3.id }));
-  check(ultima().t === '✅ Aquí jugaron 100,00', 'quedaban 100 y piden 250: juegan 100 y el bot lo dice');
+  check(ultima().t === '✅ Aquí solo 100,00', 'quedaban 100 y piden 250: juegan 100 y el bot lo dice');
   const ofQ4 = msg('j_cachaco', 'Juego 4x1 con 80 doy a8');
   await motor.procesarMensaje(ofQ4);
   await motor.procesarMensaje(msg('j_marvel', 'J', { citadoId: ofQ4.id }));

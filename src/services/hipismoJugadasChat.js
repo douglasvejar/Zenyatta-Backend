@@ -878,9 +878,8 @@ function crearMotor(deps) {
       autor: { jid: oferta.autorJid, nombre: oferta.autorNombre, etiqueta: oferta.autorEtiqueta },
       resp: { jid: m.remitente.jid, nombre, etiqueta: m.remitente.nombre } });
     sinPlano++;
-    // Se aclara cuánto se jugó cuando es menos de lo pedido ("más de lo que quedaba") o cuando la parada ya había sido tomada en parte
-    // y respondieron "J"/"jugo" (juegan solo lo que quedaba): "✅ Aquí jugaron 100,00".
-    const parcial = monto + 0.005 < pedido || (resp.tipo === 'todo' && restanteAntes + 0.005 < oferta.monto);
+    const superaRestante = resp.tipo === 'monto' && pedido > restanteAntes;
+    const tomoRestante = resp.tipo === 'todo' && restanteAntes < oferta.monto;
     nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
     if (confirmacionId) {
       const mensaje = '✅ @@ @@2 Van jugando con ' + fmt(monto);
@@ -892,7 +891,10 @@ function crearMotor(deps) {
       const op = { citarId: m.id, mencionar: oferta.autorJid, nombre: oferta.autorEtiqueta, mencionar2: m.remitente.jid, nombre2: m.remitente.nombre, mencionar3: limitado.jid, nombre3: limitado.nombre };
       nota('Saldo limitado: se jugó solo ' + fmt(monto) + ' por el pozo de ' + (limitadoPor === 'resp' ? nombre : oferta.autorNombre));
       await deps.responder('✅ @@ @@2 Aquí solo jugaron ' + fmt(monto) + ' por pozo de @@3', op);
-    } else await deps.responder('✅ Aquí jugaron' + (parcial ? ' ' + fmt(monto) : ''), { citarId: m.id });
+    } else {
+      const texto = superaRestante ? '✅ Aquí solo ' + fmt(monto) : '✅ Aquí jugaron' + (tomoRestante ? ' ' + fmt(monto) : '');
+      await deps.responder(texto, { citarId: m.id });
+    }
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
 

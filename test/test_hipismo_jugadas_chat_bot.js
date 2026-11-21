@@ -544,6 +544,19 @@ const textoDe = e => e.contenido.text;
   }
 
   {
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 11ma carrera', null, base + 2400));
+    const oferta = mT('CACHACO', 'Consigo 2p del 6 1000', null, base + 2401);
+    await whatsappBot.manejarMensajeEntrante(sock, oferta);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '700', oferta.key.id, base + 2410));
+    const antes = T.chat.length;
+    const respuesta = mT('MARVEL', '500', oferta.key.id, base + 2420);
+    await whatsappBot.manejarMensajeEntrante(sock, respuesta);
+    const aviso = enviados.find(e => e.opciones?.quoted === respuesta);
+    check(T.chat.length === antes + 1 && T.chat.at(-1).monto === 300 &&
+      aviso?.contenido.text === '✅ Aquí solo 300,00', 'piden 500 en una parada de 1000 con 300 restantes: se confirman solo los 300');
+  }
+
+  {
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];
