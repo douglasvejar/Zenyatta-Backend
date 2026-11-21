@@ -2273,6 +2273,100 @@
     #vista-controlPozos .cpz-uso { justify-content: flex-start; }
     #vista-controlPozos .cpz-barra { flex: 1 1 auto; max-width: 160px; }
   }
+  #vista-clientes .clientes-toolbar,
+  #vista-clientes .clientes-filtros,
+  #vista-clientes .clientes-acciones {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #vista-clientes .clientes-toolbar { margin: 16px 0; }
+  #vista-clientes .clientes-toolbar input { flex: 1 1 185px; width: auto; max-width: 340px; }
+  #vista-clientes .clientes-toolbar .btn { padding: 8px 12px; }
+  #vista-clientes .clientes-filtros .btn { border-radius: 999px; }
+  #vista-clientes .clientes-filtros button[aria-pressed="true"],
+  #vista-clientes .clientes-avalado {
+    background: color-mix(in srgb, var(--accent-grass) 13%, var(--card));
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent-grass) 32%, var(--card-border));
+  }
+  #tablaClientesWrap { overflow-x: auto; }
+  #tablaClientesWrap table { margin: 0; }
+  #tablaClientesWrap th,
+  #tablaClientesWrap td { padding: 7px 8px; }
+  #tablaClientesWrap th { text-transform: uppercase; font-size: 11px; }
+  #tablaClientesWrap .clientes-acciones { gap: 5px; }
+  #tablaClientesWrap .clientes-acciones button { padding: 4px 7px; font-size: 12px; white-space: nowrap; }
+
+  #clienteCrearPanel {
+    --cliente-panel-ancho: clamp(420px, 39vw, 660px);
+    position: fixed;
+    inset: 0 0 0 auto;
+    margin: 0;
+    width: min(100%, var(--cliente-panel-ancho));
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--card-border);
+    background: var(--t-solido, var(--card));
+    color: var(--text);
+    box-shadow: -8px 0 28px rgba(0, 0, 0, .12);
+  }
+  #clienteCrearPanel::backdrop { background: rgba(0, 0, 0, .14); }
+  #clienteCrearPanel[open],
+  #clienteCrearPanel .cliente-panel-form { display: flex; flex-direction: column; }
+  #clienteCrearPanel .cliente-panel-form { flex: 1; min-height: 0; }
+  #clienteCrearPanel .cliente-panel-cabecera,
+  #clienteCrearPanel .cliente-panel-pie { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+  #clienteCrearPanel .cliente-panel-cabecera { justify-content: space-between; }
+  #clienteCrearPanel h2,
+  #clienteCrearPanel h3 { margin: 0; }
+  #clienteCrearPanel .cliente-panel-cabecera .btn { padding: 2px 9px; font-size: 22px; }
+  #clienteCrearPanel .cliente-panel-cuerpo { overflow-y: auto; flex: 1; padding: 0 16px 12px; }
+  #clienteCrearPanel .cliente-panel-seccion {
+    margin-bottom: 10px;
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  #clienteCrearPanel h3 {
+    padding: 5px 12px;
+    background: color-mix(in srgb, var(--accent-grass) 14%, var(--card));
+    font-size: 15px;
+  }
+  #clienteCrearPanel .cliente-panel-campos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    padding: 8px 12px;
+  }
+  #clienteCrearPanel .cliente-panel-ancho { grid-column: 1 / -1; }
+  #nvoCteFichaPropiaWrap > div { width: 100%; }
+  #clienteCrearPanel label { margin-bottom: 3px; font-size: 12px; }
+  #clienteCrearPanel .check-fila { align-self: end; min-height: 33px; margin: 0; }
+  #clienteCrearPanel input:not([type="checkbox"]),
+  #clienteCrearPanel select,
+  #clienteCrearPanel textarea { width: 100%; padding: 6px 8px; font-size: 13px; border-radius: 6px; }
+  #clienteCrearPanel textarea { resize: vertical; font-family: inherit; }
+  #clienteCrearPanel th,
+  #clienteCrearPanel td { padding: 3px; }
+  #clienteCrearPanel th:nth-child(2) { width: 31%; }
+  #clienteCrearPanel td:last-child { width: 1%; }
+  #clienteCrearPanel .desc { margin: 0; font-size: 12px; }
+  #clienteCrearPanel .cliente-panel-pie { border-top: 1px solid var(--card-border); }
+  #clienteCrearPanel .cliente-panel-pie .btn { flex: 1; }
+  @media (min-width: 1350px) {
+    #vista-clientes:has(#clienteCrearPanel[open]) > .card {
+      margin-right: clamp(420px, 39vw, 660px);
+    }
+    #clienteCrearPanel::backdrop { background: transparent; }
+  }
+  @media (max-width: 380px) {
+    #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
 <script src="navidad.js"></script>
 <script src="banderas.js"></script>
@@ -4021,25 +4115,14 @@
     <!-- ============ ADMINISTRACIÓN: CLIENTES ============ -->
     <section class="vista" id="vista-clientes">
       <div class="card">
-        <h2>👤 Clientes</h2>
-        <!-- 24-09-2026, a pedido del usuario: se quita el párrafo de notas
-             de desarrollo que se veía acá (explicaba cuándo se construyó
-             cada parte, con las citas textuales de los pedidos) — quedaba
-             visible para cualquiera que entrara a esta pantalla, y no es
-             información que le sirva al operador del día a día. -->
-        <p class="desc">Ficha completa de cada cliente: datos personales, pozo, % de devolución y quién es su aval. Un cliente nuevo que aparezca en un plano de "Cargar Planos" se da de alta acá solo.</p>
-        <div class="btn-fila"><button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button></div>
-        <!-- 28-09-2026, a pedido del usuario: "colcome una pestaña de
-             buscar para a medida que vaya escribiendo me filtres... si
-             coloco por ejemplo verdura me traera el cliente llamado
-             verdura y todo los avales de verdura etc" — filtro 100% en el
-             navegador (ya está toda la lista cargada en
-             CLIENTES_HIPISMO_CACHE), sin pedir nada nuevo al servidor. Ver
-             clientesQueCoincidenBusqueda() más abajo. -->
-        <div class="fila" style="margin-top:12px;">
-          <div style="max-width:320px;">
-            <label for="buscarClienteInput">🔎 Buscar cliente</label>
-            <input type="text" id="buscarClienteInput" placeholder="Escribe un nombre… también trae sus avales" oninput="filtrarTablaClientes()">
+        <h2>Clientes</h2>
+        <div class="clientes-toolbar" id="clientesToolbar">
+          <button class="btn btn-primario" type="button" onclick="abrirCrearCliente()">+ Crear cliente</button>
+          <input type="search" id="buscarClienteInput" aria-label="Buscar cliente" placeholder="Buscar cliente…" oninput="filtrarTablaClientes()">
+          <div class="clientes-filtros" role="group" aria-label="Tipo de cuenta">
+            <button class="btn btn-secundario" type="button" data-cuenta="" aria-pressed="true" onclick="filtrarTablaClientes(this)">Todos</button>
+            <button class="btn btn-secundario" type="button" data-cuenta="libre" aria-pressed="false" onclick="filtrarTablaClientes(this)">Libres</button>
+            <button class="btn btn-secundario" type="button" data-cuenta="avalado" aria-pressed="false" onclick="filtrarTablaClientes(this)">Avalados</button>
           </div>
         </div>
         <!-- 29-09-2026: banner de "cliente doble" -- ver la nota grande de
@@ -4049,14 +4132,15 @@
              lo muestra y le llena el texto solo cuando encuentra alguno. -->
         <div id="avisoClientesDuplicados" class="aviso-clientes-duplicados"></div>
         <div id="tablaClientesWrap">
-          <table style="margin-top:18px;">
-            <thead><tr><th>Cliente</th><th>% Comisión propia</th><th>% Adicional Aval</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Detalle / Portal</th></tr></thead>
+          <table>
+            <thead><tr><th>Cliente</th><th>Comisión propia</th><th>Adicional aval</th><th>Cuenta</th><th id="thAnclarModulos" style="display:none;">Anclar con Deportes</th><th>Acciones</th></tr></thead>
             <tbody id="tablaClientes">
               <tr><td colspan="6" style="text-align:center; color:var(--text-dim);">Cargando…</td></tr>
             </tbody>
           </table>
         </div>
         <div id="clienteDetalleWrap" style="display:none; margin-top:18px;"></div>
+        <dialog id="clienteCrearPanel" aria-labelledby="clienteCrearTitulo" onclose="if (!this.open) this.innerHTML = '';"></dialog>
       </div>
     </section>
 
@@ -11108,7 +11192,14 @@ function clientesQueCoincidenBusqueda(jugadores, textoBusqueda) {
   });
   return resultado;
 }
-function filtrarTablaClientes() { pintarTablaClientesFiltrada(); }
+function filtrarTablaClientes(boton) {
+  if (boton) {
+    for (const filtro of boton.parentElement.querySelectorAll('button')) {
+      filtro.setAttribute('aria-pressed', String(filtro === boton));
+    }
+  }
+  pintarTablaClientesFiltrada();
+}
 
 // Pinta #tablaClientes a partir de CLIENTES_HIPISMO_CACHE (ya cargado) +
 // lo que haya escrito el operador en #buscarClienteInput — separada de
@@ -11139,9 +11230,14 @@ function pintarTablaClientesFiltrada() {
   }
   const inpBuscar = document.getElementById('buscarClienteInput');
   const textoBusqueda = inpBuscar ? inpBuscar.value : '';
-  const filtrados = clientesQueCoincidenBusqueda(jugadores, textoBusqueda);
+  const cuenta = document.querySelector('.clientes-filtros [aria-pressed="true"]')?.dataset.cuenta;
+  const filtrados = clientesQueCoincidenBusqueda(jugadores, textoBusqueda).filter(j => {
+    if (cuenta === 'libre') return j.tipo_cuenta !== 'avalado' && !j.pago_diario;
+    if (cuenta === 'avalado') return j.tipo_cuenta === 'avalado';
+    return true;
+  });
   if (!filtrados.length) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Ningún cliente coincide con "${textoBusqueda}".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-dim);">Ningún cliente coincide con la búsqueda y el filtro.</td></tr>`;
     return;
   }
   tbody.innerHTML = filtrados.map(j => {
@@ -11162,11 +11258,11 @@ function pintarTablaClientesFiltrada() {
           🔗 Anclado
         </label>
       </td>` : ''}
-      <td style="display:flex; gap:6px; flex-wrap:wrap;">
-        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirFichaCliente('${j.id}')">👁️ Ver / Editar</button>
-        <button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar link</button>
-        ${j.es_cuenta_comision ? `<button class="btn btn-secundario" type="button" style="padding:6px 12px; font-size:12.5px;" onclick="abrirTraspasoComision('${j.nombre}')">🔄 Traspasar</button>` : ''}
-      </td>
+      <td><div class="clientes-acciones">
+        <button class="btn btn-secundario" type="button" onclick="abrirFichaCliente('${j.id}')">👁️ Ver / Editar</button>
+        <button class="btn btn-secundario" type="button" onclick="copiarLinkClienteHipismo('${j.token}', '${formatNombre(j.nombre).replace(/'/g, "\\'")}')">🔗 Copiar enlace</button>
+        ${j.es_cuenta_comision ? `<button class="btn btn-secundario" type="button" onclick="abrirTraspasoComision('${j.nombre}')">🔄 Traspasar</button>` : ''}
+      </div></td>
     </tr>
   `;
   }).join('');
@@ -11374,93 +11470,85 @@ let CLIENTES_HIPISMO_CACHE = [];
 // mismo si acá se escribe "Luis", "luis" o "LuiS" — siempre queda LUIS,
 // mismo criterio ya usado para el auto-registro al cargar un plano (ver
 // la nota grande de calcularPlano() en services/hipismoCalc.js).
-// Reusa el mismo contenedor "clienteDetalleWrap" que el detalle/edición
-// de un cliente existente (mismo patrón de "una sola pantalla, se
-// reemplaza el innerHTML" que el resto del mockup) — así "Cancelar"
-// vuelve a la tabla con cerrarFichaCliente(), sin duplicar código.
 function abrirCrearCliente() {
-  CLIENTE_DETALLE_ID = null;
-  const wrap = document.getElementById('clienteDetalleWrap');
-  const tablaWrap = document.getElementById('tablaClientesWrap');
-  if (!wrap) return;
-  if (tablaWrap) tablaWrap.style.display = 'none';
-  wrap.style.display = 'block';
-
-  // 28-09-2026: se fija ANTES de armar el HTML de abajo, porque
-  // filasAvalesPorcentajeHtml()/opcionesAvalador() la leen para poblar
-  // cada <select> de avalador. Todavía no existe este cliente, así que
-  // los candidatos son TODOS los clientes actuales.
+  const panel = document.getElementById('clienteCrearPanel');
+  if (panel.open) return;
+  cerrarFichaCliente();
   FICHA_AVALES_OTROS_CLIENTES = CLIENTES_HIPISMO_CACHE;
 
-  wrap.innerHTML = `
-    <div class="btn-fila" style="margin-bottom:14px;"><button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">&lsaquo; Volver a la lista</button></div>
-    <div class="card" style="padding:16px;">
-      <h3 style="margin:0 0 12px;">➕ Crear cliente</h3>
-      <div class="fila">
-        <div><label>Nombre *</label><input type="text" id="nvoCteNombre" placeholder="Ej: Luis" autofocus></div>
-        <div><label>Teléfono / contacto</label><input type="text" id="nvoCteTelefono" placeholder="Opcional"></div>
+  panel.innerHTML = `
+    <header class="cliente-panel-cabecera">
+      <h2 id="clienteCrearTitulo">Crear cliente</h2>
+      <button class="btn btn-secundario" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">×</button>
+    </header>
+    <form onsubmit="enviarNuevoCliente(event)" class="cliente-panel-form">
+      <div class="cliente-panel-cuerpo">
+        <section class="cliente-panel-seccion">
+          <h3>Datos del cliente</h3>
+          <div class="cliente-panel-campos">
+            <div><label for="nvoCteNombre">Nombre *</label><input type="text" id="nvoCteNombre" placeholder="Escribe el nombre del cliente" required autofocus></div>
+            <div><label for="nvoCteTelefono">Teléfono / contacto</label><input type="tel" id="nvoCteTelefono" placeholder="Ej. 0414-1234567"></div>
+            <div><label for="nvoCteNotas">Notas</label><textarea id="nvoCteNotas" rows="2" placeholder="Observaciones o detalles"></textarea></div>
+            <label class="check-fila"><input type="checkbox" id="nvoCteActivo" checked> Activo</label>
+          </div>
+        </section>
+
+        <section class="cliente-panel-seccion">
+          <h3>Cuenta</h3>
+          <div class="cliente-panel-campos">
+            <div>
+              <label for="nvoCteTipoCuenta">Tipo de cuenta</label>
+              <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').hidden = !['avalado', 'pago_diario_pozo'].includes(this.value)">
+                <option value="libre">Libre</option>
+                <option value="avalado">Avalado (con pozo)</option>
+                <option value="pago_diario">Pago diario</option>
+                <option value="pago_diario_pozo">Pago diario con pozo</option>
+              </select>
+            </div>
+            <div id="nvoCtePozoWrap" hidden>
+              <label for="nvoCtePozoInicial">Pozo inicial</label>
+              <input type="number" id="nvoCtePozoInicial" step="0.01" value="0">
+            </div>
+          </div>
+        </section>
+
+        <section class="cliente-panel-seccion">
+          <h3>Comisión propia</h3>
+          <div class="cliente-panel-campos">
+            <div>
+              <label for="nvoCteComisionPropia">% de devolución para el mismo cliente</label>
+              <input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0" oninput="actualizarVisibilidadFichaPropiaCliente('nvoCte')">
+            </div>
+            <label class="check-fila"><input type="checkbox" id="nvoCteIncluirPorcentaje" onchange="actualizarVisibilidadFichaPropiaCliente('nvoCte')"> Incluir % en sus jugadas</label>
+            <div class="cliente-panel-ancho" id="nvoCteFichaPropiaWrap" style="display:none;">
+              <div>
+                <label for="nvoCteComisionPropiaFicha">¿En qué ficha va ese %?</label>
+                <input type="text" id="nvoCteComisionPropiaFicha" list="datalistFichasComision" placeholder="Nombre de la ficha">
+              </div>
+            </div>
+            <p class="cliente-panel-ancho desc" id="nvoCteFichaPropiaDesc" style="display:none;">Elige una ficha existente o escribe el nombre de una nueva.</p>
+          </div>
+        </section>
+
+        <section class="cliente-panel-seccion">
+          <h3>Avaladores</h3>
+          <div class="cliente-panel-campos">
+            <table class="cliente-panel-ancho">
+              <thead><tr><th>Ficha del avalador</th><th>% que gana</th><th></th></tr></thead>
+              <tbody id="nvoCteAvalesTbody">${filasAvalesPorcentajeHtml([])}</tbody>
+            </table>
+            <p class="cliente-panel-ancho desc">Puedes repartir el porcentaje entre varias fichas.</p>
+          </div>
+        </section>
+        ${datalistFichasComisionHtml('datalistFichasComision')}
+        ${htmlPerteneceASocio('nvoCteSocio', null, true)}
       </div>
-      <div class="fila">
-        <div><label>Notas</label><input type="text" id="nvoCteNotas" placeholder="Opcional"></div>
-        <div class="check-fila" style="align-self:flex-end; margin-bottom:10px;">
-          <input type="checkbox" id="nvoCteActivo" checked>
-          <label for="nvoCteActivo" style="margin:0;">Activo</label>
-        </div>
-      </div>
-      <div class="fila">
-        <div>
-          <label>Tipo de cuenta</label>
-          <select id="nvoCteTipoCuenta" onchange="document.getElementById('nvoCtePozoWrap').style.display = (this.value === 'avalado' || this.value === 'pago_diario_pozo') ? 'block' : 'none';">
-            <option value="libre" selected>Libre</option>
-            <option value="avalado">Avalado (con pozo)</option>
-            <option value="pago_diario">💵 Pago diario</option>
-            <option value="pago_diario_pozo">💵 Pago diario con pozo</option>
-          </select>
-        </div>
-        <div id="nvoCtePozoWrap" style="display:none;">
-          <label>Pozo inicial</label>
-          <input type="number" id="nvoCtePozoInicial" step="0.01" value="0">
-        </div>
-      </div>
-      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
-      <div style="font-weight:700; margin-bottom:8px;">💸 ¿Se le devuelve % de comisión? (opcional)</div>
-      <div class="fila">
-        <div><label>% de devolución para el mismo cliente</label><input type="number" id="nvoCteComisionPropia" step="0.01" min="0" value="0" oninput="actualizarVisibilidadFichaPropiaCliente('nvoCte')"></div>
-      </div>
-      <div class="check-fila" style="margin-top:6px;">
-        <input type="checkbox" id="nvoCteIncluirPorcentaje" onchange="actualizarVisibilidadFichaPropiaCliente('nvoCte')">
-        <label for="nvoCteIncluirPorcentaje" style="margin:0;">Incluir % en sus jugadas</label>
-      </div>
-      <p class="desc" style="margin-top:-2px;">Activado: su % queda restado/sumado DIRECTO en cada una de sus jugadas (no necesita un ítem aparte para su propio %). Desactivado (por defecto): sus jugadas salen normales y su % se acumula en la ficha que elijas abajo. En ambos casos, lo que gane por avalar a otros sigue apareciendo aparte.</p>
-      <div class="fila" id="nvoCteFichaPropiaWrap" style="display:none; margin-top:6px;">
-        <div><label>¿En qué ficha va ese %?</label><input type="text" id="nvoCteComisionPropiaFicha" list="datalistFichasComision" placeholder="Ej: su propio nombre, o cualquier otro nombre que elijas"></div>
-      </div>
-      <p class="desc" id="nvoCteFichaPropiaDesc" style="margin-top:-2px; display:none;">Escribe el nombre EXACTO de la ficha donde quieres que caiga este %: puede ser una ficha nueva (se crea sola) o una que ya exista.</p>
-      <hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
-      <!-- 28-09-2026, a pedido del usuario: "abajo, preguntame quien lo
-           avala, y si el avalador tambien gana % de ese tercio, en caso
-           de que si, cuanto se gana... aqui es donde quiero que me dejes
-           elegir mas de un avalador, ya que un cliente puede generarle 2%
-           por darte un ejemplo repartido en varias personas" — 0, 1 o
-           varias filas, ver filasAvalesPorcentajeHtml()/
-           onCambioFilaAvalPorcentaje() más arriba. 02-10-2026: cada fila
-           ahora es un campo de texto libre con el nombre de la ficha
-           destino (ver la nota grande de FICHA_AVALES_OTROS_CLIENTES más
-           arriba), no un <select> de clientes existentes. -->
-      <div style="font-weight:700; margin-bottom:6px;">🛡️ ¿Quién lo avala? ¿El avalador también gana % de ese tercio? (opcional)</div>
-      <p class="desc" style="margin-top:-2px;">Un cliente puede generarle % a varios avaladores a la vez (ej. 2% repartido entre 2 personas) — escribe en qué ficha cae cada uno (se abre sola una fila nueva al escribir en la última).</p>
-      <table>
-        <thead><tr><th>Ficha del avalador</th><th>% que gana</th><th></th></tr></thead>
-        <tbody id="nvoCteAvalesTbody">${filasAvalesPorcentajeHtml([])}</tbody>
-      </table>
-      ${datalistFichasComisionHtml('datalistFichasComision')}
-      ${htmlPerteneceASocio('nvoCteSocio', null)}
-      <div class="btn-fila" style="margin-top:14px;">
-        <button class="btn btn-primario" type="button" onclick="guardarNuevoCliente()">💾 Crear cliente</button>
-        <button class="btn btn-secundario" type="button" onclick="cerrarFichaCliente()">Cancelar</button>
-      </div>
-    </div>`;
-  actualizarVisibilidadFichaPropiaCliente('nvoCte');
+      <footer class="cliente-panel-pie">
+        <button class="btn btn-secundario" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+        <button class="btn btn-primario" type="submit">Crear cliente</button>
+      </footer>
+    </form>`;
+  panel.showModal();
 }
 
 // =================================================================
@@ -11587,11 +11675,30 @@ function actualizarVisibilidadFichaPropiaCliente(prefijo) {
   if (desc) desc.style.display = mostrar ? 'block' : 'none';
 }
 
+async function enviarNuevoCliente(event) {
+  event.preventDefault();
+  const boton = event.currentTarget.querySelector('[type="submit"]');
+  if (boton.disabled) return;
+  boton.disabled = true;
+  try {
+    await guardarNuevoCliente();
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 async function guardarNuevoCliente() {
+  const panel = document.getElementById('clienteCrearPanel');
+  const formulario = panel.querySelector('form');
   const nombre = document.getElementById('nvoCteNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del cliente.'); return; }
   const parecido = encontrarClienteParecido(nombre, null);
-  if (parecido && confirmarClienteParecido(parecido)) { cerrarFichaCliente(); abrirFichaCliente(parecido.id); return; }
+  if (parecido && confirmarClienteParecido(parecido)) {
+    panel.close();
+    panel.innerHTML = '';
+    abrirFichaCliente(parecido.id);
+    return;
+  }
   const avalesPorcentaje = extraerAvalesPorcentajeDeTabla('nvoCteAvalesTbody');
   if (avalesPorcentajeTieneDuplicados(avalesPorcentaje)) { alert('No puedes escribir la misma ficha dos veces — junta el % en una sola fila.'); return; }
   const comisionPropia = document.getElementById('nvoCteComisionPropia').value || 0;
@@ -11627,8 +11734,8 @@ async function guardarNuevoCliente() {
     alert('No se pudo crear el cliente: ' + e.message);
     return;
   }
+  if (panel.contains(formulario)) panel.close();
   await cargarClientesReales();
-  cerrarFichaCliente();
   alert('✅ Cliente creado.');
 }
 
@@ -18426,10 +18533,19 @@ function actualizarVisibilidadSocios() {
 // Pregunta "¿Pertenece a un socio?" de la ficha del cliente (crear y editar). Es un bloque APARTE de "¿Quién lo avala?" (los avaladores
 // con %, que siguen igual y SÍ afectan los saldos): esto solo sirve para agrupar la comisión del cliente en "Comisiones por Avales y
 // Socios" y no cambia ningún saldo. Sin socios en el grupo no se muestra nada.
-function htmlPerteneceASocio(idSelect, socioIdActual) {
+function htmlPerteneceASocio(idSelect, socioIdActual, enPanel = false) {
   if (!SOCIOS_HIPISMO.length) return '';
   const ops = ['<option value="">No pertenece a ningún socio</option>'].concat(SOCIOS_HIPISMO.map(s =>
     `<option value="${s.id}" ${String(s.id) === String(socioIdActual || '') ? 'selected' : ''}>${escaparHtmlChat(s.nombre)}</option>`));
+  if (enPanel) {
+    return `<section class="cliente-panel-seccion">
+      <h3>Socio</h3>
+      <div class="cliente-panel-campos"><div class="cliente-panel-ancho">
+        <label for="${idSelect}">¿Pertenece a un socio?</label>
+        <select id="${idSelect}">${ops.join('')}</select>
+      </div></div>
+    </section>`;
+  }
   return `<hr style="border:none; border-top:1px solid var(--card-border); margin:14px 0;">
       <div style="font-weight:700; margin-bottom:4px;">🤝 ¿Pertenece a un socio?</div>
       <p class="desc" style="margin-top:-2px;">Solo sirve para armar la lista de "Comisiones por Avales y Socios". No cambia el saldo del cliente ni sus avaladores.</p>
