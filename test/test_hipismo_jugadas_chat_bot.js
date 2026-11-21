@@ -276,7 +276,7 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, ofV);
   const nJug = T.jugadas.length;
   await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV.key.id, base + 200));
-  check(T.jugadas.length === nJug && /Aquí nada, pasaron más de 3 minutos/.test(textoDe(ultimo())), 'con la hora real de WhatsApp: respondieron 200 s después y el bot dice "Aquí nada" por tiempo');
+  check(T.jugadas.length === nJug && /tiene 1 minuto/.test(textoDe(ultimo())), 'con la hora real de WhatsApp: respondieron 200 s después y el bot solicita confirmación');
   const ofV2 = mT('CACHACO', 'Juego 4x1 con 20 doy a8', null, base + 300);
   await whatsappBot.manejarMensajeEntrante(sock, ofV2);
   await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV2.key.id, base + 300 + 100));
@@ -429,6 +429,35 @@ const textoDe = e => e.contenido.text;
     await glue._enviar(sFalso, '*ATENCIÓN ADMINISTRADORES: EL TERCIO @@ MARCÓ ERROR Y @@2 NO RESPONDIÓ* @@L', { mencionar: '98765432100@lid', nombre: 'A', mencionar2: '584142222222@s.whatsapp.net', nombre2: 'B', mencionarLista: adm });
     const c = enviadosTest[0];
     check(c.text.startsWith('*ATENCIÓN ADMINISTRADORES: EL TERCIO @98765432100 MARCÓ ERROR Y @584142222222 NO RESPONDIÓ* @') && c.text.includes('@584141111111') && c.mentions.includes('584141111111@s.whatsapp.net') && c.mentions.includes('98765432100@lid'), 'el llamado a los administradores los etiqueta de verdad a todos');
+  }
+
+  {
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 6ta carrera', null, base + 1200));
+    const enviarTardia = async (ts) => {
+      const oferta = mT('CACHACO', 'Juego 3n del 2 100', null, ts);
+      await whatsappBot.manejarMensajeEntrante(sock, oferta);
+      const respuesta = mT('MARVEL', 'J', oferta.key.id, ts + 240);
+      await whatsappBot.manejarMensajeEntrante(sock, respuesta);
+      return { respuesta, avisoId: ultimo().id };
+    };
+    const antes = T.chat.length;
+    const primera = await enviarTardia(base + 1210);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', 'OK', primera.respuesta.key.id, base + 1460));
+    check(T.chat.length === antes, 'el que toma la parada no puede darse el OK');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('CACHACO', 'OK', primera.avisoId, base + 1509));
+    check(T.chat.length === antes + 1 && /Van jugando/.test(textoDe(ultimo())) &&
+      ultimo().contenido.mentions?.length === 2, 'el OK antes del minuto guarda la jugada y etiqueta a ambos');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'Aquí jugaron', primera.respuesta.key.id, base + 1510));
+    check(T.chat.length === antes + 1, 'la confirmación de un administrador no duplica lo ya guardado');
+    const segunda = await enviarTardia(base + 1520);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('CACHACO', 'OK', segunda.respuesta.key.id, base + 1820));
+    check(T.chat.length === antes + 1 && /pasó el minuto/.test(textoDe(ultimo())), 'el OK al cumplirse el minuto se rechaza');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', 'Aquí jugaron', segunda.respuesta.key.id, base + 1821));
+    check(T.chat.length === antes + 1, 'un participante sin rol de WhatsApp no puede confirmar como administrador');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'Aquí jugaron', segunda.respuesta.key.id, base + 1822));
+    check(T.chat.length === antes + 2 && /Van jugando/.test(textoDe(ultimo())), 'un administrador confirma manualmente mientras la carrera sigue abierta');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'plano', null, base + 1823));
+    check(/CACHACO/i.test(textoDe(ultimo())) && /MARVEL/i.test(textoDe(ultimo())), 'el plano incluye las jugadas confirmadas');
   }
 
   {

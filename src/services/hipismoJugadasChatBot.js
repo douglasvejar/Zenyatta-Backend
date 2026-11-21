@@ -500,6 +500,7 @@ async function enviar(s, texto, op) {
     const id = enviado && enviado.key && enviado.key.id;
     if (id && op.registroDe) { s.avisos.set(id, op.registroDe); if (s.avisos.size > 200) s.avisos.delete(s.avisos.keys().next().value); } // aviso "no registrado": el admin puede responderle a ÉL con "registrar NOMBRE"
     if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
+    return id;
   } catch (e) {
     console.error('[hipismoChat] No se pudo responder en el grupo ' + s.jid + ':', e.message);
   }

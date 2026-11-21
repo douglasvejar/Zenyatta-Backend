@@ -394,11 +394,13 @@ function armarPlanoChat({ nombreGrupo, fecha, hipodromo, carrera, jugadas }) {
 // mensaje = { texto, id, citadoId, remitente: { jid, nombre }, esAdmin }
 // ---------------------------------------------------------------
 const CADA_N_JUGADAS_PLANO = 4;
-// Una parada publicada vale como máximo 3 minutos: si responden después, "Aquí nada" (por tiempo).
+// Después de 3 minutos la parada requiere confirmación.
 const VIGENCIA_PARADA_MS = 3 * 60 * 1000;
+const VENTANA_CONFIRMACION_MS = 60 * 1000;
 function crearMotor(deps) {
   const ctx = { hipodromo: null, carrera: null, abierta: false, fecha: null, ret: '' };
   const ofertas = new Map();
+  const pendientesTardias = new Map();
   let jugadas = [];
   let sinPlano = 0;
   const avisados = new Map(); // clave -> ms del último aviso (evita repetir el mismo reclamo)
@@ -447,7 +449,7 @@ function crearMotor(deps) {
     const esActual = hip === ctx.hipodromo && carreraN === ctx.carrera && fecha === ctx.fecha;
     const cuantas = esActual ? jugadas.length : ((await deps.cargarJugadas({ fecha, hipodromo: hip, carrera: carreraN })) || []).length;
     if (!cuantas) { await deps.responder('⚠️ En *' + hip + ', ' + ORDINAL_CARRERA(carreraN) + ' Carrera* no hay jugadas del bot pendientes para calcular (¿ya se cargó su pizarra, o no hubo jugadas?).', { citarId: m.id }); return; }
-    if (esActual && ctx.abierta) { ctx.abierta = false; ofertas.clear(); await guardarEstado(); await cerrarCasosError(); } // la pizarra cierra la carrera
+    if (esActual && ctx.abierta) { ctx.abierta = false; ofertas.clear(); pendientesTardias.clear(); await guardarEstado(); await cerrarCasosError(); } // la pizarra cierra la carrera
     const ret = datos.ret || (esActual ? ctx.ret : '') || '';
     nota('Pizarra ' + datos.llegada + (ret ? ' con retirados ' + ret : '') + ': calculando ' + hip + ' ' + carreraN);
     const r = await deps.cargarPizarra({ hipodromo: hip, carrera: carreraN, fecha, pizarra: datos.llegada, ret });
@@ -594,7 +596,7 @@ function crearMotor(deps) {
       return;
     }
     ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy(); ctx.ret = '';
-    ofertas.clear(); sinPlano = 0; cancelarCasosError(); registros = [];
+    ofertas.clear(); pendientesTardias.clear(); sinPlano = 0; cancelarCasosError(); registros = [];
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
     await guardarEstado();
     await deps.responder('*✅ Carrera abierta: ' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
@@ -602,7 +604,7 @@ function crearMotor(deps) {
 
   async function cerrarCarrera(m) {
     if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
-    ctx.abierta = false; ofertas.clear();
+    ctx.abierta = false; ofertas.clear(); pendientesTardias.clear();
     await guardarEstado();
     // Todo en MAYÚSCULA, negrita y cursiva (*_LÍNEA_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
     const bc = t => '*_' + t.toUpperCase() + '_*';
@@ -720,10 +722,72 @@ function crearMotor(deps) {
     if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }
     if (oferta.restante <= 0.005) { nota(nombre + ' respondió pero la parada ya estaba topada'); await deps.responder('❌ Aquí nada, ya está topada', { citarId: m.id }); return; }
     if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', { citarId: m.id }); return; }
-    if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) { nota(nombre + ' respondió pasados los 3 minutos de vigencia de la parada'); await deps.responder('❌ Aquí nada, pasaron más de 3 minutos desde que se publicó la parada', { citarId: m.id }); return; }
-
-    const restanteAntes = oferta.restante; // lo que le quedaba a la parada cuando respondieron
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
+    if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) {
+      if (pendientesTardias.has(m.id)) return;
+      const pedida = Math.min(pedido, oferta.restante);
+      const pendiente = { oferta, respuesta: m, resp, nombre, pedida, recibida: tiempoDe(m), avisoId: null, resuelta: false };
+      pendientesTardias.set(m.id, pendiente);
+      if (pendientesTardias.size > 400) pendientesTardias.delete(pendientesTardias.keys().next().value);
+      pendiente.avisoId = await deps.responder(
+        '⏱️ @@ @@2 La respuesta llegó después de 3 minutos. Quien publicó la parada tiene 1 minuto para responder *OK* citando este aviso o la respuesta. Un administrador del chat puede confirmarla citando con *Aquí jugaron*.',
+        mencionarTardia(pendiente, m.id)
+      );
+      return;
+    }
+    return registrarRespuesta(m, resp, oferta, nombre, pedido);
+  }
+
+  function mencionarTardia({ oferta, respuesta }, citarId) {
+    return { citarId, mencionar: oferta.autorJid, nombre: oferta.autorEtiqueta, mencionar2: respuesta.remitente.jid, nombre2: respuesta.remitente.nombre };
+  }
+
+  async function confirmarTardia(m, texto) {
+    const frase = normRespuesta(texto);
+    const manual = frase === 'aqui jugaron';
+    const acepta = frase === 'ok';
+    if (!manual && !acepta && frase !== 'no') return false;
+
+    const candidatas = [...pendientesTardias.values()].filter(p => !p.resuelta && !p.oferta.seFue && p.oferta.restante > 0.005);
+    const pendiente = m.citadoId
+      ? pendientesTardias.get(m.citadoId) || [...pendientesTardias.values()].find(p => p.avisoId === m.citadoId)
+      : manual && candidatas.length === 1 ? candidatas[0] : null;
+    if (!pendiente) {
+      if (manual && candidatas.length > 1 && await m.esAdminCarrera?.()) {
+        await deps.responder('Cita la respuesta o el aviso de la jugada que quieres confirmar.', { citarId: m.id });
+        return true;
+      }
+      return false;
+    }
+    if (pendiente.resuelta) return true;
+    if (manual) {
+      if (!await m.esAdminCarrera?.()) return true;
+    } else {
+      const autor = m.remitente.jid === pendiente.oferta.autorJid || await deps.identificar(m.remitente) === pendiente.oferta.autorNombre;
+      if (!autor) return true;
+      const transcurrido = tiempoDe(m) - pendiente.recibida;
+      if (transcurrido < 0 || transcurrido >= VENTANA_CONFIRMACION_MS) {
+        await deps.responder('❌ Aquí nada, ya pasó el minuto para confirmar.', { citarId: m.id });
+        return true;
+      }
+      if (!acepta) {
+        pendiente.resuelta = true;
+        await deps.responder('❌ @@ @@2 Aquí nada, quien publicó la parada rechazó la jugada.', mencionarTardia(pendiente, m.id));
+        return true;
+      }
+    }
+    if (!ctx.abierta || pendiente.oferta.seFue || pendiente.oferta.restante <= 0.005) {
+      pendiente.resuelta = true;
+      await deps.responder('❌ Aquí nada, la parada ya no está disponible.', { citarId: m.id });
+      return true;
+    }
+    await registrarRespuesta(pendiente.respuesta, pendiente.resp, pendiente.oferta, pendiente.nombre, pendiente.pedida, m.id);
+    pendiente.resuelta = true;
+    return true;
+  }
+
+  async function registrarRespuesta(m, resp, oferta, nombre, pedido, confirmacionId) {
+    const restanteAntes = oferta.restante;
     let monto = round2(Math.min(pedido, oferta.restante));
 
     const apuestaJug = apuestaDesdeElJugador(oferta);
@@ -777,7 +841,10 @@ function crearMotor(deps) {
     // y respondieron "J"/"jugo" (juegan solo lo que quedaba): "✅ Aquí jugaron 100,00".
     const parcial = monto + 0.005 < pedido || (resp.tipo === 'todo' && restanteAntes + 0.005 < oferta.monto);
     nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
-    if (limitadoPor) {
+    if (confirmacionId) {
+      const mensaje = '✅ @@ @@2 Van jugando con ' + fmt(monto);
+      await deps.responder(mensaje, mencionarTardia({ oferta, respuesta: m }, confirmacionId));
+    } else if (limitadoPor) {
       // "@(el que publicó) Aquí solo 300 por saldo de @(el que respondió)" — se etiqueta a la otra persona y se nombra a la que se quedó sin saldo.
       // "Aquí solo jugaron 1.732,70 por pozo de @(el que se quedó sin saldo)", etiquetando a las dos personas.
       const limitado = limitadoPor === 'resp' ? { jid: m.remitente.jid, nombre: m.remitente.nombre } : { jid: oferta.autorJid, nombre: oferta.autorEtiqueta };
@@ -837,6 +904,7 @@ function crearMotor(deps) {
       const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
       if (mReg) return registrarNumero(m, mReg[1]);
     }
+    if (await confirmarTardia(m, texto)) return;
     if (ES_ERROR_RE.test(normRespuesta(texto)) && await marcarError(m)) return;
     if (casosError.size && await responderCaso(m, texto)) return;
     const oferta = interpretarOferta(texto);
