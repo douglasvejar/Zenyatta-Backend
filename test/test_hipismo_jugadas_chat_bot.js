@@ -435,12 +435,15 @@ const textoDe = e => e.contenido.text;
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];
-    const mandar = (jid, texto) => {
-      const msg = mensaje('ADMIN', texto);
+    const mandar = (jid, texto, remitente = 'ADMIN') => {
+      const msg = mensaje(remitente, texto);
       msg.key.remoteJid = jid;
       const socket = { ...sock, groupMetadata: async chat => ({
         participants: chat === americanas || chat === nacionales
-          ? [{ id: num.ADMIN + '@s.whatsapp.net', admin: 'admin' }]
+          ? [
+              { id: num.ADMIN + '@s.whatsapp.net', admin: 'admin' },
+              { id: num.MARVEL + '@s.whatsapp.net', admin: chat === americanas ? 'admin' : null }
+            ]
           : []
       }) };
       const ayudas = whatsappBot.crearAyudasJugadasChat(socket, msg);
@@ -449,6 +452,12 @@ const textoDe = e => e.contenido.text;
     await Promise.all([mandar(americanas, 'Mountaineer 1era carrera'), mandar(nacionales, 'La Rinconada 2da carrera')]);
     check(T.estadosPorChat.get(americanas)?.hipodromo === 'Mountaineer' &&
       T.estadosPorChat.get(nacionales)?.hipodromo === 'La Rinconada', 'dos chats autorizados guardan carreras distintas para el mismo grupo');
+    await mandar(americanas, 'plano', 'MARVEL');
+    check(ultimo().jid === americanas && /Mountaineer/i.test(textoDe(ultimo())), 'un administrador de WhatsApp sin permiso interno pide el plano de Americanas');
+    await mandar(nacionales, 'plano');
+    check(ultimo().jid === nacionales && /La Rinconada/i.test(textoDe(ultimo())), 'Nacionales recibe el plano de su propia carrera');
+    await mandar(nacionales, 'plano', 'MARVEL');
+    check(/no está autorizado para pedir el plano/.test(textoDe(ultimo())), 'ser administrador de Americanas no permite pedir el plano de Nacionales');
     glue._sesiones.clear();
     await mandar(americanas, 'cerrar');
     check(T.estadosPorChat.get(americanas)?.abierta === false &&

@@ -817,14 +817,18 @@ function crearMotor(deps) {
     const carrera = interpretarAbrirCarrera(texto);
     const cierre = ES_CIERRE_RE.test(texto);
     const pizarra = interpretarPizarra(texto);
-    if (carrera || cierre || pizarra) {
+    const plano = ES_PLANO_RE.test(texto);
+    if (carrera || cierre || pizarra || plano) {
       const autorizado = m.esAdminCarrera ? await m.esAdminCarrera() : m.esAdmin;
       if (!autorizado) {
-        return avisarNoAdmin(m, carrera ? 'abrir carreras' : cierre ? 'cerrar carreras' : 'cargar la pizarra', !!m.esAdminCarrera);
+        const accion = carrera ? 'abrir carreras' : cierre ? 'cerrar carreras' : pizarra ? 'cargar la pizarra' : 'pedir el plano';
+        return avisarNoAdmin(m, accion, !!m.esAdminCarrera);
       }
       if (carrera) return abrirCarrera(m, carrera);
       if (cierre) return cerrarCarrera(m);
-      return cargarPizarra(m, pizarra);
+      if (pizarra) return cargarPizarra(m, pizarra);
+      if (!ctx.hipodromo) return deps.responder('⚠️ Este chat todavía no tiene una carrera seleccionada.', { citarId: m.id });
+      return publicarPlano();
     }
     if (m.esAdmin) {
       if (ES_AUTORIZAR_RE.test(texto)) return autorizarAdmin(m);
@@ -832,10 +836,6 @@ function crearMotor(deps) {
       if (retx) return anotarRetirados(m, retx);
       const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
       if (mReg) return registrarNumero(m, mReg[1]);
-      if (ES_PLANO_RE.test(texto)) {
-        if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
-        return publicarPlano();
-      }
     }
     if (ES_ERROR_RE.test(normRespuesta(texto)) && await marcarError(m)) return;
     if (casosError.size && await responderCaso(m, texto)) return;
