@@ -443,11 +443,14 @@ eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 2
   await motor.procesarMensaje(msg('j_dreamy', 'Plano', { esAdmin: true }));
   check(publicadas.length === antesPl + 1, 'un administrador pide "plano" y sale');
   const plano = publicadas[publicadas.length - 1];
-  check(/Sistema Dream/.test(plano) && /Lunes, 16 de Noviembre de 2026/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /Pizarra: \.\.\.\.\./.test(plano) && /\*TERCIOS\*/.test(plano), 'encabezado del plano como el de Dreamy');
-  check(/1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /2\) Juega Cachaco 10A8 \(4x1\) con 25,00 da Nana/.test(plano), 'líneas "Juega Cachaco 10A8 (4x1) con 22,00 da Marvel"');
+  check(/^\*🇻🇪🏇🏟️DREAM🏟️🏇🇻🇪\*/.test(plano) && /Mountaineer, 1ra Carrera/.test(plano) && /Pizarra: \.\.\.\.\./.test(plano) && /\*TERCIOS\*/.test(plano), 'encabezado de Cargar Planos');
+  check(/^Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/m.test(plano) && /^Juega Cachaco 10A8 \(4x1\) con 25,00 da Nana/m.test(plano), 'líneas "Juega Cachaco 10A8 (4x1) con 22,00 da Marvel"');
   check(/Juega Bestia|Juega Luis 2P \(8\) con 300|Juega Luis 2P \(8\) con 200,00 da Marvel/.test(plano) || /2P \(8\) con 200,00/.test(plano), 'una jugada de grupo se ve "2P (8)"');
   check(/Juega Raul 10A8 \(5x4\) con 200,00 da Luis/.test(plano), 'la jugada "recibo" sale con Raúl jugando 5x4');
-  check(new RegExp('Total jugadas: ' + guardadas.length + '$').test(plano), 'cierra con "Total jugadas: ' + guardadas.length + '"');
+  check(new RegExp('Total Jugadas: ' + guardadas.length + '\n').test(plano), 'incluye antes del pie "Total jugadas: ' + guardadas.length + '"');
+
+  check(plano.endsWith(require('../src/services/hipismoCalc').PIE_PLANO_DEFECTO) &&
+    !/\*GANAN\*|\*PIERDEN\*/.test(plano), 'usa el pie del programa y deja resultados para la pizarra');
 
   // Cierre
   await motor.procesarMensaje(msg('j_cachaco', 'cierra'));
@@ -455,7 +458,7 @@ eq(m.interpretarRespuesta('ponte 200'), { tipo: 'monto', monto: 200 }, '"ponte 2
   const antesCierre = publicadas.length;
   await motor.procesarMensaje(msg('j_dreamy', 'cierra', { esAdmin: true }));
   check(motor.estado().abierta === false && publicadas.length === antesCierre + 1 && enviadas.slice(-2).some(e => /^\*_🔒❌ CARRERA CERRADA SE DIO LA PARTIDA EN MOUNTAINEER, 1ERA CARRERA\. YA NO SE RECIBEN MAS JUGADAS,❌🔒_\*\n\*_🚫 NO HAY MAS JUGADA🚫_\*\n\*_🚫 NO HAY MAS JUGADA🚫_\*\n\*_ÉXITOS A TODOS EN SUS APUESTAS, AL TENER PIZARRA OFICIAL SE ENVIARAN LOS TOTALES DE ESTA CARRERA 💰🐎💰🐎_\*\n\*_🔒 CARRERA CERRADA🔒_\*\n\*_NOS REGIMOS POR EL CHAT📲 Y NUESTROS REGLAMENTOS ‼️_\*\n\*_JUEGA GANA Y COBRA SEGURO EN [^\n_]+_\*$/.test(e.t)), 'el administrador cierra: avisa (en negrita, línea por línea) y publica el plano final');
-  check(/1\) Juega Cachaco/.test(publicadas[publicadas.length - 1]) && new RegExp('Total jugadas: ' + guardadas.length + '$').test(publicadas[publicadas.length - 1]), 'el plano final trae TODAS las jugadas que hubo en la carrera');
+  check(/^Juega Cachaco/m.test(publicadas[publicadas.length - 1]) && new RegExp('Total Jugadas: ' + guardadas.length + '\n').test(publicadas[publicadas.length - 1]), 'el plano final trae TODAS las jugadas que hubo en la carrera');
   const antes3 = guardadas.length;
   const of5 = msg('j_luis', 'Juego 4x1 con 10 doy a8');
   await motor.procesarMensaje(of5);

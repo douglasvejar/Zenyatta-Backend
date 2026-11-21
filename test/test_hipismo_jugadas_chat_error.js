@@ -63,7 +63,7 @@ async function jugar(quienPublica, quienResponde, texto, monto) {
   await dormir(150);
   check(conTexto(/MARCA ERROR/).length === nLlamados, 'resuelto el caso no se vuelve a llamar');
   await motor.procesarMensaje(msg(ADM, 'plano', { esAdmin: true }));
-  check(!/Juega Cachaco/.test(publicadas[publicadas.length - 1]) && /Total jugadas: 0$/.test(publicadas[publicadas.length - 1]), 'el plano ya no trae la jugada borrada');
+  check(!/Juega Cachaco/.test(publicadas[publicadas.length - 1]) && /Total Jugadas: 0\n/.test(publicadas[publicadas.length - 1]), 'el plano ya no trae la jugada borrada');
 
   // ---------- 2) el otro dice NO (marca el que da) ----------
   const j2 = await jugar('j_cachaco', 'j_marvel', 'Juego 4x1 con 30 doy a8', 30);

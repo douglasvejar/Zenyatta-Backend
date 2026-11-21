@@ -1381,7 +1381,7 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   const encabezado = `*🇻🇪🏇🏟️${(nombreGrupo || '').toUpperCase()}🏟️🏇🇻🇪*\n${hipodromoNombre}, ${ordinalCarrera(carreraNumero)} Carrera\nRet: ${ret || ''}\nPizarra: ${pizarra}\n\n*TERCIOS*`;
   const pie = piePlano || PIE_PLANO_DEFECTO;
 
-  const entradasFinales = Object.entries(totalesFinales);
+  const entradasFinales = Object.entries(totalesFinales || {});
   const ganan = entradasFinales.filter(([, v]) => v >= 0).sort((a, b) => b[1] - a[1]);
   const pierden = entradasFinales.filter(([, v]) => v < 0).sort((a, b) => a[1] - b[1]);
 
@@ -1390,7 +1390,8 @@ function armarTextoResultado({ nombreGrupo, hipodromoNombre, carreraNumero, ret,
   if (pierden.length) bloques.push('❌ *PIERDEN*\n' + pierden.map(([n, v]) => `${formatNombre(n)} -${formatMontoTabla(v)}`).join('\n'));
   const totalesTexto = bloques.join('\n\n');
 
-  let salida = encabezado + '\n' + salidaLineas.join('\n') + '\n------------------------------\n------------------------------\n' + totalesTexto;
+  let salida = encabezado + '\n' + salidaLineas.join('\n');
+  if (totalesFinales != null) salida += '\n------------------------------\n------------------------------\n' + totalesTexto;
   if (totalJugadas !== undefined && totalJugadas !== null) {
     salida += `\n------------------------------\nTotal Jugadas: ${totalJugadas}`;
   }

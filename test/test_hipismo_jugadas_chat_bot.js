@@ -298,7 +298,7 @@ const textoDe = e => e.contenido.text;
   // plano desde la base de datos
   await whatsappBot.manejarMensajeEntrante(sock, mensaje('ADMIN', 'plano'));
   const plano = textoDe(ultimo());
-  check(/Sistema Dream/.test(plano) && /Mountaineer, 1era Carrera/.test(plano) && /1\) Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/.test(plano) && /Juega Cachaco 10A8 \(5x4\) con 200,00 da Marvel/.test(plano) && new RegExp('Total jugadas: ' + T.jugadas.length + '$').test(plano), 'el plano sale de las jugadas guardadas, con su "Total jugadas"');
+  check(/^\*🇻🇪🏇🏟️DREAM🏟️🏇🇻🇪\*/.test(plano) && /Mountaineer, 1ra Carrera/.test(plano) && /^Juega Cachaco 10A8 \(4x1\) con 22,00 da Marvel/m.test(plano) && /Juega Cachaco 10A8 \(5x4\) con 200,00 da Marvel/.test(plano) && new RegExp('Total Jugadas: ' + T.jugadas.length + '\n').test(plano), 'el plano sale de las jugadas guardadas, con su "Total jugadas"');
 
   // el servidor se reinicia con la carrera abierta: se retoma desde la base y se sigue jugando
   glue._sesiones.clear();

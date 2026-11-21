@@ -25,7 +25,7 @@
 //   6) El administrador abre una carrera escribiendo "Mountaineer 1ra carrera" y la cierra con "cierra".
 // =================================================================
 const calc = require('./hipismoTerciosAdelantadasCalc');
-const { RANK_NO_COLOCO, decimosN, ordinalCarrera, formatNombre } = require('./hipismoCalc');
+const { RANK_NO_COLOCO, decimosN, ordinalCarrera, formatNombre, armarTextoResultado, formatMontoTabla } = require('./hipismoCalc');
 
 const quitarTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -388,10 +388,20 @@ function fechaLarga(iso) {
 const ORDINAL_CARRERA = n => (n === 1 ? '1era' : ordinalCarrera(n));
 const nombreVisible = n => (String(n).trim().length <= 3 ? String(n).trim().toUpperCase() : formatNombre(n));
 
-function armarPlanoChat({ nombreGrupo, fecha, hipodromo, carrera, jugadas }) {
-  const lineas = jugadas.map((j, i) => (i + 1) + ') Juega ' + nombreVisible(j.jugadorNombre) + ' ' + apuestaVisible(j.apuesta) + ' con ' + fmt(j.monto) + ' da ' + nombreVisible(j.banqueroNombre));
-  return '*🏇 Sistema ' + nombreGrupo + ' 🏇*\n' + fechaLarga(fecha) + '\n' + hipodromo + ', ' + ORDINAL_CARRERA(carrera) + ' Carrera\nRet:\nPizarra: .....\n\n*TERCIOS*\n' +
-    (lineas.length ? lineas.join('\n') : '(todavía no hay jugadas)') + '\n------------------------------\nTotal jugadas: ' + jugadas.length;
+function armarPlanoChat({ nombreGrupo, hipodromo, carrera, ret, jugadas }) {
+  const lineas = jugadas.map(j =>
+    'Juega ' + nombreVisible(j.jugadorNombre) + ' ' + apuestaVisible(j.apuesta) + ' con ' +
+    formatMontoTabla(j.monto) + ' da ' + nombreVisible(j.banqueroNombre)
+  );
+  return armarTextoResultado({
+    nombreGrupo,
+    hipodromoNombre: hipodromo,
+    carreraNumero: carrera,
+    ret,
+    pizarra: '.....',
+    salidaLineas: lineas.length ? lineas : ['(todavía no hay jugadas)'],
+    totalJugadas: jugadas.length
+  });
 }
 
 // ---------------------------------------------------------------
@@ -603,7 +613,7 @@ function crearMotor(deps) {
 
   async function publicarPlano() {
     sinPlano = 0;
-    await deps.publicar(armarPlanoChat({ nombreGrupo: deps.nombreGrupo, fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera, jugadas }));
+    await deps.publicar(armarPlanoChat({ nombreGrupo: deps.nombreGrupo, hipodromo: ctx.hipodromo, carrera: ctx.carrera, ret: ctx.ret, jugadas }));
   }
 
   async function abrirCarrera(m, datos, comando) {
