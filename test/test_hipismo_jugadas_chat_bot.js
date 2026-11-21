@@ -76,18 +76,18 @@ function consulta(text, params) {
     if (i < 0) return { rows: [] };
     const [f] = T.chat.splice(i, 1); return { rows: [{ id: f.id }] };
   }
-  const mCierre = sql.match(/^UPDATE hipismo_chat_jugadas SET cerrada_en = (NULL|now\(\)) WHERE/i);
+  const mCierre = sql.match(/^UPDATE hipismo_chat_jugadas SET cerrada_en = (NULL|now\(\)|\$5::timestamptz) WHERE/i);
   if (mCierre) {
     T.chat.filter(c => c.grupo_id === params[0] && c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.resuelta && !c.adelantada_jugada_id && (mCierre[1] === 'NULL' || !c.cerrada_en))
-      .forEach(c => { c.cerrada_en = mCierre[1] === 'NULL' ? null : new Date(); });
+      .forEach(c => { c.cerrada_en = mCierre[1] === 'NULL' ? null : params[4] || new Date(); });
     return { rows: [] };
   }
   if (/^UPDATE hipismo_chat_jugadas SET resuelta = true WHERE id = ANY\(\$1\)/i.test(sql)) {
     T.chat.filter(c => params[0].includes(c.id)).forEach(c => { c.resuelta = true; });
     return { rows: [] };
   }
-  if (/^INSERT INTO hipismo_chat_estado/i.test(sql)) { T.estado = { hipodromo: params[1], carrera: params[2], abierta: params[3], fecha: params[4] }; return { rows: [] }; }
-  if (/^SELECT hipodromo, carrera, abierta, to_char\(fecha, 'YYYY-MM-DD'\) AS fecha FROM hipismo_chat_estado/i.test(sql)) return { rows: T.estado ? [T.estado] : [] };
+  if (/^INSERT INTO hipismo_chat_estado/i.test(sql)) { T.estado = { hipodromo: params[1], carrera: params[2], abierta: params[3], fecha: params[4], ultimoComando: params[5] }; return { rows: [] }; }
+  if (/^SELECT hipodromo, carrera, abierta, to_char\(fecha, 'YYYY-MM-DD'\) AS fecha, ultimo_comando AS "ultimoComando",/i.test(sql)) return { rows: T.estado ? [T.estado] : [] };
   if (/^(ALTER|create|do \$\$|alter)/i.test(sql)) return { rows: [] };
   throw new Error('BD falsa: consulta no prevista: ' + sql.slice(0, 160));
 }
@@ -522,6 +522,7 @@ const textoDe = e => e.contenido.text;
     const mandar = (jid, texto, remitente = 'ADMIN') => {
       const msg = mensaje(remitente, texto);
       msg.key.remoteJid = jid;
+      msg.messageTimestamp = Math.floor(Date.now() / 1000) - 1200;
       const socket = { ...sock, groupMetadata: async chat => ({
         participants: chat === americanas || chat === nacionales
           ? [
@@ -546,6 +547,27 @@ const textoDe = e => e.contenido.text;
     await mandar(americanas, 'cerrar');
     check(T.estadosPorChat.get(americanas)?.abierta === false &&
       T.estadosPorChat.get(nacionales)?.abierta === true, 'tras reiniciar, cerrar Americanas mantiene abierta Nacionales');
+    const cierreRecuperado = mensaje('ADMIN', 'cerrado');
+    cierreRecuperado.key.remoteJid = nacionales;
+    const segundo = Math.floor(Date.now() / 1000) - 600;
+    cierreRecuperado.messageTimestamp = segundo;
+    const recuperar = () => glue.intentar({
+      grupoId: G, sock, msg: cierreRecuperado, remoteJid: nacionales, texto: 'cerrado',
+      ayudas: whatsappBot.crearAyudasJugadasChat(sock, cierreRecuperado), recuperado: true
+    });
+    const pendiente = {
+      id: 'pendiente-recuperada', grupo_id: G, fecha: T.estadosPorChat.get(nacionales).fecha,
+      hipodromo_nombre: 'La Rinconada', carrera_numero: 2, resuelta: false,
+      jugador_nombre: 'CACHACO', banquero_nombre: 'MARVEL', monto: 20, apuesta: null
+    };
+    T.chat.push(pendiente);
+    await recuperar();
+    check(T.estadosPorChat.get(nacionales)?.abierta === false &&
+      T.estadosPorChat.get(nacionales)?.ultimoComando?.ts === segundo * 1000 && Number(pendiente.cerrada_en) === segundo * 1000, 'el cierre recuperado conserva la hora original del chat');
+    glue._sesiones.clear();
+    const antesDuplicado = enviados.length;
+    await recuperar();
+    check(enviados.length === antesDuplicado, 'el cierre recuperado no vuelve a anunciarse tras reiniciar');
     GRUPO.whatsapp_propio_chats = [americanas];
     const antes = enviados.length;
     await mandar(nacionales, 'La Rinconada 3era carrera');

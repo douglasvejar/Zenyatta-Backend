@@ -275,7 +275,8 @@ async function cargarEstadoCarrera(grupoId, chatJid) {
       const r = await db.query('SELECT estado FROM hipismo_chat_estado_por_chat WHERE grupo_id = $1 AND chat_jid = $2', [grupoId, chatJid]);
       return r.rows[0]?.estado || null;
     }
-    const r = await db.query(`SELECT hipodromo, carrera, abierta, to_char(fecha, 'YYYY-MM-DD') AS fecha FROM hipismo_chat_estado WHERE grupo_id = $1`, [grupoId]);
+    const r = await db.query(`SELECT hipodromo, carrera, abierta, to_char(fecha, 'YYYY-MM-DD') AS fecha, ultimo_comando AS "ultimoComando",
+      floor(extract(epoch from actualizado_en)) * 1000 AS "actualizadoTs" FROM hipismo_chat_estado WHERE grupo_id = $1`, [grupoId]);
     return r.rows[0] || null;
   } catch (e) {
     if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudo leer el estado de la carrera:', e.message);
@@ -288,13 +289,13 @@ async function guardarEstadoCarrera(grupoId, e, chatJid) {
       await db.query(
         `INSERT INTO hipismo_chat_estado_por_chat (grupo_id, chat_jid, estado) VALUES ($1, $2, $3)
          ON CONFLICT (grupo_id, chat_jid) DO UPDATE SET estado = EXCLUDED.estado`,
-        [grupoId, chatJid, JSON.stringify({ hipodromo: e.hipodromo, carrera: e.carrera, abierta: !!e.abierta, fecha: e.fecha })]
+        [grupoId, chatJid, JSON.stringify({ hipodromo: e.hipodromo, carrera: e.carrera, abierta: !!e.abierta, fecha: e.fecha, ultimoComando: e.ultimoComando, actualizadoTs: Date.now() })]
       );
     } else {
       await db.query(
-        `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en) VALUES ($1,$2,$3,$4,$5,now())
-         ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now()`,
-        [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha]
+        `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en, ultimo_comando) VALUES ($1,$2,$3,$4,$5,now(),$6)
+         ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now(), ultimo_comando = EXCLUDED.ultimo_comando`,
+        [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha, e.ultimoComando || null]
       );
     }
   } catch (err) {
@@ -303,10 +304,13 @@ async function guardarEstadoCarrera(grupoId, e, chatJid) {
   // Al cerrar la carrera sus jugadas en espera empiezan a contar los minutos para soltar el saldo; si se reabre, vuelven a contar como abiertas.
   try {
     if (e.hipodromo && e.carrera && e.fecha) {
+      const parametros = [grupoId, e.fecha, e.hipodromo, e.carrera];
+      const cierre = e.abierta ? 'NULL' : e.cerradoTs ? '$5::timestamptz' : 'now()';
+      if (!e.abierta && e.cerradoTs) parametros.push(new Date(e.cerradoTs));
       await db.query(
-        `UPDATE hipismo_chat_jugadas SET cerrada_en = ${e.abierta ? 'NULL' : 'now()'}
+        `UPDATE hipismo_chat_jugadas SET cerrada_en = ${cierre}
           WHERE grupo_id = $1 AND fecha = $2 AND hipodromo_nombre = $3 AND carrera_numero = $4 AND resuelta = false AND adelantada_jugada_id IS NULL${e.abierta ? '' : ' AND cerrada_en IS NULL'}`,
-        [grupoId, e.fecha, e.hipodromo, e.carrera]
+        parametros
       );
     }
   } catch (err) {
@@ -421,7 +425,7 @@ function programarAvisoPizarra(s, grupoId, e) {
       if (!pend.length) return;
       await enviar(s, '⚠️ El plano de *' + e.hipodromo + ', ' + e.carrera + 'ª carrera* lleva más de ' + MINUTOS_ESPERA_PIZARRA + ' minutos esperando la pizarra. Sus jugadas ya no descuentan el saldo de los clientes. Un administrador debe cargarla (por ejemplo: *pizarra 3 1 2 4*).', {});
     } catch (err) { console.error('[hipismoChat] No se pudo revisar el plano en espera:', err.message); }
-  }, (MINUTOS_ESPERA_PIZARRA * 60 + 5) * 1000);
+  }, Math.max(0, (MINUTOS_ESPERA_PIZARRA * 60 + 5) * 1000 - (e.cerradoTs ? Date.now() - e.cerradoTs : 0)));
   if (s.avisoPizarra.unref) s.avisoPizarra.unref();
 }
 
@@ -591,7 +595,7 @@ async function intentar(entrada) {
   return enCola(colasPorChat, JSON.stringify([grupoId || null, remoteJid]), () => procesarEntrada(entrada));
 }
 
-async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
+async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar, recuperado }) {
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
   const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
@@ -630,7 +634,7 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
     else if (citadoPart && esDelBot(sock, citadoPart)) citadoPart = null; // citó un mensaje del propio bot que no es un aviso conocido
 
     const mensaje = {
-      texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
+      texto, id: idMsg, ts: tiempoDeMensaje(msg), recuperado, citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
       esAdminCarrera: async () => {
         try {
           return await conLimiteWhatsApp(ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false, 'verificar al administrador');

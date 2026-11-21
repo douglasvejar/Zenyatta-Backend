@@ -2400,6 +2400,8 @@ create table if not exists hipismo_chat_estado (
   actualizado_en timestamptz not null default now()
 );
 
+alter table hipismo_chat_estado add column if not exists ultimo_comando jsonb;
+
 -- 17-11-2026: números (o códigos ocultos @lid de WhatsApp) que un administrador asoció a mano con un cliente del bot de jugadas
 -- ("registrar NOMBRE" citando el mensaje de esa persona). Sirve cuando WhatsApp no deja ver el teléfono real.
 create table if not exists hipismo_chat_numeros (

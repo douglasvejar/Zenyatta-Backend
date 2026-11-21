@@ -158,7 +158,7 @@ function extraerTexto(msg) {
 }
 
 // Un mensaje de WhatsApp que llegó por la conexión propia de este grupo.
-async function manejarMensaje(grupoId, sock, msg) {
+async function manejarMensaje(grupoId, sock, msg, tipo) {
   const remoteJid = msg && msg.key && msg.key.remoteJid;
   const s = sesiones.get(String(grupoId));
   const anotar = (motivo) => { if (s) s.ultimo = { en: new Date().toISOString(), chat: remoteJid, motivo }; };
@@ -171,18 +171,20 @@ async function manejarMensaje(grupoId, sock, msg) {
     return;
   }
   if (!texto) { anotar('Ignorado: el mensaje no tiene texto (foto, sticker...)'); return; }
-  // Mensajes viejos (19-11-2026): al reconectar, WhatsApp entrega de golpe lo que se escribió mientras estuvo caído (tipo "append": ej. 72 de
-  // una vez). Ejecutar comandos o jugadas de hace rato (abrir/cerrar carreras, registrar jugadas dos veces) sería peligroso: solo se
-  // atienden los de los últimos MAX_EDAD_MENSAJE_MS (cubre un deploy normal); los más viejos se ignoran y se anota en el panel.
-  const t = msg && msg.messageTimestamp;
+  const t = msg.messageTimestamp;
   const seg = t && typeof t === 'object' && typeof t.toNumber === 'function' ? t.toNumber() : Number(t);
-  if (seg > 0 && deps.ahora() - seg * 1000 > MAX_EDAD_MENSAJE_MS) {
-    anotar('Ignorado: mensaje viejo (de hace ' + Math.round((deps.ahora() - seg * 1000) / 60000) + ' min, llegó retrasado al reconectar)');
+  const ahora = deps.ahora();
+  const atrasado = seg > 0 && ahora - seg * 1000 > MAX_EDAD_MENSAJE_MS;
+  const loteDeRecuperacion = tipo === 'append' && seg > 0;
+  const recuperado = (atrasado || loteDeRecuperacion) && require('./hipismoJugadasChat').esComandoAperturaOCierre(texto);
+  const fechaLocal = ms => new Date(ms - 4 * 3600000).toISOString().slice(0, 10);
+  if ((atrasado && !recuperado) || (recuperado && fechaLocal(seg * 1000) !== fechaLocal(ahora))) {
+    anotar('Ignorado: mensaje viejo (de hace ' + Math.round((ahora - seg * 1000) / 60000) + ' min, llegó retrasado al reconectar)');
     return;
   }
   try {
     const ayudas = deps.ayudasBot()(sock, msg);
-    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar });
+    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar, recuperado });
   } catch (e) {
     console.error('[whatsappSesionesGrupo] Error al procesar un mensaje del grupo ' + grupoId + ':', e);
   }
@@ -420,7 +422,7 @@ async function iniciarSesionInterna(grupoId) {
     // Encola todo el lote antes de esperar; otro evento puede llegar enseguida.
     await Promise.all(require('./hipismoJugadasChatBot').mensajesEnOrden(evento.messages).map(async msg => {
       const t0 = deps.ahora();
-      await manejarMensaje(id, sock, msg);
+      await manejarMensaje(id, sock, msg, evento.type);
       const dur = deps.ahora() - t0;
       if (dur > 3000) console.error('[whatsappSesionesGrupo] Grupo ' + id + ': un mensaje tardó ' + Math.round(dur / 1000) + ' s en procesarse.');
     }));

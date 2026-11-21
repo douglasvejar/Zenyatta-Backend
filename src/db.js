@@ -87,6 +87,7 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado 
     hipodromo text, carrera integer, abierta boolean not null default false, fecha date,
     actualizado_en timestamptz not null default now()
   )`))
+  .then(() => pool.query('ALTER TABLE hipismo_chat_estado ADD COLUMN IF NOT EXISTS ultimo_comando jsonb'))
   .then(() => pool.query(`create table if not exists hipismo_chat_jugadas (
     id uuid primary key default gen_random_uuid(),
     grupo_id uuid not null references grupos(id) on delete cascade,

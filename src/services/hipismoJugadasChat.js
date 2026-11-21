@@ -287,6 +287,9 @@ function interpretarAbrirCarrera(texto) {
   return { hipodromo, carrera };
 }
 const ES_CIERRE_RE = /^(?:cierra|cierre|cerrar|cerrada|cerrado|cierra la carrera|cerrar carrera)$/i;
+function esComandoAperturaOCierre(texto) {
+  return ES_CIERRE_RE.test(limpiar(texto)) || !!interpretarAbrirCarrera(texto);
+}
 const ES_PLANO_RE = /^(?:plano|planos)$/i;
 // "ERROR" (19-11-2026): un cliente dice que su última jugada tiene un error. El bot le pregunta al otro si se la quita (ver marcarError).
 const ES_ERROR_RE = /^(?:(?:hay|un|puse|puso|marca|marco|coloco|coloque|tengo)\s+)*(?:erro(?:r|res)?|errro|errror|eror|erorr)(?:\s+(?:en|de|mi|la|su|esa|esta|jugada|parada|monto|plano))*$/i;
@@ -403,6 +406,7 @@ function crearMotor(deps) {
   const ctx = { hipodromo: null, carrera: null, abierta: false, fecha: null, ret: '' };
   const ofertas = new Map();
   const pendientesTardias = new Map();
+  let ultimoComando = null;
   let jugadas = [];
   let sinPlano = 0;
   const avisados = new Map(); // clave -> ms del último aviso (evita repetir el mismo reclamo)
@@ -591,7 +595,7 @@ function crearMotor(deps) {
     await deps.publicar(armarPlanoChat({ nombreGrupo: deps.nombreGrupo, fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera, jugadas }));
   }
 
-  async function abrirCarrera(m, datos) {
+  async function abrirCarrera(m, datos, comando) {
     const hip = await deps.resolverHipodromo(datos.hipodromo);
     if (!hip) {
       await deps.responder('⚠️ No encontré el hipódromo "' + datos.hipodromo + '" en la lista de este grupo. Revisa el nombre (ej.: Mountaineer 1ra carrera).', { citarId: m.id });
@@ -600,14 +604,14 @@ function crearMotor(deps) {
     ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy(); ctx.ret = '';
     ofertas.clear(); pendientesTardias.clear(); sinPlano = 0; cancelarCasosError(); registros = [];
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
-    await guardarEstado();
+    await guardarEstado(comando);
     await deps.responder('*✅ Carrera abierta: ' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
   }
 
-  async function cerrarCarrera(m) {
-    if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
+  async function cerrarCarrera(m, comando) {
+    if (!ctx.hipodromo || !ctx.abierta) { if (!m.recuperado) await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear(); pendientesTardias.clear();
-    await guardarEstado();
+    await guardarEstado(comando, m.recuperado ? comando?.ts : null);
     // Todo en MAYÚSCULA, negrita y cursiva (*_LÍNEA_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
     const bc = t => '*_' + t.toUpperCase() + '_*';
     await deps.responder([
@@ -873,14 +877,18 @@ function crearMotor(deps) {
     try {
       const e = await deps.cargarEstado();
       if (e && e.hipodromo && e.carrera && e.fecha === deps.hoy()) {
+        ultimoComando = e.ultimoComando || (e.actualizadoTs ? { ts: Number(e.actualizadoTs), ids: [], migrado: true } : null);
         ctx.hipodromo = e.hipodromo; ctx.carrera = e.carrera; ctx.abierta = !!e.abierta; ctx.fecha = e.fecha;
         jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera });
       }
     } catch (err) { console.error('[hipismoChat] No se pudo retomar la carrera abierta:', err.message); }
   }
-  async function guardarEstado() {
+  async function guardarEstado(comando, cerradoTs) {
     if (!deps.guardarEstado) return;
-    try { await deps.guardarEstado({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, abierta: ctx.abierta, fecha: ctx.fecha }); }
+    try {
+      await deps.guardarEstado({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, abierta: ctx.abierta, fecha: ctx.fecha, ultimoComando: comando || ultimoComando, cerradoTs });
+      if (comando) ultimoComando = comando;
+    }
     catch (err) { console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message); }
   }
 
@@ -899,8 +907,19 @@ function crearMotor(deps) {
         const accion = carrera ? 'abrir carreras' : cierre ? 'cerrar carreras' : pizarra ? 'cargar la pizarra' : 'pedir el plano';
         return avisarNoAdmin(m, accion, !!m.esAdminCarrera);
       }
-      if (carrera) return abrirCarrera(m, carrera);
-      if (cierre) return cerrarCarrera(m);
+      if (carrera || cierre) {
+        const ts = Number(m.ts);
+        let comando;
+        if (ts > 0 && m.id) {
+          const anterior = ultimoComando;
+          // WhatsApp solo da precisión de segundos; conserva todos los IDs de ese segundo.
+          if (anterior && (!anterior.migrado || m.recuperado) &&
+            (ts < anterior.ts || (ts === anterior.ts && anterior.ids.includes(m.id)))) return;
+          comando = { ts, ids: [...(anterior?.ts === ts ? anterior.ids : []), m.id] };
+        }
+        if (carrera) return abrirCarrera(m, carrera, comando);
+        return cerrarCarrera(m, comando);
+      }
       if (pizarra) return cargarPizarra(m, pizarra);
       if (!ctx.hipodromo) return deps.responder('⚠️ Este chat todavía no tiene una carrera seleccionada.', { citarId: m.id });
       return publicarPlano();
@@ -935,6 +954,6 @@ function crearMotor(deps) {
 }
 
 module.exports = {
-  TEXTO_PLANO_BOT: 'Jugadas del chat de WhatsApp (bot)', crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, conflictoDeRol, pareceParadaMalEscrita, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
+  esComandoAperturaOCierre, TEXTO_PLANO_BOT: 'Jugadas del chat de WhatsApp (bot)', crearMotor, interpretarPizarra, carreraDePlanoCitado, interpretarRetirados, interpretarOferta, interpretarRespuesta, conflictoDeRol, pareceParadaMalEscrita, interpretarAbrirCarrera, riesgoPorUnidad, apuestaDesdeElJugador,
   armarPlanoChat, fechaLarga, parseMontoChat, apuestaVisible, apuestaSegura, montoParaLinea, apuestaDesdeElJugador, riesgoPorUnidad, round2, CADA_N_JUGADAS_PLANO, VIGENCIA_PARADA_MS
 };
