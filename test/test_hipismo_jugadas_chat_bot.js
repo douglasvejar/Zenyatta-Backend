@@ -497,6 +497,25 @@ const textoDe = e => e.contenido.text;
   }
 
   {
+    let vencio = false;
+    try {
+      await glue.conLimiteWhatsApp(new Promise(() => {}), 'probar el tiempo de espera', 5);
+    } catch (e) {
+      vencio = /WhatsApp no respondió/.test(e.message);
+    }
+    check(vencio, 'una operación de WhatsApp que nunca responde tiene un límite');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 8va carrera', null, base + 2000));
+    const oferta = mT('CACHACO', 'Juego 1p del 4 120', null, base + 2001);
+    await whatsappBot.manejarMensajeEntrante(sock, oferta);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('CACHACO', 'Se fue', null, base + 2120));
+    const antes = T.chat.length;
+    const respuesta = mT('DESCONOCIDO', 'J', oferta.key.id, base + 2121);
+    await whatsappBot.manejarMensajeEntrante(sock, respuesta);
+    check(T.chat.length === antes && /Aquí nada, puso se fue/.test(textoDe(ultimo())) &&
+      ultimo().opciones?.quoted === respuesta, 'contesta al J de una parada retirada incluso sin reconocer a quien respondió');
+  }
+
+  {
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];

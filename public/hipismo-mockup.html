@@ -4123,6 +4123,7 @@
         <p class="desc">Los administradores del chat pueden abrir la carrera con frases como «2da Valencia abierta» o «abierta Valencia segunda».</p>
         <p class="desc">Al recibir «cerrado», el bot termina de evaluar las respuestas anteriores al comando antes de enviar el plano de cierre.</p>
         <p id="botIAConexion" role="status">Consultando conexión…</p>
+        <p id="botIADiagnostico" class="desc"></p>
         <div id="botIAQr" hidden>
           <p>En el teléfono abre WhatsApp → Dispositivos vinculados → Vincular un dispositivo y escanea el código.</p>
           <img id="botIAQrImagen" width="280" height="280" alt="Código QR para vincular el Bot IA" style="max-width:100%; height:auto;">
@@ -8152,6 +8153,13 @@ async function cargarConexionBotIA() {
   botIAConsultando = true;
   try {
     const data = await apiHipismo('/api/hipismo/bot/conexion');
+    const ultimo = data.ultimo;
+    const evento = data.ultimoEvento;
+    const hora = fecha => new Date(fecha).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas' });
+    document.getElementById('botIADiagnostico').textContent = [
+      evento?.en && 'Último mensaje recibido: ' + hora(evento.en),
+      ultimo?.en && 'Última actividad: ' + hora(ultimo.en) + ' · ' + ultimo.motivo
+    ].filter(Boolean).join(' · ');
     caja.hidden = !data.qr;
     if (data.qr) { if (imagen.getAttribute('src') !== data.qr) imagen.src = data.qr; }
     else imagen.removeAttribute('src');

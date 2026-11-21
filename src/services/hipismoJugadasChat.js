@@ -688,7 +688,13 @@ function crearMotor(deps) {
 
   async function procesarRespuesta(m, resp) {
     const oferta = ofertas.get(m.citadoId);
-    if (!ctx.abierta) { nota('Respuesta recibida pero no hay carrera abierta'); return; }
+    if (!ctx.abierta) {
+      nota('Respuesta recibida pero no hay carrera abierta');
+      if (oferta || (m.citadoTexto && interpretarOferta(m.citadoTexto)?.ok)) {
+        await deps.responder('❌ Aquí nada, no hay una carrera abierta para esa parada.', { citarId: m.id });
+      }
+      return;
+    }
     if (!oferta) {
       // La parada que citó no la conoce el bot (se publicó antes de abrir la carrera, antes de un reinicio del servidor, o no era una jugada).
       const citada = m.citadoTexto ? interpretarOferta(m.citadoTexto) : null;
@@ -715,6 +721,7 @@ function crearMotor(deps) {
     if (oferta.autorJid === m.remitente.jid) { nota('Respuesta a su propia parada: no hace nada'); return; } // responderse a uno mismo no hace nada
     const conflicto = conflictoDeRol(oferta.lado, resp);
     if (conflicto) { nota('Mal término: ' + conflicto.replace('❌ Aquí nada, ', '')); await deps.responder(conflicto, { citarId: m.id }); return; }
+    if (oferta.seFue) { nota('Alguien respondió pero quien publicó puso "se fue"'); await deps.responder('*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', { citarId: m.id }); return; }
     const nombre = await deps.identificar(m.remitente);
     if (!nombre) {
       nota('Respuesta a una parada, pero quien responde no es un cliente registrado: no se jugó');
@@ -723,7 +730,6 @@ function crearMotor(deps) {
     }
     if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }
     if (oferta.restante <= 0.005) { nota(nombre + ' respondió pero la parada ya estaba topada'); await deps.responder('❌ Aquí nada, ya está topada', { citarId: m.id }); return; }
-    if (oferta.seFue) { nota(nombre + ' respondió pero quien publicó puso "se fue"'); await deps.responder('*❌ Aquí nada, puso se fue*\n*🚨🚨🚨🚨🚨*', { citarId: m.id }); return; }
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
     if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) {
       if (pendientesTardias.has(m.id)) return;

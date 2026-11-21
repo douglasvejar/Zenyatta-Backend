@@ -161,7 +161,7 @@ async function clientePorLibreta(grupoId, sock, jids) {
       return nombre;
     }
     if (libreta.conviene(grupoId, true)) {
-      await libreta.sincronizar(grupoId, sock, c.fichas);
+      await conLimiteWhatsApp(libreta.sincronizar(grupoId, sock, c.fichas), 'consultar la libreta');
       nombre = existe(libreta.nombreDe(grupoId, jids));
     }
     return nombre;
@@ -473,6 +473,21 @@ function sesionDe(grupo, sock, remoteJid, propia) {
   return s;
 }
 
+// Limita las esperas de red sin adelantar el cierre sobre una escritura de jugada.
+async function conLimiteWhatsApp(operacion, descripcion, limiteMs = 8000) {
+  let temporizador;
+  try {
+    return await Promise.race([
+      operacion,
+      new Promise((_, rechazar) => {
+        temporizador = setTimeout(() => rechazar(new Error('WhatsApp no respondió al ' + descripcion)), limiteMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 async function enviar(s, texto, op) {
   const contenido = { text: texto };
   // '@@' = a quien se menciona (op.mencionar); '@@2' y '@@3' = otras personas (op.mencionar2/3). Sin persona, la marca se quita.
@@ -496,12 +511,13 @@ async function enviar(s, texto, op) {
   if (menciones.length) contenido.mentions = menciones.filter((j, i, a) => a.indexOf(j) === i);
   const citado = op.citarId ? s.mensajes.get(op.citarId) : null;
   try {
-    const enviado = await s.sock.sendMessage(s.jid, contenido, citado ? { quoted: citado } : undefined);
+    const enviado = await conLimiteWhatsApp(s.sock.sendMessage(s.jid, contenido, citado ? { quoted: citado } : undefined), 'enviar el mensaje');
     const id = enviado && enviado.key && enviado.key.id;
     if (id && op.registroDe) { s.avisos.set(id, op.registroDe); if (s.avisos.size > 200) s.avisos.delete(s.avisos.keys().next().value); } // aviso "no registrado": el admin puede responderle a ÉL con "registrar NOMBRE"
     if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
     return id;
   } catch (e) {
+    if (s.anotarActual) s.anotarActual('No se pudo confirmar el envío del mensaje: ' + e.message);
     console.error('[hipismoChat] No se pudo responder en el grupo ' + s.jid + ':', e.message);
   }
 }
@@ -509,7 +525,7 @@ async function enviar(s, texto, op) {
 // Manda una imagen (PNG) al grupo con su pie de foto. Devuelve true si salió.
 async function enviarImagen(s, png, pie) {
   try {
-    const enviado = await s.sock.sendMessage(s.jid, { image: png, caption: pie || '' });
+    const enviado = await conLimiteWhatsApp(s.sock.sendMessage(s.jid, { image: png, caption: pie || '' }), 'enviar la imagen');
     const id = enviado && enviado.key && enviado.key.id;
     if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
     return true;
@@ -595,7 +611,12 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
   // posterior puede adelantar la escritura de una jugada ya en curso.
   await enCola(colasPorGrupo, grupo.id, async () => {
     const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
-    const jidReal = await ayudas.resolverRemitente(jidCrudo);
+    let jidReal = jidCrudo;
+    try {
+      jidReal = await conLimiteWhatsApp(ayudas.resolverRemitente(jidCrudo), 'identificar al remitente');
+    } catch (e) {
+      if (anotar) anotar(e.message);
+    }
     if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
     const fromMe = !!(msg.key && msg.key.fromMe);
     const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
@@ -610,7 +631,14 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
 
     const mensaje = {
       texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
-      esAdminCarrera: () => ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false,
+      esAdminCarrera: async () => {
+        try {
+          return await conLimiteWhatsApp(ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false, 'verificar al administrador');
+        } catch (e) {
+          if (anotar) anotar(e.message);
+          return false;
+        }
+      },
       remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
     };
     try {
@@ -631,4 +659,4 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
 // 19-11-2026: al renombrar/editar un cliente el bot olvida su lista de clientes en memoria (se vuelve a leer en la próxima jugada).
 function olvidarClientes(grupoId) { cacheClientes.delete(grupoId); libreta.invalidar(grupoId); }
 
-module.exports = { mensajesEnOrden, clientePorLibreta, olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { conLimiteWhatsApp, mensajesEnOrden, clientePorLibreta, olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
