@@ -118,6 +118,8 @@ function interpretarOfertaBase(texto) {
   t = t.replace(/^(\s*\S+)\s+el\s+(?=\d)/i, (frase, modalidad) =>
     decimosN(modalidad.trim().replace(/@/g, 'a')) === null ? frase : modalidad + ' del ');
   t = t.replace(/(\d)\s*x\s*(\d)/gi, '$1x$2').trim();
+  // Con la «y» separada, «2 y 3n del 6» abrevia «2p y 3n del 6».
+  t = t.replace(/^(\d{1,2})\s+y\s+(\d{1,2}n)(?=\s+(?:del|de|el)\s+\d)/i, '$1p y $2');
   let tokens = t.split(/\s+/).filter(Boolean);
   // "2y2 y 2p": la "y" suelta entre dos modalidades solo une el combo.
   tokens = tokens.filter((tok, i) => !(/^(?:y|\+|&)$/i.test(tok) && i > 0 && i < tokens.length - 1 && calc.tokenEsModalidadValida(tokens[i - 1]) && calc.tokenEsModalidadValida(tokens[i + 1])));
