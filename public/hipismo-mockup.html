@@ -2367,7 +2367,7 @@
   @media (max-width: 380px) {
     #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
   }
-  #navBotIA[hidden] { display: none; }
+  #navBotIA[hidden], #vista-botIA button[hidden] { display: none; }
 </style>
 <script src="navidad.js"></script>
 <script src="banderas.js"></script>
@@ -4130,6 +4130,7 @@
         </div>
         <div class="btn-fila">
           <button type="button" class="btn btn-primario" id="botIAIniciar" hidden onclick="iniciarConexionBotIA()">Vincular WhatsApp</button>
+          <button type="button" class="btn btn-secundario" id="botIAReconectar" hidden onclick="iniciarConexionBotIA(true)">Reconectar WhatsApp</button>
         </div>
       </div>
     </section>
@@ -8150,6 +8151,7 @@ async function cargarConexionBotIA() {
   const caja = document.getElementById('botIAQr');
   const imagen = document.getElementById('botIAQrImagen');
   const boton = document.getElementById('botIAIniciar');
+  const reconectar = document.getElementById('botIAReconectar');
   botIAConsultando = true;
   try {
     const data = await apiHipismo('/api/hipismo/bot/conexion');
@@ -8163,6 +8165,7 @@ async function cargarConexionBotIA() {
     caja.hidden = !data.qr;
     if (data.qr) { if (imagen.getAttribute('src') !== data.qr) imagen.src = data.qr; }
     else imagen.removeAttribute('src');
+    reconectar.hidden = !data.conectado;
     boton.hidden = data.conectado || !!data.qr || (data.vinculando && !data.ultimoError);
     boton.textContent = data.vinculando ? 'Volver a intentar' : 'Vincular WhatsApp';
     if (data.conectado) {
@@ -8173,7 +8176,7 @@ async function cargarConexionBotIA() {
       estado.textContent = data.ultimoError || (data.vinculando ? 'Preparando el código QR…' : 'WhatsApp pendiente de vincular.');
     }
   } catch (e) {
-    caja.hidden = boton.hidden = true;
+    caja.hidden = boton.hidden = reconectar.hidden = true;
     imagen.removeAttribute('src');
     estado.textContent = e.message;
   } finally {
@@ -8182,12 +8185,12 @@ async function cargarConexionBotIA() {
   }
 }
 
-async function iniciarConexionBotIA() {
-  const boton = document.getElementById('botIAIniciar');
+async function iniciarConexionBotIA(reconectar = false) {
+  const boton = document.getElementById(reconectar ? 'botIAReconectar' : 'botIAIniciar');
   clearTimeout(botIATimer);
   boton.disabled = true;
   try {
-    await apiHipismo('/api/hipismo/bot/conexion/iniciar', { method: 'POST' });
+    await apiHipismo('/api/hipismo/bot/conexion/' + (reconectar ? 'reconectar' : 'iniciar'), { method: 'POST' });
     await cargarConexionBotIA();
   } catch (e) {
     document.getElementById('botIAConexion').textContent = e.message;

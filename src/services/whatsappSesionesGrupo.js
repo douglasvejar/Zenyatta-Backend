@@ -302,15 +302,20 @@ async function iniciarSesion(grupoId) {
   try { return await iniciarSesionInterna(id); } finally { s0.iniciando--; }
 }
 
+async function reconectarSesion(grupoId) {
+  const s = sesiones.get(String(grupoId));
+  if (s?.iniciando || s?.cerrando) return;
+  if (s) s.ultimoError = 'Reconectando WhatsApp con la sesión guardada…';
+  await iniciarSesion(grupoId);
+}
+
 async function iniciarSesionInterna(grupoId) {
   const id = String(grupoId);
   let s = sesiones.get(id);
   if (!s) { s = estadoVacio(); sesiones.set(id, s); }
   s.cerrando = false;
-  if (s.reintento) { clearTimeout(s.reintento); s.reintento = null; }
-  if (s.flusher) { try { clearInterval(s.flusher); } catch (e) { /* nada */ } s.flusher = null; }
-  if (s.sock) { try { s.sock.end(undefined); } catch (e) { /* ya estaba cerrado */ } s.sock = null; }
-  const gen = ++s.gen;
+  cerrarSocket(s);
+  const gen = s.gen;
   asegurarLatido();
 
   // Turno: solo un servidor a la vez conecta esta sesión (el nuevo espera a que el viejo la suelte).
@@ -460,7 +465,7 @@ async function arrancarSesionesGuardadas() {
 }
 
 module.exports = {
-  iniciarSesion, desvincular, arrancarSesionesGuardadas, refrescarGrupos, apagar,
+  iniciarSesion, reconectarSesion, desvincular, arrancarSesionesGuardadas, refrescarGrupos, apagar,
   estadoPublico, estaConectada, obtenerQr, carpetaDeSesion, enmascararNumero,
   _deps: deps, _sesiones: sesiones, _latido: latido, _reconciliar: reconciliar, _constantes: { SIN_MENSAJES_MS, REFRESCO_BASE_MS, REFRESCO_MAX_MS, TURNO_TTL_S }
 };

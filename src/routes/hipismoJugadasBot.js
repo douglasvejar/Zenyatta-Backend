@@ -88,6 +88,16 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
     res.json({ ok: true });
   }));
 
+  router.post('/conexion/reconectar', asyncHandler(async (req, res) => {
+    const r = await db.query(
+      'SELECT id FROM grupos WHERE id = $1 AND activo = true AND hipismo_chat_habilitado = true AND whatsapp_propio_activo = true',
+      [req.grupoId]
+    );
+    if (!r.rows.length) return res.status(409).json({ error: 'Primero debes vincular WhatsApp desde el portal.' });
+    await require('../services/whatsappSesionesGrupo').reconectarSesion(req.grupoId);
+    res.json({ ok: true });
+  }));
+
   async function nombreCliente(grupoId, texto) {
     const r = await db.query('SELECT nombre FROM jugadores WHERE grupo_id = $1 AND COALESCE(es_cuenta_comision, false) = false', [grupoId]);
     const buscado = norm(texto);

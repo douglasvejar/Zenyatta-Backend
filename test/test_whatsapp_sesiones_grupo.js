@@ -337,6 +337,13 @@ global.clearTimeout = (t) => { if (t && typeof t === 'object' && 'fn' in t) { t.
   await sockNuevo.handlers['messages.upsert']({ messages: [{ key: { remoteJid: '555@g.us', id: 'Z2' }, message: { conversation: 'hola' } }] });
   check(/INACTIVO/.test((gestor.estadoPublico(G).ultimo || {}).motivo || ''), 'y avisa si el grupo está inactivo');
   BD.grupo.activo = true; BD.grupo.whatsapp_propio_jid = JID;
+  const actualizacionesAntes = BD.updates.length;
+  await gestor.reconectarSesion(G);
+  const trasReconectar = socks.at(-1);
+  check(sockNuevo.terminado && trasReconectar !== sockNuevo && !sockNuevo.cerroSesion &&
+    BD.updates.length === actualizacionesAntes, 'reconexión manual cambia el socket sin cerrar la sesión ni borrar el vínculo');
+  trasReconectar.handlers['connection.update']({ connection: 'open' });
+  check(gestor.estadoPublico(G).conectado, 'la conexión manual vuelve a quedar disponible');
   // por la conexión general: se hace a un lado si el grupo tiene su número propio conectado
   const sockGeneral = { enviados: [], sendMessage: async (j, c) => { sockGeneral.enviados.push(c); return { key: { id: 'G' + sockGeneral.enviados.length } }; } };
   const sPropia = gestor._sesiones;
