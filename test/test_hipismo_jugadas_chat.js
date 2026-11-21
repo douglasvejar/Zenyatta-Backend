@@ -56,6 +56,11 @@ for (const [parada, cuota, monto] of [
   check(oferta.ok && oferta.lado === 'doy' && oferta.monto === monto &&
     oferta.apuesta.modalidad === cuota && oferta.apuesta.grupo[0] === 4, parada + ' conserva la cuota, el caballo y el monto');
 }
+for (const parada of ['juego 200 a5 el 4&#x20;', 'juego a 5 el 4 200', 'juego 200 a 5 el 4 ']) {
+  const oferta = m.interpretarOferta(parada);
+  check(oferta.ok && oferta.lado === 'doy' && oferta.monto === 200 &&
+    /^(?:10)?a5$/.test(oferta.apuesta.modalidad) && oferta.apuesta.grupo[0] === 4, parada + ' se lee como jugar el 4 a 10a5 por 200');
+}
 check(!m.interpretarOferta('Juego a 5 el 4').ok, 'el caballo no reemplaza un monto ausente');
 o = m.interpretarOferta('Juego 4x1 75');
 check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
