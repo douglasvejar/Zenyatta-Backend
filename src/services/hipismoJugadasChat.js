@@ -30,7 +30,10 @@ const { RANK_NO_COLOCO, decimosN, ordinalCarrera, formatNombre } = require('./hi
 const quitarTildes = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const fmt = n => Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const limpiar = t => quitarTildes(String(t || '').replace(/[*_~]/g, '')).replace(/\s+/g, ' ').trim();
+const limpiar = t => quitarTildes(String(t || '').replace(/[*_~]/g, ''))
+  // Ignora marcas invisibles junto a espacios o extremos, sin unir dígitos del monto.
+  .replace(/(^|\s)[\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]+|[\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]+(?=\s|$)/g, '$1')
+  .replace(/\s+/g, ' ').trim();
 
 // "9.50" -> 9,5 (punto + 1 o 2 decimales); "1.000" -> 1000 (miles); "13,00" -> 13.
 function parseMontoChat(txt) {

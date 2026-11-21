@@ -41,6 +41,11 @@ o = m.interpretarOferta('juego 3p del.7 1.20');
 check(o.ok && o.monto === 1.2 && o.apuesta.grupo[0] === 7, 'el punto del monto 1.20 conserva los decimales');
 o = m.interpretarOferta('CONSIGO A9 el 1  200');
 check(o.ok && o.lado === 'recibo' && o.monto === 200 && o.apuesta.modalidad === 'a9' && o.apuesta.grupo[0] === 1, 'Consigo A9 el 1 con doble espacio acepta 200 para banquear');
+for (const parada of ['CONSIGO A9 el 1 \u200B200', 'CONSIGO A9 el 1  200\u200E', 'CONSIGO A9 el 1  1.20\u200E']) {
+  const limpia = parada.replace(/[\u200B\u200E]/g, '');
+  eq(m.interpretarOferta(parada), m.interpretarOferta(limpia), 'una marca invisible junto al monto no altera la parada');
+}
+check(!m.interpretarOferta('CONSIGO A9 el 1  2\u200B00').ok, 'una marca dentro del monto no une los dígitos');
 o = m.interpretarOferta('Juego 4x1 75');
 check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
 o = m.interpretarOferta('Juego 4 x 1 doy a8');
