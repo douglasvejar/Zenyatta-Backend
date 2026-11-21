@@ -516,6 +516,20 @@ const textoDe = e => e.contenido.text;
   }
 
   {
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 9na carrera', null, base + 2200));
+    const oferta = mT('CACHACO', 'Consigo 10a8 el 1 con 40', null, base + 2201);
+    const antes = T.chat.length;
+    await whatsappBot.manejarMensajeEntrante(sock, oferta);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '15', oferta.key.id, base + 2202));
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', 'J', oferta.key.id, base + 2203));
+    const jugadas = T.chat.slice(antes);
+    check(jugadas.length === 2 && jugadas[0].monto === 15 && jugadas[1].monto === 25 &&
+      jugadas.every(j => j.jugador_nombre === 'MARVEL' && j.banquero_nombre === 'CACHACO' &&
+        JSON.parse(j.apuesta).modalidad === '10a8' && JSON.parse(j.apuesta).grupo[0] === 1),
+    'Consigo 10a8 el 1 con 40: quien responde juega el 1; el autor banquea 15 y luego los 25 restantes');
+  }
+
+  {
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];

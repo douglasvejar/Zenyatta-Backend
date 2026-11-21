@@ -107,6 +107,9 @@ function interpretarOfertaBase(texto) {
   if (monto === null || !(monto > 0)) return { ok: false, motivo: 'falta el monto' };
   if (banquea) lado = 'recibo';
 
+  // En el chat, «10a8 el 1» designa el mismo caballo que «10a8 del 1».
+  t = t.replace(/^(\s*\S+)\s+el\s+(?=\d)/i, (frase, modalidad) =>
+    decimosN(modalidad.trim().replace(/@/g, 'a')) === null ? frase : modalidad + ' del ');
   t = t.replace(/(\d)\s*x\s*(\d)/gi, '$1x$2').trim();
   let tokens = t.split(/\s+/).filter(Boolean);
   // "2y2 y 2p": la "y" suelta entre dos modalidades solo une el combo.
