@@ -530,6 +530,20 @@ const textoDe = e => e.contenido.text;
   }
 
   {
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 10ma carrera', null, base + 2300));
+    const oferta = mT('CACHACO', 'Consigo 2p del 6 300', null, base + 2301);
+    await whatsappBot.manejarMensajeEntrante(sock, oferta);
+    await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '100', oferta.key.id, base + 2310));
+    const antes = T.chat.length;
+    const respuesta = mT('RICARDO', '500', oferta.key.id, base + 2320);
+    await whatsappBot.manejarMensajeEntrante(sock, respuesta);
+    check(T.chat.length === antes && textoDe(ultimo()) === '❌ 🚨 *AQUÍ NADA ERROR DE MONTO*' &&
+      ultimo().opciones?.quoted === respuesta, 'pedir 500 en una parada de 300 se rechaza y cita la respuesta');
+    await whatsappBot.manejarMensajeEntrante(sock, mT('RICARDO', '200', oferta.key.id, base + 2330));
+    check(T.chat.length === antes + 1 && T.chat.at(-1).monto === 200, 'el rechazo no consume los 200 disponibles');
+  }
+
+  {
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];

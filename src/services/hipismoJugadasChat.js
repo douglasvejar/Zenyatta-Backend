@@ -758,7 +758,8 @@ function crearMotor(deps) {
     if (nombre === oferta.autorNombre) { nota('Respuesta a su propia parada (mismo cliente): no hace nada'); return; }
     if (oferta.restante <= 0.005) { nota(nombre + ' respondió pero la parada ya estaba topada'); await deps.responder('❌ Aquí nada, ya está topada', { citarId: m.id }); return; }
     const pedido = resp.tipo === 'todo' ? oferta.restante : resp.monto;
-    if (tiempoDe(m) - oferta.ts >= VIGENCIA_PARADA_MS) {
+    const transcurrido = tiempoDe(m) - oferta.ts;
+    if (transcurrido >= VIGENCIA_PARADA_MS) {
       if (pendientesTardias.has(m.id)) return;
       const pedida = Math.min(pedido, oferta.restante);
       const pendiente = { oferta, respuesta: m, resp, nombre, pedida, recibida: tiempoDe(m), avisoId: null, resuelta: false };
@@ -768,6 +769,11 @@ function crearMotor(deps) {
         '@@ @@2 🚨 ❌ Aquí nada. La sentencia llegó después de 3 minutos. Quien publicó la parada tiene 1 minuto para responder *OK* citando este aviso o la respuesta.',
         mencionarTardia(pendiente, m.id)
       );
+      return;
+    }
+    if (resp.tipo === 'monto' && pedido > oferta.monto) {
+      nota(nombre + ' respondió por más del monto publicado de la parada');
+      await deps.responder('❌ 🚨 *AQUÍ NADA ERROR DE MONTO*', { citarId: m.id });
       return;
     }
     return registrarRespuesta(m, resp, oferta, nombre, pedido);
