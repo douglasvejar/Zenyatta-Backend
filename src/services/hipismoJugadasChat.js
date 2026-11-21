@@ -114,6 +114,8 @@ function interpretarOfertaBase(texto) {
 
   // Corrige el separador antes del caballo después de extraer el monto.
   t = t.replace(/\b(del|de|el)\s*\.\s*(?=\d)/gi, '$1 ');
+  t = t.replace(/(^|\s)([^\s.]+)\s*\.\s*(?=(?:del|de|el)\s+\d)/gi, (frase, espacio, modalidad) =>
+    calc.tokenEsModalidadValida(modalidad) ? espacio + modalidad + ' ' : frase);
   // En el chat, «10a8 el 1» designa el mismo caballo que «10a8 del 1».
   t = t.replace(/^(\s*\S+)\s+el\s+(?=\d)/i, (frase, modalidad) =>
     decimosN(modalidad.trim().replace(/@/g, 'a')) === null ? frase : modalidad + ' del ');
