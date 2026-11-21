@@ -48,6 +48,10 @@ eq(m.interpretarAbrirCarrera('Abierta 8va de gulf'), { hipodromo: 'gulf', carrer
 eq(m.interpretarAbrirCarrera('abierta 8va gulf'), { hipodromo: 'gulf', carrera: 8 }, '"abierta 8va gulf" (sin "de")');
 eq(m.interpretarAbrirCarrera('Abierta, 8va de gulf.'), { hipodromo: 'gulf', carrera: 8 }, 'con coma y punto final');
 eq(m.interpretarAbrirCarrera('Abierta gulfstream park 8va carrera'), { hipodromo: 'gulfstream park', carrera: 8 }, '"Abierta gulfstream park 8va carrera" (el número al final)');
+for (const frase of ['2da valencia abierta', 'abierta segunda valencia', 'abierta 2 de valencia&#x20;',
+  'abierta 2da valencia&#x20;', 'abierta valencia 2da', 'abierta valencia segunda']) {
+  eq(m.interpretarAbrirCarrera(frase), { hipodromo: 'valencia', carrera: 2 }, '"' + frase + '" abre la segunda de Valencia');
+}
 check(m.interpretarAbrirCarrera('Abierta') === null && m.interpretarAbrirCarrera('Cerrado') === null, '"Abierta" sola o "Cerrado" no abren nada');
 
 // ---------- 2) Leer respuestas ----------

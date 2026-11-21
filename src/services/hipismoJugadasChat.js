@@ -261,16 +261,18 @@ const numeroDeOrdinal = tok => {
   return mn ? parseInt(mn[1], 10) : null;
 };
 // "Abierta primera de Churchill", "Abre la 2da carrera de Mountaineer", "Abierta 3ra en La Rinconada", "Abierta 8va gulf", "Abierta gulf 8va"
+const ABRIR_VERBO_FINAL_RE = new RegExp('^(.+)\\s+' + ABRIR_VERBO + '[.!]?$', 'i');
 function interpretarAbrirCarrera(texto) {
-  const t = limpiar(texto);
+  const t = limpiar(String(texto || '').replace(/(?:&#x20;|&#32;|&nbsp;)/gi, ' '));
+  const ordenado = t.replace(ABRIR_VERBO_FINAL_RE, 'abierta $1');
   const limpiaHip = h => String(h).replace(/\bcarrera\b/ig, '').replace(/[.,;:!]+$/g, '').trim();
-  const mp = t.match(ABRIR_PALABRAS_RE);
+  const mp = ordenado.match(ABRIR_PALABRAS_RE);
   if (mp) {
     const n = numeroDeOrdinal(mp[1]);
     const hip = limpiaHip(mp[2]);
     if (n && n >= 1 && n <= 30 && hip) return { hipodromo: hip, carrera: n };
   }
-  const mi = t.match(ABRIR_PALABRAS_INVERSO_RE);
+  const mi = ordenado.match(ABRIR_PALABRAS_INVERSO_RE);
   if (mi) {
     const n = numeroDeOrdinal(mi[2]);
     const hip = limpiaHip(mi[1]);
