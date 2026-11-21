@@ -540,6 +540,12 @@ function tiempoDeMensaje(msg) {
   return n > 0 ? n * 1000 : null;
 }
 
+function mensajesEnOrden(mensajes) {
+  const lote = (mensajes || []).map(msg => ({ msg, ts: tiempoDeMensaje(msg) }));
+  if (lote.every(item => item.ts !== null)) lote.sort((a, b) => a.ts - b.ts);
+  return lote.map(item => item.msg);
+}
+
 function extraerCitadoId(msg) {
   const m = msg && msg.message;
   const ci = m && m.extendedTextMessage && m.extendedTextMessage.contextInfo;
@@ -550,10 +556,26 @@ function extraerCitadoId(msg) {
 // Devuelve true si el mensaje le tocaba a este bot (el grupo tiene el servicio y era una jugada, una respuesta o un comando de
 // administrador); false para que siga su camino normal (sábana, comandos de Deportes...).
 // `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` valida permisos del bot; esAdministradorDelChat valida el rol real en WhatsApp.
+const colasPorChat = new Map();
 const colasPorGrupo = new Map();
 
-async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
+async function enCola(colas, clave, procesar) {
+  const turno = (colas.get(clave) || Promise.resolve()).then(procesar);
+  const siguiente = turno.catch(() => {});
+  colas.set(clave, siguiente);
+  try { return await turno; } finally {
+    if (colas.get(clave) === siguiente) colas.delete(clave);
+  }
+}
+
+async function intentar(entrada) {
+  const { texto, remoteJid, grupoId } = entrada;
   if (!texto || !remoteJid) return false;
+  // Reserva el turno antes de consultar permisos o resolver el teléfono.
+  return enCola(colasPorChat, JSON.stringify([grupoId || null, remoteJid]), () => procesarEntrada(entrada));
+}
+
+async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
   const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
@@ -569,48 +591,44 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
     if (propia) return false;
   }
 
-  const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
-  const jidReal = await ayudas.resolverRemitente(jidCrudo);
-  if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
-  const fromMe = !!(msg.key && msg.key.fromMe);
-  const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
-  s.anotarActual = anotar || null;
-  if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
-  const esAdmin = (await ayudas.esAdministrador(grupo, jidReal, fromMe)) || (await esAdminRegistrado(grupo.id, [jidReal, jidCrudo]));
-  let citadoPart = extraerCitadoParticipante(msg);
-  const citadoIdMsg = extraerCitadoId(msg);
-  // Si el administrador responde al aviso "no está registrado" del bot, se registra a la persona a la que iba dirigido el aviso.
-  if (citadoIdMsg && s.avisos.has(citadoIdMsg)) citadoPart = s.avisos.get(citadoIdMsg);
-  else if (citadoPart && esDelBot(sock, citadoPart)) citadoPart = null; // citó un mensaje del propio bot que no es un aviso conocido
+  // Los pozos se comparten entre los chats de un grupo. Ninguna operación
+  // posterior puede adelantar la escritura de una jugada ya en curso.
+  await enCola(colasPorGrupo, grupo.id, async () => {
+    const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
+    const jidReal = await ayudas.resolverRemitente(jidCrudo);
+    if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
+    const fromMe = !!(msg.key && msg.key.fromMe);
+    const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
+    s.anotarActual = anotar || null;
+    if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
+    const esAdmin = (await ayudas.esAdministrador(grupo, jidReal, fromMe)) || (await esAdminRegistrado(grupo.id, [jidReal, jidCrudo]));
+    let citadoPart = extraerCitadoParticipante(msg);
+    const citadoIdMsg = extraerCitadoId(msg);
+    // Si el administrador responde al aviso "no está registrado" del bot, se registra a la persona a la que iba dirigido el aviso.
+    if (citadoIdMsg && s.avisos.has(citadoIdMsg)) citadoPart = s.avisos.get(citadoIdMsg);
+    else if (citadoPart && esDelBot(sock, citadoPart)) citadoPart = null; // citó un mensaje del propio bot que no es un aviso conocido
 
-  const mensaje = {
-    texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
-    esAdminCarrera: () => ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false,
-    remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
-  };
-  // Tope de 45 s por mensaje (19-11-2026): si un envío o una consulta se queda colgado, la cola del grupo NO se atasca para siempre.
-  const conTope = (p) => new Promise((resolve, reject) => {
-    const t = setTimeout(() => { console.error('[hipismoChat] Un mensaje tardó más de 45 s y se siguió con el próximo (grupo ' + grupo.id + ').'); if (anotar) anotar('Este mensaje tardó más de 45 s en procesarse (se siguió con el próximo)'); resolve(); }, 45000);
-    if (t.unref) t.unref();
-    Promise.resolve(p).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
-  });
-  const cola = (colasPorGrupo.get(grupo.id) || Promise.resolve()).then(() => conTope(s.motor.procesarMensaje(mensaje))).catch(async e => {
-    console.error('[hipismoChat] Error al procesar un mensaje:', e);
-    if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
-    // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).
-    if (Date.now() - (s.ultimoAvisoError || 0) > 60000) {
-      s.ultimoAvisoError = Date.now();
-      await enviar(s, '⚠️ No pude procesar ese mensaje por un error interno. Avisa al administrador.', { citarId: idMsg });
+    const mensaje = {
+      texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
+      esAdminCarrera: () => ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false,
+      remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
+    };
+    try {
+      await s.motor.procesarMensaje(mensaje);
+    } catch (e) {
+      console.error('[hipismoChat] Error al procesar un mensaje:', e);
+      if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
+      // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).
+      if (Date.now() - (s.ultimoAvisoError || 0) > 60000) {
+        s.ultimoAvisoError = Date.now();
+        await enviar(s, '⚠️ No pude procesar ese mensaje por un error interno. Avisa al administrador.', { citarId: idMsg });
+      }
     }
   });
-  colasPorGrupo.set(grupo.id, cola);
-  try { await cola; } finally {
-    if (colasPorGrupo.get(grupo.id) === cola) colasPorGrupo.delete(grupo.id);
-  }
-  return false; // los mensajes siguen su camino normal (no choca con "SABANA DE JUGADAS"); nada de esto lo reconoce el resto
+  return false;
 }
 
 // 19-11-2026: al renombrar/editar un cliente el bot olvida su lista de clientes en memoria (se vuelve a leer en la próxima jugada).
 function olvidarClientes(grupoId) { cacheClientes.delete(grupoId); libreta.invalidar(grupoId); }
 
-module.exports = { clientePorLibreta, olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };
+module.exports = { mensajesEnOrden, clientePorLibreta, olvidarClientes, cargarPizarraChat, eliminarJugadaEnEspera, listarAdministradores, _enviar: enviar, _ext: ext, intentar, autorizarAdminManual, registrarNumeroManual, _registrarNumeroManual: registrarNumeroManual, clientePorNumero, disponibleDe, guardarJugada, cargarJugadas, resolverHipodromo, TEXTO_PLANO_BOT, _sesiones: sesiones };

@@ -461,6 +461,42 @@ const textoDe = e => e.contenido.text;
   }
 
   {
+    await whatsappBot.manejarMensajeEntrante(sock, mT('ADMIN', 'La Rinconada 7ma carrera', null, base + 1900));
+    const oferta = mT('CACHACO', 'Juego 3n del 2 100', null, base + 1901);
+    await whatsappBot.manejarMensajeEntrante(sock, oferta);
+    const respuesta = mT('MARVEL', '20', oferta.key.id, base + 1902);
+    const cierre = mT('ADMIN', 'cerrado', null, base + 1903);
+    const despues = mT('MARVEL', '30', oferta.key.id, base + 1904);
+    const lote = glue.mensajesEnOrden([cierre, respuesta, despues]);
+    check(lote[0] === respuesta && lote[1] === cierre && lote[2] === despues, 'ordena un lote de WhatsApp por hora del mensaje');
+    const ayudas = whatsappBot.crearAyudasJugadasChat(sock, respuesta);
+    let liberar;
+    let avisoInicio;
+    const inicio = new Promise(resolve => { avisoInicio = resolve; });
+    const pausa = new Promise(resolve => { liberar = resolve; });
+    const resolverOriginal = ayudas.resolverRemitente;
+    ayudas.resolverRemitente = async jid => {
+      avisoInicio();
+      await pausa;
+      return resolverOriginal(jid);
+    };
+    const antes = T.chat.length;
+    const primerEnvio = enviados.length;
+    const procesarRespuesta = glue.intentar({ sock, msg: respuesta, remoteJid: JID, texto: '20', ayudas });
+    await inicio;
+    const procesarCierre = whatsappBot.manejarMensajeEntrante(sock, cierre);
+    const procesarDespues = whatsappBot.manejarMensajeEntrante(sock, despues);
+    await new Promise(resolve => setImmediate(resolve));
+    check(T.estado.abierta && T.chat.length === antes, 'cerrado espera a la respuesta anterior aunque identificar al cliente tarde');
+    liberar();
+    await Promise.all([procesarRespuesta, procesarCierre, procesarDespues]);
+    const nuevos = enviados.slice(primerEnvio).map(textoDe);
+    check(T.chat.length === antes + 1 && nuevos[0] === '✅ Aquí jugaron' &&
+      /CARRERA CERRADA/.test(nuevos[1]) && /CACHACO/i.test(nuevos[2]),
+    'se sentencia la jugada anterior, se incluye en el plano de cierre y se descarta la posterior');
+  }
+
+  {
     const americanas = '111@g.us';
     const nacionales = '222@g.us';
     GRUPO.whatsapp_propio_chats = [americanas, nacionales];

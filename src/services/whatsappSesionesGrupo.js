@@ -402,12 +402,13 @@ async function iniciarSesionInterna(grupoId) {
     s.eventos = (s.eventos || 0) + n; s.ultimoEvento = { en: new Date().toISOString(), tipo: evento.type || null, n, retrasoSeg: retrasoMax };
     s.refrescos = 0; s.proximoRefresco = 0; // la conexión sí está entregando mensajes: se reinicia el vigilante
     console.log('[whatsappSesionesGrupo] Grupo ' + id + ': llegaron ' + n + ' mensaje(s) (tipo ' + (evento.type || '?') + (retrasoMax !== null ? ', el más viejo de hace ' + retrasoMax + ' s' : '') + ')');
-    for (const msg of (evento.messages || [])) {
+    // Encola todo el lote antes de esperar; otro evento puede llegar enseguida.
+    await Promise.all(require('./hipismoJugadasChatBot').mensajesEnOrden(evento.messages).map(async msg => {
       const t0 = deps.ahora();
       await manejarMensaje(id, sock, msg);
       const dur = deps.ahora() - t0;
       if (dur > 3000) console.error('[whatsappSesionesGrupo] Grupo ' + id + ': un mensaje tardó ' + Math.round(dur / 1000) + ' s en procesarse.');
-    }
+    }));
   });
 
   return sock;

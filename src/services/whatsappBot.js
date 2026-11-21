@@ -1378,11 +1378,11 @@ async function iniciarBotWhatsApp() {
     }
   });
 
-  sock.ev.on('messages.upsert', async (evento) => {
-    const mensajes = evento.messages || [];
-    for (const msg of mensajes) {
-      await manejarMensajeEntrante(sock, msg);
-    }
+  let colaMensajes = Promise.resolve();
+  sock.ev.on('messages.upsert', (evento) => {
+    colaMensajes = colaMensajes.then(async () => {
+      for (const msg of require('./hipismoJugadasChatBot').mensajesEnOrden(evento.messages)) await manejarMensajeEntrante(sock, msg);
+    }).catch(e => console.error('[whatsappBot] Error en el lote de mensajes:', e.message));
   });
 
   return sock;
