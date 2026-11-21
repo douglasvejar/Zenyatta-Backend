@@ -276,7 +276,7 @@ const textoDe = e => e.contenido.text;
   await whatsappBot.manejarMensajeEntrante(sock, ofV);
   const nJug = T.jugadas.length;
   await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV.key.id, base + 200));
-  check(T.jugadas.length === nJug && /tiene 1 minuto/.test(textoDe(ultimo())), 'con la hora real de WhatsApp: respondieron 200 s después y el bot solicita confirmación');
+  check(T.jugadas.length === nJug && /🚨 ❌ Aquí nada\. La sentencia llegó después de 3 minutos\. Quien publicó la parada tiene 1 minuto para responder \*OK\* citando este aviso o la respuesta\.$/.test(textoDe(ultimo())) && ultimo().contenido.mentions?.length === 2, 'con la hora real de WhatsApp: respondieron 200 s después y el bot solicita confirmación');
   const ofV2 = mT('CACHACO', 'Juego 4x1 con 20 doy a8', null, base + 300);
   await whatsappBot.manejarMensajeEntrante(sock, ofV2);
   await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '10', ofV2.key.id, base + 300 + 100));

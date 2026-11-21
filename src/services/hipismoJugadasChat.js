@@ -750,7 +750,7 @@ function crearMotor(deps) {
       pendientesTardias.set(m.id, pendiente);
       if (pendientesTardias.size > 400) pendientesTardias.delete(pendientesTardias.keys().next().value);
       pendiente.avisoId = await deps.responder(
-        '⏱️ @@ @@2 La respuesta llegó después de 3 minutos. Quien publicó la parada tiene 1 minuto para responder *OK* citando este aviso o la respuesta. Un administrador del chat puede confirmarla citando con *Aquí jugaron*.',
+        '@@ @@2 🚨 ❌ Aquí nada. La sentencia llegó después de 3 minutos. Quien publicó la parada tiene 1 minuto para responder *OK* citando este aviso o la respuesta.',
         mencionarTardia(pendiente, m.id)
       );
       return;
