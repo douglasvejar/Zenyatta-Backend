@@ -548,7 +548,7 @@ function extraerCitadoId(msg) {
 // `grupoId` solo viene cuando el mensaje entró por el número propio de ese grupo.
 // Devuelve true si el mensaje le tocaba a este bot (el grupo tiene el servicio y era una jugada, una respuesta o un comando de
 // administrador); false para que siga su camino normal (sábana, comandos de Deportes...).
-// `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` dice si puede abrir/cerrar/pedir plano.
+// `ayudas.resolverRemitente(jid)` pasa un @lid al número real; `ayudas.esAdministrador(grupo, jidReal, fromMe)` valida permisos del bot; esAdministradorDelChat valida el rol real en WhatsApp.
 const colasPorGrupo = new Map();
 
 async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }) {
@@ -584,6 +584,7 @@ async function intentar({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar }
 
   const mensaje = {
     texto, id: idMsg, ts: tiempoDeMensaje(msg), citadoId: extraerCitadoId(msg), citadoParticipante: citadoPart, citadoTexto: extraerCitadoTexto(msg), esAdmin,
+    esAdminCarrera: () => ayudas.esAdministradorDelChat?.(jidReal, fromMe) ?? false,
     remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
   };
   // Tope de 45 s por mensaje (19-11-2026): si un envío o una consulta se queda colgado, la cola del grupo NO se atasca para siempre.

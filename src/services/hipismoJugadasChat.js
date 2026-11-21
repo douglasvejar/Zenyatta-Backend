@@ -461,18 +461,20 @@ function crearMotor(deps) {
     ctx.ret = ret;
     await deps.responder('✅ Retirados anotados: ' + ret + '. Cuando tengas la llegada escribe: *Pizarra 6.10.4.8.2*', { citarId: m.id });
   }
-  // Un administrador autoriza a otra persona (responde a su mensaje o al aviso "no autorizado" del bot con "autorizar"): desde entonces puede abrir/cerrar y pedir el plano.
+  // Un administrador autoriza a otra persona (responde a su mensaje o al aviso "no autorizado" del bot con "autorizar"): desde entonces puede usar los comandos de administración internos del bot.
   async function autorizarAdmin(m) {
     if (!deps.autorizarAdmin) return;
     if (!m.citadoParticipante) { await deps.responder('⚠️ No sé a quién autorizar. Responde (cita) el mensaje de esa persona —o mi aviso "no autorizado" para ella— escribiendo: *autorizar*', { citarId: m.id }); return; }
     const r = await deps.autorizarAdmin({ jid: m.citadoParticipante });
-    await deps.responder(r && r.ok ? '✅ Listo: ese número ahora es administrador (puede abrir y cerrar carreras y pedir el plano).' : '⚠️ ' + ((r && r.motivo) || 'No se pudo autorizar.'), { citarId: m.id });
+    await deps.responder(r && r.ok ? '✅ Listo: ese número ahora es administrador del bot. Para gestionar carreras debe ser administrador del grupo de WhatsApp.' : '⚠️ ' + ((r && r.motivo) || 'No se pudo autorizar.'), { citarId: m.id });
   }
-  async function avisarNoAdmin(m, que) {
+  async function avisarNoAdmin(m, que, requiereAdminWhatsApp = false) {
     if (!puedeAvisar('no-admin|' + m.remitente.jid, 60000)) { nota('Intentó ' + que + ' pero no es administrador (aviso ya dado hace poco)'); return; }
     const jid = String((m.remitente && (m.remitente.jidReal || m.remitente.jid)) || '');
     const dig = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
-    const detalle = jid.endsWith('@lid')
+    const detalle = requiereAdminWhatsApp
+      ? '\nSolo pueden hacerlo los administradores de este grupo de WhatsApp.'
+      : jid.endsWith('@lid')
       ? '\n(WhatsApp oculta tu teléfono. Un administrador puede autorizarte respondiendo a este mensaje con *autorizar*.)'
       : '\n(Número que veo: +' + dig + '. Un administrador puede autorizarte respondiendo a este mensaje con *autorizar*, o cargarlo en Súper-admin → Comandos por WhatsApp.)';
     nota('Intentó ' + que + ' pero su número no está autorizado como administrador');
@@ -812,27 +814,28 @@ function crearMotor(deps) {
     if (!texto) return;
     await cargarEstadoSiHaceFalta();
     if (m.esAdmin && m.remitente && m.remitente.jid) { adminsVistos.set(String(m.remitente.jid).split('@')[0].split(':')[0], m.remitente.jid); if (adminsVistos.size > 50) adminsVistos.delete(adminsVistos.keys().next().value); }
+    const carrera = interpretarAbrirCarrera(texto);
+    const cierre = ES_CIERRE_RE.test(texto);
+    const pizarra = interpretarPizarra(texto);
+    if (carrera || cierre || pizarra) {
+      const autorizado = m.esAdminCarrera ? await m.esAdminCarrera() : m.esAdmin;
+      if (!autorizado) {
+        return avisarNoAdmin(m, carrera ? 'abrir carreras' : cierre ? 'cerrar carreras' : 'cargar la pizarra', !!m.esAdminCarrera);
+      }
+      if (carrera) return abrirCarrera(m, carrera);
+      if (cierre) return cerrarCarrera(m);
+      return cargarPizarra(m, pizarra);
+    }
     if (m.esAdmin) {
       if (ES_AUTORIZAR_RE.test(texto)) return autorizarAdmin(m);
-      const piz = interpretarPizarra(texto);
-      if (piz) return cargarPizarra(m, piz);
       const retx = interpretarRetirados(texto);
       if (retx) return anotarRetirados(m, retx);
       const mReg = texto.match(/^(?:registrar|registra|asociar)\s+(.+)$/i);
       if (mReg) return registrarNumero(m, mReg[1]);
-      const carr = interpretarAbrirCarrera(texto);
-      if (carr) return abrirCarrera(m, carr);
-      if (ES_CIERRE_RE.test(texto)) return cerrarCarrera(m);
       if (ES_PLANO_RE.test(texto)) {
         if (!ctx.hipodromo) { await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
         return publicarPlano();
       }
-    }
-    if (!m.esAdmin) {
-      // Antes esto se ignoraba en silencio (parecía que el bot "no abría la carrera"): ahora se explica.
-      if (interpretarAbrirCarrera(texto)) return avisarNoAdmin(m, 'abrir carreras');
-      if (ES_CIERRE_RE.test(texto)) return avisarNoAdmin(m, 'cerrar carreras');
-      if (interpretarPizarra(texto)) return avisarNoAdmin(m, 'cargar la pizarra');
     }
     if (ES_ERROR_RE.test(normRespuesta(texto)) && await marcarError(m)) return;
     if (casosError.size && await responderCaso(m, texto)) return;

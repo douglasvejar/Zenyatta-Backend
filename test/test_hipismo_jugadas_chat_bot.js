@@ -116,6 +116,11 @@ const enviados = [];
 let seq = 0;
 const sock = { user: { id: '573246161764:3@s.whatsapp.net', lid: '98765432100:3@lid' }, sendMessage: async (jid, contenido, opciones) => { const id = 'BOT' + (++seq); enviados.push({ jid, contenido, opciones, id }); return { key: { id, remoteJid: jid, fromMe: true } }; } };
 const num = { CACHACO: '573233070494', MARVEL: '584124537732', NANA: '584241746628', RICARDO: '19047670886', ADMIN: '584141111111', DESCONOCIDO: '5999999999' };
+let socioEsAdminWhatsApp = false;
+sock.groupMetadata = async () => ({ participants: [
+  { id: num.ADMIN + '@s.whatsapp.net', admin: 'superadmin' },
+  { id: '44444444444@lid', admin: socioEsAdminWhatsApp ? 'admin' : null }
+] });
 const guardados = {};
 function mensaje(quien, texto, citadoId, fromMe) {
   const id = 'W' + (++seq);
@@ -230,18 +235,27 @@ const textoDe = e => e.contenido.text;
   // aunque llegue el número del bot por otro camino, se rechaza
   const rBot = await glue._registrarNumeroManual(G, { jid: '98765432100@lid', nombre: 'tykhe' }, () => sock);
   check(rBot.ok === false && /propio bot/.test(rBot.motivo), 'el número (o @lid) del propio bot nunca se asocia a un cliente');
-  // "autorizar": un administrador autoriza a otra persona (responde a su aviso "no autorizado") y desde entonces puede abrir carreras
+  // La autorización interna del bot y la de WhatsApp son independientes.
   const jugadorQuiere = { key: { remoteJid: JID, participant: '44444444444@lid', id: 'ADM1', fromMe: false }, pushName: 'Socio', message: { conversation: 'Abierta 2da de mountaineer' } };
   const ayS = () => whatsappBot.crearAyudasJugadasChat(sock, jugadorQuiere);
   await glue.intentar({ sock, msg: jugadorQuiere, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: ayS() });
   const avisoAdm = ultimo();
-  check(/no está autorizado para abrir carreras/.test(textoDe(avisoAdm)) && /autorizar/.test(textoDe(avisoAdm)), 'alguien que no es administrador intenta abrir: se le explica y se le dice cómo autorizarlo');
+  check(/no está autorizado para abrir carreras/.test(textoDe(avisoAdm)) && /administradores de este grupo de WhatsApp/.test(textoDe(avisoAdm)), 'alguien que no es administrador intenta abrir: se le dice que debe ser administrador de WhatsApp');
   const autor = { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'AUT1', fromMe: false }, pushName: 'Admin', message: { extendedTextMessage: { text: 'autorizar', contextInfo: { stanzaId: avisoAdm.id, participant: '573246161764@s.whatsapp.net' } } } };
   await glue.intentar({ sock, msg: autor, remoteJid: JID, texto: 'autorizar', ayudas: whatsappBot.crearAyudasJugadasChat(sock, autor) });
   check(/ahora es administrador/.test(textoDe(ultimo())) && T.numeros.some(x => x.digitos === '44444444444' && x.jugador_nombre === '__ADMIN__'), 'el administrador responde "autorizar" al aviso y esa persona queda como administrador');
   const jugadorAbre = { key: { remoteJid: JID, participant: '44444444444@lid', id: 'ADM2', fromMe: false }, pushName: 'Socio', message: { conversation: 'Abierta 2da de mountaineer' } };
   await glue.intentar({ sock, msg: jugadorAbre, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorAbre) });
+  check(T.estado.carrera === 1, 'autorizar dentro del bot no concede permiso para abrir carreras');
+  socioEsAdminWhatsApp = true;
+  await glue.intentar({ sock, msg: jugadorAbre, remoteJid: JID, texto: 'Abierta 2da de mountaineer', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorAbre) });
   check(/Carrera abierta: Mountaineer, 2da Carrera\.\*/.test(textoDe(ultimo())), 'la persona autorizada ya puede abrir carreras (aunque WhatsApp oculte su teléfono)');
+  socioEsAdminWhatsApp = false;
+  const jugadorCierra = { ...jugadorAbre, key: { ...jugadorAbre.key, id: 'ADM3' } };
+  await glue.intentar({ sock, msg: jugadorCierra, remoteJid: JID, texto: 'cerrar', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorCierra) });
+  check(T.estado.abierta, 'si WhatsApp quita el rol de administrador, el miembro ya no puede cerrar una carrera');
+  await glue.intentar({ sock, msg: jugadorCierra, remoteJid: JID, texto: 'Pizarra 3.1.2.4', ayudas: whatsappBot.crearAyudasJugadasChat(sock, jugadorCierra) });
+  check(T.estado.abierta, 'una pizarra de alguien sin rol de WhatsApp tampoco puede cerrar la carrera');
   await glue.intentar({ sock, msg: { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net', id: 'AB1', fromMe: false }, message: { conversation: 'Mountaineer 1era carrera' } }, remoteJid: JID, texto: 'Mountaineer 1era carrera', ayudas: whatsappBot.crearAyudasJugadasChat(sock, { key: { remoteJid: JID, participant: num.ADMIN + '@s.whatsapp.net' } }) });
   check(!T.numeros.some(x => x.jugador_nombre === '__ADMIN__' && x.digitos === '573246161764'), 'el número del propio bot nunca queda como administrador autorizado');
   // un administrador registrado no es tomado por cliente
@@ -424,8 +438,13 @@ const textoDe = e => e.contenido.text;
     const mandar = (jid, texto) => {
       const msg = mensaje('ADMIN', texto);
       msg.key.remoteJid = jid;
-      const ayudas = { resolverRemitente: async j => j, esAdministrador: async () => true };
-      return glue.intentar({ grupoId: G, sock, msg, remoteJid: jid, texto, ayudas });
+      const socket = { ...sock, groupMetadata: async chat => ({
+        participants: chat === americanas || chat === nacionales
+          ? [{ id: num.ADMIN + '@s.whatsapp.net', admin: 'admin' }]
+          : []
+      }) };
+      const ayudas = whatsappBot.crearAyudasJugadasChat(socket, msg);
+      return glue.intentar({ grupoId: G, sock: socket, msg, remoteJid: jid, texto, ayudas });
     };
     await Promise.all([mandar(americanas, 'Mountaineer 1era carrera'), mandar(nacionales, 'La Rinconada 2da carrera')]);
     check(T.estadosPorChat.get(americanas)?.hipodromo === 'Mountaineer' &&

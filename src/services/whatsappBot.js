@@ -633,6 +633,26 @@ async function avisarFoto(sock, jid, imagen, caption, intento = 1) {
 function crearAyudasJugadasChat(sock, msg) {
   return {
     resolverRemitente: jid => resolverNumeroRealDelRemitente(sock, msg, jid),
+    esAdministradorDelChat: async (jidReal, fromMe) => {
+      const chat = msg.key && msg.key.remoteJid;
+      if (!chat || !sock || typeof sock.groupMetadata !== 'function') return false;
+      const normalizarJid = jid => typeof jid === 'string' && jid.includes('@')
+        ? jid.replace(/:\d+@/, '@').replace(/@c\.us$/, '@s.whatsapp.net') : null;
+      const candidatos = fromMe
+        ? [sock.user?.id, sock.user?.lid]
+        : [msg.key.participant, jidReal];
+      const remitente = new Set(candidatos.map(normalizarJid).filter(Boolean));
+      if (!remitente.size) return false;
+      try {
+        const metadata = await sock.groupMetadata(chat);
+        return !!metadata?.participants?.some(p =>
+          (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin === true || p.isSuperAdmin === true) &&
+          [p.id, p.lid, p.jid, p.phoneNumber].some(jid => remitente.has(normalizarJid(jid)))
+        );
+      } catch (e) {
+        return false;
+      }
+    },
     esAdministrador: async (grupo, jidReal, fromMe) => {
       if (fromMe) return true; // el propio número del bot (el dueño escribiendo desde su teléfono)
       if (!grupo.comandos_whatsapp_habilitado) return false;
