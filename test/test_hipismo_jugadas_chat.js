@@ -35,6 +35,12 @@ check(o && o.ok === false && /monto/.test(o.motivo), 'una oferta sin monto se re
 // 17-11-2026: formas naturales de escribir (prueba real en el grupo)
 o = m.interpretarOferta('Juego 3n del 5 400');
 check(o && o.ok && o.monto === 400 && JSON.stringify(o.apuesta.grupo) === '[5]' && o.apuesta.modalidad === '3n', '"Juego 3n del 5 400": el monto suelto al final se entiende');
+o = m.interpretarOferta('juego 3p del.7 120');
+check(o.ok && o.monto === 120 && o.apuesta.modalidad === '3p' && o.apuesta.grupo[0] === 7, 'del.7 se lee como del 7');
+o = m.interpretarOferta('juego 3p del.7 1.20');
+check(o.ok && o.monto === 1.2 && o.apuesta.grupo[0] === 7, 'el punto del monto 1.20 conserva los decimales');
+o = m.interpretarOferta('CONSIGO A9 el 1  200');
+check(o.ok && o.lado === 'recibo' && o.monto === 200 && o.apuesta.modalidad === 'a9' && o.apuesta.grupo[0] === 1, 'Consigo A9 el 1 con doble espacio acepta 200 para banquear');
 o = m.interpretarOferta('Juego 4x1 75');
 check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
 o = m.interpretarOferta('Juego 4 x 1 doy a8');
