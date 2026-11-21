@@ -302,7 +302,7 @@ const ultima = () => enviadas[enviadas.length - 1];
   await motor.procesarMensaje(msg('j_marvel', '10', { citadoId: ofT2.id, ts: T0 + 179000 }));
   check(guardadas.length === antesT + 1 && ultima().t === '✅ Aquí jugaron', 'a los 2:59 todavía vale: "Aquí jugaron"');
   // "se fue" en todas sus variantes (también errores de tecleo)
-  for (const frase of ['sf', 'Se fue', 'sefue', 'sedue', 'se due', 'S F', 'sf.', 'se fueron']) {
+  for (const frase of ['sf', 'Se fue', 'sefue', 'cfue', 'sedue', 'se due', 'S F', 'sf.', 'se fueron']) {
     const ofS = msg('j_cachaco', 'Juego 4x1 con 75 doy a8');
     await motor.procesarMensaje(ofS);
     await motor.procesarMensaje(msg('j_cachaco', frase));

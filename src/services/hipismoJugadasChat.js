@@ -164,7 +164,7 @@ function interpretarRespuesta(texto) {
   if (/^(?:j|jugo|jugado|jugamos|juego|todo|jugo todo|j todo)$/.test(t)) return { tipo: 'todo' };
   // "Sf" / "Se fue" / "Sefue": el jugador retira TODAS sus jugadas abiertas (ya no las va a jugar)
   // (también las erratas comunes: "sedue", "se due", "se fie", "se fye", "s f")
-  if (/^(?:s\.? ?f\.?|se ?[fd][uyi]e(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
+  if (/^(?:s\.? ?f\.?|cfue|se ?[fd][uyi]e(?:ron)?(?: todo| todas| todas las jugadas)?)$/.test(t)) return { tipo: 'sf' };
   const m = t.match(/^(?:j(?:ugo)?\s*)?(?:con\s+)?(\d+(?:[.,]\d+)?)$/);
   if (m) { const n = parseMontoChat(m[1]); if (n !== null && n > 0) return { tipo: 'monto', monto: round2(n) }; }
   // "ponte 200" / "ponte": se pone del lado contrario de quien publicó (neutro, como un monto solo).
