@@ -143,7 +143,9 @@ function interpretarOfertaBase(texto) {
 // Además del monto al final o con "con" ("Juego 3p del 1 2000", "Juego 3p del 1 con 2000"), se acepta el monto pegado al verbo:
 // "Juego 2000 3p del 1" = juega 2000 a 3 puestos del caballo 1. Solo se prueba si la forma normal no se entendió.
 function interpretarOferta(texto) {
-  const parada = limpiar(texto).replace(/(?:\s*(?:&#x20;|&#32;|&nbsp;))+$/i, '');
+  const parada = limpiar(texto)
+    .replace(/(?:\s*(?:&#x20;|&#32;|&nbsp;))+$/i, '')
+    .replace(/(\d(?:\s*\$)?)\s+mas[\s.]*$/i, '$1');
   const r = interpretarOfertaBase(parada);
   if (r === null || r.ok) return r;
   const m = parada.match(new RegExp('^(juego|juega|jugar|jugando|jugamos|consigo|consigue)\\s+(' + MONTO_SRC + ')\\s+(\\S.*)$', 'i'));

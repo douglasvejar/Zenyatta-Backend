@@ -67,6 +67,8 @@ for (const parada of ['juego 200 a5 el 4&#x20;', 'juego a 5 el 4 200', 'juego 20
 check(!m.interpretarOferta('Juego a 5 el 4').ok, 'el caballo no reemplaza un monto ausente');
 eq(m.interpretarOferta('Juego 2p.del 6 50'), m.interpretarOferta('Juego 2p del 6 con 50'), 'un punto accidental antes de del no invalida la parada');
 eq(m.interpretarOferta('Juego 2p.del.6 1.20'), m.interpretarOferta('Juego 2p del 6 con 1.20'), 'se corrigen los separadores del caballo y se conserva el monto decimal');
+eq(m.interpretarOferta('juego 2p del 6 con 50 mas ....'), m.interpretarOferta('juego 2p del 6 con 50'), 'más al final de una parada conserva el monto');
+eq(m.interpretarOferta('Juego 2p del 6 1.20 más'), m.interpretarOferta('Juego 2p del 6 con 1.20'), 'más al final conserva los decimales');
 o = m.interpretarOferta('Juego 4x1 75');
 check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
 o = m.interpretarOferta('Juego 4 x 1 doy a8');
