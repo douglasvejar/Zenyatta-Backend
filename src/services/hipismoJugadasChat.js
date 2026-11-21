@@ -85,6 +85,8 @@ function interpretarOfertaBase(texto) {
   // "Consigo 3n del 1 200": el que publica quiere BANQUEAR (da la jugada); "Juego ...": el que publica quiere JUGAR.
   const banquea = /^consig/i.test(t);
   t = t.replace(VERBO_OFERTA_RE, '');
+  // La cuota inicial «a 5» o «10 a 7» es 10a5 o 10a7.
+  t = t.replace(/^(?:10\s+a\s*|10a\s+|a\s+)(\d+(?:[.,]\d+)?)(?=\s)/i, '10a$1');
 
   let lado = 'doy';
   let cuota = null;
@@ -98,13 +100,13 @@ function interpretarOfertaBase(texto) {
     conRecibo = true;
     t = t.replace(mC[0], ' ');
   }
-  const mM = t.match(new RegExp('\\bcon\\s+(' + MONTO_SRC + ')(?![\\d.,])', 'i'));
+  const mM = t.match(new RegExp('\\bcon\\s+(' + MONTO_SRC + ')(?![\\d.,])(?:\\s*\\$)?', 'i'));
   if (mM) {
     monto = parseMontoChat(mM[1]);
     t = t.replace(mM[0], ' ');
   } else {
     // "Juego 4x5 recibo a 8 200" o "Juego 3n del 5 400": el monto va solo, al final. (No se toma un número pegado a una "x": "4 x 1".)
-    const mFinal = t.match(new RegExp('(?<![x×]\\s*)(?:^|\\s)(' + MONTO_SRC + ')\\s*$', 'i'));
+    const mFinal = t.match(new RegExp('(?<![x×]\\s*)(?:^|\\s)(' + MONTO_SRC + ')(?:\\s*\\$)?\\s*$', 'i'));
     if (mFinal) { monto = parseMontoChat(mFinal[1]); t = t.replace(mFinal[0], ' '); montoSuelto = true; }
   }
   if (monto === null || !(monto > 0)) return { ok: false, motivo: 'falta el monto' };

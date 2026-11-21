@@ -46,6 +46,17 @@ for (const parada of ['CONSIGO A9 el 1 \u200B200', 'CONSIGO A9 el 1  200\u200E',
   eq(m.interpretarOferta(parada), m.interpretarOferta(limpia), 'una marca invisible junto al monto no altera la parada');
 }
 check(!m.interpretarOferta('CONSIGO A9 el 1  2\u200B00').ok, 'una marca dentro del monto no une los dígitos');
+for (const [parada, cuota, monto] of [
+  ['Juego a 5 el 4 200', '10a5', 200],
+  ['Juego 10 a 7 el 4 180', '10a7', 180],
+  ['Juego 10a5 el 4 con 200$', '10a5', 200],
+  ['Juego a 5 el 4 1.20 $', '10a5', 1.2]
+]) {
+  const oferta = m.interpretarOferta(parada);
+  check(oferta.ok && oferta.lado === 'doy' && oferta.monto === monto &&
+    oferta.apuesta.modalidad === cuota && oferta.apuesta.grupo[0] === 4, parada + ' conserva la cuota, el caballo y el monto');
+}
+check(!m.interpretarOferta('Juego a 5 el 4').ok, 'el caballo no reemplaza un monto ausente');
 o = m.interpretarOferta('Juego 4x1 75');
 check(o && o.ok && o.monto === 75 && o.apuesta.cruce, '"Juego 4x1 75": monto suelto en un cruce');
 o = m.interpretarOferta('Juego 4 x 1 doy a8');
