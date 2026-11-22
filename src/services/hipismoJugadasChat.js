@@ -123,9 +123,19 @@ function interpretarOfertaBase(texto) {
   // «2 y 2n» es 2y2. «2 y 3n» abrevia las dos modalidades 2p y 3n.
   t = t.replace(/^(\d{1,2})\s+y\s+(\d{1,2})n(?=\s+(?:del|de|el)\s+\d)/i, (_, puesto, nini) =>
     puesto === nini ? puesto + 'y' + nini : puesto + 'p y ' + nini + 'n');
-  // «1y2/1p» une dos modalidades completas. «1/2» sigue siendo una sola.
-  t = t.replace(/^([^\s/]+)\s*\/\s*([^\s/]+)(?=\s)/, (frase, primera, segunda) =>
-    calc.tokenEsModalidadValida(primera) && calc.tokenEsModalidadValida(segunda) ? primera + ' ' + segunda : frase);
+  // Solo separa una combinación si hay una forma inequívoca de leer ambos pagos.
+  t = t.replace(/^([^\s/+&]+(?:\s*[/+&]\s*[^\s/+&]+)+)(?=\s)/, (frase, modalidades) => {
+    if (calc.tokenEsModalidadValida(modalidades)) return frase;
+    const combinaciones = [];
+    for (const separador of modalidades.matchAll(/[/+&]/g)) {
+      const primera = modalidades.slice(0, separador.index).trim();
+      const segunda = modalidades.slice(separador.index + 1).trim();
+      if (calc.tokenEsModalidadValida(primera) && calc.tokenEsModalidadValida(segunda)) {
+        combinaciones.push(primera + ' ' + segunda);
+      }
+    }
+    return combinaciones.length === 1 ? combinaciones[0] : frase;
+  });
   let tokens = t.split(/\s+/).filter(Boolean);
   // "2y2 y 2p": la "y" suelta entre dos modalidades solo une el combo.
   tokens = tokens.filter((tok, i) => !(/^(?:y|\+|&)$/i.test(tok) && i > 0 && i < tokens.length - 1 && calc.tokenEsModalidadValida(tokens[i - 1]) && calc.tokenEsModalidadValida(tokens[i + 1])));

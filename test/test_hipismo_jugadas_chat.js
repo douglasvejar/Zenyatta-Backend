@@ -29,6 +29,11 @@ for (const parada of ['juego 100 1p 1y2 del 3&#x20;', 'juego 100 1y2 1p del 3', 
     oferta.apuesta.modalidad.split('-').sort().join('/') === '1p/1y2', parada + ' reparte 100 entre 1p y 1y2 del 3');
 }
 check(m.interpretarOferta('juego 100 1/2 del 3').apuesta.modalidad === '1/2', 'la modalidad individual 1/2 mantiene su significado');
+for (const [juntas, separadas] of [['1/2/1p', '1/2 1p'], ['10/8/2p', '10/8 2p'], ['3n+2p', '3n 2p'], ['2p & 3n', '2p 3n']]) {
+  const base = m.interpretarOferta('Juego 100 ' + separadas + ' del 3');
+  check(base.ok, separadas + ' es una combinación válida');
+  eq(m.interpretarOferta('Juego 100 ' + juntas + ' del 3'), base, juntas + ' se interpreta igual que ' + separadas);
+}
 o = m.interpretarOferta('Juego 4x1 10@8 con 60');
 check(o.ok && o.apuesta.modalidad === '10a8' && o.monto === 60 && o.lado === 'doy', '"10@8" es lo mismo que 10a8');
 o = m.interpretarOferta('Juego 4 x 1 10a8 con 120');
