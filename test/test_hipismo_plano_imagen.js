@@ -115,7 +115,7 @@ async function invocarRuta(handler, req) {
   const d = salida && salida.datosImagen;
   check(!!d, '2) la respuesta trae datosImagen');
   check(d && d.jugadas.length === 2, '3) 2 jugadas en la imagen');
-  check(d && d.jugadas[0].cliente === 'Sammy' && d.jugadas[0].banquero === 'Zenyatta' && d.jugadas[0].modalidad === '1p' && d.jugadas[0].caballo === '3' && d.jugadas[0].monto === 225 && d.jugadas[0].resultado === 213.75,
+  check(d && d.jugadas[0].cliente === 'Sammy' && d.jugadas[0].banquero === 'Zenyatta' && d.jugadas[0].modalidad === '1p' && d.jugadas[0].caballo === '3' && d.jugadas[0].monto === 225 && d.jugadas[0].resultado === 213.75 && d.jugadas[0].resultadoDa === -225,
     '4) primera jugada: Sammy 1p al 3 con 225 da Zenyatta = +213,75');
   check(d && d.jugadas[1].cliente === 'Mujica' && d.jugadas[1].resultado === -450, '5) segunda jugada: Mujica pierde -450');
   check(d && JSON.stringify(d.llegada) === JSON.stringify(['3', '4', '8', '1', '7']) && JSON.stringify(d.retirados) === '[6]', '6) llegada 3 4 8 1 7 y retirado 6');

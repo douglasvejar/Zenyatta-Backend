@@ -181,6 +181,38 @@ function estrella(cx, cy, r) {
   return `<polygon points="${pts.join(' ')}" fill="#ffffff"/>`;
 }
 
+function filaEnfrentada(p, x, y, ancho, L, j) {
+  const alto = L.rowh + 14;
+  const gap = 7;
+  const centro = Math.round(ancho * .24);
+  const lateral = (ancho - centro - 2 * gap) / 2;
+  const f = Math.round(L.fs * ESCALA_LETRA);
+  const texto = (px, py, tam, contenido, color, ancla = 'start') => {
+    p.push(`<text x="${px}" y="${py}" font-size="${tam}" font-weight="700" text-anchor="${ancla}" fill="${color}">${esc(contenido)}</text>`);
+  };
+  const lado = (px, rol, nombre, valor) => {
+    const v = Number(valor);
+    const color = valor == null || v === 0 ? GRIS : v < 0 ? ROJO : VERDE;
+    const fondo = valor == null || v === 0 ? '#f1f4f2' : v < 0 ? '#fce9e7' : '#e7f5eb';
+    const resultado = valor == null ? '—' : v === 0 ? monto(0) : signo(v);
+    const margen = 13;
+    const fRol = Math.round(f * .65);
+    const espacio = lateral - 2 * margen - anchoAprox(resultado, f, true) - 12;
+    p.push(`<rect x="${px}" y="${y}" width="${lateral}" height="${alto - 6}" rx="11" fill="${fondo}" stroke="${color}"/>`);
+    texto(px + margen, y + 19, fRol, rol, color);
+    texto(px + margen, y + alto - 16, f, recortarAncho(nombre, f, espacio, true), TINTA);
+    texto(px + lateral - margen, y + alto - 16, f, resultado, color, 'end');
+  };
+  lado(x, 'JUEGA', j.cliente, j.resultado);
+  lado(x + lateral + centro + gap * 2, 'DA', j.banquero, j.resultadoDa);
+  const cx = x + ancho / 2;
+  const tamCentro = Math.round(f * .76);
+  texto(cx, y + 19, tamCentro, recortarAncho(j.modalidad, tamCentro, centro - 8, true), TINTA, 'middle');
+  const caballo = /^\d+$/.test(j.caballo) ? 'Caballo ' + j.caballo : j.caballo;
+  texto(cx, y + alto / 2 + 6, tamCentro, recortarAncho(caballo, tamCentro, centro - 8, true), GRIS, 'middle');
+  texto(cx, y + alto - 10, tamCentro, 'Apostó ' + monto(j.monto), TINTA, 'middle');
+}
+
 // Una fila de jugada (o de parada adelantada). `x` es el borde izquierdo de la columna, `cw` su ancho.
 function filaJugada(p, x, y, cw, L, f) {
   const F = Math.round(L.fs * ESCALA_LETRA);
@@ -265,7 +297,8 @@ function armarSvgPlano(datos, opciones) {
   const estilo = op.estilo || {};
   const t = temaDe(estilo.primario, estilo.secundario);
   const adel = datos.adelantadas && datos.adelantadas.filas && datos.adelantadas.filas.length ? datos.adelantadas.filas : [];
-  const L = nivelDe((datos.jugadas || []).length + adel.length);
+  const cantidad = (datos.jugadas || []).length + adel.length;
+  const L = cantidad <= 30 ? { ...nivelDe(10), perCol: 20 } : nivelDe(cantidad);
   const W = L.w;
   const M = 32; // margen lateral
   const p = [];
@@ -341,10 +374,15 @@ function armarSvgPlano(datos, opciones) {
     p.push('</g>');
   };
   const nFilas = n => Math.ceil(n / L.cols);
-  const filasJ = (datos.jugadas || []).map(j => ({ cliente: j.cliente, mod: j.modalidad, cab: j.caballo, monto: j.monto, da: j.banquero, res: j.resultado }));
+  const filasJ = datos.jugadas || [];
   if (filasJ.length) {
-    const alto = 34 + nFilas(filasJ.length) * L.rowh;
-    tarjeta(alto, () => { tabla(p, M, y, cardW, filasJ, L, false); }, true);
+    const porCol = nFilas(filasJ.length);
+    const anchoFila = cardW / L.cols;
+    const alto = 12 + porCol * (L.rowh + 14);
+    tarjeta(alto, () => {
+      filasJ.forEach((j, i) => filaEnfrentada(p, M + Math.floor(i / porCol) * anchoFila + 8,
+        y + 8 + (i % porCol) * (L.rowh + 14), anchoFila - 16, L, j));
+    }, true);
     y += alto;
   }
   if (adel.length) {
@@ -376,6 +414,8 @@ function armarSvgPlano(datos, opciones) {
   const ncG = ganan.length ? Math.max(1, Math.ceil(ganan.length / L.perCol)) : 0;
   const ncP = pierden.length ? Math.max(1, Math.ceil(pierden.length / L.perCol)) : 0;
   if (ncG + ncP) {
+    p.push(`<text x="${W / 2}" y="${y + 24}" font-size="23" font-weight="700" text-anchor="middle" fill="${TINTA}">TOTALES DE LA CARRERA</text>`);
+    y += 40;
     const GAP = 14;
     const util = cardW - (ncG && ncP ? GAP : 0);
     let xx = M, hMax = 0;

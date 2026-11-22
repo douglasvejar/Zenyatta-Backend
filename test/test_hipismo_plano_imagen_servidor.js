@@ -13,7 +13,7 @@ function check(cond, msg) { try { assert.ok(cond); ok++; console.log('OK: ' + ms
 const nombres = ['Tykhe', 'Cachaco', 'Luis', 'Maria', 'Pedro', 'Juan'];
 function datos(nj, extra) {
   const jugadas = [];
-  for (let i = 0; i < nj; i++) jugadas.push({ cliente: nombres[i % 6], modalidad: '4x1', caballo: String(1 + (i % 9)), monto: 100 * (1 + i % 3), banquero: nombres[(i + 2) % 6], resultado: i % 2 ? -100 : 75 });
+  for (let i = 0; i < nj; i++) jugadas.push({ cliente: nombres[i % 6], modalidad: '4x1', caballo: String(1 + (i % 9)), monto: 100 * (1 + i % 3), banquero: nombres[(i + 2) % 6], resultado: i % 2 ? -100 : 75, resultadoDa: i % 2 ? 95 : -80 });
   return Object.assign({
     grupo: 'Zenyatta', hipodromo: 'Gulfstream Park', carrera: 5, carreraTexto: '5ta', fecha: '2026-10-05', llegada: ['4', '5', '6', '7'], retirados: [3],
     jugadas, ganan: [['Tykhe', 450.5]], pierden: [['Cachaco', -300]], adelantadas: null
@@ -32,8 +32,8 @@ function datos(nj, extra) {
   check(/^<svg /.test(svg) && /width="1080"/.test(svg) && /font-family="Poppins"/.test(svg), 'arma un SVG de 1080 de ancho con la fuente Poppins');
   check(/Gulfstream Park · 5ta carrera/.test(svg) && /ZENYATTA/.test(svg) && /Lunes 05-10-2026/.test(svg), 'encabezado: grupo, hipódromo · carrera y fecha');
   check(/LLEGADA/.test(svg) && /RETIRADO/.test(svg) && />4</.test(svg) && />7</.test(svg), 'llegada con los caballos y el retirado');
-  check(/JUEGA/.test(svg) && /APOSTÓ/.test(svg) && /RESULTADO/.test(svg) && /Tykhe/.test(svg), 'tabla de jugadas con su encabezado');
-  check(/GANAN/.test(svg) && /PIERDEN/.test(svg) && /\+450,50/.test(svg) && /-300,00/.test(svg), 'cuadros de quiénes ganan y quiénes pierden');
+  check(/JUEGA/.test(svg) && /Apostó/.test(svg) && />DA</.test(svg) && /Tykhe/.test(svg) && /-80,00/.test(svg) && /\+95,00/.test(svg), 'filas enfrentadas con el monto real de los dos participantes');
+  check(/TOTALES DE LA CARRERA/.test(svg) && /GANAN/.test(svg) && /PIERDEN/.test(svg) && /\+450,50/.test(svg) && /-300,00/.test(svg), 'cuadros de quiénes ganan y quiénes pierden');
   check(/6 jugadas · Reclamos al privado/.test(svg), 'el pie cuenta las jugadas');
   check(!/LINEA|TINTE/.test(svg), 'no quedan marcas de color sin reemplazar');
   check(/rgb\(20,83,45\)/.test(svg), 'usa el color primario del grupo');
@@ -51,7 +51,7 @@ function datos(nj, extra) {
 
   // --- muchas jugadas y adelantadas ---
   const grande = m.armarSvgPlano(datos(24), { estilo: {} });
-  check(/width="1400"/.test(grande) && (grande.match(/JUEGA/g) || []).length === 2, '24 jugadas: tarjeta de 1400 con 2 columnas');
+  check(/width="1080"/.test(grande) && (grande.match(/>JUEGA</g) || []).length === 24, '24 jugadas: las 24 filas salen en formato vertical');
   const adel = m.armarSvgPlano(datos(4, { adelantadas: { filas: [1], secciones: [{ titulo: 'JUGADAS ENTRE TERCIOS ADELANTADAS', filas: [{ cliente: 'Tykhe', item: 'Cachaco', resultado: 200 }] }] } }), { estilo: {} });
   check(/PARADA ADELANTADAS/.test(adel) && /JUGADAS ENTRE TERCIOS ADELANTADAS/.test(adel) && /5 jugadas/.test(adel), 'las adelantadas van en su sección y cuentan en el pie');
   const sinJug = m.armarSvgPlano(datos(0, { ganan: [], pierden: [] }), { estilo: {} });

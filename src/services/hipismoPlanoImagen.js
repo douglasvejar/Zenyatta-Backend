@@ -51,7 +51,8 @@ function armarDatosImagenPlano({ grupoNombre, hipodromoNombre, carreraNumero, fe
     caballo: String(t.caballo === undefined || t.caballo === null ? '' : t.caballo),
     monto: redondear(t.monto),
     banquero: formatNombre(t.banqueroNombre),
-    resultado: redondear(t.resultadoJugador)
+    resultado: redondear(t.resultadoJugador),
+    resultadoDa: t.resultadoBanquero == null ? null : redondear(t.resultadoBanquero)
   }));
   const { ganan, pierden } = ordenarTotales(totalesFinales);
 
