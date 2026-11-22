@@ -62,12 +62,12 @@ const modalidadSegura = mod => (mod ? String(mod).split('-').map(m => { // para 
 }).join(' ') : '');
 const caballosTxt = lista => (lista || []).join('.');
 function apuestaVisible(a) {
-  const cab = a.cruce ? caballosTxt(a.cruce.gruposA) + 'x' + caballosTxt(a.cruce.gruposB) : caballosTxt(a.grupo);
+  const cab = a.cruce ? caballosTxt(a.cruce.gruposA) + 'x' + caballosTxt(a.cruce.gruposB) : (a.grupo || []).join(',');
   const mod = modalidadVisible(a.modalidad);
   return (mod ? mod + ' ' : '') + '(' + cab + ')';
 }
 function apuestaSegura(a) {
-  const cab = a.cruce ? caballosTxt(a.cruce.gruposA) + 'x' + caballosTxt(a.cruce.gruposB) : caballosTxt(a.grupo);
+  const cab = a.cruce ? caballosTxt(a.cruce.gruposA) + 'x' + caballosTxt(a.cruce.gruposB) : (a.grupo || []).join(',');
   const mod = modalidadSegura(a.modalidad);
   return (mod ? mod + ' ' : '') + '(' + cab + ')';
 }
@@ -120,6 +120,16 @@ function interpretarOfertaBase(texto) {
   t = t.replace(/^(\s*\S+)\s+el\s+(?=\d)/i, (frase, modalidad) =>
     decimosN(modalidad.trim().replace(/@/g, 'a')) === null ? frase : modalidad + ' del ');
   t = t.replace(/(\d)\s*x\s*(\d)/gi, '$1x$2').trim();
+  // «La 26» y «la 246» son grupos de caballos. Sin «la», 26 sigue siendo un solo número.
+  t = t.replace(/(^|\s)la\s+(\d+(?:(?:\s*[.,]\s*|\s+y\s+)\d+)*)(?=\s|$)/i, (_, prefijo, caballos) => {
+    if (/^[1-9]{2,3}$/.test(caballos)) return prefijo + caballos.split('').join('.');
+    return prefijo + caballos.replace(/\s*(?:[.,]|\by\b)\s*/gi, '.');
+  });
+  // Un pago escrito separado puede ir seguido de otro explícito: «2 y 3n y 2p».
+  t = t.replace(/^(\d{1,2})\s+y\s+(\d{1,2})n\s+y\s+(\S+)(?=\s+(?:del|de|el)\s+\d)/i, (frase, puesto, nini, segundoPago) => {
+    const primero = puesto + 'y' + nini;
+    return calc.tokenEsModalidadValida(primero) && calc.tokenEsModalidadValida(segundoPago) ? primero + ' ' + segundoPago : frase;
+  });
   // «2 y 2n» es 2y2. «2 y 3n» abrevia las dos modalidades 2p y 3n.
   t = t.replace(/^(\d{1,2})\s+y\s+(\d{1,2})n(?=\s+(?:del|de|el)\s+\d)/i, (_, puesto, nini) =>
     puesto === nini ? puesto + 'y' + nini : puesto + 'p y ' + nini + 'n');

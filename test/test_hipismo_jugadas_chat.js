@@ -34,6 +34,26 @@ for (const [juntas, separadas] of [['1/2/1p', '1/2 1p'], ['10/8/2p', '10/8 2p'],
   check(base.ok, separadas + ' es una combinación válida');
   eq(m.interpretarOferta('Juego 100 ' + juntas + ' del 3'), base, juntas + ' se interpreta igual que ' + separadas);
 }
+for (const [mensaje, caballos] of [
+  ['Juego la 26 10a4 con 100', [2, 6]],
+  ['Juego 10a4 la 246 con 100', [2, 4, 6]],
+  ['Juego la 2 y 10 10a4 con 100', [2, 10]]
+]) {
+  const oferta = m.interpretarOferta(mensaje);
+  check(oferta.ok && oferta.apuesta.modalidad === '10a4' && oferta.monto === 100, mensaje + ' reconoce la cuota y el monto');
+  eq(oferta.apuesta.grupo, caballos, mensaje + ' conserva todos los ejemplares');
+  const texto = 'Juega RAMBO ' + m.apuestaSegura(oferta.apuesta) + ' con 100 da GOKU';
+  const { calcularPlano } = require('../src/services/hipismoCalc');
+  const gana = calcularPlano({ texto, pizarra: caballos.at(-1) + '.9.2' }).tickets[0];
+  check(gana.caballo === caballos.join(',') && gana.resultadoBanquero === -40, 'si cualquiera gana, paga 40 antes de comisión');
+  const pierde = calcularPlano({ texto, pizarra: '9.' + caballos.at(-1) + '.2' }).tickets[0];
+  check(pierde.resultadoJugador === -100, 'si ninguno llega primero, pierde 100');
+  const nula = calcularPlano({ texto, pizarra: caballos.at(-1) + '.9', retirados: new Set([caballos[0]]) }).tickets[0];
+  check(nula.nulaRetirado && nula.resultadoJugador === 0 && nula.resultadoBanquero === 0, 'si retiran a uno, queda nula aunque otro gane');
+}
+eq(m.interpretarOferta('Juego 2 y  3n y 2p del 6 con 150'), m.interpretarOferta('Juego 2y3/2p del 6 con 150'),
+  'la secuencia separada 2 y 3n y 2p se interpreta como 2y3 más 2p');
+eq(m.interpretarOferta('Juego 26 10a4 con 100').apuesta.grupo, [26], 'sin la, 26 no se divide en dos caballos');
 o = m.interpretarOferta('Juego 4x1 10@8 con 60');
 check(o.ok && o.apuesta.modalidad === '10a8' && o.monto === 60 && o.lado === 'doy', '"10@8" es lo mismo que 10a8');
 o = m.interpretarOferta('Juego 4 x 1 10a8 con 120');
