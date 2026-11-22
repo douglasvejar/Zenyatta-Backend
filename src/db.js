@@ -60,6 +60,9 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS funciones_habilitadas js
 // 25-10-2026: marca "pago diario" de los clientes (ver sql/schema.sql); se crea sola igual que la de arriba.
 // 17-11-2026: "Corredores y Administración Inteligente" (bot de jugadas del chat de Hipismo, ver sql/schema.sql).
 pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado boolean NOT NULL DEFAULT false')
+  .then(() => pool.query(`ALTER TABLE grupos
+    ADD COLUMN IF NOT EXISTS hipismo_chat_en_pausa boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS hipismo_chat_cambio_en timestamptz`))
   .then(() => pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS whatsapp_propio_activo boolean NOT NULL DEFAULT false'))
   .then(() => pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS whatsapp_propio_jid text'))
   .then(() => pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS whatsapp_propio_chats text[]'))

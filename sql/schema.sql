@@ -2381,6 +2381,8 @@ alter table hipismo_chat_jugadas add column if not exists resuelta boolean not n
 -- whatsapp_propio_jid = el chat de WhatsApp (de ese número) donde trabaja el bot.
 alter table grupos add column if not exists whatsapp_propio_activo boolean not null default false;
 alter table grupos add column if not exists whatsapp_propio_jid text;
+alter table grupos add column if not exists hipismo_chat_en_pausa boolean not null default false;
+alter table grupos add column if not exists hipismo_chat_cambio_en timestamptz;
 alter table grupos add column if not exists whatsapp_propio_chats text[];
 
 create table if not exists hipismo_chat_estado_por_chat (

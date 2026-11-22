@@ -39,6 +39,11 @@ function consulta(text, params) {
     bitacoraBot.push(params);
     return { rows: [] };
   }
+  if (/^UPDATE grupos SET hipismo_chat_en_pausa/i.test(sql)) {
+    GRUPO.hipismo_chat_en_pausa = params[1];
+    GRUPO.hipismo_chat_cambio_en = params[2];
+    return { rows: [] };
+  }
   if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) return { rows: [] };
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid = \$1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true/i.test(sql)) {
     return { rows: (params[0] === JID && GRUPO.hipismo_chat_habilitado) ? [GRUPO] : [] };
@@ -648,6 +653,33 @@ const textoDe = e => e.contenido.text;
     const antes = enviados.length;
     await mandar(nacionales, 'La Rinconada 3era carrera');
     check(enviados.length === antes && T.estadosPorChat.get(nacionales)?.carrera === 2, 'retirar la autorización detiene el chat de inmediato');
+  }
+  {
+    const americanas = '111@g.us';
+    const nacionales = '222@g.us';
+    GRUPO.whatsapp_propio_chats = [americanas, nacionales];
+    const enviarPrueba = (jid, texto, ts, propio = false) => {
+      const msg = mT('ADMIN', texto, null, ts);
+      msg.key.remoteJid = jid;
+      msg.key.fromMe = propio;
+      return glue.intentar({ sock, msg, grupoId: G, remoteJid: jid, texto, ayudas: whatsappBot.crearAyudasJugadasChat(sock, msg) });
+    };
+    const ahora = Math.floor(Date.now() / 1000);
+    const antes = enviados.length;
+    await enviarPrueba(americanas, 'OFF', ahora);
+    check(enviados.length === antes && !GRUPO.hipismo_chat_en_pausa, 'un administrador ajeno al número vinculado no puede apagar el bot');
+    await enviarPrueba(americanas, 'OFF', ahora + 1, true);
+    check(GRUPO.hipismo_chat_en_pausa && textoDe(ultimo()) === '😴 Bot IA en pausa.', 'OFF desde el número vinculado pausa el grupo y responde');
+    glue._sesiones.clear();
+    const enPausa = enviados.length;
+    await enviarPrueba(nacionales, 'La Rinconada 3era carrera', ahora + 2);
+    check(enviados.length === enPausa && T.estadosPorChat.get(nacionales).carrera === 2, 'la pausa persiste tras reiniciar y aplica también al otro chat autorizado');
+    await enviarPrueba(nacionales, 'On', ahora + 3, true);
+    check(!GRUPO.hipismo_chat_en_pausa && textoDe(ultimo()) === '✅ Bot IA activado.', 'ON desde el número vinculado retoma el bot');
+    await enviarPrueba(nacionales, 'La Rinconada 3era carrera', ahora + 2);
+    check(T.estadosPorChat.get(nacionales).carrera === 2, 'no procesa un mensaje que se escribió mientras estaba en pausa');
+    await enviarPrueba(nacionales, 'La Rinconada 3era carrera', ahora + 4);
+    check(T.estadosPorChat.get(nacionales).carrera === 3, 'vuelve a procesar mensajes nuevos después del ON');
   }
   console.log('\n' + pasaron + ' OK, ' + fallaron + ' fallaron.');
   process.exit(fallaron ? 1 : 0);

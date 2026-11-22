@@ -45,7 +45,7 @@ async function grupoPropio(grupoId, jid) {
   let valor = null;
   try {
     const r = await db.query(
-      `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid
+      `SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid, hipismo_chat_en_pausa, hipismo_chat_cambio_en
          FROM grupos
         WHERE id = $1 AND $2 = ANY(COALESCE(whatsapp_propio_chats, ARRAY[whatsapp_propio_jid]))
           AND whatsapp_propio_activo = true AND hipismo_chat_habilitado = true AND activo = true`,
@@ -440,7 +440,7 @@ function sesionDe(grupo, sock, remoteJid, propia) {
   const chatEstado = propia && grupo.whatsapp_propio_jid !== remoteJid ? remoteJid : null;
   let s = sesiones.get(clave);
   if (!s) {
-    s = { mensajes: new Map(), avisos: new Map(), sock: null, jid: remoteJid, motor: null };
+    s = { grupoId: grupo.id, mensajes: new Map(), avisos: new Map(), sock: null, jid: remoteJid, motor: null };
     s.motor = motorChat.crearMotor({
       nombreGrupo: grupo.nombre,
       hoy: fechaHoyVenezuela,
@@ -507,6 +507,7 @@ async function conLimiteWhatsApp(operacion, descripcion, limiteMs = 8000) {
 }
 
 async function enviar(s, texto, op) {
+  if (s.pausado) return;
   const contenido = { text: texto };
   // '@@' = a quien se menciona (op.mencionar); '@@2' y '@@3' = otras personas (op.mencionar2/3). Sin persona, la marca se quita.
   const menciones = [];
@@ -542,6 +543,7 @@ async function enviar(s, texto, op) {
 
 // Manda una imagen (PNG) al grupo con su pie de foto. Devuelve true si salió.
 async function enviarImagen(s, png, pie) {
+  if (s.pausado) return false;
   try {
     const enviado = await conLimiteWhatsApp(s.sock.sendMessage(s.jid, { image: png, caption: pie || '' }), 'enviar la imagen');
     const id = enviado && enviado.key && enviado.key.id;
@@ -613,22 +615,45 @@ async function intentar(entrada) {
 async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar, recuperado, recibidoEn = Date.now() }) {
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
-  const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
-  if (!grupo) {
-    if (grupoId && anotar) anotar(await motivoSinGrupoPropio(grupoId, remoteJid));
-    return false;
-  }
-  if (anotar) anotar('Lo leyó el bot de jugadas');
-  // Si el grupo tiene su número propio conectado, la conexión general se hace a un lado (no se responde dos veces).
-  if (!grupoId) {
-    let propia = false;
-    try { propia = require('./whatsappSesionesGrupo').estaConectada(grupo.id); } catch (e) { /* sin gestor: sigue la general */ }
-    if (propia) return false;
-  }
+  const grupoGeneral = grupoId ? null : await grupoDelChat(remoteJid);
+  const idGrupo = grupoId || grupoGeneral?.id;
+  if (!idGrupo) return false;
 
-  // Los pozos se comparten entre los chats de un grupo. Ninguna operación
-  // posterior puede adelantar la escritura de una jugada ya en curso.
-  await enCola(colasPorGrupo, grupo.id, async () => {
+  // Los pozos y el interruptor de actividad se comparten en el grupo de Ludox.
+  await enCola(colasPorGrupo, idGrupo, async () => {
+    const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : grupoGeneral;
+    if (!grupo) {
+      if (anotar) anotar(await motivoSinGrupoPropio(grupoId, remoteJid));
+      return;
+    }
+    // La conexión general cede el paso a la propia.
+    if (!grupoId && require('./whatsappSesionesGrupo').estaConectada(grupo.id)) return;
+    const comando = texto.trim().toLowerCase();
+    const fromMe = !!msg.key?.fromMe;
+    const cambioEn = grupo.hipismo_chat_cambio_en ? new Date(grupo.hipismo_chat_cambio_en).getTime() : null;
+    const enviadoEn = tiempoDeMensaje(msg);
+    if (comando === 'on' || comando === 'off') {
+      if (!grupoId || !fromMe || (enviadoEn && cambioEn && enviadoEn < cambioEn)) return;
+      const pausado = comando === 'off';
+      if (pausado !== !!grupo.hipismo_chat_en_pausa) {
+        await db.query(
+          'UPDATE grupos SET hipismo_chat_en_pausa = $2, hipismo_chat_cambio_en = $3 WHERE id = $1',
+          [grupo.id, pausado, new Date(enviadoEn || recibidoEn)]
+        );
+      }
+      for (const sesion of sesiones.values()) {
+        if (sesion.grupoId === grupo.id) sesion.pausado = pausado;
+      }
+      if (anotar) anotar(pausado ? 'Bot IA en pausa por OFF' : 'Bot IA activo por ON');
+      const control = { sock, jid: remoteJid, avisos: new Map(), mensajes: new Map([[idMsg, msg]]), anotarActual: anotar };
+      await enviar(control, pausado ? '😴 Bot IA en pausa.' : '✅ Bot IA activado.', { citarId: idMsg });
+      return;
+    }
+    if (grupoId && (grupo.hipismo_chat_en_pausa || (enviadoEn && cambioEn && enviadoEn < cambioEn))) {
+      if (anotar) anotar(grupo.hipismo_chat_en_pausa ? 'Bot IA en pausa' : 'Ignorado: mensaje anterior al último ON');
+      return;
+    }
+    if (anotar) anotar('Lo leyó el bot de jugadas');
     const jidCrudo = (msg.key && msg.key.participant) || remoteJid;
     let jidReal = jidCrudo;
     try {
@@ -637,8 +662,8 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
       if (anotar) anotar(e.message);
     }
     if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
-    const fromMe = !!(msg.key && msg.key.fromMe);
     const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
+    s.pausado = false;
     let decision = '';
     s.anotarActual = motivo => {
       if (anotar) anotar(motivo);

@@ -27,7 +27,7 @@ function consulta(text, params) {
     bitacoraBot.push(params);
     return { rows: [] };
   }
-  if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid FROM grupos WHERE id = \$1 AND \$2 = ANY/i.test(sql)) {
+  if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid, hipismo_chat_en_pausa, hipismo_chat_cambio_en FROM grupos WHERE id = \$1 AND \$2 = ANY/i.test(sql)) {
     return { rows: (params[0] === G && params[1] === BD.grupo.whatsapp_propio_jid && BD.grupo.activo) ? [BD.grupo] : [] };
   }
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid/i.test(sql)) {
