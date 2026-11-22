@@ -8168,15 +8168,18 @@ let botIAConsultando = false;
 
 async function cargarConexionBotIA() {
   const vista = document.getElementById('vista-botIA');
-  if (!vista.classList.contains('activa') || botIAConsultando) return;
+  if (!vista.classList.contains('activa') || document.hidden || botIAConsultando) return;
+  clearTimeout(botIATimer);
   const estado = document.getElementById('botIAConexion');
   const caja = document.getElementById('botIAQr');
   const imagen = document.getElementById('botIAQrImagen');
   const boton = document.getElementById('botIAIniciar');
   const reconectar = document.getElementById('botIAReconectar');
   botIAConsultando = true;
+  let intervalo = 15000;
   try {
     const data = await apiHipismo('/api/hipismo/bot/conexion');
+    if (data.qr || (data.vinculando && !data.ultimoError)) intervalo = 3000;
     const ultimo = data.ultimo;
     const evento = data.ultimoEvento;
     const hora = fecha => new Date(fecha).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas' });
@@ -8203,9 +8206,14 @@ async function cargarConexionBotIA() {
     estado.textContent = e.message;
   } finally {
     botIAConsultando = false;
-    if (vista.classList.contains('activa')) botIATimer = setTimeout(cargarConexionBotIA, 3000);
+    if (vista.classList.contains('activa') && !document.hidden) botIATimer = setTimeout(cargarConexionBotIA, intervalo);
   }
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearTimeout(botIATimer);
+  else cargarConexionBotIA();
+});
 
 let botIABitacora = { filas: [], chats: {}, limitada: false };
 let botIAConsultaBitacora = 0;
