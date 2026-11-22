@@ -32,7 +32,7 @@ function datos(nj, extra) {
   check(/^<svg /.test(svg) && /width="1080"/.test(svg) && /font-family="Poppins"/.test(svg), 'arma un SVG de 1080 de ancho con la fuente Poppins');
   check(/Gulfstream Park · 5ta carrera/.test(svg) && /ZENYATTA/.test(svg) && /Lunes 05-10-2026/.test(svg), 'encabezado: grupo, hipódromo · carrera y fecha');
   check(/LLEGADA/.test(svg) && /RETIRADO/.test(svg) && />4</.test(svg) && />7</.test(svg), 'llegada con los caballos y el retirado');
-  check(/JUEGA/.test(svg) && /Apostó/.test(svg) && />DA</.test(svg) && /Tykhe/.test(svg) && /-80,00/.test(svg) && /\+95,00/.test(svg), 'filas enfrentadas con el monto real de los dos participantes');
+  check(/JUEGA/.test(svg) && /Apostó/.test(svg) && />DA</.test(svg) && /Tykhe/.test(svg) && /-80,00/.test(svg) && /\+95,00/.test(svg), 'tarjetas por parada con el monto real de los dos participantes');
   check(/TOTALES DE LA CARRERA/.test(svg) && /GANAN/.test(svg) && /PIERDEN/.test(svg) && /\+450,50/.test(svg) && /-300,00/.test(svg), 'cuadros de quiénes ganan y quiénes pierden');
   check(/6 jugadas · Reclamos al privado/.test(svg), 'el pie cuenta las jugadas');
   check(!/LINEA|TINTE/.test(svg), 'no quedan marcas de color sin reemplazar');
@@ -62,7 +62,7 @@ function datos(nj, extra) {
   check(!/<b>/.test(raro) && /A&amp;B &lt;X&gt;/.test(raro) && /&quot;/.test(raro), 'el texto se escapa (nombres con & < > ")');
 
   // --- nombres largos se recortan ---
-  const largo = m.armarSvgPlano(datos(1, { jugadas: [{ cliente: 'UN NOMBRE DE CLIENTE MUY MUY LARGO', modalidad: '4x1', caballo: '3', monto: 10, banquero: 'OTRO NOMBRE DE BANQUERO LARGUISIMO', resultado: 5 }] }), { estilo: {} });
+  const largo = m.armarSvgPlano(datos(1, { jugadas: [{ cliente: 'UN NOMBRE DE CLIENTE MUY MUY LARGO '.repeat(3), modalidad: '4x1', caballo: '3', monto: 10, banquero: 'OTRO NOMBRE DE BANQUERO LARGUISIMO', resultado: 5 }] }), { estilo: {} });
   check(/…/.test(largo), 'los nombres demasiado largos se recortan con …');
 
   // --- PNG real (si el servidor tiene resvg) ---

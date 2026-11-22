@@ -181,36 +181,40 @@ function estrella(cx, cy, r) {
   return `<polygon points="${pts.join(' ')}" fill="#ffffff"/>`;
 }
 
-function filaEnfrentada(p, x, y, ancho, L, j) {
-  const alto = L.rowh + 14;
-  const gap = 7;
-  const centro = Math.round(ancho * .24);
-  const lateral = (ancho - centro - 2 * gap) / 2;
+function tarjetaParada(p, x, y, ancho, alto, L, j) {
   const f = Math.round(L.fs * ESCALA_LETRA);
+  const margen = 14;
+  const cabH = Math.round(alto * .31);
+  const filaH = (alto - cabH - 10) / 2;
   const texto = (px, py, tam, contenido, color, ancla = 'start') => {
     p.push(`<text x="${px}" y="${py}" font-size="${tam}" font-weight="700" text-anchor="${ancla}" fill="${color}">${esc(contenido)}</text>`);
   };
-  const lado = (px, rol, nombre, valor) => {
+  p.push(`<rect x="${x}" y="${y}" width="${ancho}" height="${alto - 3}" rx="12" fill="#ffffff" stroke="LINEA"/>`);
+  p.push(`<rect x="${x + 4}" y="${y + 4}" width="${ancho - 8}" height="${cabH - 4}" rx="7" fill="#f1f4f2"/>`);
+  const caballo = /^\d+$/.test(j.caballo) ? 'Caballo ' + j.caballo : j.caballo;
+  const apuesta = [j.modalidad, caballo].filter(Boolean).join(' · ');
+  const importe = 'Apostó ' + monto(j.monto);
+  const fCab = Math.round(f * .82);
+  const anchoImporte = anchoAprox(importe, fCab, true);
+  const base = y + cabH / 2 + fCab * .42;
+  texto(x + margen, base, fCab, recortarAncho(apuesta, fCab, ancho - anchoImporte - 3 * margen, true), TINTA);
+  texto(x + ancho - margen, base, fCab, importe, TINTA, 'end');
+  const participante = (indice, rol, nombre, valor) => {
+    const py = y + cabH + 2 + indice * (filaH + 2);
     const v = Number(valor);
     const color = valor == null || v === 0 ? GRIS : v < 0 ? ROJO : VERDE;
     const fondo = valor == null || v === 0 ? '#f1f4f2' : v < 0 ? '#fce9e7' : '#e7f5eb';
     const resultado = valor == null ? '—' : v === 0 ? monto(0) : signo(v);
-    const margen = 13;
-    const fRol = Math.round(f * .65);
-    const espacio = lateral - 2 * margen - anchoAprox(resultado, f, true) - 12;
-    p.push(`<rect x="${px}" y="${y}" width="${lateral}" height="${alto - 6}" rx="11" fill="${fondo}" stroke="${color}"/>`);
-    texto(px + margen, y + 19, fRol, rol, color);
-    texto(px + margen, y + alto - 16, f, recortarAncho(nombre, f, espacio, true), TINTA);
-    texto(px + lateral - margen, y + alto - 16, f, resultado, color, 'end');
+    const anchoRol = Math.round(f * 2.55);
+    const anchoNombre = ancho - anchoRol - anchoAprox(resultado, f, true) - 3 * margen;
+    const centro = py + filaH / 2 + f * .32;
+    p.push(`<rect x="${x + 4}" y="${py}" width="${ancho - 8}" height="${filaH}" rx="6" fill="${fondo}"/>`);
+    texto(x + margen, centro, Math.round(f * .65), rol, color);
+    texto(x + margen + anchoRol, centro, f, recortarAncho(nombre, f, anchoNombre, true), TINTA);
+    texto(x + ancho - margen, centro, f, resultado, color, 'end');
   };
-  lado(x, 'JUEGA', j.cliente, j.resultado);
-  lado(x + lateral + centro + gap * 2, 'DA', j.banquero, j.resultadoDa);
-  const cx = x + ancho / 2;
-  const tamCentro = Math.round(f * .76);
-  texto(cx, y + 19, tamCentro, recortarAncho(j.modalidad, tamCentro, centro - 8, true), TINTA, 'middle');
-  const caballo = /^\d+$/.test(j.caballo) ? 'Caballo ' + j.caballo : j.caballo;
-  texto(cx, y + alto / 2 + 6, tamCentro, recortarAncho(caballo, tamCentro, centro - 8, true), GRIS, 'middle');
-  texto(cx, y + alto - 10, tamCentro, 'Apostó ' + monto(j.monto), TINTA, 'middle');
+  participante(0, 'JUEGA', j.cliente, j.resultado);
+  participante(1, 'DA', j.banquero, j.resultadoDa);
 }
 
 // Una fila de jugada (o de parada adelantada). `x` es el borde izquierdo de la columna, `cw` su ancho.
@@ -378,10 +382,12 @@ function armarSvgPlano(datos, opciones) {
   if (filasJ.length) {
     const porCol = nFilas(filasJ.length);
     const anchoFila = cardW / L.cols;
-    const alto = 12 + porCol * (L.rowh + 14);
+    const altoTarjeta = L.rowh + 56;
+    const paso = altoTarjeta + 5;
+    const alto = 14 + porCol * paso;
     tarjeta(alto, () => {
-      filasJ.forEach((j, i) => filaEnfrentada(p, M + Math.floor(i / porCol) * anchoFila + 8,
-        y + 8 + (i % porCol) * (L.rowh + 14), anchoFila - 16, L, j));
+      filasJ.forEach((j, i) => tarjetaParada(p, M + Math.floor(i / porCol) * anchoFila + 8,
+        y + 8 + (i % porCol) * paso, anchoFila - 16, altoTarjeta, L, j));
     }, true);
     y += alto;
   }
