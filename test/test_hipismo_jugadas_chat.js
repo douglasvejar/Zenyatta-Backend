@@ -23,6 +23,12 @@ const pagoSegundo = require('../src/services/hipismoCalc').resolverModalidad(o.a
 check(pagoSegundo.j * o.monto === 50, 'si el 4 llega segundo, el jugador gana 50 sobre 100 antes de comisión');
 o = m.interpretarOferta('Juego 2y3n del 6 120');
 check(o.ok && o.apuesta.modalidad === '2y3n', 'la modalidad escrita junta 2y3n conserva su significado');
+for (const parada of ['juego 100 1p 1y2 del 3&#x20;', 'juego 100 1y2 1p del 3', 'juego 100 1y2/1p del 3&#x20;']) {
+  const oferta = m.interpretarOferta(parada);
+  check(oferta.ok && oferta.monto === 100 && oferta.apuesta.grupo[0] === 3 &&
+    oferta.apuesta.modalidad.split('-').sort().join('/') === '1p/1y2', parada + ' reparte 100 entre 1p y 1y2 del 3');
+}
+check(m.interpretarOferta('juego 100 1/2 del 3').apuesta.modalidad === '1/2', 'la modalidad individual 1/2 mantiene su significado');
 o = m.interpretarOferta('Juego 4x1 10@8 con 60');
 check(o.ok && o.apuesta.modalidad === '10a8' && o.monto === 60 && o.lado === 'doy', '"10@8" es lo mismo que 10a8');
 o = m.interpretarOferta('Juego 4 x 1 10a8 con 120');
