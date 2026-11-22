@@ -17,6 +17,10 @@ check(o.ok && o.lado === 'recibo' && o.monto === 200 && o.apuesta.modalidad === 
 o = m.interpretarOferta('Juego 2y2 y 2p del 5 con 40');
 check(o.ok && JSON.stringify(o.apuesta.grupo) === '[5]' && o.apuesta.modalidad === '2y2-2p' && o.monto === 40, '"Juego 2y2 y 2p del 5 con 40": combo 2y2 + 2p del caballo 5');
 eq(m.interpretarOferta('Juego 2 y 3n del 6 120'), m.interpretarOferta('Juego 2p y 3n del 6 con 120'), 'la y separada permite abreviar 2p');
+o = m.interpretarOferta('Juego  2 y 2n del 4 con 100&#x20;');
+check(o.ok && o.apuesta.modalidad === '2y2' && o.apuesta.grupo[0] === 4 && o.monto === 100, '2 y 2n se lee como 2y2 del 4 con 100');
+const pagoSegundo = require('../src/services/hipismoCalc').resolverModalidad(o.apuesta.modalidad, 2);
+check(pagoSegundo.j * o.monto === 50, 'si el 4 llega segundo, el jugador gana 50 sobre 100 antes de comisión');
 o = m.interpretarOferta('Juego 2y3n del 6 120');
 check(o.ok && o.apuesta.modalidad === '2y3n', 'la modalidad escrita junta 2y3n conserva su significado');
 o = m.interpretarOferta('Juego 4x1 10@8 con 60');
