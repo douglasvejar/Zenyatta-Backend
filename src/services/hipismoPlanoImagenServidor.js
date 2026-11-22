@@ -181,58 +181,49 @@ function estrella(cx, cy, r) {
   return `<polygon points="${pts.join(' ')}" fill="#ffffff"/>`;
 }
 
-function tarjetaParada(p, x, y, ancho, alto, L, j) {
-  const f = Math.round(L.fs * ESCALA_LETRA);
-  const margen = 14;
-  const cabH = Math.round(alto * .31);
-  const filaH = (alto - cabH - 10) / 2;
-  const texto = (px, py, tam, contenido, color, ancla = 'start') => {
-    p.push(`<text x="${px}" y="${py}" font-size="${tam}" font-weight="700" text-anchor="${ancla}" fill="${color}">${esc(contenido)}</text>`);
-  };
-  p.push(`<rect x="${x}" y="${y}" width="${ancho}" height="${alto - 3}" rx="12" fill="#ffffff" stroke="LINEA"/>`);
-  p.push(`<rect x="${x + 4}" y="${y + 4}" width="${ancho - 8}" height="${cabH - 4}" rx="7" fill="#f1f4f2"/>`);
-  const caballo = /^\d+$/.test(j.caballo) ? 'Caballo ' + j.caballo : j.caballo;
-  const apuesta = [j.modalidad, caballo].filter(Boolean).join(' · ');
-  const importe = 'Apostó ' + monto(j.monto);
-  const fCab = Math.round(f * .82);
-  const anchoImporte = anchoAprox(importe, fCab, true);
-  const base = y + cabH / 2 + fCab * .42;
-  texto(x + margen, base, fCab, recortarAncho(apuesta, fCab, ancho - anchoImporte - 3 * margen, true), TINTA);
-  texto(x + ancho - margen, base, fCab, importe, TINTA, 'end');
-  const participante = (indice, rol, nombre, valor) => {
-    const py = y + cabH + 2 + indice * (filaH + 2);
-    const v = Number(valor);
-    const color = valor == null || v === 0 ? GRIS : v < 0 ? ROJO : VERDE;
-    const fondo = valor == null || v === 0 ? '#f1f4f2' : v < 0 ? '#fce9e7' : '#e7f5eb';
-    const resultado = valor == null ? '—' : v === 0 ? monto(0) : signo(v);
-    const anchoRol = Math.round(f * 2.55);
-    const anchoNombre = ancho - anchoRol - anchoAprox(resultado, f, true) - 3 * margen;
-    const centro = py + filaH / 2 + f * .32;
-    p.push(`<rect x="${x + 4}" y="${py}" width="${ancho - 8}" height="${filaH}" rx="6" fill="${fondo}"/>`);
-    texto(x + margen, centro, Math.round(f * .65), rol, color);
-    texto(x + margen + anchoRol, centro, f, recortarAncho(nombre, f, anchoNombre, true), TINTA);
-    texto(x + ancho - margen, centro, f, resultado, color, 'end');
-  };
-  participante(0, 'JUEGA', j.cliente, j.resultado);
-  participante(1, 'DA', j.banquero, j.resultadoDa);
+function participante(p, x, y, ancho, fuente, nombre, valor) {
+  const texto = valor == null ? '—' : Number(valor) === 0 ? monto(0) : signo(valor);
+  const color = valor == null || Number(valor) === 0 ? GRIS : Number(valor) < 0 ? ROJO : VERDE;
+  const espacio = ancho - anchoAprox(texto, fuente, true) - 9;
+  const visible = recortarAncho(nombre, fuente, espacio, true);
+  p.push(`<text x="${x}" y="${y}" font-size="${fuente}" font-weight="700" fill="${TINTA}">${esc(visible)} <tspan dx="5" fill="${color}">${texto}</tspan></text>`);
+}
+
+function posicionesTabla(x, cw, L) {
+  const xCli = x + 14;
+  if (L.resultadosPorNombre) {
+    const ancho = cw - 28;
+    return [xCli, xCli + ancho * .31, xCli + ancho * .43, xCli + ancho * .50, xCli + ancho * .65];
+  }
+  const xMod = xCli + L.cCli + 6;
+  const xSilk = xMod + L.cMod + 6;
+  const xMonto = xSilk + L.cSilk + 6;
+  return [xCli, xMod, xSilk, xMonto, xMonto + L.cMonto + 6];
 }
 
 // Una fila de jugada (o de parada adelantada). `x` es el borde izquierdo de la columna, `cw` su ancho.
 function filaJugada(p, x, y, cw, L, f) {
   const F = Math.round(L.fs * ESCALA_LETRA);
   const base = y + L.rowh / 2 + F * 0.36;
-  const xCli = x + 14, xMod = xCli + L.cCli + 6, xSilk = xMod + L.cMod + 6, xMonto = xSilk + L.cSilk + 6, xDa = xMonto + L.cMonto + 6;
+  const [xCli, xMod, xSilk, xMonto, xDa] = posicionesTabla(x, cw, L);
+  const xAposto = L.resultadosPorNombre ? xDa - 9 : xMonto + L.cMonto;
+  const anchoSilk = L.resultadosPorNombre ? xMonto - xSilk : L.cSilk;
   const xDerecha = x + cw - 14;
   p.push(`<line x1="${x}" x2="${x + cw}" y1="${y}" y2="${y}" stroke="LINEA"/>`);
-  p.push(`<text x="${xCli}" y="${base}" font-size="${F}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.cliente, F, L.cCli, true))}</text>`);
-  if (f.mod) p.push(`<text x="${xMod}" y="${base}" font-size="${F}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.mod, F, L.cMod, true))}</text>`);
+  if (L.resultadosPorNombre) participante(p, xCli, base, xMod - xCli - 8, F, f.cliente, f.res);
+  else p.push(`<text x="${xCli}" y="${base}" font-size="${F}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.cliente, F, L.cCli, true))}</text>`);
+  if (f.mod) p.push(`<text x="${xMod}" y="${base}" font-size="${F}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.mod, F, xSilk - xMod - 6, true))}</text>`);
   const toks = String(f.cab || '').split(/[^0-9]+/).filter(Boolean);
-  if (toks.length === 1) silk(p, xSilk + L.cSilk / 2, y + L.rowh / 2, L.silk, toks[0]);
+  if (toks.length === 1) silk(p, xSilk + anchoSilk / 2, y + L.rowh / 2, L.silk, toks[0]);
   else if (f.cab) {
     const fc = Math.round(F * 0.8);
-    p.push(`<text x="${xSilk}" y="${y + L.rowh / 2 + fc * 0.36}" font-size="${fc}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.cab, fc, L.cSilk + L.cMonto * 0.2, true))}</text>`);
+    p.push(`<text x="${xSilk}" y="${y + L.rowh / 2 + fc * 0.36}" font-size="${fc}" font-weight="700" fill="${TINTA}">${esc(recortarAncho(f.cab, fc, anchoSilk, true))}</text>`);
   }
-  if (f.monto !== '' && f.monto != null) p.push(`<text x="${xMonto + L.cMonto}" y="${base}" font-size="${F}" font-weight="700" text-anchor="end" fill="${TINTA}">${monto(f.monto)}</text>`);
+  if (f.monto !== '' && f.monto != null) p.push(`<text x="${xAposto}" y="${base}" font-size="${F}" font-weight="700" text-anchor="end" fill="${TINTA}">${monto(f.monto)}</text>`);
+  if (L.resultadosPorNombre) {
+    participante(p, xDa + 6, base, xDerecha - xDa - 6, F, f.da, f.resDa);
+    return;
+  }
   const fd = Math.round(F * 0.9);
   const anchoDa = xDerecha - xDa - 14 - anchoAprox(signo(f.res), F, true) - 8;
   p.push(`<text x="${xDa + 14}" y="${y + L.rowh / 2 + fd * 0.36}" font-size="${fd}" font-weight="700" fill="${GRIS}">${esc(recortarAncho(f.da, fd, Math.max(40, Math.min(L.cDa, anchoDa)), true))}</text>`);
@@ -252,10 +243,12 @@ function tabla(p, x0, y0, ancho, filas, L, sinCab) {
     const x = x0 + c * cw;
     if (!sinCab) {
       p.push(`<rect x="${x}" y="${y0}" width="${cw}" height="${cabH}" fill="TINTE"/>`);
-      const xCli = x + 14, xMod = xCli + L.cCli + 6, xMonto = xMod + L.cMod + 6 + L.cSilk + 6;
+      const [xCli, xMod, , xMonto, xDa] = posicionesTabla(x, cw, L);
       const fh = 13;
       const t = (tx, txt, anchor) => p.push(`<text x="${tx}" y="${y0 + 22}" font-size="${fh}" font-weight="700" letter-spacing="1" ${anchor ? `text-anchor="${anchor}"` : ''} fill="${GRIS}">${txt}</text>`);
-      t(xCli, 'JUEGA'); t(xMod, 'JUGÓ'); t(xMonto + L.cMonto, 'APOSTÓ', 'end'); t(xMonto + L.cMonto + 6 + 14, 'DA'); t(x + cw - 14, 'RESULTADO', 'end');
+      t(xCli, 'JUEGA'); t(xMod, 'JUGÓ'); t(L.resultadosPorNombre ? xDa - 9 : xMonto + L.cMonto, 'APOSTÓ', 'end');
+      t(xDa + (L.resultadosPorNombre ? 6 : 14), 'DA');
+      if (!L.resultadosPorNombre) t(x + cw - 14, 'RESULTADO', 'end');
     }
     trozo.forEach((f, i) => filaJugada(p, x, y0 + cabH + i * L.rowh, cw, L, f));
     if (c > 0) p.push(`<line x1="${x}" x2="${x}" y1="${y0}" y2="${y0 + cabH + trozo.length * L.rowh}" stroke="LINEA" stroke-width="2"/>`);
@@ -302,7 +295,7 @@ function armarSvgPlano(datos, opciones) {
   const t = temaDe(estilo.primario, estilo.secundario);
   const adel = datos.adelantadas && datos.adelantadas.filas && datos.adelantadas.filas.length ? datos.adelantadas.filas : [];
   const cantidad = (datos.jugadas || []).length + adel.length;
-  const L = cantidad <= 30 ? { ...nivelDe(10), perCol: 20 } : nivelDe(cantidad);
+  const L = nivelDe(cantidad);
   const W = L.w;
   const M = 32; // margen lateral
   const p = [];
@@ -378,17 +371,13 @@ function armarSvgPlano(datos, opciones) {
     p.push('</g>');
   };
   const nFilas = n => Math.ceil(n / L.cols);
-  const filasJ = datos.jugadas || [];
+  const filasJ = (datos.jugadas || []).map(j => ({
+    cliente: j.cliente, mod: j.modalidad, cab: j.caballo, monto: j.monto,
+    da: j.banquero, res: j.resultado, resDa: j.resultadoDa
+  }));
   if (filasJ.length) {
-    const porCol = nFilas(filasJ.length);
-    const anchoFila = cardW / L.cols;
-    const altoTarjeta = L.rowh + 56;
-    const paso = altoTarjeta + 5;
-    const alto = 14 + porCol * paso;
-    tarjeta(alto, () => {
-      filasJ.forEach((j, i) => tarjetaParada(p, M + Math.floor(i / porCol) * anchoFila + 8,
-        y + 8 + (i % porCol) * paso, anchoFila - 16, altoTarjeta, L, j));
-    }, true);
+    const alto = 34 + nFilas(filasJ.length) * L.rowh;
+    tarjeta(alto, () => tabla(p, M, y, cardW, filasJ, { ...L, resultadosPorNombre: true }, false), true);
     y += alto;
   }
   if (adel.length) {

@@ -11057,16 +11057,10 @@ function pimgAsegurarEstilos() {
   .pimg-jh .pimg-d { padding-left:14px; }
   .pimg-j .pimg-r, .pimg-jh .pimg-r { text-align:right; font-weight:700; }
   .pimg-g { color:#17803f; } .pimg-p { color:#b42318; }
-  .pimg-tarjeta { display:grid; grid-template-rows:31% minmax(0, 1fr) minmax(0, 1fr); gap:2px; padding:4px; margin:0 0 6px; border:1px solid var(--pimg-line); border-radius:12px; background:#fff; }
-  .pimg-tarjeta-lado { display:grid; grid-template-columns:2.55em minmax(0, 1fr) auto; align-items:center; gap:6px; border-radius:6px; padding:0 10px; }
-  .pimg-tarjeta-lado small { font-size:.65em; font-weight:700; }
-  .pimg-tarjeta-lado b { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#14211b; }
-  .pimg-tarjeta-lado.pimg-g { background:#e7f5eb; }
-  .pimg-tarjeta-lado.pimg-p { background:#fce9e7; }
-  .pimg-tarjeta-lado.pimg-n { color:#5b6b63; background:#f1f4f2; }
-  .pimg-tarjeta-cab { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 10px; border-radius:7px; background:#f1f4f2; font-size:.82em; font-weight:700; }
-  .pimg-tarjeta-cab span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .pimg-tarjeta-cab strong { white-space:nowrap; }
+  .pimg-participante { display:flex; align-items:baseline; gap:7px; min-width:0; padding-right:8px; }
+  .pimg-j .pimg-participante b { min-width:0; }
+  .pimg-participante strong { flex-shrink:0; white-space:nowrap; }
+  .pimg-n { color:#5b6b63; }
   .pimg-totales-titulo { text-align:center; padding:10px 0 2px; font-size:23px; letter-spacing:.05em; }
   .pimg-res { display:flex; gap:14px; padding:10px 32px 6px; align-items:flex-start; }
   .pimg-rc { background:#fff; border-radius:12px; overflow:hidden; border:1px solid var(--pimg-line); }
@@ -11080,31 +11074,22 @@ function pimgAsegurarEstilos() {
   `;
   document.head.appendChild(st);
 }
-function pimgTarjetaParada(j, L) {
-  const lado = (rol, nombre, valor) => {
-    const n = Number(valor);
-    const color = valor == null || n === 0 ? 'pimg-n' : n < 0 ? 'pimg-p' : 'pimg-g';
-    const resultado = valor == null ? '—' : n === 0 ? pimgMonto(0) : pimgSigno(n);
-    return `<div class="pimg-tarjeta-lado ${color}"><small>${rol}</small><b>${pimgEsc(nombre)}</b><strong>${resultado}</strong></div>`;
+function pimgFila(c, mod, cab, monto, da, res, L, resDa) {
+  const columnas = L.resultadosPorNombre ? 'minmax(0,31fr) minmax(0,12fr) minmax(0,7fr) minmax(0,15fr) minmax(0,35fr)' : `${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr`;
+  const grid = `grid-template-columns:${columnas}; height:${L.rowh}px; font-size:${L.fs}px;`;
+  const participante = (nombre, valor) => {
+    const color = valor == null || Number(valor) === 0 ? 'pimg-n' : Number(valor) < 0 ? 'pimg-p' : 'pimg-g';
+    return `<span class="pimg-participante"><b>${pimgEsc(nombre)}</b><strong class="${color}">${valor == null ? '—' : Number(valor) === 0 ? pimgMonto(0) : pimgSigno(Number(valor))}</strong></span>`;
   };
-  const caballo = /^\d+$/.test(j.caballo) ? 'Caballo ' + j.caballo : j.caballo;
-  const apuesta = [j.modalidad, caballo].filter(Boolean).join(' · ');
-  return `<div class="pimg-tarjeta" style="height:${L.rowh + 56}px;font-size:${L.fs}px;">
-    <div class="pimg-tarjeta-cab"><span>${pimgEsc(apuesta)}</span><strong>Apostó ${pimgMonto(j.monto)}</strong></div>
-    ${lado('JUEGA', j.cliente, j.resultado)}
-    ${lado('DA', j.banquero, j.resultadoDa)}
-  </div>`;
-}
-function pimgFila(c, mod, cab, monto, da, res, L) {
-  const grid = `grid-template-columns:${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr; height:${L.rowh}px; font-size:${L.fs}px;`;
+  const juega = L.resultadosPorNombre ? participante(c, res) : `<b>${pimgEsc(c)}</b>`;
+  const banca = L.resultadosPorNombre ? participante(da, resDa) : `<span class="pimg-d">${pimgEsc(da)}</span><span class="pimg-r ${Number(res) < 0 ? 'pimg-p' : 'pimg-g'}">${pimgSigno(Number(res))}</span>`;
   const toks = String(cab || '').split(/[^0-9]+/).filter(Boolean);
   const cabHtml = toks.length === 1 ? pimgSilk(toks[0], L.silk) : `<span style="font-weight:700;font-size:${Math.round(L.fs * 0.8)}px;white-space:nowrap;">${pimgEsc(cab || '')}</span>`;
-  const r = Number(res);
-  return `<div class="pimg-j" style="${grid}"><b>${pimgEsc(c)}</b><span class="pimg-m">${pimgEsc(mod)}</span><span>${cab === '' || cab == null ? '' : cabHtml}</span>` +
-    `<span class="pimg-a">${monto === '' || monto == null ? '' : pimgMonto(monto)}</span><span class="pimg-d">${pimgEsc(da)}</span>` +
-    `<span class="pimg-r ${r < 0 ? 'pimg-p' : 'pimg-g'}">${pimgSigno(r)}</span></div>`;
+  return `<div class="pimg-j" style="${grid}">${juega}<span class="pimg-m">${pimgEsc(mod)}</span><span>${cab === '' || cab == null ? '' : cabHtml}</span>` +
+    `<span class="pimg-a">${monto === '' || monto == null ? '' : pimgMonto(monto)}</span>${banca}</div>`;
 }
 function pimgCabecera(L) {
+  if (L.resultadosPorNombre) return '<div class="pimg-j pimg-jh" style="grid-template-columns:minmax(0,31fr) minmax(0,12fr) minmax(0,7fr) minmax(0,15fr) minmax(0,35fr);"><span>Juega</span><span>Jugó</span><span></span><span class="pimg-a">Apostó</span><span class="pimg-d">Da</span></div>';
   const grid = `grid-template-columns:${L.cCli} ${L.cMod} ${L.cSilk} ${L.cMonto} ${L.cDa} 1fr;`;
   return `<div class="pimg-j pimg-jh" style="${grid}"><span>Juega</span><span>Jugó</span><span></span><span class="pimg-a">Apostó</span><span class="pimg-d">Da</span><span class="pimg-r">Resultado</span></div>`;
 }
@@ -11131,14 +11116,15 @@ function pimgResumen(items, cls, titulo, color, L) {
 function construirHtmlPlanoImagen(d, logoUrl, tema) {
   const adel = d.adelantadas && d.adelantadas.filas && d.adelantadas.filas.length ? d.adelantadas.filas : [];
   const cantidad = d.jugadas.length + adel.length;
-  const L = cantidad <= 30 ? { ...pimgNivel(10), perCol: 20 } : pimgNivel(cantidad);
+  const L = pimgNivel(cantidad);
   const llegada = (d.llegada || []).map((n, i) => `<div class="pimg-pos">${pimgSilk(n, 56)}${i + 1}º</div>`).join('');
   const ret = (d.retirados || []).length
     ? `<div class="pimg-ret">🚫 Retirado ${d.retirados.map(n => pimgSilk(n, 40)).join(' ')}</div>` : '';
   const titulo = [d.hipodromo, d.carreraTexto ? d.carreraTexto + ' carrera' : ''].filter(Boolean).join(' · ') || 'Plano';
-  const filasJ = d.jugadas.map(j => pimgTarjetaParada(j, L));
+  const tablaJugadas = { ...L, resultadosPorNombre: true };
+  const filasJ = d.jugadas.map(j => pimgFila(j.cliente, j.modalidad, j.caballo, j.monto, j.banquero, j.resultado, tablaJugadas, j.resultadoDa));
   const logo = logoUrl ? `<img class="pimg-logo" src="${pimgEsc(logoUrl)}" alt="">` : '';
-  let cuerpo = filasJ.length ? `<div class="pimg-cuerpo"><div class="pimg-marca">${logo}${pimgTabla(filasJ, L, true)}</div></div>` : '';
+  let cuerpo = filasJ.length ? `<div class="pimg-cuerpo"><div class="pimg-marca">${logo}${pimgTabla(filasJ, tablaJugadas, false)}</div></div>` : '';
   if (adel.length) {
     // PARADA ADELANTADAS separada en secciones (Tablas Fijas / Marcas Adelantadas / Jugadas entre
     // Tercios Adelantadas), cada una con su título y su propia tabla (08-10-2026).
