@@ -85,6 +85,7 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
     const r = await db.query(
       `SELECT chat_jid, hipodromo, carrera, enviado_en, recibido_en, autor, texto, decision
        FROM hipismo_chat_bitacora WHERE grupo_id = $1 AND fecha = $2
+         AND recibido_en >= now() - interval '168 hours'
        ORDER BY recibido_en DESC, mensaje_id DESC LIMIT 501`,
       [req.grupoId, fecha]
     );

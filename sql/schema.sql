@@ -2452,5 +2452,6 @@ create table if not exists hipismo_chat_bitacora (
   primary key (grupo_id, chat_jid, mensaje_id)
 );
 create index if not exists hipismo_chat_bitacora_fecha on hipismo_chat_bitacora (grupo_id, fecha, recibido_en desc);
+create index if not exists hipismo_chat_bitacora_retencion on hipismo_chat_bitacora (recibido_en);
 alter table hipismo_chat_pendientes enable row level security;
 alter table hipismo_chat_bitacora enable row level security;
