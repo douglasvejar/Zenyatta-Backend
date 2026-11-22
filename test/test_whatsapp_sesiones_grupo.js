@@ -11,8 +11,22 @@ const originalLoad = Module._load;
 
 const G = 'grupo-uno', JID = '120363000000000077@g.us';
 const BD = { grupo: { id: G, nombre: 'Dream', activo: true, whatsapp_propio_jid: JID, whatsapp_propio_activo: true, hipismo_chat_habilitado: true, comandos_whatsapp_habilitado: true, comandos_whatsapp_numero: '+58 414 1111111' }, updates: [], activos: [{ id: 'a1' }, { id: 'a2' }], errorColumna: false };
+const estadosPendientes = new Map();
+const bitacoraBot = [];
 function consulta(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  if (/^SELECT estado FROM hipismo_chat_pendientes/i.test(sql)) {
+    const estado = estadosPendientes.get(params.slice(0, 2).join('|'));
+    return { rows: estado ? [{ estado: JSON.parse(estado) }] : [] };
+  }
+  if (/^INSERT INTO hipismo_chat_pendientes/i.test(sql)) {
+    estadosPendientes.set(params.slice(0, 2).join('|'), params[2]);
+    return { rows: [] };
+  }
+  if (/^INSERT INTO hipismo_chat_bitacora/i.test(sql)) {
+    bitacoraBot.push(params);
+    return { rows: [] };
+  }
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero, whatsapp_propio_jid FROM grupos WHERE id = \$1 AND \$2 = ANY/i.test(sql)) {
     return { rows: (params[0] === G && params[1] === BD.grupo.whatsapp_propio_jid && BD.grupo.activo) ? [BD.grupo] : [] };
   }

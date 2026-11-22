@@ -88,6 +88,29 @@ pool.query('ALTER TABLE grupos ADD COLUMN IF NOT EXISTS hipismo_chat_habilitado 
     actualizado_en timestamptz not null default now()
   )`))
   .then(() => pool.query('ALTER TABLE hipismo_chat_estado ADD COLUMN IF NOT EXISTS ultimo_comando jsonb'))
+  .then(() => pool.query(`create table if not exists hipismo_chat_pendientes (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  chat_jid text not null,
+  estado jsonb not null,
+  primary key (grupo_id, chat_jid)
+);
+create table if not exists hipismo_chat_bitacora (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  chat_jid text not null,
+  mensaje_id text not null,
+  fecha date not null,
+  hipodromo text,
+  carrera integer,
+  enviado_en timestamptz,
+  recibido_en timestamptz not null,
+  autor text not null,
+  texto text not null,
+  decision text not null,
+  primary key (grupo_id, chat_jid, mensaje_id)
+);
+create index if not exists hipismo_chat_bitacora_fecha on hipismo_chat_bitacora (grupo_id, fecha, recibido_en desc);
+alter table hipismo_chat_pendientes enable row level security;
+alter table hipismo_chat_bitacora enable row level security;`))
   .then(() => pool.query(`create table if not exists hipismo_chat_jugadas (
     id uuid primary key default gen_random_uuid(),
     grupo_id uuid not null references grupos(id) on delete cascade,

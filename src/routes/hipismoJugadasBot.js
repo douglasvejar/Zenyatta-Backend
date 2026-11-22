@@ -74,6 +74,24 @@ module.exports = function crearRouterBot({ registrarAlerta, hipismoPlanosPapeler
     });
   }));
 
+  router.get('/conexion/bitacora', asyncHandler(async (req, res) => {
+    const fecha = req.query.fecha || fechaHoyVenezuela();
+    if (typeof fecha !== 'string' || !FECHA_RE.test(fecha) ||
+      new Date(fecha + 'T00:00:00Z').toJSON()?.slice(0, 10) !== fecha) {
+      return res.status(400).json({ error: 'Elige una fecha válida.' });
+    }
+    const gestor = require('../services/whatsappSesionesGrupo');
+    const chats = Object.fromEntries(gestor.estadoPublico(req.grupoId).grupos.map(g => [g.jid, g.nombre]));
+    const r = await db.query(
+      `SELECT chat_jid, hipodromo, carrera, enviado_en, recibido_en, autor, texto, decision
+       FROM hipismo_chat_bitacora WHERE grupo_id = $1 AND fecha = $2
+       ORDER BY recibido_en DESC, mensaje_id DESC LIMIT 501`,
+      [req.grupoId, fecha]
+    );
+    res.set('Cache-Control', 'no-store');
+    res.json({ chats, filas: r.rows.slice(0, 500), limitada: r.rows.length > 500 });
+  }));
+
   router.post('/conexion/iniciar', asyncHandler(async (req, res) => {
     const gestor = require('../services/whatsappSesionesGrupo');
     if (gestor.estaConectada(req.grupoId)) return res.json({ ok: true });

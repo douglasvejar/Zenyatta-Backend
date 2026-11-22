@@ -23,8 +23,22 @@ const T = {
   }
 };
 let contador = 0;
+const estadosPendientes = new Map();
+const bitacoraBot = [];
 function consulta(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
+  if (/^SELECT estado FROM hipismo_chat_pendientes/i.test(sql)) {
+    const estado = estadosPendientes.get(params.slice(0, 2).join('|'));
+    return { rows: estado ? [{ estado: JSON.parse(estado) }] : [] };
+  }
+  if (/^INSERT INTO hipismo_chat_pendientes/i.test(sql)) {
+    estadosPendientes.set(params.slice(0, 2).join('|'), params[2]);
+    return { rows: [] };
+  }
+  if (/^INSERT INTO hipismo_chat_bitacora/i.test(sql)) {
+    bitacoraBot.push(params);
+    return { rows: [] };
+  }
   if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) return { rows: [] };
   if (/^SELECT id, nombre, comandos_whatsapp_habilitado, comandos_whatsapp_numero FROM grupos WHERE whatsapp_grupo_jid = \$1 AND whatsapp_habilitado = true AND hipismo_chat_habilitado = true AND activo = true/i.test(sql)) {
     return { rows: (params[0] === JID && GRUPO.hipismo_chat_habilitado) ? [GRUPO] : [] };
@@ -65,7 +79,7 @@ function consulta(text, params) {
     return { rows: T.chat.filter(c => (c.jugador_nombre === params[1] || c.banquero_nombre === params[1]) && !c.resuelta && !c.adelantada_jugada_id &&
       ((!c.cerrada_en && c.creado_en.getTime() > ahora - 3 * 3600e3) || (c.cerrada_en && new Date(c.cerrada_en).getTime() > ahora - 10 * 60e3))) };
   }
-  if (/^SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad FROM hipismo_chat_jugadas c LEFT JOIN/i.test(sql)) {
+  if (/^SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad, c.id FROM hipismo_chat_jugadas c LEFT JOIN/i.test(sql)) {
     return { rows: T.chat.filter(c => c.fecha === params[1] && c.hipodromo_nombre === params[2] && c.carrera_numero === params[3] && !c.resuelta) };
   }
   if (/^SELECT c.id, c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta FROM hipismo_chat_jugadas c WHERE/i.test(sql)) {
@@ -442,6 +456,7 @@ const textoDe = e => e.contenido.text;
     };
     const antes = T.chat.length;
     const primera = await enviarTardia(base + 1210);
+    glue._sesiones.clear(); // incluso el aviso citado y el plazo del OK sobreviven
     await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', 'OK', primera.respuesta.key.id, base + 1460));
     check(T.chat.length === antes, 'el que toma la parada no puede darse el OK');
     await whatsappBot.manejarMensajeEntrante(sock, mT('CACHACO', 'OK', primera.avisoId, base + 1509));
@@ -549,11 +564,18 @@ const textoDe = e => e.contenido.text;
     await whatsappBot.manejarMensajeEntrante(sock, oferta);
     await whatsappBot.manejarMensajeEntrante(sock, mT('MARVEL', '700', oferta.key.id, base + 2410));
     const antes = T.chat.length;
+    glue._sesiones.clear(); // simula reiniciar entre los 700 y la segunda respuesta
     const respuesta = mT('MARVEL', '500', oferta.key.id, base + 2420);
     await whatsappBot.manejarMensajeEntrante(sock, respuesta);
     const aviso = enviados.find(e => e.opciones?.quoted === respuesta);
     check(T.chat.length === antes + 1 && T.chat.at(-1).monto === 300 &&
       aviso?.contenido.text === '✅ Aquí solo 300,00', 'piden 500 en una parada de 1000 con 300 restantes: se confirman solo los 300');
+    const fila = bitacoraBot.find(evento => evento[2] === respuesta.key.id);
+    check(fila?.[5] === 11 && Number(fila?.[6]) === (base + 2420) * 1000 && /300,00/.test(fila?.[10]),
+      'la bitácora guarda mensaje, hora original y decisión en la carrera correcta');
+    glue._sesiones.clear();
+    await whatsappBot.manejarMensajeEntrante(sock, respuesta);
+    check(T.chat.length === antes + 1, 'reentregar la respuesta después del reinicio no duplica la jugada');
   }
 
   {

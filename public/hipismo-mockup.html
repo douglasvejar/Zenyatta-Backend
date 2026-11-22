@@ -4137,6 +4137,23 @@
           <button type="button" class="btn btn-secundario" id="botIAReconectar" hidden onclick="iniciarConexionBotIA(true)">Reconectar WhatsApp</button>
         </div>
       </div>
+      <div class="card" style="margin-top:16px;">
+        <h2>Bitácora del Bot IA</h2>
+        <div class="fila">
+          <div><label for="botIAFechaBitacora">Fecha</label><input id="botIAFechaBitacora" type="date" onchange="cargarBitacoraBotIA()"></div>
+          <div><label for="botIAChatBitacora">Chat</label><select id="botIAChatBitacora" onchange="filtrarBitacoraBotIA()"></select></div>
+          <div><label for="botIACarreraBitacora">Carrera</label><select id="botIACarreraBitacora" onchange="filtrarBitacoraBotIA()"></select></div>
+          <div><label for="botIABuscarBitacora">Buscar mensaje o cliente</label><input id="botIABuscarBitacora" type="search" oninput="filtrarBitacoraBotIA()"></div>
+        </div>
+        <button type="button" class="btn btn-secundario" onclick="cargarBitacoraBotIA()">Actualizar bitácora</button>
+        <p id="botIAMsgBitacora" role="status"></p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Enviado</th><th>Recibido</th><th>Chat</th><th>Carrera</th><th>Participante</th><th>Mensaje</th><th>Decisión</th></tr></thead>
+            <tbody id="botIATablaBitacora"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ============ ADMINISTRACIÓN: CLIENTES ============ -->
@@ -8189,6 +8206,66 @@ async function cargarConexionBotIA() {
   }
 }
 
+let botIABitacora = { filas: [], chats: {}, limitada: false };
+let botIAConsultaBitacora = 0;
+
+async function cargarBitacoraBotIA() {
+  const fecha = document.getElementById('botIAFechaBitacora');
+  const estado = document.getElementById('botIAMsgBitacora');
+  fecha.value ||= fechaLocalHoy();
+  const consulta = ++botIAConsultaBitacora;
+  estado.textContent = 'Cargando bitácora…';
+  try {
+    const data = await apiHipismo('/api/hipismo/bot/conexion/bitacora?fecha=' + encodeURIComponent(fecha.value));
+    if (consulta !== botIAConsultaBitacora) return;
+    botIABitacora = data;
+    const opcionesChat = data.filas.map(f => [f.chat_jid, data.chats[f.chat_jid] || f.chat_jid]);
+    const opcionesCarrera = data.filas.filter(f => f.carrera).map(f => {
+      const nombre = f.hipodromo + ', carrera ' + f.carrera;
+      return [nombre, nombre];
+    });
+    for (const [id, etiqueta, opciones] of [
+      ['botIAChatBitacora', 'Todos los chats', opcionesChat],
+      ['botIACarreraBitacora', 'Todas las carreras', opcionesCarrera]
+    ]) {
+      const select = document.getElementById(id);
+      const anterior = select.value;
+      const valores = new Map(opciones);
+      select.replaceChildren(new Option(etiqueta, ''));
+      for (const [valor, texto] of valores) select.add(new Option(texto, valor));
+      if (valores.has(anterior)) select.value = anterior;
+    }
+    filtrarBitacoraBotIA();
+  } catch (e) {
+    if (consulta !== botIAConsultaBitacora) return;
+    botIABitacora = { filas: [], chats: {}, limitada: false };
+    document.getElementById('botIATablaBitacora').replaceChildren();
+    estado.textContent = e.message;
+  }
+}
+
+function filtrarBitacoraBotIA() {
+  const chat = document.getElementById('botIAChatBitacora').value;
+  const carrera = document.getElementById('botIACarreraBitacora').value;
+  const buscar = document.getElementById('botIABuscarBitacora').value.trim().toLowerCase();
+  const { filas, chats, limitada } = botIABitacora;
+  const tabla = document.getElementById('botIATablaBitacora');
+  const hora = fecha => fecha ? new Date(fecha).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas' }) : '—';
+  tabla.replaceChildren();
+  for (const f of filas) {
+    const nombreCarrera = f.carrera ? f.hipodromo + ', carrera ' + f.carrera : '—';
+    if ((chat && chat !== f.chat_jid) || (carrera && carrera !== nombreCarrera) ||
+      (buscar && ![f.autor, f.texto, f.decision].some(s => s.toLowerCase().includes(buscar)))) continue;
+    const fila = tabla.insertRow();
+    for (const valor of [hora(f.enviado_en), hora(f.recibido_en), chats[f.chat_jid] || f.chat_jid, nombreCarrera, f.autor, f.texto, f.decision]) {
+      fila.insertCell().textContent = valor;
+    }
+  }
+  document.getElementById('botIAMsgBitacora').textContent = tabla.rows.length
+    ? tabla.rows.length + ' registros' + (limitada ? ' entre los últimos 500 del día' : '')
+    : 'No hay registros para estos filtros.';
+}
+
 async function iniciarConexionBotIA(reconectar = false) {
   const boton = document.getElementById(reconectar ? 'botIAReconectar' : 'botIAIniciar');
   clearTimeout(botIATimer);
@@ -8233,7 +8310,7 @@ function mostrarVista(id, btn) {
   // estado real más reciente sin depender de que el operador se acuerde
   // de refrescar.
   clearTimeout(botIATimer);
-  if (id === 'botIA') cargarConexionBotIA();
+  if (id === 'botIA') { cargarConexionBotIA(); cargarBitacoraBotIA(); }
   if (typeof movAlCambiarVista === 'function') movAlCambiarVista(id);
   if (REFRESCAR_AL_ENTRAR_VISTA[id]) REFRESCAR_AL_ENTRAR_VISTA[id]();
 }

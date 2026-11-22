@@ -448,6 +448,20 @@ function crearMotor(deps) {
   const ofertas = new Map();
   const pendientesTardias = new Map();
   let ultimoComando = null;
+  const respuestasConfirmadas = new Set();
+  function estadoPendiente() {
+    return {
+      fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera,
+      ofertas: [...ofertas.entries()],
+      tardias: [...pendientesTardias].map(([id, p]) => [id, { ...p, oferta: p.oferta.id }]),
+      registros, respuestasConfirmadas: [...respuestasConfirmadas]
+    };
+  }
+
+  async function guardarPendientes() {
+    if (deps.guardarPendientes) await deps.guardarPendientes(estadoPendiente());
+  }
+
   let jugadas = [];
   let sinPlano = 0;
   const avisados = new Map(); // clave -> ms del último aviso (evita repetir el mismo reclamo)
@@ -620,6 +634,7 @@ function crearMotor(deps) {
       if (!r || !r.ok) { await deps.responder('⚠️ No pude borrar esa jugada (' + ((r && r.motivo) || 'ya no existe o ya fue calculada') + '). Un administrador debe revisarla en JUGADAS BOT IA.', { citarId: m.id }); return true; }
       registros = registros.filter(x => x !== caso.reg);
       jugadas = jugadas.filter(j => j !== caso.reg.jugada);
+      await guardarPendientes();
       nota('ERROR: se borró la jugada de ' + caso.marcador.nombre + ' (' + (comoAdmin ? 'decidió un administrador' : caso.otro.nombre + ' aceptó') + ')');
       await deps.responder(comoAdmin
         ? '*LISTO, UN ADMINISTRADOR AUTORIZÓ BORRAR LA JUGADA DE @@2 CON @@, AQUÍ NADA SE LA BORRARON*'
@@ -643,9 +658,10 @@ function crearMotor(deps) {
       return;
     }
     ctx.hipodromo = hip; ctx.carrera = datos.carrera; ctx.abierta = true; ctx.fecha = deps.hoy(); ctx.ret = '';
-    ofertas.clear(); pendientesTardias.clear(); sinPlano = 0; cancelarCasosError(); registros = [];
+    ofertas.clear(); pendientesTardias.clear(); sinPlano = 0; cancelarCasosError(); registros = []; respuestasConfirmadas.clear();
     jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: hip, carrera: datos.carrera });
     await guardarEstado(comando);
+    nota('Carrera abierta');
     await deps.responder('*✅ Carrera abierta: ' + hip + ', ' + ORDINAL_CARRERA(datos.carrera) + ' Carrera.*\n*PARA QUE DINERO , VAMOS PONLE PONLE 🤑🤑*' + (jugadas.length ? '\n(Ya había ' + jugadas.length + ' jugadas guardadas en esta carrera.)' : ''), { citarId: m.id });
   }
 
@@ -653,6 +669,7 @@ function crearMotor(deps) {
     if (!ctx.hipodromo || !ctx.abierta) { if (!m.recuperado) await deps.responder('⚠️ No hay ninguna carrera abierta.', { citarId: m.id }); return; }
     ctx.abierta = false; ofertas.clear(); pendientesTardias.clear();
     await guardarEstado(comando, m.recuperado ? comando?.ts : null);
+    nota('Carrera cerrada');
     // Todo en MAYÚSCULA, negrita y cursiva (*_LÍNEA_*): WhatsApp lo aplica por línea, así que cada línea lleva sus marcas.
     const bc = t => '*_' + t.toUpperCase() + '_*';
     await deps.responder([
@@ -698,6 +715,7 @@ function crearMotor(deps) {
   }
 
   async function procesarOferta(m, o) {
+    if (ofertas.has(m.id)) return;
     if (!ctx.abierta) {
       if (puedeAvisar('sin-carrera', 120000)) await deps.responder('⚠️ Todavía no hay una carrera abierta. Un administrador debe abrirla escribiendo, por ejemplo: *Mountaineer 1ra carrera*.', { citarId: m.id });
       return;
@@ -728,11 +746,19 @@ function crearMotor(deps) {
     }
     nota('Jugada publicada por ' + nombre + ' (' + fmt(o.monto) + '): queda abierta 3 minutos esperando respuestas');
     ofertas.set(m.id, { id: m.id, ts: tiempoDe(m), autorJid: m.remitente.jid, autorNombre: nombre, autorEtiqueta: m.remitente.nombre, lado: o.lado, apuesta: o.apuesta, monto: o.monto, restante: o.monto });
-    if (ofertas.size > 400) ofertas.delete(ofertas.keys().next().value);
+    if (ofertas.size > 400) {
+      const id = ofertas.keys().next().value;
+      ofertas.delete(id);
+      for (const [respuesta, pendiente] of pendientesTardias) {
+        if (pendiente.oferta.id === id) pendientesTardias.delete(respuesta);
+      }
+    }
+    await guardarPendientes();
   }
 
   async function procesarRespuesta(m, resp) {
     const oferta = ofertas.get(m.citadoId);
+    if (respuestasConfirmadas.has(m.id)) return;
     if (!ctx.abierta) {
       nota('Respuesta recibida pero no hay carrera abierta');
       if (oferta || (m.citadoTexto && interpretarOferta(m.citadoTexto)?.ok)) {
@@ -763,6 +789,7 @@ function crearMotor(deps) {
       } else nota('Respuesta a un mensaje que no es una parada conocida: se ignora');
       return;
     }
+    if (tiempoDe(m) < oferta.ts) return;
     if (oferta.autorJid === m.remitente.jid) { nota('Respuesta a su propia parada: no hace nada'); return; } // responderse a uno mismo no hace nada
     const conflicto = conflictoDeRol(oferta.lado, resp);
     if (conflicto) { nota('Mal término: ' + conflicto.replace('❌ Aquí nada, ', '')); await deps.responder(conflicto, { citarId: m.id }); return; }
@@ -780,13 +807,16 @@ function crearMotor(deps) {
     if (transcurrido >= VIGENCIA_PARADA_MS) {
       if (pendientesTardias.has(m.id)) return;
       const pedida = Math.min(pedido, oferta.restante);
+      nota('Respuesta fuera de los tres minutos: pendiente del OK de quien publicó');
       const pendiente = { oferta, respuesta: m, resp, nombre, pedida, recibida: tiempoDe(m), avisoId: null, resuelta: false };
       pendientesTardias.set(m.id, pendiente);
       if (pendientesTardias.size > 400) pendientesTardias.delete(pendientesTardias.keys().next().value);
+      await guardarPendientes();
       pendiente.avisoId = await deps.responder(
         '@@ @@2 🚨 ❌ Aquí nada. La sentencia llegó después de 3 minutos. Quien publicó la parada tiene 1 minuto para responder *OK* citando este aviso o la respuesta.',
         mencionarTardia(pendiente, m.id)
       );
+      await guardarPendientes();
       return;
     }
     if (resp.tipo === 'monto' && pedido > oferta.monto) {
@@ -818,7 +848,7 @@ function crearMotor(deps) {
       }
       return false;
     }
-    if (pendiente.resuelta) return true;
+    if (pendiente.resuelta || respuestasConfirmadas.has(pendiente.respuesta.id)) return true;
     if (manual) {
       if (!await m.esAdminCarrera?.()) return true;
     } else {
@@ -826,22 +856,27 @@ function crearMotor(deps) {
       if (!autor) return true;
       const transcurrido = tiempoDe(m) - pendiente.recibida;
       if (transcurrido < 0 || transcurrido >= VENTANA_CONFIRMACION_MS) {
+        nota('Confirmación fuera del minuto permitido');
         await deps.responder('❌ Aquí nada, ya pasó el minuto para confirmar.', { citarId: m.id });
         return true;
       }
       if (!acepta) {
         pendiente.resuelta = true;
+        await guardarPendientes();
+        nota('Quien publicó rechazó la jugada');
         await deps.responder('❌ @@ @@2 Aquí nada, quien publicó la parada rechazó la jugada.', mencionarTardia(pendiente, m.id));
         return true;
       }
     }
     if (!ctx.abierta || pendiente.oferta.seFue || pendiente.oferta.restante <= 0.005) {
       pendiente.resuelta = true;
+      await guardarPendientes();
       await deps.responder('❌ Aquí nada, la parada ya no está disponible.', { citarId: m.id });
       return true;
     }
     await registrarRespuesta(pendiente.respuesta, pendiente.resp, pendiente.oferta, pendiente.nombre, pendiente.pedida, m.id);
     pendiente.resuelta = true;
+    await guardarPendientes();
     return true;
   }
 
@@ -873,6 +908,7 @@ function crearMotor(deps) {
       monto = round2(Math.max(0, topeAutor.max));
       if (monto <= 0.005) {
         oferta.restante = 0;
+        await guardarPendientes();
         nota('El que publicó ' + oferta.autorNombre + ' ya no tiene disponible: no se jugó');
         await deps.responder('❌ Aquí nada, el que publicó esa parada ya no tiene disponible', { citarId: m.id });
         return;
@@ -888,17 +924,29 @@ function crearMotor(deps) {
       riesgoJugador: round2(monto * r.jugador), riesgoBanquero: round2(monto * r.banquero),
       textoLinea: 'Juega ' + jugadorNombre + ' ' + apuestaSegura(apuestaJug) + ' con ' + montoParaLinea(monto) + ' da ' + banqueroNombre
     };
-    const idGuardada = await deps.guardarJugada(jugada);
-    if (idGuardada) jugada.id = idGuardada;
     oferta.restante = round2(oferta.restante - monto);
-    jugadas.push(jugada);
+    if (m.id) respuestasConfirmadas.add(m.id);
     registros.push({ jugada, ofertaId: oferta.id, respId: m.id,
       autor: { jid: oferta.autorJid, nombre: oferta.autorNombre, etiqueta: oferta.autorEtiqueta },
       resp: { jid: m.remitente.jid, nombre, etiqueta: m.remitente.nombre } });
+    const estadoParada = oferta.restante > 0 ? 'Quedan ' + fmt(oferta.restante) : 'Parada topada';
+    const decision = 'Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre + '. ' + estadoParada +
+      (limitadoPor ? '. Limitado por el pozo de ' + (limitadoPor === 'resp' ? nombre : oferta.autorNombre) : '');
+    let idGuardada;
+    try {
+      idGuardada = await deps.guardarJugada(jugada, estadoPendiente(), decision);
+    } catch (e) {
+      registros.pop();
+      respuestasConfirmadas.delete(m.id);
+      oferta.restante = restanteAntes;
+      throw e;
+    }
+    if (idGuardada) jugada.id = idGuardada;
+    jugadas.push(jugada);
     sinPlano++;
     const superaRestante = resp.tipo === 'monto' && pedido > restanteAntes;
     const tomoRestante = resp.tipo === 'todo' && restanteAntes < oferta.monto;
-    nota('Se jugó: ' + jugadorNombre + ' con ' + fmt(monto) + ' contra ' + banqueroNombre);
+    nota(decision);
     if (confirmacionId) {
       const mensaje = '✅ @@ @@2 Van jugando con ' + fmt(monto);
       await deps.responder(mensaje, mencionarTardia({ oferta, respuesta: m }, confirmacionId));
@@ -907,7 +955,6 @@ function crearMotor(deps) {
       // "Aquí solo jugaron 1.732,70 por pozo de @(el que se quedó sin saldo)", etiquetando a las dos personas.
       const limitado = limitadoPor === 'resp' ? { jid: m.remitente.jid, nombre: m.remitente.nombre } : { jid: oferta.autorJid, nombre: oferta.autorEtiqueta };
       const op = { citarId: m.id, mencionar: oferta.autorJid, nombre: oferta.autorEtiqueta, mencionar2: m.remitente.jid, nombre2: m.remitente.nombre, mencionar3: limitado.jid, nombre3: limitado.nombre };
-      nota('Saldo limitado: se jugó solo ' + fmt(monto) + ' por el pozo de ' + (limitadoPor === 'resp' ? nombre : oferta.autorNombre));
       await deps.responder('✅ @@ @@2 Aquí solo jugaron ' + fmt(monto) + ' por pozo de @@3', op);
     } else {
       const texto = superaRestante ? '✅ Aquí solo ' + fmt(monto) : '✅ Aquí jugaron' + (tomoRestante ? ' ' + fmt(monto) : '');
@@ -916,8 +963,7 @@ function crearMotor(deps) {
     if (sinPlano >= CADA_N_JUGADAS_PLANO) await publicarPlano();
   }
 
-  // Si el servidor se reinició con una carrera abierta, se retoma desde la base (solo del mismo día). Las jugadas ofrecidas que
-  // esperaban respuesta no se recuperan: quien quiera jugar debe volver a publicarlas.
+  // Se restaura la foto de la carrera abierta, sus paradas y las confirmaciones pendientes.
   let estadoCargado = false;
   async function cargarEstadoSiHaceFalta() {
     if (estadoCargado) return;
@@ -929,16 +975,30 @@ function crearMotor(deps) {
         ultimoComando = e.ultimoComando || (e.actualizadoTs ? { ts: Number(e.actualizadoTs), ids: [], migrado: true } : null);
         ctx.hipodromo = e.hipodromo; ctx.carrera = e.carrera; ctx.abierta = !!e.abierta; ctx.fecha = e.fecha;
         jugadas = await deps.cargarJugadas({ fecha: ctx.fecha, hipodromo: ctx.hipodromo, carrera: ctx.carrera });
+        const p = ctx.abierta && deps.cargarPendientes ? await deps.cargarPendientes() : null;
+        if (p && p.fecha === ctx.fecha && p.hipodromo === ctx.hipodromo && p.carrera === ctx.carrera) {
+          for (const [id, oferta] of p.ofertas || []) ofertas.set(id, oferta);
+          for (const [id, pendiente] of p.tardias || []) {
+            const oferta = ofertas.get(pendiente.oferta);
+            if (oferta) pendientesTardias.set(id, { ...pendiente, oferta });
+          }
+          const jugadasPorId = new Map(jugadas.map(j => [j.id, j]));
+          registros = (p.registros || []).flatMap(registro => {
+            const jugada = jugadasPorId.get(registro.jugada.id);
+            return jugada ? [{ ...registro, jugada }] : [];
+          });
+          for (const id of p.respuestasConfirmadas || []) respuestasConfirmadas.add(id);
+        }
       }
-    } catch (err) { console.error('[hipismoChat] No se pudo retomar la carrera abierta:', err.message); }
+    } catch (err) { estadoCargado = false; throw err; }
   }
   async function guardarEstado(comando, cerradoTs) {
     if (!deps.guardarEstado) return;
     try {
-      await deps.guardarEstado({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, abierta: ctx.abierta, fecha: ctx.fecha, ultimoComando: comando || ultimoComando, cerradoTs });
+      await deps.guardarEstado({ hipodromo: ctx.hipodromo, carrera: ctx.carrera, abierta: ctx.abierta, fecha: ctx.fecha, ultimoComando: comando || ultimoComando, cerradoTs }, estadoPendiente());
       if (comando) ultimoComando = comando;
     }
-    catch (err) { console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message); }
+    catch (err) { estadoCargado = false; throw err; }
   }
 
   async function procesarMensaje(m) {
@@ -971,6 +1031,7 @@ function crearMotor(deps) {
       }
       if (pizarra) return cargarPizarra(m, pizarra);
       if (!ctx.hipodromo) return deps.responder('⚠️ Este chat todavía no tiene una carrera seleccionada.', { citarId: m.id });
+      nota('Plano solicitado para esta carrera');
       return publicarPlano();
     }
     if (m.esAdmin) {
@@ -987,7 +1048,7 @@ function crearMotor(deps) {
     if (oferta !== null) return procesarOferta(m, oferta);
     const resp = interpretarRespuesta(texto);
     // "Sf"/"Se fue": sus jugadas abiertas se fueron. Si después alguien le responde (monto o J), el bot dice que no hay nada.
-    if (resp && resp.tipo === 'sf') { nota('Puso "se fue": sus paradas abiertas quedan muertas'); retirarOfertasDe(m.remitente.jid); return; }
+    if (resp && resp.tipo === 'sf') { nota('Puso "se fue": sus paradas abiertas quedan muertas'); retirarOfertasDe(m.remitente.jid); await guardarPendientes(); return; }
     // Responder a una parada mal escrita (con "J", un monto, "ok"…): no se juega nada.
     if (m.citadoId && ctx.abierta && (resp || pareceIntentoDeJugar(texto)) && (malas.has(m.citadoId) || (m.citadoTexto && (pareceParadaMalEscrita(m.citadoTexto) || (interpretarOferta(m.citadoTexto) || { ok: true }).ok === false)))) {
       nota('Respondieron a una parada mal escrita: no se juega');

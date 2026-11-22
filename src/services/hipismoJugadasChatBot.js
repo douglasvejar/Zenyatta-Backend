@@ -244,13 +244,26 @@ async function resolverHipodromo(grupoId, texto) {
 
 // El bot NO guarda nada como "adelantada": la jugada espera aquí (plano en espera de la pizarra, máx. unos minutos). Al cargar la pizarra el
 // bot hace lo mismo que el empleado: pega el plano en Cargar Planos, calcula y confirma (ver cargarPizarraChat).
-async function guardarJugada(grupoId, j) {
-  const r = await db.query(
+async function guardarJugada(grupoId, j, ejecutor = db) {
+  const r = await ejecutor.query(
     `INSERT INTO hipismo_chat_jugadas (grupo_id, fecha, hipodromo_nombre, carrera_numero, jugador_nombre, banquero_nombre, monto, riesgo_jugador, riesgo_banquero, texto_linea, apuesta)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [grupoId, j.fecha, j.hipodromo, j.carrera, j.jugadorNombre, j.banqueroNombre, j.monto, j.riesgoJugador, j.riesgoBanquero, j.textoLinea, JSON.stringify(j.apuesta || null)]
   );
   return r && r.rows && r.rows[0] ? r.rows[0].id : null;
+}
+
+async function guardarPendientes(grupoId, chat, estado, ejecutor = db) {
+  await ejecutor.query(
+    `INSERT INTO hipismo_chat_pendientes (grupo_id, chat_jid, estado) VALUES ($1, $2, $3)
+     ON CONFLICT (grupo_id, chat_jid) DO UPDATE SET estado = EXCLUDED.estado`,
+    [grupoId, chat, JSON.stringify(estado)]
+  );
+}
+
+async function cargarPendientes(grupoId, chat) {
+  const r = await db.query('SELECT estado FROM hipismo_chat_pendientes WHERE grupo_id = $1 AND chat_jid = $2', [grupoId, chat]);
+  return r.rows[0]?.estado;
 }
 
 // "ERROR" en el chat: el otro involucrado (o un administrador) aceptó quitar la jugada. Solo se borran las que siguen en espera de la pizarra.
@@ -279,49 +292,42 @@ async function cargarEstadoCarrera(grupoId, chatJid) {
       floor(extract(epoch from actualizado_en)) * 1000 AS "actualizadoTs" FROM hipismo_chat_estado WHERE grupo_id = $1`, [grupoId]);
     return r.rows[0] || null;
   } catch (e) {
-    if (!e || (e.code !== '42P01' && e.code !== '42703')) console.error('[hipismoChat] No se pudo leer el estado de la carrera:', e.message);
-    return null;
+    throw e;
   }
 }
-async function guardarEstadoCarrera(grupoId, e, chatJid) {
-  try {
+async function guardarEstadoCarrera(grupoId, e, chatJid, chat, pendientes) {
+  await db.transaccion(async cliente => {
     if (chatJid) {
-      await db.query(
+      await cliente.query(
         `INSERT INTO hipismo_chat_estado_por_chat (grupo_id, chat_jid, estado) VALUES ($1, $2, $3)
          ON CONFLICT (grupo_id, chat_jid) DO UPDATE SET estado = EXCLUDED.estado`,
         [grupoId, chatJid, JSON.stringify({ hipodromo: e.hipodromo, carrera: e.carrera, abierta: !!e.abierta, fecha: e.fecha, ultimoComando: e.ultimoComando, actualizadoTs: Date.now() })]
       );
     } else {
-      await db.query(
+      await cliente.query(
         `INSERT INTO hipismo_chat_estado (grupo_id, hipodromo, carrera, abierta, fecha, actualizado_en, ultimo_comando) VALUES ($1,$2,$3,$4,$5,now(),$6)
          ON CONFLICT (grupo_id) DO UPDATE SET hipodromo = EXCLUDED.hipodromo, carrera = EXCLUDED.carrera, abierta = EXCLUDED.abierta, fecha = EXCLUDED.fecha, actualizado_en = now(), ultimo_comando = EXCLUDED.ultimo_comando`,
         [grupoId, e.hipodromo, e.carrera, !!e.abierta, e.fecha, e.ultimoComando || null]
       );
     }
-  } catch (err) {
-    if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo guardar el estado de la carrera:', err.message);
-  }
-  // Al cerrar la carrera sus jugadas en espera empiezan a contar los minutos para soltar el saldo; si se reabre, vuelven a contar como abiertas.
-  try {
     if (e.hipodromo && e.carrera && e.fecha) {
       const parametros = [grupoId, e.fecha, e.hipodromo, e.carrera];
       const cierre = e.abierta ? 'NULL' : e.cerradoTs ? '$5::timestamptz' : 'now()';
       if (!e.abierta && e.cerradoTs) parametros.push(new Date(e.cerradoTs));
-      await db.query(
+      await cliente.query(
         `UPDATE hipismo_chat_jugadas SET cerrada_en = ${cierre}
           WHERE grupo_id = $1 AND fecha = $2 AND hipodromo_nombre = $3 AND carrera_numero = $4 AND resuelta = false AND adelantada_jugada_id IS NULL${e.abierta ? '' : ' AND cerrada_en IS NULL'}`,
         parametros
       );
     }
-  } catch (err) {
-    if (!err || (err.code !== '42P01' && err.code !== '42703')) console.error('[hipismoChat] No se pudo marcar la hora de cierre de las jugadas:', err.message);
-  }
+    await guardarPendientes(grupoId, chat, pendientes, cliente);
+  });
 }
 
 // Las jugadas de la carrera, tal cual están hoy en el sistema (si alguien borró o editó una desde "Revisar Jugadas", el plano lo refleja).
 async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
   const r = await db.query(
-    `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad
+    `SELECT c.jugador_nombre, c.banquero_nombre, c.monto, c.apuesta, a.es_cruce, a.grupo_caballos, a.cruce_grupo_a, a.cruce_grupo_b, a.modalidad, c.id
        FROM hipismo_chat_jugadas c
        LEFT JOIN hipismo_tercios_adelantadas_jugadas a ON a.id = c.adelantada_jugada_id
       WHERE c.grupo_id = $1 AND c.fecha = $2 AND c.hipodromo_nombre = $3 AND c.carrera_numero = $4
@@ -333,7 +339,7 @@ async function cargarJugadas(grupoId, { fecha, hipodromo, carrera }) {
   return r.rows.map(f => {
     const ap = typeof f.apuesta === 'string' ? JSON.parse(f.apuesta) : f.apuesta;
     return {
-      jugadorNombre: f.jugador_nombre, banqueroNombre: f.banquero_nombre, monto: Number(f.monto),
+      id: f.id, jugadorNombre: f.jugador_nombre, banqueroNombre: f.banquero_nombre, monto: Number(f.monto),
       apuesta: ap || (f.es_cruce
         ? { cruce: { gruposA: lista(f.cruce_grupo_a), gruposB: lista(f.cruce_grupo_b) }, grupo: null, modalidad: f.modalidad }
         : { cruce: null, grupo: lista(f.grupo_caballos), modalidad: f.modalidad })
@@ -453,15 +459,23 @@ function sesionDe(grupo, sock, remoteJid, propia) {
       },
       resolverHipodromo: t => resolverHipodromo(grupo.id, t),
       disponible: n => disponibleDe(grupo.id, n),
-      guardarJugada: j => guardarJugada(grupo.id, j),
+      guardarPendientes: estado => guardarPendientes(grupo.id, remoteJid, estado),
+      cargarPendientes: () => cargarPendientes(grupo.id, remoteJid),
+      guardarJugada: (j, estado, decision) => db.transaccion(async cliente => {
+        const id = await guardarJugada(grupo.id, j, cliente);
+        j.id = id;
+        await guardarPendientes(grupo.id, remoteJid, estado, cliente);
+        if (s.registrarActividad) await s.registrarActividad(estado, decision, cliente);
+        return id;
+      }),
       eliminarJugada: id => eliminarJugadaEnEspera(grupo.id, id),
       listarAdmins: () => listarAdministradores(grupo),
       cargarJugadas: q => cargarJugadas(grupo.id, q),
       cargarEstado: () => cargarEstadoCarrera(grupo.id, chatEstado),
       registrarNumero: x => registrarNumeroManual(grupo.id, x, () => s.sock),
       autorizarAdmin: x => autorizarAdminManual(grupo.id, x, () => s.sock),
-      guardarEstado: async e => {
-        await guardarEstadoCarrera(grupo.id, e, chatEstado);
+      guardarEstado: async (e, pendientes) => {
+        await guardarEstadoCarrera(grupo.id, e, chatEstado, remoteJid, pendientes);
         if (e.abierta) { if (s.avisoPizarra) { clearTimeout(s.avisoPizarra); s.avisoPizarra = null; } return; }
         programarAvisoPizarra(s, grupo.id, e);
       },
@@ -521,7 +535,7 @@ async function enviar(s, texto, op) {
     if (id) { enviadosPorElBot.add(id); if (enviadosPorElBot.size > 500) enviadosPorElBot.delete(enviadosPorElBot.values().next().value); }
     return id;
   } catch (e) {
-    if (s.anotarActual) s.anotarActual('No se pudo confirmar el envío del mensaje: ' + e.message);
+    if (s.anotarActual) s.anotarActual('Envío sin confirmar: ' + e.message);
     console.error('[hipismoChat] No se pudo responder en el grupo ' + s.jid + ':', e.message);
   }
 }
@@ -590,12 +604,13 @@ async function enCola(colas, clave, procesar) {
 
 async function intentar(entrada) {
   const { texto, remoteJid, grupoId } = entrada;
+  entrada.recibidoEn ??= Date.now();
   if (!texto || !remoteJid) return false;
   // Reserva el turno antes de consultar permisos o resolver el teléfono.
   return enCola(colasPorChat, JSON.stringify([grupoId || null, remoteJid]), () => procesarEntrada(entrada));
 }
 
-async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar, recuperado }) {
+async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, anotar, recuperado, recibidoEn = Date.now() }) {
   const idMsg = msg.key && msg.key.id;
   if (idMsg && enviadosPorElBot.has(idMsg)) return false; // lo escribió el propio bot
   const grupo = grupoId ? await grupoPropio(grupoId, remoteJid) : await grupoDelChat(remoteJid);
@@ -624,7 +639,12 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
     if (anotar && String(jidReal).endsWith('@lid')) anotar('Lo leyó el bot, pero WhatsApp oculta el número de ' + (msg.pushName || 'esa persona') + ' y no se pudo identificar al cliente');
     const fromMe = !!(msg.key && msg.key.fromMe);
     const s = sesionDe(grupo, sock, remoteJid, !!grupoId);
-    s.anotarActual = anotar || null;
+    let decision = '';
+    s.anotarActual = motivo => {
+      if (anotar) anotar(motivo);
+      if (motivo.startsWith('Número que vio')) return;
+      decision = motivo.startsWith('Envío sin confirmar') && decision ? decision + ' · ' + motivo : motivo;
+    };
     if (idMsg) { s.mensajes.set(idMsg, msg); if (s.mensajes.size > 400) s.mensajes.delete(s.mensajes.keys().next().value); }
     const esAdmin = (await ayudas.esAdministrador(grupo, jidReal, fromMe)) || (await esAdminRegistrado(grupo.id, [jidReal, jidCrudo]));
     let citadoPart = extraerCitadoParticipante(msg);
@@ -645,9 +665,30 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
       },
       remitente: { jid: jidCrudo, jidReal, nombre: msg.pushName || telefonoDeParticipante(jidReal) }
     };
+    const respuesta = motorChat.interpretarRespuesta(texto);
+    const actividad = respuesta?.tipo === 'sf' || motorChat.interpretarOferta(texto) || motorChat.esComandoAperturaOCierre(texto) ||
+      motorChat.interpretarPizarra(texto) || (citadoIdMsg && (respuesta ||
+        /^(?:ok|no|aqu[ií] jugaron)$/i.test(texto.trim()))) || /^(?:plano|planos|aqu[ií] jugaron)$/i.test(texto.trim());
+    s.registrarActividad = async (estado, resultado, ejecutor = db) => {
+      if (!idMsg || !resultado) return;
+      await ejecutor.query(
+        `INSERT INTO hipismo_chat_bitacora
+         (grupo_id, chat_jid, mensaje_id, fecha, hipodromo, carrera, enviado_en, recibido_en, autor, texto, decision)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (grupo_id, chat_jid, mensaje_id) DO UPDATE SET decision = EXCLUDED.decision`,
+        [grupo.id, remoteJid, idMsg, estado.fecha || fechaHoyVenezuela(), estado.hipodromo, estado.carrera,
+          mensaje.ts ? new Date(mensaje.ts) : null, new Date(recibidoEn),
+          String(mensaje.remitente.nombre || 'Participante').slice(0, 120), texto.slice(0, 500), resultado.slice(0, 500)]
+      );
+    };
     try {
       await s.motor.procesarMensaje(mensaje);
+      if (actividad && decision && !decision.includes('no es una parada conocida')) {
+        await s.registrarActividad(s.motor.estado(), decision)
+          .catch(e => console.error('[hipismoChat] No se pudo guardar la bitácora:', e.message));
+      }
     } catch (e) {
+      sesiones.delete(JSON.stringify([grupo.id, remoteJid]));
       console.error('[hipismoChat] Error al procesar un mensaje:', e);
       if (anotar) anotar('ERROR interno al procesar este mensaje: ' + (e && e.message));
       // Antes un error aquí dejaba al bot mudo sin explicación: ahora se avisa en el grupo (una vez por minuto).
@@ -655,6 +696,9 @@ async function procesarEntrada({ sock, msg, remoteJid, texto, ayudas, grupoId, a
         s.ultimoAvisoError = Date.now();
         await enviar(s, '⚠️ No pude procesar ese mensaje por un error interno. Avisa al administrador.', { citarId: idMsg });
       }
+    } finally {
+      s.registrarActividad = null;
+      s.anotarActual = null;
     }
   });
   return false;

@@ -184,7 +184,7 @@ async function manejarMensaje(grupoId, sock, msg, tipo) {
   }
   try {
     const ayudas = deps.ayudasBot()(sock, msg);
-    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar, recuperado });
+    await deps.intentar({ sock, msg, remoteJid, texto, grupoId, ayudas, anotar, recuperado, recibidoEn: ahora });
   } catch (e) {
     console.error('[whatsappSesionesGrupo] Error al procesar un mensaje del grupo ' + grupoId + ':', e);
   }

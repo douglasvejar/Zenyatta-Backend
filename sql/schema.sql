@@ -2429,3 +2429,28 @@ create table if not exists whatsapp_sesion_turno (
   dueno     text not null,
   expira_en timestamptz not null
 );
+
+
+create table if not exists hipismo_chat_pendientes (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  chat_jid text not null,
+  estado jsonb not null,
+  primary key (grupo_id, chat_jid)
+);
+create table if not exists hipismo_chat_bitacora (
+  grupo_id uuid not null references grupos(id) on delete cascade,
+  chat_jid text not null,
+  mensaje_id text not null,
+  fecha date not null,
+  hipodromo text,
+  carrera integer,
+  enviado_en timestamptz,
+  recibido_en timestamptz not null,
+  autor text not null,
+  texto text not null,
+  decision text not null,
+  primary key (grupo_id, chat_jid, mensaje_id)
+);
+create index if not exists hipismo_chat_bitacora_fecha on hipismo_chat_bitacora (grupo_id, fecha, recibido_en desc);
+alter table hipismo_chat_pendientes enable row level security;
+alter table hipismo_chat_bitacora enable row level security;
