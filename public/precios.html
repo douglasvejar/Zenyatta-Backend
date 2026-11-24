@@ -62,9 +62,16 @@
 
   /* ============ HERO ============ */
   .pagina { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 148px 20px 0; }
-  .selector-planes { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:0 auto 28px; }
-  .selector-planes button { font:600 16px Outfit,sans-serif; color:var(--text); background:var(--card); border:1px solid var(--card-border); min-width:112px; padding:10px 20px; border-radius:10px; cursor:pointer; }
-  .selector-planes button[aria-pressed="true"] { color:#06121c; background:var(--accent-cyan); border-color:var(--accent-cyan); }
+  .eleccion-planes { margin:0 auto 42px; text-align:center; }
+  .eleccion-planes h2 { margin:0 0 16px; font:700 clamp(23px,4vw,32px)/1.15 Outfit,sans-serif; }
+  .selector-planes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .selector-planes button { display:grid; gap:6px; align-content:start; text-align:left; color:var(--text); background:var(--card); border:1px solid var(--card-border); padding:clamp(14px,3vw,24px); border-radius:16px; cursor:pointer; }
+  .selector-planes strong { font:700 clamp(22px,4vw,34px)/1.1 Outfit,sans-serif; }
+  .selector-planes span { font:400 14px/1.4 Inter,sans-serif; color:var(--text-dim); }
+  .selector-planes .accion-plan { margin-top:6px; font-weight:600; color:var(--accent-cyan); }
+  .selector-planes [data-tipo-plan="con-ia"] { border-color:#3d9fb8; background:linear-gradient(135deg,#102b3b,var(--card)); }
+  .selector-planes button[aria-pressed="true"] { border-color:var(--accent-cyan); box-shadow:inset 0 0 0 1px var(--accent-cyan); }
+  .selector-planes button:hover { background:#18283b; }
   .selector-planes button:focus-visible { outline:2px solid var(--accent-cyan); outline-offset:4px; }
   .panel-ia { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,340px); align-items:center; gap:clamp(18px,4vw,42px); padding:clamp(18px,4vw,40px); border:1px solid var(--card-border); border-radius:20px; background:var(--card); }
   .panel-ia h1 { margin:0 0 14px; font:700 clamp(28px,5vw,45px)/1.12 Outfit,sans-serif; }
@@ -203,9 +210,20 @@
 
   <div class="pagina">
 
-    <div class="selector-planes" role="group" aria-label="Tipo de automatización">
-      <button type="button" data-tipo-plan="sin-ia" aria-controls="planes-sin-ia" aria-pressed="true">Sin IA</button>
-      <button type="button" data-tipo-plan="con-ia" aria-controls="planes-con-ia" aria-pressed="false">Con IA</button>
+    <div class="eleccion-planes">
+      <h2 id="titulo-selector-planes">Elige el tipo de automatización</h2>
+      <div class="selector-planes" role="group" aria-labelledby="titulo-selector-planes">
+        <button type="button" data-tipo-plan="sin-ia" aria-controls="planes-sin-ia" aria-pressed="true">
+          <strong>Sin IA</strong>
+          <span>Deportes, Hípica o ambos módulos</span>
+          <span class="accion-plan">Viendo esta oferta</span>
+        </button>
+        <button type="button" data-tipo-plan="con-ia" aria-controls="planes-con-ia" aria-pressed="false">
+          <strong>Con IA</strong>
+          <span>Hipismo con LudoXbot2.0 para WhatsApp</span>
+          <span class="accion-plan">Ver plan con IA →</span>
+        </button>
+      </div>
     </div>
 
     <section id="planes-sin-ia" data-panel-plan aria-labelledby="titulo-sin-ia">
@@ -443,6 +461,8 @@ opcionesPlan.forEach(boton => boton.addEventListener('click', () => {
   opcionesPlan.forEach(opcion => {
     const seleccionado = opcion === boton;
     opcion.setAttribute('aria-pressed', String(seleccionado));
+    const tipo = opcion.dataset.tipoPlan === 'con-ia' ? 'con IA' : 'sin IA';
+    opcion.querySelector('.accion-plan').textContent = seleccionado ? 'Viendo esta oferta' : 'Ver oferta ' + tipo + ' →';
     document.getElementById(opcion.getAttribute('aria-controls')).hidden = !seleccionado;
   });
 }));
