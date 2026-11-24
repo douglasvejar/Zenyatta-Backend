@@ -121,6 +121,10 @@ function crearClienteTelegram({ token, fetchImpl, esperarImpl } = {}) {
     const enviados = [];
     const tema = opciones && opciones.threadId ? { message_thread_id: Number(opciones.threadId) } : {};
     for (const trozo of trozos) {
+      if (opciones?.textoPlano) {
+        enviados.push(await llamar('sendMessage', { chat_id: chatId, ...tema, text: trozo, disable_web_page_preview: true }));
+        continue;
+      }
       try {
         enviados.push(await llamar('sendMessage', { chat_id: chatId, ...tema, text: formatearParaTelegram(trozo), parse_mode: 'HTML', disable_web_page_preview: true }));
       } catch (e) {

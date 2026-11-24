@@ -619,6 +619,66 @@ async function responderChatDeGrupo({ api }, mensaje, texto) {
   return true;
 }
 
+const chatPrivadoContacto = () => {
+  const chatId = String(process.env.TELEGRAM_AVISOS_CHAT_ID || '').trim();
+  return /^[1-9]\d*$/.test(chatId) ? chatId : null;
+};
+
+async function avisarMensajeContacto(mensaje) {
+  const chatId = chatPrivadoContacto();
+  if (!chatId || !apiActual) return;
+  const { esEmailContacto } = require('./emailAlertas');
+  const accion = esEmailContacto(mensaje.contacto)
+    ? 'Usa «Responder» en este mensaje para enviarle un correo.'
+    : 'Este contacto dejó un teléfono u otro dato. Respóndele directamente por ese medio.';
+  const texto = [
+    '📩 CONTACTO LUDOXAPP #' + mensaje.id,
+    'Nombre: ' + (mensaje.nombre || 'Sin nombre'),
+    'Contacto: ' + mensaje.contacto,
+    '',
+    mensaje.mensaje,
+    '',
+    accion
+  ].join('\n');
+  await apiActual.enviarTexto(chatId, texto, { textoPlano: true });
+}
+
+async function responderMensajeContacto(api, mensaje, texto, editado) {
+  const citado = mensaje.reply_to_message;
+  const referencia = citado?.from?.is_bot && /^📩 CONTACTO LUDOXAPP #(\d+)\n/.exec(citado.text || '');
+  if (!referencia) return false;
+
+  const chatId = chatPrivadoContacto();
+  if (editado || mensaje.chat.type !== 'private' ||
+      String(mensaje.chat.id) !== chatId || String(mensaje.from?.id) !== chatId) return true;
+
+  if (!texto?.trim()) {
+    await responder(api, chatId, 'Escribe una respuesta de texto para enviarla por correo.');
+    return true;
+  }
+
+  const { rows } = await db.query('SELECT contacto FROM mensajes_contacto WHERE id = $1', [referencia[1]]);
+  if (!rows.length) {
+    await responder(api, chatId, 'Este mensaje de contacto ya no está en la bandeja.');
+    return true;
+  }
+  const { enviarRespuestaContacto } = require('./emailAlertas');
+  const resultado = await enviarRespuestaContacto(rows[0].contacto, texto.trim());
+  if (resultado.enviado) {
+    await responder(api, chatId, '✅ Respuesta enviada por correo.');
+    await db.query('UPDATE mensajes_contacto SET leido = true WHERE id = $1', [referencia[1]])
+      .catch(e => console.error('[contacto] No se pudo marcar el mensaje como leído:', e.message));
+  } else {
+    const errores = {
+      sin_email: 'Este contacto no dejó un correo válido. Usa el dato de contacto del aviso.',
+      sin_configurar: 'Falta configurar el envío de correo SMTP en LudoxApp.',
+      smtp: 'El servidor de correo no confirmó el envío. Revisa el servicio de correo antes de reenviar.'
+    };
+    await responder(api, chatId, '⚠️ ' + errores[resultado.motivo]);
+  }
+  return true;
+}
+
 // ---- Entrada: una actualización de Telegram -----------------------------
 async function manejarActualizacion(update, ctxExterno) {
   const ctx = ctxPorDefecto(ctxExterno);
@@ -632,6 +692,7 @@ async function manejarActualizacion(update, ctxExterno) {
   }
   if (mensaje.from && mensaje.from.is_bot) return;
   const texto = mensaje.text || mensaje.caption;
+  if (await responderMensajeContacto(api, mensaje, mensaje.text, !!update.edited_message)) return;
   // Escrito dentro de un tema del grupo de soporte (un chat por grupo): se manda a la bandeja de ese grupo.
   if (mensaje.message_thread_id && chatSoporte() && String(mensaje.chat.id) === chatSoporte() && !/^\s*\/\w+/.test(texto || '')) {
     if (await responderDesdeTema(ctx, mensaje, texto)) return;
@@ -874,7 +935,7 @@ function _usarCliente(api) { apiActual = api; sockActual = crearSock(api); retur
 
 module.exports = {
   iniciarBotTelegram, detenerBotTelegram, obtenerEstadoTelegram,
-  manejarActualizacion, avisarMensajeDeGrupo, responderChatDeGrupo, responderDesdeTema, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
+  manejarActualizacion, avisarMensajeContacto, avisarMensajeDeGrupo, responderChatDeGrupo, responderDesdeTema, revisarResumenesAutomaticos, revisarCierreNocturnoTelegram, avisarPropietario, avisarProblema, notificarProblemaDeBot,
   jidDeChat, chatDeJid, crearSock, crearSockCentral, config, _usarCliente,
   separarEncabezadoGrupo, resolverGrupoPorNombre, esCentral
 };

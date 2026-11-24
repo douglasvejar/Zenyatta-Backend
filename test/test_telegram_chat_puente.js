@@ -14,6 +14,7 @@ const GRUPOS = [
 ];
 const MENSAJES = [];
 const ADJUNTOS = {};
+const contacto = { id: 21, nombre: 'Ana', contacto: 'ana@example.test', mensaje: 'Quiero una demo', leido: false };
 let SIN_COLUMNA_TEMA = false;
 function ejecutarQuery(text, params) {
   const sql = text.replace(/\s+/g, ' ').trim();
@@ -49,6 +50,13 @@ function ejecutarQuery(text, params) {
   }
   if (/^UPDATE mensajes_chat SET leido_superadmin = true/i.test(sql)) {
     MENSAJES.forEach(m => { if (m.grupo_id === params[0] && m.remitente === 'grupo') m.leido_superadmin = true; });
+    return { rows: [] };
+  }
+  if (/^SELECT contacto FROM mensajes_contacto/i.test(sql)) {
+    return { rows: String(contacto.id) === params[0] ? [contacto] : [] };
+  }
+  if (/^UPDATE mensajes_contacto SET leido/i.test(sql)) {
+    if (String(contacto.id) === params[0]) contacto.leido = true;
     return { rows: [] };
   }
   throw new Error('BD falsa: no sé responder ' + sql);
@@ -308,6 +316,41 @@ function respuesta({ chat = DUENO_CHAT, tipo = 'private', from = DUENO, citadoId
   await telegramBot.avisarMensajeDeGrupo({ grupoId: 'g1', mensaje: { id: 'no-existe', texto: '', tiene_adjunto: true, adjunto_tipo: 'image/png', adjunto_nombre: 'x.png' } });
   check(archivosEnv.length === 1 && archivosEnv[0].k === 'texto' && /una foto/.test(archivosEnv[0].t), '13k) si no se puede leer el adjunto, queda el aviso de texto de siempre');
   delete process.env.TELEGRAM_AVISOS_CHAT_ID;
+
+  process.env.TELEGRAM_AVISOS_CHAT_ID = String(DUENO_CHAT);
+  process.env.ALERTA_EMAIL_SMTP_HOST = 'smtp.example.test';
+  process.env.ALERTA_EMAIL_SMTP_USER = 'ludox@example.test';
+  process.env.ALERTA_EMAIL_SMTP_PASS = 'fake';
+  const correos = [];
+  Module._load = function (request) {
+    if (request === 'nodemailer') return {
+      createTransport: () => ({
+        sendMail: async correo => {
+          correos.push(correo);
+          return { accepted: [correo.to] };
+        }
+      })
+    };
+    return originalLoad.apply(this, arguments);
+  };
+  const apiContacto = crearApi([]);
+  const ctxContacto = telegramBot._usarCliente(apiContacto);
+  await telegramBot.avisarMensajeContacto(contacto);
+  const recibo = apiContacto.enviados[0];
+  check(recibo.chatId === String(DUENO_CHAT) && recibo.texto.includes(contacto.mensaje), 'Contacto llega al chat privado del dueño');
+  const contestacion = { citadoId: recibo.message_id, citadoTexto: recibo.texto, texto: 'Coordinemos la demo.' };
+  await telegramBot.manejarActualizacion(respuesta({ ...contestacion, chat: -100999, tipo: 'supergroup' }), ctxContacto);
+  check(correos.length === 0, 'Contacto no se puede responder desde un grupo');
+  const editado = respuesta(contestacion);
+  await telegramBot.manejarActualizacion({ edited_message: editado.message }, ctxContacto);
+  check(correos.length === 0, 'Editar una respuesta no reenvía un correo');
+  await telegramBot.manejarActualizacion(respuesta(contestacion), ctxContacto);
+  check(correos.length === 1 && correos[0].to === contacto.contacto && correos[0].text === contestacion.texto &&
+    contacto.leido && /enviada por correo/.test(apiContacto.enviados.at(-1).texto), 'Responder al aviso envía el correo y marca el contacto como leído');
+  contacto.contacto = '+584141234567';
+  await telegramBot.manejarActualizacion(respuesta(contestacion), ctxContacto);
+  check(correos.length === 1 && /no dejó un correo/.test(apiContacto.enviados.at(-1).texto), 'Si dejaron teléfono, se indica cómo contestar sin intentar correo');
+  Module._load = originalLoad;
 
   console.log(`\n${ok} pruebas OK, ${mal} fallaron.`);
   process.exit(mal ? 1 : 0);

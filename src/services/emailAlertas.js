@@ -17,13 +17,37 @@
 // hosting, etc.). Ver .env.example para las variables exactas.
 let transportadorCache = null;
 
-function estaConfigurado() {
+function smtpConfigurado() {
   return !!(
     process.env.ALERTA_EMAIL_SMTP_HOST &&
     process.env.ALERTA_EMAIL_SMTP_USER &&
-    process.env.ALERTA_EMAIL_SMTP_PASS &&
-    process.env.ALERTA_EMAIL_DESTINO
+    process.env.ALERTA_EMAIL_SMTP_PASS
   );
+}
+
+function estaConfigurado() {
+  return smtpConfigurado() && !!process.env.ALERTA_EMAIL_DESTINO;
+}
+
+function esEmailContacto(valor) {
+  return typeof valor === 'string' && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(valor);
+}
+
+async function enviarRespuestaContacto(destinatario, texto) {
+  if (!smtpConfigurado()) return { enviado: false, motivo: 'sin_configurar' };
+  if (!esEmailContacto(destinatario)) return { enviado: false, motivo: 'sin_email' };
+  try {
+    const resultado = await obtenerTransportador().sendMail({
+      from: process.env.ALERTA_EMAIL_SMTP_USER,
+      to: destinatario,
+      subject: 'Respuesta de LudoxApp a tu mensaje de contacto',
+      text: texto
+    });
+    return resultado.accepted?.length ? { enviado: true } : { enviado: false, motivo: 'smtp' };
+  } catch (e) {
+    console.error('[contacto] Falló la entrega SMTP:', e.code || 'SMTP');
+    return { enviado: false, motivo: 'smtp' };
+  }
 }
 
 function obtenerTransportador() {
@@ -71,4 +95,4 @@ async function enviarAlertaEmail(asunto, cuerpoTexto) {
   }
 }
 
-module.exports = { enviarAlertaEmail, estaConfigurado };
+module.exports = { enviarAlertaEmail, estaConfigurado, enviarRespuestaContacto, esEmailContacto };

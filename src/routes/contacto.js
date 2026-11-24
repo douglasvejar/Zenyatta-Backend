@@ -7,6 +7,7 @@
 const express = require('express');
 const db = require('../db');
 const asyncHandler = require('../middleware/asyncHandler');
+const { avisarMensajeContacto } = require('../services/telegramBot');
 
 const router = express.Router();
 
@@ -20,8 +21,9 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Escribe tu mensaje.' });
   }
 
-  await db.query(
-    'INSERT INTO mensajes_contacto (nombre, contacto, mensaje) VALUES ($1, $2, $3)',
+  const { rows } = await db.query(
+    `INSERT INTO mensajes_contacto (nombre, contacto, mensaje) VALUES ($1, $2, $3)
+     RETURNING id, nombre, contacto, mensaje`,
     [
       nombre ? String(nombre).trim().slice(0, 200) : null,
       String(contacto).trim().slice(0, 200),
@@ -30,6 +32,9 @@ router.post('/', asyncHandler(async (req, res) => {
   );
 
   res.json({ ok: true });
+  avisarMensajeContacto(rows[0]).catch(e => {
+    console.error('[contacto] No se pudo entregar el aviso a Telegram:', e.message);
+  });
 }));
 
 module.exports = router;
