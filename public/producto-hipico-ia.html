@@ -117,6 +117,8 @@
   .ia-hero .acciones-pagina { justify-content:flex-start; margin:0; }
   .ia-section { margin-top:56px; text-align:left; scroll-margin-top:86px; }
   .ia-section h2 { font:700 clamp(23px,4vw,36px)/1.15 Outfit,sans-serif; margin:0 0 18px; }
+  .ia-demo-grid { display:grid; grid-template-columns:minmax(0,350px) minmax(0,1fr); align-items:center; gap:clamp(18px,4vw,36px); }
+  .ia-video { display:block; width:100%; aspect-ratio:9 / 16; max-width:350px; justify-self:center; border-radius:20px; border:1px solid var(--card-border); background:#0b1d29; }
   .ia-demo { border:1px solid var(--card-border); border-radius:18px; background:var(--card); padding:clamp(14px,3vw,28px); }
   .ia-choices { display:flex; flex-wrap:wrap; gap:8px; }
   .ia-choices button { font:inherit; color:var(--text); background:#111b30; padding:9px 13px; border:1px solid #46536a; border-radius:9px; cursor:pointer; }
@@ -128,7 +130,7 @@
   .ia-chat strong { display:block; color:#94f2df; font-size:.8em; margin-bottom:4px; }
   .ia-features { list-style:none; padding:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
   .ia-features li { border:1px solid var(--card-border); background:var(--card); border-radius:12px; padding:15px 18px; }
-  @media (max-width:640px) { .ia-hero,.ia-features { grid-template-columns:1fr; } .ia-section { margin-top:35px; } }
+  @media (max-width:640px) { .ia-hero,.ia-features,.ia-demo-grid { grid-template-columns:1fr; } .ia-section { margin-top:35px; } }
 </style>
 </head>
 <body>
@@ -179,16 +181,22 @@
 
     <section class="ia-section" id="probar-bot" aria-labelledby="tituloDemo">
       <h2 id="tituloDemo">Así responde en WhatsApp</h2>
-      <div class="ia-demo">
-        <p>Demostración interactiva. Elige una acción para ver una conversación de ejemplo.</p>
-        <div class="ia-choices" aria-label="Acciones de ejemplo">
-          <button type="button" aria-pressed="true" data-ejemplo="abrir">Abrir carrera</button>
-          <button type="button" aria-pressed="false" data-ejemplo="jugada">Confirmar jugada</button>
-          <button type="button" aria-pressed="false" data-ejemplo="plano">Pedir plano</button>
-        </div>
-        <div class="ia-chat" aria-live="polite">
-          <p><strong id="demoAutor">Administrador</strong><span id="demoMensaje">Abierta segunda Valencia</span></p>
-          <p><strong>LudoXbot2.0</strong><span id="demoRespuesta">✅ Carrera abierta. Valencia, 2da carrera.</span></p>
+      <div class="ia-demo-grid">
+        <video class="ia-video" controls playsinline preload="none" poster="img/ludoxbot-chat-movil.jpg" aria-label="Chat simulado de jugadas con LudoXbot2.0 en un móvil">
+          <source src="videos/ludoxbot-chat-movil.mp4" type="video/mp4">
+          <a href="videos/ludoxbot-chat-movil.mp4">Ver video del chat</a>
+        </video>
+        <div class="ia-demo">
+          <p>Demostración interactiva. Elige una acción para ver una conversación de ejemplo.</p>
+          <div class="ia-choices" aria-label="Acciones de ejemplo">
+            <button type="button" aria-pressed="true" data-ejemplo="abrir">Abrir carrera</button>
+            <button type="button" aria-pressed="false" data-ejemplo="jugada">Confirmar jugada</button>
+            <button type="button" aria-pressed="false" data-ejemplo="plano">Pedir plano</button>
+          </div>
+          <div class="ia-chat" aria-live="polite">
+            <p><strong id="demoAutor">Administrador</strong><span id="demoMensaje">Abierta segunda Valencia</span></p>
+            <p><strong>LudoXbot2.0</strong><span id="demoRespuesta">✅ Carrera abierta. Valencia, 2da carrera.</span></p>
+          </div>
         </div>
       </div>
       <p>El bot trabaja en los chats autorizados de Nacionales y Americanas. La apertura, el cierre y la solicitud del plano están reservados a los administradores del chat.</p>
