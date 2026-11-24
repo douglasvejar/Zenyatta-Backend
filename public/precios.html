@@ -68,6 +68,7 @@
   .selector-planes button { display:grid; gap:6px; align-content:start; text-align:left; color:var(--text); background:var(--card); border:1px solid var(--card-border); padding:clamp(14px,3vw,24px); border-radius:16px; cursor:pointer; }
   .selector-planes strong { font:700 clamp(22px,4vw,34px)/1.1 Outfit,sans-serif; }
   .selector-planes span { font:400 14px/1.4 Inter,sans-serif; color:var(--text-dim); }
+  .selector-planes .novedad-plan { justify-self:start; padding:4px 9px; border-radius:6px; background:#ffcf68; color:#281900; font-weight:800; letter-spacing:.04em; }
   .selector-planes .accion-plan { margin-top:6px; font-weight:600; color:var(--accent-cyan); }
   .selector-planes [data-tipo-plan="con-ia"] { border-color:#3d9fb8; background:linear-gradient(135deg,#102b3b,var(--card)); }
   .selector-planes button[aria-pressed="true"] { border-color:var(--accent-cyan); box-shadow:inset 0 0 0 1px var(--accent-cyan); }
@@ -214,14 +215,15 @@
       <h2 id="titulo-selector-planes">Elige el tipo de automatización</h2>
       <div class="selector-planes" role="group" aria-labelledby="titulo-selector-planes">
         <button type="button" data-tipo-plan="sin-ia" aria-controls="planes-sin-ia" aria-pressed="true">
-          <strong>Sin IA</strong>
+          <strong>Sistema automatizado sin bot LudoXbot2.0</strong>
           <span>Deportes, Hípica o ambos módulos</span>
           <span class="accion-plan">Viendo esta oferta</span>
         </button>
         <button type="button" data-tipo-plan="con-ia" aria-controls="planes-con-ia" aria-pressed="false">
-          <strong>Con IA</strong>
-          <span>Hipismo con LudoXbot2.0 para WhatsApp</span>
-          <span class="accion-plan">Ver plan con IA →</span>
+          <span class="novedad-plan">LO MÁS NUEVO</span>
+          <strong>Sistema automatizado con nuestro bot LudoXbot2.0</strong>
+          <span>Hipismo Grupos con inteligencia artificial en WhatsApp</span>
+          <span class="accion-plan">Ver plan con bot →</span>
         </button>
       </div>
     </div>
@@ -461,7 +463,7 @@ opcionesPlan.forEach(boton => boton.addEventListener('click', () => {
   opcionesPlan.forEach(opcion => {
     const seleccionado = opcion === boton;
     opcion.setAttribute('aria-pressed', String(seleccionado));
-    const tipo = opcion.dataset.tipoPlan === 'con-ia' ? 'con IA' : 'sin IA';
+    const tipo = opcion.dataset.tipoPlan === 'con-ia' ? 'con bot' : 'sin bot';
     opcion.querySelector('.accion-plan').textContent = seleccionado ? 'Viendo esta oferta' : 'Ver oferta ' + tipo + ' →';
     document.getElementById(opcion.getAttribute('aria-controls')).hidden = !seleccionado;
   });
