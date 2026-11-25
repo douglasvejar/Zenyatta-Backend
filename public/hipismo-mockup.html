@@ -2382,6 +2382,16 @@
   @media (max-width: 380px) {
     #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
   }
+  .bot-estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr)); gap: 10px; margin: 14px 0; }
+  .bot-estado[hidden] { display: none; }
+  .bot-estado > div { background: var(--card-2, var(--card)); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .bot-estado dt { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+  .bot-estado dd { margin: 5px 0 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+  .bot-estado-numero { font-variant-numeric: tabular-nums; }
+  .bot-distintivo { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; font-size: 13px; background: #d8f4e3; color: #105831; }
+  .bot-distintivo[data-pausado="true"] { background: #fff0cc; color: #734500; }
+  #botIAConexion { margin: 8px 0; font-weight: 600; }
+  #botIADiagnostico:empty { display: none; }
   #navBotIA[hidden], #vista-botIA button[hidden] { display: none; }
 </style>
 <script src="navidad.js"></script>
@@ -4136,16 +4146,12 @@
     <section class="vista" id="vista-botIA">
       <div class="card">
         <h2>Bot IA</h2>
-        <p class="desc">Vincula un número de WhatsApp para los chats de Hipismo que autorice Súper-admin.</p>
-        <p class="desc">Si una respuesta llega después de tres minutos, quien publicó la parada tiene un minuto para responder OK citando la respuesta o el aviso. Un administrador del chat puede confirmarla citando con «Aquí jugaron» mientras la carrera siga abierta.</p>
-        <p class="desc">Los administradores del chat pueden abrir la carrera con frases como «2da Valencia abierta» o «abierta Valencia segunda».</p>
-        <p class="desc">Al recibir «cerrado», el bot termina de evaluar las respuestas anteriores al comando antes de enviar el plano de cierre.</p>
-        <p class="desc">Al reconectarse, el bot recupera las órdenes de apertura y cierre del día que WhatsApp entregue pendientes.</p>
-        <p class="desc">Con «Consigo 10a8 el 1 con 40», quien publica banquea y quien responde juega el 1 por el monto que tome.</p>
-        <p class="desc">«Juego 3p del.7 120» se entiende como «Juego 3p del 7 con 120». En el monto, 1.20 se lee como 1,20. Los espacios de más y las marcas invisibles al final del mensaje se ignoran.</p>
-        <p class="desc">«Se fue», «SF» y «cfue» retiran las paradas abiertas de quien escribe el mensaje.</p>
-        <p class="desc">Desde el número vinculado, escribe ON u OFF en un chat autorizado para activar o pausar el bot en los chats del grupo.</p>
         <p id="botIAConexion" role="status">Consultando conexión…</p>
+        <dl class="bot-estado" id="botIAResumen" hidden>
+          <div><dt>Estado del bot</dt><dd><span class="bot-distintivo" id="botIAActividad"></span></dd></div>
+          <div><dt>Número de WhatsApp</dt><dd class="bot-estado-numero" id="botIANumero"></dd></div>
+          <div><dt>Chats autorizados</dt><dd id="botIAChats"></dd></div>
+        </dl>
         <p id="botIADiagnostico" class="desc"></p>
         <div id="botIAQr" hidden>
           <p>En el teléfono abre WhatsApp → Dispositivos vinculados → Vincular un dispositivo y escanea el código.</p>
@@ -8190,6 +8196,7 @@ async function cargarConexionBotIA() {
   if (!vista.classList.contains('activa') || document.hidden || botIAConsultando) return;
   clearTimeout(botIATimer);
   const estado = document.getElementById('botIAConexion');
+  const resumen = document.getElementById('botIAResumen');
   const caja = document.getElementById('botIAQr');
   const imagen = document.getElementById('botIAQrImagen');
   const boton = document.getElementById('botIAIniciar');
@@ -8212,15 +8219,21 @@ async function cargarConexionBotIA() {
     reconectar.hidden = !data.conectado;
     boton.hidden = data.conectado || !!data.qr || (data.vinculando && !data.ultimoError);
     boton.textContent = data.requiereNuevoQr ? 'Generar nuevo QR' : data.vinculando ? 'Volver a intentar' : 'Vincular WhatsApp';
+    resumen.hidden = !data.conectado;
     if (data.conectado) {
-      estado.textContent = 'WhatsApp conectado' + (data.numero ? ' · ' + data.numero : '') + ' · Chats autorizados: ' + data.chatsAutorizados + (data.pausado ? ' · 😴 Bot en pausa' : ' · ✅ Bot activo');
+      estado.textContent = 'WhatsApp conectado';
+      const actividad = document.getElementById('botIAActividad');
+      actividad.textContent = data.pausado ? '😴 En pausa' : '✓ Activo';
+      actividad.dataset.pausado = String(!!data.pausado);
+      document.getElementById('botIANumero').textContent = data.numero || 'Sin número disponible';
+      document.getElementById('botIAChats').textContent = data.chatsAutorizados ?? '—';
     } else if (data.qr) {
       estado.textContent = 'Escanea el código para conectar WhatsApp.';
     } else {
       estado.textContent = data.ultimoError || (data.vinculando ? 'Preparando el código QR…' : 'WhatsApp pendiente de vincular.');
     }
   } catch (e) {
-    caja.hidden = boton.hidden = reconectar.hidden = true;
+    resumen.hidden = caja.hidden = boton.hidden = reconectar.hidden = true;
     imagen.removeAttribute('src');
     estado.textContent = e.message;
   } finally {
