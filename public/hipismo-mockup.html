@@ -2383,9 +2383,24 @@
   @media (max-width: 380px) {
     #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
   }
-  .bot-cabecera { display: flex; align-items: center; gap: 16px; }
-  .bot-cabecera img { width: clamp(68px, 11vw, 108px); height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 17px; border: 1px solid var(--card-border); flex-shrink: 0; }
-  .bot-cabecera h2 { margin: 0; }
+  .bot-panel { display: grid; grid-template-columns: minmax(0, 1fr) clamp(160px, 25%, 290px); align-items: center; gap: 18px; }
+  .bot-panel-datos { min-width: 0; }
+  .bot-panel h2 { margin: 0; }
+  .bot-mascota {
+    display: block; width: 100%; max-height: 300px; object-fit: contain;
+    animation: bot-saludo 3.2s ease-in-out 1;
+    transform-origin: center 80%;
+  }
+  @keyframes bot-saludo {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    30%, 70% { transform: translateY(-7px) rotate(-3deg); }
+    50% { transform: translateY(-4px) rotate(3deg); }
+  }
+  @media (max-width: 600px) {
+    .bot-panel { grid-template-columns: minmax(0, 1fr) minmax(70px, 27%); align-items: start; gap: 8px; }
+    .bot-mascota { max-height: 150px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bot-mascota { animation: none; } }
   .bot-estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr)); gap: 10px; margin: 14px 0; }
   .bot-estado[hidden] { display: none; }
   .bot-estado > div { background: var(--card-2, var(--card)); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
@@ -4148,28 +4163,26 @@
     </section>
 
     <section class="vista" id="vista-botIA">
-      <div class="card">
-        <header class="bot-cabecera">
-          <img src="img/ludoxbot-2.jpg" alt="Robot de LudoXbot2.0" width="108" height="108" loading="lazy">
-          <div>
-            <h2>LudoXbot2.0</h2>
-            <p id="botIAConexion" role="status">Consultando conexión…</p>
+      <div class="card bot-panel">
+        <div class="bot-panel-datos">
+          <h2>LudoXbot2.0</h2>
+          <p id="botIAConexion" role="status">Consultando conexión…</p>
+          <dl class="bot-estado" id="botIAResumen" hidden>
+            <div><dt>Estado del bot</dt><dd><span class="bot-distintivo" id="botIAActividad"></span></dd></div>
+            <div><dt>Número de WhatsApp</dt><dd class="bot-estado-numero" id="botIANumero"></dd></div>
+            <div><dt>Chats autorizados</dt><dd id="botIAChats"></dd></div>
+          </dl>
+          <p id="botIADiagnostico" class="desc"></p>
+          <div id="botIAQr" hidden>
+            <p>En el teléfono abre WhatsApp → Dispositivos vinculados → Vincular un dispositivo y escanea el código.</p>
+            <img id="botIAQrImagen" width="280" height="280" alt="Código QR para vincular el Bot IA" style="max-width:100%; height:auto;">
           </div>
-        </header>
-        <dl class="bot-estado" id="botIAResumen" hidden>
-          <div><dt>Estado del bot</dt><dd><span class="bot-distintivo" id="botIAActividad"></span></dd></div>
-          <div><dt>Número de WhatsApp</dt><dd class="bot-estado-numero" id="botIANumero"></dd></div>
-          <div><dt>Chats autorizados</dt><dd id="botIAChats"></dd></div>
-        </dl>
-        <p id="botIADiagnostico" class="desc"></p>
-        <div id="botIAQr" hidden>
-          <p>En el teléfono abre WhatsApp → Dispositivos vinculados → Vincular un dispositivo y escanea el código.</p>
-          <img id="botIAQrImagen" width="280" height="280" alt="Código QR para vincular el Bot IA" style="max-width:100%; height:auto;">
+          <div class="btn-fila">
+            <button type="button" class="btn btn-primario" id="botIAIniciar" hidden onclick="iniciarConexionBotIA()">Vincular WhatsApp</button>
+            <button type="button" class="btn btn-secundario" id="botIAReconectar" hidden onclick="iniciarConexionBotIA(true)">Reconectar WhatsApp</button>
+          </div>
         </div>
-        <div class="btn-fila">
-          <button type="button" class="btn btn-primario" id="botIAIniciar" hidden onclick="iniciarConexionBotIA()">Vincular WhatsApp</button>
-          <button type="button" class="btn btn-secundario" id="botIAReconectar" hidden onclick="iniciarConexionBotIA(true)">Reconectar WhatsApp</button>
-        </div>
+        <img class="bot-mascota" src="img/ludoxbot-de-pie.png" alt="LudoXbot2.0 de pie, con el pulgar arriba" loading="lazy">
       </div>
       <div class="card" style="margin-top:16px;">
         <h2>Bitácora del Bot IA</h2>
