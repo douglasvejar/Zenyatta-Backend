@@ -10,11 +10,12 @@ let pasaron = 0, fallaron = 0;
 const check = (c, m) => { if (c) { pasaron++; console.log('OK:', m); } else { fallaron++; console.error('FALLÓ:', m); } };
 
 const filas = new Map(); // "scope|clave" -> valor
+let lecturasClaves = 0;
 const db = {
   async query(text, params) {
     const sql = text.replace(/\s+/g, ' ').trim();
     if (/^SELECT valor FROM whatsapp_sesion_datos WHERE scope = \$1 AND clave = \$2/.test(sql)) { const v = filas.get(params[0] + '|' + params[1]); return { rows: v === undefined ? [] : [{ valor: v }] }; }
-    if (/^SELECT clave, valor FROM whatsapp_sesion_datos WHERE scope = \$1 AND clave = ANY\(\$2\)/.test(sql)) return { rows: params[1].filter(k => filas.has(params[0] + '|' + k)).map(k => ({ clave: k, valor: filas.get(params[0] + '|' + k) })) };
+    if (/^SELECT clave, valor FROM whatsapp_sesion_datos WHERE scope = \$1 AND clave = ANY\(\$2\)/.test(sql)) { lecturasClaves++; return { rows: params[1].filter(k => filas.has(params[0] + '|' + k)).map(k => ({ clave: k, valor: filas.get(params[0] + '|' + k) })) }; }
     if (/^INSERT INTO whatsapp_sesion_datos \(scope, clave, valor, actualizado_en\) SELECT/.test(sql)) { params[1].forEach((k, i) => filas.set(params[0] + '|' + k, params[2][i])); return { rows: [] }; }
     if (/^INSERT INTO whatsapp_sesion_datos \(scope, clave, valor, actualizado_en\) VALUES/.test(sql)) { filas.set(params[0] + '|creds', params[1]); return { rows: [] }; }
     if (/^DELETE FROM whatsapp_sesion_datos WHERE scope = \$1 AND clave = ANY/.test(sql)) { params[1].forEach(k => filas.delete(params[0] + '|' + k)); return { rows: [] }; }
@@ -39,6 +40,17 @@ const db = {
   await a2.state.keys.set({ 'pre-key': { 1: null } });
   const tras = await a2.state.keys.get('pre-key', ['1', '2']);
   check(tras['1'] === undefined && tras['2'] !== undefined, 'un valor null borra esa llave');
+
+  const reconexion = await authEnBaseDeDatos(db, 'grupo-1', baileys);
+  const antes = lecturasClaves;
+  const guardada = await reconexion.state.keys.get('pre-key', ['2']);
+  guardada['2'].public[0] = 99;
+  const repetida = await reconexion.state.keys.get('pre-key', ['2']);
+  check(lecturasClaves === antes + 1 && repetida['2'].public[0] === 5, 'una conexión nueva lee de la base una vez y las lecturas repetidas devuelven copias');
+  const actualizar = reconexion.state.keys.set({ 'pre-key': { 2: { public: Buffer.from([8]) } } });
+  const leerDurante = reconexion.state.keys.get('pre-key', ['2']);
+  await actualizar;
+  check((await leerDurante)['2'].public[0] === 8 && lecturasClaves === antes + 1, 'una lectura concurrente espera la escritura y reutiliza el valor persistido');
 
   const otro = await authEnBaseDeDatos(db, 'grupo-2', baileys);
   check(Buffer.compare(otro.state.creds.noiseKey.private, a1.state.creds.noiseKey.private) !== 0 && Object.keys(await otro.state.keys.get('pre-key', ['2'])).length === 0, 'cada grupo tiene su propia sesión (no se mezclan)');
