@@ -67,48 +67,29 @@ function ejecutarQuery(text, params) {
     };
   }
 
-  // ---- calcularLiquidadoHipismo(): Tercios ----
-  if (/^SELECT cliente_nombre, banquero_nombre, resultado_jugador, resultado_banquero FROM hipismo_tickets WHERE grupo_id = \$1 AND \(cliente_nombre = \$2 OR banquero_nombre = \$2\)/i.test(sql)) {
-    const [grupoId, nombre] = params;
-    return { rows: TABLAS.hipismo_tickets.filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre)) };
+  if (/^WITH adelantadas AS /i.test(sql)) {
+    const [grupo, nombre, desde, hasta] = params;
+    const incluidas = filas => filas.filter(f => f.grupo_id === grupo && (!desde || enRango(f.fecha, desde, hasta)));
+    let total = 0;
+    for (const t of incluidas(TABLAS.hipismo_tickets)) {
+      if (t.cliente_nombre === nombre) total += Number(t.resultado_jugador) || 0;
+      if (t.banquero_nombre === nombre) total += Number(t.resultado_banquero) || 0;
+    }
+    for (const a of incluidas(TABLAS.hipismo_remate_apuestas)) {
+      if (a.cliente_nombre === nombre) total += Number(a.resultado) || 0;
+    }
+    for (const j of incluidas(TABLAS.hipismo_adelantadas_jugadas)) {
+      if (!['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado)) continue;
+      if (j.cliente_nombre === nombre) total += Number(j.resultado_cliente) || 0;
+      if (Array.isArray(j.banqueadores)) {
+        for (const b of j.banqueadores) if (b?.nombre === nombre) total += Number(b.monto) || 0;
+      }
+    }
+    for (const w of incluidas(TABLAS.hipismo_winners)) {
+      if (w.cliente_nombre === nombre) total += Number(w.monto) || 0;
+    }
+    return { rows: [{ total: String(total) }] };
   }
-
-  // ---- calcularLiquidadoHipismo(): Remate ----
-  if (/^SELECT resultado FROM hipismo_remate_apuestas WHERE grupo_id = \$1 AND cliente_nombre = \$2/i.test(sql)) {
-    const [grupoId, nombre] = params;
-    return { rows: TABLAS.hipismo_remate_apuestas.filter(a => a.grupo_id === grupoId && a.cliente_nombre === nombre) };
-  }
-
-  // ---- calcularLiquidadoHipismo(): Adelantadas ----
-  if (/^SELECT cliente_nombre, resultado_cliente, banqueadores FROM hipismo_adelantadas_jugadas WHERE grupo_id = \$1 AND estado IN \('resuelto', 'falta_banqueo', 'sin_decidir'\)/i.test(sql)) {
-    const [grupoId] = params;
-    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado)) };
-  }
-
-  // ---- calcularLiquidadoHipismo(): Winners ----
-  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2/i.test(sql)) {
-    const [grupoId, nombre] = params;
-    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre) };
-  }
-
-  // ---- versiones CON rango de semana (JOIN a planos/remates, ver hipismoPozo.js) ----
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero FROM hipismo_tickets t JOIN hipismo_planos p/i.test(sql)) {
-    const [grupoId, nombre, desde, hasta] = params;
-    return { rows: TABLAS.hipismo_tickets.filter(t => t.grupo_id === grupoId && (t.cliente_nombre === nombre || t.banquero_nombre === nombre) && enRango(t.fecha, desde, hasta)) };
-  }
-  if (/^SELECT a\.resultado FROM hipismo_remate_apuestas a JOIN hipismo_remates r/i.test(sql)) {
-    const [grupoId, nombre, desde, hasta] = params;
-    return { rows: TABLAS.hipismo_remate_apuestas.filter(a => a.grupo_id === grupoId && a.cliente_nombre === nombre && enRango(a.fecha, desde, hasta)) };
-  }
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p/i.test(sql)) {
-    const [grupoId, desde, hasta] = params;
-    return { rows: TABLAS.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === grupoId && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado) && enRango(j.fecha, desde, hasta)) };
-  }
-  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) {
-    const [grupoId, nombre, desde, hasta] = params;
-    return { rows: TABLAS.hipismo_winners.filter(w => w.grupo_id === grupoId && w.cliente_nombre === nombre && enRango(w.fecha, desde, hasta)) };
-  }
-
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }

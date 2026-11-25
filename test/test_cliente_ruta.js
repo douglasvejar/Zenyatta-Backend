@@ -127,28 +127,8 @@ function ejecutarQuery(text, params) {
   if (/^SELECT id, telefono, apodo, creado_en FROM grupo_telefonos WHERE grupo_id = \$1 ORDER BY creado_en ASC/i.test(sql)) {
     return { rows: TABLAS.grupo_telefonos.filter(t => t.grupo_id === params[0]) };
   }
-  // Pozo de Hipismo (26-09-2026, ver services/hipismoPozo.js) — este
-  // archivo prueba el portal de Deportes, sin ninguna jugada de Hipismo
-  // cargada, así que las 3 consultas nuevas siempre dan vacío (RANDY solo
-  // tiene su pozo de Deportes, calculado más arriba con tickets_historial).
-  if (/^SELECT cliente_nombre, banquero_nombre, resultado_jugador, resultado_banquero FROM hipismo_tickets WHERE/i.test(sql)) {
-    return { rows: [] };
-  }
-  if (/^SELECT resultado FROM hipismo_remate_apuestas WHERE/i.test(sql)) {
-    return { rows: [] };
-  }
-  if (/^SELECT cliente_nombre, resultado_cliente, banqueadores FROM hipismo_adelantadas_jugadas WHERE/i.test(sql)) {
-    return { rows: [] };
-  }
-  if (/^SELECT monto FROM hipismo_winners WHERE/i.test(sql)) {
-    return { rows: [] };
-  }
-  // POZO SEMANAL (07-10-2026): las mismas 4 consultas, ahora CON rango de
-  // semana (JOIN a planos/remates) — también vacías en esta prueba.
-  if (/^SELECT t\.cliente_nombre, t\.banquero_nombre, t\.resultado_jugador, t\.resultado_banquero FROM hipismo_tickets t JOIN hipismo_planos p/i.test(sql)) return { rows: [] };
-  if (/^SELECT a\.resultado FROM hipismo_remate_apuestas a JOIN hipismo_remates r/i.test(sql)) return { rows: [] };
-  if (/^SELECT j\.cliente_nombre, j\.resultado_cliente, j\.banqueadores FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p/i.test(sql)) return { rows: [] };
-  if (/^SELECT monto FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) return { rows: [] };
+  // El portal de Deportes de esta prueba no tiene movimientos de Hipismo.
+  if (/^WITH adelantadas AS /i.test(sql)) return { rows: [{ total: "0" }] };
 
   if (/^SELECT l\.cliente_nombre, l\.monto, c\.fecha[\s\S]*?FROM hipismo_cargas_especiales_lineas/i.test(sql)) return { rows: [] };
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);

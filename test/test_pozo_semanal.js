@@ -30,21 +30,28 @@ function ejecutarQuery(text, params) {
     const filas = T.tickets_historial.filter(r => r.grupo_id === params[0] && r.cliente_nombre === params[params.length - 1]);
     return { rows: filas.map(r => ({ id: r.id, fecha: r.fecha, cliente: r.cliente_nombre, ticket: 'T', detalle: 'x', arriesga: r.arriesga, gana: r.gana, estado: r.estado, logros: null })) };
   }
-  if (/FROM hipismo_tickets t JOIN hipismo_planos p/i.test(sql)) {
-    const [g, n, d, h] = params;
-    return { rows: T.hipismo_tickets.filter(t => t.grupo_id === g && (t.cliente_nombre === n || t.banquero_nombre === n) && enRango(t.fecha, d, h)) };
-  }
-  if (/FROM hipismo_remate_apuestas a JOIN hipismo_remates r/i.test(sql)) {
-    const [g, n, d, h] = params;
-    return { rows: T.hipismo_remate_apuestas.filter(a => a.grupo_id === g && a.cliente_nombre === n && enRango(a.fecha, d, h)) };
-  }
-  if (/FROM hipismo_adelantadas_jugadas j JOIN hipismo_adelantadas_planos p/i.test(sql)) {
-    const [g, d, h] = params;
-    return { rows: T.hipismo_adelantadas_jugadas.filter(j => j.grupo_id === g && ['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado) && enRango(j.fecha, d, h)) };
-  }
-  if (/FROM hipismo_winners WHERE grupo_id = \$1 AND cliente_nombre = \$2 AND fecha BETWEEN/i.test(sql)) {
-    const [g, n, d, h] = params;
-    return { rows: T.hipismo_winners.filter(w => w.grupo_id === g && w.cliente_nombre === n && enRango(w.fecha, d, h)) };
+  if (/^WITH adelantadas AS /i.test(sql)) {
+    const [grupo, nombre, desde, hasta] = params;
+    const incluidas = filas => filas.filter(f => f.grupo_id === grupo && (!desde || enRango(f.fecha, desde, hasta)));
+    let total = 0;
+    for (const t of incluidas(T.hipismo_tickets)) {
+      if (t.cliente_nombre === nombre) total += Number(t.resultado_jugador) || 0;
+      if (t.banquero_nombre === nombre) total += Number(t.resultado_banquero) || 0;
+    }
+    for (const a of incluidas(T.hipismo_remate_apuestas)) {
+      if (a.cliente_nombre === nombre) total += Number(a.resultado) || 0;
+    }
+    for (const j of incluidas(T.hipismo_adelantadas_jugadas)) {
+      if (!['resuelto', 'falta_banqueo', 'sin_decidir'].includes(j.estado)) continue;
+      if (j.cliente_nombre === nombre) total += Number(j.resultado_cliente) || 0;
+      if (Array.isArray(j.banqueadores)) {
+        for (const b of j.banqueadores) if (b?.nombre === nombre) total += Number(b.monto) || 0;
+      }
+    }
+    for (const w of incluidas(T.hipismo_winners)) {
+      if (w.cliente_nombre === nombre) total += Number(w.monto) || 0;
+    }
+    return { rows: [{ total: String(total) }] };
   }
   throw new Error('La base de datos falsa de esta prueba no sabe responder: ' + sql);
 }
