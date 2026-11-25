@@ -1895,20 +1895,21 @@
   .sidebar-admin .nav-item.nav-item-active .cr-ic, .sidebar-admin .nav-child.nav-item-active .cr-ic-hijo { color: #ffffff; }
   /* Casilla de la pizarra (llegada): fondo de bandera de cuadros, claro para que se lea el número */
   #inpPizarra { background-color: #ffffff; background-image: conic-gradient(#d9e4ee 25%, #ffffff 0 50%, #d9e4ee 0 75%, #ffffff 0); background-size: 16px 16px; color: #0a1c2e; font-weight: 800; letter-spacing: .06em; border: 1.5px solid #9fb4c6; }
-  .pizarra-casilla:has(#pizarraEjemplares:not(:empty)) {
-    border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden;
-  }
+  .pizarra-casilla { position: relative; }
   #selectorPlanoCompacto .pizarra-casilla:has(#pizarraEjemplares:not(:empty)) #inpPizarra {
-    border: 0; border-radius: 0;
+    color: transparent;
+    caret-color: transparent;
   }
-  .pizarra-casilla:has(#pizarraEjemplares:not(:empty)):focus-within {
-    outline: 2px solid var(--accent); outline-offset: 2px;
+  #pizarraEjemplares {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    gap: 3px; padding: 0 5px; overflow: hidden; pointer-events: none;
   }
-  #pizarraEjemplares { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 8px 7px; }
   #pizarraEjemplares:empty { display: none; }
   #pizarraEjemplares .pimg-silk {
     display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 50%; font-weight: 700; border: 1px solid rgba(0,0,0,.22); flex: none;
+    border-radius: 50%; font-weight: 700; border: 1px solid rgba(0,0,0,.22);
+    box-sizing: border-box; flex: 0 1 22px; min-width: 0;
+    aspect-ratio: 1; height: auto !important; max-height: 22px;
   }
   #inpPizarra::placeholder { color: #5c7186; font-weight: 600; letter-spacing: 0; }
   #inpPizarra:focus { border-color: #4f5bd5; box-shadow: 0 0 0 3px rgba(79,91,213,.22); outline: none; }
@@ -8577,7 +8578,7 @@ function pintarEjemplaresPizarra() {
   const entrada = document.getElementById('inpPizarra');
   const vista = document.getElementById('pizarraEjemplares');
   const numeros = entrada.value.match(/[0-9]+/g) || [];
-  vista.innerHTML = numeros.map(numero => pimgSilk(numero, 26)).join('');
+  vista.innerHTML = numeros.map(numero => pimgSilk(numero, 22)).join('');
 }
 
 function actualizarPasosCP() {
