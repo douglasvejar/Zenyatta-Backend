@@ -2383,6 +2383,9 @@
   @media (max-width: 380px) {
     #clienteCrearPanel .cliente-panel-campos { grid-template-columns: minmax(0, 1fr); }
   }
+  .bot-cabecera { display: flex; align-items: center; gap: 16px; }
+  .bot-cabecera img { width: clamp(68px, 11vw, 108px); height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 17px; border: 1px solid var(--card-border); flex-shrink: 0; }
+  .bot-cabecera h2 { margin: 0; }
   .bot-estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr)); gap: 10px; margin: 14px 0; }
   .bot-estado[hidden] { display: none; }
   .bot-estado > div { background: var(--card-2, var(--card)); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
@@ -4146,8 +4149,13 @@
 
     <section class="vista" id="vista-botIA">
       <div class="card">
-        <h2>Bot IA</h2>
-        <p id="botIAConexion" role="status">Consultando conexión…</p>
+        <header class="bot-cabecera">
+          <img src="img/ludoxbot-2.jpg" alt="Robot de LudoXbot2.0" width="108" height="108" loading="lazy">
+          <div>
+            <h2>LudoXbot2.0</h2>
+            <p id="botIAConexion" role="status">Consultando conexión…</p>
+          </div>
+        </header>
         <dl class="bot-estado" id="botIAResumen" hidden>
           <div><dt>Estado del bot</dt><dd><span class="bot-distintivo" id="botIAActividad"></span></dd></div>
           <div><dt>Número de WhatsApp</dt><dd class="bot-estado-numero" id="botIANumero"></dd></div>
