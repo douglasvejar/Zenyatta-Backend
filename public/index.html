@@ -257,6 +257,28 @@
   }
   .inicio-visual figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 3px 5px 12px; color: #cbdbee; font-size: 12px; }
   .inicio-visual img { display: block; width: 100%; height: auto; border-radius: 10px; }
+  .inicio-presentacion { position: relative; isolation: isolate; }
+  .inicio-presentacion::before {
+    content: ""; position: absolute; z-index: -1; inset: 0 -16px;
+    background: radial-gradient(ellipse at 78% 45%, #143b623e, transparent 66%),
+      repeating-linear-gradient(90deg, #5aaaff0b 0 1px, transparent 1px 52px);
+    mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent);
+    pointer-events: none;
+  }
+  .inicio-presentacion h1 { text-wrap: initial; }
+  .inicio-presentacion h1 span { display: block; color: #8fe9d0; }
+  .inicio-visual { padding: 0; overflow: hidden; }
+  .inicio-selector { display:flex; gap:6px; padding:10px 12px; background:#0a1425; border-bottom:1px solid #314155; }
+  .inicio-selector button {
+    border:1px solid transparent; color:#b9cae0; background:transparent; border-radius:7px;
+    padding:7px 10px; font:600 14px/1.1 Outfit,sans-serif; cursor:pointer;
+  }
+  .inicio-selector button[aria-pressed="true"] { color:#a6f1d8; background:#163b43; border-color:#376067; }
+  .inicio-selector button:focus-visible { outline:2px solid #8fe9d0; outline-offset:2px; }
+  .inicio-vista { margin:0; padding:12px; }
+  .inicio-vista figcaption { align-items:center; }
+  .inicio-vista figcaption a, .inicio-bot-enlace { color:#a6f1d8; text-underline-offset:3px; }
+  .inicio-bot-enlace { display:inline-block; margin-top:14px; font-size:14px; }
   .inicio-seccion { margin-top: 16px; padding-top: 24px; border-top: 1px solid #314155; scroll-margin-top: 80px; }
   .inicio-seccion-titulo { font-size: clamp(28px, 4vw, 44px); margin-bottom: 18px; }
   .inicio-productos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -529,38 +551,49 @@
   <main class="portal">
     <section class="inicio-presentacion" aria-labelledby="tituloInicio">
       <div>
-        <h1 id="tituloInicio">Plataforma de gestión para <span>Hipismo y Deportes</span></h1>
-        <p>Procesa jugadas, verifica resultados y consulta los saldos de tus clientes desde un solo panel.</p>
+        <h1 id="tituloInicio">De las jugadas <span>al cuadre del día.</span></h1>
+        <p>Ludox reúne la operación de tu grupo de Hipismo o Deportes. Procesa los planos o las sábanas, verifica quién ganó y consulta cuánto le toca a cada cliente.</p>
         <div class="botonera">
           <button type="button" class="btn-portal btn-entrar" data-demo-producto="">Solicitar demo</button>
-          <a class="btn-portal btn-secundario" href="precios.html">Ver precios</a>
+          <a class="btn-portal btn-secundario" href="precios.html">Ver planes y precios</a>
         </div>
       </div>
-      <figure class="inicio-visual">
-        <figcaption><strong>Panel de Deportes</strong><span>Datos de demostración</span></figcaption>
-        <img src="img/inicio-panel.jpg" alt="Panel de Deportes con tickets, escudos de los equipos, montos y resultados" width="1040" height="592">
-      </figure>
+      <div class="inicio-visual">
+        <div class="inicio-selector" role="group" aria-label="Explorar los módulos">
+          <button type="button" data-vista-inicio="previewHipismo" aria-controls="previewHipismo" aria-pressed="true">Hipismo Grupos</button>
+          <button type="button" data-vista-inicio="previewDeportes" aria-controls="previewDeportes" aria-pressed="false">Deportes</button>
+        </div>
+        <figure class="inicio-vista" id="previewHipismo">
+          <figcaption><strong>Plano y llegada</strong><a href="producto-hipico.html">Ver demostración →</a></figcaption>
+          <img src="img/inicio-hipismo.jpg" alt="Pantalla real de Hipismo con la pizarra de llegada y un plano de ejemplo" width="900" height="512">
+        </figure>
+        <figure class="inicio-vista" id="previewDeportes" hidden>
+          <figcaption><strong>Tickets y resultados</strong><a href="producto-deportes.html">Ver demostración →</a></figcaption>
+          <img src="img/inicio-panel.jpg" alt="Panel real de Deportes con tickets de ejemplo, escudos y resultados" width="1040" height="592" loading="lazy">
+        </figure>
+      </div>
     </section>
 
     <section class="inicio-seccion" aria-labelledby="tituloModulos">
-      <h2 class="inicio-seccion-titulo" id="tituloModulos">Módulos de Ludox</h2>
+      <h2 class="inicio-seccion-titulo" id="tituloModulos">Elige cómo opera tu grupo</h2>
       <div class="inicio-productos">
         <article class="inicio-modulo">
           <div class="inicio-captura"><img src="img/inicio-hipismo.jpg" alt="Pantalla Cargar plano de Hipismo, con la pizarra de llegada y las jugadas de ejemplo" width="900" height="512" loading="lazy"></div>
           <div class="inicio-modulo-datos">
             <h3>Hipismo Grupos</h3>
-            <p>Carga planos y remates, registra la llegada y calcula los totales de cada carrera.</p>
+            <p>Carga planos y remates. Con la llegada, consulta el resultado de cada jugada y el total de la carrera por cliente.</p>
             <div class="botonera">
               <a class="btn-portal inicio-demo" href="producto-hipico.html">Ver demostración<span class="btn-icono" aria-hidden="true"> →</span></a>
               <button type="button" class="btn-portal btn-secundario" data-demo-producto="Hipismo Grupos">Solicitar demo</button>
             </div>
+            <a class="inicio-bot-enlace" href="producto-hipico-ia.html">Conocer Hipismo con LudoXbot2.0 →</a>
           </div>
         </article>
         <article class="inicio-modulo inicio-modulo-deportes">
           <div class="inicio-captura"><img src="img/inicio-deportes.jpg" alt="Pizarra de Deportes con escudos de los equipos, marcadores y totales de ejemplo" width="900" height="512" loading="lazy"></div>
           <div class="inicio-modulo-datos">
             <h3>Deportes</h3>
-            <p>Procesa la sábana de WhatsApp, verifica los tickets y revisa el balance de cada cliente.</p>
+            <p>Pega la sábana de WhatsApp, revisa los marcadores y distingue los tickets ganados, perdidos y pendientes antes del cierre.</p>
             <div class="botonera">
               <a class="btn-portal inicio-demo" href="producto-deportes.html">Ver demostración<span class="btn-icono" aria-hidden="true"> →</span></a>
               <button type="button" class="btn-portal btn-secundario" data-demo-producto="Deportes">Solicitar demo</button>
@@ -626,6 +659,15 @@
   </div>
 
 <script>
+const vistasInicio = document.querySelectorAll('[data-vista-inicio]');
+vistasInicio.forEach(boton => boton.addEventListener('click', () => {
+  vistasInicio.forEach(opcion => {
+    const activa = opcion === boton;
+    opcion.setAttribute('aria-pressed', String(activa));
+    document.getElementById(opcion.dataset.vistaInicio).hidden = !activa;
+  });
+}));
+
 document.getElementById('anioActual').textContent = new Date().getFullYear();
 
 // =================================================================
