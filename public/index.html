@@ -308,7 +308,23 @@
   }
   .inicio-modulo-deportes { --modulo-acento: #9ac8ff; }
   .inicio-captura { padding: 12px 12px 0; }
-  .inicio-captura img { display: block; width: 100%; height: auto; border-radius: 9px; background: #dceae7; }
+  .inicio-galeria-vista { margin: 0; }
+  .inicio-galeria-marco { aspect-ratio: 900 / 512; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; background: #0b1626; border-radius: 9px; }
+  .inicio-galeria-marco img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .inicio-galeria-marco pre {
+    width: 100%; height: 100%; min-height: 0; overflow: auto; margin: 0; padding: 14px;
+    white-space: pre-wrap; overflow-wrap: anywhere; color: #15342b; background: #edf7f1; font: 13px/1.5 ui-monospace, monospace;
+  }
+  .inicio-galeria-vista figcaption { min-height: 76px; padding: 10px 4px 4px; color: #c3d1e2; font-size: 14px; line-height: 1.4; }
+  .inicio-galeria-vista strong { display: block; color: var(--modulo-acento); margin-bottom: 3px; }
+  .inicio-galeria-controles { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 4px; }
+  .inicio-galeria-controles[hidden] { display: none; }
+  .inicio-galeria-controles button {
+    width: 44px; height: 44px; background: #192d41; color: #eff8ff; border: 1px solid #537087;
+    border-radius: 10px; font-size: 21px; cursor: pointer;
+  }
+  .inicio-galeria-controles button:hover { background: #28455f; }
+  .inicio-galeria-controles button:focus-visible { outline: 2px solid var(--modulo-acento); outline-offset: 2px; }
   .inicio-modulo-datos { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: 18px clamp(14px, 2.5vw, 24px) 22px; }
   .inicio-modulo h3 { margin: 0; font: 700 clamp(23px, 3.5vw, 32px)/1.15 Outfit, sans-serif; color: #f3f7fd; }
   .inicio-modulo p { flex: 1; margin: 8px 0 18px; color: #bdcadc; line-height: 1.55; font-size: 15px; }
@@ -609,7 +625,61 @@
       <h2 class="inicio-seccion-titulo" id="tituloModulos">Elige cómo opera tu grupo</h2>
       <div class="inicio-productos">
         <article class="inicio-modulo">
-          <div class="inicio-captura"><img src="img/inicio-hipismo.jpg" alt="Pantalla Cargar plano de Hipismo, con la pizarra de llegada y las jugadas de ejemplo" width="900" height="512" loading="lazy"></div>
+          <div class="inicio-captura" data-galeria aria-label="Capturas de Hipismo">
+            <figure class="inicio-galeria-vista" data-captura>
+              <div class="inicio-galeria-marco"><img src="img/inicio-hipismo.jpg" alt="Pantalla Cargar plano del módulo de Hipismo" loading="lazy"></div>
+              <figcaption><strong>Carga de planos</strong>Elige hipódromo y carrera, pega las jugadas y escribe la llegada para calcular el resultado.</figcaption>
+            </figure>
+            <figure class="inicio-galeria-vista" data-captura hidden>
+              <div class="inicio-galeria-marco"><img src="img/inicio-plano-foto.jpg" alt="Plano en foto con llegada, jugadas, ganadores y perdedores" loading="lazy"></div>
+              <figcaption><strong>Plano en foto</strong>Comparte la llegada con los colores de los ejemplares, el resultado por jugada y los totales por cliente.</figcaption>
+            </figure>
+            <figure class="inicio-galeria-vista" data-captura hidden>
+              <div class="inicio-galeria-marco"><pre tabindex="0" aria-label="Ejemplo del plano resuelto en texto">*🇻🇪🏇🏟️HIPISMO DEMO🏟️🏇🇻🇪*
+Valencia, 2da Carrera
+Ret:
+Pizarra: 6.2.7.5.1
+
+*TERCIOS*
+2p (6) con 100
+Juega Carlos $ +95,00
+Consigue Ana $ -100,00
+
+10a5 (4) con 200
+Juega Camila $ -200,00
+Consigue Diego $ +190,00
+
+10a5 (2) con 80
+Juega Ana $ -80,00
+Consigue Marco $ +76,00
+
+3n (7) con 70
+Juega Diego $ +0,00
+Consigue Elena $ +0,00
+
+------------------------------
+------------------------------
+✅ *GANAN*
+Diego +190,00
+Carlos +95,00
+Marco +76,00
+Elena +0,00
+
+❌ *PIERDEN*
+Camila -200,00
+Ana -180,00
+------------------------------
+Total Jugadas: 4
+------------------------------
+------------------------------</pre></div>
+              <figcaption><strong>Plano en texto</strong>Copia y comparte el desglose de cada jugada con sus montos y los totales de quienes ganan y pierden.</figcaption>
+            </figure>
+            <div class="inicio-galeria-controles" hidden>
+              <button type="button" data-paso="-1" aria-label="Ver captura anterior de Hipismo">←</button>
+              <span data-indice aria-live="polite">1 / 3</span>
+              <button type="button" data-paso="1" aria-label="Ver captura siguiente de Hipismo">→</button>
+            </div>
+          </div>
           <div class="inicio-modulo-datos">
             <h3>Hipismo Grupos</h3>
             <p>Carga planos y remates. Con la llegada, consulta el resultado de cada jugada y el total de la carrera por cliente.</p>
@@ -620,7 +690,29 @@
           </div>
         </article>
         <article class="inicio-modulo inicio-modulo-deportes">
-          <div class="inicio-captura"><img src="img/inicio-deportes.jpg" alt="Pizarra de Deportes con escudos de los equipos, marcadores y totales de ejemplo" width="900" height="512" loading="lazy"></div>
+          <div class="inicio-captura" data-galeria aria-label="Capturas de Deportes">
+            <figure class="inicio-galeria-vista" data-captura>
+              <div class="inicio-galeria-marco"><img src="img/inicio-deportes.jpg" alt="Pizarra de Deportes con marcadores y balance del día" loading="lazy"></div>
+              <figcaption><strong>Pizarra y balance del día</strong>Consulta los marcadores, el volumen apostado, los premios y el balance neto de la casa.</figcaption>
+            </figure>
+            <figure class="inicio-galeria-vista" data-captura hidden>
+              <div class="inicio-galeria-marco"><img src="img/inicio-sabana.jpg" alt="Formulario de carga de una sábana de ejemplo" loading="lazy"></div>
+              <figcaption><strong>Procesar sábana</strong>Pega la sábana que recibiste por WhatsApp y elige la fecha para procesar los tickets.</figcaption>
+            </figure>
+            <figure class="inicio-galeria-vista" data-captura hidden>
+              <div class="inicio-galeria-marco"><img src="img/inicio-panel.jpg" alt="Tickets deportivos con escudos y estados" loading="lazy"></div>
+              <figcaption><strong>Revisión de tickets</strong>Ve cada selección con su escudo y el estado del ticket: ganado, perdido o pendiente.</figcaption>
+            </figure>
+            <figure class="inicio-galeria-vista" data-captura hidden>
+              <div class="inicio-galeria-marco"><img src="img/inicio-saldos-deportes.jpg" alt="Tabla de saldos y tickets pendientes por cliente" loading="lazy"></div>
+              <figcaption><strong>Resumen por cliente</strong>Consulta lo arriesgado, el balance y los tickets que siguen pendientes de cada cliente.</figcaption>
+            </figure>
+            <div class="inicio-galeria-controles" hidden>
+              <button type="button" data-paso="-1" aria-label="Ver captura anterior de Deportes">←</button>
+              <span data-indice aria-live="polite">1 / 4</span>
+              <button type="button" data-paso="1" aria-label="Ver captura siguiente de Deportes">→</button>
+            </div>
+          </div>
           <div class="inicio-modulo-datos">
             <h3>Deportes</h3>
             <p>Pega la sábana de WhatsApp, revisa los marcadores y distingue los tickets ganados, perdidos y pendientes antes del cierre.</p>
@@ -689,6 +781,22 @@
   </div>
 
 <script>
+document.querySelectorAll('[data-galeria]').forEach(galeria => {
+  const capturas = [...galeria.querySelectorAll('[data-captura]')];
+  const controles = galeria.querySelector('.inicio-galeria-controles');
+  const indicador = controles.querySelector('[data-indice]');
+  let actual = 0;
+  controles.hidden = false;
+  controles.addEventListener('click', evento => {
+    const boton = evento.target.closest('button[data-paso]');
+    if (!boton) return;
+    capturas[actual].hidden = true;
+    actual = (actual + Number(boton.dataset.paso) + capturas.length) % capturas.length;
+    capturas[actual].hidden = false;
+    indicador.textContent = (actual + 1) + ' / ' + capturas.length;
+  });
+});
+
 const robotInicio = document.querySelector('.inicio-bot-robot');
 if ('IntersectionObserver' in window) {
   const observarSaludo = new IntersectionObserver(([entrada]) => {
