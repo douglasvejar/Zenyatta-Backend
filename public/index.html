@@ -176,11 +176,11 @@
   .navbar-accesos { display: flex; align-items: center; gap: 7px; margin-left: auto; }
   .navbar-acceso {
     display: inline-flex; align-items: center; justify-content: center;
-    min-height: 38px; padding: 7px 12px; border: 1px solid #79b7e3; border-radius: 9px;
-    color: #edf7ff; background: #142943; text-decoration: none; text-align: center;
+    min-height: 38px; padding: 7px 12px; border: 1px solid #5bdc90; border-radius: 9px;
+    color: #b1ffd1; background: #123629; text-decoration: none; text-align: center;
     font: 700 14px/1.15 Outfit, sans-serif;
   }
-  .navbar-acceso-grupo { color: #081724; background: #83dcff; border-color: #83dcff; }
+  .navbar-acceso-grupo { color: #082419; background: #5aea95; border-color: #5aea95; }
   .navbar-acceso:hover { filter: brightness(1.15); }
   .navbar-acceso:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
   @media (max-width: 420px) {
@@ -277,8 +277,28 @@
   .inicio-selector button:focus-visible { outline:2px solid #8fe9d0; outline-offset:2px; }
   .inicio-vista { margin:0; padding:12px; }
   .inicio-vista figcaption { align-items:center; }
-  .inicio-vista figcaption a, .inicio-bot-enlace { color:#a6f1d8; text-underline-offset:3px; }
-  .inicio-bot-enlace { display:inline-block; margin-top:14px; font-size:14px; }
+  .inicio-vista figcaption a { color:#a6f1d8; text-underline-offset:3px; }
+  .inicio-bot {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 32%); align-items: center;
+    gap: clamp(8px, 3vw, 32px); margin: 8px 0 34px; padding: clamp(16px, 4vw, 42px);
+    background: radial-gradient(ellipse at 85% 50%, #175449 0, transparent 60%), #101b2d;
+    border: 1px solid #376057; border-radius: 18px;
+  }
+  .inicio-bot h2 { margin: 0; color: #a6f1d8; font: 700 clamp(26px, 4vw, 46px)/1.05 Outfit, sans-serif; }
+  .inicio-bot p { color: #d0deea; line-height: 1.6; margin: 10px 0 18px; max-width: 500px; }
+  .inicio-bot .botonera { justify-content: flex-start; }
+  .inicio-bot .btn-portal { --modulo-acento: #a6f1d8; padding: 9px 13px; font-size: 14px; }
+  .inicio-bot-robot { display: block; width: 100%; height: auto; max-height: 245px; object-fit: contain; }
+  .inicio-bot-robot.saludando { animation: inicio-bot-saludo 2.4s ease-in-out 2; transform-origin: 50% 80%; }
+  @keyframes inicio-bot-saludo {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    30%, 70% { transform: translateY(-8px) rotate(-3deg); }
+    50% { transform: translateY(-4px) rotate(3deg); }
+  }
+  @media (max-width: 420px) {
+    .inicio-bot { grid-template-columns: minmax(0, 1fr) minmax(75px, 27%); }
+  }
+  @media (prefers-reduced-motion: reduce) { .inicio-bot-robot.saludando { animation: none; } }
   .inicio-seccion { margin-top: 16px; padding-top: 24px; border-top: 1px solid #314155; scroll-margin-top: 80px; }
   .inicio-seccion-titulo { font-size: clamp(28px, 4vw, 44px); margin-bottom: 18px; }
   .inicio-productos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -574,6 +594,17 @@
       </div>
     </section>
 
+    <section class="inicio-bot" aria-labelledby="tituloBotInicio">
+      <div>
+        <h2 id="tituloBotInicio">LudoXbot2.0 para Hipismo</h2>
+        <p>El bot con IA de Ludox trabaja en tus grupos autorizados de WhatsApp. Interpreta las paradas, confirma las jugadas según las reglas del grupo y comparte el plano de la carrera.</p>
+        <div class="botonera">
+          <a class="btn-portal inicio-demo" href="producto-hipico-ia.html#probar-bot">Ver el bot en WhatsApp →</a>
+        </div>
+      </div>
+      <img class="inicio-bot-robot" src="img/ludoxbot-de-pie.png" alt="LudoXbot2.0 de pie con el pulgar arriba" width="480" height="640" loading="lazy">
+    </section>
+
     <section class="inicio-seccion" aria-labelledby="tituloModulos">
       <h2 class="inicio-seccion-titulo" id="tituloModulos">Elige cómo opera tu grupo</h2>
       <div class="inicio-productos">
@@ -586,7 +617,6 @@
               <a class="btn-portal inicio-demo" href="producto-hipico.html">Ver demostración<span class="btn-icono" aria-hidden="true"> →</span></a>
               <button type="button" class="btn-portal btn-secundario" data-demo-producto="Hipismo Grupos">Solicitar demo</button>
             </div>
-            <a class="inicio-bot-enlace" href="producto-hipico-ia.html">Conocer Hipismo con LudoXbot2.0 →</a>
           </div>
         </article>
         <article class="inicio-modulo inicio-modulo-deportes">
@@ -659,6 +689,18 @@
   </div>
 
 <script>
+const robotInicio = document.querySelector('.inicio-bot-robot');
+if ('IntersectionObserver' in window) {
+  const observarSaludo = new IntersectionObserver(([entrada]) => {
+    if (!entrada.isIntersecting) return;
+    robotInicio.classList.add('saludando');
+    observarSaludo.disconnect();
+  }, { threshold: 0.25 });
+  observarSaludo.observe(robotInicio);
+} else {
+  robotInicio.classList.add('saludando');
+}
+
 const vistasInicio = document.querySelectorAll('[data-vista-inicio]');
 vistasInicio.forEach(boton => boton.addEventListener('click', () => {
   vistasInicio.forEach(opcion => {
