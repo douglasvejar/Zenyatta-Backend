@@ -65,7 +65,7 @@
     border-bottom: 1px solid var(--card-border);
   }
   .navbar-inner {
-    max-width: 980px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
     height: 64px;
@@ -173,7 +173,24 @@
     flex-shrink: 0;
   }
 
-  @media (max-width: 720px) {
+  .navbar-accesos { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+  .navbar-acceso {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 38px; padding: 7px 12px; border: 1px solid #79b7e3; border-radius: 9px;
+    color: #edf7ff; background: #142943; text-decoration: none; text-align: center;
+    font: 700 14px/1.15 Outfit, sans-serif;
+  }
+  .navbar-acceso-grupo { color: #081724; background: #83dcff; border-color: #83dcff; }
+  .navbar-acceso:hover { filter: brightness(1.15); }
+  .navbar-acceso:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  @media (max-width: 420px) {
+    .navbar-inner { padding-inline: 10px; gap: 6px; }
+    .navbar-marca { gap: 4px; font-size: 13px; }
+    .navbar-marca img { width: 20px; }
+    .navbar-acceso { min-height: 42px; padding: 5px 7px; font-size: 12px; }
+  }
+
+  @media (max-width: 1040px) {
     .navbar-links { display: none; }
     .navbar-toggle { display: flex; }
     .navbar-links.movil-abierto {
@@ -466,8 +483,6 @@
         LUDOX
       </a>
 
-      <button type="button" class="navbar-toggle" id="navbarToggle" aria-label="Abrir menú">☰</button>
-
       <div class="navbar-links" id="navbarLinks">
         <div class="navbar-dropdown" id="navbarDropdownProducto">
           <button type="button" class="navbar-link" id="navbarBtnProducto">
@@ -493,6 +508,11 @@
         <a class="navbar-link" href="precios.html">Precios</a>
         <button type="button" class="navbar-cta" id="navbarBtnDemo">Solicitar Demo</button>
       </div>
+      <div class="navbar-accesos">
+        <a class="navbar-acceso navbar-acceso-grupo" id="btnEntrar" href="grupo.html">Entrar a mi grupo</a>
+        <a class="navbar-acceso" id="btnSuperadmin" href="superadmin.html?ingreso=portal">Entrar a Súper-admin</a>
+      </div>
+      <button type="button" class="navbar-toggle" id="navbarToggle" aria-label="Abrir menú">☰</button>
     </div>
   </nav>
 
@@ -503,7 +523,6 @@
         <p>Procesa jugadas, verifica resultados y consulta los saldos de tus clientes desde un solo panel.</p>
         <div class="botonera">
           <button type="button" class="btn-portal btn-entrar" data-demo-producto="">Solicitar demo</button>
-          <a class="btn-portal btn-secundario" id="btnEntrar" href="grupo.html">Entrar a mi grupo</a>
           <a class="btn-portal btn-secundario" href="precios.html">Ver precios</a>
         </div>
       </div>
@@ -542,7 +561,6 @@
     </section>
 
     <div class="botonera inicio-utilidades">
-      <a class="btn-portal btn-secundario" id="btnSuperadmin" href="superadmin.html?ingreso=portal">Súper-admin</a>
       <button type="button" class="btn-portal btn-secundario" id="btnContacto">Contacto</button>
     </div>
   </main>
