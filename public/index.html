@@ -470,6 +470,16 @@
   @media (max-width: 420px) {
     .modal { padding: 24px 18px 20px; }
   }
+  /* La franja ocupa su propia fila; la navegación queda justo debajo. */
+  html.nav-activa body { padding-top: 0; }
+  html.nav-activa .navbar {
+    position: sticky;
+    align-self: stretch;
+    margin-inline: -20px;
+    z-index: 60;
+  }
+  html.nav-activa .navbar-links.movil-abierto { position: absolute; top: 100%; }
+  .overlay { z-index: 70; }
 </style>
 <script src="navidad.js"></script>
 </head>
