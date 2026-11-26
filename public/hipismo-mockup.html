@@ -1776,6 +1776,25 @@
   #txtPlano { height: 340px; border-radius: 14px; background: rgba(255,255,255,0.6); font-size: 13.5px; line-height: 1.8; resize: vertical; }
   #cpResultado .resultado-vacio { margin-top: 4px; }
   #cpResultado .resultado-caja { margin-top: 4px; }
+  #vista-cargarPlanos #txtPlano { min-height: 320px; font-size: 15px; line-height: 1.6; }
+  #cpResultado #resultadoCaja {
+    max-height: min(62vh, 520px); overflow: auto; overflow-wrap: anywhere;
+    font-size: 14px; line-height: 1.6;
+  }
+  #cpResultado #avisoResultado { margin: 0 0 12px; border-inline-start-width: 4px; font-weight: 600; }
+  #cpResultado #avisoResultado.cp-revisar { background: #fff5dc; border-color: #cd8f24; color: #654100; }
+  .cp-resumen:not([hidden]) { display: grid; gap: 12px; margin: 0 0 14px; }
+  .cp-resumen h3 { margin: 0 0 6px; font-size: 14px; }
+  .cp-llegada-lista { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .cp-llegada-lista .pimg-silk { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #0003; border-radius: 50%; font-weight: 700; flex: none; }
+  .cp-totales { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .cp-totales-col { min-width: 0; padding: 8px 10px; border-radius: 10px; background: #e9f8ee; color: #155631; }
+  .cp-totales-col.cp-pierden { background: #fbeceb; color: #842b2b; }
+  .cp-totales-col dl { max-height: 132px; overflow: auto; margin: 5px 0 0; }
+  .cp-totales-col dl:empty { display: none; }
+  .cp-totales-col dl > div { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; font-size: 13px; }
+  .cp-totales-col dt { overflow-wrap: anywhere; }
+  .cp-totales-col dd { margin: 0; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
   .cp-acciones { grid-column: 1 / -1; position: sticky; bottom: 18px; z-index: 20; justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 9px; margin: 0; width: max-content; max-width: 100%; border-radius: 999px; background: rgba(255,255,255,0.80); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border: 1px solid var(--cr-borde); box-shadow: 0 14px 40px rgba(30,80,120,0.18); }
   .cp-acciones .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; font-size: 14px; border-radius: 999px; }
   .cp-toast-zona { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
@@ -1805,12 +1824,10 @@
     #selectorPlanoCompacto input:not([type="checkbox"]), #selectorPlanoCompacto select { height: 38px; font-size: 14px; }
     #selectorPlanoCompacto > div:nth-child(6) .btn-lista-sin-comision { position: static; display: block; margin-top: 4px; }
     #selectorPlanoCompacto > div:nth-child(6) input { padding-right: 10px; }
-    #txtPlano { height: 240px; }
-    .cp-acciones { bottom: calc(86px + env(safe-area-inset-bottom)); width: calc(100% - 66px); justify-self: start; border-radius: 26px; padding: 6px; gap: 5px; }
-    .cp-acciones .btn { height: 40px; padding: 0 9px; gap: 6px; min-width: 0; justify-content: center; font-size: 14px; flex: 1 1 auto; }
-    .cp-acciones .btn.btn-secundario { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; font-size: 0; gap: 0; }
-    .cp-acciones .btn.btn-secundario .cr-ic { width: 18px; height: 18px; }
-    .cp-acciones #btnCalcularPlano, .cp-acciones #btnConfirmarPlano { flex: 1 1 100px; }
+    #vista-cargarPlanos #txtPlano { height: 300px; min-height: 300px; font-size: 16px; }
+    .cp-acciones { position: relative; bottom: auto; width: 100%; justify-self: stretch; border-radius: 14px; padding: 8px; gap: 6px; }
+    .cp-acciones .btn, .cp-acciones .btn.btn-secundario { height: auto; min-height: 42px; padding: 7px 10px; gap: 6px; justify-content: center; font-size: 13px; flex: 1 1 128px; }
+    .cp-acciones .btn .cr-ic { width: 16px; height: 16px; flex-shrink: 0; }
     .alerta-flotante { bottom: calc(150px + env(safe-area-inset-bottom)); }
     .alerta-flotante.alerta-adelantadas { bottom: calc(204px + env(safe-area-inset-bottom)); }
     .alerta-flotante.alerta-tercios-adelantadas { bottom: calc(258px + env(safe-area-inset-bottom)); }
@@ -2830,8 +2847,21 @@
           <div class="captura-logo-fondo" id="resultadoLogoFondo"></div>
           <div class="captura-contenido">
             <div id="resultadoVacio" class="resultado-vacio">El plano resuelto va a aparecer acá cuando le des Calcular.</div>
-            <div id="avisoResultado" class="aviso-resultado" style="display:none;"></div>
-            <pre class="resultado-caja" id="resultadoCaja" style="display:none;"></pre>
+            <div id="avisoResultado" class="aviso-resultado" role="status" style="display:none;"></div>
+            <div class="cp-resumen" id="cpResumenResultado" hidden>
+              <div id="cpLlegadaResultado">
+                <h3>Llegada</h3>
+                <div class="cp-llegada-lista" id="cpLlegadaNumeros"></div>
+              </div>
+              <div id="cpTotalesResultado">
+                <h3>Totales por cliente</h3>
+                <div class="cp-totales">
+                  <div class="cp-totales-col" id="cpGananCol"><strong>Ganan</strong><dl id="cpGanan" tabindex="0" aria-label="Clientes que ganan"></dl></div>
+                  <div class="cp-totales-col cp-pierden" id="cpPierdenCol"><strong>Pierden</strong><dl id="cpPierden" tabindex="0" aria-label="Clientes que pierden"></dl></div>
+                </div>
+              </div>
+            </div>
+            <pre class="resultado-caja" id="resultadoCaja" style="display:none;" tabindex="0" aria-label="Plano completo"></pre>
           </div>
         </div>
         </div>
@@ -9103,6 +9133,22 @@ let planoPendienteDeConfirmar = null;
 let calculandoPlano = false;
 let confirmandoPlano = false;
 
+function pintarResumenPlano(datos) {
+  const llegada = datos?.llegada || [];
+  const ganan = (datos?.ganan || []).filter(([, monto]) => Number(monto) !== 0);
+  const pierden = datos?.pierden || [];
+  const numeros = document.getElementById('cpLlegadaNumeros');
+  numeros.innerHTML = llegada.map(numero => pimgSilk(numero, 30)).join('');
+  document.getElementById('cpLlegadaResultado').hidden = !llegada.length;
+  document.getElementById('cpTotalesResultado').hidden = !ganan.length && !pierden.length;
+  for (const [id, filas] of [['cpGanan', ganan], ['cpPierden', pierden]]) {
+    document.getElementById(id + 'Col').hidden = !filas.length;
+    document.getElementById(id).innerHTML = filas
+      .map(([nombre, monto]) => '<div><dt>' + pimgEsc(nombre) + '</dt><dd>' + pimgSigno(Number(monto)) + '</dd></div>').join('');
+  }
+  document.getElementById('cpResumenResultado').hidden = !llegada.length && !ganan.length && !pierden.length;
+}
+
 async function calcularPlano() {
   if (calculandoPlano) return;
   if (carreraSeleccionadaYaCargada()) { aplicarBloqueoCarreraCargada(); return; } // 25-10-2026: ya tiene plano registrado
@@ -9136,17 +9182,21 @@ async function calcularPlano() {
   // confirmar anterior — el operador siempre confirma el ÚLTIMO cálculo
   // que ve en pantalla, nunca uno viejo que ya no coincide con el plano.
   planoPendienteDeConfirmar = null;
+  pintarResumenPlano(null);
+  vacio.classList.remove('resultado-error');
   ULTIMOS_DATOS_IMAGEN_PLANO = null; // la imagen siempre sale del ÚLTIMO plano que se ve en pantalla
   aviso.style.display = 'none';
   btnConfirmar.style.display = 'none';
 
   if (!hipodromoNombre) {
+    vacio.classList.add('resultado-error');
     vacio.textContent = 'Elige un hipódromo primero (crea uno en Administración > Hipódromos si todavía no tienes ninguno).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
     return;
   }
   if (!pizarraTxt) {
+    vacio.classList.add('resultado-error');
     vacio.textContent = 'Falta la Pizarra (orden de llegada).';
     vacio.style.display = 'block';
     caja.style.display = 'none';
@@ -9168,6 +9218,7 @@ async function calcularPlano() {
       body: JSON.stringify(payload)
     });
   } catch (e) {
+    vacio.classList.add('resultado-error');
     vacio.textContent = e.message;
     vacio.style.display = 'block';
     caja.style.display = 'none';
@@ -9181,13 +9232,15 @@ async function calcularPlano() {
     salida = '⚠️ Líneas que no reconocí (revisa el formato): \n' + data.sinReconocer.join('\n') + '\n\n' + salida;
   }
   aviso.textContent = '🔎 VISTA PREVIA — todavía NO se guardó ni afectó ningún saldo.\nRevisa que esté bien y dale "Confirmar Plano" para guardarlo de verdad.';
-  aviso.className = 'aviso-resultado';
+  aviso.className = data.sinReconocer?.length ? 'aviso-resultado cp-revisar' : 'aviso-resultado';
+  if (data.sinReconocer?.length) aviso.textContent = '⚠ Revisa las líneas sin reconocer antes de confirmar. El plano sigue en vista previa.';
   aviso.style.display = 'block';
 
   vacio.style.display = 'none';
   caja.style.display = 'block';
   caja.textContent = salida;
   ULTIMOS_DATOS_IMAGEN_PLANO = data.datosImagen || null;
+  pintarResumenPlano(ULTIMOS_DATOS_IMAGEN_PLANO);
 
   // Guarda exactamente lo que se acaba de previsualizar — confirmarPlano()
   // manda ESTO, no una nueva lectura del formulario.
@@ -9226,6 +9279,7 @@ async function confirmarPlano() {
       // El servidor ya tiene un plano de esta carrera (por ejemplo, se cargó desde otra pantalla): se marca "Listo" y no se pisa nada.
       CARRERAS_CARGADAS.add(Number(planoPendienteDeConfirmar.carreraNumero)); pintarCarrerasCargadas();
     }
+    pintarResumenPlano(null);
     caja.textContent = '❌ ' + e.message + '\n\nEl plano NO se guardó.' + (/YA TIENES UN PLANO REGISTRADO/.test(e.message || '') ? '' : ' Corrige lo que haga falta y dale "Confirmar Plano" de nuevo (o "Calcular" si necesitas cambiar algo del plano).');
     aviso.style.display = 'none';
     confirmandoPlano = false;
@@ -9265,6 +9319,7 @@ async function confirmarPlano() {
   caja.style.display = 'block';
   caja.textContent = salida;
   ULTIMOS_DATOS_IMAGEN_PLANO = data.datosImagen || null;
+  pintarResumenPlano(ULTIMOS_DATOS_IMAGEN_PLANO);
   mostrarAvisoPozo(data.alertasPozo, data.pozoBajo);
 
   // Deja todo listo para la SIGUIENTE carrera de la misma jornada
@@ -9395,6 +9450,8 @@ document.addEventListener('click', (ev) => {
 });
 
 function limpiarPlano() {
+  pintarResumenPlano(null);
+  document.getElementById('resultadoVacio').classList.remove('resultado-error');
   document.getElementById('txtPlano').value = '';
   document.getElementById('inpSinComision').value = '';
   limpiarListaSinComision(); // 04-10-2026: también destilda los chips de la lista
