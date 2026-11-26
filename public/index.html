@@ -40,8 +40,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 116px 20px 32px;
+    justify-content: flex-start;
+    padding: 100px 20px 32px;
     position: relative;
     overflow-x: hidden;
   }
@@ -220,21 +220,32 @@
     opacity: 0.28;
   }
 
-  .portal {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 460px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+  .portal { position: relative; z-index: 1; width: min(100%, 1080px); }
+  .inicio-presentacion { max-width: 820px; margin: 0 auto 34px; text-align: center; }
+  .inicio-presentacion h1 { margin: 0; font: 750 clamp(34px, 6vw, 65px)/1.04 Outfit, sans-serif; letter-spacing: -.035em; text-wrap: balance; }
+  .inicio-presentacion p { color: var(--text-dim); font-size: clamp(15px, 2vw, 18px); line-height: 1.6; margin: 14px auto 22px; max-width: 590px; text-wrap: pretty; }
+  .inicio-productos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .inicio-modulo { --modulo-acento: #74e6bf; min-width: 0; display: flex; flex-direction: column; background: #10192a; border: 1px solid #344655; border-radius: 20px; overflow: hidden; }
+  .inicio-modulo-deportes { --modulo-acento: #8fc9ff; }
+  .inicio-captura { padding: 12px 12px 0; }
+  .inicio-captura img { display: block; width: 100%; height: auto; border-radius: 11px; background: #dceae7; }
+  .inicio-modulo-datos { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: 18px clamp(14px, 2.5vw, 24px) 22px; }
+  .inicio-modulo h2 { margin: 0; font: 700 clamp(23px, 3.5vw, 34px)/1.15 Outfit, sans-serif; color: var(--modulo-acento); }
+  .inicio-modulo p { flex: 1; margin: 8px 0 18px; color: #c3cddd; line-height: 1.55; font-size: 15px; }
+  .inicio-modulo .btn-portal { padding: 9px 13px; font-size: 14px; }
+  .inicio-demo { background: var(--modulo-acento); color: #081724; }
+  .inicio-demo:hover { background: #fff; }
+  .inicio-utilidades { margin: 24px 0 0; }
+  @media (max-width: 640px) {
+    body { padding-top: 86px; }
+    .inicio-productos { grid-template-columns: 1fr; }
+    .inicio-presentacion { margin-bottom: 24px; }
   }
 
   .logo-wrap {
-    width: 220px;
+    width: 92px;
     max-width: 62vw;
-    margin-bottom: 6px;
+    margin: 0 auto 6px;
     /* La "cámara" 3D del logo (15-09-2026, a pedido del usuario: "quiero
        que el logo de la pagina de incio se vea en 3d y tenga movimiento
        que llame la atención") — perspective acá afuera, el giro/flote
@@ -275,22 +286,8 @@
     .logo-3d { animation: none; }
   }
 
-  .eyebrow {
-    font-family: 'Outfit', sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin: 18px 0 36px;
-  }
-
-  .botonera {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
+  .botonera { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .inicio-modulo .botonera { justify-content: flex-start; }
 
   .btn-portal {
     font-family: 'Outfit', sans-serif;
@@ -311,8 +308,8 @@
   .btn-portal:active { transform: scale(0.98); }
 
   .btn-entrar {
-    background: linear-gradient(100deg, var(--accent-cyan), var(--accent-blue) 55%, var(--accent-deep));
-    color: #04070f;
+    background: linear-gradient(100deg, #58e2ea, #78a9ff);
+    color: #081724;
     box-shadow: 0 8px 28px -8px rgba(47, 107, 255, 0.65);
   }
   .btn-entrar:hover { box-shadow: 0 10px 34px -6px rgba(47, 107, 255, 0.8); transform: translateY(-1px); }
@@ -478,7 +475,6 @@
 
   @media (max-width: 420px) {
     .modal { padding: 24px 18px 20px; }
-    .logo-wrap { width: 180px; }
   }
 </style>
 <script src="navidad.js"></script>
@@ -523,26 +519,47 @@
     </div>
   </nav>
 
-  <div class="portal">
-    <div class="logo-wrap">
-      <div class="logo-3d">
-        <img src="img/logo-ludox.png" alt="LUDOX — Soluciones digitales para un mayor mañana">
+  <main class="portal">
+    <div class="inicio-presentacion">
+      <div class="logo-wrap"><div class="logo-3d"><img src="img/logo-ludox.png" alt="Ludox"></div></div>
+      <h1>Administra tu grupo de hipismo o deportes</h1>
+      <p>Carga las jugadas, revisa los resultados y consulta los saldos por cliente desde un mismo panel.</p>
+      <div class="botonera">
+        <a class="btn-portal btn-entrar" id="btnEntrar" href="grupo.html">Entrar a mi grupo</a>
+        <a class="btn-portal btn-secundario" href="precios.html">Ver precios</a>
       </div>
     </div>
-    <p class="eyebrow">Portal de acceso</p>
 
-    <div class="botonera">
-      <a class="btn-portal btn-entrar" id="btnEntrar" href="grupo.html">
-        <span class="btn-icono">→</span> Entrar
-      </a>
-      <a class="btn-portal btn-secundario" id="btnSuperadmin" href="superadmin.html?ingreso=portal">
-        <span class="btn-icono">⚙</span> Súper-admin
-      </a>
-      <button type="button" class="btn-portal btn-secundario" id="btnContacto">
-        <span class="btn-icono">✉</span> Contacto
-      </button>
+    <section class="inicio-productos" aria-label="Módulos de Ludox">
+      <article class="inicio-modulo">
+        <div class="inicio-captura"><img src="img/inicio-hipismo.jpg" alt="Pantalla Cargar plano de Hipismo, con la pizarra de llegada y las jugadas de ejemplo" width="900" height="512"></div>
+        <div class="inicio-modulo-datos">
+          <h2>Hipismo Grupos</h2>
+          <p>Carga planos y remates, registra la llegada y calcula los totales de cada carrera.</p>
+          <div class="botonera">
+            <a class="btn-portal inicio-demo" href="producto-hipico.html">Ver demostración<span class="btn-icono" aria-hidden="true"> →</span></a>
+            <button type="button" class="btn-portal btn-secundario" data-demo-producto="Hipismo Grupos">Solicitar demo</button>
+          </div>
+        </div>
+      </article>
+      <article class="inicio-modulo inicio-modulo-deportes">
+        <div class="inicio-captura"><img src="img/inicio-deportes.jpg" alt="Pizarra de Deportes con escudos de los equipos, marcadores y totales de ejemplo" width="900" height="512"></div>
+        <div class="inicio-modulo-datos">
+          <h2>Deportes</h2>
+          <p>Procesa la sábana de WhatsApp, verifica los tickets y revisa el balance de cada cliente.</p>
+          <div class="botonera">
+            <a class="btn-portal inicio-demo" href="producto-deportes.html">Ver demostración<span class="btn-icono" aria-hidden="true"> →</span></a>
+            <button type="button" class="btn-portal btn-secundario" data-demo-producto="Deportes">Solicitar demo</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <div class="botonera inicio-utilidades">
+      <a class="btn-portal btn-secundario" id="btnSuperadmin" href="superadmin.html?ingreso=portal">Súper-admin</a>
+      <button type="button" class="btn-portal btn-secundario" id="btnContacto">Contacto</button>
     </div>
-  </div>
+  </main>
 
   <footer>LUDOX © <span id="anioActual"></span> — Soluciones digitales</footer>
 
@@ -620,15 +637,17 @@ const overlay = document.getElementById('overlayContacto');
 // y si el mensaje que se manda a Súper-admin queda etiquetado como
 // solicitud de demo (ver TEXTOS_MODAL_CONTACTO y el submit más abajo).
 let origenModalContacto = 'contacto';
+let productoDemo = '';
 const TEXTOS_MODAL_CONTACTO = {
   contacto: { titulo: 'Hablemos', sub: '¿Quieres contratar el servicio para tu grupo? Escribinos por cualquiera de estos medios.' },
   demo: { titulo: 'Solicita tu demo', sub: 'Te mostramos cómo funciona LUDOX en vivo — escribinos por cualquiera de estos medios o dejanos tus datos y te contactamos.' }
 };
 
-function abrirContacto(origen) {
+function abrirContacto(origen, producto = '') {
+  productoDemo = producto;
   origenModalContacto = origen === 'demo' ? 'demo' : 'contacto';
   const textos = TEXTOS_MODAL_CONTACTO[origenModalContacto];
-  document.getElementById('tituloModalContacto').textContent = textos.titulo;
+  document.getElementById('tituloModalContacto').textContent = producto ? 'Solicita una demo de ' + producto : textos.titulo;
   document.getElementById('subModalContacto').textContent = textos.sub;
   overlay.classList.add('abierto');
   document.getElementById('msgFormContacto').textContent = '';
@@ -638,6 +657,9 @@ function cerrarContacto() { overlay.classList.remove('abierto'); }
 
 document.getElementById('btnContacto').addEventListener('click', () => abrirContacto('contacto'));
 document.getElementById('navbarBtnDemo').addEventListener('click', () => { cerrarMenuMovil(); abrirContacto('demo'); });
+document.querySelectorAll('[data-demo-producto]').forEach(boton => {
+  boton.addEventListener('click', () => abrirContacto('demo', boton.dataset.demoProducto));
+});
 document.getElementById('cerrarContacto').addEventListener('click', cerrarContacto);
 overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarContacto(); });
 
@@ -660,7 +682,7 @@ document.getElementById('formContacto').addEventListener('submit', async (e) => 
   // principio del mensaje, para que se note de un vistazo en la bandeja
   // de Súper-admin sin necesitar ninguna columna/ruta nueva.
   if (origenModalContacto === 'demo') {
-    mensaje = '🎬 SOLICITUD DE DEMO\n' + mensaje;
+    mensaje = ['🎬 SOLICITUD DE DEMO', productoDemo, mensaje].filter(Boolean).join('\n');
   }
 
   btn.disabled = true;
